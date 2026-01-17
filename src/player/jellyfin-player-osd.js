@@ -28,6 +28,14 @@
     let isOsdVisible = true;
     let isDraggingSeekbar = false;
 
+    // Track menu state
+    let trackMenuOverlay = null;
+    let isTrackMenuOpen = false;
+    let trackMenuType = null; // 'subtitles' or 'audio'
+    let trackMenuFocusIndex = 0;
+    let currentSubtitleIndex = -1;
+    let currentAudioIndex = 0;
+
     // ========================================================================
     // Material Design Icons
     // ========================================================================
@@ -45,7 +53,8 @@
         settings: '<span class="material-icons">settings</span>',
         favorite: '<span class="material-icons">favorite_border</span>',
         favoriteFilled: '<span class="material-icons">favorite</span>',
-        sync: '<span class="material-icons">sync</span>'
+        sync: '<span class="material-icons">sync</span>',
+        check: '<span class="material-icons">check</span>'
     };
 
     // ========================================================================
@@ -298,6 +307,11 @@
     }
 
     function handleKeyDown(e) {
+        // Handle track menu navigation if open
+        if (handleTrackMenuKeyDown(e)) {
+            return;
+        }
+
         show();
         resetAutoHide();
 
@@ -423,8 +437,13 @@
 
         switch (action) {
             case 'back':
-                if (player.stop) player.stop();
-                history.back();
+                // If OSD is visible, hide it first; otherwise exit
+                if (isOsdVisible) {
+                    hide();
+                } else {
+                    if (player.stop) player.stop();
+                    history.back();
+                }
                 break;
 
             case 'togglePlay':
@@ -448,11 +467,11 @@
                 break;
 
             case 'subtitles':
-                console.log('[OSD] Subtitles menu');
+                openTrackMenu('subtitles');
                 break;
 
             case 'audio':
-                console.log('[OSD] Audio menu');
+                openTrackMenu('audio');
                 break;
 
             case 'favorite':
@@ -599,12 +618,185 @@
         return `${pad(minutes)}:${pad(seconds)}`;
     }
 
+    // ========================================================================
+    // Track Selection Menu
+    // ========================================================================
+
+    function openTrackMenu(type) {
+        const player = window.playerInstance;
+        if (!player) return;
+
+        trackMenuType = type;
+        trackMenuFocusIndex = 0;
+
+        // Get tracks
+        let tracks = [];
+        let title = '';
+        let currentIndex = -1;
+
+        if (type === 'subtitles') {
+            tracks = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
+            title = 'Subtitles';
+            currentIndex = currentSubtitleIndex;
+            // Add "Off" option at the beginning
+            tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
+        } else if (type === 'audio') {
+            tracks = player.getAudioTracks ? player.getAudioTracks() : [];
+            title = 'Audio';
+            currentIndex = currentAudioIndex;
+        }
+
+        if (tracks.length === 0) {
+            console.log('[OSD] No tracks available for', type);
+            return;
+        }
+
+        // Find current selection index in menu
+        trackMenuFocusIndex = tracks.findIndex(t => t.Index === currentIndex);
+        if (trackMenuFocusIndex < 0) trackMenuFocusIndex = 0;
+
+        renderTrackMenu(title, tracks, currentIndex);
+        isTrackMenuOpen = true;
+        trackMenuOverlay.classList.add('visible');
+        updateTrackMenuFocus();
+    }
+
+    function closeTrackMenu() {
+        if (trackMenuOverlay) {
+            trackMenuOverlay.classList.remove('visible');
+        }
+        isTrackMenuOpen = false;
+        trackMenuType = null;
+    }
+
+    function renderTrackMenu(title, tracks, currentIndex) {
+        if (!trackMenuOverlay) {
+            trackMenuOverlay = document.createElement('div');
+            trackMenuOverlay.className = 'track-menu-overlay';
+            document.body.appendChild(trackMenuOverlay);
+        }
+
+        const optionsHtml = tracks.map((track, i) => {
+            const isSelected = track.Index === currentIndex;
+            const label = track.DisplayTitle || track.Title || `Track ${track.Index}`;
+            return `
+                <button class="track-option ${isSelected ? 'selected' : ''}" data-index="${track.Index}" data-menu-index="${i}">
+                    <span class="track-option-check">${ICONS.check}</span>
+                    <span class="track-option-label">${label}</span>
+                </button>
+            `;
+        }).join('');
+
+        trackMenuOverlay.innerHTML = `
+            <div class="track-menu">
+                <div class="track-menu-title">${title}</div>
+                <div class="track-menu-options">
+                    ${optionsHtml}
+                </div>
+            </div>
+        `;
+
+        // Add click handlers
+        trackMenuOverlay.querySelectorAll('.track-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const trackIndex = parseInt(btn.dataset.index);
+                selectTrack(trackIndex);
+            });
+        });
+
+        trackMenuOverlay.addEventListener('click', (e) => {
+            if (e.target === trackMenuOverlay) {
+                closeTrackMenu();
+            }
+        });
+    }
+
+    function updateTrackMenuFocus() {
+        if (!trackMenuOverlay) return;
+        const options = trackMenuOverlay.querySelectorAll('.track-option');
+        options.forEach((opt, i) => {
+            const isFocused = i === trackMenuFocusIndex;
+            opt.classList.toggle('focused', isFocused);
+            if (isFocused) {
+                opt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        });
+    }
+
+    function selectTrack(trackIndex) {
+        const player = window.playerInstance;
+        if (!player) return;
+
+        if (trackMenuType === 'subtitles') {
+            currentSubtitleIndex = trackIndex;
+            if (player.setSubtitleStreamIndex) {
+                player.setSubtitleStreamIndex(trackIndex);
+            }
+            console.log('[OSD] Subtitle track set to:', trackIndex);
+        } else if (trackMenuType === 'audio') {
+            currentAudioIndex = trackIndex;
+            if (player.setAudioStreamIndex) {
+                player.setAudioStreamIndex(trackIndex);
+            }
+            console.log('[OSD] Audio track set to:', trackIndex);
+        }
+
+        closeTrackMenu();
+    }
+
+    function handleTrackMenuKeyDown(e) {
+        if (!isTrackMenuOpen) return false;
+
+        const options = trackMenuOverlay?.querySelectorAll('.track-option') || [];
+        const optionCount = options.length;
+
+        switch (e.keyCode) {
+            case 38: // Up
+                if (trackMenuFocusIndex > 0) {
+                    trackMenuFocusIndex--;
+                    updateTrackMenuFocus();
+                }
+                e.preventDefault();
+                return true;
+
+            case 40: // Down
+                if (trackMenuFocusIndex < optionCount - 1) {
+                    trackMenuFocusIndex++;
+                    updateTrackMenuFocus();
+                }
+                e.preventDefault();
+                return true;
+
+            case 13: // Enter
+                const selectedOption = options[trackMenuFocusIndex];
+                if (selectedOption) {
+                    const trackIndex = parseInt(selectedOption.dataset.index);
+                    selectTrack(trackIndex);
+                }
+                e.preventDefault();
+                return true;
+
+            case 10009: // Tizen Back
+            case 27:    // Escape
+            case 8:     // Backspace
+                closeTrackMenu();
+                e.preventDefault();
+                return true;
+        }
+
+        return false;
+    }
+
     function destroy() {
         stopUpdates();
         if (autoHideTimer) clearTimeout(autoHideTimer);
         document.removeEventListener('keydown', handleKeyDown);
         document.removeEventListener('mousemove', handleActivity);
         document.removeEventListener('touchstart', handleActivity);
+        if (trackMenuOverlay) {
+            trackMenuOverlay.remove();
+            trackMenuOverlay = null;
+        }
     }
 
     // ========================================================================
