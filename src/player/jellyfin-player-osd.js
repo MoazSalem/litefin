@@ -118,7 +118,9 @@
     let trackMenuType = null; // 'subtitles' or 'audio'
     let trackMenuFocusIndex = 0;
     let currentSubtitleIndex = -1;
+    let currentSecondarySubtitleIndex = -1; // Track secondary subtitle index
     let currentAudioIndex = 0;
+    let trackMenuSubtitleMode = 'primary'; // 'primary' or 'secondary'
 
     // ========================================================================
     // Material Design Icons
@@ -861,12 +863,17 @@
     // Track Selection Menu
     // ========================================================================
 
-    function openTrackMenu(type) {
+    function openTrackMenu(type, mode) {
         const player = window.playerInstance;
         if (!player) return;
 
         trackMenuType = type;
         trackMenuFocusIndex = 0;
+
+        // Set subtitle mode (primary or secondary)
+        if (type === 'subtitles') {
+            trackMenuSubtitleMode = mode || 'primary';
+        }
 
         // Get tracks
         let tracks = [];
@@ -875,8 +882,15 @@
 
         if (type === 'subtitles') {
             tracks = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
-            title = 'Subtitles';
-            currentIndex = currentSubtitleIndex;
+
+            if (trackMenuSubtitleMode === 'secondary') {
+                title = 'Secondary Subtitle';
+                currentIndex = currentSecondarySubtitleIndex;
+            } else {
+                title = 'Subtitles';
+                currentIndex = currentSubtitleIndex;
+            }
+
             // Add "Off" option at the beginning
             tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
         } else if (type === 'audio') {
@@ -891,8 +905,15 @@
         }
 
         // Find current selection index in menu
-        trackMenuFocusIndex = tracks.findIndex(t => t.Index === currentIndex);
-        if (trackMenuFocusIndex < 0) trackMenuFocusIndex = 0;
+        // For track list, index 0 = Off, index 1+ = actual tracks
+        const trackListIndex = tracks.findIndex(t => t.Index === currentIndex);
+
+        // For subtitle menus, add 1 to account for the header option ("Secondary Subtitle" or "← Back")
+        if (type === 'subtitles') {
+            trackMenuFocusIndex = trackListIndex < 0 ? 1 : trackListIndex + 1;
+        } else {
+            trackMenuFocusIndex = trackListIndex < 0 ? 0 : trackListIndex;
+        }
 
         renderTrackMenu(title, tracks, currentIndex);
         isTrackMenuOpen = true;
@@ -909,17 +930,47 @@
     }
 
     function renderTrackMenu(title, tracks, currentIndex) {
+        // Create overlay if first time, otherwise just clear and rebuild content
         if (!trackMenuOverlay) {
             trackMenuOverlay = document.createElement('div');
             trackMenuOverlay.className = 'track-menu-overlay';
             document.body.appendChild(trackMenuOverlay);
+
+            // Backdrop click handler - only bind once
+            trackMenuOverlay.addEventListener('click', (e) => {
+                if (e.target === trackMenuOverlay) {
+                    closeTrackMenu();
+                }
+            });
+        }
+
+        // Build header option for mode switching (subtitle menu only)
+        let headerOptionHtml = '';
+        if (trackMenuType === 'subtitles') {
+            if (trackMenuSubtitleMode === 'primary') {
+                // Add "Secondary Subtitle" option at top
+                headerOptionHtml = `
+                    <button class="track-option track-mode-switch" data-action="switch-secondary">
+                        <span class="track-option-check"></span>
+                        <span class="track-option-label">Secondary Subtitle</span>
+                    </button>
+                `;
+            } else {
+                // Add "← Back" option at top for secondary mode
+                headerOptionHtml = `
+                    <button class="track-option track-mode-switch" data-action="switch-primary">
+                        <span class="track-option-check"></span>
+                        <span class="track-option-label">← Back</span>
+                    </button>
+                `;
+            }
         }
 
         const optionsHtml = tracks.map((track, i) => {
             const isSelected = track.Index === currentIndex;
             const label = track.DisplayTitle || track.Title || `Track ${track.Index}`;
             return `
-                <button class="track-option ${isSelected ? 'selected' : ''}" data-index="${track.Index}" data-menu-index="${i}">
+                <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-index="${track.Index}" data-menu-index="${i}">
                     <span class="track-option-check">${ICONS.check}</span>
                     <span class="track-option-label">${label}</span>
                 </button>
@@ -930,23 +981,33 @@
             <div class="track-menu">
                 <div class="track-menu-title">${title}</div>
                 <div class="track-menu-options">
+                    ${headerOptionHtml}
                     ${optionsHtml}
                 </div>
             </div>
         `;
 
-        // Add click handlers
-        trackMenuOverlay.querySelectorAll('.track-option').forEach(btn => {
-            btn.addEventListener('click', () => {
+        // Add click handler for mode switch button
+        const modeSwitchBtn = trackMenuOverlay.querySelector('.track-mode-switch');
+        if (modeSwitchBtn) {
+            modeSwitchBtn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent backdrop click
+                const action = modeSwitchBtn.dataset.action;
+                if (action === 'switch-secondary') {
+                    openTrackMenu('subtitles', 'secondary');
+                } else if (action === 'switch-primary') {
+                    openTrackMenu('subtitles', 'primary');
+                }
+            });
+        }
+
+        // Add click handlers for track options
+        trackMenuOverlay.querySelectorAll('.track-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation(); // Prevent backdrop click
                 const menuIndex = parseInt(btn.dataset.menuIndex);
                 selectTrackByMenuIndex(menuIndex);
             });
-        });
-
-        trackMenuOverlay.addEventListener('click', (e) => {
-            if (e.target === trackMenuOverlay) {
-                closeTrackMenu();
-            }
         });
     }
 
@@ -967,23 +1028,42 @@
         if (!player) return;
 
         if (trackMenuType === 'subtitles') {
+            // Determine if we're setting primary or secondary subtitle
+            const isSecondary = trackMenuSubtitleMode === 'secondary';
+
             // Menu index 0 = Off (-1)
             if (menuIndex === 0) {
-                currentSubtitleIndex = -1;
-                if (player.setSubtitleStreamIndex) {
-                    player.setSubtitleStreamIndex(-1);
+                if (isSecondary) {
+                    currentSecondarySubtitleIndex = -1;
+                    if (player.setSecondarySubtitleStreamIndex) {
+                        player.setSecondarySubtitleStreamIndex(-1);
+                    }
+                    console.log('[OSD] Secondary Subtitles Off');
+                } else {
+                    currentSubtitleIndex = -1;
+                    if (player.setSubtitleStreamIndex) {
+                        player.setSubtitleStreamIndex(-1);
+                    }
+                    console.log('[OSD] Subtitles Off');
                 }
-                console.log('[OSD] Subtitles Off');
             } else {
                 // menuIndex 1 corresponds to tracks[0]
                 const tracks = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
                 const track = tracks[menuIndex - 1];
                 if (track) {
-                    currentSubtitleIndex = track.Index;
-                    if (player.setSubtitleStreamIndex) {
-                        player.setSubtitleStreamIndex(track.Index);
+                    if (isSecondary) {
+                        currentSecondarySubtitleIndex = track.Index;
+                        if (player.setSecondarySubtitleStreamIndex) {
+                            player.setSecondarySubtitleStreamIndex(track.Index);
+                        }
+                        console.log('[OSD] Secondary subtitle track set to index:', track.Index);
+                    } else {
+                        currentSubtitleIndex = track.Index;
+                        if (player.setSubtitleStreamIndex) {
+                            player.setSubtitleStreamIndex(track.Index);
+                        }
+                        console.log('[OSD] Subtitle track set to index:', track.Index);
                     }
-                    console.log('[OSD] Subtitle track set to index:', track.Index);
                 }
             }
         } else if (trackMenuType === 'audio') {
@@ -999,7 +1079,12 @@
             }
         }
 
-        closeTrackMenu();
+        // Re-render menu to update checkmarks (don't close)
+        if (trackMenuType === 'subtitles') {
+            openTrackMenu('subtitles', trackMenuSubtitleMode);
+        } else if (trackMenuType === 'audio') {
+            openTrackMenu('audio');
+        }
     }
 
     function handleTrackMenuKeyDown(e) {
@@ -1026,7 +1111,22 @@
                 return true;
 
             case 13: // Enter
-                selectTrackByMenuIndex(trackMenuFocusIndex);
+                // Check if focused option is the mode-switch button
+                const focusedOption = options[trackMenuFocusIndex];
+                if (focusedOption && focusedOption.classList.contains('track-mode-switch')) {
+                    // Handle mode switch
+                    const action = focusedOption.dataset.action;
+                    if (action === 'switch-secondary') {
+                        openTrackMenu('subtitles', 'secondary');
+                    } else if (action === 'switch-primary') {
+                        openTrackMenu('subtitles', 'primary');
+                    }
+                } else {
+                    // Handle track selection - adjust index if header exists
+                    const hasHeader = trackMenuType === 'subtitles';
+                    const trackIndex = hasHeader ? trackMenuFocusIndex - 1 : trackMenuFocusIndex;
+                    selectTrackByMenuIndex(trackIndex);
+                }
                 e.preventDefault();
                 return true;
 
