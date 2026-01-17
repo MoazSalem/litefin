@@ -266,6 +266,33 @@
 .osd-slider-container {
     flex: 1;
     margin: 0 calc(1em * var(--osd-scale));
+    position: relative;
+}
+
+/* Seek Tooltip - Shows target time above seekbar during seeking */
+.osd-seek-tooltip {
+    position: absolute;
+    top: calc(-50px * var(--osd-scale));
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(0, 0, 0, 0.9);
+    color: #fff;
+    font-size: calc(1.4em * var(--osd-scale));
+    font-weight: bold;
+    font-variant-numeric: tabular-nums;
+    padding: calc(8px * var(--osd-scale)) calc(16px * var(--osd-scale));
+    border-radius: calc(8px * var(--osd-scale));
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.15s ease;
+    z-index: 200;
+}
+
+.osd-seek-tooltip.visible {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Seekbar */

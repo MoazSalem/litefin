@@ -274,6 +274,7 @@
                 <div class="osd-slider-row">
                     <span class="osd-time osd-time-current" id="osdCurrentTime">00:00</span>
                     <div class="osd-slider-container">
+                        <div class="osd-seek-tooltip" id="osdSeekTooltip">00:00</div>
                         <input type="range" 
                                class="osd-slider" 
                                id="osdPositionSlider"
@@ -416,38 +417,59 @@
             return;
         }
 
-        // Determine if this is a Back/Exit key
+        const player = window.playerInstance;
+        const wasHidden = !isOsdVisible;
         const isBackKey = [10009, 27, 8].includes(e.keyCode);
+        const isPlayKey = [13, 415, 10252].includes(e.keyCode);
+        const isSeekKey = [37, 39, 412, 417].includes(e.keyCode);
 
-        // Only wake OSD if it's NOT a back key
-        if (!isBackKey) {
-            const wasHidden = !isOsdVisible;
-            show();
-            resetAutoHide();
-
-            // If OSD was hidden, consume the event to just wake up the UI
-            // This prevents "Enter" from triggering the focused button (e.g. restart video)
-            // If OSD was hidden, consume the event to just wake up the UI
-            // This prevents "Enter" from triggering the focused button (e.g. restart video)
-            if (wasHidden) {
-                // Feature: If Left/Right pressed while hidden, jump to seekbar immediately
-                if (e.keyCode === 37 || e.keyCode === 39) {
-                    currentFocusRow = 2; // Seekbar row index
-                    updateFocus();
-                }
-
-                e.preventDefault();
-                return;
-            }
+        // Back key: If OSD visible, hide it. If hidden, exit player.
+        if (isBackKey) {
+            executeAction('back');
+            e.preventDefault();
+            return;
         }
 
-        const player = window.playerInstance;
-        const { headerRow, controlsRow, seekbar } = getFocusableElements();
+        // Always show OSD and reset timer for non-back keys
+        show();
+        resetAutoHide();
+
+        // ============================================================
+        // Play/Pause Keys (OK, Play, Play/Pause)
+        // Always toggle play AND focus play button
+        // ============================================================
+        if (isPlayKey) {
+            currentFocusRow = 1;
+            currentFocusIndex = 2; // Play button is index 2
+            updateFocus();
+            executeAction('togglePlay');
+            e.preventDefault();
+            return;
+        }
+
+        // ============================================================
+        // Seek Keys (Left, Right, Rewind, FastForward)
+        // Focus seekbar AND perform seek action
+        // ============================================================
+        if (isSeekKey) {
+            currentFocusRow = 2; // Seekbar row
+            updateFocus();
+
+            if (e.keyCode === 37 || e.keyCode === 412) {
+                executeAction('rewind');
+            } else {
+                executeAction('fastForward');
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // ============================================================
+        // D-Pad Navigation (Up/Down only for OSD navigation)
+        // ============================================================
+        const { headerRow, controlsRow } = getFocusableElements();
 
         switch (e.keyCode) {
-            // ============================================================
-            // D-Pad Navigation
-            // ============================================================
             case 38: // Up arrow
                 if (currentFocusRow > 0) {
                     currentFocusRow--;
@@ -464,85 +486,9 @@
                 e.preventDefault();
                 break;
 
-            case 37: // Left arrow
-                if (currentFocusRow === 1) {
-                    // Move left in controls row
-                    if (currentFocusIndex > 0) {
-                        currentFocusIndex--;
-                        updateFocus();
-                    }
-                } else if (currentFocusRow === 2) {
-                    // On seekbar - seek backward
-                    executeAction('rewind');
-                }
-                // Row 0 (header) - no left/right, only one button
-                e.preventDefault();
-                break;
-
-            case 39: // Right arrow
-                if (currentFocusRow === 1) {
-                    // Move right in controls row
-                    if (currentFocusIndex < controlsRow.length - 1) {
-                        currentFocusIndex++;
-                        updateFocus();
-                    }
-                } else if (currentFocusRow === 2) {
-                    // On seekbar - seek forward
-                    executeAction('fastForward');
-                }
-                // Row 0 (header) - no left/right, only one button
-                e.preventDefault();
-                break;
-
-            // ============================================================
-            // Enter / OK - Activate focused element
-            // ============================================================
-            case 13: // Enter
-                if (currentFocusRow === 0 && headerRow[0]) {
-                    // Back button
-                    executeAction('back');
-                } else if (currentFocusRow === 1 && controlsRow[currentFocusIndex]) {
-                    const action = controlsRow[currentFocusIndex].dataset.action;
-                    if (action) executeAction(action);
-                } else if (currentFocusRow === 2) {
-                    // On seekbar - toggle play
-                    executeAction('togglePlay');
-                }
-                e.preventDefault();
-                break;
-
-            // ============================================================
-            // Media Keys
-            // ============================================================
-            case 415:   // Tizen Play
-            case 10252: // Tizen Play/Pause toggle
-                executeAction('togglePlay');
-                e.preventDefault();
-                break;
-
             case 19: // Pause
             case 10253: // Tizen Pause
                 if (player && player.pause) player.pause();
-                e.preventDefault();
-                break;
-
-            case 412: // Tizen Rewind
-                executeAction('rewind');
-                e.preventDefault();
-                break;
-
-            case 417: // Tizen FastForward
-                executeAction('fastForward');
-                e.preventDefault();
-                break;
-
-            // ============================================================
-            // Back / Exit
-            // ============================================================
-            case 10009: // Tizen Back
-            case 27:    // Escape
-            case 8:     // Backspace
-                executeAction('back');
                 e.preventDefault();
                 break;
         }
@@ -644,7 +590,6 @@
             }
 
             // Update UI with preview (Mock player object)
-            // Ensure functions return safe numbers
             const previewPlayer = {
                 getCurrentPositionTicks: () => seekTargetTicks,
                 getDurationTicks: () => duration
@@ -652,12 +597,27 @@
             updateTimeDisplay(previewPlayer);
             updatePositionSlider(previewPlayer);
 
-            // Set timer to commit seek
+            // Show seek tooltip with target time
+            const tooltip = document.getElementById('osdSeekTooltip');
+            const slider = document.getElementById('osdPositionSlider');
+            if (tooltip && slider) {
+                tooltip.textContent = formatTime(seekTargetTicks);
+                tooltip.classList.add('visible');
+
+                // Position tooltip above the current slider position
+                const percent = duration > 0 ? (seekTargetTicks / duration) * 100 : 0;
+                tooltip.style.left = percent + '%';
+            }
+
+            // Set timer to commit seek and hide tooltip
             seekDebounceTimer = setTimeout(() => {
                 console.log('[OSD] Committing seek to:', seekTargetTicks);
                 if (player.seek) player.seek(seekTargetTicks);
                 seekTargetTicks = null;
                 seekDebounceTimer = null;
+
+                // Hide tooltip after seek commits
+                if (tooltip) tooltip.classList.remove('visible');
             }, 500); // 500ms wait
         } catch (err) {
             console.error('[OSD] Seek error:', err);
