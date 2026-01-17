@@ -429,7 +429,8 @@
         const wasHidden = !isOsdVisible;
         const isBackKey = [10009, 27, 8].includes(e.keyCode);
         const isPlayKey = [13, 415, 10252].includes(e.keyCode);
-        const isSeekKey = [37, 39, 412, 417].includes(e.keyCode);
+        const isMediaSeekKey = [412, 417].includes(e.keyCode); // Rewind/FastForward media keys
+        const isLeftRight = [37, 39].includes(e.keyCode);
 
         // Back key: If OSD visible, hide it. If hidden, exit player.
         if (isBackKey) {
@@ -444,26 +445,45 @@
 
         // ============================================================
         // Play/Pause Keys (OK, Play, Play/Pause)
-        // Always toggle play AND focus play button
+        // When OSD hidden: focus play button and toggle play
+        // When OSD visible: OK activates focused control, Play keys toggle
         // ============================================================
         if (isPlayKey) {
-            currentFocusRow = 1;
-            currentFocusIndex = 2; // Play button is index 2
-            updateFocus();
-            executeAction('togglePlay');
+            const isEnterKey = e.keyCode === 13;
+
+            if (wasHidden) {
+                // OSD was hidden - focus play button and toggle play
+                currentFocusRow = 1;
+                currentFocusIndex = 2; // Play button is index 2
+                updateFocus();
+                executeAction('togglePlay');
+            } else if (isEnterKey) {
+                // OSD visible + Enter/OK - activate current focused control
+                const { headerRow, controlsRow } = getFocusableElements();
+                if (currentFocusRow === 0 && headerRow[0]) {
+                    executeAction('back');
+                } else if (currentFocusRow === 1 && controlsRow[currentFocusIndex]) {
+                    const action = controlsRow[currentFocusIndex].dataset.action;
+                    if (action) executeAction(action);
+                } else if (currentFocusRow === 2) {
+                    // On seekbar - toggle play
+                    executeAction('togglePlay');
+                }
+            } else {
+                // OSD visible + Play/Pause keys - always toggle play
+                executeAction('togglePlay');
+            }
             e.preventDefault();
             return;
         }
 
         // ============================================================
-        // Seek Keys (Left, Right, Rewind, FastForward)
-        // Focus seekbar AND perform seek action
+        // Media Seek Keys (Rewind, FastForward) - always seek
         // ============================================================
-        if (isSeekKey) {
+        if (isMediaSeekKey) {
             currentFocusRow = 2; // Seekbar row
             updateFocus();
-
-            if (e.keyCode === 37 || e.keyCode === 412) {
+            if (e.keyCode === 412) {
                 executeAction('rewind');
             } else {
                 executeAction('fastForward');
@@ -473,7 +493,48 @@
         }
 
         // ============================================================
-        // D-Pad Navigation (Up/Down only for OSD navigation)
+        // Left/Right Arrow Keys
+        // When OSD was hidden: focus seekbar and seek
+        // When OSD was visible: navigate controls
+        // ============================================================
+        if (isLeftRight) {
+            if (wasHidden) {
+                // OSD was hidden - focus seekbar and seek
+                currentFocusRow = 2;
+                updateFocus();
+                if (e.keyCode === 37) {
+                    executeAction('rewind');
+                } else {
+                    executeAction('fastForward');
+                }
+            } else {
+                // OSD was visible - navigate or seek based on current row
+                const { controlsRow } = getFocusableElements();
+                if (currentFocusRow === 1) {
+                    // Controls row - navigate left/right
+                    if (e.keyCode === 37 && currentFocusIndex > 0) {
+                        currentFocusIndex--;
+                        updateFocus();
+                    } else if (e.keyCode === 39 && currentFocusIndex < controlsRow.length - 1) {
+                        currentFocusIndex++;
+                        updateFocus();
+                    }
+                } else if (currentFocusRow === 2) {
+                    // Seekbar row - seek
+                    if (e.keyCode === 37) {
+                        executeAction('rewind');
+                    } else {
+                        executeAction('fastForward');
+                    }
+                }
+                // Row 0 (header) - no left/right navigation
+            }
+            e.preventDefault();
+            return;
+        }
+
+        // ============================================================
+        // D-Pad Navigation (Up/Down for OSD navigation)
         // ============================================================
         const { headerRow, controlsRow } = getFocusableElements();
 
