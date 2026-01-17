@@ -99,7 +99,7 @@
     let osdElement = null;
     let autoHideTimer = null;
     let updateTimer = null;
-    let isOsdVisible = true;
+    let isOsdVisible = false;
     let isDraggingSeekbar = false;
 
     // Track menu state
@@ -147,10 +147,10 @@
         render();
         bindEvents();
         startUpdates();
-        show();
+        hide();
 
         // Set initial focus on play button and start auto-hide timer
-        setTimeout(() => updateFocus(), 100);
+        // setTimeout(() => updateFocus(), 100);
         resetAutoHide();
 
         console.log('[OSD] Initialized');
@@ -414,8 +414,14 @@
             return;
         }
 
-        show();
-        resetAutoHide();
+        // Determine if this is a Back/Exit key
+        const isBackKey = [10009, 27, 8].includes(e.keyCode);
+
+        // Only wake OSD if it's NOT a back key
+        if (!isBackKey) {
+            show();
+            resetAutoHide();
+        }
 
         const player = window.playerInstance;
         const { headerRow, controlsRow, seekbar } = getFocusableElements();
@@ -686,11 +692,13 @@
     }
 
     function hide() {
-        const player = window.playerInstance;
+        // Allow hiding even if paused
+        /*
         if (player && player.isPaused && player.isPaused()) {
             resetAutoHide();
             return;
         }
+        */
         osdElement.classList.add('osd-hidden');
         isOsdVisible = false;
     }
