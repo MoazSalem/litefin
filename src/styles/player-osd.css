@@ -446,3 +446,36 @@
         outline-offset: 4px;
     }
 }
+
+/* ============================================================================
+   Debug Overlay
+   ============================================================================ */
+#debug-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 40%;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.8);
+    color: #0f0;
+    font-family: monospace;
+    font-size: 14px;
+    padding: 10px;
+    z-index: 9999;
+    overflow-y: auto;
+    pointer-events: none;
+    white-space: pre-wrap;
+    word-break: break-all;
+}
+
+#debug-overlay .log-error {
+    color: #f55;
+}
+
+#debug-overlay .log-warn {
+    color: #fe0;
+}
+
+#debug-overlay .log-info {
+    color: #fff;
+}

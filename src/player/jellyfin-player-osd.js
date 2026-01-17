@@ -9,6 +9,80 @@
     'use strict';
 
     // ========================================================================
+    // Debug Overlay Support
+    // ========================================================================
+    const originalConsole = {
+        log: console.log,
+        error: console.error,
+        warn: console.warn,
+        info: console.info
+    };
+
+    function initDebugOverlay() {
+        if (!document.getElementById('debug-overlay')) {
+            const overlay = document.createElement('div');
+            overlay.id = 'debug-overlay';
+            document.body.appendChild(overlay);
+        }
+    }
+
+    function logToOverlay(type, args) {
+        initDebugOverlay();
+        const overlay = document.getElementById('debug-overlay');
+        if (overlay) {
+            const msg = args.map(arg =>
+                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+            ).join(' ');
+
+            // Only show important logs (DeviceProfile, Tizen, Error, OSD, JellyfinPlayer)
+            const isImportant = type === 'error' ||
+                msg.includes('[DeviceProfile]') ||
+                msg.includes('[TizenAVPlayer]') ||
+                msg.includes('[JellyfinPlayer]') ||
+                msg.includes('[OSD]') ||
+                msg.includes('Tizen');
+
+            if (!isImportant) return;
+
+            const line = document.createElement('div');
+            line.className = `log-${type}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            overlay.insertBefore(line, overlay.firstChild);
+
+            // Limit lines
+            if (overlay.children.length > 100) {
+                overlay.removeChild(overlay.lastChild);
+            }
+        }
+    }
+
+    console.log = function (...args) {
+        originalConsole.log.apply(console, args);
+        logToOverlay('info', args);
+    };
+
+    console.error = function (...args) {
+        originalConsole.error.apply(console, args);
+        logToOverlay('error', args);
+    };
+
+    console.warn = function (...args) {
+        originalConsole.warn.apply(console, args);
+        logToOverlay('warn', args);
+    };
+
+    console.info = function (...args) {
+        originalConsole.info.apply(console, args);
+        logToOverlay('info', args);
+    };
+
+    // Capture global errors
+    window.onerror = function (msg, url, line, col, error) {
+        console.error('Global Error:', msg, url, line, col, error);
+        return false;
+    };
+
+    // ========================================================================
     // Configuration
     // ========================================================================
 
@@ -699,8 +773,8 @@
         // Add click handlers
         trackMenuOverlay.querySelectorAll('.track-option').forEach(btn => {
             btn.addEventListener('click', () => {
-                const trackIndex = parseInt(btn.dataset.index);
-                selectTrack(trackIndex);
+                const menuIndex = parseInt(btn.dataset.menuIndex);
+                selectTrackByMenuIndex(menuIndex);
             });
         });
 
@@ -723,22 +797,25 @@
         });
     }
 
-    function selectTrack(trackIndex) {
+    function selectTrackByMenuIndex(menuIndex) {
         const player = window.playerInstance;
         if (!player) return;
 
         if (trackMenuType === 'subtitles') {
-            currentSubtitleIndex = trackIndex;
+            // Menu index 0 = Off (-1), 1+ = actual track positions
+            const trackPosition = menuIndex - 1; // -1 for Off, 0+ for actual tracks
+            currentSubtitleIndex = trackPosition;
             if (player.setSubtitleStreamIndex) {
-                player.setSubtitleStreamIndex(trackIndex);
+                player.setSubtitleStreamIndex(trackPosition);
             }
-            console.log('[OSD] Subtitle track set to:', trackIndex);
+            console.log('[OSD] Subtitle track set to position:', trackPosition);
         } else if (trackMenuType === 'audio') {
-            currentAudioIndex = trackIndex;
+            // Audio has no "Off", menu index is the track position
+            currentAudioIndex = menuIndex;
             if (player.setAudioStreamIndex) {
-                player.setAudioStreamIndex(trackIndex);
+                player.setAudioStreamIndex(menuIndex);
             }
-            console.log('[OSD] Audio track set to:', trackIndex);
+            console.log('[OSD] Audio track set to position:', menuIndex);
         }
 
         closeTrackMenu();
@@ -768,11 +845,7 @@
                 return true;
 
             case 13: // Enter
-                const selectedOption = options[trackMenuFocusIndex];
-                if (selectedOption) {
-                    const trackIndex = parseInt(selectedOption.dataset.index);
-                    selectTrack(trackIndex);
-                }
+                selectTrackByMenuIndex(trackMenuFocusIndex);
                 e.preventDefault();
                 return true;
 
