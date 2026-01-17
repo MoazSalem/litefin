@@ -95,7 +95,8 @@
     const CONFIG = {
         autoHideDelay: 5000,
         updateInterval: 500,
-        seekStep: 10000
+        seekStepBack: 5000,    // 5 seconds default
+        seekStepForward: 10000 // 10 seconds default
     };
 
     // ========================================================================
@@ -109,6 +110,7 @@
     let isDraggingSeekbar = false;
     let seekDebounceTimer = null;
     let seekTargetTicks = null;
+    let seekStartTime = null; // Track when continuous seeking started (for speed acceleration)
 
     // Track menu state
     let trackMenuOverlay = null;
@@ -530,12 +532,12 @@
                 break;
 
             case 'rewind':
-                const skipBackMs = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || CONFIG.seekStep;
+                const skipBackMs = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || CONFIG.seekStepBack;
                 performDebouncedSeek(-skipBackMs * 10000); // Convert MS to Ticks
                 break;
 
             case 'fastForward':
-                const skipFwdMs = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || CONFIG.seekStep;
+                const skipFwdMs = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || CONFIG.seekStepForward;
                 performDebouncedSeek(skipFwdMs * 10000); // Convert MS to Ticks
                 break;
 
@@ -570,10 +572,24 @@
             show();
             resetAutoHide();
 
-            // Initialize target if starting new seek
+            // Initialize seek session if starting fresh
             if (seekTargetTicks === null) {
-                // Ensure we have a valid start position
                 seekTargetTicks = (player.getCurrentPositionTicks && player.getCurrentPositionTicks()) || 0;
+                seekStartTime = Date.now(); // Start tracking seek duration
+            }
+
+            // Calculate seek speed multiplier based on how long user has been seeking
+            // 0-3s: 1x, 3-5s: 2x, 5-8s: 3x, 8-11s: 4x, 11+: 5x
+            const seekDuration = (Date.now() - seekStartTime) / 1000;
+            let speedMultiplier = 1;
+            if (seekDuration >= 11) {
+                speedMultiplier = 5;
+            } else if (seekDuration >= 8) {
+                speedMultiplier = 4;
+            } else if (seekDuration >= 5) {
+                speedMultiplier = 3;
+            } else if (seekDuration >= 3) {
+                speedMultiplier = 2;
             }
 
             // Ensure offset is a number
@@ -582,8 +598,9 @@
                 return;
             }
 
-            // Add offset
-            seekTargetTicks += offsetTicks;
+            // Apply speed multiplier to offset
+            const adjustedOffset = offsetTicks * speedMultiplier;
+            seekTargetTicks += adjustedOffset;
 
             // Clamp to duration
             const duration = (player.getDurationTicks && player.getDurationTicks()) || 0;
@@ -595,7 +612,7 @@
                 clearTimeout(seekDebounceTimer);
             }
 
-            // Update UI with preview (Mock player object)
+            // Update UI with preview
             const previewPlayer = {
                 getCurrentPositionTicks: () => seekTargetTicks,
                 getDurationTicks: () => duration
@@ -603,11 +620,12 @@
             updateTimeDisplay(previewPlayer);
             updatePositionSlider(previewPlayer);
 
-            // Show seek tooltip with target time
+            // Show seek tooltip with target time and speed indicator
             const tooltip = document.getElementById('osdSeekTooltip');
             const slider = document.getElementById('osdPositionSlider');
             if (tooltip && slider) {
-                tooltip.textContent = formatTime(seekTargetTicks);
+                const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
+                tooltip.textContent = formatTime(seekTargetTicks) + speedIndicator;
                 tooltip.classList.add('visible');
 
                 // Position tooltip above the current slider position
@@ -615,11 +633,12 @@
                 tooltip.style.left = percent + '%';
             }
 
-            // Set timer to commit seek and hide tooltip
+            // Set timer to commit seek and reset state
             seekDebounceTimer = setTimeout(() => {
                 console.log('[OSD] Committing seek to:', seekTargetTicks);
                 if (player.seek) player.seek(seekTargetTicks);
                 seekTargetTicks = null;
+                seekStartTime = null; // Reset seek session
                 seekDebounceTimer = null;
 
                 // Hide tooltip after seek commits
@@ -627,7 +646,8 @@
             }, 500); // 500ms wait
         } catch (err) {
             console.error('[OSD] Seek error:', err);
-            seekTargetTicks = null; // Reset state on error
+            seekTargetTicks = null;
+            seekStartTime = null;
         }
     }
 
