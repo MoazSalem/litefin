@@ -216,7 +216,7 @@
             <!-- ============================================================ -->
             <div class="osd-header">
                 <div class="osd-header-left">
-                    <button class="osd-btn osd-back-btn" data-action="back" tabindex="0" title="Back">
+                    <button class="osd-btn osd-back-btn" data-action="exit" tabindex="0" title="Back">
                         ${ICONS.arrowBack}
                     </button>
                     <span class="osd-title" id="osdTitle">${title}</span>
@@ -585,6 +585,12 @@
                     if (player.stop) player.stop();
                     history.back();
                 }
+                break;
+
+            case 'exit':
+                // Always exit
+                if (player.stop) player.stop();
+                history.back();
                 break;
 
             case 'togglePlay':
