@@ -154,6 +154,34 @@
         resetAutoHide();
 
         console.log('[OSD] Initialized');
+
+        // Bind to player events for track updates
+        const player = window.playerInstance;
+        if (player) {
+            player.on('mediastreamschange', onMediaStreamsChange);
+
+            // Initialize state from player
+            if (player.getCurrentAudioStreamIndex) {
+                const aIndex = player.getCurrentAudioStreamIndex();
+                if (aIndex !== undefined) currentAudioIndex = aIndex;
+            }
+            if (player.getCurrentSubtitleStreamIndex) {
+                const sIndex = player.getCurrentSubtitleStreamIndex();
+                if (sIndex !== undefined) currentSubtitleIndex = sIndex;
+            }
+        }
+    }
+
+    function onMediaStreamsChange(e) {
+        console.log('[OSD] onMediaStreamsChange:', e);
+        if (e.detail) {
+            if (e.detail.audioStreamIndex !== undefined) {
+                currentAudioIndex = e.detail.audioStreamIndex;
+            }
+            if (e.detail.subtitleStreamIndex !== undefined) {
+                currentSubtitleIndex = e.detail.subtitleStreamIndex;
+            }
+        }
     }
 
     function addMaterialIcons() {
@@ -802,20 +830,36 @@
         if (!player) return;
 
         if (trackMenuType === 'subtitles') {
-            // Menu index 0 = Off (-1), 1+ = actual track positions
-            const trackPosition = menuIndex - 1; // -1 for Off, 0+ for actual tracks
-            currentSubtitleIndex = trackPosition;
-            if (player.setSubtitleStreamIndex) {
-                player.setSubtitleStreamIndex(trackPosition);
+            // Menu index 0 = Off (-1)
+            if (menuIndex === 0) {
+                currentSubtitleIndex = -1;
+                if (player.setSubtitleStreamIndex) {
+                    player.setSubtitleStreamIndex(-1);
+                }
+                console.log('[OSD] Subtitles Off');
+            } else {
+                // menuIndex 1 corresponds to tracks[0]
+                const tracks = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
+                const track = tracks[menuIndex - 1];
+                if (track) {
+                    currentSubtitleIndex = track.Index;
+                    if (player.setSubtitleStreamIndex) {
+                        player.setSubtitleStreamIndex(track.Index);
+                    }
+                    console.log('[OSD] Subtitle track set to index:', track.Index);
+                }
             }
-            console.log('[OSD] Subtitle track set to position:', trackPosition);
         } else if (trackMenuType === 'audio') {
-            // Audio has no "Off", menu index is the track position
-            currentAudioIndex = menuIndex;
-            if (player.setAudioStreamIndex) {
-                player.setAudioStreamIndex(menuIndex);
+            // Audio has no "Off", menu index maps directly to tracks array
+            const tracks = player.getAudioTracks ? player.getAudioTracks() : [];
+            const track = tracks[menuIndex];
+            if (track) {
+                currentAudioIndex = track.Index;
+                if (player.setAudioStreamIndex) {
+                    player.setAudioStreamIndex(track.Index);
+                }
+                console.log('[OSD] Audio track set to index:', track.Index);
             }
-            console.log('[OSD] Audio track set to position:', menuIndex);
         }
 
         closeTrackMenu();
