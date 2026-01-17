@@ -85,7 +85,7 @@
 .osd-header-left {
     display: flex;
     align-items: center;
-    gap: calc(3em * var(--osd-scale));
+    gap: calc(1.5em * var(--osd-scale));
 }
 
 .osd-header-right {
@@ -189,8 +189,7 @@
 }
 
 .osd-btn:focus {
-    outline: 2px solid var(--osd-accent-color);
-    outline-offset: 2px;
+    outline: none;
 }
 
 .osd-btn .material-icons {
@@ -203,6 +202,7 @@
     height: calc(48px * var(--osd-scale));
     background: transparent;
     border: none;
+    margin-right: calc(1em * var(--osd-scale));
 }
 
 .osd-back-btn:hover {
@@ -218,21 +218,20 @@
     font-size: calc(24px * var(--osd-scale));
 }
 
-/* BIG BLUE PLAY/PAUSE BUTTON */
 .osd-btn-play {
     width: calc(72px * var(--osd-scale));
     height: calc(72px * var(--osd-scale));
-    background: var(--osd-accent-color);
+    background: transparent;
+    border: none;
     margin: 0 calc(0.6em * var(--osd-scale));
 }
 
 .osd-btn-play:hover {
-    background: #008fc2;
+    background: rgba(255, 255, 255, 0.15);
 }
 
 .osd-btn-play:focus {
-    outline: 3px solid #fff;
-    outline-offset: 3px;
+    outline: none;
 }
 
 .osd-btn-play .material-icons {
@@ -269,41 +268,68 @@
     margin: 0 calc(1em * var(--osd-scale));
 }
 
-/* Position Slider */
+/* Seekbar */
 .osd-slider {
     width: 100%;
     height: calc(6px * var(--osd-scale));
     -webkit-appearance: none;
     appearance: none;
-    background: var(--osd-slider-bg);
+    background: rgba(255, 255, 255, 0.3);
     border-radius: calc(3px * var(--osd-scale));
     outline: none;
     cursor: pointer;
 }
 
+/* Thumb - rounded rectangle, same height as track when unfocused */
 .osd-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: calc(20px * var(--osd-scale));
-    height: calc(20px * var(--osd-scale));
-    background: var(--osd-accent-color);
-    border-radius: 50%;
+    width: calc(6px * var(--osd-scale));
+    height: calc(6px * var(--osd-scale));
+    background: #fff;
+    border-radius: calc(2px * var(--osd-scale));
     cursor: pointer;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    transition: height 0.15s, width 0.15s, margin-top 0.15s;
 }
 
 .osd-slider::-moz-range-thumb {
-    width: calc(20px * var(--osd-scale));
-    height: calc(20px * var(--osd-scale));
-    background: var(--osd-accent-color);
+    width: calc(6px * var(--osd-scale));
+    height: calc(6px * var(--osd-scale));
+    background: #fff;
     border: none;
-    border-radius: 50%;
+    border-radius: calc(2px * var(--osd-scale));
     cursor: pointer;
 }
 
+/* Progress track (before thumb) - white */
+.osd-slider::-webkit-slider-runnable-track {
+    background: linear-gradient(to right,
+            #fff 0%,
+            #fff var(--progress, 0%),
+            rgba(255, 255, 255, 0.3) var(--progress, 0%),
+            rgba(255, 255, 255, 0.3) 100%);
+    height: calc(6px * var(--osd-scale));
+    border-radius: calc(3px * var(--osd-scale));
+}
+
+/* Focused state - larger thumb */
 .osd-slider:focus {
-    outline: 2px solid var(--osd-accent-color);
-    outline-offset: 4px;
+    outline: none;
+}
+
+.osd-slider.focused::-webkit-slider-thumb,
+.osd-slider:focus::-webkit-slider-thumb {
+    width: calc(8px * var(--osd-scale));
+    height: calc(24px * var(--osd-scale));
+    border-radius: calc(4px * var(--osd-scale));
+    margin-top: calc(-9px * var(--osd-scale));
+}
+
+.osd-slider.focused::-moz-range-thumb,
+.osd-slider:focus::-moz-range-thumb {
+    width: calc(8px * var(--osd-scale));
+    height: calc(24px * var(--osd-scale));
+    border-radius: calc(4px * var(--osd-scale));
 }
 
 /* ============================================================================
@@ -318,10 +344,10 @@
    TV Focus Styles
    ============================================================================ */
 
+/* Focused button style */
 .osd-btn.focused {
-    outline: 3px solid var(--osd-accent-color);
-    outline-offset: 3px;
-    background: rgba(255, 255, 255, 0.15);
+    background: var(--osd-accent-color);
+    outline: none;
 }
 
 /* Larger buttons for touch devices */

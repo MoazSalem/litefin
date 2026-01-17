@@ -65,7 +65,10 @@
         bindEvents();
         startUpdates();
         show();
-        resetAutoHide(); // Start the auto-hide timer
+
+        // Set initial focus on play button and start auto-hide timer
+        setTimeout(() => updateFocus(), 100);
+        resetAutoHide();
 
         console.log('[OSD] Initialized');
     }
@@ -232,38 +235,170 @@
         resetAutoHide();
     }
 
+    // ========================================================================
+    // Focus Management for TV Navigation
+    // ========================================================================
+
+    // Define focusable elements in order (row by row)
+    // Row 0: Header row (back button)
+    // Row 1: Controls row buttons
+    // Row 2: Seekbar
+    let currentFocusRow = 1;
+    let currentFocusIndex = 2; // Start on play button (index 2 in controls)
+
+    function getFocusableElements() {
+        // Header row - just the back button
+        const headerBackBtn = osdElement.querySelector('.osd-back-btn');
+        const headerRow = headerBackBtn ? [headerBackBtn] : [];
+
+        // Get all buttons in controls row (left + right)
+        const controlsLeft = Array.from(osdElement.querySelectorAll('.osd-controls-left .osd-btn'));
+        const controlsRight = Array.from(osdElement.querySelectorAll('.osd-controls-right .osd-btn'));
+        const controlsRow = [...controlsLeft, ...controlsRight];
+
+        // The seekbar
+        const seekbar = osdElement.querySelector('.osd-slider');
+
+        return {
+            headerRow,
+            controlsRow,
+            seekbar
+        };
+    }
+
+    function updateFocus() {
+        const { headerRow, controlsRow, seekbar } = getFocusableElements();
+
+        // Remove focus from all elements
+        headerRow.forEach(btn => btn.classList.remove('focused'));
+        controlsRow.forEach(btn => btn.classList.remove('focused'));
+        seekbar?.classList.remove('focused');
+
+        // Apply focus to current element based on row
+        if (currentFocusRow === 0) {
+            // Header row (back button)
+            if (headerRow[0]) {
+                headerRow[0].classList.add('focused');
+                headerRow[0].focus();
+            }
+        } else if (currentFocusRow === 1) {
+            // Controls row
+            const index = Math.min(currentFocusIndex, controlsRow.length - 1);
+            if (controlsRow[index]) {
+                controlsRow[index].classList.add('focused');
+                controlsRow[index].focus();
+            }
+        } else {
+            // Seekbar row
+            if (seekbar) {
+                seekbar.classList.add('focused');
+                seekbar.focus();
+            }
+        }
+    }
+
     function handleKeyDown(e) {
         show();
         resetAutoHide();
 
         const player = window.playerInstance;
+        const { headerRow, controlsRow, seekbar } = getFocusableElements();
 
         switch (e.keyCode) {
-            case 37: // Left - seek back
-                executeAction('rewind');
+            // ============================================================
+            // D-Pad Navigation
+            // ============================================================
+            case 38: // Up arrow
+                if (currentFocusRow > 0) {
+                    currentFocusRow--;
+                    updateFocus();
+                }
                 e.preventDefault();
                 break;
-            case 39: // Right - seek forward
-                executeAction('fastForward');
+
+            case 40: // Down arrow
+                if (currentFocusRow < 2) {
+                    currentFocusRow++;
+                    updateFocus();
+                }
                 e.preventDefault();
                 break;
-            case 13: // Enter - toggle play
-            case 415: // Play
+
+            case 37: // Left arrow
+                if (currentFocusRow === 1) {
+                    // Move left in controls row
+                    if (currentFocusIndex > 0) {
+                        currentFocusIndex--;
+                        updateFocus();
+                    }
+                } else if (currentFocusRow === 2) {
+                    // On seekbar - seek backward
+                    executeAction('rewind');
+                }
+                // Row 0 (header) - no left/right, only one button
+                e.preventDefault();
+                break;
+
+            case 39: // Right arrow
+                if (currentFocusRow === 1) {
+                    // Move right in controls row
+                    if (currentFocusIndex < controlsRow.length - 1) {
+                        currentFocusIndex++;
+                        updateFocus();
+                    }
+                } else if (currentFocusRow === 2) {
+                    // On seekbar - seek forward
+                    executeAction('fastForward');
+                }
+                // Row 0 (header) - no left/right, only one button
+                e.preventDefault();
+                break;
+
+            // ============================================================
+            // Enter / OK - Activate focused element
+            // ============================================================
+            case 13: // Enter
+                if (currentFocusRow === 0 && headerRow[0]) {
+                    // Back button
+                    executeAction('back');
+                } else if (currentFocusRow === 1 && controlsRow[currentFocusIndex]) {
+                    const action = controlsRow[currentFocusIndex].dataset.action;
+                    if (action) executeAction(action);
+                } else if (currentFocusRow === 2) {
+                    // On seekbar - toggle play
+                    executeAction('togglePlay');
+                }
+                e.preventDefault();
+                break;
+
+            // ============================================================
+            // Media Keys
+            // ============================================================
+            case 415:   // Tizen Play
+            case 10252: // Tizen Play/Pause toggle
                 executeAction('togglePlay');
                 e.preventDefault();
                 break;
+
             case 19: // Pause
+            case 10253: // Tizen Pause
                 if (player && player.pause) player.pause();
                 e.preventDefault();
                 break;
-            case 412: // Rewind key
+
+            case 412: // Tizen Rewind
                 executeAction('rewind');
                 e.preventDefault();
                 break;
-            case 417: // FastForward key
+
+            case 417: // Tizen FastForward
                 executeAction('fastForward');
                 e.preventDefault();
                 break;
+
+            // ============================================================
+            // Back / Exit
+            // ============================================================
             case 10009: // Tizen Back
             case 27:    // Escape
             case 8:     // Backspace
@@ -405,6 +540,9 @@
 
         const percent = duration > 0 ? (current / duration) * 100 : 0;
         slider.value = percent;
+
+        // Update progress track gradient
+        slider.style.setProperty('--progress', percent + '%');
     }
 
     function updatePlayPauseButton() {
