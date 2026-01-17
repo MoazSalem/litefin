@@ -9,8 +9,10 @@
     'use strict';
 
     // ========================================================================
-    // Debug Overlay Support
+    // Debug Mode (Enable with ?debug=true in URL)
     // ========================================================================
+    const DEBUG_ENABLED = new URLSearchParams(window.location.search).get('debug') === 'true';
+
     const originalConsole = {
         log: console.log,
         error: console.error,
@@ -18,63 +20,67 @@
         info: console.info
     };
 
-    function initDebugOverlay() {
-        if (!document.getElementById('debug-overlay')) {
-            const overlay = document.createElement('div');
-            overlay.id = 'debug-overlay';
-            document.body.appendChild(overlay);
-        }
-    }
-
-    function logToOverlay(type, args) {
-        initDebugOverlay();
-        const overlay = document.getElementById('debug-overlay');
-        if (overlay) {
-            const msg = args.map(arg =>
-                typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-            ).join(' ');
-
-            // Only show important logs (DeviceProfile, Tizen, Error, OSD, JellyfinPlayer)
-            const isImportant = type === 'error' ||
-                msg.includes('[DeviceProfile]') ||
-                msg.includes('[TizenAVPlayer]') ||
-                msg.includes('[JellyfinPlayer]') ||
-                msg.includes('[OSD]') ||
-                msg.includes('Tizen');
-
-            if (!isImportant) return;
-
-            const line = document.createElement('div');
-            line.className = `log-${type}`;
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-            overlay.insertBefore(line, overlay.firstChild);
-
-            // Limit lines
-            if (overlay.children.length > 100) {
-                overlay.removeChild(overlay.lastChild);
+    // Only set up debug overlay if debug mode is enabled
+    if (DEBUG_ENABLED) {
+        function initDebugOverlay() {
+            if (!document.getElementById('debug-overlay')) {
+                const overlay = document.createElement('div');
+                overlay.id = 'debug-overlay';
+                document.body.appendChild(overlay);
             }
         }
+
+        function logToOverlay(type, args) {
+            initDebugOverlay();
+            const overlay = document.getElementById('debug-overlay');
+            if (overlay) {
+                const msg = args.map(arg =>
+                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
+                ).join(' ');
+
+                // Only show important logs
+                const isImportant = type === 'error' ||
+                    msg.includes('[DeviceProfile]') ||
+                    msg.includes('[TizenAVPlayer]') ||
+                    msg.includes('[JellyfinPlayer]') ||
+                    msg.includes('[OSD]') ||
+                    msg.includes('Tizen');
+
+                if (!isImportant) return;
+
+                const line = document.createElement('div');
+                line.className = `log-${type}`;
+                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+                overlay.insertBefore(line, overlay.firstChild);
+
+                // Limit lines
+                if (overlay.children.length > 100) {
+                    overlay.removeChild(overlay.lastChild);
+                }
+            }
+        }
+
+        // Override console methods to log to overlay
+        console.log = function (...args) {
+            originalConsole.log.apply(console, args);
+            logToOverlay('info', args);
+        };
+
+        console.error = function (...args) {
+            originalConsole.error.apply(console, args);
+            logToOverlay('error', args);
+        };
+
+        console.warn = function (...args) {
+            originalConsole.warn.apply(console, args);
+            logToOverlay('warn', args);
+        };
+
+        console.info = function (...args) {
+            originalConsole.info.apply(console, args);
+            logToOverlay('info', args);
+        };
     }
-
-    console.log = function (...args) {
-        originalConsole.log.apply(console, args);
-        logToOverlay('info', args);
-    };
-
-    console.error = function (...args) {
-        originalConsole.error.apply(console, args);
-        logToOverlay('error', args);
-    };
-
-    console.warn = function (...args) {
-        originalConsole.warn.apply(console, args);
-        logToOverlay('warn', args);
-    };
-
-    console.info = function (...args) {
-        originalConsole.info.apply(console, args);
-        logToOverlay('info', args);
-    };
 
     // Capture global errors
     window.onerror = function (msg, url, line, col, error) {
