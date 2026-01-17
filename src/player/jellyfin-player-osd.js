@@ -101,6 +101,8 @@
     let updateTimer = null;
     let isOsdVisible = false;
     let isDraggingSeekbar = false;
+    let seekDebounceTimer = null;
+    let seekTargetTicks = null;
 
     // Track menu state
     let trackMenuOverlay = null;
@@ -419,8 +421,24 @@
 
         // Only wake OSD if it's NOT a back key
         if (!isBackKey) {
+            const wasHidden = !isOsdVisible;
             show();
             resetAutoHide();
+
+            // If OSD was hidden, consume the event to just wake up the UI
+            // This prevents "Enter" from triggering the focused button (e.g. restart video)
+            // If OSD was hidden, consume the event to just wake up the UI
+            // This prevents "Enter" from triggering the focused button (e.g. restart video)
+            if (wasHidden) {
+                // Feature: If Left/Right pressed while hidden, jump to seekbar immediately
+                if (e.keyCode === 37 || e.keyCode === 39) {
+                    currentFocusRow = 2; // Seekbar row index
+                    updateFocus();
+                }
+
+                e.preventDefault();
+                return;
+            }
         }
 
         const player = window.playerInstance;
@@ -560,13 +578,13 @@
                 break;
 
             case 'rewind':
-                const skipBack = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || CONFIG.seekStep;
-                if (player.seekRelative) player.seekRelative(-skipBack);
+                const skipBackMs = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || CONFIG.seekStep;
+                performDebouncedSeek(-skipBackMs * 10000); // Convert MS to Ticks
                 break;
 
             case 'fastForward':
-                const skipFwd = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || CONFIG.seekStep;
-                if (player.seekRelative) player.seekRelative(skipFwd);
+                const skipFwdMs = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || CONFIG.seekStep;
+                performDebouncedSeek(skipFwdMs * 10000); // Convert MS to Ticks
                 break;
 
             case 'previousTrack':
@@ -592,6 +610,61 @@
         }
     }
 
+    function performDebouncedSeek(offsetTicks) {
+        const player = window.playerInstance;
+        if (!player) return;
+
+        try {
+            show();
+            resetAutoHide();
+
+            // Initialize target if starting new seek
+            if (seekTargetTicks === null) {
+                // Ensure we have a valid start position
+                seekTargetTicks = (player.getCurrentPositionTicks && player.getCurrentPositionTicks()) || 0;
+            }
+
+            // Ensure offset is a number
+            if (isNaN(offsetTicks)) {
+                console.error('[OSD] Invalid seek offset:', offsetTicks);
+                return;
+            }
+
+            // Add offset
+            seekTargetTicks += offsetTicks;
+
+            // Clamp to duration
+            const duration = (player.getDurationTicks && player.getDurationTicks()) || 0;
+            if (seekTargetTicks < 0) seekTargetTicks = 0;
+            if (seekTargetTicks > duration) seekTargetTicks = duration;
+
+            // Clear existing timer
+            if (seekDebounceTimer) {
+                clearTimeout(seekDebounceTimer);
+            }
+
+            // Update UI with preview (Mock player object)
+            // Ensure functions return safe numbers
+            const previewPlayer = {
+                getCurrentPositionTicks: () => seekTargetTicks,
+                getDurationTicks: () => duration
+            };
+            updateTimeDisplay(previewPlayer);
+            updatePositionSlider(previewPlayer);
+
+            // Set timer to commit seek
+            seekDebounceTimer = setTimeout(() => {
+                console.log('[OSD] Committing seek to:', seekTargetTicks);
+                if (player.seek) player.seek(seekTargetTicks);
+                seekTargetTicks = null;
+                seekDebounceTimer = null;
+            }, 500); // 500ms wait
+        } catch (err) {
+            console.error('[OSD] Seek error:', err);
+            seekTargetTicks = null; // Reset state on error
+        }
+    }
+
     // ========================================================================
     // UI Updates
     // ========================================================================
@@ -610,6 +683,9 @@
     function updateState() {
         const player = window.playerInstance;
         if (!player) return;
+
+        // Don't update UI from player if we are in the middle of a remote seek
+        if (seekTargetTicks !== null) return;
 
         updateTimeDisplay(player);
         updateClock();
