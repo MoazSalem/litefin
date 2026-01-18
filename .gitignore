@@ -29,3 +29,6 @@ npm-debug.log*
 # Environment
 .env
 .env.local
+
+# Sign files
+.sign/

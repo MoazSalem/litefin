@@ -16,7 +16,7 @@ import { layoutManager } from './ui/LayoutManager.js';
 // Import styles
 import './styles/base.css';
 import './styles/pages.css';
-import './themes/classic/dark.css';
+import './themes/classic/index.js';  // All classic themes
 
 /**
  * Bootstrap the application

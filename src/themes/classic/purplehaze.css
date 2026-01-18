@@ -1,0 +1,87 @@
+/**
+ * ============================================================================
+ * FastFin Tizen - Purple Haze Theme
+ * ============================================================================
+ * Deep purple/violet theme inspired by jellyfin-web's Purple Haze.
+ * ============================================================================
+ */
+
+[data-theme="purplehaze"] {
+    /* ========================================================================
+       Base Colors - Deep purple tones
+       ======================================================================== */
+    --jf-background: #0f0a14;
+    --jf-background-alt: #1a1025;
+    --jf-surface: #251835;
+    --jf-card-bg: #2d1e45;
+    --jf-card-bg-hover: #3a2858;
+
+    /* ========================================================================
+       Accent Colors - Vibrant purple/magenta
+       ======================================================================== */
+    --jf-accent: #b24bf3;
+    --jf-accent-hover: #9c3ed8;
+    --jf-accent-light: rgba(178, 75, 243, 0.18);
+
+    /* ========================================================================
+       Text Colors
+       ======================================================================== */
+    --jf-text-primary: #f0e8f5;
+    --jf-text-secondary: #c8b8d8;
+    --jf-text-tertiary: #8870a0;
+    --jf-text-on-accent: #ffffff;
+
+    /* ========================================================================
+       UI Elements
+       ======================================================================== */
+    --jf-navbar-bg: #120d18;
+    --jf-sidebar-bg: #1a1225;
+    --jf-input-bg: #251835;
+    --jf-input-border: #402860;
+    --jf-button-bg: #352550;
+    --jf-button-hover: #452e68;
+    --jf-divider: #352550;
+
+    /* ========================================================================
+       Semantic Colors
+       ======================================================================== */
+    --jf-success: #00d68f;
+    --jf-warning: #ffc107;
+    --jf-error: #ff5252;
+    --jf-info: #7c4dff;
+
+    /* ========================================================================
+       Shadows & Effects
+       ======================================================================== */
+    --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.35);
+    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
+    --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.55);
+    --jf-focus-ring: 0 0 0 3px var(--jf-accent-light);
+
+    /* ========================================================================
+       Border Radius
+       ======================================================================== */
+    --jf-border-radius: 4px;
+    --jf-border-radius-lg: 8px;
+
+    /* ========================================================================
+       Transitions
+       ======================================================================== */
+    --jf-transition-fast: 150ms ease;
+    --jf-transition-normal: 250ms ease;
+}
+
+/* Purple Haze gradient overlay */
+[data-theme="purplehaze"] .page::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at bottom left,
+            rgba(178, 75, 243, 0.1) 0%,
+            transparent 60%);
+    pointer-events: none;
+    z-index: -1;
+}

@@ -1,0 +1,102 @@
+/**
+ * ============================================================================
+ * FastFin Tizen - Apple TV Theme
+ * ============================================================================
+ * Clean, minimal theme inspired by tvOS/Apple TV interface.
+ * ============================================================================
+ */
+
+[data-theme="appletv"] {
+    /* ========================================================================
+       Base Colors - Near black with subtle warmth
+       ======================================================================== */
+    --jf-background: #000000;
+    --jf-background-alt: #1c1c1e;
+    --jf-surface: #2c2c2e;
+    --jf-card-bg: #3a3a3c;
+    --jf-card-bg-hover: #48484a;
+
+    /* ========================================================================
+       Accent Colors - iOS Blue
+       ======================================================================== */
+    --jf-accent: #0a84ff;
+    --jf-accent-hover: #409cff;
+    --jf-accent-light: rgba(10, 132, 255, 0.2);
+
+    /* ========================================================================
+       Text Colors
+       ======================================================================== */
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: #ebebf5;
+    --jf-text-tertiary: #8e8e93;
+    --jf-text-on-accent: #ffffff;
+
+    /* ========================================================================
+       UI Elements
+       ======================================================================== */
+    --jf-navbar-bg: rgba(28, 28, 30, 0.8);
+    --jf-sidebar-bg: #1c1c1e;
+    --jf-input-bg: #2c2c2e;
+    --jf-input-border: #3a3a3c;
+    --jf-button-bg: #3a3a3c;
+    --jf-button-hover: #48484a;
+    --jf-divider: #38383a;
+
+    /* ========================================================================
+       Semantic Colors - iOS colors
+       ======================================================================== */
+    --jf-success: #30d158;
+    --jf-warning: #ff9f0a;
+    --jf-error: #ff453a;
+    --jf-info: #64d2ff;
+
+    /* ========================================================================
+       Shadows & Effects - Subtle on dark
+       ======================================================================== */
+    --jf-shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.5);
+    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+    --jf-shadow-lg: 0 10px 40px rgba(0, 0, 0, 0.7);
+    --jf-focus-ring: 0 0 0 4px var(--jf-accent-light);
+
+    /* ========================================================================
+       Border Radius - Apple's rounded corners
+       ======================================================================== */
+    --jf-border-radius: 10px;
+    --jf-border-radius-lg: 16px;
+
+    /* ========================================================================
+       Transitions - Apple's smooth feel
+       ======================================================================== */
+    --jf-transition-fast: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
+    --jf-transition-normal: 350ms cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Apple TV specific styles */
+[data-theme="appletv"] .media-card,
+[data-theme="appletv"] .grid-card,
+[data-theme="appletv"] .result-card {
+    border-radius: 10px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+[data-theme="appletv"] .media-card:focus,
+[data-theme="appletv"] .grid-card:focus,
+[data-theme="appletv"] .result-card:focus {
+    transform: scale(1.08) translateZ(0);
+    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.7);
+}
+
+[data-theme="appletv"] .btn {
+    border-radius: 10px;
+}
+
+[data-theme="appletv"] .text-input,
+[data-theme="appletv"] .search-input {
+    border-radius: 10px;
+}
+
+/* Apple-style blur for navbar */
+[data-theme="appletv"] .page-header {
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+}
