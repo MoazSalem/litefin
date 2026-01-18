@@ -12,6 +12,7 @@ const path = require('path');
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
+const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 // ============================================================================
 // Common configuration shared between builds
@@ -74,6 +75,12 @@ const modernConfig = {
         }),
         new MiniCssExtractPlugin({
             filename: 'css/[name].css'
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: 'src/config.xml', to: 'config.xml' },
+                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
+            ]
         })
     ]
 };
@@ -127,6 +134,12 @@ const legacyConfig = {
         }),
         new MiniCssExtractPlugin({
             filename: 'css/[name].css'
+        }),
+        new CopyWebpackPlugin({
+            patterns: [
+                { from: 'src/config.xml', to: 'config.xml' },
+                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
+            ]
         })
     ]
 };
