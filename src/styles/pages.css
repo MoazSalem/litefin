@@ -194,11 +194,110 @@
     display: none;
 }
 
+/* Discovered Servers */
+.discovered-servers {
+    margin-top: 32px;
+    text-align: left;
+    border-top: 1px solid var(--jf-divider);
+    padding-top: 24px;
+}
+
+.discovered-servers h3 {
+    color: var(--jf-text-secondary);
+    font-size: 0.9rem;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    margin-bottom: 16px;
+}
+
+.discovery-status {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    color: var(--jf-text-tertiary);
+    font-size: 0.9rem;
+}
+
+.loading-spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--jf-text-tertiary);
+    border-top-color: var(--jf-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.server-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.server-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px 16px;
+    background: var(--jf-card-bg);
+    border-radius: var(--jf-border-radius);
+    margin-bottom: 8px;
+    cursor: pointer;
+    transition: background var(--jf-transition-fast);
+}
+
+.server-item:focus,
+.server-item:hover {
+    background: var(--jf-card-bg-hover);
+    outline: none;
+    box-shadow: var(--jf-focus-ring);
+}
+
+.server-item.empty {
+    cursor: default;
+    color: var(--jf-text-tertiary);
+    background: transparent;
+    justify-content: center;
+}
+
+.server-item.empty:hover,
+.server-item.empty:focus {
+    background: transparent;
+    box-shadow: none;
+}
+
+.server-name {
+    flex: 1;
+    color: var(--jf-text-primary);
+    font-weight: 500;
+}
+
+.server-address {
+    color: var(--jf-text-tertiary);
+    font-size: 0.85rem;
+    padding: 2px 8px;
+}
+
+.server-version {
+    color: var(--jf-accent);
+    font-size: 0.75rem;
+    background: var(--jf-accent-light);
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
 /* Users grid */
 .users-grid {
     display: flex;
     flex-wrap: wrap;
-    justify-content: center;
+    justify-content: start;
     gap: 24px;
     margin-bottom: 24px;
 }
@@ -248,6 +347,7 @@
 .user-name {
     color: var(--jf-text-primary);
     font-size: 1rem;
+    margin-right: 6px;
 }
 
 .selected-user {

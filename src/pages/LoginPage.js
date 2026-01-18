@@ -8,7 +8,7 @@
  */
 
 import Page from './Page.js';
-import { auth, api } from '../api/index.js';
+import { auth, api, discoverServers } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
@@ -30,6 +30,8 @@ class LoginPage extends Page {
         this._users = [];
         this._selectedUser = null;
         this._serverUrl = '';
+        this._discoveredServers = []; // Servers found via LAN discovery
+        this._isDiscovering = false;
     }
 
     render() {
@@ -49,16 +51,27 @@ class LoginPage extends Page {
                             <input 
                                 type="url" 
                                 id="server-url" 
-                                class="text-input"
+                                class="text-input tv-input"
                                 placeholder="https://your-server.com"
                                 autocomplete="off"
                                 tabindex="0"
+                                readonly
                             >
                         </div>
                         <button class="btn btn-primary connect-btn" tabindex="0">
                             Connect
                         </button>
                         <p class="login-error" id="server-error"></p>
+                        
+                        <!-- Discovered Servers -->
+                        <div class="discovered-servers" id="discovered-servers">
+                            <h3>Discovered Servers</h3>
+                            <div class="discovery-status" id="discovery-status">
+                                <div class="loading-spinner-small"></div>
+                                <span>Scanning network...</span>
+                            </div>
+                            <ul class="server-list" id="server-list"></ul>
+                        </div>
                     </div>
                     
                     <!-- User Selection -->
@@ -83,9 +96,10 @@ class LoginPage extends Page {
                             <input 
                                 type="password" 
                                 id="password-input" 
-                                class="text-input"
+                                class="text-input tv-input"
                                 placeholder="Password (leave empty if none)"
                                 tabindex="0"
+                                readonly
                             >
                         </div>
                         <button class="btn btn-primary login-btn" tabindex="0">
@@ -112,6 +126,8 @@ class LoginPage extends Page {
         this._serverInput = this.$('#server-url');
         this._passwordInput = this.$('#password-input');
         this._usersGrid = this.$('#users-grid');
+        this._serverList = this.$('#server-list');
+        this._discoveryStatus = this.$('#discovery-status');
 
         // Load saved server URL
         const savedUrl = auth.getSavedServerUrl();
@@ -124,6 +140,9 @@ class LoginPage extends Page {
 
         // Setup focus sections
         this._setupFocus();
+
+        // Start server discovery in background
+        this._startDiscovery();
 
         // Set initial focus
         setTimeout(() => {
@@ -143,31 +162,62 @@ class LoginPage extends Page {
             btn.addEventListener('click', () => this._goBack());
         });
 
-        // Enter key on inputs
+        // Enter key on inputs - open keyboard first, or submit if already editable
         this._serverInput?.addEventListener('keydown', (e) => {
-            if (e.keyCode === 13) this._connectToServer();
+            if (e.keyCode === 13) {
+                if (this._serverInput.readOnly) {
+                    // First Enter press: enable editing and open keyboard
+                    this._serverInput.readOnly = false;
+                    this._serverInput.focus();
+                } else {
+                    // Second Enter press: submit
+                    this._serverInput.readOnly = true;
+                    this._connectToServer();
+                }
+            }
+        });
+
+        // Restore readonly when input loses focus
+        this._serverInput?.addEventListener('blur', () => {
+            this._serverInput.readOnly = true;
         });
 
         this._passwordInput?.addEventListener('keydown', (e) => {
-            if (e.keyCode === 13) this._login();
+            if (e.keyCode === 13) {
+                if (this._passwordInput.readOnly) {
+                    // First Enter press: enable editing and open keyboard
+                    this._passwordInput.readOnly = false;
+                    this._passwordInput.focus();
+                } else {
+                    // Second Enter press: submit
+                    this._passwordInput.readOnly = true;
+                    this._login();
+                }
+            }
+        });
+
+        // Restore readonly when input loses focus
+        this._passwordInput?.addEventListener('blur', () => {
+            this._passwordInput.readOnly = true;
         });
     }
 
     _setupFocus() {
-        // Register server section
+        // Register server section - vertical for input + button + discovered servers
         this.registerFocusSection('login-server', this.$('[data-section="server"]'), {
             orientation: 'vertical'
         });
 
-        // Register users section
+        // Register users section - grid allows 2D navigation
         this.registerFocusSection('login-users', this.$('[data-section="users"]'), {
             orientation: 'grid',
             leaveUp: 'login-server'
         });
 
-        // Register password section
+        // Register password section - use grid for spatial navigation
+        // so up/down and left/right can reach all elements
         this.registerFocusSection('login-password', this.$('[data-section="password"]'), {
-            orientation: 'vertical'
+            orientation: 'grid'
         });
 
         this.setActiveSection('login-server');
@@ -199,11 +249,20 @@ class LoginPage extends Page {
                 this._renderUsers();
                 this._showState(STATE.USERS);
                 this.setActiveSection('login-users');
+
+                // Focus first user card
+                setTimeout(() => {
+                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    if (firstCard) firstCard.focus();
+                }, 100);
             } else {
                 // No public users - go straight to manual entry
                 this._showState(STATE.PASSWORD);
                 this._selectedUser = { Name: '', Id: '' };
                 this.setActiveSection('login-password');
+
+                // Focus password input
+                setTimeout(() => this._passwordInput.focus(), 100);
             }
         } catch (error) {
             this._showState(STATE.SERVER);
@@ -217,7 +276,7 @@ class LoginPage extends Page {
                 <div class="user-avatar-wrapper">
                     <img 
                         class="user-avatar" 
-                        src="${user.PrimaryImageTag ? api.getImageUrl(user.Id, 'Primary', { maxWidth: 150 }) : ''}"
+                        src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 150 }) : ''}"
                         alt="${user.Name}"
                         onerror="this.style.display='none'"
                     >
@@ -229,11 +288,19 @@ class LoginPage extends Page {
 
         this._usersGrid.innerHTML = html;
 
-        // Add click handlers
+        // Add click and keyboard handlers
         this._usersGrid.querySelectorAll('.user-card').forEach(card => {
             card.addEventListener('click', () => {
                 const index = parseInt(card.dataset.userIndex);
                 this._selectUser(this._users[index]);
+            });
+
+            // Enter key to select user
+            card.addEventListener('keydown', (e) => {
+                if (e.keyCode === 13) {
+                    const index = parseInt(card.dataset.userIndex);
+                    this._selectUser(this._users[index]);
+                }
             });
         });
     }
@@ -245,7 +312,7 @@ class LoginPage extends Page {
         const userEl = this.$('#selected-user');
         userEl.querySelector('.user-name').textContent = user.Name;
         userEl.querySelector('.user-avatar').src = user.PrimaryImageTag
-            ? api.getImageUrl(user.Id, 'Primary', { maxWidth: 100 })
+            ? api.getUserImageUrl(user.Id, { maxWidth: 100 })
             : '';
 
         // Clear password
@@ -284,9 +351,16 @@ class LoginPage extends Page {
             if (this._users.length > 0) {
                 this._showState(STATE.USERS);
                 this.setActiveSection('login-users');
+
+                // Focus first user card
+                setTimeout(() => {
+                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    if (firstCard) firstCard.focus();
+                }, 100);
             } else {
                 this._showState(STATE.SERVER);
                 this.setActiveSection('login-server');
+                setTimeout(() => this._serverInput.focus(), 100);
             }
         } else if (this._state === STATE.USERS) {
             this._showState(STATE.SERVER);
@@ -328,6 +402,105 @@ class LoginPage extends Page {
 
     onBack() {
         this._goBack();
+    }
+
+    // ========================================================================
+    // Server Discovery
+    // ========================================================================
+
+    /**
+     * Start LAN server discovery in the background
+     */
+    async _startDiscovery() {
+        if (this._isDiscovering) return;
+        this._isDiscovering = true;
+
+        console.log('LoginPage: Starting server discovery...');
+
+        try {
+            // Show scanning status
+            if (this._discoveryStatus) {
+                this._discoveryStatus.style.display = 'flex';
+            }
+
+            // Run discovery
+            const servers = await discoverServers((checked, total) => {
+                // Update progress if desired
+                const percent = Math.round((checked / total) * 100);
+                console.log(`LoginPage: Discovery ${percent}%`);
+            });
+
+            this._discoveredServers = servers;
+
+            // Render discovered servers
+            this._renderDiscoveredServers();
+
+        } catch (error) {
+            console.error('LoginPage: Discovery failed', error);
+            if (this._discoveryStatus) {
+                this._discoveryStatus.innerHTML = '<span>Discovery failed</span>';
+            }
+        } finally {
+            this._isDiscovering = false;
+        }
+    }
+
+    /**
+     * Render discovered servers list
+     */
+    _renderDiscoveredServers() {
+        if (!this._serverList) return;
+
+        // Hide scanning status
+        if (this._discoveryStatus) {
+            this._discoveryStatus.style.display = 'none';
+        }
+
+        if (this._discoveredServers.length === 0) {
+            this._serverList.innerHTML = '<li class="server-item empty">No servers found</li>';
+            return;
+        }
+
+        // Render server items
+        this._serverList.innerHTML = this._discoveredServers.map((server, index) => `
+            <li class="server-item" data-server-index="${index}" tabindex="0">
+                <span class="server-name">${server.name}</span>
+                <span class="server-address">${server.address}</span>
+                <span class="server-version">v${server.version || '?'}</span>
+            </li>
+        `).join('');
+
+        // Bind click events
+        this._serverList.querySelectorAll('.server-item:not(.empty)').forEach(item => {
+            item.addEventListener('click', () => {
+                const index = parseInt(item.dataset.serverIndex);
+                this._selectDiscoveredServer(index);
+            });
+            item.addEventListener('keydown', (e) => {
+                if (e.keyCode === 13) {
+                    const index = parseInt(item.dataset.serverIndex);
+                    this._selectDiscoveredServer(index);
+                }
+            });
+        });
+    }
+
+    /**
+     * Select a discovered server and populate the URL input
+     */
+    _selectDiscoveredServer(index) {
+        const server = this._discoveredServers[index];
+        if (server && this._serverInput) {
+            this._serverInput.value = server.address;
+
+            // Focus the Connect button so user can proceed immediately
+            const connectBtn = this.$('.connect-btn');
+            if (connectBtn) {
+                connectBtn.focus();
+            }
+
+            console.log(`LoginPage: Selected server ${server.name} (${server.address})`);
+        }
     }
 }
 

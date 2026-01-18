@@ -464,6 +464,25 @@ class ApiClient {
         return this.buildUrl(queryString ? `${path}?${queryString}` : path);
     }
 
+    /**
+     * Get image URL for a user (avatar)
+     * @param {string} userId - User ID
+     * @param {Object} [options] - Image options
+     * @returns {string} Image URL
+     */
+    getUserImageUrl(userId, options = {}) {
+        const params = new URLSearchParams();
+
+        if (options.maxWidth) params.append('maxWidth', options.maxWidth);
+        if (options.maxHeight) params.append('maxHeight', options.maxHeight);
+        if (options.quality) params.append('quality', options.quality);
+
+        const queryString = params.toString();
+        const path = `/Users/${userId}/Images/Primary`;
+
+        return this.buildUrl(queryString ? `${path}?${queryString}` : path);
+    }
+
     // ========================================================================
     // Playback endpoints
     // ========================================================================
@@ -550,7 +569,126 @@ class ApiClient {
     get isAuthenticated() { return !!this._accessToken; }
 }
 
+// ============================================================================
+// Server Discovery - Static methods for finding Jellyfin servers on LAN
+// ============================================================================
+
+/**
+ * Test if a server is a valid Jellyfin server
+ * @param {string} address - Server address to test (e.g., "http://192.168.1.100:8096")
+ * @param {number} timeout - Timeout in ms
+ * @returns {Promise<Object|null>} Server info or null if not valid
+ */
+async function testServer(address, timeout = 1000) {
+    try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        const response = await fetch(`${address}/System/Info/Public`, {
+            method: 'GET',
+            signal: controller.signal
+        });
+
+        clearTimeout(timeoutId);
+
+        if (!response.ok) return null;
+
+        const info = await response.json();
+
+        // Extract server name from response or URL
+        let serverName = info.ServerName;
+        if (!serverName || serverName.trim() === '') {
+            try {
+                const url = new URL(address);
+                serverName = url.hostname;
+            } catch {
+                serverName = 'Jellyfin Server';
+            }
+        }
+
+        return {
+            address: address,
+            name: serverName,
+            id: info.Id,
+            version: info.Version,
+            operatingSystem: info.OperatingSystem
+        };
+    } catch {
+        return null;
+    }
+}
+
+/**
+ * Discover Jellyfin servers on the local network
+ * Scans common LAN IP ranges on port 8096
+ * @param {Function} onProgress - Optional callback for progress updates (checked, total)
+ * @returns {Promise<Array>} Array of found servers
+ */
+async function discoverServers(onProgress = null) {
+    console.log('ApiClient: Starting server discovery...');
+
+    // Build list of addresses to scan
+    const addressesToScan = [
+        'http://localhost:8096',
+        'http://127.0.0.1:8096',
+        'http://jellyfin:8096'
+    ];
+
+    // Common LAN ranges
+    const ranges = [
+        { prefix: '192.168.1.', start: 1, end: 255 },
+        { prefix: '192.168.0.', start: 1, end: 50 },
+        { prefix: '10.0.0.', start: 1, end: 50 }
+    ];
+
+    for (const range of ranges) {
+        for (let i = range.start; i <= range.end; i++) {
+            addressesToScan.push(`http://${range.prefix}${i}:8096`);
+        }
+    }
+
+    console.log(`ApiClient: Scanning ${addressesToScan.length} addresses...`);
+
+    const foundServers = [];
+    let checkedCount = 0;
+    const totalToCheck = addressesToScan.length;
+
+    // Scan in batches - larger batches for faster scanning
+    const batchSize = 50;
+
+    for (let i = 0; i < addressesToScan.length; i += batchSize) {
+        const batch = addressesToScan.slice(i, i + batchSize);
+
+        // Test all addresses in batch in parallel
+        const results = await Promise.all(
+            batch.map(address => testServer(address))
+        );
+
+        // Collect found servers
+        for (const result of results) {
+            if (result) {
+                console.log(`ApiClient: Found server at ${result.address}`);
+                foundServers.push(result);
+            }
+        }
+
+        checkedCount += batch.length;
+
+        // Report progress
+        if (onProgress) {
+            onProgress(checkedCount, totalToCheck);
+        }
+    }
+
+    console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
+    return foundServers;
+}
+
 // Export singleton
 export const api = new ApiClient();
 
+// Export discovery functions
+export { discoverServers, testServer };
+
 export default ApiClient;
+
