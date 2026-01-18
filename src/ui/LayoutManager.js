@@ -1,0 +1,241 @@
+/**
+ * ============================================================================
+ * FastFin Tizen - LayoutManager
+ * ============================================================================
+ * Manages dual-layout support for Classic and Modern UI modes.
+ * Provides component factories and layout-specific configuration.
+ * 
+ * Usage:
+ *   layoutManager.setLayout('modern');
+ *   const Card = layoutManager.getComponent('Card');
+ * ============================================================================
+ */
+
+import { eventBus } from '../core/EventBus.js';
+import { state } from '../core/StateManager.js';
+
+// Layout constants
+const LAYOUT = {
+    CLASSIC: 'classic',
+    MODERN: 'modern'
+};
+
+// Theme constants per layout
+const THEMES = {
+    [LAYOUT.CLASSIC]: ['dark', 'light', 'blueradiance', 'purplehaze', 'wmc', 'appletv'],
+    [LAYOUT.MODERN]: ['dark', 'light']
+};
+
+class LayoutManager {
+    constructor() {
+        // Component registries per layout
+        this._components = {
+            [LAYOUT.CLASSIC]: new Map(),
+            [LAYOUT.MODERN]: new Map()
+        };
+
+        // Current layout
+        this._layout = LAYOUT.CLASSIC;
+
+        // Current theme
+        this._theme = 'dark';
+    }
+
+    /**
+     * Initialize layout manager
+     */
+    init() {
+        // Load saved preferences
+        const savedLayout = localStorage.getItem('fastfin:layout') || LAYOUT.CLASSIC;
+        const savedTheme = localStorage.getItem('fastfin:theme') || 'dark';
+
+        this.setLayout(savedLayout, false);
+        this.setTheme(savedTheme, false);
+
+        console.log(`LayoutManager: Initialized with layout="${this._layout}", theme="${this._theme}"`);
+    }
+
+    /**
+     * Get current layout
+     * @returns {string} 'classic' or 'modern'
+     */
+    getLayout() {
+        return this._layout;
+    }
+
+    /**
+     * Set the current layout
+     * @param {string} layout - 'classic' or 'modern'
+     * @param {boolean} [save=true] - Save to localStorage
+     */
+    setLayout(layout, save = true) {
+        if (layout !== LAYOUT.CLASSIC && layout !== LAYOUT.MODERN) {
+            console.warn(`LayoutManager: Invalid layout "${layout}"`);
+            return;
+        }
+
+        const oldLayout = this._layout;
+        this._layout = layout;
+
+        // Update HTML attribute for CSS
+        document.documentElement.setAttribute('data-layout', layout);
+
+        // Update state
+        state.set('app:layout', layout, true);
+
+        // Validate theme for new layout
+        if (!this.getAvailableThemes().includes(this._theme)) {
+            // Reset to dark if current theme not available
+            this.setTheme('dark', save);
+        }
+
+        // Save preference
+        if (save) {
+            localStorage.setItem('fastfin:layout', layout);
+        }
+
+        // Emit event for components to update
+        if (oldLayout !== layout) {
+            console.log(`LayoutManager: Layout changed from "${oldLayout}" to "${layout}"`);
+            eventBus.emit('layout:changed', { layout, previousLayout: oldLayout });
+        }
+    }
+
+    /**
+     * Toggle between layouts
+     */
+    toggleLayout() {
+        const newLayout = this._layout === LAYOUT.CLASSIC ? LAYOUT.MODERN : LAYOUT.CLASSIC;
+        this.setLayout(newLayout);
+    }
+
+    /**
+     * Get current theme
+     * @returns {string} Theme name
+     */
+    getTheme() {
+        return this._theme;
+    }
+
+    /**
+     * Set the current theme
+     * @param {string} theme - Theme name
+     * @param {boolean} [save=true] - Save to localStorage
+     */
+    setTheme(theme, save = true) {
+        const availableThemes = this.getAvailableThemes();
+
+        if (!availableThemes.includes(theme)) {
+            console.warn(`LayoutManager: Theme "${theme}" not available for layout "${this._layout}"`);
+            return;
+        }
+
+        const oldTheme = this._theme;
+        this._theme = theme;
+
+        // Update HTML attribute for CSS
+        document.documentElement.setAttribute('data-theme', theme);
+
+        // Update state
+        state.set('app:theme', theme, true);
+
+        // Save preference
+        if (save) {
+            localStorage.setItem('fastfin:theme', theme);
+        }
+
+        if (oldTheme !== theme) {
+            console.log(`LayoutManager: Theme changed from "${oldTheme}" to "${theme}"`);
+            eventBus.emit('theme:changed', { theme, previousTheme: oldTheme });
+        }
+    }
+
+    /**
+     * Get available themes for current layout
+     * @returns {string[]} Array of theme names
+     */
+    getAvailableThemes() {
+        return THEMES[this._layout] || THEMES[LAYOUT.CLASSIC];
+    }
+
+    /**
+     * Register a component for a specific layout
+     * @param {string} name - Component name
+     * @param {Function} ClassicComponent - Classic layout component class
+     * @param {Function} [ModernComponent] - Modern layout component class (optional)
+     */
+    registerComponent(name, ClassicComponent, ModernComponent = null) {
+        this._components[LAYOUT.CLASSIC].set(name, ClassicComponent);
+
+        if (ModernComponent) {
+            this._components[LAYOUT.MODERN].set(name, ModernComponent);
+        } else {
+            // Fall back to classic if modern not provided
+            this._components[LAYOUT.MODERN].set(name, ClassicComponent);
+        }
+
+        console.log(`LayoutManager: Registered component "${name}"`);
+    }
+
+    /**
+     * Get a component class for the current layout
+     * @param {string} name - Component name
+     * @returns {Function|null} Component class
+     */
+    getComponent(name) {
+        const layoutComponents = this._components[this._layout];
+
+        if (layoutComponents.has(name)) {
+            return layoutComponents.get(name);
+        }
+
+        // Fallback to classic
+        if (this._components[LAYOUT.CLASSIC].has(name)) {
+            return this._components[LAYOUT.CLASSIC].get(name);
+        }
+
+        console.warn(`LayoutManager: Component "${name}" not found`);
+        return null;
+    }
+
+    /**
+     * Check if current layout is classic
+     * @returns {boolean} True if classic layout
+     */
+    isClassic() {
+        return this._layout === LAYOUT.CLASSIC;
+    }
+
+    /**
+     * Check if current layout is modern
+     * @returns {boolean} True if modern layout
+     */
+    isModern() {
+        return this._layout === LAYOUT.MODERN;
+    }
+
+    /**
+     * Get layout-specific CSS class prefix
+     * @returns {string} CSS class prefix
+     */
+    getClassPrefix() {
+        return this._layout === LAYOUT.MODERN ? 'modern' : 'classic';
+    }
+
+    /**
+     * Apply layout-specific class to element
+     * @param {HTMLElement} element - Element to style
+     * @param {string} baseClass - Base class name
+     */
+    applyLayoutClass(element, baseClass) {
+        element.className = `${baseClass} ${this.getClassPrefix()}-${baseClass}`;
+    }
+}
+
+// Export singleton instance
+export const layoutManager = new LayoutManager();
+
+// Export constants
+export { LAYOUT, THEMES };
+
+export default LayoutManager;
