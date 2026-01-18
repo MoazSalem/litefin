@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Home Page
+ * LiteFin Tizen - Home Page
  * ============================================================================
  * Main landing page after login showing:
  * - Continue watching row

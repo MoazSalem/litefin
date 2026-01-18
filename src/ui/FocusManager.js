@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - FocusManager
+ * LiteFin Tizen - FocusManager
  * ============================================================================
  * Manages focus navigation for TV remote D-pad control. Handles:
  * - 2D grid navigation (up/down/left/right)

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Application Entry Point
+ * LiteFin Tizen - Application Entry Point
  * ============================================================================
  * Main entry point that bootstraps the application.
  * ============================================================================
@@ -22,7 +22,7 @@ import './themes/classic/index.js';  // All classic themes
  * Bootstrap the application
  */
 async function bootstrap() {
-    console.log('FastFin: Starting...');
+    console.log('LiteFin: Starting...');
 
     // Initialize Tizen adapter first
     tizenAdapter.init();
@@ -44,7 +44,7 @@ async function bootstrap() {
         container: '#app'
     });
 
-    console.log('FastFin: Bootstrap complete');
+    console.log('LiteFin: Bootstrap complete');
 }
 
 // Wait for DOM ready

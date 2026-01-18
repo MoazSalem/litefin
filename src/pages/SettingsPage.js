@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Settings Page
+ * LiteFin Tizen - Settings Page
  * ============================================================================
  * App settings and preferences including layout, theme, and account.
  * ============================================================================
@@ -138,7 +138,7 @@ class SettingsPage extends Page {
                             
                             <div class="setting-item">
                                 <div class="setting-label">
-                                    <span class="setting-name">FastFin for Tizen</span>
+                                    <span class="setting-name">LiteFin for Tizen</span>
                                     <span class="setting-value">Version 0.1.0</span>
                                 </div>
                             </div>

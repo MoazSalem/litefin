@@ -8,7 +8,7 @@ import path from "path";
 
 const execAsync = promisify(exec);
 
-console.info("Building FastFin Tizen app");
+console.info("Building LiteFin Tizen app");
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 const version = pkg.version;
@@ -71,8 +71,8 @@ function copySignatures(buildDir) {
 // ============================================================================
 
 async function packageModern() {
-    const wgtName = `FastFin-${version}.wgt`;
-    const simpleWgtName = "FastFin.wgt";
+    const wgtName = `LiteFin-${version}.wgt`;
+    const simpleWgtName = "LiteFin.wgt";
     await del([wgtName, simpleWgtName]);
 
     const buildDir = "dist/tizen4";
@@ -107,8 +107,8 @@ async function packageModern() {
 }
 
 async function packageLegacy() {
-    const wgtName = `FastFin-Legacy-${version}.wgt`;
-    const simpleWgtName = "FastFin-Legacy.wgt";
+    const wgtName = `LiteFin-Legacy-${version}.wgt`;
+    const simpleWgtName = "LiteFin-Legacy.wgt";
     await del([wgtName, simpleWgtName]);
 
     const buildDir = "dist/tizen3";

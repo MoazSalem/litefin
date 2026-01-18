@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - StateManager
+ * LiteFin Tizen - StateManager
  * ============================================================================
  * Simple observable state container with reactive updates. Components can
  * subscribe to state changes and automatically update when values change.

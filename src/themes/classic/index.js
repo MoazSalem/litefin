@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Theme Index
+ * LiteFin Tizen - Theme Index
  * ============================================================================
  * Imports all classic themes for bundling.
  * Only the base dark theme is loaded by default; 

@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - EventBus
+ * LiteFin Tizen - EventBus
  * ============================================================================
  * Global publish/subscribe event system for decoupled communication between
  * components. Enables loose coupling and makes testing easier.

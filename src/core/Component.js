@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Component Base Class
+ * LiteFin Tizen - Component Base Class
  * ============================================================================
  * Base class for all UI components. Provides lifecycle hooks, DOM management,
  * and event handling. Components should extend this class.

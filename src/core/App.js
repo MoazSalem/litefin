@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - App Controller
+ * LiteFin Tizen - App Controller
  * ============================================================================
  * Main application controller that bootstraps the app, manages global state,
  * and coordinates between core systems (Router, State, Events).
@@ -31,7 +31,7 @@ class App {
             return;
         }
 
-        console.log('App: Initializing FastFin...');
+        console.log('App: Initializing LiteFin...');
 
         // Get container element
         if (typeof options.container === 'string') {

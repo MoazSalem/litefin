@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Details Page
+ * LiteFin Tizen - Details Page
  * ============================================================================
  * Item details with metadata, play button, and related content.
  * Handles movies, series, seasons, and episodes.

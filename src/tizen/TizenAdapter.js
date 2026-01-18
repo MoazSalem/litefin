@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Tizen Adapter
+ * LiteFin Tizen - Tizen Adapter
  * ============================================================================
  * Handles all Tizen-specific functionality including:
  * - Remote control key registration

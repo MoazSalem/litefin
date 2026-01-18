@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Auth Manager
+ * LiteFin Tizen - Auth Manager
  * ============================================================================
  * Handles user authentication, session management, and credential storage.
  * Supports both quick connect and password-based login.
@@ -13,11 +13,11 @@ import { api } from './ApiClient.js';
 
 // Storage keys
 const STORAGE_KEYS = {
-    SERVER_URL: 'fastfin:serverUrl',
-    ACCESS_TOKEN: 'fastfin:accessToken',
-    USER_ID: 'fastfin:userId',
-    USER_DATA: 'fastfin:userData',
-    DEVICE_ID: 'fastfin:deviceId'
+    SERVER_URL: 'litefin:serverUrl',
+    ACCESS_TOKEN: 'litefin:accessToken',
+    USER_ID: 'litefin:userId',
+    USER_DATA: 'litefin:userData',
+    DEVICE_ID: 'litefin:deviceId'
 };
 
 class AuthManager {

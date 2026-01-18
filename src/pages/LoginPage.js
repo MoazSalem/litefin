@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Login Page
+ * LiteFin Tizen - Login Page
  * ============================================================================
  * Server connection and user authentication flow.
  * Steps: 1) Enter server URL -> 2) Select user -> 3) Enter password
@@ -38,7 +38,7 @@ class LoginPage extends Page {
                 <div class="login-container">
                     <!-- Header -->
                     <div class="login-header">
-                        <h1 class="login-logo">FastFin</h1>
+                        <h1 class="login-logo">LiteFin</h1>
                         <p class="login-tagline">Jellyfin for Tizen</p>
                     </div>
                     

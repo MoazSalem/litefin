@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - LayoutManager
+ * LiteFin Tizen - LayoutManager
  * ============================================================================
  * Manages dual-layout support for Classic and Modern UI modes.
  * Provides component factories and layout-specific configuration.
@@ -46,8 +46,8 @@ class LayoutManager {
      */
     init() {
         // Load saved preferences
-        const savedLayout = localStorage.getItem('fastfin:layout') || LAYOUT.CLASSIC;
-        const savedTheme = localStorage.getItem('fastfin:theme') || 'dark';
+        const savedLayout = localStorage.getItem('litefin:layout') || LAYOUT.CLASSIC;
+        const savedTheme = localStorage.getItem('litefin:theme') || 'dark';
 
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);
@@ -91,7 +91,7 @@ class LayoutManager {
 
         // Save preference
         if (save) {
-            localStorage.setItem('fastfin:layout', layout);
+            localStorage.setItem('litefin:layout', layout);
         }
 
         // Emit event for components to update
@@ -141,7 +141,7 @@ class LayoutManager {
 
         // Save preference
         if (save) {
-            localStorage.setItem('fastfin:theme', theme);
+            localStorage.setItem('litefin:theme', theme);
         }
 
         if (oldTheme !== theme) {

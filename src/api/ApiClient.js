@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - API Client
+ * LiteFin Tizen - API Client
  * ============================================================================
  * HTTP client wrapper for Jellyfin server API communication.
  * Handles authentication headers, error handling, and request queuing.
@@ -20,8 +20,8 @@ class ApiClient {
         this._accessToken = null;
         this._userId = null;
         this._deviceId = null;
-        this._deviceName = 'FastFin Tizen';
-        this._clientName = 'FastFin';
+        this._deviceName = 'LiteFin Tizen';
+        this._clientName = 'LiteFin';
         this._clientVersion = '0.1.0';
 
         // Request queue for rate limiting

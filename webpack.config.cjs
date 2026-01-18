@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - Webpack Configuration
+ * LiteFin Tizen - Webpack Configuration
  * ============================================================================
  * Dual-build system supporting:
  * - Modern build (Tizen 4.0+): Native ES6, no transpilation
@@ -79,6 +79,7 @@ const modernConfig = {
         new CopyWebpackPlugin({
             patterns: [
                 { from: 'src/config.xml', to: 'config.xml' },
+                { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
             ]
         })
@@ -138,6 +139,7 @@ const legacyConfig = {
         new CopyWebpackPlugin({
             patterns: [
                 { from: 'src/config.xml', to: 'config.xml' },
+                { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
             ]
         })

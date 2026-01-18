@@ -1,87 +1,87 @@
 /**
  * ============================================================================
- * FastFin Tizen - Blue Radiance Theme
+ * LiteFin Tizen - Blue Radiance Theme
  * ============================================================================
  * Deep blue theme inspired by jellyfin-web's Blue Radiance.
  * ============================================================================
  */
 
 [data-theme="blueradiance"] {
-    /* ========================================================================
+   /* ========================================================================
        Base Colors - Deep blue tones
        ======================================================================== */
-    --jf-background: #0a0f1a;
-    --jf-background-alt: #111827;
-    --jf-surface: #1a2332;
-    --jf-card-bg: #1e2940;
-    --jf-card-bg-hover: #263550;
+   --jf-background: #0a0f1a;
+   --jf-background-alt: #111827;
+   --jf-surface: #1a2332;
+   --jf-card-bg: #1e2940;
+   --jf-card-bg-hover: #263550;
 
-    /* ========================================================================
+   /* ========================================================================
        Accent Colors - Bright cyan/blue
        ======================================================================== */
-    --jf-accent: #00b4d8;
-    --jf-accent-hover: #0096c7;
-    --jf-accent-light: rgba(0, 180, 216, 0.18);
+   --jf-accent: #00b4d8;
+   --jf-accent-hover: #0096c7;
+   --jf-accent-light: rgba(0, 180, 216, 0.18);
 
-    /* ========================================================================
+   /* ========================================================================
        Text Colors
        ======================================================================== */
-    --jf-text-primary: #e8f4f8;
-    --jf-text-secondary: #a8c8d8;
-    --jf-text-tertiary: #6b8ea0;
-    --jf-text-on-accent: #ffffff;
+   --jf-text-primary: #e8f4f8;
+   --jf-text-secondary: #a8c8d8;
+   --jf-text-tertiary: #6b8ea0;
+   --jf-text-on-accent: #ffffff;
 
-    /* ========================================================================
+   /* ========================================================================
        UI Elements
        ======================================================================== */
-    --jf-navbar-bg: #0d1520;
-    --jf-sidebar-bg: #111d2b;
-    --jf-input-bg: #1a2332;
-    --jf-input-border: #2a4060;
-    --jf-button-bg: #1e3050;
-    --jf-button-hover: #2a4060;
-    --jf-divider: #1e3050;
+   --jf-navbar-bg: #0d1520;
+   --jf-sidebar-bg: #111d2b;
+   --jf-input-bg: #1a2332;
+   --jf-input-border: #2a4060;
+   --jf-button-bg: #1e3050;
+   --jf-button-hover: #2a4060;
+   --jf-divider: #1e3050;
 
-    /* ========================================================================
+   /* ========================================================================
        Semantic Colors
        ======================================================================== */
-    --jf-success: #00c49a;
-    --jf-warning: #ffc857;
-    --jf-error: #ff6b6b;
-    --jf-info: #48cae4;
+   --jf-success: #00c49a;
+   --jf-warning: #ffc857;
+   --jf-error: #ff6b6b;
+   --jf-info: #48cae4;
 
-    /* ========================================================================
+   /* ========================================================================
        Shadows & Effects
        ======================================================================== */
-    --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --jf-focus-ring: 0 0 0 3px var(--jf-accent-light);
+   --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+   --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+   --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+   --jf-focus-ring: 0 0 0 3px var(--jf-accent-light);
 
-    /* ========================================================================
+   /* ========================================================================
        Border Radius
        ======================================================================== */
-    --jf-border-radius: 4px;
-    --jf-border-radius-lg: 8px;
+   --jf-border-radius: 4px;
+   --jf-border-radius-lg: 8px;
 
-    /* ========================================================================
+   /* ========================================================================
        Transitions
        ======================================================================== */
-    --jf-transition-fast: 150ms ease;
-    --jf-transition-normal: 250ms ease;
+   --jf-transition-fast: 150ms ease;
+   --jf-transition-normal: 250ms ease;
 }
 
 /* Blue Radiance gradient overlay effect */
 [data-theme="blueradiance"] .page::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(ellipse at top right,
-            rgba(0, 180, 216, 0.08) 0%,
-            transparent 60%);
-    pointer-events: none;
-    z-index: -1;
+   content: '';
+   position: fixed;
+   top: 0;
+   left: 0;
+   right: 0;
+   bottom: 0;
+   background: radial-gradient(ellipse at top right,
+         rgba(0, 180, 216, 0.08) 0%,
+         transparent 60%);
+   pointer-events: none;
+   z-index: -1;
 }

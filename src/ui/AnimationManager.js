@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * FastFin Tizen - AnimationManager
+ * LiteFin Tizen - AnimationManager
  * ============================================================================
  * GPU-accelerated animation utilities optimized for TV performance.
  * Uses CSS transforms and opacity for smooth 60fps animations.
