@@ -11,6 +11,14 @@ import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { router } from './Router.js';
 
+// Page imports (static to support Tizen 4's Chromium 56)
+import LoginPage from '../pages/LoginPage.js';
+import HomePage from '../pages/HomePage.js';
+import LibraryPage from '../pages/LibraryPage.js';
+import DetailsPage from '../pages/DetailsPage.js';
+import SearchPage from '../pages/SearchPage.js';
+import SettingsPage from '../pages/SettingsPage.js';
+
 class App {
     constructor() {
         // App initialization state
@@ -51,7 +59,7 @@ class App {
         // Setup global event handlers
         this._setupEventHandlers();
 
-        // Register routes
+        // Register routes (must await to ensure all pages are loaded)
         this._registerRoutes();
 
         // Initialize router (will navigate to current hash or default)
@@ -113,13 +121,17 @@ class App {
      * @private
      */
     _registerRoutes() {
-        // Import pages dynamically to avoid circular deps
-        import('../pages/LoginPage.js').then(m => router.register('/login', m.default));
-        import('../pages/HomePage.js').then(m => router.register('/home', m.default));
-        import('../pages/LibraryPage.js').then(m => router.register('/library/:id', m.default));
-        import('../pages/DetailsPage.js').then(m => router.register('/details/:id', m.default));
-        import('../pages/SearchPage.js').then(m => router.register('/search', m.default));
-        import('../pages/SettingsPage.js').then(m => router.register('/settings', m.default));
+        // NOTE: Using synchronous registration to avoid dynamic import() 
+        // which is not supported in Tizen 4's Chromium 56 engine
+
+        // Import pages at top of file (see imports above)
+        // Register all routes
+        router.register('/login', LoginPage);
+        router.register('/home', HomePage);
+        router.register('/library/:id', LibraryPage);
+        router.register('/details/:id', DetailsPage);
+        router.register('/search', SearchPage);
+        router.register('/settings', SettingsPage);
 
         // Default route - check auth and redirect appropriately
         router.register('/', {

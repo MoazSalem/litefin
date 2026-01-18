@@ -157,7 +157,14 @@ class Router {
                 }
 
                 // Create new page instance
-                this._currentPage = new route.PageClass();
+                // Handle both class constructors and plain object handlers
+                if (typeof route.PageClass === 'function') {
+                    // It's a class/constructor - use 'new'
+                    this._currentPage = new route.PageClass();
+                } else {
+                    // It's a plain object with methods (like the '/' redirect route)
+                    this._currentPage = route.PageClass;
+                }
 
                 // Initialize the page with route params
                 if (typeof this._currentPage.init === 'function') {

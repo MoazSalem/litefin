@@ -2,9 +2,10 @@
  * ============================================================================
  * LiteFin Tizen - Webpack Configuration
  * ============================================================================
- * Dual-build system supporting:
- * - Modern build (Tizen 4.0+): Native ES6, no transpilation
- * - Legacy build (Tizen 3.0): Transpiled to ES5 via Babel
+ * Triple-build system supporting:
+ * - Native build (Tizen 6.0+): No transpilation, pure ES6+
+ * - Modern build (Tizen 5.0+): Transpiled for Chromium 69
+ * - Legacy build (Tizen 3.0+): Transpiled for Chromium 47 (ES5)
  * ============================================================================
  */
 
@@ -15,59 +16,10 @@ const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 const CopyWebpackPlugin = require('copy-webpack-plugin');
 
 // ============================================================================
-// Common configuration shared between builds
+// Shared plugins factory
 // ============================================================================
-const commonConfig = {
-    entry: './src/index.js',
-
-    optimization: {
-        splitChunks: {
-            chunks: 'all',
-            maxSize: 100000  // Keep chunks small for fast loading on TVs
-        },
-        minimizer: [
-            '...',  // Keep default minimizers (terser)
-            new CssMinimizerPlugin()
-        ]
-    },
-
-    plugins: [
-        new HtmlWebpackPlugin({
-            template: './src/index.html',
-            filename: 'index.html',
-            inject: 'body'
-        }),
-        new MiniCssExtractPlugin({
-            filename: 'css/[name].css'
-        })
-    ],
-
-    module: {
-        rules: [
-            // CSS handling
-            {
-                test: /\.css$/,
-                use: [MiniCssExtractPlugin.loader, 'css-loader']
-            }
-        ]
-    }
-};
-
-// ============================================================================
-// Modern build - Tizen 4.0+ (Native ES6)
-// ============================================================================
-const modernConfig = {
-    ...commonConfig,
-    name: 'modern',
-    mode: 'production',
-
-    output: {
-        path: path.resolve(__dirname, 'dist/tizen4'),
-        filename: 'js/[name].js',
-        clean: true
-    },
-
-    plugins: [
+function getPlugins() {
+    return [
         new HtmlWebpackPlugin({
             template: './src/index.html',
             filename: 'index.html',
@@ -83,67 +35,120 @@ const modernConfig = {
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
             ]
         })
-    ]
-};
+    ];
+}
 
 // ============================================================================
-// Legacy build - Tizen 3.0 (Transpiled ES5)
+// ES6 build - Tizen 6.0+ (No transpilation, pure ES6+)
 // ============================================================================
-const legacyConfig = {
-    ...commonConfig,
-    name: 'legacy',
+const es6Config = {
+    name: 'es6',
     mode: 'production',
+    entry: './src/index.js',
 
     output: {
-        path: path.resolve(__dirname, 'dist/tizen3'),
+        path: path.resolve(__dirname, 'dist/es6'),
         filename: 'js/[name].js',
         clean: true
     },
 
+    optimization: {
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
     module: {
         rules: [
-            // Babel transpilation for ES5
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
+        ]
+    },
+
+    plugins: getPlugins()
+};
+
+// ============================================================================
+// Normal build - Tizen 5.0+ (Chromium 69)
+// ============================================================================
+const normalConfig = {
+    name: 'normal',
+    mode: 'production',
+    entry: './src/index.js',
+
+    output: {
+        path: path.resolve(__dirname, 'dist/normal'),
+        filename: 'js/[name].js',
+        clean: true
+    },
+
+    optimization: {
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
             {
                 test: /\.js$/,
                 exclude: /node_modules/,
                 use: {
                     loader: 'babel-loader',
                     options: {
-                        presets: [
-                            ['@babel/preset-env', {
-                                targets: { chrome: '47' },  // Chromium M47 = Tizen 3.0
-                                useBuiltIns: 'usage',
-                                corejs: 3
-                            }]
-                        ]
+                        presets: [['@babel/preset-env', {
+                            targets: { chrome: '69' },
+                            useBuiltIns: 'usage',
+                            corejs: 3
+                        }]]
                     }
                 }
             },
-            // CSS handling
-            {
-                test: /\.css$/,
-                use: [MiniCssExtractPlugin.loader, 'css-loader']
-            }
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
         ]
     },
 
-    plugins: [
-        new HtmlWebpackPlugin({
-            template: './src/index.html',
-            filename: 'index.html',
-            inject: 'body'
-        }),
-        new MiniCssExtractPlugin({
-            filename: 'css/[name].css'
-        }),
-        new CopyWebpackPlugin({
-            patterns: [
-                { from: 'src/config.xml', to: 'config.xml' },
-                { from: 'icon.png', to: 'icon.png' },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
-            ]
-        })
-    ]
+    plugins: getPlugins()
 };
 
-module.exports = [modernConfig, legacyConfig];
+// ============================================================================
+// Legacy build - Tizen 3.0+ (Chromium 47, ES5)
+// ============================================================================
+const legacyConfig = {
+    name: 'legacy',
+    mode: 'production',
+    entry: './src/index.js',
+
+    output: {
+        path: path.resolve(__dirname, 'dist/legacy'),
+        filename: 'js/[name].js',
+        clean: true
+    },
+
+    optimization: {
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
+            {
+                test: /\.js$/,
+                exclude: /node_modules/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: [['@babel/preset-env', {
+                            targets: { chrome: '47' },
+                            useBuiltIns: 'usage',
+                            corejs: 3
+                        }]]
+                    }
+                }
+            },
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
+        ]
+    },
+
+    plugins: getPlugins()
+};
+
+module.exports = [es6Config, normalConfig, legacyConfig];
+

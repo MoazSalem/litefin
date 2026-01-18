@@ -45,6 +45,9 @@ class Page extends Component {
         // Get main container
         this.container = document.getElementById('app');
 
+        // IMPORTANT: Clear the container (removes loading screen)
+        this.container.innerHTML = '';
+
         // Mount the page
         this.mount();
 

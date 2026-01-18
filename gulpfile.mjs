@@ -1,6 +1,6 @@
 import gulp from "gulp";
 import { deleteAsync as del } from "del";
-import { readFileSync, writeFileSync, createWriteStream, copyFileSync, existsSync, mkdirSync } from "fs";
+import { readFileSync, createWriteStream, copyFileSync, existsSync } from "fs";
 import { exec } from "child_process";
 import { promisify } from "util";
 import archiver from "archiver";
@@ -25,20 +25,36 @@ function cleanDist() {
     return del(["dist/**", "!dist"]);
 }
 
+function cleanWgt() {
+    return del(["*.wgt"]);
+}
+
 // ============================================================================
 // Build tasks (webpack)
 // ============================================================================
 
-async function webpackModern() {
-    console.info("Building modern bundle (Tizen 4.0+)...");
-    await execAsync("npx webpack --config webpack.config.cjs --config-name modern");
-    console.info("Modern build complete");
+async function webpackES6() {
+    console.info("Building ES6 bundle (Tizen 6.0+, no transpilation)...");
+    await execAsync("npx webpack --config webpack.config.cjs --config-name es6");
+    console.info("ES6 build complete");
+}
+
+async function webpackNormal() {
+    console.info("Building Normal bundle (Tizen 5.0+, Chromium 69)...");
+    await execAsync("npx webpack --config webpack.config.cjs --config-name normal");
+    console.info("Normal build complete");
 }
 
 async function webpackLegacy() {
-    console.info("Building legacy bundle (Tizen 3.0)...");
+    console.info("Building legacy bundle (Tizen 3.0+, ES5)...");
     await execAsync("npx webpack --config webpack.config.cjs --config-name legacy");
     console.info("Legacy build complete");
+}
+
+async function webpackAll() {
+    console.info("Building all bundles...");
+    await execAsync("npx webpack --config webpack.config.cjs");
+    console.info("All builds complete");
 }
 
 // ============================================================================
@@ -60,109 +76,107 @@ function copySignatures(buildDir) {
     }
 
     if (copied) {
-        console.info("Added signature files to build directory");
+        console.info(`Added signature files to ${buildDir}`);
     } else {
-        console.warn("Warning: No signature files found in .sign/ - package may not install on device");
+        console.warn("Warning: No signature files found in .sign/");
     }
 }
 
 // ============================================================================
-// Package tasks
+// Package helpers
 // ============================================================================
 
-async function packageModern() {
-    const wgtName = `LiteFin-${version}.wgt`;
-    const simpleWgtName = "LiteFin.wgt";
-    await del([wgtName, simpleWgtName]);
+async function createWgt(buildDir, outputName) {
+    return new Promise((resolve, reject) => {
+        const output = createWriteStream(outputName);
+        const archive = archiver("zip", { zlib: { level: 9 } });
 
-    const buildDir = "dist/tizen4";
-
-    // Copy signatures
-    copySignatures(buildDir);
-
-    // Create zip as .wgt
-    async function createZip(outputPath) {
-        return new Promise((resolve, reject) => {
-            const output = createWriteStream(outputPath);
-            const archive = archiver("zip", { zlib: { level: 9 } });
-
-            output.on("close", () => {
-                console.info(`Package created: ${path.basename(outputPath)} (${archive.pointer()} bytes)`);
-                resolve();
-            });
-
-            archive.on("error", (err) => reject(err));
-
-            archive.pipe(output);
-            archive.directory(buildDir + "/", false);
-            archive.finalize();
+        output.on("close", () => {
+            console.info(`Package created: ${outputName} (${archive.pointer()} bytes)`);
+            resolve();
         });
-    }
 
-    console.info(`Creating ${simpleWgtName}...`);
-    await createZip(simpleWgtName);
+        archive.on("error", (err) => reject(err));
 
+        archive.pipe(output);
+        archive.directory(buildDir + "/", false);
+        archive.finalize();
+    });
+}
+
+// ============================================================================
+// Package tasks - each produces a single versioned file
+// ============================================================================
+
+async function packageES6() {
+    const buildDir = "dist/es6";
+    const wgtName = `LiteFin-${version}-es6.wgt`;  // No transpilation
+
+    copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
-    await createZip(wgtName);
+    await createWgt(buildDir, wgtName);
+}
+
+async function packageNormal() {
+    const buildDir = "dist/normal";
+    const wgtName = `LiteFin-${version}.wgt`;  // Default, no suffix
+
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    await createWgt(buildDir, wgtName);
 }
 
 async function packageLegacy() {
-    const wgtName = `LiteFin-Legacy-${version}.wgt`;
-    const simpleWgtName = "LiteFin-Legacy.wgt";
-    await del([wgtName, simpleWgtName]);
+    const buildDir = "dist/legacy";
+    const wgtName = `LiteFin-${version}-legacy.wgt`;
 
-    const buildDir = "dist/tizen3";
-
-    // Copy signatures
     copySignatures(buildDir);
-
-    async function createZip(outputPath) {
-        return new Promise((resolve, reject) => {
-            const output = createWriteStream(outputPath);
-            const archive = archiver("zip", { zlib: { level: 9 } });
-
-            output.on("close", () => {
-                console.info(`Package created: ${path.basename(outputPath)} (${archive.pointer()} bytes)`);
-                resolve();
-            });
-
-            archive.on("error", (err) => reject(err));
-
-            archive.pipe(output);
-            archive.directory(buildDir + "/", false);
-            archive.finalize();
-        });
-    }
-
-    console.info(`Creating ${simpleWgtName}...`);
-    await createZip(simpleWgtName);
-
     console.info(`Creating ${wgtName}...`);
-    await createZip(wgtName);
+    await createWgt(buildDir, wgtName);
 }
 
 // ============================================================================
-// Exported tasks
+// Main tasks
 // ============================================================================
 
-const build = gulp.series(cleanDist, webpackModern);
-const buildLegacy = gulp.series(cleanDist, webpackLegacy);
-const buildAll = gulp.series(cleanDist, gulp.parallel(webpackModern, webpackLegacy));
-const buildPackage = gulp.series(cleanDist, webpackModern, packageModern);
+// Build and package all 3 versions (default for npm run package)
+const buildPackage = gulp.series(
+    cleanDist,
+    cleanWgt,
+    webpackAll,
+    gulp.parallel(packageES6, packageNormal, packageLegacy)
+);
+
+// Individual build+package tasks
+const buildPackageES6 = gulp.series(cleanDist, webpackES6, packageES6);
+const buildPackageNormal = gulp.series(cleanDist, webpackNormal, packageNormal);
 const buildPackageLegacy = gulp.series(cleanDist, webpackLegacy, packageLegacy);
-const buildPackageAll = gulp.series(cleanDist, gulp.parallel(webpackModern, webpackLegacy), gulp.parallel(packageModern, packageLegacy));
+
+// Just build (no packaging)
+const build = gulp.series(cleanDist, webpackAll);
+const buildES6 = gulp.series(cleanDist, webpackES6);
+const buildNormal = gulp.series(cleanDist, webpackNormal);
+const buildLegacy = gulp.series(cleanDist, webpackLegacy);
 
 export {
     clean,
     cleanDist,
-    webpackModern,
+    cleanWgt,
+    webpackES6,
+    webpackNormal,
     webpackLegacy,
-    packageModern,
+    webpackAll,
+    packageES6,
+    packageNormal,
     packageLegacy,
     buildPackage,
+    buildPackageES6,
+    buildPackageNormal,
     buildPackageLegacy,
-    buildPackageAll,
-    buildLegacy,
-    buildAll,
+    build,
+    buildES6,
+    buildNormal,
+    buildLegacy
 };
-export default build;
+
+export default buildPackage;

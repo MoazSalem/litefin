@@ -5,13 +5,16 @@
     "main": "src/index.js",
     "type": "module",
     "scripts": {
-        "build": "webpack --config webpack.config.cjs --config-name modern",
+        "build": "webpack --config webpack.config.cjs",
+        "build:es6": "webpack --config webpack.config.cjs --config-name es6",
+        "build:normal": "webpack --config webpack.config.cjs --config-name normal",
         "build:legacy": "webpack --config webpack.config.cjs --config-name legacy",
-        "build:all": "webpack --config webpack.config.cjs",
-        "dev": "webpack --config webpack.config.cjs --config-name modern --watch",
+        "dev": "webpack --config webpack.config.cjs --config-name normal-watch",
         "lint": "eslint src/",
-        "clean": "rimraf dist/",
+        "clean": "rimraf dist/ *.wgt",
         "package": "gulp buildPackage",
+        "package:es6": "gulp buildPackageES6",
+        "package:normal": "gulp buildPackageNormal",
         "package:legacy": "gulp buildPackageLegacy"
     },
     "keywords": [
