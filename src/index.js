@@ -10,19 +10,28 @@
 import { app } from './core/App.js';
 import { tizenAdapter } from './tizen/TizenAdapter.js';
 import { eventBus } from './core/EventBus.js';
+import { auth } from './api/index.js';
+import { layoutManager } from './ui/LayoutManager.js';
 
 // Import styles
 import './styles/base.css';
+import './styles/pages.css';
 import './themes/classic/dark.css';
 
 /**
  * Bootstrap the application
  */
-function bootstrap() {
+async function bootstrap() {
     console.log('FastFin: Starting...');
 
     // Initialize Tizen adapter first
     tizenAdapter.init();
+
+    // Initialize layout manager
+    layoutManager.init();
+
+    // Try to restore auth session
+    await auth.init();
 
     // Setup exit handler
     eventBus.on('app:exitRequested', () => {

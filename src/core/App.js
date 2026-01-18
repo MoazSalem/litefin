@@ -113,27 +113,26 @@ class App {
      * @private
      */
     _registerRoutes() {
-        // Routes will be registered as pages are created
-        // For now, register placeholder
-        router.register('/', { init: () => this._showWelcome() });
+        // Import pages dynamically to avoid circular deps
+        import('../pages/LoginPage.js').then(m => router.register('/login', m.default));
+        import('../pages/HomePage.js').then(m => router.register('/home', m.default));
+        import('../pages/LibraryPage.js').then(m => router.register('/library/:id', m.default));
+        import('../pages/DetailsPage.js').then(m => router.register('/details/:id', m.default));
+        import('../pages/SearchPage.js').then(m => router.register('/search', m.default));
+        import('../pages/SettingsPage.js').then(m => router.register('/settings', m.default));
+
+        // Default route - check auth and redirect appropriately
+        router.register('/', {
+            init: () => {
+                if (state.get('user:authenticated')) {
+                    router.navigate('/home', { replace: true });
+                } else {
+                    router.navigate('/login', { replace: true });
+                }
+            }
+        });
 
         console.log('App: Routes registered');
-    }
-
-    /**
-     * Show welcome screen (temporary)
-     * @private
-     */
-    _showWelcome() {
-        if (this.container) {
-            this.container.innerHTML = `
-                <div class="welcome-screen">
-                    <h1>FastFin</h1>
-                    <p>Native Jellyfin Client for Tizen</p>
-                    <p class="version">v0.1.0 - Foundation</p>
-                </div>
-            `;
-        }
     }
 
     /**

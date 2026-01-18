@@ -1,0 +1,820 @@
+/**
+ * ============================================================================
+ * FastFin Tizen - Page Styles
+ * ============================================================================
+ * Styles for all page components using CSS variables from themes.
+ * ============================================================================
+ */
+
+/* ============================================================================
+   Common Page Layout
+   ============================================================================ */
+
+.page {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    overflow: hidden;
+    background: var(--jf-background);
+}
+
+.page-header {
+    display: flex;
+    align-items: center;
+    padding: 20px 40px;
+    background: var(--jf-navbar-bg);
+    gap: 20px;
+}
+
+.page-title {
+    font-size: 1.75rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    margin: 0;
+    flex: 1;
+}
+
+.page-content {
+    height: calc(100% - 80px);
+    overflow-y: auto;
+    padding: 20px 40px;
+}
+
+.page-loading {
+    display: none;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+
+.page.loading .page-loading {
+    display: block;
+}
+
+.page.loading .page-content>*:not(.page-loading) {
+    opacity: 0.3;
+}
+
+.back-btn {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--jf-border-radius);
+}
+
+.back-btn:focus {
+    background: var(--jf-accent-light);
+}
+
+.header-nav {
+    display: flex;
+    gap: 12px;
+}
+
+.nav-btn {
+    background: var(--jf-button-bg);
+    border: none;
+    color: var(--jf-text-primary);
+    padding: 10px 20px;
+    border-radius: var(--jf-border-radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-btn:focus {
+    background: var(--jf-accent);
+}
+
+/* ============================================================================
+   Login Page
+   ============================================================================ */
+
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 500px;
+    text-align: center;
+}
+
+.login-header {
+    margin-bottom: 48px;
+}
+
+.login-logo {
+    font-size: 4rem;
+    color: var(--jf-accent);
+    margin: 0;
+}
+
+.login-tagline {
+    color: var(--jf-text-secondary);
+    font-size: 1.25rem;
+    margin-top: 8px;
+}
+
+.login-section {
+    padding: 24px;
+}
+
+.login-section h2 {
+    margin-bottom: 24px;
+    color: var(--jf-text-primary);
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.text-input {
+    width: 100%;
+    padding: 16px 20px;
+    font-size: 1.25rem;
+    background: var(--jf-input-bg);
+    border: 2px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius);
+    color: var(--jf-text-primary);
+}
+
+.text-input:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.text-input::placeholder {
+    color: var(--jf-text-tertiary);
+}
+
+.btn {
+    padding: 14px 32px;
+    font-size: 1.125rem;
+    border: none;
+    border-radius: var(--jf-border-radius);
+    cursor: pointer;
+    margin: 8px;
+}
+
+.btn-primary {
+    background: var(--jf-accent);
+    color: white;
+}
+
+.btn-primary:focus {
+    background: var(--jf-accent-hover);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.btn-secondary {
+    background: var(--jf-button-bg);
+    color: var(--jf-text-primary);
+}
+
+.btn-secondary:focus {
+    background: var(--jf-button-hover);
+}
+
+.btn-danger {
+    background: var(--jf-error);
+    color: white;
+}
+
+.login-error {
+    color: var(--jf-error);
+    margin-top: 16px;
+    display: none;
+}
+
+/* Users grid */
+.users-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 24px;
+    margin-bottom: 24px;
+}
+
+.user-card {
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius-lg);
+    padding: 20px;
+    cursor: pointer;
+    text-align: center;
+    width: 140px;
+}
+
+.user-card:focus {
+    background: var(--jf-card-bg-hover);
+    transform: scale(1.05);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.user-avatar-wrapper {
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin: 0 auto 12px;
+    background: var(--jf-accent-light);
+    position: relative;
+}
+
+.user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-avatar-placeholder {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--jf-accent);
+}
+
+.user-name {
+    color: var(--jf-text-primary);
+    font-size: 1rem;
+}
+
+.selected-user {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.selected-user .user-avatar {
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+}
+
+.hidden {
+    display: none !important;
+}
+
+/* ============================================================================
+   Home Page
+   ============================================================================ */
+
+.home-page .page-content {
+    padding: 0;
+}
+
+.home-rows {
+    padding: 20px 0;
+}
+
+.media-row {
+    padding: 0 40px;
+    margin-bottom: 32px;
+}
+
+.row-title {
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+    color: var(--jf-text-primary);
+}
+
+.row-items {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding-bottom: 16px;
+    scroll-snap-type: x mandatory;
+}
+
+.media-card {
+    flex-shrink: 0;
+    width: 180px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+    transition: transform var(--jf-transition-fast);
+}
+
+.media-card:focus {
+    transform: scale(1.05) translateZ(0);
+    z-index: 1;
+}
+
+.media-card .card-image {
+    position: relative;
+    aspect-ratio: 2/3;
+    overflow: hidden;
+    background: var(--jf-background-alt);
+}
+
+.media-card .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.media-card .card-info {
+    padding: 12px;
+}
+
+.card-title {
+    color: var(--jf-text-primary);
+    font-size: 0.9rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.card-subtitle {
+    color: var(--jf-text-secondary);
+    font-size: 0.8rem;
+    margin: 4px 0 0;
+}
+
+.progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 4px;
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.progress-bar .progress {
+    height: 100%;
+    background: var(--jf-accent);
+}
+
+/* ============================================================================
+   Library Page
+   ============================================================================ */
+
+.library-grid {
+    height: calc(100vh - 140px);
+}
+
+.vgrid-item {
+    cursor: pointer;
+}
+
+.grid-card {
+    width: 100%;
+    height: 100%;
+    background: var(--jf-card-bg);
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+}
+
+.grid-card .card-image {
+    height: 75%;
+    position: relative;
+    background: var(--jf-background-alt);
+}
+
+.grid-card .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.watched-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--jf-accent);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
+.grid-card .card-info {
+    padding: 8px 12px;
+}
+
+.card-year {
+    color: var(--jf-text-secondary);
+    font-size: 0.8rem;
+    margin: 2px 0 0;
+}
+
+/* ============================================================================
+   Details Page
+   ============================================================================ */
+
+.details-page {
+    overflow-y: auto;
+}
+
+.details-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background-size: cover;
+    background-position: center top;
+}
+
+.backdrop-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom,
+            rgba(16, 16, 16, 0.3) 0%,
+            var(--jf-background) 100%);
+}
+
+.details-content {
+    position: relative;
+    padding: 40px;
+    padding-top: 20%;
+}
+
+.details-hero {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 32px;
+}
+
+.hero-poster {
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.hero-poster img {
+    width: 100%;
+    border-radius: var(--jf-border-radius);
+    box-shadow: var(--jf-shadow-lg);
+}
+
+.hero-info {
+    flex: 1;
+}
+
+.details-title {
+    font-size: 2.5rem;
+    margin: 0 0 8px;
+}
+
+.details-episode-info {
+    color: var(--jf-accent);
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.details-meta {
+    color: var(--jf-text-secondary);
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.details-genres {
+    color: var(--jf-text-tertiary);
+    font-size: 0.9rem;
+}
+
+.details-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.btn-icon {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    background: var(--jf-button-bg);
+    color: var(--jf-text-primary);
+    border: none;
+}
+
+.btn-icon.active {
+    color: var(--jf-accent);
+}
+
+.btn-icon:focus {
+    background: var(--jf-accent);
+    color: white;
+}
+
+.details-overview {
+    margin-bottom: 40px;
+}
+
+.overview-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--jf-text-secondary);
+    max-width: 800px;
+}
+
+/* Seasons */
+.seasons-row,
+.similar-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 8px 0;
+}
+
+.season-card {
+    flex-shrink: 0;
+    width: 140px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: center;
+}
+
+.season-card:focus {
+    transform: scale(1.05);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.season-card img {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+}
+
+.season-card span {
+    display: block;
+    padding: 10px;
+    color: var(--jf-text-primary);
+}
+
+/* Episodes */
+.episodes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.episode-card {
+    display: flex;
+    gap: 16px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    padding: 12px;
+    cursor: pointer;
+    text-align: left;
+    align-items: flex-start;
+}
+
+.episode-card:focus {
+    background: var(--jf-card-bg-hover);
+}
+
+.episode-thumb {
+    width: 200px;
+    flex-shrink: 0;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    position: relative;
+}
+
+.episode-thumb img {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+}
+
+.episode-info {
+    flex: 1;
+}
+
+.episode-number {
+    color: var(--jf-accent);
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.episode-title {
+    color: var(--jf-text-primary);
+    font-weight: 500;
+}
+
+.episode-overview {
+    color: var(--jf-text-secondary);
+    font-size: 0.9rem;
+    margin-top: 8px;
+    line-height: 1.4;
+}
+
+/* ============================================================================
+   Search Page
+   ============================================================================ */
+
+.search-input-wrapper {
+    flex: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1.25rem;
+    background: var(--jf-input-bg);
+    border: 2px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius-lg);
+    color: var(--jf-text-primary);
+}
+
+.search-input:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.search-empty,
+.search-no-results {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--jf-text-secondary);
+}
+
+.search-empty .empty-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.result-section {
+    margin-bottom: 32px;
+}
+
+.result-section-title {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+    color: var(--jf-text-primary);
+}
+
+.result-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.result-card {
+    width: 160px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+}
+
+.result-card:focus {
+    transform: scale(1.05);
+}
+
+.result-image {
+    aspect-ratio: 2/3;
+    background: var(--jf-background-alt);
+}
+
+.result-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.result-info {
+    padding: 10px;
+}
+
+.result-title {
+    color: var(--jf-text-primary);
+    font-size: 0.85rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.result-subtitle {
+    color: var(--jf-text-secondary);
+    font-size: 0.75rem;
+    margin: 4px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   Settings Page
+   ============================================================================ */
+
+.settings-container {
+    max-width: 700px;
+}
+
+.settings-section {
+    margin-bottom: 40px;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    color: var(--jf-accent);
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.setting-label {
+    flex: 1;
+}
+
+.setting-name {
+    display: block;
+    color: var(--jf-text-primary);
+    font-size: 1rem;
+}
+
+.setting-description {
+    display: block;
+    color: var(--jf-text-tertiary);
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+.setting-value {
+    display: block;
+    color: var(--jf-text-secondary);
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+.setting-control {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-option {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    background: var(--jf-button-bg);
+    border: 2px solid transparent;
+}
+
+.btn-option.active {
+    border-color: var(--jf-accent);
+    background: var(--jf-accent-light);
+}
+
+.btn-option:focus {
+    border-color: var(--jf-accent);
+}
+
+.setting-select {
+    padding: 10px 16px;
+    font-size: 1rem;
+    background: var(--jf-input-bg);
+    border: 2px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius);
+    color: var(--jf-text-primary);
+}
+
+.setting-select:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}
