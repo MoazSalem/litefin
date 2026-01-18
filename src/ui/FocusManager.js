@@ -2,15 +2,8 @@
  * ============================================================================
  * LiteFin Tizen - FocusManager
  * ============================================================================
- * Manages focus navigation for TV remote D-pad control. Handles:
- * - 2D grid navigation (up/down/left/right)
- * - Focus memory per section
- * - Smooth scroll-into-view
- * - Focus restoration on back navigation
- * 
- * Usage:
- *   focusManager.register('home-row', rowElement);
- *   focusManager.setActiveSection('home-row');
+ * Manages focus navigation for TV remote D-pad control.
+ * Uses robust spatial navigation for grid traversal.
  * ============================================================================
  */
 
@@ -24,10 +17,10 @@ class FocusManager {
         // Registered sections: name -> config
         this._sections = new Map();
 
-        // Currently active section
+        // Currently active section name
         this._activeSection = null;
 
-        // Focus memory: section -> last focused element info
+        // Focus memory: section -> { element, index }
         this._focusMemory = new Map();
 
         // Currently focused element
@@ -36,10 +29,13 @@ class FocusManager {
         // Focus trap stack (for modals)
         this._trapStack = [];
 
+        // Debounce handling
+        this._lastMoveTime = 0;
+
         // Bound methods
         this._onKeyDown = this._onKeyDown.bind(this);
 
-        // Setup global key listener
+        // Initialize
         this._init();
     }
 
@@ -49,22 +45,25 @@ class FocusManager {
      */
     _init() {
         // Listen for key events from TizenAdapter
-        eventBus.on('key:up', () => this._move('up'));
-        eventBus.on('key:down', () => this._move('down'));
-        eventBus.on('key:left', () => this._move('left'));
-        eventBus.on('key:right', () => this._move('right'));
+        eventBus.on('key:up', () => this._handleKey('up'));
+        eventBus.on('key:down', () => this._handleKey('down'));
+        eventBus.on('key:left', () => this._handleKey('left'));
+        eventBus.on('key:right', () => this._handleKey('right'));
+        // We handle Enter via native click, but listen just in case
         eventBus.on('key:enter', () => this._activate());
 
-        // Also listen for native keydown as fallback
+        // Listen for native keydown (fallback & web testing)
         document.addEventListener('keydown', this._onKeyDown);
 
-        // Track focus changes
+        // Track focus changes globally
         document.addEventListener('focusin', (e) => {
-            this._focusedElement = e.target;
-            this._updateFocusMemory();
+            if (this._focusedElement !== e.target) {
+                this._focusedElement = e.target;
+                this._updateFocusMemory();
+            }
         });
 
-        console.log('FocusManager: Initialized');
+        console.log('FocusManager: Initialized (v2 Rewrite)');
     }
 
     /**
@@ -72,27 +71,34 @@ class FocusManager {
      * @private
      */
     _onKeyDown(e) {
+        let dir = null;
         switch (e.keyCode) {
-            case 38: // Up
-                e.preventDefault();
-                this._move('up');
-                break;
-            case 40: // Down
-                e.preventDefault();
-                this._move('down');
-                break;
-            case 37: // Left
-                e.preventDefault();
-                this._move('left');
-                break;
-            case 39: // Right
-                e.preventDefault();
-                this._move('right');
-                break;
-            case 13: // Enter
+            case 38: dir = 'up'; break;
+            case 40: dir = 'down'; break;
+            case 37: dir = 'left'; break;
+            case 39: dir = 'right'; break;
+            case 13:
                 this._activate();
-                break;
+                return;
         }
+
+        if (dir) {
+            e.preventDefault();
+            this._handleKey(dir);
+        }
+    }
+
+    /**
+     * Handle directional key press
+     * @param {string} direction 
+     */
+    _handleKey(direction) {
+        // Simple debounce to prevent event flooding
+        const now = Date.now();
+        if (now - this._lastMoveTime < 50) return;
+        this._lastMoveTime = now;
+
+        this._move(direction);
     }
 
     /**
@@ -100,22 +106,18 @@ class FocusManager {
      * @param {string} name - Section identifier
      * @param {HTMLElement} container - Section container element
      * @param {Object} [options] - Section options
-     * @param {string} [options.orientation='horizontal'] - 'horizontal', 'vertical', or 'grid'
-     * @param {boolean} [options.loop=false] - Loop navigation at ends
-     * @param {string} [options.leaveUp] - Section to enter when leaving up
-     * @param {string} [options.leaveDown] - Section to enter when leaving down
-     * @param {string} [options.leaveLeft] - Section to enter when leaving left
-     * @param {string} [options.leaveRight] - Section to enter when leaving right
      */
     register(name, container, options = {}) {
         const config = {
             container,
-            orientation: options.orientation || 'horizontal',
+            orientation: options.orientation || 'horizontal', // 'horizontal', 'vertical', 'grid'
             loop: options.loop || false,
+            // Navigation overrides
             leaveUp: options.leaveUp || null,
             leaveDown: options.leaveDown || null,
             leaveLeft: options.leaveLeft || null,
             leaveRight: options.leaveRight || null,
+            // Custom selector
             selector: options.selector || FOCUSABLE_SELECTOR
         };
 
@@ -125,21 +127,18 @@ class FocusManager {
 
     /**
      * Unregister a section
-     * @param {string} name - Section name
+     * @param {string} name 
      */
     unregister(name) {
         this._sections.delete(name);
         this._focusMemory.delete(name);
-
-        if (this._activeSection === name) {
-            this._activeSection = null;
-        }
+        if (this._activeSection === name) this._activeSection = null;
     }
 
     /**
-     * Set the active section
-     * @param {string} name - Section name
-     * @param {boolean} [restoreFocus=true] - Restore last focused element
+     * Set the active section and focus inside it
+     * @param {string} name 
+     * @param {boolean} restoreFocus 
      */
     setActiveSection(name, restoreFocus = true) {
         if (!this._sections.has(name)) {
@@ -148,36 +147,36 @@ class FocusManager {
         }
 
         this._activeSection = name;
+        eventBus.emit('focus:sectionChanged', name);
 
         if (restoreFocus) {
             this._restoreFocus(name);
         }
-
-        eventBus.emit('focus:sectionChanged', name);
     }
 
     /**
-     * Get focusable elements in a section
-     * @private
-     * @param {string} sectionName - Section name
-     * @returns {HTMLElement[]} Array of focusable elements
+     * Get validated focusable elements in section
+     * @param {string} sectionName 
      */
     _getFocusables(sectionName) {
         const config = this._sections.get(sectionName);
-        if (!config) return [];
+        if (!config || !document.contains(config.container)) return [];
 
+        // strictly filter visible elements
         return Array.from(config.container.querySelectorAll(config.selector))
             .filter(el => {
-                // Filter out hidden elements
+                // Must be in DOM
+                if (!el.offsetParent) return false;
+
+                // Must have size
                 const rect = el.getBoundingClientRect();
                 return rect.width > 0 && rect.height > 0;
             });
     }
 
     /**
-     * Move focus in a direction
-     * @private
-     * @param {string} direction - 'up', 'down', 'left', 'right'
+     * Core movement logic
+     * @param {string} direction 
      */
     _move(direction) {
         if (!this._activeSection) return;
@@ -186,127 +185,177 @@ class FocusManager {
         if (!config) return;
 
         const focusables = this._getFocusables(this._activeSection);
-        if (focusables.length === 0) return;
+        if (!focusables.length) return;
+
+        // If nothing focused, focus first available
+        if (!this._focusedElement || !config.container.contains(this._focusedElement)) {
+            this.focusElement(focusables[0]);
+            return;
+        }
 
         const currentIndex = focusables.indexOf(this._focusedElement);
-        let nextIndex = currentIndex;
+        let nextElement = null;
 
-        // Determine movement based on orientation
-        const isHorizontalNav = direction === 'left' || direction === 'right';
-        const isVerticalNav = direction === 'up' || direction === 'down';
+        // 1. Check Forced Leave (e.g. leaveUp: 'other-section')
+        // We only do this if we are at the edge, OR if it's not a grid/spatial navigation
+        // Actually, let's keep it simple: Try to move internally first. If fail, then leave.
 
+        // Handling strict orientations
         if (config.orientation === 'horizontal') {
-            if (isHorizontalNav) {
-                nextIndex = direction === 'left' ? currentIndex - 1 : currentIndex + 1;
-            } else {
-                // Leave section
-                this._leaveSection(direction);
-                return;
-            }
-        } else if (config.orientation === 'vertical') {
-            if (isVerticalNav) {
-                nextIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
-            } else {
-                // Leave section
-                this._leaveSection(direction);
-                return;
-            }
-        } else {
-            // Grid orientation - use spatial navigation
-            nextIndex = this._findSpatialNeighbor(focusables, currentIndex, direction);
-        }
-
-        // Handle boundaries
-        if (nextIndex < 0 || nextIndex >= focusables.length) {
-            if (config.loop) {
-                nextIndex = nextIndex < 0 ? focusables.length - 1 : 0;
-            } else {
-                // Try to leave section
-                this._leaveSection(direction);
-                return;
+            if (direction === 'left') {
+                if (currentIndex > 0) nextElement = focusables[currentIndex - 1];
+            } else if (direction === 'right') {
+                if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
         }
+        else if (config.orientation === 'vertical') {
+            if (direction === 'up') {
+                if (currentIndex > 0) nextElement = focusables[currentIndex - 1];
+            } else if (direction === 'down') {
+                if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
+            }
+        }
+        else {
+            // 'grid' or default - Use Spatial Navigation
+            nextElement = this._findSpatialNext(this._focusedElement, focusables, direction);
+        }
 
-        // Focus new element
-        this.focusElement(focusables[nextIndex]);
+        // 2. If we found a target, move to it
+        if (nextElement) {
+            this.focusElement(nextElement);
+            return;
+        }
+
+        // 3. If no target found inside, try to leave section
+        this._leaveSection(direction);
     }
 
     /**
-     * Find spatially closest neighbor in direction
-     * @private
+     * Spatial Navigation: Find best candidate in direction
+     * Uses "Cone" + "Projected Distance" logic
      */
-    _findSpatialNeighbor(focusables, currentIndex, direction) {
-        if (currentIndex < 0 || !focusables[currentIndex]) {
-            return 0;
-        }
-
-        const current = focusables[currentIndex];
-        const currentRect = current.getBoundingClientRect();
-        const currentCenter = {
-            x: currentRect.left + currentRect.width / 2,
-            y: currentRect.top + currentRect.height / 2
+    _findSpatialNext(current, candidates, direction) {
+        const rect1 = current.getBoundingClientRect();
+        const center1 = {
+            x: rect1.left + rect1.width / 2,
+            y: rect1.top + rect1.height / 2
         };
 
-        let bestIndex = -1;
-        let bestScore = Infinity;
+        let bestCandidate = null;
+        let minScore = Infinity;
 
-        focusables.forEach((el, index) => {
-            if (index === currentIndex) return;
+        // Filter for candidates in the cone
+        for (const candidate of candidates) {
+            if (candidate === current) continue;
 
-            const rect = el.getBoundingClientRect();
-            const center = {
-                x: rect.left + rect.width / 2,
-                y: rect.top + rect.height / 2
+            const rect2 = candidate.getBoundingClientRect();
+            const center2 = {
+                x: rect2.left + rect2.width / 2,
+                y: rect2.top + rect2.height / 2
             };
 
-            // Check if element is in the right direction
-            const dx = center.x - currentCenter.x;
-            const dy = center.y - currentCenter.y;
+            // Calculate vector
+            const dx = center2.x - center1.x;
+            const dy = center2.y - center1.y;
 
-            let inDirection = false;
-            switch (direction) {
-                case 'up': inDirection = dy < -10; break;
-                case 'down': inDirection = dy > 10; break;
-                case 'left': inDirection = dx < -10; break;
-                case 'right': inDirection = dx > 10; break;
-            }
+            // 1. Check Direction
+            let isValid = false;
+            let distMain = 0;  // parallel to direction
+            let distCross = 0; // perpendicular to direction
 
-            if (inDirection) {
-                // Calculate distance score (prefer straight lines)
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const angle = Math.abs(direction === 'up' || direction === 'down'
-                    ? dx / (Math.abs(dy) || 1)
-                    : dy / (Math.abs(dx) || 1));
-
-                const score = distance + angle * 100;
-
-                if (score < bestScore) {
-                    bestScore = score;
-                    bestIndex = index;
+            if (direction === 'right') {
+                // Must be roughly to the right
+                if (dx > 0) {
+                    isValid = true;
+                    distMain = dx;
+                    distCross = Math.abs(dy);
+                }
+            } else if (direction === 'left') {
+                if (dx < 0) {
+                    isValid = true;
+                    distMain = Math.abs(dx);
+                    distCross = Math.abs(dy);
+                }
+            } else if (direction === 'down') {
+                if (dy > 0) {
+                    isValid = true;
+                    distMain = dy;
+                    distCross = Math.abs(dx);
+                }
+            } else if (direction === 'up') {
+                if (dy < 0) {
+                    isValid = true;
+                    distMain = Math.abs(dy);
+                    distCross = Math.abs(dx);
                 }
             }
-        });
 
-        return bestIndex;
+            if (!isValid) continue;
+
+            // 2. Cone Check
+            // Verify candidate is within a reasonable angle (e.g., 45 degrees)
+            // If cross distance > main distance, it's > 45 degrees.
+            // We relax this slightly for close elements to allow reaching diagonal neighbors if necessary,
+            // but strict grid navigation usually prefers < 45 deg.
+
+            // However, to fix "skipping", we want to favor elements that are "in line".
+            // i.e., distCross should be small.
+
+            // Scoring Function:
+            // Score = distMain + (distCross * WEIGHT)
+            // Weight > 1 penalizes off-axis elements.
+            // Weight ~ 2-3 is usually good.
+
+            // Additional: Overlap Bonus
+            // If the element overlaps on the cross-axis, it's definitely the intended target.
+            // e.g. moving Right, and the next element has Y-overlap -> huge bonus.
+
+            let overlap = 0;
+            if (direction === 'left' || direction === 'right') {
+                // Check Y overlap
+                const top = Math.max(rect1.top, rect2.top);
+                const bottom = Math.min(rect1.bottom, rect2.bottom);
+                overlap = Math.max(0, bottom - top);
+            } else {
+                // Check X overlap
+                const left = Math.max(rect1.left, rect2.left);
+                const right = Math.min(rect1.right, rect2.right);
+                overlap = Math.max(0, right - left);
+            }
+
+            // If effective overlap (covers > 30% of source or dest), reduce cross penalty
+            if (overlap > 0) {
+                distCross = 0; // It is "aligned"
+            }
+
+            // Calculate final score
+            const score = distMain + (distCross * 3.0);
+
+            if (score < minScore) {
+                minScore = score;
+                bestCandidate = candidate;
+            }
+        }
+
+        return bestCandidate;
     }
 
     /**
-     * Leave current section in a direction
-     * @private
+     * Leave current section
+     * @param {string} direction 
      */
     _leaveSection(direction) {
         const config = this._sections.get(this._activeSection);
         if (!config) return;
 
-        const leaveKey = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
-        const nextSection = config[leaveKey];
+        const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
+        const nextSection = config[key];
 
         if (nextSection && this._sections.has(nextSection)) {
-            eventBus.emit('focus:leaveSection', {
-                from: this._activeSection,
-                to: nextSection,
-                direction
-            });
+            // Unfocus current
+            if (this._focusedElement) {
+                this._focusedElement.classList.remove('focused');
+            }
 
             this.setActiveSection(nextSection);
         }
@@ -314,148 +363,112 @@ class FocusManager {
 
     /**
      * Focus a specific element
-     * @param {HTMLElement} element - Element to focus
-     * @param {Object} [options] - Focus options
-     * @param {boolean} [options.scroll=true] - Scroll into view
      */
-    focusElement(element, options = {}) {
+    focusElement(element, options = { scroll: true }) {
         if (!element) return;
 
-        const { scroll = true } = options;
-
-        // Remove focus class from previous
-        if (this._focusedElement) {
+        // Cleanup old focus
+        if (this._focusedElement && this._focusedElement !== element) {
             this._focusedElement.classList.remove('focused');
         }
 
-        // Apply focus
-        element.classList.add('focused');
-        element.focus({ preventScroll: !scroll });
+        // Set New Focus
+        this._focusedElement = element;
+        this._focusedElement.classList.add('focused');
 
-        // Smooth scroll into view if needed
-        if (scroll) {
-            element.scrollIntoView({
-                behavior: 'smooth',
-                block: 'nearest',
-                inline: 'nearest'
-            });
+        // Native focus (for screen readers/input handling)
+        this._focusedElement.focus({ preventScroll: true });
+
+        // Smooth Scroll
+        if (options.scroll) {
+            try {
+                this._focusedElement.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center',
+                    inline: 'center' // Center it for better visibility
+                });
+            } catch (e) {
+                // Fallback for older browsers
+                this._focusedElement.scrollIntoView(false);
+            }
         }
 
-        this._focusedElement = element;
-
+        this._updateFocusMemory();
         eventBus.emit('focus:changed', element);
     }
 
-    /**
-     * Update focus memory for current section
-     * @private
-     */
     _updateFocusMemory() {
         if (!this._activeSection || !this._focusedElement) return;
-
         const config = this._sections.get(this._activeSection);
-        if (!config) return;
 
-        // Check if focused element is in current section
         if (config.container.contains(this._focusedElement)) {
+            const focusables = this._getFocusables(this._activeSection);
+            const index = focusables.indexOf(this._focusedElement);
             this._focusMemory.set(this._activeSection, {
                 element: this._focusedElement,
-                index: this._getFocusables(this._activeSection).indexOf(this._focusedElement)
+                index
             });
         }
     }
 
-    /**
-     * Restore focus for a section
-     * @private
-     */
     _restoreFocus(sectionName) {
         const memory = this._focusMemory.get(sectionName);
         const focusables = this._getFocusables(sectionName);
+        if (!focusables.length) return;
 
-        if (memory && document.contains(memory.element)) {
-            // Element still exists, focus it
-            this.focusElement(memory.element);
-        } else if (memory && memory.index >= 0 && focusables[memory.index]) {
-            // Element gone, but try same index
-            this.focusElement(focusables[memory.index]);
-        } else if (focusables.length > 0) {
-            // No memory, focus first element
-            this.focusElement(focusables[0]);
+        let target = focusables[0];
+
+        if (memory) {
+            // 1. Try exact element
+            if (document.contains(memory.element) && focusables.includes(memory.element)) {
+                target = memory.element;
+            }
+            // 2. Try index
+            else if (memory.index >= 0 && memory.index < focusables.length) {
+                target = focusables[memory.index];
+            }
         }
+
+        this.focusElement(target);
     }
 
-    /**
-     * Activate (click/select) the focused element
-     * @private
-     */
     _activate() {
         if (this._focusedElement) {
+            // Dispatch click
             this._focusedElement.click();
             eventBus.emit('focus:activated', this._focusedElement);
         }
     }
 
-    /**
-     * Push a focus trap (for modals/dialogs)
-     * @param {HTMLElement} container - Container to trap focus in
-     */
     pushTrap(container) {
-        // Save current state
         this._trapStack.push({
             section: this._activeSection,
             element: this._focusedElement
         });
-
-        // Create temporary section for trap
         this.register('__trap__', container, { orientation: 'grid' });
         this.setActiveSection('__trap__');
     }
 
-    /**
-     * Pop focus trap and restore previous focus
-     */
     popTrap() {
-        const previous = this._trapStack.pop();
-
+        const prev = this._trapStack.pop();
         this.unregister('__trap__');
-
-        if (previous) {
-            this._activeSection = previous.section;
-            if (previous.element && document.contains(previous.element)) {
-                this.focusElement(previous.element);
+        if (prev) {
+            this.setActiveSection(prev.section, false);
+            if (prev.element && document.contains(prev.element)) {
+                this.focusElement(prev.element);
             }
         }
     }
 
-    /**
-     * Get currently focused element
-     * @returns {HTMLElement|null} Focused element
-     */
-    getFocused() {
-        return this._focusedElement;
-    }
+    getActiveSection() { return this._activeSection; }
+    getFocused() { return this._focusedElement; }
 
-    /**
-     * Get active section name
-     * @returns {string|null} Active section name
-     */
-    getActiveSection() {
-        return this._activeSection;
-    }
-
-    /**
-     * Clean up
-     */
     destroy() {
         document.removeEventListener('keydown', this._onKeyDown);
         this._sections.clear();
         this._focusMemory.clear();
-        this._trapStack = [];
     }
 }
 
-// Export singleton instance
 export const focusManager = new FocusManager();
-
 export default FocusManager;
