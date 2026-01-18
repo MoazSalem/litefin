@@ -1,0 +1,239 @@
+/**
+ * ============================================================================
+ * FastFin Tizen - Base Styles
+ * ============================================================================
+ * Core styles, resets, and utility classes shared across all layouts/themes.
+ * Theme-specific colors are handled via CSS variables.
+ * ============================================================================
+ */
+
+/* ============================================================================
+   CSS Reset & Box Model
+   ============================================================================ */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+
+html {
+    /* Base font size for rem calculations */
+    font-size: 16px;
+
+    /* Prevent text selection on TV */
+    -webkit-user-select: none;
+    user-select: none;
+
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+        'Helvetica Neue', Arial, sans-serif;
+    line-height: 1.5;
+    overflow-x: hidden;
+
+    /* Theme colors applied via CSS variables */
+    background-color: var(--jf-background);
+    color: var(--jf-text-primary);
+}
+
+/* ============================================================================
+   Focus Management
+   ============================================================================ */
+
+/* Hide default focus outline - we'll use custom focus styles */
+*:focus {
+    outline: none;
+}
+
+/* Custom focus indicator for TV navigation */
+.focusable:focus,
+[tabindex]:focus {
+    outline: 3px solid var(--jf-accent);
+    outline-offset: 2px;
+}
+
+/* ============================================================================
+   App Container
+   ============================================================================ */
+
+#app {
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+    position: relative;
+}
+
+/* ============================================================================
+   Loading Screen
+   ============================================================================ */
+
+.loading-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    background-color: var(--jf-background);
+}
+
+.loading-logo h1 {
+    font-size: 4rem;
+    font-weight: 700;
+    color: var(--jf-accent);
+    margin-bottom: 2rem;
+}
+
+.loading-spinner {
+    width: 48px;
+    height: 48px;
+    border: 4px solid var(--jf-card-bg);
+    border-top-color: var(--jf-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ============================================================================
+   Welcome Screen (Temporary)
+   ============================================================================ */
+
+.welcome-screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    text-align: center;
+}
+
+.welcome-screen h1 {
+    font-size: 5rem;
+    font-weight: 700;
+    color: var(--jf-accent);
+    margin-bottom: 1rem;
+}
+
+.welcome-screen p {
+    font-size: 1.5rem;
+    color: var(--jf-text-secondary);
+    margin-bottom: 0.5rem;
+}
+
+.welcome-screen .version {
+    font-size: 1rem;
+    color: var(--jf-text-tertiary);
+    margin-top: 2rem;
+}
+
+/* ============================================================================
+   Typography
+   ============================================================================ */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+    font-weight: 600;
+    line-height: 1.2;
+    color: var(--jf-text-primary);
+}
+
+h1 {
+    font-size: 2.5rem;
+}
+
+h2 {
+    font-size: 2rem;
+}
+
+h3 {
+    font-size: 1.5rem;
+}
+
+h4 {
+    font-size: 1.25rem;
+}
+
+p {
+    color: var(--jf-text-secondary);
+}
+
+/* ============================================================================
+   GPU Acceleration Helpers
+   ============================================================================ */
+
+.gpu-accelerated {
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* ============================================================================
+   Utility Classes
+   ============================================================================ */
+
+.hidden {
+    display: none !important;
+}
+
+.invisible {
+    visibility: hidden;
+}
+
+.flex {
+    display: flex;
+}
+
+.flex-col {
+    flex-direction: column;
+}
+
+.items-center {
+    align-items: center;
+}
+
+.justify-center {
+    justify-content: center;
+}
+
+.justify-between {
+    justify-content: space-between;
+}
+
+.text-center {
+    text-align: center;
+}
+
+/* ============================================================================
+   Scrollbar Styling (for devices that show them)
+   ============================================================================ */
+
+::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--jf-scrollbar);
+    border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background: var(--jf-scrollbar-hover);
+}

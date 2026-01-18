@@ -1,0 +1,36 @@
+{
+    "name": "fastfin-tizen",
+    "version": "0.1.0",
+    "description": "Native Jellyfin client for Samsung Tizen TVs",
+    "main": "src/index.js",
+    "scripts": {
+        "build": "webpack --config webpack.config.js --config-name modern",
+        "build:legacy": "webpack --config webpack.config.js --config-name legacy",
+        "build:all": "webpack --config webpack.config.js",
+        "dev": "webpack --config webpack.config.js --config-name modern --watch",
+        "lint": "eslint src/",
+        "clean": "rimraf dist/"
+    },
+    "keywords": [
+        "jellyfin",
+        "tizen",
+        "samsung",
+        "tv"
+    ],
+    "author": "",
+    "license": "GPL-2.0",
+    "devDependencies": {
+        "@babel/core": "^7.23.0",
+        "@babel/preset-env": "^7.23.0",
+        "babel-loader": "^9.1.3",
+        "core-js": "^3.33.0",
+        "css-loader": "^6.8.1",
+        "css-minimizer-webpack-plugin": "^5.0.1",
+        "eslint": "^8.50.0",
+        "html-webpack-plugin": "^5.5.3",
+        "mini-css-extract-plugin": "^2.7.6",
+        "rimraf": "^5.0.5",
+        "webpack": "^5.88.2",
+        "webpack-cli": "^5.1.4"
+    }
+}
