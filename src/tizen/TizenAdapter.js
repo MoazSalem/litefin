@@ -314,6 +314,30 @@ class TizenAdapter {
     getKeyCodes() {
         return { ...TIZEN_KEYS };
     }
+    /**
+     * Get device IP address
+     * @returns {Promise<string|null>} IP address (IPv4) or null
+     */
+    getIPAddress() {
+        return new Promise((resolve) => {
+            if (!this._isTizen) {
+                resolve(null); // Browser - can't get local IP easily
+                return;
+            }
+
+            try {
+                tizen.systeminfo.getPropertyValue('NETWORK', (network) => {
+                    resolve(network.ipAddress || null);
+                }, (error) => {
+                    console.warn('TizenAdapter: Failed to get network info', error);
+                    resolve(null);
+                });
+            } catch (e) {
+                console.error('TizenAdapter: Error getting IP:', e);
+                resolve(null);
+            }
+        });
+    }
 }
 
 // Export singleton instance

@@ -9,6 +9,7 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { tizenAdapter } from '../tizen/TizenAdapter.js';
 
 // API request timeout (ms)
 const REQUEST_TIMEOUT = 30000;
@@ -620,65 +621,70 @@ async function testServer(address, timeout = 1000) {
 
 /**
  * Discover Jellyfin servers on the local network
- * Scans common LAN IP ranges on port 8096
- * @param {Function} onProgress - Optional callback for progress updates (checked, total)
- * @returns {Promise<Array>} Array of found servers
+ * Smart scanning strategy:
+ * 1. Identify local IP and scan that subnet first (fastest)
+ * 2. Scan standard subnets in parallel
+ * 3. Use high concurrency (batch size 100) and low timeout (500ms)
+ * @param {Function} onProgress - Optional callback
  */
 async function discoverServers(onProgress = null) {
-    console.log('ApiClient: Starting server discovery...');
-
-    // Build list of addresses to scan
-    const addressesToScan = [
-        'http://localhost:8096',
-        'http://127.0.0.1:8096',
-        'http://jellyfin:8096'
-    ];
-
-    // Common LAN ranges
-    const ranges = [
-        { prefix: '192.168.1.', start: 1, end: 255 },
-        { prefix: '192.168.0.', start: 1, end: 50 },
-        { prefix: '10.0.0.', start: 1, end: 50 }
-    ];
-
-    for (const range of ranges) {
-        for (let i = range.start; i <= range.end; i++) {
-            addressesToScan.push(`http://${range.prefix}${i}:8096`);
-        }
-    }
-
-    console.log(`ApiClient: Scanning ${addressesToScan.length} addresses...`);
-
+    console.log('ApiClient: Starting smart server discovery...');
     const foundServers = [];
-    let checkedCount = 0;
-    const totalToCheck = addressesToScan.length;
+    const scannedIps = new Set();
 
-    // Scan in batches - larger batches for faster scanning
-    const batchSize = 50;
-
-    for (let i = 0; i < addressesToScan.length; i += batchSize) {
-        const batch = addressesToScan.slice(i, i + batchSize);
-
-        // Test all addresses in batch in parallel
-        const results = await Promise.all(
-            batch.map(address => testServer(address))
-        );
-
-        // Collect found servers
-        for (const result of results) {
-            if (result) {
-                console.log(`ApiClient: Found server at ${result.address}`);
-                foundServers.push(result);
+    // Helper to scan a subnet base (e.g. "192.168.1.")
+    const scanSubnet = async (prefix) => {
+        const batch = [];
+        for (let i = 1; i < 255; i++) {
+            const ip = `http://${prefix}${i}:8096`;
+            if (!scannedIps.has(ip)) {
+                batch.push(ip);
+                scannedIps.add(ip);
             }
         }
 
-        checkedCount += batch.length;
+        // Scan full subnet in concurrent chunks of 60
+        // Browsers handle ~6 connections per host, but for different IPs we can go higher.
+        // 60 * 500ms = 2 seconds for full subnet if sequential batches
+        const CHUNK_SIZE = 60;
+        for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
+            const chunk = batch.slice(i, i + CHUNK_SIZE);
+            const results = await Promise.all(
+                chunk.map(addr => testServer(addr, 500)) // 500ms timeout
+            );
 
-        // Report progress
-        if (onProgress) {
-            onProgress(checkedCount, totalToCheck);
+            results.filter(s => s).forEach(s => {
+                // Deduplicate
+                if (!foundServers.find(existing => existing.address === s.address)) {
+                    console.log(`ApiClient: Found server at ${s.address}`);
+                    foundServers.push(s);
+                }
+            });
+
+            if (onProgress) onProgress(scannedIps.size, 600); // Approximate total
+        }
+    };
+
+    // 1. Local Subnet (High Priority)
+    const localIP = await tizenAdapter.getIPAddress();
+    if (localIP) {
+        const parts = localIP.split('.');
+        if (parts.length === 4) {
+            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}.`;
+            console.log(`ApiClient: Scanning local subnet ${subnet}x`);
+            await scanSubnet(subnet);
         }
     }
+
+    // 2. Standard Subnets (Background / Parallel)
+    // Scan these if we haven't found anything OR if we want to be thorough.
+    // To be fast, if we found something on local subnet, we could return early.
+    // user might have multiple servers. Let's scan standard ones quickly too.
+
+    const standardSubnets = ['192.168.0.', '192.168.1.', '10.0.0.'];
+
+    // Run these in parallel to each other!
+    await Promise.all(standardSubnets.map(subnet => scanSubnet(subnet)));
 
     console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
     return foundServers;

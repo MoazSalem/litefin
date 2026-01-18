@@ -103,7 +103,7 @@
 
 .login-container {
     width: 100%;
-    max-width: 500px;
+    max-width: 960px;
     text-align: center;
 }
 
@@ -125,6 +125,18 @@
 
 .login-section {
     padding: 24px;
+}
+
+.loading-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.loading-section .loading-spinner {
+    margin-bottom: 24px;
 }
 
 .login-section h2 {
@@ -297,9 +309,12 @@
 .users-grid {
     display: flex;
     flex-wrap: wrap;
-    justify-content: start;
-    gap: 24px;
-    margin-bottom: 24px;
+    justify-content: center;
+    /* gap property isn't supported in older Tizen Chromium */
+    margin: -12px;
+    width: calc(100% + 24px);
+    padding-bottom: 24px;
+    /* Space for focus ring */
 }
 
 .user-card {
@@ -310,6 +325,7 @@
     cursor: pointer;
     text-align: center;
     width: 140px;
+    margin: 12px;
 }
 
 .user-card:focus {
@@ -347,7 +363,7 @@
 .user-name {
     color: var(--jf-text-primary);
     font-size: 1rem;
-    margin-right: 6px;
+    padding: 12px 12px;
 }
 
 .selected-user {
