@@ -27,8 +27,12 @@ html {
     -webkit-user-select: none;
     user-select: none;
 
-    /* Smooth scrolling */
-    scroll-behavior: smooth;
+    /* 
+     * PERFORMANCE: Removed smooth scrolling - it causes slow vertical navigation
+     * as the browser animates all scrolls, even focus-triggered ones.
+     * Smooth scroll is handled explicitly in JS where needed.
+     */
+    /* scroll-behavior: smooth; */
 }
 
 body {
@@ -243,12 +247,15 @@ p {
 
 /* IE / Legacy Edge */
 body {
-    -ms-overflow-style: none; /* IE and Edge */
+    -ms-overflow-style: none;
+    /* IE and Edge */
 }
 
 /* Ensure no scrollbars on html/body */
-html, body {
-    overflow: hidden; /* Main container handles scrolling */
+html,
+body {
+    overflow: hidden;
+    /* Main container handles scrolling */
 }
 
 #app {

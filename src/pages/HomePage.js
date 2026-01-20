@@ -352,7 +352,6 @@ class HomePage extends Page {
                     <img 
                         src="${imageUrl}" 
                         alt="${titleText}"
-                        loading="lazy"
                         onerror="this.style.visibility='hidden'"
                     >
                     ${progressHtml}

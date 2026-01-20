@@ -23,6 +23,9 @@ class FocusManager {
         // Focus memory: section -> { element, index }
         this._focusMemory = new Map();
 
+        // PERFORMANCE: Cache focusables per section
+        this._focusablesCache = new Map();
+
         // Currently focused element
         this._focusedElement = null;
 
@@ -31,6 +34,9 @@ class FocusManager {
 
         // Debounce handling
         this._lastMoveTime = 0;
+
+        // SAMSUNG OPTIMIZATION: Cache DOM reference to avoid repeated queries
+        this._pageContent = null;
 
         // Bound methods
         this._onKeyDown = this._onKeyDown.bind(this);
@@ -155,23 +161,40 @@ class FocusManager {
     }
 
     /**
-     * Get validated focusable elements in section
+     * Get focusable elements in section (OPTIMIZED)
+     * Uses cache to avoid repeated expensive DOM queries.
      * @param {string} sectionName 
+     * @param {boolean} forceRefresh - Force cache refresh
      */
-    _getFocusables(sectionName) {
+    _getFocusables(sectionName, forceRefresh = false) {
         const config = this._sections.get(sectionName);
         if (!config || !document.contains(config.container)) return [];
 
-        // strictly filter visible elements
-        return Array.from(config.container.querySelectorAll(config.selector))
-            .filter(el => {
-                // Must be in DOM
-                if (!el.offsetParent) return false;
+        // Return cached if available and not forcing refresh
+        if (!forceRefresh && this._focusablesCache.has(sectionName)) {
+            return this._focusablesCache.get(sectionName);
+        }
 
-                // Must have size
-                const rect = el.getBoundingClientRect();
-                return rect.width > 0 && rect.height > 0;
-            });
+        // Query focusables - rely on tabindex for visibility (much faster)
+        // Skip expensive getBoundingClientRect checks
+        const focusables = Array.from(
+            config.container.querySelectorAll(config.selector)
+        ).filter(el => el.offsetParent !== null); // Basic visibility check only
+
+        this._focusablesCache.set(sectionName, focusables);
+        return focusables;
+    }
+
+    /**
+     * Invalidate focusables cache for a section
+     * @param {string} sectionName 
+     */
+    invalidateCache(sectionName) {
+        if (sectionName) {
+            this._focusablesCache.delete(sectionName);
+        } else {
+            this._focusablesCache.clear();
+        }
     }
 
     /**
@@ -341,7 +364,8 @@ class FocusManager {
     }
 
     /**
-     * Leave current section
+     * Leave current section (OPTIMIZED)
+     * Uses instant scroll when changing sections vertically.
      * @param {string} direction 
      */
     _leaveSection(direction) {
@@ -357,41 +381,70 @@ class FocusManager {
                 this._focusedElement.classList.remove('focused');
             }
 
+            // Set flag for instant scroll when changing rows
+            this._useInstantScroll = (direction === 'up' || direction === 'down');
             this.setActiveSection(nextSection);
+            this._useInstantScroll = false;
         }
     }
 
     /**
-     * Focus a specific element
+     * Focus a specific element (OPTIMIZED per Samsung Tizen Guidelines)
+     * - Cache DOM queries
+     * - Batch reads before writes  
+     * - Scroll first, then focus
      */
-    focusElement(element, options = { scroll: true }) {
+    focusElement(element, options = {}) {
         if (!element) return;
 
-        // Cleanup old focus
+        const defaults = { scroll: true, skipScroll: false };
+        options = { ...defaults, ...options };
+
+        // Cleanup old focus FIRST (lightweight)
         if (this._focusedElement && this._focusedElement !== element) {
             this._focusedElement.classList.remove('focused');
         }
 
-        // Set New Focus
-        this._focusedElement = element;
-        this._focusedElement.classList.add('focused');
+        // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
+        if (!this._pageContent) {
+            this._pageContent = document.querySelector('.page-content');
+        }
+        const pageContent = this._pageContent;
 
-        // Native focus (for screen readers/input handling)
-        this._focusedElement.focus({ preventScroll: true });
+        // SCROLL FIRST - before focus
+        if (options.skipScroll && pageContent) {
+            // For vertical row changes: scroll row section into view
+            const row = element.closest('.media-row');
+            if (row) {
+                // SAMSUNG: Batch all reads first
+                const rowTop = row.offsetTop;
+                const viewHeight = pageContent.clientHeight;
+                const currentScroll = pageContent.scrollTop;
 
-        // Smooth Scroll
-        if (options.scroll) {
-            try {
-                this._focusedElement.scrollIntoView({
-                    behavior: 'smooth',
-                    block: 'center',
-                    inline: 'center' // Center it for better visibility
-                });
-            } catch (e) {
-                // Fallback for older browsers
-                this._focusedElement.scrollIntoView(false);
+                // Then write
+                if (rowTop < currentScroll || rowTop > currentScroll + viewHeight - 200) {
+                    pageContent.scrollTop = Math.max(0, rowTop - 100);
+                }
+            }
+        } else if (options.scroll) {
+            // For horizontal navigation within row
+            const rowItems = element.closest('.row-items');
+            if (rowItems) {
+                // SAMSUNG: Batch all reads first
+                const elementLeft = element.offsetLeft;
+                const elementWidth = element.offsetWidth;
+                const containerWidth = rowItems.clientWidth;
+
+                // Then write
+                const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
+                rowItems.scrollLeft = Math.max(0, targetScroll);
             }
         }
+
+        // NOW set focus (after scroll is done)
+        this._focusedElement = element;
+        this._focusedElement.classList.add('focused');
+        this._focusedElement.focus({ preventScroll: true });
 
         this._updateFocusMemory();
         eventBus.emit('focus:changed', element);
@@ -429,7 +482,8 @@ class FocusManager {
             }
         }
 
-        this.focusElement(target);
+        // Use skipScroll when changing sections vertically (much faster)
+        this.focusElement(target, { skipScroll: this._useInstantScroll });
     }
 
     _activate() {
