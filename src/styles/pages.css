@@ -127,6 +127,14 @@
     padding: 24px;
 }
 
+.login-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    margin-top: 24px;
+    align-items: center;
+}
+
 .loading-section {
     display: flex;
     flex-direction: column;
@@ -922,6 +930,19 @@
     border: 2px solid var(--jf-input-border);
     border-radius: var(--jf-border-radius);
     color: var(--jf-text-primary);
+}
+
+/* Error Display */
+.page-error {
+    display: none;
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b;
+    padding: 1rem;
+    margin: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.1rem;
 }
 
 .setting-select:focus {

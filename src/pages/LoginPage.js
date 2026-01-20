@@ -18,6 +18,7 @@ const STATE = {
     SERVER: 'server',
     USERS: 'users',
     PASSWORD: 'password',
+    MANUAL: 'manual',
     LOADING: 'loading'
 };
 
@@ -32,6 +33,7 @@ class LoginPage extends Page {
         this._serverUrl = '';
         this._discoveredServers = []; // Servers found via LAN discovery
         this._isDiscovering = false;
+        this._isLoggingIn = false;
     }
 
     render() {
@@ -55,7 +57,6 @@ class LoginPage extends Page {
                                 placeholder="https://your-server.com"
                                 autocomplete="off"
                                 tabindex="0"
-                                readonly
                             >
                         </div>
                         <button class="btn btn-primary connect-btn" tabindex="0">
@@ -80,9 +81,44 @@ class LoginPage extends Page {
                         <div class="users-grid" id="users-grid">
                             <!-- Users will be rendered here -->
                         </div>
+                        <div class="login-actions">
+                            <button class="btn btn-secondary manual-login-btn" tabindex="0">
+                                Manual Login
+                            </button>
+                            <button class="btn btn-secondary change-server-btn" tabindex="0">
+                                Change Server
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Manual Login Form -->
+                    <div class="login-section manual-section hidden" data-section="manual">
+                        <h2>Manual Login</h2>
+                        <div class="input-group">
+                            <input 
+                                type="text" 
+                                id="manual-username" 
+                                class="text-input tv-input"
+                                placeholder="Username"
+                                tabindex="0"
+                            >
+                        </div>
+                        <div class="input-group">
+                            <input 
+                                type="password" 
+                                id="manual-password" 
+                                class="text-input tv-input"
+                                placeholder="Password"
+                                tabindex="0"
+                            >
+                        </div>
+                        <button class="btn btn-primary manual-signin-btn" tabindex="0">
+                            Sign In
+                        </button>
                         <button class="btn btn-secondary back-btn" tabindex="0">
                             Back
                         </button>
+                        <p class="login-error" id="manual-error"></p>
                     </div>
                     
                     <!-- Password Form -->
@@ -99,7 +135,6 @@ class LoginPage extends Page {
                                 class="text-input tv-input"
                                 placeholder="Password (leave empty if none)"
                                 tabindex="0"
-                                readonly
                             >
                         </div>
                         <button class="btn btn-primary login-btn" tabindex="0">
@@ -114,7 +149,7 @@ class LoginPage extends Page {
                     <!-- Loading -->
                     <div class="login-section loading-section hidden" data-section="loading">
                         <div class="loading-spinner"></div>
-                        <p>Connecting...</p>
+                        <p class="login-error" id="server-error"></p>
                     </div>
                 </div>
             </div>
@@ -122,18 +157,19 @@ class LoginPage extends Page {
     }
 
     onMounted() {
+        // CRITICAL: Clear any stale authentication data when entering login screen
+        // This prevents 401 errors from stale tokens if logout failed
+        console.log('LoginPage: Clearing any stale auth data');
+        api.clearAuth();
+
         // Get element references
         this._serverInput = this.$('#server-url');
         this._passwordInput = this.$('#password-input');
+        this._manualUsername = this.$('#manual-username');
+        this._manualPassword = this.$('#manual-password');
         this._usersGrid = this.$('#users-grid');
         this._serverList = this.$('#server-list');
         this._discoveryStatus = this.$('#discovery-status');
-
-        // Load saved server URL
-        const savedUrl = auth.getSavedServerUrl();
-        if (savedUrl) {
-            this._serverInput.value = savedUrl;
-        }
 
         // Bind events
         this._bindEvents();
@@ -141,13 +177,19 @@ class LoginPage extends Page {
         // Setup focus sections
         this._setupFocus();
 
-        // Start server discovery in background
-        this._startDiscovery();
-
-        // Set initial focus
-        setTimeout(() => {
-            this._serverInput.focus();
-        }, 100);
+        // Check if we have a saved server - auto-connect if so
+        const savedUrl = auth.getSavedServerUrl();
+        if (savedUrl) {
+            // Server already saved - skip server selection, go straight to users
+            this._serverInput.value = savedUrl;
+            this._autoConnectToSavedServer(savedUrl);
+        } else {
+            // No saved server - show server selection
+            this._startDiscovery();
+            setTimeout(() => {
+                this._serverInput.focus();
+            }, 100);
+        }
     }
 
     _bindEvents() {
@@ -157,10 +199,17 @@ class LoginPage extends Page {
         // Login button
         this.$('.login-btn')?.addEventListener('click', () => this._login());
 
-        // Back buttons
+        // Manual Login buttons
+        this.$('.manual-login-btn')?.addEventListener('click', () => this._goToManualLogin());
+        this.$('.manual-signin-btn')?.addEventListener('click', () => this._handleManualLogin());
+
+        // Back buttons (for password and manual screens)
         this.$$('.back-btn').forEach(btn => {
             btn.addEventListener('click', () => this._goBack());
         });
+
+        // Change Server button - goes back to server selection
+        this.$('.change-server-btn')?.addEventListener('click', () => this._goToServerSelection());
 
         // Enter key on inputs - open keyboard first, or submit if already editable
         this._serverInput?.addEventListener('keydown', (e) => {
@@ -200,6 +249,28 @@ class LoginPage extends Page {
         this._passwordInput?.addEventListener('blur', () => {
             this._passwordInput.readOnly = true;
         });
+
+        // Manual Login inputs handling
+        this._setupInputHandler(this._manualUsername, () => this._manualPassword.focus());
+        this._setupInputHandler(this._manualPassword, () => this._handleManualLogin());
+    }
+
+    _setupInputHandler(input, onSubmit) {
+        if (!input) return;
+        input.addEventListener('keydown', (e) => {
+            if (e.keyCode === 13) {
+                if (input.readOnly) {
+                    input.readOnly = false;
+                    input.focus();
+                } else {
+                    input.readOnly = true;
+                    if (onSubmit) onSubmit();
+                }
+            }
+        });
+        input.addEventListener('blur', () => {
+            if (input) input.readOnly = true;
+        });
     }
 
     _setupFocus() {
@@ -220,7 +291,63 @@ class LoginPage extends Page {
             orientation: 'grid'
         });
 
+        // Register manual login section
+        this.registerFocusSection('login-manual', this.$('[data-section="manual"]'), {
+            orientation: 'grid'
+        });
+
         this.setActiveSection('login-server');
+    }
+
+    /**
+     * Auto-connect to a saved server on app startup
+     * Skips server selection and goes straight to user list
+     * @param {string} savedUrl - The saved server URL
+     */
+    async _autoConnectToSavedServer(savedUrl) {
+        console.log(`LoginPage: Auto-connecting to saved server ${savedUrl}`);
+        this._showState(STATE.LOADING);
+
+        try {
+            this._serverUrl = savedUrl;
+            await auth.connectToServer(savedUrl);
+
+            // Get public users
+            this._users = await api.getPublicUsers();
+
+            if (this._users.length > 0) {
+                this._renderUsers();
+                this._showState(STATE.USERS);
+                this.setActiveSection('login-users');
+
+                // Focus first user card
+                setTimeout(() => {
+                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    if (firstCard) firstCard.focus();
+                }, 100);
+            } else {
+                // No public users - show manual login
+                this._goToManualLogin();
+            }
+        } catch (error) {
+            // Connection failed - show server selection
+            console.warn('LoginPage: Auto-connect failed, showing server selection');
+            this._showState(STATE.SERVER);
+            this._startDiscovery();
+            setTimeout(() => this._serverInput.focus(), 100);
+        }
+    }
+
+    /**
+     * Go to server selection screen (when Change Server button is clicked)
+     * This is the only way users can change their server after initial setup
+     */
+    _goToServerSelection() {
+        console.log('LoginPage: Going to server selection');
+        this._showState(STATE.SERVER);
+        this.setActiveSection('login-server');
+        this._startDiscovery();
+        setTimeout(() => this._serverInput.focus(), 100);
     }
 
     async _connectToServer() {
@@ -292,38 +419,79 @@ class LoginPage extends Page {
         this._usersGrid.querySelectorAll('.user-card').forEach(card => {
             card.addEventListener('click', () => {
                 const index = parseInt(card.dataset.userIndex);
-                this._selectUser(this._users[index]);
+                console.log(`LoginPage: User card clicked, index=${index}`);
+                if (this._users[index]) {
+                    console.log(`LoginPage: User found: ${this._users[index].Name}`);
+                    this._selectUser(this._users[index]);
+                } else {
+                    console.error(`LoginPage: No user at index ${index}`);
+                }
             });
 
             // Enter key to select user
             card.addEventListener('keydown', (e) => {
                 if (e.keyCode === 13) {
                     const index = parseInt(card.dataset.userIndex);
-                    this._selectUser(this._users[index]);
+                    console.log(`LoginPage: User card Enter pressed, index=${index}`);
+                    if (this._users[index]) {
+                        this._selectUser(this._users[index]);
+                    }
                 }
             });
         });
     }
 
-    _selectUser(user) {
-        this._selectedUser = user;
+    /**
+     * Handle user card selection
+     * If user has no password, login directly
+     * If user has password, show password form
+     * @param {Object} user - User object from getPublicUsers
+     */
+    async _selectUser(user) {
+        console.log(`LoginPage: _selectUser called for "${user?.Name}"`);
 
-        // Update password section with user info
-        const userEl = this.$('#selected-user');
-        userEl.querySelector('.user-name').textContent = user.Name;
-        userEl.querySelector('.user-avatar').src = user.PrimaryImageTag
-            ? api.getUserImageUrl(user.Id, { maxWidth: 100 })
-            : '';
+        if (!user) {
+            console.error('LoginPage: _selectUser called with null/undefined user');
+            return;
+        }
 
-        // Clear password
-        this._passwordInput.value = '';
+        try {
+            this._selectedUser = user;
 
-        // Show password section
-        this._showState(STATE.PASSWORD);
-        this.setActiveSection('login-password');
+            // Check HasPassword field (key jellyfin-web pattern)
+            if (user.HasPassword === false) {
+                // No password required - login directly
+                console.log(`LoginPage: User "${user.Name}" has no password, logging in directly`);
+                this._showState(STATE.LOADING);
 
-        // Focus password input
-        setTimeout(() => this._passwordInput.focus(), 100);
+                await auth.login(user.Name, '');
+                router.navigate('/home', { replace: true });
+            } else {
+                // Password required - show password form
+                console.log(`LoginPage: User "${user.Name}" requires password`);
+
+                // Update password section with user info
+                const userEl = this.$('#selected-user');
+                userEl.querySelector('.user-name').textContent = user.Name;
+                userEl.querySelector('.user-avatar').src = user.PrimaryImageTag
+                    ? api.getUserImageUrl(user.Id, { maxWidth: 100 })
+                    : '';
+
+                // Clear password input
+                this._passwordInput.value = '';
+
+                // Show password section
+                this._showState(STATE.PASSWORD);
+                this.setActiveSection('login-password');
+
+                // Focus password input
+                setTimeout(() => this._passwordInput.focus(), 100);
+            }
+        } catch (error) {
+            console.error('LoginPage: _selectUser error:', error);
+            this._showState(STATE.USERS);
+            this._showError('server-error', error.message || 'Login failed');
+        }
     }
 
     async _login() {
@@ -335,7 +503,12 @@ class LoginPage extends Page {
         this._showState(STATE.LOADING);
 
         try {
+            console.log('LoginPage: AuthManager.login calling...');
             await auth.login(username, password);
+            console.log('LoginPage: AuthManager.login success. Navigating to home...');
+
+            // Short delay to ensure state propagation
+            await new Promise(resolve => setTimeout(resolve, 50));
 
             // Success! Navigate to home
             router.navigate('/home', { replace: true });
@@ -343,6 +516,46 @@ class LoginPage extends Page {
             this._showState(STATE.PASSWORD);
             this._showError('password-error', error.message || 'Login failed');
             this._passwordInput.focus();
+        }
+    }
+
+    _goToManualLogin() {
+        this._manualUsername.value = '';
+        this._manualPassword.value = '';
+        this._showState(STATE.MANUAL);
+        this.setActiveSection('login-manual');
+        setTimeout(() => this._manualUsername.focus(), 100);
+    }
+
+    async _handleManualLogin() {
+        this._hideError('manual-error');
+
+        // Read values from input fields (readonly removed so they work now)
+        const username = this._manualUsername.value.trim();
+        const password = this._manualPassword.value;
+
+        console.log(`LoginPage: Manual Login. User="${username}" PassLength=${password ? password.length : 0}`);
+
+        if (!username) {
+            this._showError('manual-error', 'Username is required');
+            return;
+        }
+
+        this._showState(STATE.LOADING);
+
+        try {
+            console.log('LoginPage: AuthManager.login calling...');
+            await auth.login(username, password);
+            console.log('LoginPage: AuthManager.login success. Navigating to home...');
+
+            // Short delay to ensure state propagation
+            await new Promise(resolve => setTimeout(resolve, 50));
+
+            router.navigate('/home', { replace: true });
+        } catch (error) {
+            this._showState(STATE.MANUAL);
+            this._showError('manual-error', error.message || 'Login failed');
+            this._manualUsername.focus();
         }
     }
 
@@ -365,7 +578,14 @@ class LoginPage extends Page {
         } else if (this._state === STATE.USERS) {
             this._showState(STATE.SERVER);
             this.setActiveSection('login-server');
+            this.setActiveSection('login-server');
             this._serverInput.focus();
+        } else if (this._state === STATE.MANUAL) {
+            this._showState(STATE.USERS);
+            this.setActiveSection('login-users');
+            setTimeout(() => {
+                this.$('.manual-login-btn')?.focus();
+            }, 100);
         }
     }
 
@@ -501,6 +721,62 @@ class LoginPage extends Page {
 
             console.log(`LoginPage: Selected server ${server.name} (${server.address})`);
         }
+    }
+
+    /**
+     * Initialize debug overlay
+     * Intercepts console logs and shows them on screen
+     */
+    _initDebugOverlay() {
+        const overlay = this.$('#debug-overlay');
+        const content = this.$('#debug-content');
+
+        if (!overlay || !content) return;
+
+        // Make overlay visible
+        overlay.style.display = 'block';
+
+        // Keep original console methods
+        const originalLog = console.log;
+        const originalError = console.error;
+        const originalWarn = console.warn;
+
+        const addLog = (type, args) => {
+            const line = document.createElement('div');
+            line.style.borderBottom = '1px solid #333';
+            line.style.padding = '2px 0';
+
+            if (type === 'error') line.style.color = '#f55';
+            else if (type === 'warn') line.style.color = '#fa0';
+
+            const text = args.map(arg => {
+                if (typeof arg === 'object') return JSON.stringify(arg);
+                return String(arg);
+            }).join(' ');
+
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            content.appendChild(line);
+
+            // Auto-scroll
+            overlay.scrollTop = overlay.scrollHeight;
+        };
+
+        console.log = (...args) => {
+            originalLog.apply(console, args);
+            addLog('log', args);
+        };
+
+        console.error = (...args) => {
+            originalError.apply(console, args);
+            addLog('error', args);
+        };
+
+        console.warn = (...args) => {
+            originalWarn.apply(console, args);
+            addLog('warn', args);
+        };
+
+        console.log('LoginPage: Debug overlay initialized');
     }
 }
 

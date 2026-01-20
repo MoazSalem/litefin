@@ -124,10 +124,7 @@ class SettingsPage extends Page {
                             
                             <div class="setting-actions">
                                 <button class="btn btn-secondary switch-user-btn" tabindex="0">
-                                    Switch User
-                                </button>
-                                <button class="btn btn-danger logout-btn" tabindex="0">
-                                    Sign Out
+                                    Log Out
                                 </button>
                             </div>
                         </section>
@@ -179,15 +176,11 @@ class SettingsPage extends Page {
             });
         });
 
-        // Switch user
-        this.$('.switch-user-btn')?.addEventListener('click', () => {
-            // Keep server URL, just go back to login
-            router.navigate('/login', { replace: true });
-        });
-
-        // Logout
-        this.$('.logout-btn')?.addEventListener('click', async () => {
+        // Log Out (was Switch User)
+        this.$('.switch-user-btn')?.addEventListener('click', async () => {
+            // Perform logout to clear user session
             await auth.logout();
+            // Navigate to login page (server URL remains in localStorage)
             router.navigate('/login', { replace: true });
         });
     }

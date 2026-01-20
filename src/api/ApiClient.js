@@ -3,7 +3,9 @@
  * LiteFin Tizen - API Client
  * ============================================================================
  * HTTP client wrapper for Jellyfin server API communication.
- * Handles authentication headers, error handling, and request queuing.
+ * Handles authentication headers, error handling, and request management.
+ * 
+ * Based on jellyfin-web patterns for compatibility.
  * ============================================================================
  */
 
@@ -14,23 +16,29 @@ import { tizenAdapter } from '../tizen/TizenAdapter.js';
 // API request timeout (ms)
 const REQUEST_TIMEOUT = 30000;
 
+// ============================================================================
+// ApiClient Class
+// ============================================================================
 class ApiClient {
     constructor() {
         // Server configuration
         this._serverUrl = null;
         this._accessToken = null;
         this._userId = null;
+
+        // Device identification - NO SPACES in any of these values
         this._deviceId = null;
-        this._deviceName = 'LiteFin Tizen';
+        this._deviceName = 'LiteFinTizenTv';
         this._clientName = 'LiteFin';
         this._clientVersion = '0.1.0';
-
-        // Request queue for rate limiting
-        this._pendingRequests = new Map();
     }
 
+    // ========================================================================
+    // Configuration Methods
+    // ========================================================================
+
     /**
-     * Initialize API client with server URL
+     * Set the server URL
      * @param {string} serverUrl - Jellyfin server URL
      */
     setServer(serverUrl) {
@@ -54,18 +62,20 @@ class ApiClient {
 
     /**
      * Set device identification
+     * Device name is sanitized to remove spaces and special characters
      * @param {string} deviceId - Unique device ID
-     * @param {string} [deviceName] - Device name
+     * @param {string} [deviceName] - Device name (will be sanitized)
      */
     setDevice(deviceId, deviceName = null) {
         this._deviceId = deviceId;
         if (deviceName) {
-            this._deviceName = deviceName;
+            // Remove ALL spaces and special characters - critical for header safety
+            this._deviceName = deviceName.replace(/[^a-zA-Z0-9]/g, '');
         }
     }
 
     /**
-     * Clear authentication
+     * Clear authentication credentials
      */
     clearAuth() {
         this._accessToken = null;
@@ -75,18 +85,31 @@ class ApiClient {
         console.log('ApiClient: Authentication cleared');
     }
 
+    // ========================================================================
+    // Header Management
+    // ========================================================================
+
     /**
-     * Get authorization header value
-     * @returns {string} Authorization header
+     * Build the X-Emby-Authorization header
+     * This header format is required by Jellyfin for all authenticated requests
+     * @returns {string} Authorization header value
      */
     getAuthHeader() {
-        let header = `MediaBrowser Client="${this._clientName}", Device="${this._deviceName}", DeviceId="${this._deviceId}", Version="${this._clientVersion}"`;
+        // Build MediaBrowser authorization header
+        // Format: MediaBrowser Client="...", Device="...", DeviceId="...", Version="..."[, Token="..."]
+        const parts = [
+            `Client="${this._clientName}"`,
+            `Device="${this._deviceName}"`,
+            `DeviceId="${this._deviceId}"`,
+            `Version="${this._clientVersion}"`
+        ];
 
+        // Add token if authenticated
         if (this._accessToken) {
-            header += `, Token="${this._accessToken}"`;
+            parts.push(`Token="${this._accessToken}"`);
         }
 
-        return header;
+        return `MediaBrowser ${parts.join(', ')}`;
     }
 
     /**
@@ -95,10 +118,13 @@ class ApiClient {
      * @returns {string} Full URL
      */
     buildUrl(endpoint) {
-        // Handle endpoints that already start with /
         const path = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
         return `${this._serverUrl}${path}`;
     }
+
+    // ========================================================================
+    // Request Methods
+    // ========================================================================
 
     /**
      * Make an API request
@@ -124,11 +150,10 @@ class ApiClient {
         // Build fetch options
         const fetchOptions = {
             method,
-            headers,
-            ...options
+            headers
         };
 
-        // Add body for POST/PUT
+        // Add body for POST/PUT requests
         if (options.body && typeof options.body === 'object') {
             fetchOptions.body = JSON.stringify(options.body);
         }
@@ -139,20 +164,18 @@ class ApiClient {
             // Create abort controller for timeout
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
-
             fetchOptions.signal = controller.signal;
 
             const response = await fetch(url, fetchOptions);
-
             clearTimeout(timeoutId);
 
-            // Handle response
+            // Handle error responses
             if (!response.ok) {
                 const error = await this._handleError(response);
                 throw error;
             }
 
-            // Parse response
+            // Parse response based on content type
             const contentType = response.headers.get('content-type');
             if (contentType && contentType.includes('application/json')) {
                 return await response.json();
@@ -178,11 +201,12 @@ class ApiClient {
     async _handleError(response) {
         let message = `HTTP ${response.status}`;
 
+        // Try to parse error message from response
         try {
             const data = await response.json();
             message = data.message || data.Message || message;
         } catch {
-            // Response wasn't JSON
+            // Response wasn't JSON, use status code
         }
 
         // Handle specific status codes
@@ -209,8 +233,6 @@ class ApiClient {
 
     /**
      * GET request helper
-     * @param {string} endpoint - API endpoint
-     * @param {Object} [params] - Query parameters
      */
     async get(endpoint, params = null) {
         let url = endpoint;
@@ -233,8 +255,6 @@ class ApiClient {
 
     /**
      * POST request helper
-     * @param {string} endpoint - API endpoint
-     * @param {Object} [body] - Request body
      */
     async post(endpoint, body = null) {
         return this.request(endpoint, { method: 'POST', body });
@@ -242,36 +262,36 @@ class ApiClient {
 
     /**
      * DELETE request helper
-     * @param {string} endpoint - API endpoint
      */
     async delete(endpoint) {
         return this.request(endpoint, { method: 'DELETE' });
     }
 
     // ========================================================================
-    // Server endpoints
+    // Server Endpoints (Public - No auth required)
     // ========================================================================
 
     /**
-     * Get server public info (no auth required)
+     * Get server public info
      */
     async getPublicInfo() {
         return this.get('/System/Info/Public');
     }
 
     /**
-     * Get server branding
+     * Get server branding configuration
      */
     async getBranding() {
         return this.get('/Branding/Configuration');
     }
 
     // ========================================================================
-    // User endpoints
+    // User Endpoints
     // ========================================================================
 
     /**
-     * Get public users list
+     * Get list of public users (for login screen)
+     * Returns users with HasPassword field
      */
     async getPublicUsers() {
         return this.get('/Users/Public');
@@ -285,19 +305,18 @@ class ApiClient {
     }
 
     /**
-     * Get user views (libraries)
+     * Get user's library views
      */
     async getUserViews() {
         return this.get(`/Users/${this._userId}/Views`);
     }
 
     // ========================================================================
-    // Library endpoints
+    // Library Endpoints
     // ========================================================================
 
     /**
      * Get items from library
-     * @param {Object} params - Query parameters
      */
     async getItems(params = {}) {
         const defaults = {
@@ -317,8 +336,6 @@ class ApiClient {
 
     /**
      * Get latest items in a library
-     * @param {string} parentId - Library ID
-     * @param {Object} params - Additional parameters
      */
     async getLatestItems(parentId, params = {}) {
         const defaults = {
@@ -334,7 +351,6 @@ class ApiClient {
 
     /**
      * Get resume items (continue watching)
-     * @param {Object} params - Query parameters
      */
     async getResumeItems(params = {}) {
         const defaults = {
@@ -352,7 +368,6 @@ class ApiClient {
 
     /**
      * Get next up episodes
-     * @param {Object} params - Query parameters
      */
     async getNextUp(params = {}) {
         const defaults = {
@@ -367,22 +382,13 @@ class ApiClient {
     }
 
     // ========================================================================
-    // Item endpoints
+    // Item Endpoints
     // ========================================================================
 
-    /**
-     * Get single item details
-     * @param {string} itemId - Item ID
-     */
     async getItem(itemId) {
         return this.get(`/Users/${this._userId}/Items/${itemId}`);
     }
 
-    /**
-     * Get similar items
-     * @param {string} itemId - Item ID
-     * @param {Object} params - Query parameters
-     */
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,
@@ -393,10 +399,6 @@ class ApiClient {
         return this.get(`/Items/${itemId}/Similar`, { ...defaults, ...params });
     }
 
-    /**
-     * Get seasons for a series
-     * @param {string} seriesId - Series ID
-     */
     async getSeasons(seriesId) {
         return this.get(`/Shows/${seriesId}/Seasons`, {
             UserId: this._userId,
@@ -404,11 +406,6 @@ class ApiClient {
         });
     }
 
-    /**
-     * Get episodes for a season
-     * @param {string} seriesId - Series ID
-     * @param {string} seasonId - Season ID
-     */
     async getEpisodes(seriesId, seasonId) {
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
@@ -418,14 +415,9 @@ class ApiClient {
     }
 
     // ========================================================================
-    // Search endpoints
+    // Search Endpoints
     // ========================================================================
 
-    /**
-     * Search for items
-     * @param {string} query - Search query
-     * @param {Object} params - Additional parameters
-     */
     async search(query, params = {}) {
         const defaults = {
             UserId: this._userId,
@@ -441,16 +433,9 @@ class ApiClient {
     }
 
     // ========================================================================
-    // Image endpoints
+    // Image URLs
     // ========================================================================
 
-    /**
-     * Get image URL for an item
-     * @param {string} itemId - Item ID
-     * @param {string} [imageType='Primary'] - Image type
-     * @param {Object} [options] - Image options
-     * @returns {string} Image URL
-     */
     getImageUrl(itemId, imageType = 'Primary', options = {}) {
         const params = new URLSearchParams();
 
@@ -465,12 +450,6 @@ class ApiClient {
         return this.buildUrl(queryString ? `${path}?${queryString}` : path);
     }
 
-    /**
-     * Get image URL for a user (avatar)
-     * @param {string} userId - User ID
-     * @param {Object} [options] - Image options
-     * @returns {string} Image URL
-     */
     getUserImageUrl(userId, options = {}) {
         const params = new URLSearchParams();
 
@@ -485,14 +464,9 @@ class ApiClient {
     }
 
     // ========================================================================
-    // Playback endpoints
+    // Playback Endpoints
     // ========================================================================
 
-    /**
-     * Get playback info for an item
-     * @param {string} itemId - Item ID
-     * @param {Object} deviceProfile - Device profile
-     */
     async getPlaybackInfo(itemId, deviceProfile) {
         return this.post(`/Items/${itemId}/PlaybackInfo`, {
             UserId: this._userId,
@@ -501,62 +475,34 @@ class ApiClient {
         });
     }
 
-    /**
-     * Report playback start
-     * @param {Object} info - Playback info
-     */
     async reportPlaybackStart(info) {
         return this.post('/Sessions/Playing', info);
     }
 
-    /**
-     * Report playback progress
-     * @param {Object} info - Progress info
-     */
     async reportPlaybackProgress(info) {
         return this.post('/Sessions/Playing/Progress', info);
     }
 
-    /**
-     * Report playback stopped
-     * @param {Object} info - Stop info
-     */
     async reportPlaybackStopped(info) {
         return this.post('/Sessions/Playing/Stopped', info);
     }
 
     // ========================================================================
-    // Favorites endpoints
+    // Favorites Endpoints
     // ========================================================================
 
-    /**
-     * Mark item as favorite
-     * @param {string} itemId - Item ID
-     */
     async markFavorite(itemId) {
         return this.post(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
-    /**
-     * Unmark item as favorite
-     * @param {string} itemId - Item ID
-     */
     async unmarkFavorite(itemId) {
         return this.delete(`/Users/${this._userId}/FavoriteItems/${itemId}`);
     }
 
-    /**
-     * Mark item as played
-     * @param {string} itemId - Item ID
-     */
     async markPlayed(itemId) {
         return this.post(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
-    /**
-     * Unmark item as played
-     * @param {string} itemId - Item ID
-     */
     async unmarkPlayed(itemId) {
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
@@ -571,14 +517,11 @@ class ApiClient {
 }
 
 // ============================================================================
-// Server Discovery - Static methods for finding Jellyfin servers on LAN
+// Server Discovery
 // ============================================================================
 
 /**
- * Test if a server is a valid Jellyfin server
- * @param {string} address - Server address to test (e.g., "http://192.168.1.100:8096")
- * @param {number} timeout - Timeout in ms
- * @returns {Promise<Object|null>} Server info or null if not valid
+ * Test if an address is a valid Jellyfin server
  */
 async function testServer(address, timeout = 1000) {
     try {
@@ -596,7 +539,6 @@ async function testServer(address, timeout = 1000) {
 
         const info = await response.json();
 
-        // Extract server name from response or URL
         let serverName = info.ServerName;
         if (!serverName || serverName.trim() === '') {
             try {
@@ -620,19 +562,13 @@ async function testServer(address, timeout = 1000) {
 }
 
 /**
- * Discover Jellyfin servers on the local network
- * Smart scanning strategy:
- * 1. Identify local IP and scan that subnet first (fastest)
- * 2. Scan standard subnets in parallel
- * 3. Use high concurrency (batch size 100) and low timeout (500ms)
- * @param {Function} onProgress - Optional callback
+ * Discover Jellyfin servers on local network
  */
 async function discoverServers(onProgress = null) {
-    console.log('ApiClient: Starting smart server discovery...');
+    console.log('ApiClient: Starting server discovery...');
     const foundServers = [];
     const scannedIps = new Set();
 
-    // Helper to scan a subnet base (e.g. "192.168.1.")
     const scanSubnet = async (prefix) => {
         const batch = [];
         for (let i = 1; i < 255; i++) {
@@ -643,29 +579,25 @@ async function discoverServers(onProgress = null) {
             }
         }
 
-        // Scan full subnet in concurrent chunks of 60
-        // Browsers handle ~6 connections per host, but for different IPs we can go higher.
-        // 60 * 500ms = 2 seconds for full subnet if sequential batches
         const CHUNK_SIZE = 60;
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
             const chunk = batch.slice(i, i + CHUNK_SIZE);
             const results = await Promise.all(
-                chunk.map(addr => testServer(addr, 500)) // 500ms timeout
+                chunk.map(addr => testServer(addr, 500))
             );
 
             results.filter(s => s).forEach(s => {
-                // Deduplicate
                 if (!foundServers.find(existing => existing.address === s.address)) {
                     console.log(`ApiClient: Found server at ${s.address}`);
                     foundServers.push(s);
                 }
             });
 
-            if (onProgress) onProgress(scannedIps.size, 600); // Approximate total
+            if (onProgress) onProgress(scannedIps.size, 600);
         }
     };
 
-    // 1. Local Subnet (High Priority)
+    // Scan local subnet first
     const localIP = await tizenAdapter.getIPAddress();
     if (localIP) {
         const parts = localIP.split('.');
@@ -676,14 +608,8 @@ async function discoverServers(onProgress = null) {
         }
     }
 
-    // 2. Standard Subnets (Background / Parallel)
-    // Scan these if we haven't found anything OR if we want to be thorough.
-    // To be fast, if we found something on local subnet, we could return early.
-    // user might have multiple servers. Let's scan standard ones quickly too.
-
+    // Scan common subnets
     const standardSubnets = ['192.168.0.', '192.168.1.', '10.0.0.'];
-
-    // Run these in parallel to each other!
     await Promise.all(standardSubnets.map(subnet => scanSubnet(subnet)));
 
     console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
@@ -697,4 +623,3 @@ export const api = new ApiClient();
 export { discoverServers, testServer };
 
 export default ApiClient;
-

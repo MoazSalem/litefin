@@ -3,7 +3,14 @@
  * LiteFin Tizen - Auth Manager
  * ============================================================================
  * Handles user authentication, session management, and credential storage.
- * Supports both quick connect and password-based login.
+ * 
+ * Features:
+ * - Session persistence (auto-login on app restart)
+ * - HasPassword detection (auto-login for passwordless users)
+ * - Manual login with username/password
+ * - Proper logout with server notification
+ * 
+ * Based on jellyfin-web patterns for compatibility.
  * ============================================================================
  */
 
@@ -11,7 +18,9 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
 
-// Storage keys
+// ============================================================================
+// Storage Keys
+// ============================================================================
 const STORAGE_KEYS = {
     SERVER_URL: 'litefin:serverUrl',
     ACCESS_TOKEN: 'litefin:accessToken',
@@ -20,23 +29,32 @@ const STORAGE_KEYS = {
     DEVICE_ID: 'litefin:deviceId'
 };
 
+// ============================================================================
+// AuthManager Class
+// ============================================================================
 class AuthManager {
     constructor() {
-        // Bound methods
+        // Bind methods
         this._onUnauthorized = this._onUnauthorized.bind(this);
 
-        // Listen for unauthorized events
+        // Listen for unauthorized events from API
         eventBus.on('api:unauthorized', this._onUnauthorized);
     }
 
+    // ========================================================================
+    // Initialization
+    // ========================================================================
+
     /**
-     * Initialize auth manager - restore saved session
-     * @returns {Promise<boolean>} True if restored session
+     * Initialize auth manager
+     * - Ensures device ID exists
+     * - Attempts to restore saved session
+     * @returns {Promise<boolean>} True if session was restored
      */
     async init() {
         console.log('AuthManager: Initializing...');
 
-        // Ensure device ID exists
+        // Ensure we have a device ID
         this._ensureDeviceId();
 
         // Try to restore saved session
@@ -58,18 +76,19 @@ class AuthManager {
         let deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
 
         if (!deviceId) {
-            // Generate UUID
+            // Generate UUID v4
             deviceId = this._generateUUID();
             localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
             console.log('AuthManager: Generated new device ID');
         }
 
-        // Get device name from platform if available
-        let deviceName = 'Samsung TV';
+        // Get device name - NO SPACES allowed
+        let deviceName = 'SamsungTV';
         if (typeof tizen !== 'undefined') {
             try {
                 const model = webapis.productinfo.getModel();
-                deviceName = `Samsung ${model}`;
+                // Remove all spaces and special characters
+                deviceName = `Samsung${model.replace(/[^a-zA-Z0-9]/g, '')}`;
             } catch (e) {
                 // Use default
             }
@@ -79,36 +98,45 @@ class AuthManager {
     }
 
     /**
-     * Restore session from local storage
+     * Restore session from localStorage
      * @private
+     * @returns {Promise<boolean>} True if session was valid
      */
     async _restoreSession() {
         const serverUrl = localStorage.getItem(STORAGE_KEYS.SERVER_URL);
         const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
         const userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
 
+        // Need all three to restore
         if (!serverUrl || !accessToken || !userId) {
             return false;
         }
 
-        // Configure API
+        // Configure API with saved values
         api.setServer(serverUrl);
         api.setAuth(accessToken, userId);
 
         // Validate token by fetching user info
         try {
             const user = await api.getCurrentUser();
+
+            // Token is valid - restore state
             state.set('user:data', user);
             state.set('user:authenticated', true);
             state.set('server:connected', true);
+
             return true;
         } catch (error) {
-            // Token invalid - clear credentials
+            // Token is invalid - clear stored credentials
             console.warn('AuthManager: Saved token is invalid');
             this._clearStorage();
             return false;
         }
     }
+
+    // ========================================================================
+    // Server Connection
+    // ========================================================================
 
     /**
      * Connect to a Jellyfin server
@@ -141,7 +169,20 @@ class AuthManager {
     }
 
     /**
+     * Get saved server URL
+     * @returns {string|null} Server URL if saved
+     */
+    getSavedServerUrl() {
+        return localStorage.getItem(STORAGE_KEYS.SERVER_URL);
+    }
+
+    // ========================================================================
+    // User Management
+    // ========================================================================
+
+    /**
      * Get list of public users
+     * Each user has HasPassword field to determine if password is required
      * @returns {Promise<Array>} Public users
      */
     async getPublicUsers() {
@@ -149,38 +190,55 @@ class AuthManager {
     }
 
     /**
-     * Authenticate with username and password
-     * @param {string} username - Username
-     * @param {string} password - Password (can be empty)
+     * Authenticate a user by name and password
+     * This is the core authentication method
+     * @param {string} username - Username (case-insensitive on most servers)
+     * @param {string} password - Password (empty string for passwordless users)
      * @returns {Promise<Object>} Authentication result
      */
     async login(username, password = '') {
         console.log(`AuthManager: Logging in as "${username}"`);
+        console.log(`AuthManager: Password length: ${password ? password.length : 0}`);
+        console.log(`AuthManager: Current accessToken before login: ${api._accessToken ? 'SET' : 'NULL'}`);
 
         try {
+            // Ensure no stale token is being sent - clear BOTH memory and storage
+            this._clearStorage();
+            api.clearAuth();
+            console.log(`AuthManager: Cleared any stale auth before login request`);
+
+            // Call Jellyfin authenticate endpoint
             const result = await api.post('/Users/AuthenticateByName', {
                 Username: username,
                 Pw: password
             });
 
-            // Store credentials
-            const accessToken = result.AccessToken;
-            const userId = result.User.Id;
+            // Extract data (handle potential casing differences)
+            const accessToken = result.AccessToken || result.accessToken;
+            const user = result.User || result.user;
+            const userId = user?.Id || user?.id;
 
+            // Validate response
+            if (!accessToken || !userId) {
+                console.error('AuthManager: Invalid login response', result);
+                throw new Error('Invalid server response');
+            }
+
+            // Store credentials
             localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
             localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-            localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(result.User));
+            localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
 
-            // Configure API
+            // Configure API with new credentials
             api.setAuth(accessToken, userId);
 
             // Update state
             state.set('user:authenticated', true);
-            state.set('user:data', result.User);
+            state.set('user:data', user);
 
-            eventBus.emit('auth:login', result.User);
+            eventBus.emit('auth:login', user);
 
-            console.log(`AuthManager: Logged in as "${result.User.Name}"`);
+            console.log(`AuthManager: Logged in as "${user.Name || user.name}"`);
 
             return result;
         } catch (error) {
@@ -190,67 +248,67 @@ class AuthManager {
     }
 
     /**
-     * Login with PIN (for Quick Connect)
-     * @param {string} pin - Quick Connect PIN
+     * Login with a public user
+     * Checks HasPassword to determine if password prompt is needed
+     * @param {Object} user - User object from getPublicUsers()
+     * @param {string} [password] - Password (only needed if HasPassword is true)
+     * @returns {Promise<Object>} Authentication result
      */
-    async loginWithPin(pin) {
-        // First initiate quick connect
-        const initResult = await api.post('/QuickConnect/Initiate');
-        const secret = initResult.Secret;
-
-        // Then authorize with PIN
-        await api.post('/QuickConnect/Authorize', {
-            Code: pin
-        });
-
-        // Finally, authenticate with the secret
-        const authResult = await api.post('/Users/AuthenticateWithQuickConnect', {
-            Secret: secret
-        });
-
-        // Store and configure like normal login
-        const accessToken = authResult.AccessToken;
-        const userId = authResult.User.Id;
-
-        localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-        localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-        localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(authResult.User));
-
-        api.setAuth(accessToken, userId);
-
-        state.set('user:authenticated', true);
-        state.set('user:data', authResult.User);
-
-        eventBus.emit('auth:login', authResult.User);
-
-        return authResult;
+    async loginWithUser(user, password = '') {
+        // If user has no password, always use empty string
+        const pw = user.HasPassword ? password : '';
+        return this.login(user.Name, pw);
     }
+
+    // ========================================================================
+    // Logout
+    // ========================================================================
 
     /**
      * Logout current user
+     * Clears local session and notifies server
+     * NOTE: Local cleanup happens regardless of server response
      */
     async logout() {
-        console.log('AuthManager: Logging out');
+        console.log('AuthManager: Logging out...');
 
-        // Try to notify server (ignore errors)
-        try {
-            await api.post('/Sessions/Logout');
-        } catch (e) {
-            // Ignore
-        }
+        // Get current token for server notification
+        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
 
-        // Clear local state
+        // ALWAYS clear local state first - don't wait for server
+        console.log('AuthManager: Clearing local credentials...');
         this._clearStorage();
         api.clearAuth();
-
         state.set('user:authenticated', false);
         state.set('user:data', null);
 
+        // Then try to notify server (best effort)
+        if (accessToken) {
+            try {
+                console.log('AuthManager: Notifying server of logout...');
+                // Temporarily restore token just for the logout call
+                api._accessToken = accessToken;
+                await api.post('/Sessions/Logout');
+                console.log('AuthManager: Server logout successful');
+            } catch (e) {
+                console.warn('AuthManager: Server logout failed (session may remain on server):', e.message);
+                // This is okay - we've cleared local state
+            } finally {
+                // Ensure token is cleared again
+                api._accessToken = null;
+            }
+        }
+
         eventBus.emit('auth:logout');
+        console.log('AuthManager: Logout complete (local state cleared)');
     }
 
+    // ========================================================================
+    // Event Handlers
+    // ========================================================================
+
     /**
-     * Handle unauthorized API response
+     * Handle unauthorized API response (401)
      * @private
      */
     _onUnauthorized() {
@@ -265,6 +323,10 @@ class AuthManager {
         eventBus.emit('auth:expired');
     }
 
+    // ========================================================================
+    // Storage Management
+    // ========================================================================
+
     /**
      * Clear stored credentials
      * @private
@@ -275,6 +337,10 @@ class AuthManager {
         localStorage.removeItem(STORAGE_KEYS.USER_DATA);
         // Keep server URL and device ID
     }
+
+    // ========================================================================
+    // Utilities
+    // ========================================================================
 
     /**
      * Generate UUID v4
@@ -288,6 +354,10 @@ class AuthManager {
         });
     }
 
+    // ========================================================================
+    // Getters
+    // ========================================================================
+
     /**
      * Get current user data
      * @returns {Object|null} User data
@@ -297,19 +367,11 @@ class AuthManager {
     }
 
     /**
-     * Check if authenticated
+     * Check if user is authenticated
      * @returns {boolean} True if authenticated
      */
     isAuthenticated() {
         return state.get('user:authenticated', false);
-    }
-
-    /**
-     * Get saved server URL
-     * @returns {string|null} Server URL
-     */
-    getSavedServerUrl() {
-        return localStorage.getItem(STORAGE_KEYS.SERVER_URL);
     }
 }
 

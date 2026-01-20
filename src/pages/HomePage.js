@@ -44,7 +44,9 @@ class HomePage extends Page {
                 </header>
                 
                 <!-- Content rows -->
+                <!-- Content rows -->
                 <main class="page-content" id="home-content">
+                    <div class="page-error" style="display: none;"></div>
                     <div class="home-rows">
                         <!-- Rows will be rendered here -->
                     </div>
@@ -59,6 +61,13 @@ class HomePage extends Page {
     }
 
     async onInit() {
+        // Safety check: Ensure we are authenticated
+        if (!api.isAuthenticated) {
+            console.warn('HomePage: Not authenticated, redirecting to login');
+            router.navigate('/login', { replace: true });
+            return;
+        }
+
         // Setup navigation
         this._bindNavigation();
 
@@ -93,18 +102,34 @@ class HomePage extends Page {
 
     async _loadContent() {
         this.setLoading(true);
+        this.hideError();
+
+        // Capture state BEFORE request (in case 401 clears it)
+        const preAuth = {
+            uid: api._userId,
+            dev: api._deviceId,
+            hasTok: !!api._accessToken
+        };
 
         try {
+            console.log(`HomePage: Loading content for user ${preAuth.uid}`);
+
+            // Test simple call first
+            await api.getCurrentUser();
+
             // Get user libraries
             const viewsResponse = await api.getUserViews();
             this._libraries = viewsResponse.Items || [];
 
             // Build rows data
             const rowsData = [];
+            // ... (rest of logic)
 
             // 1. Continue watching
             const resumeItems = await api.getResumeItems();
             if (resumeItems.Items?.length > 0) {
+                // ... (rest of render logic remains same, just replacing start of function)
+
                 rowsData.push({
                     title: 'Continue Watching',
                     items: resumeItems.Items,
@@ -142,9 +167,18 @@ class HomePage extends Page {
             // Render rows
             this._renderRows(rowsData);
 
+            if (rowsData.length === 0 && this._libraries.length === 0) {
+                this.showError('No libraries found. Please check your Jellyfin user permissions.');
+            }
+
         } catch (error) {
             console.error('HomePage: Failed to load content', error);
-            this.showError('Failed to load content');
+
+            // Use captured state for debug
+            const debug = `UID:${preAuth.uid} Dev:${preAuth.dev} Tok:${preAuth.hasTok ? 'OK' : 'MISS'}`;
+            const status = error.status ? `HTTP ${error.status}` : 'ERR';
+
+            this.showError(`${status}: ${error.message} [${debug}]`);
         }
 
         this.setLoading(false);

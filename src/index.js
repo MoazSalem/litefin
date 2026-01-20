@@ -12,6 +12,7 @@ import { tizenAdapter } from './tizen/TizenAdapter.js';
 import { eventBus } from './core/EventBus.js';
 import { auth } from './api/index.js';
 import { layoutManager } from './ui/LayoutManager.js';
+import { debugOverlay } from './ui/DebugOverlay.js';
 
 // Import styles
 import './styles/base.css';
@@ -22,6 +23,12 @@ import './themes/classic/index.js';  // All classic themes
  * Bootstrap the application
  */
 async function bootstrap() {
+    // Init Debug Mode
+    // Set to 'false' to suppress all logs and hide overlay
+    // Set to 'true' to enable overlay and console logs
+    const DEBUG_MODE = false;
+    debugOverlay.init(DEBUG_MODE);
+
     console.log('LiteFin: Starting...');
 
     // Initialize Tizen adapter first

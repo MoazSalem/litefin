@@ -73,6 +73,7 @@ class App {
 
     /**
      * Initialize default application state
+     * NOTE: Does NOT overwrite auth state - that's handled by auth.init() before this runs
      * @private
      */
     _initializeState() {
@@ -80,13 +81,21 @@ class App {
         state.set('app:layout', 'classic');  // 'classic' or 'modern'
         state.set('app:theme', 'dark');
 
-        // User state
-        state.set('user:authenticated', false);
-        state.set('user:data', null);
+        // User state - only set defaults if not already set by auth.init()
+        if (!state.has('user:authenticated')) {
+            state.set('user:authenticated', false);
+        }
+        if (!state.has('user:data')) {
+            state.set('user:data', null);
+        }
 
-        // Server state
-        state.set('server:url', null);
-        state.set('server:connected', false);
+        // Server state - only set defaults if not already set
+        if (!state.has('server:url')) {
+            state.set('server:url', null);
+        }
+        if (!state.has('server:connected')) {
+            state.set('server:connected', false);
+        }
 
         console.log('App: State initialized');
     }
