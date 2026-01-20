@@ -44,7 +44,6 @@ class HomePage extends Page {
                 </header>
                 
                 <!-- Content rows -->
-                <!-- Content rows -->
                 <main class="page-content" id="home-content">
                     <div class="page-error" style="display: none;"></div>
                     <div class="home-rows">
@@ -121,15 +120,26 @@ class HomePage extends Page {
             const viewsResponse = await api.getUserViews();
             this._libraries = viewsResponse.Items || [];
 
-            // Build rows data
+            // ========================================================
+            // OPTIMIZATION: Fetch all data in PARALLEL instead of sequential
+            // ========================================================
+            const [resumeItems, nextUp, ...latestResults] = await Promise.all([
+                api.getResumeItems(),
+                api.getNextUp(),
+                // Map libraries to fetch requests
+                ...this._libraries.map(lib =>
+                    api.getLatestItems(lib.Id, { Limit: 20 }).catch(e => {
+                        console.warn(`Failed to load latest for ${lib.Name}`, e);
+                        return null; // Return null on error, filter later
+                    })
+                )
+            ]);
+
+            // Build rows data from parallel results
             const rowsData = [];
-            // ... (rest of logic)
 
             // 1. Continue watching
-            const resumeItems = await api.getResumeItems();
-            if (resumeItems.Items?.length > 0) {
-                // ... (rest of render logic remains same, just replacing start of function)
-
+            if (resumeItems?.Items?.length > 0) {
                 rowsData.push({
                     title: 'Continue Watching',
                     items: resumeItems.Items,
@@ -138,8 +148,7 @@ class HomePage extends Page {
             }
 
             // 2. Next up
-            const nextUp = await api.getNextUp();
-            if (nextUp.Items?.length > 0) {
+            if (nextUp?.Items?.length > 0) {
                 rowsData.push({
                     title: 'Next Up',
                     items: nextUp.Items,
@@ -147,22 +156,17 @@ class HomePage extends Page {
                 });
             }
 
-            // 3. Latest per library
-            for (const library of this._libraries) {
-                try {
-                    const latest = await api.getLatestItems(library.Id, { Limit: 20 });
-                    if (latest?.length > 0) {
-                        rowsData.push({
-                            title: `Latest in ${library.Name}`,
-                            items: latest,
-                            libraryId: library.Id,
-                            type: 'latest'
-                        });
-                    }
-                } catch (e) {
-                    console.warn(`Failed to load latest for ${library.Name}`, e);
+            // 3. Latest per library (from parallel results)
+            latestResults.forEach((latest, i) => {
+                if (latest?.length > 0) {
+                    rowsData.push({
+                        title: `Latest in ${this._libraries[i].Name}`,
+                        items: latest,
+                        libraryId: this._libraries[i].Id,
+                        type: 'latest'
+                    });
                 }
-            }
+            });
 
             // Render rows
             this._renderRows(rowsData);
@@ -188,42 +192,60 @@ class HomePage extends Page {
         const container = this.$('.home-rows');
         if (!container) return;
 
-        container.innerHTML = rowsData.map((row, index) => `
-            <section class="media-row" data-row-index="${index}">
-                <h2 class="row-title">${row.title}</h2>
-                <div class="row-items" id="row-items-${index}">
-                    ${this._renderRowItems(row.items)}
-                </div>
-            </section>
-        `).join('');
+        // ========================================================
+        // OPTIMIZATION: Build HTML using array push (faster than map().join())
+        // ========================================================
+        const htmlParts = [];
+
+        for (let i = 0; i < rowsData.length; i++) {
+            const row = rowsData[i];
+            // Determine card style based on row type
+            const isLandscape = row.type === 'resume' || row.type === 'episode';
+
+            htmlParts.push(`<section class="media-row" data-row-index="${i}">`);
+            htmlParts.push(`<h2 class="row-title">${row.title}</h2>`);
+            htmlParts.push(`<div class="row-items" id="row-items-${i}">`);
+
+            // Inline card rendering to avoid function call overhead per item
+            for (const item of row.items) {
+                htmlParts.push(this._renderMediaCard(item, isLandscape));
+            }
+
+            htmlParts.push('</div></section>');
+        }
+
+        container.innerHTML = htmlParts.join('');
 
         // Register focus sections for each row
-        rowsData.forEach((row, index) => {
-            const rowEl = this.$(`[data-row-index="${index}"]`);
-
-            this.registerFocusSection(`home-row-${index}`, rowEl, {
+        for (let i = 0; i < rowsData.length; i++) {
+            const rowEl = container.querySelector(`[data-row-index="${i}"]`);
+            this.registerFocusSection(`home-row-${i}`, rowEl, {
                 orientation: 'horizontal',
-                leaveUp: index === 0 ? 'home-header' : `home-row-${index - 1}`,
-                leaveDown: index < rowsData.length - 1 ? `home-row-${index + 1}` : null
+                leaveUp: i === 0 ? 'home-header' : `home-row-${i - 1}`,
+                leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null
             });
+        }
+
+        // ========================================================
+        // OPTIMIZATION: Event Delegation instead of per-card listeners
+        // ========================================================
+        container.addEventListener('click', (e) => {
+            const card = e.target.closest('.media-card');
+            if (card?.dataset?.itemId) {
+                router.navigate(`/details/${card.dataset.itemId}`);
+            }
         });
 
-        // Add click handlers to cards
-        container.querySelectorAll('.media-card').forEach(card => {
-            card.addEventListener('click', () => {
-                const itemId = card.dataset.itemId;
-                if (itemId) {
-                    router.navigate(`/details/${itemId}`);
-                }
-            });
-
-            // Focus animation
-            card.addEventListener('focus', () => {
-                animationManager.focusScale(card, true);
-            });
-            card.addEventListener('blur', () => {
-                animationManager.focusScale(card, false);
-            });
+        // Focus/Blur delegation (these bubble)
+        container.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('media-card')) {
+                animationManager.focusScale(e.target, true);
+            }
+        });
+        container.addEventListener('focusout', (e) => {
+            if (e.target.classList.contains('media-card')) {
+                animationManager.focusScale(e.target, false);
+            }
         });
 
         // Set first row as active if content loaded
@@ -232,22 +254,69 @@ class HomePage extends Page {
         }
     }
 
-    _renderRowItems(items) {
-        return items.map(item => this._renderMediaCard(item)).join('');
-    }
+    /**
+     * Renders a single media card.
+     * @param {Object} item - Jellyfin item data
+     * @param {boolean} isLandscape - True for 16:9 cards (Resume/Next Up), false for 2:3 posters
+     * @returns {string} HTML string
+     */
+    _renderMediaCard(item, isLandscape) {
+        let imageUrl = '';
 
-    _renderMediaCard(item) {
-        // Get primary image URL
-        const imageUrl = api.getImageUrl(item.Id, 'Primary', {
-            maxWidth: 300,
-            tag: item.ImageTags?.Primary
-        });
+        if (isLandscape) {
+            // Resume / Next Up (Landscape):
 
-        // Get backdrop for episodes
-        const useBackdrop = item.Type === 'Episode';
-        const backdropUrl = useBackdrop && item.ParentBackdropItemId
-            ? api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: 400 })
-            : '';
+            if (item.Type === 'Episode') {
+                // EPISODES (Next Up): 
+                // Priority: Series Thumb (Logo) -> Series Backdrop -> Episode Screenshot
+
+                if (item.SeriesThumbImageTag && item.SeriesId) {
+                    // Best: Series Thumb (Logo/Card)
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
+                } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+                    // Check Parent Thumb (usually same as Series Thumb)
+                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
+                } else if (item.ParentBackdropItemId) {
+                    // Fallback: Series Backdrop
+                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: 400 });
+                } else if (item.SeriesId) {
+                    // Fallback: Series Backdrop via ID (without tag, might not cache well but works)
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: 400 });
+                }
+
+                // Final fallback to episode screenshot if absolutely no show image found
+                if (!imageUrl && item.ImageTags && item.ImageTags.Primary) {
+                    imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+                }
+            }
+            else {
+                // MOVIES / SERIES: 'Primary' is a vertical poster. 
+                // We prefer 'Thumb' (Landscape) -> 'Backdrop' (Landscape) -> 'Primary' (Fallback)
+                if (item.ImageTags && item.ImageTags.Thumb) {
+                    imageUrl = api.getImageUrl(item.Id, 'Thumb', { maxWidth: 400, tag: item.ImageTags.Thumb });
+                } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                    imageUrl = api.getImageUrl(item.Id, 'Backdrop', { maxWidth: 400 });
+                } else {
+                    imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+                }
+            }
+
+            // Final fallback if nothing found above
+            if (!imageUrl) {
+                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+            }
+
+        } else {
+            // Latest / Poster Lists
+            // User request: "If it's an episode, use the card shape with the SHOWS poster"
+            if (item.Type === 'Episode' && item.SeriesId) {
+                // Use Series Primary Image (Poster)
+                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 300 });
+            } else {
+                // Standard Poster
+                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+            }
+        }
 
         // Progress bar for resume items
         let progressHtml = '';
@@ -256,26 +325,41 @@ class HomePage extends Page {
             progressHtml = `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>`;
         }
 
-        // Episode info
-        let subtitleHtml = '';
+        // Text Content Logic
+        let titleText = item.Name;
+        let subtitleText = '';
+
         if (item.Type === 'Episode') {
-            subtitleHtml = `<p class="card-subtitle">S${item.ParentIndexNumber}:E${item.IndexNumber}</p>`;
+            if (isLandscape) {
+                // Next Up / Continue Watching:
+                // Title: Show Name
+                // Subtitle: Sxx:Exx - Episode Name
+                titleText = item.SeriesName || item.Name;
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`;
+            } else {
+                // Latest (Poster):
+                // Title: Episode Name
+                // Subtitle: Sxx:Exx
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber}`;
+            }
+        } else if (item.ProductionYear) {
+            subtitleText = item.ProductionYear;
         }
 
         return `
-            <button class="media-card" data-item-id="${item.Id}" tabindex="0">
+            <button class="media-card ${isLandscape ? 'landscape' : ''}" data-item-id="${item.Id}" tabindex="0">
                 <div class="card-image">
                     <img 
-                        src="${useBackdrop ? backdropUrl : imageUrl}" 
-                        alt="${item.Name}"
+                        src="${imageUrl}" 
+                        alt="${titleText}"
                         loading="lazy"
                         onerror="this.style.visibility='hidden'"
                     >
                     ${progressHtml}
                 </div>
                 <div class="card-info">
-                    <p class="card-title">${item.Name}</p>
-                    ${subtitleHtml}
+                    <p class="card-title">${titleText}</p>
+                    ${subtitleText ? `<p class="card-subtitle">${subtitleText}</p>` : ''}
                 </div>
             </button>
         `;

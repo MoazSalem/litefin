@@ -405,71 +405,124 @@
 }
 
 .media-row {
-    padding: 0 40px;
+    /* padding: 0 40px; Remove container padding to allow edge-to-edge scrolling */
     margin-bottom: 32px;
 }
 
 .row-title {
     font-size: 1.5rem;
     margin-bottom: 16px;
+    padding: 0 40px;
+    /* Keep title aligned with content */
     color: var(--jf-text-primary);
 }
 
 .row-items {
     display: flex;
-    gap: 16px;
+    /* gap: 16px; Not supported in older Chromium */
     overflow-x: auto;
-    padding-bottom: 16px;
+    /* Add padding to all sides to prevent clipping on focus scale */
+    /* Horizontal padding (40px) matches title alignment and provides scroll buffer */
+    padding: 20px 40px;
     scroll-snap-type: x mandatory;
 }
 
 .media-card {
     flex-shrink: 0;
     width: 180px;
-    background: var(--jf-card-bg);
+    background: transparent;
+    /* Remove container background */
     border: none;
-    border-radius: var(--jf-border-radius);
-    overflow: hidden;
+    border-radius: 0;
+    /* Radius moved to image */
+    overflow: visible;
+    /* Allow focus effects/shadows to extend */
     cursor: pointer;
     text-align: left;
     transition: transform var(--jf-transition-fast);
+    /* Use margin for spacing instead of gap */
+    margin-right: 16px;
 }
 
+.media-card:last-child {
+    margin-right: 0;
+}
+
+/* Landscape styling for "Continue Watching" & "Next Up" */
+.media-card.landscape {
+    width: 280px;
+    /* Wider for 16:9 box */
+}
+
+/* Focus scales the whole unit */
 .media-card:focus {
-    transform: scale(1.05) translateZ(0);
+    transform: scale(1.05);
     z-index: 1;
+    outline: none;
 }
 
 .media-card .card-image {
     position: relative;
-    aspect-ratio: 2/3;
+    width: 100%;
+    /* aspect-ratio: 2/3; Not supported in Chromium 69 */
+    /* PADDING HACK for 2:3 Ratio (3/2 * 100 = 150%) */
+    height: 0;
+    padding-bottom: 150%;
     overflow: hidden;
     background: var(--jf-background-alt);
+    border-radius: var(--jf-border-radius);
+    box-shadow: var(--jf-shadow-sm);
+    transition: box-shadow var(--jf-transition-fast), border var(--jf-transition-fast);
+}
+
+.media-card.landscape .card-image {
+    /* aspect-ratio: 16/9; Not supported in Chromium 69 */
+    /* PADDING HACK for 16:9 Ratio (9/16 * 100 = 56.25%) */
+    padding-bottom: 56.25%;
+}
+
+/* Highlight image on focus */
+.media-card:focus .card-image {
+    box-shadow: 0 0 0 4px var(--jf-accent), var(--jf-shadow-lg);
 }
 
 .media-card .card-image img {
+    position: absolute;
+    /* Required for padding hack */
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
+    /* Force image to fill container completely */
 }
 
 .media-card .card-info {
-    padding: 12px;
+    padding: 8px 4px 0 4px;
+    /* Minimal padding, mostly top separation */
 }
 
+/* Ensure consistent text layout */
 .card-title {
     color: var(--jf-text-primary);
     font-size: 0.9rem;
+    font-weight: 500;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    text-align: center;
+    /* Center align text below poster */
 }
 
 .card-subtitle {
     color: var(--jf-text-secondary);
     font-size: 0.8rem;
     margin: 4px 0 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .progress-bar {

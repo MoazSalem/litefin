@@ -217,12 +217,15 @@ p {
 }
 
 /* ============================================================================
-   Scrollbar Styling (for devices that show them)
+   Scrollbar Hiding (Global)
    ============================================================================ */
 
+/* Webkit (Chrome, Safari, newer Tizen) */
 ::-webkit-scrollbar {
-    width: 6px;
-    height: 6px;
+    width: 0px;
+    height: 0px;
+    background: transparent;
+    display: none;
 }
 
 ::-webkit-scrollbar-track {
@@ -230,10 +233,24 @@ p {
 }
 
 ::-webkit-scrollbar-thumb {
-    background: var(--jf-scrollbar);
-    border-radius: 3px;
+    background: transparent;
 }
 
-::-webkit-scrollbar-thumb:hover {
-    background: var(--jf-scrollbar-hover);
+/* Firefox */
+* {
+    scrollbar-width: none;
+}
+
+/* IE / Legacy Edge */
+body {
+    -ms-overflow-style: none; /* IE and Edge */
+}
+
+/* Ensure no scrollbars on html/body */
+html, body {
+    overflow: hidden; /* Main container handles scrolling */
+}
+
+#app {
+    overflow: hidden;
 }

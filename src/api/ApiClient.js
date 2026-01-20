@@ -356,7 +356,7 @@ class ApiClient {
         const defaults = {
             Limit: 12,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -373,7 +373,7 @@ class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
