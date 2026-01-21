@@ -44,30 +44,40 @@ class LoginPage extends Page {
                     <!-- Header -->
                     <div class="login-header">
                         <h1 class="login-logo">LiteFin</h1>
-                        <p class="login-tagline">Jellyfin for Tizen</p>
+                        <p class="login-tagline">Jellyfin Client for Tizen OS</p>
                     </div>
                     
                     <!-- Server URL Form -->
                     <div class="login-section server-section" data-section="server">
-                        <h2>Connect to Server</h2>
-                        <div class="input-group">
+                        <label class="input-label">Connect to Server</label>
+                        <div class="server-input-container">
                             <input 
                                 type="url" 
                                 id="server-url" 
-                                class="text-input tv-input"
+                                class="text-input tv-input server-url-input"
                                 placeholder="https://your-server.com"
                                 autocomplete="off"
+                                readonly
                                 tabindex="0"
                             >
+                            <button type="button" class="btn btn-primary connect-btn" tabindex="0">
+                                Connect
+                            </button>
                         </div>
-                        <button class="btn btn-primary connect-btn" tabindex="0">
-                            Connect
-                        </button>
                         <p class="login-error" id="server-error"></p>
                         
                         <!-- Discovered Servers -->
                         <div class="discovered-servers" id="discovered-servers">
-                            <h3>Discovered Servers</h3>
+                            <div class="discovered-header">
+                                <h3>Discovered Servers</h3>
+                                <button class="btn-icon-small refresh-btn" id="refresh-discovery" title="Refresh">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 4v6h-6"></path>
+                                        <path d="M1 20v-6h6"></path>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                    </svg>
+                                </button>
+                            </div>
                             <div class="discovery-status" id="discovery-status">
                                 <div class="loading-spinner-small"></div>
                                 <span>Scanning network...</span>
@@ -82,12 +92,13 @@ class LoginPage extends Page {
                         <div class="users-grid" id="users-grid">
                             <!-- Users will be rendered here -->
                         </div>
+                        <p class="login-error" id="users-error"></p>
                         <div class="login-actions">
-                            <button class="btn btn-secondary manual-login-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0">
                                 Manual Login
                             </button>
-                            <button class="btn btn-secondary change-server-btn" tabindex="0">
-                                Change Server
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                                Log out of server
                             </button>
                         </div>
                     </div>
@@ -101,6 +112,7 @@ class LoginPage extends Page {
                                 id="manual-username" 
                                 class="text-input tv-input"
                                 placeholder="Username"
+                                readonly
                                 tabindex="0"
                             >
                         </div>
@@ -110,13 +122,14 @@ class LoginPage extends Page {
                                 id="manual-password" 
                                 class="text-input tv-input"
                                 placeholder="Password"
+                                readonly
                                 tabindex="0"
                             >
                         </div>
-                        <button class="btn btn-primary manual-signin-btn" tabindex="0">
+                        <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
                             Sign In
                         </button>
-                        <button class="btn btn-secondary back-btn" tabindex="0">
+                        <button type="button" class="btn btn-secondary back-btn" tabindex="0">
                             Back
                         </button>
                         <p class="login-error" id="manual-error"></p>
@@ -135,13 +148,14 @@ class LoginPage extends Page {
                                 id="password-input" 
                                 class="text-input tv-input"
                                 placeholder="Password (leave empty if none)"
+                                readonly
                                 tabindex="0"
                             >
                         </div>
-                        <button class="btn btn-primary login-btn" tabindex="0">
+                        <button type="button" class="btn btn-primary login-btn" tabindex="0">
                             Sign In
                         </button>
-                        <button class="btn btn-secondary back-btn" tabindex="0">
+                        <button type="button" class="btn btn-secondary back-btn" tabindex="0">
                             Back
                         </button>
                         <p class="login-error" id="password-error"></p>
@@ -162,6 +176,12 @@ class LoginPage extends Page {
         // This prevents 401 errors from stale tokens if logout failed
         console.log('LoginPage: Clearing any stale auth data');
         api.clearAuth();
+
+        // Clear any previous errors
+        this._hideError('server-error'); // Clear server errors
+        this._hideError('manual-error'); // Clear manual login errors
+        this._hideError('password-error'); // Clear password errors
+        this._hideError('users-error'); // Clear user selection errors
 
         // Get element references
         this._serverInput = this.$('#server-url');
@@ -196,6 +216,13 @@ class LoginPage extends Page {
     _bindEvents() {
         // Connect button
         this.$('.connect-btn')?.addEventListener('click', () => this._connectToServer());
+
+        // Refresh discovery button
+        this.$('#refresh-discovery')?.addEventListener('click', () => {
+            if (!this._isDiscovering) {
+                this._startDiscovery();
+            }
+        });
 
         // Login button
         this.$('.login-btn')?.addEventListener('click', () => this._login());
@@ -276,8 +303,9 @@ class LoginPage extends Page {
 
     _setupFocus() {
         // Register server section - vertical for input + button + discovered servers
+        // Register server section - use grid or visual to allow Right to Login button, Down to Servers
         this.registerFocusSection('login-server', this.$('[data-section="server"]'), {
-            orientation: 'vertical'
+            orientation: 'auto' // Allow spatial navigation (Left/Right for button, Down for servers)
         });
 
         // Register users section - grid allows 2D navigation
@@ -343,12 +371,45 @@ class LoginPage extends Page {
      * Go to server selection screen (when Change Server button is clicked)
      * This is the only way users can change their server after initial setup
      */
+    /**
+     * Go to server selection screen (when Change Server button is clicked)
+     * This is the only way users can change their server after initial setup
+     */
     _goToServerSelection() {
         console.log('LoginPage: Going to server selection');
+
+        // Explicitly clear ONLY server URL for local purposes if not handled by logout
+        // But auth.logout() handles the rest and notifies server
+        localStorage.removeItem('litefin:serverUrl');
+
+        // Call proper logout to notify server
+        auth.logout();
+
+        // Reset state
         this._showState(STATE.SERVER);
         this.setActiveSection('login-server');
+
+        // Clear visible errors (since onMounted might not run)
+        this._hideError('server-error');
+        this._hideError('manual-error');
+        this._hideError('password-error');
+        this._hideError('users-error');
+
+        // Reset navigator history
+        router.reset('/login');
+
+        // Ensure input is editable
+        if (this._serverInput) {
+            this._serverInput.readOnly = true; // Keep readonly until user presses Enter
+            this._serverInput.value = ''; // Clear input for fresh start
+        }
+
         this._startDiscovery();
-        setTimeout(() => this._serverInput.focus(), 100);
+
+        // Force focus with a slight delay to allow visibility transition
+        setTimeout(() => {
+            if (this._serverInput) this._serverInput.focus();
+        }, 150);
     }
 
     async _connectToServer() {
@@ -390,7 +451,12 @@ class LoginPage extends Page {
                 this.setActiveSection('login-password');
 
                 // Focus password input
-                setTimeout(() => this._passwordInput.focus(), 100);
+                setTimeout(() => {
+                    if (this._passwordInput) {
+                        this._passwordInput.readOnly = true;
+                        this._passwordInput.focus();
+                    }
+                }, 100);
             }
         } catch (error) {
             this._showState(STATE.SERVER);
@@ -489,12 +555,17 @@ class LoginPage extends Page {
                 this.setActiveSection('login-password');
 
                 // Focus password input
-                setTimeout(() => this._passwordInput.focus(), 100);
+                setTimeout(() => {
+                    if (this._passwordInput) {
+                        this._passwordInput.readOnly = true;
+                        this._passwordInput.focus();
+                    }
+                }, 100);
             }
         } catch (error) {
             console.error('LoginPage: _selectUser error:', error);
             this._showState(STATE.USERS);
-            this._showError('server-error', error.message || 'Login failed');
+            this._showError('users-error', error.message || 'Login failed');
         }
     }
 
@@ -528,7 +599,13 @@ class LoginPage extends Page {
         this._manualPassword.value = '';
         this._showState(STATE.MANUAL);
         this.setActiveSection('login-manual');
-        setTimeout(() => this._manualUsername.focus(), 100);
+        this.setActiveSection('login-manual');
+        setTimeout(() => {
+            if (this._manualUsername) {
+                this._manualUsername.readOnly = true;
+                this._manualUsername.focus();
+            }
+        }, 100);
     }
 
     async _handleManualLogin() {
@@ -574,10 +651,19 @@ class LoginPage extends Page {
                     const firstCard = this._usersGrid.querySelector('.user-card');
                     if (firstCard) firstCard.focus();
                 }, 100);
-            } else {
-                this._showState(STATE.SERVER);
                 this.setActiveSection('login-server');
                 setTimeout(() => this._serverInput.focus(), 100);
+            }
+        } else if (this._state === STATE.SERVER) {
+            // Exit app if back is pressed on server screen
+            if (typeof tizen !== 'undefined') {
+                try {
+                    tizen.application.getCurrentApplication().exit();
+                } catch (e) {
+                    console.error('App exit failed:', e);
+                }
+            } else {
+                console.log('App exit (simulated)');
             }
         } else if (this._state === STATE.USERS) {
             this._showState(STATE.SERVER);
@@ -641,6 +727,10 @@ class LoginPage extends Page {
 
         console.log('LoginPage: Starting server discovery...');
 
+        // Clear previous results
+        this._discoveredServers = [];
+        this._renderDiscoveredServers();
+
         try {
             // Show scanning status
             if (this._discoveryStatus) {
@@ -648,15 +738,22 @@ class LoginPage extends Page {
             }
 
             // Run discovery
-            const servers = await discoverServers((checked, total) => {
-                // Update progress if desired
-                const percent = Math.round((checked / total) * 100);
-                console.log(`LoginPage: Discovery ${percent}%`);
-            });
+            const servers = await discoverServers(
+                (checked, total) => {
+                    // Update progress if desired
+                    const percent = Math.round((checked / total) * 100);
+                    console.log(`LoginPage: Discovery ${percent}%`);
+                },
+                (server) => {
+                    // Server found! Add and render immediately
+                    console.log(`LoginPage: Found server ${server.name} (${server.address})`);
+                    this._discoveredServers.push(server);
+                    this._renderDiscoveredServers();
+                }
+            );
 
+            // Ensure final list is synced
             this._discoveredServers = servers;
-
-            // Render discovered servers
             this._renderDiscoveredServers();
 
         } catch (error) {
@@ -681,7 +778,12 @@ class LoginPage extends Page {
         }
 
         if (this._discoveredServers.length === 0) {
-            this._serverList.innerHTML = '<li class="server-item empty">No servers found</li>';
+            // Only show empty message if NOT discovering
+            if (!this._isDiscovering) {
+                this._serverList.innerHTML = '<li class="server-item empty">No servers found</li>';
+            } else {
+                this._serverList.innerHTML = '';
+            }
             return;
         }
 

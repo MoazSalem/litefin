@@ -113,25 +113,82 @@
 }
 
 .login-header {
-    margin-bottom: 48px;
+    margin-bottom: 60px;
 }
 
 .login-logo {
-    font-size: 4rem;
-    color: var(--jf-accent);
+    font-size: 5rem;
+    font-weight: 300;
+    color: #e0e0e0;
     margin: 0;
+    letter-spacing: -2px;
 }
 
 .login-tagline {
-    color: var(--jf-text-secondary);
-    font-size: 1.25rem;
-    margin-top: 8px;
+    color: var(--jf-accent);
+    /* Blue */
+    font-size: 1.1rem;
+    margin-top: 4px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
 }
 
-.login-section {
-    padding: 24px;
+.server-section {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: left;
 }
 
+.input-label {
+    display: block;
+    color: #e0e0e0;
+    font-size: 1.1rem;
+    margin-bottom: 12px;
+    font-weight: 400;
+}
+
+.server-input-container {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.server-url-input {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    padding: 14px 20px;
+    font-size: 1.1rem;
+    border-radius: 4px;
+    color: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.server-url-input:focus {
+    border-color: var(--jf-accent);
+    box-shadow: 0 0 0 2px rgba(0, 164, 220, 0.3);
+}
+
+.connect-btn {
+    background: var(--jf-accent);
+    color: white;
+    border: none;
+    padding: 0 32px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    border-radius: 4px;
+    cursor: pointer;
+    margin: 0;
+    /* Override default btn margin */
+}
+
+.connect-btn:focus {
+    background: var(--jf-accent-hover);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+    outline: none;
+}
+
+/* Override generic login actions for other sections */
 .login-actions {
     display: flex;
     flex-direction: column;
@@ -153,6 +210,8 @@
 }
 
 .login-section h2 {
+    font-size: 1.5rem;
+    font-weight: 300;
     margin-bottom: 24px;
     color: var(--jf-text-primary);
 }
@@ -192,6 +251,8 @@
 .btn-primary {
     background: var(--jf-accent);
     color: white;
+    margin: 0px;
+    margin-left: 8px;
 }
 
 .btn-primary:focus {
@@ -221,27 +282,58 @@
 
 /* Discovered Servers */
 .discovered-servers {
-    margin-top: 32px;
+    margin-top: 40px;
     text-align: left;
-    border-top: 1px solid var(--jf-divider);
+    border-top: 1px solid #333;
     padding-top: 24px;
 }
 
+.discovered-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
 .discovered-servers h3 {
-    color: var(--jf-text-secondary);
-    font-size: 0.9rem;
-    font-weight: 500;
+    color: #888;
+    font-size: 0.8rem;
+    font-weight: 700;
     text-transform: uppercase;
-    letter-spacing: 0.5px;
-    margin-bottom: 16px;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+}
+
+.btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-small:focus,
+.btn-icon-small:hover {
+    background: var(--jf-button-hover);
+    color: var(--jf-accent);
 }
 
 .discovery-status {
     display: flex;
     align-items: center;
+    justify-content: center;
+    /* Center "No servers found" */
     gap: 12px;
-    color: var(--jf-text-tertiary);
+    color: #666;
     font-size: 0.9rem;
+    padding: 20px;
 }
 
 .loading-spinner-small {

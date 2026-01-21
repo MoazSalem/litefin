@@ -289,6 +289,7 @@ class AuthManager {
             const serverUrl = api._serverUrl; // Access internal property or add getter if needed
             if (serverUrl) {
                 const url = `${serverUrl}/Sessions/Logout`;
+                // Fix: Pass token to getAuthHeader since we cleared state
                 const authHeader = api.getAuthHeader(accessToken);
 
                 console.log('AuthManager: Notifying server (background)...');

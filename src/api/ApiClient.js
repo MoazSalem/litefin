@@ -94,7 +94,7 @@ class ApiClient {
      * This header format is required by Jellyfin for all authenticated requests
      * @returns {string} Authorization header value
      */
-    getAuthHeader() {
+    getAuthHeader(tokenOverride = null) {
         // Build MediaBrowser authorization header
         // Format: MediaBrowser Client="...", Device="...", DeviceId="...", Version="..."[, Token="..."]
         const parts = [
@@ -104,9 +104,10 @@ class ApiClient {
             `Version="${this._clientVersion}"`
         ];
 
-        // Add token if authenticated
-        if (this._accessToken) {
-            parts.push(`Token="${this._accessToken}"`);
+        // Add token if authenticated or overridden
+        const token = tokenOverride || this._accessToken;
+        if (token) {
+            parts.push(`Token="${token}"`);
         }
 
         return `MediaBrowser ${parts.join(', ')}`;
@@ -564,7 +565,7 @@ async function testServer(address, timeout = 1000) {
 /**
  * Discover Jellyfin servers on local network
  */
-async function discoverServers(onProgress = null) {
+async function discoverServers(onProgress = null, onServerFound = null) {
     console.log('ApiClient: Starting server discovery...');
     const foundServers = [];
     const scannedIps = new Set();
@@ -590,6 +591,7 @@ async function discoverServers(onProgress = null) {
                 if (!foundServers.find(existing => existing.address === s.address)) {
                     console.log(`ApiClient: Found server at ${s.address}`);
                     foundServers.push(s);
+                    if (onServerFound) onServerFound(s);
                 }
             });
 

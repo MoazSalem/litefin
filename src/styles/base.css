@@ -86,25 +86,49 @@ body {
     background-color: var(--jf-background);
 }
 
-.loading-logo h1 {
-    font-size: 4rem;
-    font-weight: 700;
-    color: var(--jf-accent);
-    margin-bottom: 2rem;
-}
-
 .loading-spinner {
+    margin-top: 2rem;
+    position: relative;
     width: 48px;
     height: 48px;
-    border: 4px solid var(--jf-card-bg);
-    border-top-color: var(--jf-accent);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
 }
 
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
+.loading-spinner::before,
+.loading-spinner::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: var(--jf-accent);
+    border-radius: 50%;
+    animation: pulse 1s linear infinite;
+}
+
+.loading-logo {
+    text-align: center;
+}
+
+.loading-logo h1 {
+    margin-bottom: 0.5rem;
+    color: var(--jf-accent);
+}
+
+.loading-logo p {
+    color: var(--jf-text-secondary);
+}
+
+@keyframes pulse {
+
+    0% {
+        transform: scale(0);
+        opacity: 1;
+    }
+
+    100% {
+        transform: scale(1);
+        opacity: 0;
     }
 }
 
