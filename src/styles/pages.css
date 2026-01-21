@@ -12,10 +12,12 @@
 
 .page {
     width: 100%;
-    height: 100%;
+    height: 100vh;
     position: relative;
     overflow: hidden;
     background: var(--jf-background);
+    display: flex;
+    flex-direction: column;
 }
 
 .page-header {
@@ -24,6 +26,7 @@
     padding: 20px 40px;
     background: var(--jf-navbar-bg);
     gap: 20px;
+    flex-shrink: 0;
 }
 
 .page-title {
@@ -35,7 +38,9 @@
 }
 
 .page-content {
-    height: calc(100% - 80px);
+    flex: 1;
+    height: auto;
+    min-height: 0;
     overflow-y: auto;
     padding: 20px 40px;
 }
@@ -401,32 +406,28 @@
 }
 
 .home-rows {
-    padding: 20px 0;
+    padding: 20px 0 80px 0;
 }
 
 .media-row {
     margin-bottom: 32px;
-
-    /* PERFORMANCE: GPU layer for each row */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
     will-change: scroll-position;
 }
 
 .row-title {
-    font-size: 1.5rem;
-    margin-bottom: 16px;
-    padding: 0 40px;
-    /* Keep title aligned with content */
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    padding: 0 60px;
     color: var(--jf-text-primary);
 }
 
 .row-items {
     display: flex;
     overflow-x: auto;
-    padding: 20px 40px;
-
-    /* PERFORMANCE: GPU-accelerated scrolling */
+    padding: 16px 0 16px 60px;
     -webkit-overflow-scrolling: touch;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -435,16 +436,24 @@
     will-change: scroll-position;
 }
 
+.row-items::after {
+    content: '';
+    flex-shrink: 0;
+    width: 60px;
+    height: 1px;
+}
+
 .media-card {
     flex-shrink: 0;
-    width: 180px;
+    width: 240px;
     background: transparent;
     border: none;
     border-radius: 0;
     overflow: visible;
     cursor: pointer;
     text-align: left;
-    margin-right: 16px;
+    margin-right: 24px;
+    /* More spacing between cards */
 
     /* PERFORMANCE: Aggressive GPU acceleration */
     will-change: transform;
@@ -455,14 +464,16 @@
     -webkit-backface-visibility: hidden;
 }
 
+/* Keep padding on last card so it can scroll fully into view */
 .media-card:last-child {
-    margin-right: 0;
+    margin-right: 120px;
+    /* Large margin so last item fits fully on screen */
 }
 
 /* Landscape styling for "Continue Watching" & "Next Up" */
 .media-card.landscape {
-    width: 280px;
-    /* Wider for 16:9 box */
+    width: 400px;
+    /* Larger for TV (was 280px) */
 }
 
 /* Focus scales the whole unit */
@@ -491,45 +502,39 @@
     padding-bottom: 56.25%;
 }
 
-/* Highlight on focus - using border instead of heavy shadow */
 .media-card:focus .card-image {
-    outline: 4px solid var(--jf-accent);
-    outline-offset: 2px;
+    box-shadow: 0 0 0 3px var(--jf-accent);
 }
 
 .media-card .card-image img {
     position: absolute;
-    /* Required for padding hack */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
-    /* Force image to fill container completely */
+    z-index: 1;
 }
 
 .media-card .card-info {
-    padding: 8px 4px 0 4px;
-    /* Minimal padding, mostly top separation */
+    padding: 12px 4px 0 4px;
 }
 
-/* Ensure consistent text layout */
 .card-title {
     color: var(--jf-text-primary);
-    font-size: 0.9rem;
-    font-weight: 500;
+    font-size: 1.2rem;
+    font-weight: 600;
     margin: 0;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
     text-align: center;
-    /* Center align text below poster */
 }
 
 .card-subtitle {
     color: var(--jf-text-secondary);
-    font-size: 0.8rem;
-    margin: 4px 0 0;
+    font-size: 1rem;
+    margin: 6px 0 0;
     text-align: center;
     white-space: nowrap;
     overflow: hidden;
@@ -541,12 +546,18 @@
     bottom: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: rgba(0, 0, 0, 0.5);
+    height: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2;
+    border-radius: 0 0 var(--jf-border-radius) var(--jf-border-radius);
+    overflow: hidden;
 }
 
 .progress-bar .progress {
-    height: 100%;
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
     background: var(--jf-accent);
 }
 

@@ -16,6 +16,7 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import VirtualList from '../ui/VirtualList.js';
 import { animationManager } from '../ui/AnimationManager.js';
+import { focusManager } from '../ui/FocusManager.js';
 
 class HomePage extends Page {
     constructor() {
@@ -160,7 +161,7 @@ class HomePage extends Page {
             latestResults.forEach((latest, i) => {
                 if (latest?.length > 0) {
                     rowsData.push({
-                        title: `Latest in ${this._libraries[i].Name}`,
+                        title: `Recently Added In ${this._libraries[i].Name}`,
                         items: latest,
                         libraryId: this._libraries[i].Id,
                         type: 'latest'
@@ -250,7 +251,24 @@ class HomePage extends Page {
 
         // Set first row as active if content loaded
         if (rowsData.length > 0) {
-            this.setActiveSection('home-row-0');
+            // Use requestAnimationFrame to ensure DOM is painted and offsetParent is valid
+            requestAnimationFrame(() => {
+                // Invalidate cache for strict safety
+                rowsData.forEach((_, i) => focusManager.invalidateCache(`home-row-${i}`));
+
+                this.setActiveSection('home-row-0');
+
+                // Fallback: If no element focused, try focusing first card manually
+                if (!focusManager.getFocused()) {
+                    const firstCard = container.querySelector('[data-row-index="0"] .media-card');
+                    if (firstCard) {
+                        focusManager.focusElement(firstCard);
+                    } else {
+                        // Worst case: back to header
+                        this.setActiveSection('home-header');
+                    }
+                }
+            });
         }
     }
 
@@ -322,7 +340,9 @@ class HomePage extends Page {
         let progressHtml = '';
         if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            progressHtml = `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>`;
+            console.log(`[PROGRESS DEBUG] ${item.Name}: Percent=${progress.toFixed(1)}%`);
+            // Use linear-gradient for progress - more reliable than nested div width
+            progressHtml = `<div class="progress-bar" style="background: linear-gradient(to right, var(--jf-accent) ${progress}%, rgba(0,0,0,0.6) ${progress}%);"></div>`;
         }
 
         // Text Content Logic

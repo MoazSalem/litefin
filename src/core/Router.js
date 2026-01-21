@@ -118,6 +118,15 @@ class Router {
     }
 
     /**
+     * Reset history and navigate to a new path (clears stack)
+     * @param {string} path - Path to navigate to
+     */
+    reset(path) {
+        this._history = [];
+        this.navigate(path, { replace: true });
+    }
+
+    /**
      * Get current route path
      * @returns {string} Current path without the hash
      */

@@ -12,6 +12,7 @@ import { auth, api, discoverServers } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
+import { focusManager } from '../ui/FocusManager.js';
 
 // Login states
 const STATE = {
@@ -415,6 +416,9 @@ class LoginPage extends Page {
 
         this._usersGrid.innerHTML = html;
 
+        // Invalidate focus cache so new items are found
+        focusManager.invalidateCache('login-users');
+
         // Add click and keyboard handlers
         this._usersGrid.querySelectorAll('.user-card').forEach(card => {
             card.addEventListener('click', () => {
@@ -689,6 +693,9 @@ class LoginPage extends Page {
                 <span class="server-version">v${server.version || '?'}</span>
             </li>
         `).join('');
+
+        // Invalid focus cache so new items are found
+        focusManager.invalidateCache('login-server');
 
         // Bind click events
         this._serverList.querySelectorAll('.server-item:not(.empty)').forEach(item => {

@@ -138,7 +138,18 @@ class FocusManager {
     unregister(name) {
         this._sections.delete(name);
         this._focusMemory.delete(name);
+        // CRITICAL: Clear cache to prevent returning detached elements if section name is reused
+        this.invalidateCache(name);
+
         if (this._activeSection === name) this._activeSection = null;
+    }
+
+    /**
+     * Clear cached DOM references
+     */
+    resetDOMCache() {
+        this._pageContent = null;
+        this._focusablesCache.clear();
     }
 
     /**
@@ -406,6 +417,11 @@ class FocusManager {
         }
 
         // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
+        // Check if cached content is still valid (attached to DOM)
+        if (this._pageContent && !document.contains(this._pageContent)) {
+            this._pageContent = null;
+        }
+
         if (!this._pageContent) {
             this._pageContent = document.querySelector('.page-content');
         }
@@ -418,12 +434,29 @@ class FocusManager {
             if (row) {
                 // SAMSUNG: Batch all reads first
                 const rowTop = row.offsetTop;
+                const rowHeight = row.offsetHeight;
+                const rowBottom = rowTop + rowHeight;
+
                 const viewHeight = pageContent.clientHeight;
                 const currentScroll = pageContent.scrollTop;
+                const viewBottom = currentScroll + viewHeight;
 
-                // Then write
-                if (rowTop < currentScroll || rowTop > currentScroll + viewHeight - 200) {
-                    pageContent.scrollTop = Math.max(0, rowTop - 100);
+                // Check visibility with padding/buffer
+                const topCutoff = rowTop < currentScroll + 50;  // 50px buffer at top
+                const bottomCutoff = rowBottom > viewBottom - 50; // 50px buffer at bottom
+
+                // If cut off at bottom, scroll down JUST enough to show it
+                // Align bottom of row with bottom of view (minus padding)
+                if (bottomCutoff) {
+                    const padding = 60; // Bottom buffer
+                    const targetScroll = rowBottom - viewHeight + padding;
+                    pageContent.scrollTop = Math.max(0, targetScroll);
+                }
+                // If cut off at top, scroll up JUST enough to show it
+                // Align top of row with top of view (minus padding)
+                else if (topCutoff) {
+                    const padding = 100; // Top buffer (larger for title visibility)
+                    pageContent.scrollTop = Math.max(0, rowTop - padding);
                 }
             }
         } else if (options.scroll) {

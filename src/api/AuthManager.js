@@ -284,24 +284,30 @@ class AuthManager {
 
         // Then try to notify server (best effort)
         if (accessToken) {
-            try {
-                console.log('AuthManager: Notifying server of logout...');
-                // Temporarily restore token just for the logout call
-                api._accessToken = accessToken;
-                await api.post('/Sessions/Logout');
-                console.log('AuthManager: Server logout successful');
-            } catch (e) {
-                console.warn('AuthManager: Server logout failed (session may remain on server):', e.message);
-                // This is okay - we've cleared local state
-            } finally {
-                // Ensure token is cleared again
-                api._accessToken = null;
+            // Use detached fetch to facilitate background execution without blocking UI
+            // and without modifying the global 'api' instance state (race condition prevention)
+            const serverUrl = api._serverUrl; // Access internal property or add getter if needed
+            if (serverUrl) {
+                const url = `${serverUrl}/Sessions/Logout`;
+                const authHeader = api.getAuthHeader(accessToken);
+
+                console.log('AuthManager: Notifying server (background)...');
+                fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Emby-Authorization': authHeader
+                    }
+                }).catch(e => {
+                    console.warn('AuthManager: Server logout background request failed:', e.message);
+                });
             }
         }
 
         eventBus.emit('auth:logout');
         console.log('AuthManager: Logout complete (local state cleared)');
     }
+
+
 
     // ========================================================================
     // Event Handlers

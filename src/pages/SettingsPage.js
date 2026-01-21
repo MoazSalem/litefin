@@ -176,12 +176,12 @@ class SettingsPage extends Page {
             });
         });
 
-        // Log Out (was Switch User)
+        // Log Out
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
             // Perform logout to clear user session
             await auth.logout();
-            // Navigate to login page (server URL remains in localStorage)
-            router.navigate('/login', { replace: true });
+            // Navigate and clear history so user can't go back
+            router.reset('/login');
         });
     }
 
