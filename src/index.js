@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Application Entry Point
+ * Litefin Tizen - Application Entry Point
  * ============================================================================
  * Main entry point that bootstraps the application.
  * ============================================================================
@@ -29,7 +29,7 @@ async function bootstrap() {
     const DEBUG_MODE = false;
     debugOverlay.init(DEBUG_MODE);
 
-    console.log('LiteFin: Starting...');
+    console.log('Litefin: Starting...');
 
     // Initialize Tizen adapter first
     tizenAdapter.init();
@@ -51,7 +51,7 @@ async function bootstrap() {
         container: '#app'
     });
 
-    console.log('LiteFin: Bootstrap complete');
+    console.log('Litefin: Bootstrap complete');
 }
 
 // Wait for DOM ready

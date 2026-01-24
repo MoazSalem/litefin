@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Debug Overlay
+ * Litefin Tizen - Debug Overlay
  * ============================================================================
  * Global debug console overlay for Tizen TVs.
  * Intercepts console logs and displays them in an on-screen window.

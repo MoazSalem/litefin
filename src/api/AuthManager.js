@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Auth Manager
+ * Litefin Tizen - Auth Manager
  * ============================================================================
  * Handles user authentication, session management, and credential storage.
  * 

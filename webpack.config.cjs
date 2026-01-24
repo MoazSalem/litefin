@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Webpack Configuration
+ * Litefin Tizen - Webpack Configuration
  * ============================================================================
  * Triple-build system supporting:
  * - Native build (Tizen 6.0+): No transpilation, pure ES6+

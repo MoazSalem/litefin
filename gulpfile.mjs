@@ -8,7 +8,7 @@ import path from "path";
 
 const execAsync = promisify(exec);
 
-console.info("Building LiteFin Tizen app");
+console.info("Building Litefin Tizen app");
 
 const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
 const version = pkg.version;
@@ -110,7 +110,7 @@ async function createWgt(buildDir, outputName) {
 
 async function packageES6() {
     const buildDir = "dist/es6";
-    const wgtName = `LiteFin-${version}-es6.wgt`;  // No transpilation
+    const wgtName = `Litefin-${version}-es6.wgt`;  // No transpilation
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -119,7 +119,7 @@ async function packageES6() {
 
 async function packageNormal() {
     const buildDir = "dist/normal";
-    const wgtName = `LiteFin-${version}.wgt`;  // Default, no suffix
+    const wgtName = `Litefin-${version}.wgt`;  // Default, no suffix
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -128,7 +128,7 @@ async function packageNormal() {
 
 async function packageLegacy() {
     const buildDir = "dist/legacy";
-    const wgtName = `LiteFin-${version}-legacy.wgt`;
+    const wgtName = `Litefin-${version}-legacy.wgt`;
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);

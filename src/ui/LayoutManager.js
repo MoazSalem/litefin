@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - LayoutManager
+ * Litefin Tizen - LayoutManager
  * ============================================================================
  * Manages dual-layout support for Classic and Modern UI modes.
  * Provides component factories and layout-specific configuration.

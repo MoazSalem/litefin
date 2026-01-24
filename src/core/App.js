@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - App Controller
+ * Litefin Tizen - App Controller
  * ============================================================================
  * Main application controller that bootstraps the app, manages global state,
  * and coordinates between core systems (Router, State, Events).
@@ -18,6 +18,7 @@ import LibraryPage from '../pages/LibraryPage.js';
 import DetailsPage from '../pages/DetailsPage.js';
 import SearchPage from '../pages/SearchPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
+import FavoritesPage from '../pages/FavoritesPage.js';
 
 class App {
     constructor() {
@@ -39,7 +40,7 @@ class App {
             return;
         }
 
-        console.log('App: Initializing LiteFin...');
+        console.log('App: Initializing Litefin...');
 
         // Get container element
         if (typeof options.container === 'string') {
@@ -140,6 +141,7 @@ class App {
         router.register('/library/:id', LibraryPage);
         router.register('/details/:id', DetailsPage);
         router.register('/search', SearchPage);
+        router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
 
         // Default route - check auth and redirect appropriately

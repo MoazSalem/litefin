@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - API Client
+ * Litefin Tizen - API Client
  * ============================================================================
  * HTTP client wrapper for Jellyfin server API communication.
  * Handles authentication headers, error handling, and request management.
@@ -28,8 +28,8 @@ class ApiClient {
 
         // Device identification - NO SPACES in any of these values
         this._deviceId = null;
-        this._deviceName = 'LiteFinTizenTv';
-        this._clientName = 'LiteFin';
+        this._deviceName = 'LitefinTizenTv';
+        this._clientName = 'Litefin';
         this._clientVersion = '0.1.0';
     }
 
@@ -303,6 +303,24 @@ class ApiClient {
      */
     async getCurrentUser() {
         return this.get(`/Users/${this._userId}`);
+    }
+
+    /**
+     * Get user profile image URL
+     */
+    getUserImageUrl(userId, options = {}) {
+        if (!this._serverUrl) return '';
+
+        const type = options.type || 'Primary';
+        const url = `${this._serverUrl}/Users/${userId}/Images/${type}`;
+        const query = [];
+
+        if (options.maxWidth) query.push(`maxWidth=${options.maxWidth}`);
+        if (options.maxHeight) query.push(`maxHeight=${options.maxHeight}`);
+        if (options.tag) query.push(`tag=${options.tag}`);
+        if (options.quality) query.push(`quality=${options.quality}`);
+
+        return query.length > 0 ? `${url}?${query.join('&')}` : url;
     }
 
     /**

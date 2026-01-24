@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - FocusManager
+ * Litefin Tizen - FocusManager
  * ============================================================================
  * Manages focus navigation for TV remote D-pad control.
  * Uses robust spatial navigation for grid traversal.

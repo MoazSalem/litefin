@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - VirtualGrid
+ * Litefin Tizen - VirtualGrid
  * ============================================================================
  * 2D virtual grid for displaying media cards with D-pad navigation.
  * Extends VirtualList concepts to handle rows and columns.

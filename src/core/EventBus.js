@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - EventBus
+ * Litefin Tizen - EventBus
  * ============================================================================
  * Global publish/subscribe event system for decoupled communication between
  * components. Enables loose coupling and makes testing easier.

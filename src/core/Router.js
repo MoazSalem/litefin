@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Router
+ * Litefin Tizen - Router
  * ============================================================================
  * Simple hash-based router for single-page navigation. Uses URL hash to
  * manage current page state without requiring History API support.

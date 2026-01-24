@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - VirtualList
+ * Litefin Tizen - VirtualList
  * ============================================================================
  * High-performance virtual scrolling list that only renders visible items.
  * Critical for smooth scrolling on TV devices with limited resources.

@@ -9,7 +9,7 @@ api_version: "9.0"
 build_type: Debug
 
 # Output name for application
-output_name: LiteFin
+output_name: Litefin
 
 # Output path for build
 output_path: ""

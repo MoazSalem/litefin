@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Device Profile
+ * Litefin Tizen - Device Profile
  * ============================================================================
  * Defines the device capabilities for transcoding negotiation with Jellyfin.
  * Tells the server what formats/codecs the device can play natively.
@@ -219,7 +219,7 @@ export function getDeviceProfile(options = {}) {
     // Assemble final profile
     // ========================================================================
     return {
-        Name: 'LiteFin Tizen',
+        Name: 'Litefin Tizen',
         MaxStaticBitrate: maxBitrate,
         MaxStreamingBitrate: maxBitrate,
         MusicStreamingTranscodingBitrate: 192000,

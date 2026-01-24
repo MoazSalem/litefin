@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Home Page
+ * Litefin Tizen - Home Page
  * ============================================================================
  * Main landing page after login showing:
  * - Continue watching row
@@ -10,7 +10,7 @@
  */
 
 import Page from './Page.js';
-import { api } from '../api/index.js';
+import { api, auth } from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
@@ -32,14 +32,37 @@ class HomePage extends Page {
             <div class="page home-page">
                 <!-- Header -->
                 <header class="page-header">
-                    <h1 class="page-title">Home</h1>
-                    <nav class="header-nav">
-                        <button class="nav-btn search-btn" tabindex="0">
-                            <span class="icon">🔍</span>
-                            Search
+                    <div class="header-left">
+                        <button class="nav-btn menu-btn icon-only" aria-label="Menu" tabindex="0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="5" y1="7" x2="19" y2="7"></line>
+                                <line x1="5" y1="12" x2="19" y2="12"></line>
+                                <line x1="5" y1="17" x2="19" y2="17"></line>
+                            </svg>
                         </button>
-                        <button class="nav-btn settings-btn" tabindex="0">
-                            <span class="icon">⚙️</span>
+                        <div class="header-logo">
+                            <span class="logo-text">LiteFin</span>
+                        </div>
+                    </div>
+                    <nav class="header-mid">
+                        <button class="nav-text-btn home-nav-btn active" tabindex="0">Home</button>
+                        <button class="nav-text-btn favorites-nav-btn" tabindex="0">Favorites</button>
+                    </nav>
+                    <nav class="header-nav">
+                        <button class="nav-btn search-btn icon-only" aria-label="Search" tabindex="0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </button>
+                        <button class="nav-btn user-btn icon-only" aria-label="User Profile" tabindex="0">
+                            ${this._renderUserAvatar()}
+                        </button>
+                        <button class="nav-btn settings-btn icon-only" aria-label="Settings" tabindex="0">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="3"></circle>
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                            </svg>
                         </button>
                     </nav>
                 </header>
@@ -79,9 +102,29 @@ class HomePage extends Page {
     }
 
     _bindNavigation() {
+        // Menu button
+        this.$('.menu-btn')?.addEventListener('click', () => {
+            console.log('Menu clicked - TODO: Implement sidebar');
+        });
+
+        // Center Nav
+        this.$('.home-nav-btn')?.addEventListener('click', () => {
+            // Already on home, maybe scroll to top?
+            document.querySelector('.page-content').scrollTo({ top: 0, behavior: 'smooth' });
+        });
+        this.$('.favorites-nav-btn')?.addEventListener('click', () => {
+            router.navigate('/favorites');
+        });
+
         // Search button
         this.$('.search-btn')?.addEventListener('click', () => {
             router.navigate('/search');
+        });
+
+        // User button (Placeholder for now)
+        this.$('.user-btn')?.addEventListener('click', () => {
+            console.log('User profile clicked - TODO: Implement profile page');
+            // Placeholder: Maybe toast "Profile not implemented yet"
         });
 
         // Settings button
@@ -387,6 +430,22 @@ class HomePage extends Page {
     onBack() {
         // Show exit confirmation or go to login
         eventBus.emit('app:exitRequested');
+    }
+
+    _renderUserAvatar() {
+        const user = auth.getCurrentUser();
+        if (!user) return '<span class="icon">👤</span>';
+
+        // Use high-res avatar
+        const imageUrl = user.PrimaryImageTag
+            ? api.getUserImageUrl(user.Id, { maxWidth: 100 })
+            : '';
+
+        if (imageUrl) {
+            return `<img src="${imageUrl}" class="header-avatar" alt="${user.Name}" onerror="this.style.display='none'">`;
+        }
+
+        return `<div class="header-avatar-placeholder">${user.Name.charAt(0).toUpperCase()}</div>`;
     }
 }
 

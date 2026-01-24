@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * LiteFin Tizen - Base Page Class
+ * Litefin Tizen - Base Page Class
  * ============================================================================
  * Base class for all pages. Extends Component with page-specific features:
  * - Route parameter handling
@@ -56,7 +56,7 @@ class Page extends Component {
 
         // Set document title
         if (this.title) {
-            document.title = `${this.title} - LiteFin`;
+            document.title = `${this.title} - Litefin`;
         }
 
         // Call page-specific initialization
