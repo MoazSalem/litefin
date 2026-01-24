@@ -468,13 +468,13 @@ class LoginPage extends Page {
         const html = this._users.map((user, index) => `
             <button class="user-card" data-user-index="${index}" tabindex="0">
                 <div class="user-avatar-wrapper">
+                    <div class="user-avatar-placeholder">${user.Name.charAt(0).toUpperCase()}</div>
                     <img 
                         class="user-avatar" 
-                        src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 150 }) : ''}"
+                        src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
                         alt="${user.Name}"
                         onerror="this.style.display='none'"
                     >
-                    <div class="user-avatar-placeholder">${user.Name.charAt(0).toUpperCase()}</div>
                 </div>
                 <span class="user-name">${user.Name}</span>
             </button>

@@ -108,12 +108,12 @@
 
 .login-container {
     width: 100%;
-    max-width: 960px;
+    max-width: 1200px;
     text-align: center;
 }
 
 .login-header {
-    margin-bottom: 60px;
+    margin-bottom: 80px;
 }
 
 .login-logo {
@@ -127,8 +127,8 @@
 .login-tagline {
     color: var(--jf-accent);
     /* Blue */
-    font-size: 1.1rem;
-    margin-top: 4px;
+    font-size: 1.5rem;
+    margin-top: 8px;
     font-weight: 400;
     letter-spacing: 0.5px;
 }
@@ -142,8 +142,8 @@
 .input-label {
     display: block;
     color: #e0e0e0;
-    font-size: 1.1rem;
-    margin-bottom: 12px;
+    font-size: 1.5rem;
+    margin-bottom: 16px;
     font-weight: 400;
 }
 
@@ -156,10 +156,10 @@
 .server-url-input {
     flex: 1;
     background: #1a1a1a;
-    border: 1px solid #333;
-    padding: 14px 20px;
-    font-size: 1.1rem;
-    border-radius: 4px;
+    border: 2px solid #333;
+    padding: 20px 28px;
+    font-size: 1.75rem;
+    border-radius: 6px;
     color: #fff;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
@@ -173,10 +173,10 @@
     background: var(--jf-accent);
     color: white;
     border: none;
-    padding: 0 32px;
-    font-size: 1.1rem;
+    padding: 0 40px;
+    font-size: 1.5rem;
     font-weight: 600;
-    border-radius: 4px;
+    border-radius: 6px;
     cursor: pointer;
     margin: 0;
     /* Override default btn margin */
@@ -222,10 +222,10 @@
 
 .text-input {
     width: 100%;
-    padding: 16px 20px;
-    font-size: 1.25rem;
+    padding: 20px 28px;
+    font-size: 1.75rem;
     background: var(--jf-input-bg);
-    border: 2px solid var(--jf-input-border);
+    border: 3px solid var(--jf-input-border);
     border-radius: var(--jf-border-radius);
     color: var(--jf-text-primary);
 }
@@ -240,12 +240,12 @@
 }
 
 .btn {
-    padding: 14px 32px;
-    font-size: 1.125rem;
+    padding: 20px 40px;
+    font-size: 1.5rem;
     border: none;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
-    margin: 8px;
+    margin: 12px;
 }
 
 .btn-primary {
@@ -361,11 +361,11 @@
 .server-item {
     display: flex;
     align-items: center;
-    gap: 12px;
-    padding: 14px 16px;
+    gap: 16px;
+    padding: 20px 24px;
     background: var(--jf-card-bg);
     border-radius: var(--jf-border-radius);
-    margin-bottom: 8px;
+    margin-bottom: 12px;
     cursor: pointer;
     transition: background var(--jf-transition-fast);
 }
@@ -398,7 +398,7 @@
 
 .server-address {
     color: var(--jf-text-tertiary);
-    font-size: 0.85rem;
+    font-size: 1.1rem;
     padding: 2px 8px;
 }
 
@@ -426,11 +426,11 @@
     background: var(--jf-card-bg);
     border: none;
     border-radius: var(--jf-border-radius-lg);
-    padding: 20px;
+    padding: 30px;
     cursor: pointer;
     text-align: center;
-    width: 140px;
-    margin: 12px;
+    width: 220px;
+    margin: 16px;
 }
 
 .user-card:focus {
@@ -440,23 +440,26 @@
 }
 
 .user-avatar-wrapper {
-    width: 80px;
-    height: 80px;
+    width: 150px;
+    height: 150px;
     border-radius: 50%;
     overflow: hidden;
-    margin: 0 auto 12px;
+    margin: 0 auto 16px;
     background: var(--jf-accent-light);
     position: relative;
 }
 
 .user-avatar {
+    position: absolute;
+    top: 0;
+    right: 0;
     width: 100%;
     height: 100%;
     object-fit: cover;
 }
 
 .user-avatar-placeholder {
-    position: absolute;
+    position: relative;
     inset: 0;
     display: flex;
     align-items: center;
@@ -467,8 +470,8 @@
 
 .user-name {
     color: var(--jf-text-primary);
-    font-size: 1rem;
-    padding: 12px 12px;
+    font-size: 1.4rem;
+    padding: 16px 12px;
 }
 
 .selected-user {
@@ -480,8 +483,8 @@
 }
 
 .selected-user .user-avatar {
-    width: 60px;
-    height: 60px;
+    width: 100px;
+    height: 100px;
     border-radius: 50%;
 }
 
