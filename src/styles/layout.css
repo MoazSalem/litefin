@@ -32,6 +32,36 @@
     margin-right: 0;
 }
 
+/* Classic Light Theme overrides for Header */
+:root[data-theme="light"][data-layout="classic"] .page-header {
+    background: rgba(255, 255, 255, 0.95);
+    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
+}
+
+:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn {
+    color: #444;
+}
+
+:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn.active {
+    color: var(--jf-accent);
+    background: rgba(0, 164, 220, 0.1);
+}
+
+:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn:focus {
+    color: white;
+    background: var(--jf-accent);
+}
+
+:root[data-theme="light"][data-layout="classic"] .page-header .nav-btn {
+    color: #444;
+}
+
+:root[data-theme="light"][data-layout="classic"] .page-header .nav-btn:focus {
+    color: var(--jf-accent);
+    background: rgba(0, 164, 220, 0.1);
+}
+
 .header-left {
     display: flex;
     align-items: center;
@@ -65,10 +95,6 @@
     font-size: 1.75rem;
     font-weight: 700;
     color: var(--jf-text-primary);
-    background: linear-gradient(135deg, #00A4DC 0%, #AA5CC3 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    text-shadow: 0 0 20px rgba(170, 92, 195, 0.3);
 }
 
 .header-nav {
@@ -85,6 +111,8 @@
     min-height: 0;
     overflow-y: auto;
     padding: 20px 40px;
+    position: relative;
+    /* CRITICAL: Ensures offsetTop of children is relative to this scroll container */
 }
 
 .page-loading {

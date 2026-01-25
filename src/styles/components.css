@@ -61,7 +61,7 @@
 }
 
 .nav-text-btn:focus {
-    border-color: white;
+    border-color: var(--jf-accent);
     color: var(--jf-accent);
     box-shadow: none;
     outline: none;

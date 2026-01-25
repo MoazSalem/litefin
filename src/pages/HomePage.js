@@ -41,7 +41,7 @@ class HomePage extends Page {
                             </svg>
                         </button>
                         <div class="header-logo">
-                            <span class="logo-text">LiteFin</span>
+                            <span class="logo-text">Litefin</span>
                         </div>
                     </div>
                     <nav class="header-mid">

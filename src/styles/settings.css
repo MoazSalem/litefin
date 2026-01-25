@@ -1,95 +1,373 @@
 /**
  * ============================================================================
- * Litefin Tizen - Settings Styles
+ * Litefin Tizen - Settings Styles (Redesigned)
  * ============================================================================
  */
 
-.settings-container {
-    max-width: 700px;
+.settings-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
-.settings-section {
+.settings-split-view {
+    display: flex;
+    flex: 1;
+    min-height: 0;
+    /* Enable scrolling inside flex children */
+    overflow: hidden;
+}
+
+/* Sidebar */
+.settings-sidebar {
+    width: 350px;
+    background: rgba(0, 0, 0, 0.3);
+    border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    padding: 40px 0;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+}
+
+.settings-menu-btn {
+    display: flex;
+    align-items: center;
+    padding: 20px 40px;
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    font-size: 1.4rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: left;
+    margin-bottom: 4px;
+    border-left: 6px solid transparent;
+}
+
+.settings-menu-btn .menu-icon {
+    margin-right: 16px;
+    width: 28px;
+    height: 28px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.settings-menu-btn .menu-icon svg {
+    width: 100%;
+    height: 100%;
+    stroke-width: 2px;
+}
+
+.settings-menu-btn.active {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--jf-text-primary);
+    border-left-color: var(--jf-accent);
+}
+
+.settings-menu-btn:focus {
+    background: var(--jf-accent);
+    color: white;
+    border-left-color: white;
+    outline: none;
+}
+
+/* Content Panel */
+.settings-content-panel {
+    flex: 1;
+    padding: 40px 60px;
+    overflow-y: auto;
+    background: transparent;
+}
+
+.content-title {
+    font-size: 2.5rem;
+    font-weight: 300;
     margin-bottom: 40px;
+    color: var(--jf-text-primary);
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    padding-bottom: 20px;
 }
 
-.section-title {
-    font-size: 1.25rem;
-    color: var(--jf-accent);
-    margin-bottom: 20px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--jf-divider);
-}
-
+/* Setting Items */
 .setting-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 16px 0;
-    border-bottom: 1px solid var(--jf-divider);
+    padding: 24px 0;
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+    min-height: 80px;
 }
 
 .setting-label {
     flex: 1;
+    padding-right: 40px;
 }
 
 .setting-name {
     display: block;
     color: var(--jf-text-primary);
-    font-size: 1rem;
+    font-size: 1.4rem;
+    font-weight: 500;
+    margin-bottom: 8px;
 }
 
 .setting-description {
     display: block;
-    color: var(--jf-text-tertiary);
-    font-size: 0.85rem;
-    margin-top: 4px;
-}
-
-.setting-value {
-    display: block;
     color: var(--jf-text-secondary);
-    font-size: 0.9rem;
-    margin-top: 4px;
+    font-size: 1rem;
+    line-height: 1.4;
 }
 
 .setting-control {
     display: flex;
-    gap: 8px;
+    gap: 12px;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 
+/* Buttons inside settings */
 .btn-option {
-    padding: 10px 16px;
-    font-size: 0.9rem;
-    background: var(--jf-button-bg);
-    border: 2px solid transparent;
+    padding: 12px 24px;
+    font-size: 1.1rem;
+    /* Dark glass background to ensure white text is visible on both Light and Dark themes */
+    background: rgba(30, 30, 30, 0.8);
+    border: 3px solid transparent;
+    border-radius: 8px;
+    min-width: 100px;
+    text-align: center;
+    /* Force light text color (approx white) because the background is always dark glass */
+    color: rgb(229, 231, 235);
 }
+
+/* 
+ * REMOVED Light Theme Overrides 
+ * User requested consistent dark/glass style for all themes
+ */
 
 .btn-option.active {
+    background: var(--jf-accent);
+    color: white;
     border-color: var(--jf-accent);
-    background: var(--jf-accent-light);
 }
 
 .btn-option:focus {
-    border-color: var(--jf-accent);
-}
-
-.setting-select {
-    padding: 10px 16px;
-    font-size: 1rem;
-    background: var(--jf-input-bg);
-    border: 2px solid var(--jf-input-border);
-    border-radius: var(--jf-border-radius);
-    color: var(--jf-text-primary);
-}
-
-.setting-select:focus {
-    border-color: var(--jf-accent);
+    border-color: white;
+    /* High contrast focus */
+    background: var(--jf-accent-hover);
+    transform: scale(1.05);
     outline: none;
 }
 
-.setting-actions {
+/* Select Inputs */
+/* Custom Select Inputs */
+.custom-select-container {
+    position: relative;
+    min-width: 300px;
+    margin: 10px;
+}
+
+.custom-select-trigger {
     display: flex;
-    gap: 12px;
-    margin-top: 24px;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    font-size: 1.2rem;
+    background: rgba(30, 30, 30, 0.8);
+    border: 3px solid transparent;
+    border-radius: 12px;
+    color: var(--jf-text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    width: 100%;
+    text-align: left;
+}
+
+.custom-select-trigger:focus {
+    background: var(--jf-accent);
+    color: white;
+    border-color: white;
+    transform: scale(1.02);
+    outline: none;
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+    z-index: 5;
+}
+
+.custom-select-trigger .chevron {
+    transition: transform 0.3s ease;
+}
+
+.custom-select-container.open .custom-select-trigger .chevron {
+    transform: rotate(180deg);
+}
+
+.custom-select-options {
+    position: absolute;
+    top: 110%;
+    left: 0;
+    right: 0;
+    background: rgba(20, 20, 20, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    z-index: 100;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+    max-height: 400px;
+    overflow-y: auto;
+    opacity: 0;
+    transform: translateY(-10px);
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.custom-select-container.open .custom-select-options {
+    display: flex;
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.select-option {
+    padding: 14px 20px;
+    font-size: 1.1rem;
+    color: var(--jf-text-secondary);
+    background: transparent;
+    border: 2px solid transparent;
+    border-radius: 8px;
+    text-align: left;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    margin-bottom: 4px;
+}
+
+.select-option:last-child {
+    margin-bottom: 0;
+}
+
+.select-option:focus,
+.select-option:hover {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    outline: none;
+}
+
+.select-option.selected {
+    color: var(--jf-accent);
+    font-weight: 600;
+}
+
+.select-option:focus.selected {
+    color: white;
+    background: var(--jf-accent);
+}
+
+/* User Profile Card */
+.user-profile-card {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 60px 0;
+}
+
+.user-avatar-wrapper {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    margin-bottom: 20px;
+    background: var(--jf-accent-light);
+    position: relative;
+    overflow: hidden;
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+}
+
+.settings-page .user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: relative;
+    /* Reset from login.css */
+    z-index: 10;
+}
+
+.settings-page .user-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4rem;
+    font-weight: 300;
+    color: var(--jf-accent);
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 1;
+}
+
+.settings-page .user-avatar-placeholder.hidden {
+    display: none !important;
+}
+
+.user-name-large {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin: 20px 0 10px;
+    color: var(--jf-text-primary);
+}
+
+.server-url-display {
+    font-size: 1.2rem;
+    color: var(--jf-text-secondary);
+    background: rgba(0, 0, 0, 0.3);
+    padding: 8px 16px;
+    border-radius: 20px;
+}
+
+.setting-actions.centered {
+    display: flex;
+    justify-content: center;
+    margin-top: 40px;
+}
+
+/* About Card */
+.about-card {
+    background: rgba(255, 255, 255, 0.05);
+    padding: 40px;
+    border-radius: 16px;
+    text-align: center;
+    margin-top: 20px;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+}
+
+.about-card:focus {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--jf-accent);
+    box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);
+    outline: none;
+    transform: scale(1.02);
+}
+
+.app-version {
+    font-size: 2rem;
+    color: var(--jf-accent);
+    margin-bottom: 20px;
+}
+
+.about-desc {
+    font-size: 1.2rem;
+    line-height: 1.6;
+    color: var(--jf-text-secondary);
+    margin-bottom: 40px;
+}
+
+.about-credits {
+    font-size: 0.9rem;
+    color: var(--jf-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 2px;
 }

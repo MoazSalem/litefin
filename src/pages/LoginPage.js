@@ -139,7 +139,8 @@ class LoginPage extends Page {
                     <div class="login-section password-section hidden" data-section="password">
                         <h2>Enter Password</h2>
                         <div class="selected-user" id="selected-user">
-                            <img class="user-avatar" src="" alt="">
+                            <img class="user-avatar" src="" alt="" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                            <div class="user-avatar-placeholder hidden">?</div>
                             <span class="user-name"></span>
                         </div>
                         <div class="input-group">
@@ -468,13 +469,13 @@ class LoginPage extends Page {
         const html = this._users.map((user, index) => `
             <button class="user-card" data-user-index="${index}" tabindex="0">
                 <div class="user-avatar-wrapper">
-                    <div class="user-avatar-placeholder">${user.Name.charAt(0).toUpperCase()}</div>
                     <img 
-                        class="user-avatar" 
+                        class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
                         src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
                         alt="${user.Name}"
-                        onerror="this.style.display='none'"
+                        onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                     >
+                    <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
                 </div>
                 <span class="user-name">${user.Name}</span>
             </button>
@@ -543,9 +544,21 @@ class LoginPage extends Page {
                 // Update password section with user info
                 const userEl = this.$('#selected-user');
                 userEl.querySelector('.user-name').textContent = user.Name;
-                userEl.querySelector('.user-avatar').src = user.PrimaryImageTag
-                    ? api.getUserImageUrl(user.Id, { maxWidth: 100 })
-                    : '';
+
+                const img = userEl.querySelector('.user-avatar');
+                const placeholder = userEl.querySelector('.user-avatar-placeholder');
+
+                placeholder.textContent = user.Name.charAt(0).toUpperCase();
+
+                if (user.PrimaryImageTag) {
+                    img.src = api.getUserImageUrl(user.Id, { maxWidth: 100 });
+                    img.classList.remove('hidden');
+                    placeholder.classList.add('hidden');
+                } else {
+                    img.src = '';
+                    img.classList.add('hidden');
+                    placeholder.classList.remove('hidden');
+                }
 
                 // Clear password input
                 this._passwordInput.value = '';

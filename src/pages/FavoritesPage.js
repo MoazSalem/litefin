@@ -16,7 +16,7 @@ class FavoritesPage extends Page {
                 <header class="page-header">
                     <div class="header-left">
                         <div class="header-logo">
-                            <span class="logo-text">LiteFin</span>
+                            <span class="logo-text">Litefin</span>
                         </div>
                     </div>
                     <nav class="header-mid">

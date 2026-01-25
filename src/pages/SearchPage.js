@@ -49,7 +49,12 @@ class SearchPage extends Page {
                     
                     <!-- Empty state -->
                     <div class="search-empty hidden" id="search-empty">
-                        <p class="empty-icon">🔍</p>
+                        <p class="empty-icon">
+                            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="#666" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                <circle cx="11" cy="11" r="8"></circle>
+                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+                            </svg>
+                        </p>
                         <p>Start typing to search</p>
                     </div>
                     
