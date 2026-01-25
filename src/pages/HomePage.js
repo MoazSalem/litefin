@@ -140,7 +140,9 @@ class HomePage extends Page {
             leaveDown: 'home-row-0'
         });
 
-        this.setActiveSection('home-header');
+        // NOTE: We do NOT set active section here anymore.
+        // We wait for content to load so we don't show a floating focus ring on the menu
+        // while the page is just a loading spinner.
     }
 
     async _loadContent() {
@@ -181,6 +183,19 @@ class HomePage extends Page {
 
             // Build rows data from parallel results
             const rowsData = [];
+
+            // 0. My Media (Libraries)
+
+            // Check user preference
+            const hideMyMedia = localStorage.getItem('pref:hideMyMedia') === 'true';
+
+            if (!hideMyMedia && this._libraries.length > 0) {
+                rowsData.push({
+                    title: 'My Media',
+                    items: this._libraries,
+                    type: 'library'
+                });
+            }
 
             // 1. Continue watching
             if (resumeItems?.Items?.length > 0) {
@@ -230,6 +245,12 @@ class HomePage extends Page {
         }
 
         this.setLoading(false);
+
+        // Final Focus Check: If nothing is focused yet (e.g. empty results or error),
+        // focus the header so navigation is possible.
+        if (!focusManager.getActiveSection()) {
+            this.setActiveSection('home-header');
+        }
     }
 
     _renderRows(rowsData) {
@@ -244,7 +265,7 @@ class HomePage extends Page {
         for (let i = 0; i < rowsData.length; i++) {
             const row = rowsData[i];
             // Determine card style based on row type
-            const isLandscape = row.type === 'resume' || row.type === 'episode';
+            const isLandscape = row.type === 'resume' || row.type === 'episode' || row.type === 'library';
 
             htmlParts.push(`<section class="media-row" data-row-index="${i}">`);
             htmlParts.push(`<h2 class="row-title">${row.title}</h2>`);
@@ -252,7 +273,7 @@ class HomePage extends Page {
 
             // Inline card rendering to avoid function call overhead per item
             for (const item of row.items) {
-                htmlParts.push(this._renderMediaCard(item, isLandscape));
+                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type));
             }
 
             htmlParts.push('</div></section>');
@@ -276,7 +297,12 @@ class HomePage extends Page {
         container.addEventListener('click', (e) => {
             const card = e.target.closest('.media-card');
             if (card?.dataset?.itemId) {
-                router.navigate(`/details/${card.dataset.itemId}`);
+                const type = card.dataset.contextType;
+                if (type === 'library') {
+                    router.navigate(`/library/${card.dataset.itemId}`);
+                } else {
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
             }
         });
 
@@ -319,9 +345,10 @@ class HomePage extends Page {
      * Renders a single media card.
      * @param {Object} item - Jellyfin item data
      * @param {boolean} isLandscape - True for 16:9 cards (Resume/Next Up), false for 2:3 posters
+     * @param {string} type - Row type (resume, episode, library, latest)
      * @returns {string} HTML string
      */
-    _renderMediaCard(item, isLandscape) {
+    _renderMediaCard(item, isLandscape, type) {
         let imageUrl = '';
 
         if (isLandscape) {
@@ -379,6 +406,13 @@ class HomePage extends Page {
             }
         }
 
+        // Library items usually only have Primary images (often thumbnails/landscape for some collections, but Primary is safer)
+        if (type === 'library') {
+            // Libraries often have specific "Primary" images that are banners or landscape art
+            // We use Primary.
+            imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags?.Primary });
+        }
+
         // Progress bar for resume items
         let progressHtml = '';
         if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
@@ -405,12 +439,16 @@ class HomePage extends Page {
                 // Subtitle: Sxx:Exx
                 subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber}`;
             }
+        } else if (type === 'library') {
+            // Library Cards: Just title, no subtitle
+            titleText = item.Name;
+            subtitleText = '';
         } else if (item.ProductionYear) {
             subtitleText = item.ProductionYear;
         }
 
         return `
-            <button class="media-card ${isLandscape ? 'landscape' : ''}" data-item-id="${item.Id}" tabindex="0">
+            <button class="media-card ${isLandscape ? 'landscape' : ''}" data-item-id="${item.Id}" data-context-type="${type}" tabindex="0">
                 <div class="card-image">
                     <img 
                         src="${imageUrl}" 

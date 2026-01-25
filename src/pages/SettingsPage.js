@@ -123,6 +123,20 @@ class SettingsPage extends Page {
                         `).join('')}
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Home Screen Customization</span>
+                        <span class="setting-description">Hide "My Media" row from home screen</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${localStorage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-my-media" 
+                                 tabindex="0"
+                                 aria-label="Toggle My Media visibility">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -270,6 +284,21 @@ class SettingsPage extends Page {
                 this._setTheme(btn.dataset.theme);
             });
         });
+
+
+
+        // Toggle My Media
+        const myMediaBtn = this.$('#toggle-my-media');
+        if (myMediaBtn) {
+            myMediaBtn.addEventListener('click', () => {
+                const isHidden = localStorage.getItem('pref:hideMyMedia') === 'true';
+                const newValue = !isHidden;
+                localStorage.setItem('pref:hideMyMedia', newValue);
+
+                // Toggle active class
+                myMediaBtn.classList.toggle('active', newValue);
+            });
+        }
 
         // Log Out
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
