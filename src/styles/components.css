@@ -1,0 +1,232 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Components Styles
+ * ============================================================================
+ */
+
+/* Buttons */
+.btn {
+    padding: 20px 40px;
+    font-size: 1.5rem;
+    border: none;
+    border-radius: var(--jf-border-radius);
+    cursor: pointer;
+    margin: 12px;
+}
+
+.btn-primary {
+    background: var(--jf-accent);
+    color: white;
+    margin: 0px;
+    margin-left: 8px;
+}
+
+.btn-primary:focus {
+    background: var(--jf-accent-hover);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.btn-secondary {
+    background: var(--jf-button-bg);
+    color: var(--jf-text-primary);
+}
+
+.btn-secondary:focus {
+    background: var(--jf-button-hover);
+}
+
+.btn-danger {
+    background: var(--jf-error);
+    color: white;
+}
+
+.nav-text-btn {
+    background: transparent;
+    border: 3px solid transparent;
+    /* Reserve space */
+    color: var(--jf-text-secondary);
+    font-size: 1.25rem;
+    font-weight: 600;
+    padding: 10px 24px;
+    cursor: pointer;
+    border-radius: 50px;
+    /* Pill shape */
+    transition: all 0.2s ease;
+    outline: none;
+}
+
+.nav-text-btn.active {
+    color: var(--jf-accent);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+.nav-text-btn:focus {
+    border-color: white;
+    color: var(--jf-accent);
+    box-shadow: none;
+    outline: none;
+}
+
+.nav-btn {
+    background: var(--jf-button-bg);
+    border: none;
+    color: var(--jf-text-primary);
+    padding: 10px 20px;
+    border-radius: var(--jf-border-radius);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+}
+
+.nav-btn>*:not(:last-child) {
+    margin-right: 8px;
+}
+
+.nav-btn:focus {
+    background: var(--jf-accent);
+    outline: none;
+    box-shadow: none;
+}
+
+.nav-btn.icon-only {
+    background: transparent;
+    padding: 8px;
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-text-primary);
+}
+
+.nav-btn.icon-only:focus {
+    background: var(--jf-button-hover);
+    color: var(--jf-accent);
+    outline: none;
+    box-shadow: none;
+}
+
+.back-btn {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-primary);
+    font-size: 1.5rem;
+    cursor: pointer;
+    padding: 8px 16px;
+    border-radius: var(--jf-border-radius);
+}
+
+.back-btn:focus {
+    background: var(--jf-accent-light);
+    outline: none;
+    box-shadow: none;
+}
+
+.btn-icon-small {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    font-size: 1.2rem;
+    cursor: pointer;
+    padding: 4px;
+    border-radius: 50%;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-icon-small:focus,
+.btn-icon-small:hover {
+    background: var(--jf-button-hover);
+    color: var(--jf-accent);
+}
+
+/* Inputs */
+.text-input {
+    width: 100%;
+    padding: 20px 28px;
+    font-size: 1.75rem;
+    background: var(--jf-input-bg);
+    border: 3px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius);
+    color: var(--jf-text-primary);
+}
+
+.text-input:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.text-input::placeholder {
+    color: var(--jf-text-tertiary);
+}
+
+.input-group {
+    margin-bottom: 20px;
+}
+
+.input-label {
+    display: block;
+    color: #e0e0e0;
+    font-size: 1.5rem;
+    margin-bottom: 16px;
+    font-weight: 400;
+}
+
+/* Avatars */
+.header-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+}
+
+.header-avatar-placeholder {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--jf-accent);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1rem;
+    font-weight: 600;
+}
+
+/* Loaders */
+.loading-spinner-small {
+    width: 16px;
+    height: 16px;
+    border: 2px solid var(--jf-text-tertiary);
+    border-top-color: var(--jf-accent);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin-right: 8px;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* Alerts/Errors */
+.page-error {
+    display: none;
+    background-color: rgba(220, 53, 69, 0.1);
+    color: #ff6b6b;
+    border: 1px solid #ff6b6b;
+    padding: 1rem;
+    margin: 1rem;
+    border-radius: 8px;
+    text-align: center;
+    font-size: 1.1rem;
+}
+
+.hidden {
+    display: none !important;
+}

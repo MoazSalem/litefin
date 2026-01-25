@@ -1,0 +1,99 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Search Styles
+ * ============================================================================
+ */
+
+.search-input-wrapper {
+    flex: 1;
+}
+
+.search-input {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 1.25rem;
+    background: var(--jf-input-bg);
+    border: 2px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius-lg);
+    color: var(--jf-text-primary);
+}
+
+.search-input:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.search-empty,
+.search-no-results {
+    text-align: center;
+    padding: 80px 20px;
+    color: var(--jf-text-secondary);
+}
+
+.search-empty .empty-icon {
+    font-size: 4rem;
+    margin-bottom: 16px;
+}
+
+.result-section {
+    margin-bottom: 32px;
+}
+
+.result-section-title {
+    font-size: 1.25rem;
+    margin-bottom: 16px;
+    color: var(--jf-text-primary);
+}
+
+.result-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 16px;
+}
+
+.result-card {
+    width: 160px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: left;
+}
+
+.result-card:focus {
+    transform: scale(1.05);
+}
+
+.result-image {
+    aspect-ratio: 2/3;
+    background: var(--jf-background-alt);
+}
+
+.result-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.result-info {
+    padding: 10px;
+}
+
+.result-title {
+    color: var(--jf-text-primary);
+    font-size: 0.85rem;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.result-subtitle {
+    color: var(--jf-text-secondary);
+    font-size: 0.75rem;
+    margin: 4px 0 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

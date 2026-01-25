@@ -1,0 +1,58 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Library Styles
+ * ============================================================================
+ */
+
+.library-grid {
+    height: calc(100vh - 140px);
+}
+
+.vgrid-item {
+    cursor: pointer;
+}
+
+.grid-card {
+    width: 100%;
+    height: 100%;
+    background: var(--jf-card-bg);
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+}
+
+.grid-card .card-image {
+    height: 75%;
+    position: relative;
+    background: var(--jf-background-alt);
+}
+
+.grid-card .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.watched-badge {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    background: var(--jf-accent);
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.75rem;
+}
+
+.grid-card .card-info {
+    padding: 8px 12px;
+}
+
+.card-year {
+    color: var(--jf-text-secondary);
+    font-size: 0.8rem;
+    margin: 2px 0 0;
+}

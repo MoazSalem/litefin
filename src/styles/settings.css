@@ -1,0 +1,95 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Settings Styles
+ * ============================================================================
+ */
+
+.settings-container {
+    max-width: 700px;
+}
+
+.settings-section {
+    margin-bottom: 40px;
+}
+
+.section-title {
+    font-size: 1.25rem;
+    color: var(--jf-accent);
+    margin-bottom: 20px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.setting-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 0;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.setting-label {
+    flex: 1;
+}
+
+.setting-name {
+    display: block;
+    color: var(--jf-text-primary);
+    font-size: 1rem;
+}
+
+.setting-description {
+    display: block;
+    color: var(--jf-text-tertiary);
+    font-size: 0.85rem;
+    margin-top: 4px;
+}
+
+.setting-value {
+    display: block;
+    color: var(--jf-text-secondary);
+    font-size: 0.9rem;
+    margin-top: 4px;
+}
+
+.setting-control {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-option {
+    padding: 10px 16px;
+    font-size: 0.9rem;
+    background: var(--jf-button-bg);
+    border: 2px solid transparent;
+}
+
+.btn-option.active {
+    border-color: var(--jf-accent);
+    background: var(--jf-accent-light);
+}
+
+.btn-option:focus {
+    border-color: var(--jf-accent);
+}
+
+.setting-select {
+    padding: 10px 16px;
+    font-size: 1rem;
+    background: var(--jf-input-bg);
+    border: 2px solid var(--jf-input-border);
+    border-radius: var(--jf-border-radius);
+    color: var(--jf-text-primary);
+}
+
+.setting-select:focus {
+    border-color: var(--jf-accent);
+    outline: none;
+}
+
+.setting-actions {
+    display: flex;
+    gap: 12px;
+    margin-top: 24px;
+}

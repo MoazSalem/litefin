@@ -44,6 +44,7 @@ function getPlugins() {
 const es6Config = {
     name: 'es6',
     mode: 'production',
+    devtool: 'source-map', // Enable source maps for debugging
     entry: './src/index.js',
 
     output: {
@@ -72,6 +73,7 @@ const es6Config = {
 const normalConfig = {
     name: 'normal',
     mode: 'production',
+    devtool: 'source-map', // Enable source maps
     entry: './src/index.js',
 
     output: {

@@ -1,0 +1,209 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Details Styles
+ * ============================================================================
+ */
+
+.details-page {
+    overflow-y: auto;
+}
+
+.details-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background-size: cover;
+    background-position: center top;
+}
+
+.backdrop-gradient {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(to bottom,
+            rgba(16, 16, 16, 0.3) 0%,
+            var(--jf-background) 100%);
+}
+
+.details-content {
+    position: relative;
+    padding: 40px;
+    padding-top: 20%;
+}
+
+.details-hero {
+    display: flex;
+    gap: 40px;
+    margin-bottom: 32px;
+}
+
+.hero-poster {
+    width: 200px;
+    flex-shrink: 0;
+}
+
+.hero-poster img {
+    width: 100%;
+    border-radius: var(--jf-border-radius);
+    box-shadow: var(--jf-shadow-lg);
+}
+
+.hero-info {
+    flex: 1;
+}
+
+.details-title {
+    font-size: 2.5rem;
+    margin: 0 0 8px;
+}
+
+.details-episode-info {
+    color: var(--jf-accent);
+    font-size: 1.1rem;
+    margin-bottom: 8px;
+}
+
+.details-meta {
+    color: var(--jf-text-secondary);
+    font-size: 1rem;
+    margin-bottom: 8px;
+}
+
+.details-genres {
+    color: var(--jf-text-tertiary);
+    font-size: 0.9rem;
+}
+
+.details-actions {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 32px;
+}
+
+.btn-icon {
+    width: 48px;
+    height: 48px;
+    padding: 0;
+    font-size: 1.5rem;
+    border-radius: 50%;
+    background: var(--jf-button-bg);
+    color: var(--jf-text-primary);
+    border: none;
+}
+
+.btn-icon.active {
+    color: var(--jf-accent);
+}
+
+.btn-icon:focus {
+    background: var(--jf-accent);
+    color: white;
+}
+
+.details-overview {
+    margin-bottom: 40px;
+}
+
+.overview-text {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: var(--jf-text-secondary);
+    max-width: 800px;
+}
+
+/* Seasons */
+.seasons-row,
+.similar-row {
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    padding: 8px 0;
+}
+
+.season-card {
+    flex-shrink: 0;
+    width: 140px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    text-align: center;
+}
+
+.season-card:focus {
+    transform: scale(1.05);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.season-card img {
+    width: 100%;
+    aspect-ratio: 2/3;
+    object-fit: cover;
+}
+
+.season-card span {
+    display: block;
+    padding: 10px;
+    color: var(--jf-text-primary);
+}
+
+/* Episodes */
+.episodes-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.episode-card {
+    display: flex;
+    gap: 16px;
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius);
+    padding: 12px;
+    cursor: pointer;
+    text-align: left;
+    align-items: flex-start;
+}
+
+.episode-card:focus {
+    background: var(--jf-card-bg-hover);
+}
+
+.episode-thumb {
+    width: 200px;
+    flex-shrink: 0;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    position: relative;
+}
+
+.episode-thumb img {
+    width: 100%;
+    aspect-ratio: 16/9;
+    object-fit: cover;
+}
+
+.episode-info {
+    flex: 1;
+}
+
+.episode-number {
+    color: var(--jf-accent);
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.episode-title {
+    color: var(--jf-text-primary);
+    font-weight: 500;
+}
+
+.episode-overview {
+    color: var(--jf-text-secondary);
+    font-size: 0.9rem;
+    margin-top: 8px;
+    line-height: 1.4;
+}

@@ -16,7 +16,14 @@ import { debugOverlay } from './ui/DebugOverlay.js';
 
 // Import styles
 import './styles/base.css';
-import './styles/pages.css';
+import './styles/layout.css';
+import './styles/components.css';
+import './styles/login.css';
+import './styles/home.css';
+import './styles/library.css';
+import './styles/details.css';
+import './styles/search.css';
+import './styles/settings.css';
 import './themes/classic/index.js';  // All classic themes
 
 /**

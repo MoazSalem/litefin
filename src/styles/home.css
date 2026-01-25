@@ -1,0 +1,165 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Home Styles
+ * ============================================================================
+ */
+
+.home-page .page-content {
+    padding: 0;
+}
+
+.home-rows {
+    padding: 20px 0 80px 0;
+}
+
+.media-row {
+    margin-bottom: 32px;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: scroll-position;
+}
+
+.row-title {
+    font-size: 2rem;
+    font-weight: 700;
+    margin-bottom: 12px;
+    padding: 0 60px;
+    color: var(--jf-text-primary);
+}
+
+.row-items {
+    display: flex;
+    overflow-x: auto;
+    padding: 16px 0 16px 60px;
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: scroll-position;
+}
+
+.row-items::after {
+    content: '';
+    flex-shrink: 0;
+    width: 60px;
+    height: 1px;
+}
+
+.media-card {
+    flex-shrink: 0;
+    width: 240px;
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    overflow: visible;
+    cursor: pointer;
+    text-align: left;
+    margin-right: 24px;
+    /* More spacing between cards */
+
+    /* PERFORMANCE: Aggressive GPU acceleration */
+    will-change: transform;
+    contain: layout style;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+/* Keep padding on last card so it can scroll fully into view */
+.media-card:last-child {
+    margin-right: 120px;
+    /* Large margin so last item fits fully on screen */
+}
+
+/* Landscape styling for "Continue Watching" & "Next Up" */
+.media-card.landscape {
+    width: 400px;
+    /* Larger for TV (was 280px) */
+}
+
+/* Focus scales the whole unit */
+.media-card:focus {
+    transform: scale(1.05);
+    z-index: 1;
+    outline: none;
+}
+
+.media-card .card-image {
+    position: relative;
+    width: 100%;
+    /* PADDING HACK for 2:3 Ratio */
+    height: 0;
+    padding-bottom: 150%;
+    overflow: hidden;
+    background: var(--jf-background-alt);
+    border-radius: var(--jf-border-radius);
+    /* PERFORMANCE: Removed box-shadow - expensive to paint */
+    /* box-shadow: var(--jf-shadow-sm); */
+}
+
+.media-card.landscape .card-image {
+    /* aspect-ratio: 16/9; Not supported in Chromium 69 */
+    /* PADDING HACK for 16:9 Ratio (9/16 * 100 = 56.25%) */
+    padding-bottom: 56.25%;
+}
+
+.media-card:focus .card-image {
+    box-shadow: 0 0 0 3px var(--jf-accent);
+}
+
+.media-card .card-image img {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    z-index: 1;
+}
+
+.media-card .card-info {
+    padding: 12px 4px 0 4px;
+}
+
+.card-title {
+    color: var(--jf-text-primary);
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    text-align: center;
+}
+
+.card-subtitle {
+    color: var(--jf-text-secondary);
+    font-size: 1rem;
+    margin: 6px 0 0;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 6px;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 2;
+    border-radius: 0 0 var(--jf-border-radius) var(--jf-border-radius);
+    overflow: hidden;
+}
+
+.progress-bar .progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    background: var(--jf-accent);
+}

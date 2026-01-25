@@ -1,0 +1,299 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Login Styles
+ * ============================================================================
+ */
+
+.login-page {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.login-container {
+    width: 100%;
+    max-width: 1200px;
+    text-align: center;
+}
+
+.login-header {
+    margin-bottom: 80px;
+}
+
+.login-logo {
+    font-size: 5rem;
+    font-weight: 300;
+    color: #e0e0e0;
+    margin: 0;
+    letter-spacing: -2px;
+}
+
+.login-tagline {
+    color: var(--jf-accent);
+    font-size: 1.5rem;
+    margin-top: 8px;
+    font-weight: 400;
+    letter-spacing: 0.5px;
+}
+
+.server-section {
+    max-width: 600px;
+    margin: 0 auto;
+    text-align: left;
+}
+
+.server-input-container {
+    display: flex;
+    margin-bottom: 20px;
+}
+
+.server-input-container>*:not(:last-child) {
+    margin-right: 12px;
+}
+
+.server-url-input {
+    flex: 1;
+    background: #1a1a1a;
+    border: 2px solid #333;
+    padding: 20px 28px;
+    font-size: 1.75rem;
+    border-radius: 6px;
+    color: #fff;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.server-url-input:focus {
+    border-color: var(--jf-accent);
+    box-shadow: 0 0 0 2px rgba(0, 164, 220, 0.3);
+}
+
+.connect-btn {
+    background: var(--jf-accent);
+    color: white;
+    border: none;
+    padding: 0 40px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    border-radius: 6px;
+    cursor: pointer;
+    margin: 0;
+}
+
+.connect-btn:focus {
+    background: var(--jf-accent-hover);
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
+    outline: none;
+}
+
+.login-actions {
+    display: flex;
+    flex-direction: column;
+    margin-top: 24px;
+    align-items: center;
+}
+
+.login-actions>*:not(:last-child) {
+    margin-bottom: 12px;
+}
+
+.loading-section {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+}
+
+.loading-section .loading-spinner {
+    margin-bottom: 24px;
+}
+
+.login-section h2 {
+    font-size: 1.5rem;
+    font-weight: 300;
+    margin-bottom: 24px;
+    color: var(--jf-text-primary);
+}
+
+.login-error {
+    color: var(--jf-error);
+    margin-top: 16px;
+    display: none;
+}
+
+/* Discovered Servers */
+.discovered-servers {
+    margin-top: 40px;
+    text-align: left;
+    border-top: 1px solid #333;
+    padding-top: 24px;
+}
+
+.discovered-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+}
+
+.discovered-servers h3 {
+    color: #888;
+    font-size: 0.8rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 0;
+}
+
+.discovery-status {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #666;
+    font-size: 0.9rem;
+    padding: 20px;
+}
+
+.discovery-status>*:not(:last-child) {
+    margin-right: 12px;
+}
+
+.server-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.server-item {
+    display: flex;
+    align-items: center;
+    padding: 20px 24px;
+    background: var(--jf-card-bg);
+    border-radius: var(--jf-border-radius);
+    margin-bottom: 12px;
+    cursor: pointer;
+    transition: background var(--jf-transition-fast);
+}
+
+.server-item>*:not(:last-child) {
+    margin-right: 16px;
+}
+
+.server-item:focus,
+.server-item:hover {
+    background: var(--jf-card-bg-hover);
+    outline: none;
+    box-shadow: var(--jf-focus-ring);
+}
+
+.server-item.empty {
+    cursor: default;
+    color: var(--jf-text-tertiary);
+    background: transparent;
+    justify-content: center;
+}
+
+.server-item.empty:hover,
+.server-item.empty:focus {
+    background: transparent;
+    box-shadow: none;
+}
+
+.server-name {
+    flex: 1;
+    color: var(--jf-text-primary);
+    font-weight: 500;
+}
+
+.server-address {
+    color: var(--jf-text-tertiary);
+    font-size: 1.1rem;
+    padding: 2px 8px;
+}
+
+.server-version {
+    color: var(--jf-accent);
+    font-size: 0.75rem;
+    background: var(--jf-accent-light);
+    padding: 2px 8px;
+    border-radius: 12px;
+}
+
+/* Users grid */
+.users-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    margin: -12px;
+    width: calc(100% + 24px);
+    padding-bottom: 24px;
+}
+
+.user-card {
+    background: var(--jf-card-bg);
+    border: none;
+    border-radius: var(--jf-border-radius-lg);
+    padding: 30px;
+    cursor: pointer;
+    text-align: center;
+    width: 220px;
+    margin: 16px;
+}
+
+.user-card:focus {
+    background: var(--jf-card-bg-hover);
+    transform: scale(1.05);
+    box-shadow: var(--jf-focus-ring);
+}
+
+.user-avatar-wrapper {
+    width: 150px;
+    height: 150px;
+    border-radius: 50%;
+    overflow: hidden;
+    margin: 0 auto 16px;
+    background: var(--jf-accent-light);
+    position: relative;
+}
+
+.user-avatar {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+.user-avatar-placeholder {
+    position: relative;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2rem;
+    color: var(--jf-accent);
+}
+
+.user-name {
+    color: var(--jf-text-primary);
+    font-size: 1.4rem;
+    padding: 16px 12px;
+}
+
+.selected-user {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 24px;
+}
+
+.selected-user>*:not(:last-child) {
+    margin-right: 16px;
+}
+
+.selected-user .user-avatar {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+}
