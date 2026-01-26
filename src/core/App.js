@@ -108,6 +108,18 @@ class App {
     _setupEventHandlers() {
         // Handle back button / return key
         eventBus.on('key:back', () => {
+            const currentPage = router.getCurrentPage();
+
+            // 1. Try page-specific back handler
+            if (currentPage && typeof currentPage.onBack === 'function') {
+                const handled = currentPage.onBack();
+                if (handled === true) {
+                    console.log('App: Back handled by page');
+                    return;
+                }
+            }
+
+            // 2. Fallback to router history
             if (!router.back()) {
                 // No history - show exit confirmation or exit app
                 eventBus.emit('app:exitRequested');

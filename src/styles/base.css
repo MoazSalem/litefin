@@ -86,11 +86,31 @@ body {
     background-color: var(--jf-background);
 }
 
+.page-loading {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh;
+    display: none;
+    z-index: 9999;
+    background-color: var(--jf-background);
+}
+
+.page.loading .page-loading {
+    display: block;
+}
+
 .loading-spinner {
-    margin-top: 2rem;
-    position: relative;
-    width: 48px;
-    height: 48px;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 240px;
+    height: 240px;
+    margin-top: -120px;
+    margin-left: -120px;
 }
 
 .loading-spinner::before,
@@ -103,24 +123,15 @@ body {
     height: 100%;
     background-color: var(--jf-accent);
     border-radius: 50%;
-    animation: pulse 1s linear infinite;
+    animation: pulse 0.5s linear infinite;
+    opacity: 0;
 }
 
-.loading-logo {
-    text-align: center;
-}
-
-.loading-logo h1 {
-    margin-bottom: 0.5rem;
-    color: var(--jf-accent);
-}
-
-.loading-logo p {
-    color: var(--jf-text-secondary);
+.loading-spinner::after {
+    animation-delay: 0.25s;
 }
 
 @keyframes pulse {
-
     0% {
         transform: scale(0);
         opacity: 1;

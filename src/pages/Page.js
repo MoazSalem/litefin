@@ -31,7 +31,8 @@ class Page extends Component {
         this._focusSections = [];
 
         // Back handler
-        this._onBack = this._onBack.bind(this);
+        // REMOVED: App.js handles this directly
+        // this._onBack = this._onBack.bind(this);
     }
 
     /**
@@ -52,7 +53,8 @@ class Page extends Component {
         this.mount();
 
         // Register back handler
-        eventBus.on('key:back', this._onBack);
+        // REMOVED: App.js now coordinates back events
+        // eventBus.on('key:back', this._onBack);
 
         // Set document title
         if (this.title) {
@@ -71,18 +73,10 @@ class Page extends Component {
     /**
      * Handle back button press
      * Override for custom behavior
-     * @private
-     */
-    _onBack() {
-        this.onBack();
-    }
-
-    /**
-     * Default back behavior - can be overridden
+     * @returns {boolean} True if handled, False to trigger default router back
      */
     onBack() {
-        // Default: emit back event for router to handle
-        eventBus.emit('key:back');
+        return false; // Not handled by default
     }
 
     /**

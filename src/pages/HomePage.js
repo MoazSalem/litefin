@@ -73,12 +73,12 @@ class HomePage extends Page {
                     <div class="home-rows">
                         <!-- Rows will be rendered here -->
                     </div>
-                    
-                    <!-- Loading state -->
-                    <div class="page-loading">
-                        <div class="loading-spinner"></div>
-                    </div>
                 </main>
+                
+                <!-- Loading state -->
+                <div class="page-loading">
+                    <div class="loading-spinner"></div>
+                </div>
             </div>
         `;
     }

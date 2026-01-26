@@ -135,6 +135,14 @@ class Router {
     }
 
     /**
+     * Get current page instance
+     * @returns {Page|null} Current page
+     */
+    getCurrentPage() {
+        return this._currentPage;
+    }
+
+    /**
      * Handle hash change events
      * @private
      */

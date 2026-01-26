@@ -10,7 +10,15 @@
 import { eventBus } from '../core/EventBus.js';
 
 // Focusable element selector
-const FOCUSABLE_SELECTOR = '[tabindex], a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])';
+// Strictly exclude tabindex="-1" from ALL elements (buttons, inputs, etc.)
+const FOCUSABLE_SELECTOR = `
+    a[href]:not([tabindex="-1"]),
+    button:not([disabled]):not([tabindex="-1"]),
+    input:not([disabled]):not([tabindex="-1"]),
+    select:not([disabled]):not([tabindex="-1"]),
+    textarea:not([disabled]):not([tabindex="-1"]),
+    [tabindex]:not([tabindex="-1"])
+`.replace(/\s+/g, ' ').trim();
 
 class FocusManager {
     constructor() {

@@ -8,6 +8,26 @@
     overflow-y: auto;
 }
 
+.person-fallback {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.05);
+    /* Subtle background */
+    color: var(--jf-text-secondary);
+}
+
+.person-fallback svg {
+    width: 40%;
+    height: 40%;
+    stroke-width: 1.5;
+}
+
 .details-backdrop {
     position: absolute;
     top: 0;
@@ -16,168 +36,471 @@
     height: 60%;
     background-size: cover;
     background-position: center top;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
 }
 
 .backdrop-gradient {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
     background: linear-gradient(to bottom,
             rgba(16, 16, 16, 0.3) 0%,
             var(--jf-background) 100%);
 }
 
 .details-content {
-    position: relative;
-    padding: 40px;
-    padding-top: 20%;
+    /* position: relative; REMOVED to fix scroll offset calculation */
+    /* PADDING REFAC: Moved to children to align with global rows */
+    padding: 0;
 }
 
-.details-hero {
+/* Main Split Layout */
+.details-main-split {
     display: flex;
-    gap: 40px;
-    margin-bottom: 32px;
+    margin-bottom: 40px;
+    padding: 60px 60px 0 60px;
+    padding-top: 5%;
 }
 
 .hero-poster {
-    width: 200px;
+    width: 420px;
+    aspect-ratio: 2/3;
+    /* Enforce 2:3 aspect ratio */
     flex-shrink: 0;
+    margin-right: 60px;
+    background-color: rgba(255, 255, 255, 0.05);
+    /* Placeholder */
+    border-radius: var(--jf-border-radius);
+    position: relative;
+    /* For potential spinner if needed */
 }
 
 .hero-poster img {
     width: 100%;
+    height: 100%;
+    /* Fill container */
+    object-fit: cover;
     border-radius: var(--jf-border-radius);
     box-shadow: var(--jf-shadow-lg);
+    opacity: 0;
+    /* Start hidden, fade in */
+    transition: opacity 0.3s ease-in;
+}
+
+.hero-poster img.loaded {
+    opacity: 1;
+}
+
+.details-info-col {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding-bottom: 20px;
+    opacity: 0;
+    /* Start hidden to prevent layout jumps */
+    transition: opacity 0.4s ease-out;
+}
+
+.details-info-col.visible {
+    opacity: 1;
 }
 
 .hero-info {
-    flex: 1;
+    margin-bottom: 24px;
+    position: relative;
+    /* Anchor for logo */
+}
+
+.details-logo {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 280px;
+    /* Adjust based on available space */
+    max-width: 40%;
+    height: 100px;
+    /* Constrain height */
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+    pointer-events: none;
+    /* Let clicks pass through */
+}
+
+.details-logo img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    opacity: 0;
+    transition: opacity 1s ease-in-out;
+}
+
+.details-logo img.loaded {
+    opacity: 1;
 }
 
 .details-title {
-    font-size: 2.5rem;
-    margin: 0 0 8px;
+    font-size: 3.5rem;
+    margin: 0 0 16px;
+    line-height: 1.1;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    max-width: 60%;
+    /* Prevent title from overlapping logo */
+}
+
+.details-original-title {
+    font-size: 1.75rem;
+    color: var(--jf-text-secondary);
+    margin: -8px 0 20px 0;
+    /* Tight under title */
+    font-weight: 500;
+}
+
+.details-tagline {
+    font-size: 1.4rem;
+    font-style: italic;
+    color: var(--jf-text-secondary);
+    margin: 0 0 12px 0;
+    font-weight: 300;
+    opacity: 0.9;
 }
 
 .details-episode-info {
     color: var(--jf-accent);
-    font-size: 1.1rem;
-    margin-bottom: 8px;
+    font-size: 1.8rem;
+    margin-bottom: 16px;
 }
 
-.details-meta {
+/* Metadata Row */
+.details-meta-row {
+    display: flex;
+    align-items: center;
+    /* Center badges vertically */
+    flex-wrap: wrap;
+    margin-bottom: 24px;
+    font-size: 1.4rem;
+    color: var(--jf-text-primary);
+}
+
+.meta-item {
+    margin-right: 20px;
+}
+
+.meta-item:last-child {
+    margin-right: 0;
+}
+
+/* Rating Badge (R, PG-13, etc) */
+.meta-badge {
+    background: rgba(255, 255, 255, 0.15);
+    padding: 4px 10px;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 1.2rem;
+    color: #e0e0e0;
+}
+
+/* Star Rating */
+.meta-star {
+    color: #f5c518;
+    /* IMDB Yellow */
+    font-weight: 600;
+}
+
+/* Tomato Rating */
+.meta-tomato {
+    color: #fa320a;
+    /* Rotten Tomatoes Red */
+    font-weight: 600;
+}
+
+/* Ends At */
+.meta-ends-at {
     color: var(--jf-text-secondary);
-    font-size: 1rem;
-    margin-bottom: 8px;
-}
-
-.details-genres {
-    color: var(--jf-text-tertiary);
-    font-size: 0.9rem;
+    /* Improved readability */
+    font-size: 1.3rem;
 }
 
 .details-actions {
     display: flex;
-    gap: 12px;
+    align-items: center;
+    /* Fix alignment */
     margin-bottom: 32px;
 }
 
-.btn-icon {
-    width: 48px;
-    height: 48px;
-    padding: 0;
+.details-actions>* {
+    margin-right: 16px;
+}
+
+.details-actions>*:last-child {
+    margin-right: 0;
+}
+
+/* Action Buttons */
+.details-actions .btn {
+    height: 72px;
+    /* Match icon button height */
+    border-radius: 36px;
+    /* Pill shape */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0 32px;
     font-size: 1.5rem;
-    border-radius: 50%;
-    background: var(--jf-button-bg);
-    color: var(--jf-text-primary);
+    font-weight: 600;
     border: none;
+    transition: transform 0.2s, background-color 0.2s, color 0.2s;
 }
 
-.btn-icon.active {
-    color: var(--jf-accent);
-}
-
-.btn-icon:focus {
+/* Primary Play Button */
+.play-btn {
     background: var(--jf-accent);
     color: white;
 }
 
+.play-btn:focus {
+    transform: scale(1.05);
+    background: white;
+    /* Invert on focus? Or just lighter accent? */
+    color: var(--jf-background);
+    outline: none;
+    /* Remove square border */
+    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
+    /* Soft ring instead? Or just scale? */
+}
+
+/* Secondary Resume Button */
+.resume-btn {
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    backdrop-filter: blur(10px);
+}
+
+.resume-btn:focus {
+    transform: scale(1.05);
+    background: white;
+    color: var(--jf-background);
+    outline: none;
+}
+
+/* Icon Buttons (Heart/Check) */
+.btn-icon {
+    width: 72px;
+    height: 72px;
+    padding: 0;
+    font-size: 2rem;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    /* Consistent with other buttons */
+    color: var(--jf-text-primary);
+    border: none;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+}
+
+.btn-icon.active {
+    background: var(--jf-accent);
+    /* Obvious active state */
+    color: white;
+}
+
+.btn-icon:focus {
+    transform: scale(1.1);
+    background: white;
+    color: var(--jf-background);
+    outline: none;
+}
+
+/* Specific focus state for ACTIVE buttons to distinguish them */
+.btn-icon.active:focus {
+    background: white;
+    color: var(--jf-accent);
+    /* Accent icon on white bg indicates active state while focused */
+}
+
 .details-overview {
-    margin-bottom: 40px;
+    margin-bottom: 0;
 }
 
 .overview-text {
-    font-size: 1.1rem;
-    line-height: 1.6;
+    font-size: 1.5rem;
+    line-height: 1.5;
     color: var(--jf-text-secondary);
-    max-width: 800px;
+    max-width: 1200px;
+    margin-bottom: 12px;
 }
 
-/* Seasons */
+.line-clamp-6 {
+    display: -webkit-box;
+    -webkit-line-clamp: 6;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+}
+
+/* Rich Metadata */
+.details-rich-meta {
+    margin-top: 10px;
+    margin-bottom: 50px;
+    margin-left: 60px;
+    margin-right: 60px;
+    padding: 20px;
+    /* Internal padding */
+    border: 2px solid transparent;
+    /* Focus border placeholder */
+    border-radius: var(--jf-border-radius);
+    transition: border-color 0.2s, background-color 0.2s;
+}
+
+.details-rich-meta:focus,
+.details-rich-meta.active-table {
+    border-color: var(--jf-accent);
+    /* Focus highlight */
+    background-color: rgba(255, 255, 255, 0.02);
+    outline: none;
+}
+
+.rich-meta-row {
+    display: flex;
+    margin-bottom: 16px;
+    align-items: baseline;
+    padding: 8px 0;
+    /* Touch target spacing */
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    /* Row separators */
+}
+
+.rich-meta-row:last-child {
+    border-bottom: none;
+}
+
+.meta-label {
+    width: 120px;
+    flex-shrink: 0;
+    color: var(--jf-text-secondary);
+    font-size: 1.1rem;
+    font-weight: 500;
+}
+
+.meta-value-list {
+    flex: 1;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    /* Standardize gap for modern browsers */
+    /* Fallback for older engines if needed is margin on items */
+}
+
+.meta-chip {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-primary);
+    font-size: 1.1rem;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: none;
+    opacity: 0.9;
+    transition: opacity 0.2s, color 0.2s;
+}
+
+.meta-chip:hover,
+.meta-chip:focus {
+    color: var(--jf-accent);
+    opacity: 1;
+    outline: none;
+    text-decoration: underline;
+}
+
+/* Add commas between items except the last one?
+   Or just keep them as space-separated chips?
+   User image showed comma separated text.
+   Let's check the user request image.
+   "Crime, Thriller, Western" - Comma separated text.
+   So .meta-chip should be text-like, not pill-like.
+*/
+
+.meta-chip:not(:last-child)::after {
+    content: ",";
+    margin-right: 6px;
+    color: var(--jf-text-secondary);
+    display: inline-block;
+}
+
+/* Tags might need to be badges/pills though? User image: "Tags: vietnam veteran, sheriff..." - plain text comma list.
+   I will style them as text links with comas.
+   But if I want "pill" style for tags specifically?
+   User image shows everything as text lists. I will stick to that for elegance.
+*/
+.see-more-btn {
+    background: transparent;
+    border: none;
+    color: var(--jf-accent);
+    font-size: 1.4rem;
+    font-weight: 600;
+    padding: 8px 0;
+    cursor: pointer;
+    display: none;
+    /* Hidden by default */
+}
+
+.see-more-btn:focus {
+    color: white;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    outline: none;
+}
+
+/* Seasons & Similar */
 .seasons-row,
 .similar-row {
-    display: flex;
-    gap: 16px;
-    overflow-x: auto;
-    padding: 8px 0;
-}
-
-.season-card {
-    flex-shrink: 0;
-    width: 140px;
-    background: var(--jf-card-bg);
-    border: none;
-    border-radius: var(--jf-border-radius);
-    overflow: hidden;
-    cursor: pointer;
-    text-align: center;
-}
-
-.season-card:focus {
-    transform: scale(1.05);
-    box-shadow: var(--jf-focus-ring);
-}
-
-.season-card img {
-    width: 100%;
-    aspect-ratio: 2/3;
-    object-fit: cover;
-}
-
-.season-card span {
-    display: block;
-    padding: 10px;
-    color: var(--jf-text-primary);
+    margin-bottom: 40px;
 }
 
 /* Episodes */
 .episodes-list {
     display: flex;
     flex-direction: column;
-    gap: 12px;
 }
 
 .episode-card {
     display: flex;
-    gap: 16px;
+    margin-bottom: 20px;
+    /* Increased spacing */
     background: var(--jf-card-bg);
     border: none;
     border-radius: var(--jf-border-radius);
-    padding: 12px;
+    padding: 20px;
+    /* Larger padding */
     cursor: pointer;
     text-align: left;
     align-items: flex-start;
+    transition: background 0.2s;
+}
+
+.episode-card:last-child {
+    margin-bottom: 0;
 }
 
 .episode-card:focus {
     background: var(--jf-card-bg-hover);
+    outline: 4px solid var(--jf-accent);
+    /* Clearer focus indication */
 }
 
 .episode-thumb {
-    width: 200px;
+    width: 360px;
+    /* Increased from 200px */
     flex-shrink: 0;
     border-radius: var(--jf-border-radius);
     overflow: hidden;
     position: relative;
+    margin-right: 30px;
+    /* Increased spacing */
 }
 
 .episode-thumb img {
@@ -188,22 +511,28 @@
 
 .episode-info {
     flex: 1;
+    padding-top: 10px;
 }
 
 .episode-number {
     color: var(--jf-accent);
     font-weight: 600;
-    margin-right: 8px;
+    font-size: 1.4rem;
+    /* Larger */
+    margin-right: 12px;
 }
 
 .episode-title {
     color: var(--jf-text-primary);
     font-weight: 500;
+    font-size: 1.4rem;
+    /* Larger */
 }
 
 .episode-overview {
     color: var(--jf-text-secondary);
-    font-size: 0.9rem;
-    margin-top: 8px;
-    line-height: 1.4;
+    font-size: 1.2rem;
+    /* Larger */
+    margin-top: 12px;
+    line-height: 1.5;
 }

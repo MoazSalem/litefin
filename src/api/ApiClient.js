@@ -404,8 +404,8 @@ class ApiClient {
     // Item Endpoints
     // ========================================================================
 
-    async getItem(itemId) {
-        return this.get(`/Users/${this._userId}/Items/${itemId}`);
+    async getItem(itemId, params = {}) {
+        return this.get(`/Users/${this._userId}/Items/${itemId}`, params);
     }
 
     async getSimilar(itemId, params = {}) {
@@ -430,6 +430,13 @@ class ApiClient {
             UserId: this._userId,
             SeasonId: seasonId,
             Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview'
+        });
+    }
+
+    async getPeople(itemId) {
+        return this.get(`/Items/${itemId}/People`, {
+            UserId: this._userId,
+            Limit: 24
         });
     }
 

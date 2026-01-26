@@ -8,11 +8,107 @@
     <title>Litefin</title>
 </head>
 
+<style>
+    body,
+    html {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        background-color: #101010;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        font-family: sans-serif;
+        overflow: hidden;
+    }
+
+    .splash-content {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        /* Legacy: Block display for absolute child centering */
+        display: block;
+        z-index: 9999;
+        background-color: #101010;
+    }
+
+    .page-loading {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        display: none;
+        z-index: 9999;
+        background-color: #101010;
+    }
+
+    .page.loading .page-loading {
+        display: block;
+    }
+
+    .page-loading.hidden {
+        display: none !important;
+    }
+
+    .loading-spinner {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        width: 240px;
+        height: 240px;
+        /* Legacy Centering: Negative margin */
+        margin-top: -120px;
+        margin-left: -120px;
+    }
+
+    .loading-spinner::before,
+    .loading-spinner::after {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background-color: #00a4dc;
+        border-radius: 50%;
+        animation: pulse 0.5s linear infinite;
+        opacity: 0;
+    }
+
+    .loading-spinner::after {
+        animation-delay: 0.25s;
+    }
+
+    @keyframes pulse {
+        0% {
+            transform: scale(0);
+            opacity: 1;
+        }
+
+        100% {
+            transform: scale(1);
+            opacity: 0;
+        }
+    }
+</style>
+</head>
+
 <body>
     <!-- Main application container -->
     <div id="app">
         <!-- Loading screen shown before JS loads -->
-        <div class="loading-spinner"></div>
+        <div class="splash-content">
+            <div class="loading-spinner"></div>
+        </div>
     </div>
 </body>
 

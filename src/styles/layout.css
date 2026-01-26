@@ -115,18 +115,7 @@
     /* CRITICAL: Ensures offsetTop of children is relative to this scroll container */
 }
 
-.page-loading {
-    display: none;
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-}
-
-.page.loading .page-loading {
-    display: block;
-}
-
+/* Page loading styles moved to base.css */
 .page.loading .page-content>*:not(.page-loading) {
     opacity: 0.3;
 }
