@@ -61,6 +61,13 @@ class ApiClient {
     }
 
     /**
+     * Get current user ID
+     */
+    userId() {
+        return this._userId;
+    }
+
+    /**
      * Set device identification
      * Device name is sanitized to remove spaces and special characters
      * @param {string} deviceId - Unique device ID

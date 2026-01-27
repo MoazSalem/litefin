@@ -3,6 +3,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import Header from '../components/Header.js';
 
 class FavoritesPage extends Page {
     constructor() {
@@ -12,102 +13,172 @@ class FavoritesPage extends Page {
 
     render() {
         return `
-            <div class="page favorites-page">
-                <header class="page-header">
-                    <div class="header-left">
-                        <div class="header-logo">
-                            <span class="logo-text">Litefin</span>
-                        </div>
-                    </div>
-                    <nav class="header-mid">
-                        <button class="nav-text-btn home-nav-btn" tabindex="0">Home</button>
-                        <button class="nav-text-btn favorites-nav-btn active" tabindex="0">Favorites</button>
-                    </nav>
-                    <nav class="header-nav">
-                        <button class="nav-btn search-btn icon-only" aria-label="Search" tabindex="0">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="11" cy="11" r="8"></circle>
-                                <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                        </button>
-                        <button class="nav-btn user-btn icon-only" aria-label="User Profile" tabindex="0">
-                            <span class="icon">👤</span> 
-                        </button>
-                        <button class="nav-btn settings-btn icon-only" aria-label="Settings" tabindex="0">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="3"></circle>
-                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
-                            </svg>
-                        </button>
-                        <div class="header-clock"></div>
-                    </nav>
-                </header>
-                <div class="page-content">
-                    <h2 class="section-title">Your Favorites</h2>
-                    <div class="favorites-grid" id="favorites-grid">
+            <div class="page favorites-page home-page">
+                <div class="header-container"></div>
+                <main class="page-content" id="favorites-content">
+                    <div id="favorites-rows" class="home-rows">
                         <div class="loading-spinner"></div>
                     </div>
-                </div>
+                </main>
             </div>
         `;
     }
 
     async onInit() {
+        // Initialize Header
+        this.header = new Header({ props: { activeTab: 'favorites' } });
+        this.header.mount(this.$('.header-container'));
+
         this._bindNavigation();
-        this._startClock();
         await this._loadFavorites();
     }
 
     onDestroyed() {
-        if (this._clockInterval) {
-            clearInterval(this._clockInterval);
-        }
-    }
-
-    _startClock() {
-        this._updateClock();
-        const now = new Date();
-        const delay = (60 - now.getSeconds()) * 1000;
-        setTimeout(() => {
-            this._updateClock();
-            if (this._clockInterval) clearInterval(this._clockInterval);
-            this._clockInterval = setInterval(() => this._updateClock(), 60000);
-        }, delay);
-    }
-
-    _updateClock() {
-        const el = this.$('.header-clock');
-        if (el) {
-            const now = new Date();
-            let hours = now.getHours();
-            const minutes = now.getMinutes().toString().padStart(2, '0');
-            const ampm = hours >= 12 ? 'PM' : 'AM';
-            hours = hours % 12;
-            hours = hours ? hours : 12;
-            el.textContent = `${hours}:${minutes} ${ampm}`;
+        if (this.header) {
+            this.header.destroy();
         }
     }
 
     _bindNavigation() {
-        this.$('.home-nav-btn')?.addEventListener('click', () => router.navigate('/'));
-        this.$('.favorites-nav-btn')?.addEventListener('click', () => { }); // Already here
-        this.$('.search-btn')?.addEventListener('click', () => router.navigate('/search'));
-        this.$('.settings-btn')?.addEventListener('click', () => router.navigate('/settings'));
+        // Nav listeners handled by Header component now
 
         // Register focus
         this.registerFocusSection('header', this.$('.page-header'), {
-            orientation: 'horizontal',
-            leaveDown: 'favorites-grid'
+            orientation: 'horizontal'
         });
-
-        this.setActiveSection('header');
     }
 
     async _loadFavorites() {
-        // Todo: Implement fetching favorites
-        // api.getItems({ Filters: 'IsFavorite' }) ...
-        const container = this.$('#favorites-grid');
-        if (container) container.innerHTML = '<p style="padding: 20px; color: #aaa;">Favorites content coming soon...</p>';
+        try {
+            const userId = typeof api.userId === 'function' ? api.userId() : api._userId;
+            if (!userId) throw new Error('User not authenticated');
+
+            // Parallel fetch of all favorite types
+            const [movies, shows, episodes, people] = await Promise.all([
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Movie', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear' }),
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Series', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ProductionYear' }),
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Episode', SortBy: 'DateCreated', SortOrder: 'Descending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks' }),
+                api.get('/Persons', { Filters: 'IsFavorite', UserId: userId, SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio' })
+            ]);
+
+            const container = this.$('#favorites-rows');
+            if (!container) return;
+            container.innerHTML = '';
+
+            // Prepare sections data
+            const sectionsData = [];
+            if (movies.TotalRecordCount > 0) sectionsData.push({ id: 'fav-movie', title: 'Movies', items: movies.Items, type: 'movie' });
+            if (shows.TotalRecordCount > 0) sectionsData.push({ id: 'fav-series', title: 'Shows', items: shows.Items, type: 'series' });
+            if (episodes.TotalRecordCount > 0) sectionsData.push({ id: 'fav-episode', title: 'Episodes', items: episodes.Items, type: 'episode' });
+            if (people.TotalRecordCount > 0) sectionsData.push({ id: 'fav-person', title: 'People', items: people.Items, type: 'person' });
+
+            if (sectionsData.length === 0) {
+                container.innerHTML = '<div class="page-error" style="display:block; position:static; margin:40px;">No favorites found. Go add some!</div>';
+                return;
+            }
+
+            // Render and Link Sections
+            for (let i = 0; i < sectionsData.length; i++) {
+                const current = sectionsData[i];
+                const prevId = i > 0 ? sectionsData[i - 1].id : 'header';
+                const nextId = i < sectionsData.length - 1 ? sectionsData[i + 1].id : null;
+
+                this._renderSection(current.title, current.items, current.type, current.id, prevId, nextId);
+            }
+
+            // Update Header to point to first section
+            this.registerFocusSection('header', this.$('.page-header'), {
+                orientation: 'horizontal',
+                leaveDown: sectionsData[0].id
+            });
+
+            // Set initial focus to first content row
+            if (sectionsData.length > 0) {
+                this.setActiveSection(sectionsData[0].id);
+            }
+
+        } catch (e) {
+            console.error('Failed to load favorites', e);
+            const container = this.$('#favorites-rows');
+            if (container) container.innerHTML = `<div class="page-error" style="display:block; padding: 20px;">Failed to load favorites: ${e.message || e}</div>`;
+        }
+    }
+
+    _renderSection(title, items, type, sectionId, prevId, nextId) {
+        const container = this.$('#favorites-rows');
+
+        const sectionHtml = `
+             <div class="media-row" id="${sectionId}-row">
+                 <h2 class="row-title">${title}</h2>
+                 <div class="row-items" id="${sectionId}-items">
+                     ${items.map(item => this._renderCard(item, type)).join('')}
+                 </div>
+             </div>
+         `;
+
+        // Append HTML
+        const temp = document.createElement('div');
+        temp.innerHTML = sectionHtml;
+        const rowEl = temp.firstElementChild;
+        container.appendChild(rowEl);
+
+        // Register Focus
+        const itemsContainer = rowEl.querySelector('.row-items');
+
+        // Click handling
+        itemsContainer.onclick = (e) => {
+            const card = e.target.closest('.media-card');
+            if (card && card.dataset.id) {
+                if (type === 'person') {
+                    router.navigate(`/person/${card.dataset.id}`);
+                } else {
+                    router.navigate(`/details/${card.dataset.id}`);
+                }
+            }
+        };
+
+        this.registerFocusSection(sectionId, itemsContainer, {
+            orientation: 'horizontal',
+            leaveUp: prevId,
+            leaveDown: nextId
+        });
+    }
+
+    _renderCard(item, type) {
+        const isEpisode = type === 'episode';
+        const isPerson = type === 'person';
+
+        // Image options
+        const imageOpts = { maxWidth: 300 };
+        const imageUrl = api.getImageUrl(item.Id, 'Primary', imageOpts);
+
+        // Layout class
+        // Episodes: Landscape (user requested Primary Image, which for episodes is landscape thumb usually)
+        // Others: Portrait
+        let cardClass = 'media-card';
+        if (isEpisode) cardClass += ' landscape';
+
+        const title = item.Name;
+        let subtitle = '';
+
+        if (isEpisode) {
+            // "Show Title - S1:E2"
+            subtitle = item.ParentTitle || ''; // Show Name
+        } else if (item.ProductionYear && !isPerson) {
+            subtitle = item.ProductionYear;
+        }
+
+        return `
+            <button class="${cardClass}" data-id="${item.Id}" tabindex="0">
+                <div class="card-image">
+                    <img src="${imageUrl}" alt="${title}" loading="lazy" />
+                </div>
+                <div class="card-info">
+                    <div class="card-title">${title}</div>
+                    ${!isPerson ? `<div class="card-subtitle">${subtitle}</div>` : ''}
+                </div>
+            </button>
+        `;
     }
 }
 

@@ -75,6 +75,15 @@ class PersonPage extends Page {
 
                             <!-- Bio -->
                             <div class="details-overview overview-text line-clamp-6" id="person-bio"></div>
+
+                            <!-- Actions (Favorite) -->
+                            <div class="person-actions-row" id="person-fav-actions">
+                                <button class="btn btn-icon favorite-btn" id="btn-person-favorite" tabindex="0" aria-label="Favorite">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                                    </svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
 
@@ -98,9 +107,18 @@ class PersonPage extends Page {
             if (btnBack) btnBack.onclick = () => router.back();
             if (btnHome) btnHome.onclick = () => router.navigate('/home');
 
+            // Favorite Button
+            const btnFav = this.$('#btn-person-favorite');
+            if (btnFav) {
+                btnFav.onclick = () => this._toggleFavorite();
+            }
+
             // 1. Fetch Person Details
             this._person = await api.getPerson(this._personId);
+            this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
+
+            this._updateFavoriteState();
 
             this._renderPersonInfo();
 
@@ -163,6 +181,46 @@ class PersonPage extends Page {
         if (backdropUrl) {
             backdropEl.style.backgroundImage = `url('${backdropUrl}')`;
             backdropEl.style.opacity = '1'; // Fade in
+        }
+    }
+
+    async _toggleFavorite() {
+        if (!this._person) return;
+
+        try {
+            const isFavorite = this._person.UserData?.IsFavorite;
+            if (isFavorite) {
+                await api.unmarkFavorite(this._personId);
+                this._person.UserData.IsFavorite = false;
+            } else {
+                await api.markFavorite(this._personId);
+                if (!this._person.UserData) this._person.UserData = {};
+                this._person.UserData.IsFavorite = true;
+            }
+            this._updateFavoriteState();
+        } catch (e) {
+            console.error('PersonPage: Failed to toggle favorite', e);
+        }
+    }
+
+    _updateFavoriteState() {
+        const btn = this.$('#btn-person-favorite');
+        if (!btn || !this._person) return;
+
+        const isFavorite = this._person.UserData?.IsFavorite;
+        if (isFavorite) {
+            btn.classList.add('active');
+            btn.innerHTML = `
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>`;
+        } else {
+            btn.classList.remove('active');
+            btn.innerHTML = `
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
+                    </svg>`;
+
         }
     }
 
@@ -374,8 +432,18 @@ class PersonPage extends Page {
         if (headerEl) {
             this.registerFocusSection('person-actions', headerEl, {
                 orientation: 'horizontal',
-                leaveDown: `person-${firstType}-items` // Link to first grid items
+                leaveDown: 'person-fav-actions'
             });
+
+            // 1.5 Favorite Button Row
+            const favActionsEl = this.$('#person-fav-actions');
+            if (favActionsEl) {
+                this.registerFocusSection('person-fav-actions', favActionsEl, {
+                    orientation: 'horizontal',
+                    leaveUp: 'person-actions',
+                    leaveDown: `person-${firstType}-items`
+                });
+            }
         }
 
         // 2. Register Each Grid
@@ -402,7 +470,7 @@ class PersonPage extends Page {
 
             // --- Grid Zone ---
             // UP
-            let gridLeaveUp = 'person-actions';
+            let gridLeaveUp = 'person-fav-actions';
             if (prevType) {
                 // Check if previous had a "See More" that was visible
                 const prevComp = this._grids[prevType];
