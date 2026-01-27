@@ -296,3 +296,26 @@ body {
 #app {
     overflow: hidden;
 }
+
+/* ============================================================================
+   Media Card Badges
+   ============================================================================ */
+
+.count-badge {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    min-width: 40px;
+    height: 40px;
+    padding: 0 8px;
+    border-radius: 20px;
+    background-color: var(--jf-accent);
+    color: white;
+    font-size: 1.1rem;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
+    z-index: 2;
+}
