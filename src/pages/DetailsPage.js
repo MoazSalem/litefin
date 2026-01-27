@@ -69,16 +69,18 @@ class DetailsPage extends Page {
                             <!-- Actions -->
                             <section class="details-actions" id="actions">
                                 <button class="btn btn-primary play-btn" tabindex="0">
-                                    ▶ Play
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    <span>Play</span>
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="0">
-                                    ▶ Resume
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                                    <span>Resume</span>
                                 </button>
-                                <button class="btn btn-icon watched-btn" tabindex="0">
-                                    ✓
+                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="Mark as watched">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </button>
-                                <button class="btn btn-icon favorite-btn" tabindex="0">
-                                    ♡
+                                <button class="btn btn-icon favorite-btn" tabindex="0" aria-label="Add to favorites">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
                                 </button>
                             </section>
 
@@ -573,12 +575,12 @@ class DetailsPage extends Page {
         if (userData.PlaybackPositionTicks > 0) {
             this.$('.resume-btn')?.classList.remove('hidden');
             const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-            this.$('.resume-btn').textContent = `▶ Resume (${resumeTime}m)`;
+            this.$('.resume-btn').innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
         }
 
         // Favorite button
         if (userData.IsFavorite) {
-            this.$('.favorite-btn').textContent = '♥';
+            this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
             this.$('.favorite-btn').classList.add('active');
         }
 
@@ -1045,11 +1047,11 @@ class DetailsPage extends Page {
         try {
             if (isFavorite) {
                 await api.unmarkFavorite(this._itemId);
-                this.$('.favorite-btn').textContent = '♡';
+                this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
                 this.$('.favorite-btn').classList.remove('active');
             } else {
                 await api.markFavorite(this._itemId);
-                this.$('.favorite-btn').textContent = '♥';
+                this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
                 this.$('.favorite-btn').classList.add('active');
             }
 

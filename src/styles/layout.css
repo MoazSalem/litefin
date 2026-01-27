@@ -105,6 +105,16 @@
     margin-right: 12px;
 }
 
+.header-clock {
+    display: flex;
+    align-items: center;
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    margin-left: 8px;
+    white-space: nowrap;
+}
+
 .page-content {
     flex: 1;
     height: auto;
@@ -113,9 +123,34 @@
     padding: 20px 40px;
     position: relative;
     /* CRITICAL: Ensures offsetTop of children is relative to this scroll container */
+    scroll-behavior: smooth;
+    /* Global smooth scrolling */
 }
 
 /* Page loading styles moved to base.css */
 .page.loading .page-content>*:not(.page-loading) {
     opacity: 0.3;
+}
+
+/* Global Horizontal Scroll Row (Moved from home.css) */
+.row-items {
+    display: flex;
+    overflow-x: auto;
+    padding: 16px 0 16px 60px;
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+    will-change: scroll-position;
+
+    /* Ensure no native smooth scroll interfering with our adaptive JS logic */
+    scroll-behavior: auto;
+}
+
+.row-items::after {
+    content: '';
+    flex-shrink: 0;
+    width: 60px;
+    height: 1px;
 }

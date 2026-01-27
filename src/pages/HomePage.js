@@ -64,6 +64,7 @@ class HomePage extends Page {
                                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
                             </svg>
                         </button>
+                        <div class="header-clock"></div>
                     </nav>
                 </header>
                 
@@ -93,12 +94,73 @@ class HomePage extends Page {
 
         // Setup navigation
         this._bindNavigation();
+        this._startClock();
 
         // Setup focus
         this._setupFocus();
 
         // Load content
         await this._loadContent();
+    }
+
+    onDestroyed() {
+        if (this._clockInterval) {
+            clearInterval(this._clockInterval);
+        }
+    }
+
+    _startClock() {
+        this._updateClock();
+        const now = new Date();
+        const delay = (60 - now.getSeconds()) * 1000;
+        setTimeout(() => {
+            this._updateClock();
+            if (this._clockInterval) clearInterval(this._clockInterval);
+            this._clockInterval = setInterval(() => this._updateClock(), 60000);
+        }, delay);
+    }
+
+    _updateClock() {
+        const el = this.$('.header-clock');
+        if (el) {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            el.textContent = `${hours}:${minutes} ${ampm}`;
+        }
+    }
+
+    onDestroyed() {
+        if (this._clockInterval) {
+            clearInterval(this._clockInterval);
+        }
+    }
+
+    _startClock() {
+        this._updateClock();
+        const now = new Date();
+        const delay = (60 - now.getSeconds()) * 1000;
+        setTimeout(() => {
+            this._updateClock();
+            if (this._clockInterval) clearInterval(this._clockInterval);
+            this._clockInterval = setInterval(() => this._updateClock(), 60000);
+        }, delay);
+    }
+
+    _updateClock() {
+        const el = this.$('.header-clock');
+        if (el) {
+            const now = new Date();
+            let hours = now.getHours();
+            const minutes = now.getMinutes().toString().padStart(2, '0');
+            const ampm = hours >= 12 ? 'PM' : 'AM';
+            hours = hours % 12;
+            hours = hours ? hours : 12;
+            el.textContent = `${hours}:${minutes} ${ampm}`;
+        }
     }
 
     _bindNavigation() {
@@ -297,6 +359,9 @@ class HomePage extends Page {
         container.addEventListener('click', (e) => {
             const card = e.target.closest('.media-card');
             if (card?.dataset?.itemId) {
+                // Save clicked item for focus restoration on back navigation
+                state.set('home:lastFocusedItemId', card.dataset.itemId);
+
                 const type = card.dataset.contextType;
                 if (type === 'library') {
                     router.navigate(`/library/${card.dataset.itemId}`);
@@ -325,16 +390,40 @@ class HomePage extends Page {
                 // Invalidate cache for strict safety
                 rowsData.forEach((_, i) => focusManager.invalidateCache(`home-row-${i}`));
 
-                this.setActiveSection('home-row-0');
+                // Check for saved focus to restore (from back navigation)
+                const lastFocusedId = state.get('home:lastFocusedItemId');
+                let restoredFocus = false;
 
-                // Fallback: If no element focused, try focusing first card manually
-                if (!focusManager.getFocused()) {
-                    const firstCard = container.querySelector('[data-row-index="0"] .media-card');
-                    if (firstCard) {
-                        focusManager.focusElement(firstCard);
-                    } else {
-                        // Worst case: back to header
-                        this.setActiveSection('home-header');
+                if (lastFocusedId) {
+                    // Find the card with that item ID
+                    const savedCard = container.querySelector(`.media-card[data-item-id="${lastFocusedId}"]`);
+                    if (savedCard) {
+                        // Find which row it's in and set that section active
+                        const row = savedCard.closest('.media-row');
+                        if (row) {
+                            const rowIndex = row.dataset.rowIndex;
+                            this.setActiveSection(`home-row-${rowIndex}`);
+                            focusManager.focusElement(savedCard);
+                            restoredFocus = true;
+                        }
+                    }
+                    // Clear the saved state after use
+                    state.delete('home:lastFocusedItemId');
+                }
+
+                // Default: focus first row if no restoration happened
+                if (!restoredFocus) {
+                    this.setActiveSection('home-row-0');
+
+                    // Fallback: If no element focused, try focusing first card manually
+                    if (!focusManager.getFocused()) {
+                        const firstCard = container.querySelector('[data-row-index="0"] .media-card');
+                        if (firstCard) {
+                            focusManager.focusElement(firstCard);
+                        } else {
+                            // Worst case: back to header
+                            this.setActiveSection('home-header');
+                        }
                     }
                 }
             });

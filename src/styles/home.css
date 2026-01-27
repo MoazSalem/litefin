@@ -29,25 +29,6 @@
     color: var(--jf-text-primary);
 }
 
-.row-items {
-    display: flex;
-    overflow-x: auto;
-    padding: 16px 0 16px 60px;
-    -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    will-change: scroll-position;
-}
-
-.row-items::after {
-    content: '';
-    flex-shrink: 0;
-    width: 60px;
-    height: 1px;
-}
-
 .media-card {
     flex-shrink: 0;
     width: 240px;

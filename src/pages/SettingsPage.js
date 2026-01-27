@@ -537,10 +537,9 @@ class SettingsPage extends Page {
     }
 
     onBack() {
-        // If in content, go back to sidebar?
-        // Or just go back to previous page?
-        // Standard TV UX: Left goes to sidebar. Back goes to Home.
+        // Standard TV UX: Back button goes to previous page
         router.back();
+        return true; // Signal that we handled the back event
     }
 
     _renderUserAvatar(user) {

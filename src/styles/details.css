@@ -64,8 +64,7 @@
     flex: 1;
     overflow-y: auto;
     /* THIS IS THE SCROLLER */
-    scroll-behavior: auto;
-    /* Disable smooth scroll for instant focus snapping */
+
     outline: none;
     /* remove focus outline if focused programmatically */
 }
@@ -73,6 +72,8 @@
 /* Main Split Layout */
 .details-main-split {
     display: flex;
+    align-items: flex-start;
+    /* Prevent poster stretching */
     margin-bottom: 40px;
     padding: 60px 60px 0 60px;
     padding-top: 5%;
@@ -84,8 +85,8 @@
     /* Enforce 2:3 aspect ratio */
     flex-shrink: 0;
     margin-right: 60px;
-    background-color: rgba(255, 255, 255, 0.05);
-    /* Placeholder */
+    background-color: transparent;
+    /* Removed placeholder bg as requested */
     border-radius: var(--jf-border-radius);
     position: relative;
     /* For potential spinner if needed */
@@ -301,12 +302,21 @@
     outline: none;
 }
 
+/* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */
+.play-btn svg,
+.resume-btn svg {
+    margin-right: 12px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
 /* Icon Buttons (Heart/Check) */
 .btn-icon {
     width: 72px;
     height: 72px;
     padding: 0;
-    font-size: 2rem;
+    /* font-size: 2rem; Removed as we use SVGs now */
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.1);
     /* Consistent with other buttons */
@@ -316,6 +326,17 @@
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(10px);
+}
+
+.btn-icon svg {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    /* Tizen fix: Ensure min-size */
+    min-height: 28px;
+    flex-shrink: 0;
+    /* Tizen fix: Prevent flex shrinking */
+    stroke-width: 2.5;
 }
 
 .btn-icon.active {
@@ -481,6 +502,11 @@
     color: white;
     outline: none;
     transform: scale(1.05);
+}
+
+/* Smooth focus for cast/similar items (matches Home scaling) */
+.media-card {
+    transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 /* Seasons & Similar */

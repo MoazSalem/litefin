@@ -251,6 +251,8 @@ class FocusManager {
         // 2. If we found a target, move to it
         if (nextElement) {
             this.focusElement(nextElement);
+            // Track timing AFTER focus for next rapid-scroll detection
+            this._lastMoveTime = Date.now();
             return;
         }
 
@@ -484,19 +486,52 @@ class FocusManager {
                 const padding = 100; // Top buffer (larger for title visibility)
                 pageContent.scrollTop = Math.max(0, rowTop - padding);
             }
-        } else if (options.scroll) {
+        }
+        else if (options.scroll) {
             // For horizontal navigation within row
             const rowItems = element.closest('.row-items');
             if (rowItems) {
-                // SAMSUNG: Batch all reads first
+                // FIRST: Scroll the row into view vertically (if needed)
+                const row = element.closest('.media-row');
+                if (row && pageContent) {
+                    const rowTop = row.offsetTop;
+                    const rowHeight = row.offsetHeight;
+                    const rowBottom = rowTop + rowHeight;
+                    const viewHeight = pageContent.clientHeight;
+                    const currentScroll = pageContent.scrollTop;
+                    const viewBottom = currentScroll + viewHeight;
+
+                    // Check if row is outside viewport
+                    if (rowTop < currentScroll + 50 || rowBottom > viewBottom - 50) {
+                        // Scroll to center the row vertically
+                        const targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
+                        pageContent.scrollTop = Math.max(0, targetScroll);
+                    }
+                }
+
+                // THEN: Scroll horizontally to center the card
                 const elementLeft = element.offsetLeft;
                 const elementWidth = element.offsetWidth;
                 const containerWidth = rowItems.clientWidth;
 
-                // Then write
                 const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
-                rowItems.scrollLeft = Math.max(0, targetScroll);
-            } else {
+                const finalScrollLeft = Math.max(0, targetScroll);
+
+                // RAPID NAVIGATION CHECK:
+                // If user is holding button or clicking fast (<300ms), use instant scroll
+                // Otherwise use smooth scroll for premium feel
+                const isRapid = (Date.now() - this._lastMoveTime) < 300;
+                const behavior = isRapid ? 'auto' : 'smooth';
+
+                try {
+                    rowItems.scrollTo({
+                        left: finalScrollLeft,
+                        behavior: behavior
+                    });
+                } catch (e) {
+                    rowItems.scrollLeft = finalScrollLeft;
+                }
+            } else if (pageContent) {
                 // Generic Vertical Scroll (for Grids/Lists or Tall Rows)
                 // Fix: Calculate offset relative to pageContent (accumulate up the chain)
                 let currentEl = element;
@@ -507,27 +542,41 @@ class FocusManager {
                 }
 
                 const elementHeight = element.offsetHeight;
-                const viewHeight = pageContent.clientHeight;
-                const currentScroll = pageContent.scrollTop;
+                const viewHeight = pageContent.clientHeight; // Redeclaration safe if scope correct
+                const currentScroll = pageContent.scrollTop; // Redeclaration safe if scope correct
 
                 // Margins for visibility comfort
                 const topMargin = 60; // Reduced from 100 to allow fitting more
                 const bottomMargin = 60; // Reduced from 100 to help footer buttons
 
-                console.log(`[FocusManager] Scroll Calc: ElTop=${elementTop}, Scroll=${currentScroll}, View=${viewHeight}`);
+                let finalScrollTop = currentScroll;
 
                 // Simple "Scroll Into View" logic
-                // If element is above view
                 if (elementTop < currentScroll + topMargin) {
-                    pageContent.scrollTop = Math.max(0, elementTop - topMargin);
+                    finalScrollTop = Math.max(0, elementTop - topMargin);
                 }
-                // If element is below view
                 else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    // Try to center small elements (like buttons)
                     if (elementHeight < viewHeight / 4) {
-                        pageContent.scrollTop = elementTop - (viewHeight / 2) + (elementHeight / 2);
+                        finalScrollTop = elementTop - (viewHeight / 2) + (elementHeight / 2);
                     } else {
-                        pageContent.scrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
+                        finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
+                    }
+                }
+
+                // Apply Vertical Scroll
+                if (finalScrollTop !== currentScroll) {
+                    // Check Tizen version/Capabilities if needed, but standard try/catch works
+                    try {
+                        const isRapid = (Date.now() - this._lastMoveTime) < 300;
+                        const behavior = isRapid ? 'auto' : 'smooth';
+
+                        pageContent.scrollTo({
+                            top: finalScrollTop,
+                            behavior: behavior
+                        });
+                    } catch (e) {
+                        // Fallback for older browsers
+                        pageContent.scrollTop = finalScrollTop;
                     }
                 }
             }

@@ -193,8 +193,10 @@ class Page extends Component {
         else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             if (item.Type === 'Episode') {
-                // Episodes: Series Thumb -> Parent Thumb -> Backdrop -> Series ID
-                if (item.SeriesThumbImageTag && item.SeriesId) {
+                // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
+                if (item.ImageTags && item.ImageTags.Primary) {
+                    imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+                } else if (item.SeriesThumbImageTag && item.SeriesId) {
                     imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
                 } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
                     imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
@@ -202,8 +204,6 @@ class Page extends Component {
                     imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: 400 });
                 } else if (item.SeriesId) {
                     imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: 400 });
-                } else if (item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
                 }
             } else {
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
