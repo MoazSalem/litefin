@@ -123,12 +123,12 @@ body {
     height: 100%;
     background-color: var(--jf-accent);
     border-radius: 50%;
-    animation: pulse 0.5s linear infinite;
+    animation: pulse 1.0s linear infinite;
     opacity: 0;
 }
 
 .loading-spinner::after {
-    animation-delay: 0.25s;
+    animation-delay: 0.5s;
 }
 
 @keyframes pulse {

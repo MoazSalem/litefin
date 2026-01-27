@@ -141,6 +141,13 @@ class ApiClient {
         const url = this.buildUrl(endpoint);
         const method = options.method || 'GET';
 
+        // DEBUG: Store last requested URL
+        this.lastUrl = url;
+        // Note: URL doesn't include params if they were passed within options, 
+        // but 'get' helper appends them to 'endpoint' string passed here.
+        // So 'url' here is the FULL URL with query string.
+
+
         // Build headers
         const headers = {
             'X-Emby-Authorization': this.getAuthHeader(),
@@ -437,6 +444,36 @@ class ApiClient {
         return this.get(`/Items/${itemId}/People`, {
             UserId: this._userId,
             Limit: 24
+        });
+    }
+
+    async getPerson(personId) {
+        return this.getItem(personId);
+    }
+
+    async getPersonItems(personId) {
+        // Fetch items for this person - Movies, Series, Episodes only
+        // High limit to capture full filmography (some people have many appearances)
+        // Note: People field loaded separately via getPersonItemsWithRoles for performance
+        return this.get(`/Users/${this._userId}/Items`, {
+            PersonIds: personId,
+            IncludeItemTypes: 'Movie,Series,Episode',
+            Recursive: true,
+            Limit: 500,
+            Fields: 'PrimaryImageAspectRatio,ProductionYear,ParentIndexNumber,IndexNumber,SeriesName',
+            SortBy: 'PremiereDate',
+            SortOrder: 'Descending'
+        });
+    }
+
+    // Separate call to get items with People field (for character roles)
+    async getPersonItemsWithRoles(personId) {
+        return this.get(`/Users/${this._userId}/Items`, {
+            PersonIds: personId,
+            IncludeItemTypes: 'Movie,Series',
+            Recursive: true,
+            Limit: 200,
+            Fields: 'People'
         });
     }
 

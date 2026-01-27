@@ -5,7 +5,11 @@
  */
 
 .details-page {
-    overflow-y: auto;
+    overflow: hidden;
+    /* Main container fixed */
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
 }
 
 .person-fallback {
@@ -51,10 +55,19 @@
             var(--jf-background) 100%);
 }
 
-.details-content {
-    /* position: relative; REMOVED to fix scroll offset calculation */
-    /* PADDING REFAC: Moved to children to align with global rows */
+/* Details Content Scroller */
+.details-content,
+.person-page .page-content {
+    /* CRITICAL: Position Relative required for offsetParent calculations in FocusManager */
+    position: relative;
     padding: 0;
+    flex: 1;
+    overflow-y: auto;
+    /* THIS IS THE SCROLLER */
+    scroll-behavior: auto;
+    /* Disable smooth scroll for instant focus snapping */
+    outline: none;
+    /* remove focus outline if focused programmatically */
 }
 
 /* Main Split Layout */
@@ -437,22 +450,37 @@
    But if I want "pill" style for tags specifically?
    User image shows everything as text lists. I will stick to that for elegance.
 */
+
+/* See More Button Container */
+.see-more-container {
+    text-align: center;
+    padding: 20px 60px 60px 60px;
+}
+
 .see-more-btn {
-    background: transparent;
-    border: none;
-    color: var(--jf-accent);
-    font-size: 1.4rem;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 25px;
+    color: var(--jf-text-primary);
+    font-size: 1.3rem;
     font-weight: 600;
-    padding: 8px 0;
+    padding: 12px 32px;
     cursor: pointer;
-    display: none;
-    /* Hidden by default */
+    display: inline-block;
+    transition: all 0.2s ease;
+}
+
+.see-more-btn:hover {
+    background: rgba(255, 255, 255, 0.15);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 .see-more-btn:focus {
+    background: var(--jf-accent);
+    border-color: var(--jf-accent);
     color: white;
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
     outline: none;
+    transform: scale(1.05);
 }
 
 /* Seasons & Similar */
@@ -463,23 +491,25 @@
 
 /* Episodes */
 .episodes-list {
-    display: flex;
-    flex-direction: column;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+    gap: 30px;
+    padding-bottom: 40px;
 }
 
 .episode-card {
     display: flex;
-    margin-bottom: 20px;
-    /* Increased spacing */
+    flex-direction: column;
     background: var(--jf-card-bg);
     border: none;
     border-radius: var(--jf-border-radius);
-    padding: 20px;
-    /* Larger padding */
+    padding: 0;
+    /* Remove padding to let image flush */
     cursor: pointer;
     text-align: left;
-    align-items: flex-start;
-    transition: background 0.2s;
+    overflow: hidden;
+    /* Clip image corners */
+    transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
 }
 
 .episode-card:last-child {
@@ -487,52 +517,122 @@
 }
 
 .episode-card:focus {
+    transform: scale(1.05);
     background: var(--jf-card-bg-hover);
+    box-shadow: var(--jf-shadow-lg);
     outline: 4px solid var(--jf-accent);
-    /* Clearer focus indication */
+    z-index: 10;
 }
 
 .episode-thumb {
-    width: 360px;
-    /* Increased from 200px */
+    width: 100%;
+    aspect-ratio: 16/9;
     flex-shrink: 0;
-    border-radius: var(--jf-border-radius);
+    margin-right: 0;
+    /* Reset from previous row layout */
+    border-radius: 0;
+    /* Flush with card */
     overflow: hidden;
     position: relative;
-    margin-right: 30px;
-    /* Increased spacing */
 }
 
 .episode-thumb img {
     width: 100%;
-    aspect-ratio: 16/9;
+    height: 100%;
     object-fit: cover;
 }
 
 .episode-info {
     flex: 1;
-    padding-top: 10px;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
 }
 
 .episode-number {
     color: var(--jf-accent);
     font-weight: 600;
-    font-size: 1.4rem;
-    /* Larger */
-    margin-right: 12px;
+    font-size: 1.2rem;
+    margin-bottom: 4px;
+    margin-right: 0;
 }
 
 .episode-title {
     color: var(--jf-text-primary);
-    font-weight: 500;
+    font-weight: 600;
     font-size: 1.4rem;
-    /* Larger */
+    margin-bottom: 8px;
+    line-height: 1.3;
 }
 
 .episode-overview {
+    font-size: 1.1rem;
     color: var(--jf-text-secondary);
-    font-size: 1.2rem;
-    /* Larger */
-    margin-top: 12px;
-    line-height: 1.5;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin: 0;
+}
+
+
+/* Person Page Header */
+
+/* Nav Header (Shared) */
+.nav-header {
+    display: flex;
+    align-items: center;
+    padding: 30px 60px 0 60px;
+    margin-bottom: 0;
+}
+
+.nav-header .btn-icon {
+    width: 60px;
+    height: 60px;
+    margin-right: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    /* Subtle */
+    border: 2px solid transparent;
+}
+
+.nav-header .btn-icon:focus {
+    background: var(--jf-accent);
+    color: white;
+    border-color: white;
+    transform: scale(1.1);
+}
+
+.nav-header .btn-icon svg {
+    display: block;
+}
+
+/* Person Page Grids */
+.person-grid {
+    display: grid;
+    /* Auto-FILL: Prevents single items from becoming huge (adds empty cols) */
+    /* Min-Width 260px: Ensures cards act "bigger" as requested, while filling width */
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 24px;
+    padding: 40px 60px 60px 60px;
+    width: 100%;
+    margin: 0;
+    box-sizing: border-box;
+}
+
+/* Ensure grid items don't stretch weirdly */
+.person-grid .media-card {
+    /* Allow card to fill the grid cell */
+    width: 100% !important;
+    margin: 0 !important;
+    /* Gap determines spacing */
+    flex: none !important;
+    max-width: unset !important;
+    min-width: 0 !important;
+    /* Allow shrinking if needed */
+}
+
+/* Landscape Grid (Episodes on Person Page) */
+.person-grid.landscape-grid {
+    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
 }

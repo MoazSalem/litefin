@@ -177,7 +177,20 @@ class Page extends Component {
                     </div>
                 `;
             }
-        } else if (isLandscape) {
+        }
+        else if (type === 'episode-primary') {
+            // Force Episode Primary Image (for Person Page grid)
+            if (item.ImageTags?.Primary) {
+                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+            } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+                // Fallback to season thumb
+                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
+            } else if (item.SeriesThumbImageTag && item.SeriesId) {
+                // Fallback to series thumb
+                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
+            }
+        }
+        else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             if (item.Type === 'Episode') {
                 // Episodes: Series Thumb -> Parent Thumb -> Backdrop -> Series ID

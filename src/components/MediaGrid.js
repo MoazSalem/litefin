@@ -1,0 +1,252 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - MediaGrid Component
+ * ============================================================================
+ * Reusable grid component for displaying media items (Movies, Shows, Episodes).
+ * Handles rendering, "See More" expansion, and basic focus rendering support.
+ * ============================================================================
+ */
+
+import Component from '../core/Component.js';
+import { api } from '../api/index.js';
+import { focusManager } from '../ui/FocusManager.js';
+import { router } from '../core/Router.js';
+
+class MediaGrid extends Component {
+    constructor(config = {}) {
+        super(config);
+
+        this.id = config.id || `grid-${Math.random().toString(36).substr(2, 9)}`;
+        this.title = config.title || '';
+        this.items = config.items || [];
+        this.limit = config.limit || 12;
+        this.type = config.type || 'poster'; // 'poster', 'episode', 'episode-primary'
+        this.isLandscape = config.isLandscape || false;
+
+        // State
+        this.expanded = false;
+
+        // Callbacks
+        this.onSeeMore = config.onSeeMore || null; // Optional override
+    }
+
+    render() {
+        // If no items, return empty or hidden
+        if (!this.items || this.items.length === 0) {
+            return `<div id="${this.id}" class="media-row hidden"></div>`;
+        }
+
+        const gridId = `${this.id}-items`;
+        const btnId = `${this.id}-btn`;
+
+        // landscape-grid class?
+        const gridClass = this.isLandscape ? 'person-grid landscape-grid' : 'person-grid';
+
+        return `
+            <div id="${this.id}" class="media-row">
+                ${this.title ? `<h2 class="row-title">${this.title}</h2>` : ''}
+                <div class="${gridClass}" id="${gridId}">
+                    ${this._renderItems()}
+                </div>
+                
+                <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'block' : 'none'}">
+                    <button class="btn see-more-btn" id="${btnId}" tabindex="0">
+                        ${this.expanded ? 'See Less' : 'See More'}
+                    </button>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Re-render logic after mount/update
+     */
+    onMounted() {
+        // console.log(`MediaGrid (${this.title}): Mounted with ${this.items.length} items.`);
+        const btn = document.getElementById(`${this.id}-btn`);
+        if (btn) {
+            btn.onclick = () => this.toggleExpand();
+            // CRITICAL: Add keyboard handler for "Enter" key (TV Remote/Keyboard)
+            btn.onkeydown = (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.toggleExpand();
+                }
+            };
+        }
+
+        this._updateButtonVisibility();
+        this._bindItemClicks();
+    }
+
+    /**
+     * Render the grid items strings
+     */
+    _renderItems() {
+        const displayItems = (this._shouldShowButton() && !this.expanded)
+            ? this.items.slice(0, this.limit)
+            : this.items;
+
+        return displayItems.map(item => this._createCardHtml(item)).join('');
+    }
+
+    /**
+     * Toggle "See More" state
+     */
+    toggleExpand() {
+        this.expanded = !this.expanded;
+
+        // Re-render items container content ONLY to avoid destroying the parent (and focus)
+        const grid = document.getElementById(`${this.id}-items`);
+        if (grid) {
+            grid.innerHTML = this._renderItems();
+            this._bindItemClicks();
+        }
+
+        // Update button text
+        const btn = document.getElementById(`${this.id}-btn`);
+        if (btn) {
+            btn.textContent = this.expanded ? 'See Less' : 'See More';
+        }
+
+        // Parent notification (optional) - allows PersonPage to re-register focus sections
+        if (this.onSeeMore) this.onSeeMore(this.expanded);
+
+        // Invalidate focus cache for the grid items section
+        focusManager.invalidateCache(`${this.id}-items`);
+
+        // Refocus button and scroll it into view after DOM update
+        setTimeout(() => {
+            if (btn) {
+                btn.focus();
+                // Scroll the button into view so it's visible after content expansion
+                btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 150);
+    }
+
+    _shouldShowButton() {
+        return this.items.length > this.limit;
+    }
+
+    _updateButtonVisibility() {
+        const btnContainer = document.getElementById(`${this.id}-btn-zone`);
+        if (btnContainer) {
+            if (this._shouldShowButton()) {
+                btnContainer.style.setProperty('display', 'flex', 'important');
+                // Also ensure inner button is visible
+                const btn = btnContainer.querySelector('.see-more-btn');
+                if (btn) btn.style.setProperty('display', 'inline-block', 'important');
+            } else {
+                btnContainer.style.display = 'none';
+            }
+        }
+    }
+
+    _bindItemClicks() {
+        const grid = document.getElementById(`${this.id}-items`);
+        if (!grid) return;
+
+        grid.querySelectorAll('.media-card').forEach(card => {
+            card.onclick = () => {
+                router.navigate(`/details/${card.dataset.itemId}`);
+            };
+        });
+    }
+
+    /**
+     * Helper to render card HTML (Copied/Adapted from Page.js)
+     *Ideally this logic should be in a separate MediaCard component or helper, 
+     * but for now we duplicate the logic to keep this component meaningful self-contained 
+     * or accept a render callback.
+     * 
+     * To properly "Extract", I should probably move the `_renderMediaCard` logic from Page.js 
+     * to a shared utility or keep using Page.js if this component is used inside a page.
+     * 
+     * BUT: Since this is a standalone component, it doesn't extend Page.js.
+     * I will create a static helper in a new file `src/utils/CardRenderer.js` OR 
+     * just implment it here. Implementing here for now to match `Page.js` exactly.
+     */
+    _createCardHtml(item) {
+        // Reuse logic from Page.js structure, adapted for local scope
+        // We can import `api`
+
+        let imageUrl = '';
+        let imageInnerHtml = '';
+        const isLandscape = this.isLandscape;
+        const type = this.type;
+
+        // --- Image Resolution ---
+        if (type === 'episode-primary') {
+            if (item.ImageTags?.Primary) {
+                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+            } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
+                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
+            } else if (item.SeriesThumbImageTag && item.SeriesId) {
+                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
+            }
+        } else if (isLandscape) {
+            if (item.ImageTags && item.ImageTags.Thumb) {
+                imageUrl = api.getImageUrl(item.Id, 'Thumb', { maxWidth: 400, tag: item.ImageTags.Thumb });
+            } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                imageUrl = api.getImageUrl(item.Id, 'Backdrop', { maxWidth: 400 });
+            } else {
+                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+            }
+        } else {
+            // Portrait
+            imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+        }
+
+        // --- Overlays ---
+        let progressHtml = '';
+        if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
+            const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
+            progressHtml = `<div class="progress-bar" style="background: linear-gradient(to right, var(--jf-accent) ${progress}%, rgba(0,0,0,0.6) ${progress}%);"></div>`;
+        }
+
+        let badgeHtml = '';
+        if (item.UserData && item.UserData.UnplayedItemCount > 0) {
+            badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
+        }
+
+        // --- Text ---
+        let titleText = item.Name;
+        let subtitleText = '';
+
+        if (item.Type === 'Episode') {
+            if (isLandscape) {
+                titleText = item.SeriesName || item.Name;
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`;
+            } else {
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber}`;
+            }
+        } else {
+            // Movies/Shows - show year and role if available
+            let parts = [];
+            if (item.ProductionYear) parts.push(item.ProductionYear);
+            if (item._roleName) parts.push(`as ${item._roleName}`);
+            subtitleText = parts.join(' · ');
+        }
+
+        const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
+        const imagePart = imageUrl ? `<img src="${imageUrl}" alt="${item.Name}" loading="lazy" />` : imageInnerHtml;
+
+        return `
+            <button class="${cssClass}" data-item-id="${item.Id}" tabindex="0">
+                <div class="card-image">
+                    ${imagePart}
+                    ${progressHtml}
+                    ${badgeHtml}
+                </div>
+                <div class="card-info">
+                    <div class="card-title">${titleText}</div>
+                    ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                </div>
+            </button>
+        `;
+    }
+}
+
+export default MediaGrid;

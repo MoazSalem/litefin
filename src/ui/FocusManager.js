@@ -47,7 +47,7 @@ class FocusManager {
         this._pageContent = null;
 
         // Bound methods
-        this._onKeyDown = this._onKeyDown.bind(this);
+        // this._onKeyDown = this._onKeyDown.bind(this);
 
         // Initialize
         this._init();
@@ -59,15 +59,20 @@ class FocusManager {
      */
     _init() {
         // Listen for key events from TizenAdapter
-        eventBus.on('key:up', () => this._handleKey('up'));
-        eventBus.on('key:down', () => this._handleKey('down'));
-        eventBus.on('key:left', () => this._handleKey('left'));
-        eventBus.on('key:right', () => this._handleKey('right'));
-        // We handle Enter via native click, but listen just in case
-        eventBus.on('key:enter', () => this._activate());
+        // PREVENT DEFAULT on all handled keys to avoid browser/native double-handling
+        eventBus.on('key:up', (e) => { e?.preventDefault(); this._handleKey('up'); });
+        eventBus.on('key:down', (e) => { e?.preventDefault(); this._handleKey('down'); });
+        eventBus.on('key:left', (e) => { e?.preventDefault(); this._handleKey('left'); });
+        eventBus.on('key:right', (e) => { e?.preventDefault(); this._handleKey('right'); });
 
-        // Listen for native keydown (fallback & web testing)
-        document.addEventListener('keydown', this._onKeyDown);
+        eventBus.on('key:enter', (e) => {
+            e?.preventDefault(); // Prevent native button click (we trigger it manually)
+            this._activate();
+        });
+
+        // REMOVED: Direct document keydown listener
+        // We now rely solely on TizenAdapter -> EventBus to be the Single Source of Truth.
+        // This fixes double-handling issues.
 
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
@@ -77,30 +82,10 @@ class FocusManager {
             }
         });
 
-        console.log('FocusManager: Initialized (v2 Rewrite)');
+        console.log('FocusManager: Initialized (v3 Single Source Rewrite)');
     }
 
-    /**
-     * Handle keydown events
-     * @private
-     */
-    _onKeyDown(e) {
-        let dir = null;
-        switch (e.keyCode) {
-            case 38: dir = 'up'; break;
-            case 40: dir = 'down'; break;
-            case 37: dir = 'left'; break;
-            case 39: dir = 'right'; break;
-            case 13:
-                this._activate();
-                return;
-        }
-
-        if (dir) {
-            e.preventDefault();
-            this._handleKey(dir);
-        }
-    }
+    // REMOVED: _onKeyDown (Redundant)
 
     /**
      * Handle directional key press
@@ -164,8 +149,9 @@ class FocusManager {
      * Set the active section and focus inside it
      * @param {string} name 
      * @param {boolean} restoreFocus 
+     * @param {HTMLElement} [fromElement] - Element user is coming FROM (for spatial entry)
      */
-    setActiveSection(name, restoreFocus = true) {
+    setActiveSection(name, restoreFocus = true, fromElement = null) {
         if (!this._sections.has(name)) {
             console.warn(`FocusManager: Unknown section "${name}"`);
             return;
@@ -175,7 +161,7 @@ class FocusManager {
         eventBus.emit('focus:sectionChanged', name);
 
         if (restoreFocus) {
-            this._restoreFocus(name);
+            this._restoreFocus(name, fromElement);
         }
     }
 
@@ -223,6 +209,8 @@ class FocusManager {
     _move(direction) {
         if (!this._activeSection) return;
 
+        console.log(`[FocusManager] _move(${direction}) Active: ${this._activeSection}`); // DEBUG LOG
+
         const config = this._sections.get(this._activeSection);
         if (!config) return;
 
@@ -238,11 +226,7 @@ class FocusManager {
         const currentIndex = focusables.indexOf(this._focusedElement);
         let nextElement = null;
 
-        // 1. Check Forced Leave (e.g. leaveUp: 'other-section')
-        // We only do this if we are at the edge, OR if it's not a grid/spatial navigation
-        // Actually, let's keep it simple: Try to move internally first. If fail, then leave.
-
-        // Handling strict orientations
+        // 1. Handling strict orientations
         if (config.orientation === 'horizontal') {
             if (direction === 'left') {
                 if (currentIndex > 0) nextElement = focusables[currentIndex - 1];
@@ -259,7 +243,9 @@ class FocusManager {
         }
         else {
             // 'grid' or default - Use Spatial Navigation
+            console.log(`[FocusManager] Spatial Move: ${direction} from`, this._focusedElement);
             nextElement = this._findSpatialNext(this._focusedElement, focusables, direction);
+            console.log(`[FocusManager] Spatial Result:`, nextElement);
         }
 
         // 2. If we found a target, move to it
@@ -268,13 +254,15 @@ class FocusManager {
             return;
         }
 
+        console.log(`[FocusManager] No valid target in section. Leaving section: ${direction}`);
+
         // 3. If no target found inside, try to leave section
         this._leaveSection(direction);
     }
 
     /**
      * Spatial Navigation: Find best candidate in direction
-     * Uses "Cone" + "Projected Distance" logic
+     * User for ARROW KEY navigation within a grid.
      */
     _findSpatialNext(current, candidates, direction) {
         const rect1 = current.getBoundingClientRect();
@@ -306,7 +294,6 @@ class FocusManager {
             let distCross = 0; // perpendicular to direction
 
             if (direction === 'right') {
-                // Must be roughly to the right
                 if (dx > 0) {
                     isValid = true;
                     distMain = dx;
@@ -334,38 +321,19 @@ class FocusManager {
 
             if (!isValid) continue;
 
-            // 2. Cone Check
-            // Verify candidate is within a reasonable angle (e.g., 45 degrees)
-            // If cross distance > main distance, it's > 45 degrees.
-            // We relax this slightly for close elements to allow reaching diagonal neighbors if necessary,
-            // but strict grid navigation usually prefers < 45 deg.
-
-            // However, to fix "skipping", we want to favor elements that are "in line".
-            // i.e., distCross should be small.
-
-            // Scoring Function:
-            // Score = distMain + (distCross * WEIGHT)
-            // Weight > 1 penalizes off-axis elements.
-            // Weight ~ 2-3 is usually good.
-
-            // Additional: Overlap Bonus
-            // If the element overlaps on the cross-axis, it's definitely the intended target.
-            // e.g. moving Right, and the next element has Y-overlap -> huge bonus.
-
+            // 2. Score with Alignment Bonus
             let overlap = 0;
             if (direction === 'left' || direction === 'right') {
-                // Check Y overlap
                 const top = Math.max(rect1.top, rect2.top);
                 const bottom = Math.min(rect1.bottom, rect2.bottom);
                 overlap = Math.max(0, bottom - top);
             } else {
-                // Check X overlap
                 const left = Math.max(rect1.left, rect2.left);
                 const right = Math.min(rect1.right, rect2.right);
                 overlap = Math.max(0, right - left);
             }
 
-            // If effective overlap (covers > 30% of source or dest), reduce cross penalty
+            // If effective overlap, reduce cross penalty
             if (overlap > 0) {
                 distCross = 0; // It is "aligned"
             }
@@ -383,6 +351,40 @@ class FocusManager {
     }
 
     /**
+     * Find best candidate closest to a target element (Euclidean distance).
+     * Used for RESTORING focus when entering a section from a specific point.
+     */
+    _findSpatialClosest(target, candidates) {
+        if (!target || !candidates.length) return null;
+
+        const rect1 = target.getBoundingClientRect();
+        const center1 = {
+            x: rect1.left + rect1.width / 2,
+            y: rect1.top + rect1.height / 2
+        };
+
+        let best = null;
+        let minDist = Infinity;
+
+        for (const c of candidates) {
+            const rect2 = c.getBoundingClientRect();
+            const center2 = {
+                x: rect2.left + rect2.width / 2,
+                y: rect2.top + rect2.height / 2
+            };
+            const dx = center2.x - center1.x;
+            const dy = center2.y - center1.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist < minDist) {
+                minDist = dist;
+                best = c;
+            }
+        }
+        return best;
+    }
+
+    /**
      * Leave current section (OPTIMIZED)
      * Uses instant scroll when changing sections vertically.
      * @param {string} direction 
@@ -395,6 +397,8 @@ class FocusManager {
         const nextSection = config[key];
 
         if (nextSection && this._sections.has(nextSection)) {
+            const originElement = this._focusedElement; // Capture for spatial handover
+
             // Unfocus current
             if (this._focusedElement) {
                 this._focusedElement.classList.remove('focused');
@@ -402,7 +406,10 @@ class FocusManager {
 
             // Set flag for instant scroll when changing rows
             this._useInstantScroll = (direction === 'up' || direction === 'down');
-            this.setActiveSection(nextSection);
+
+            // Pass originElement to allow selecting closest target in new section
+            this.setActiveSection(nextSection, true, originElement);
+
             this._useInstantScroll = false;
         }
     }
@@ -425,47 +432,57 @@ class FocusManager {
         }
 
         // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
-        // Check if cached content is still valid (attached to DOM)
-        if (this._pageContent && !document.contains(this._pageContent)) {
-            this._pageContent = null;
-        }
+        // RESOLUTION FIX: Find the SPECIFIC page content for this element, not just first in DOM
+        // This fixes multi-page DOM issues where querySelector finds hidden pages.
+        let pageContent = element.closest('.page-content');
 
-        if (!this._pageContent) {
-            this._pageContent = document.querySelector('.page-content');
-        }
-        const pageContent = this._pageContent;
+        // Fallback for safety
+        if (!pageContent) pageContent = document.querySelector('.page-content');
+
+        this._pageContent = pageContent; // Cache for other ops if needed
 
         // SCROLL FIRST - before focus
-        if (options.skipScroll && pageContent) {
+
+        // Determine scroll strategy
+        let useRowScroll = options.skipScroll && !!pageContent;
+        let row = null;
+
+        if (useRowScroll) {
+            row = element.closest('.media-row');
+            // If row is taller than viewport (e.g. Grid), disable row-alignment
+            // to prevent jumping to top when focusing bottom elements
+            if (row && row.offsetHeight > pageContent.clientHeight) {
+                useRowScroll = false;
+            }
+        }
+
+        if (useRowScroll && row) {
             // For vertical row changes: scroll row section into view
-            const row = element.closest('.media-row');
-            if (row) {
-                // SAMSUNG: Batch all reads first
-                const rowTop = row.offsetTop;
-                const rowHeight = row.offsetHeight;
-                const rowBottom = rowTop + rowHeight;
+            // SAMSUNG: Batch all reads first
+            const rowTop = row.offsetTop;
+            const rowHeight = row.offsetHeight;
+            const rowBottom = rowTop + rowHeight;
 
-                const viewHeight = pageContent.clientHeight;
-                const currentScroll = pageContent.scrollTop;
-                const viewBottom = currentScroll + viewHeight;
+            const viewHeight = pageContent.clientHeight;
+            const currentScroll = pageContent.scrollTop;
+            const viewBottom = currentScroll + viewHeight;
 
-                // Check visibility with padding/buffer
-                const topCutoff = rowTop < currentScroll + 50;  // 50px buffer at top
-                const bottomCutoff = rowBottom > viewBottom - 50; // 50px buffer at bottom
+            // Check visibility with padding/buffer
+            const topCutoff = rowTop < currentScroll + 50;  // 50px buffer at top
+            const bottomCutoff = rowBottom > viewBottom - 50; // 50px buffer at bottom
 
-                // If cut off at bottom, scroll down JUST enough to show it
-                // Align bottom of row with bottom of view (minus padding)
-                if (bottomCutoff) {
-                    const padding = 60; // Bottom buffer
-                    const targetScroll = rowBottom - viewHeight + padding;
-                    pageContent.scrollTop = Math.max(0, targetScroll);
-                }
-                // If cut off at top, scroll up JUST enough to show it
-                // Align top of row with top of view (minus padding)
-                else if (topCutoff) {
-                    const padding = 100; // Top buffer (larger for title visibility)
-                    pageContent.scrollTop = Math.max(0, rowTop - padding);
-                }
+            // If cut off at bottom, scroll down JUST enough to show it
+            // Align bottom of row with bottom of view (minus padding)
+            if (bottomCutoff) {
+                const padding = 60; // Bottom buffer
+                const targetScroll = rowBottom - viewHeight + padding;
+                pageContent.scrollTop = Math.max(0, targetScroll);
+            }
+            // If cut off at top, scroll up JUST enough to show it
+            // Align top of row with top of view (minus padding)
+            else if (topCutoff) {
+                const padding = 100; // Top buffer (larger for title visibility)
+                pageContent.scrollTop = Math.max(0, rowTop - padding);
             }
         } else if (options.scroll) {
             // For horizontal navigation within row
@@ -479,6 +496,40 @@ class FocusManager {
                 // Then write
                 const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
                 rowItems.scrollLeft = Math.max(0, targetScroll);
+            } else {
+                // Generic Vertical Scroll (for Grids/Lists or Tall Rows)
+                // Fix: Calculate offset relative to pageContent (accumulate up the chain)
+                let currentEl = element;
+                let elementTop = 0;
+                while (currentEl && currentEl !== pageContent) {
+                    elementTop += currentEl.offsetTop;
+                    currentEl = currentEl.offsetParent;
+                }
+
+                const elementHeight = element.offsetHeight;
+                const viewHeight = pageContent.clientHeight;
+                const currentScroll = pageContent.scrollTop;
+
+                // Margins for visibility comfort
+                const topMargin = 60; // Reduced from 100 to allow fitting more
+                const bottomMargin = 60; // Reduced from 100 to help footer buttons
+
+                console.log(`[FocusManager] Scroll Calc: ElTop=${elementTop}, Scroll=${currentScroll}, View=${viewHeight}`);
+
+                // Simple "Scroll Into View" logic
+                // If element is above view
+                if (elementTop < currentScroll + topMargin) {
+                    pageContent.scrollTop = Math.max(0, elementTop - topMargin);
+                }
+                // If element is below view
+                else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
+                    // Try to center small elements (like buttons)
+                    if (elementHeight < viewHeight / 4) {
+                        pageContent.scrollTop = elementTop - (viewHeight / 2) + (elementHeight / 2);
+                    } else {
+                        pageContent.scrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
+                    }
+                }
             }
         }
 
@@ -505,22 +556,34 @@ class FocusManager {
         }
     }
 
-    _restoreFocus(sectionName) {
+    _restoreFocus(sectionName, fromElement = null) {
         const memory = this._focusMemory.get(sectionName);
         const focusables = this._getFocusables(sectionName);
         if (!focusables.length) return;
 
-        let target = focusables[0];
+        let target = null;
 
-        if (memory) {
-            // 1. Try exact element
+        // 1. Spatial Entry (Highest Priority)
+        // If we came from another element (e.g. Button below grid), pick closest grid item
+        if (fromElement && document.contains(fromElement)) {
+            target = this._findSpatialClosest(fromElement, focusables);
+        }
+
+        // 2. Memory (Fallback)
+        if (!target && memory) {
+            // Try exact element
             if (document.contains(memory.element) && focusables.includes(memory.element)) {
                 target = memory.element;
             }
-            // 2. Try index
+            // Try index
             else if (memory.index >= 0 && memory.index < focusables.length) {
                 target = focusables[memory.index];
             }
+        }
+
+        // 3. Default (First Item)
+        if (!target) {
+            target = focusables[0];
         }
 
         // Use skipScroll when changing sections vertically (much faster)
@@ -559,7 +622,7 @@ class FocusManager {
     getFocused() { return this._focusedElement; }
 
     destroy() {
-        document.removeEventListener('keydown', this._onKeyDown);
+        // document.removeEventListener('keydown', this._onKeyDown);
         this._sections.clear();
         this._focusMemory.clear();
     }

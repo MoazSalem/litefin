@@ -37,6 +37,24 @@ class DetailsPage extends Page {
                 
                 <!-- Scrollable Content -->
                 <div class="details-content page-content">
+                    <!-- Nav Header -->
+                    <div class="nav-header media-row" id="details-nav-header">
+                        <button class="btn btn-icon" id="btn-details-back" tabindex="0">
+                            <!-- Arrow Left SVG -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
+                        </button>
+                        <button class="btn btn-icon" id="btn-details-home" tabindex="0">
+                            <!-- Home SVG -->
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="30" height="30">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                        </button>
+                    </div>
+
                     <!-- Main Split Layout (Marked as media-row for focus scrolling) -->
                     <div class="details-main-split media-row">
                         <!-- Left: Poster -->
@@ -131,16 +149,28 @@ class DetailsPage extends Page {
     }
 
     _setupFocus() {
-        // Initial setup - leaveDown will be updated as content loads
+        // Register Header
+        this.registerFocusSection('details-nav-header', this.$('#details-nav-header'), {
+            orientation: 'horizontal',
+            leaveDown: 'details-actions'
+        });
+
+        // Register Action Buttons - Update leaveUp to header
         this.registerFocusSection('details-actions', this.$('#actions'), {
             orientation: 'horizontal',
+            leaveUp: 'details-nav-header',
             leaveDown: null // Will be updated dynamically
         });
 
+        // Default to Play button (actions)
         this.setActiveSection('details-actions');
     }
 
     _bindActions() {
+        // Nav Buttons
+        this.$('#btn-details-back').onclick = () => router.back();
+        this.$('#btn-details-home').onclick = () => router.navigate('/home');
+
         // Play button
         this.$('.play-btn')?.addEventListener('click', () => {
             this._play();
@@ -739,10 +769,13 @@ class DetailsPage extends Page {
         // Delegated click handler - navigate to Person Details (if we had a page)
         // For now, maybe just focus? Or do nothing?
         // User didn't specify behavior, but usually it goes to person items.
-        // We probably don't have a PersonPage yet. So let's leave click handler empty or log.
+        // Person Click Handler
         container.onclick = (e) => {
-            // Future: Navigate to Person Page
-
+            const card = e.target.closest('.media-card');
+            if (card && card.dataset.itemId) {
+                const personId = card.dataset.itemId;
+                router.navigate(`/person/${personId}`);
+            }
         };
 
         const upwardLink = this._getPreviousVisibleSection('details-people')?.targetName || 'details-actions';
@@ -865,6 +898,7 @@ class DetailsPage extends Page {
 
             this.registerFocusSection('details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
+                leaveUp: 'details-nav-header', // Preserve header link
                 leaveDown: actualTarget
             });
         } else if (sectionName === 'details-see-more') {
