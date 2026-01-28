@@ -14,6 +14,7 @@ import { eventBus } from '../core/EventBus.js';
 import MediaGrid from '../components/MediaGrid.js';
 import SimpleHeader from '../components/SimpleHeader.js';
 import FavoriteButton from '../components/FavoriteButton.js';
+import BackdropManager from '../utils/BackdropManager.js';
 
 class PersonPage extends Page {
     constructor() {
@@ -139,29 +140,11 @@ class PersonPage extends Page {
         const backdropEl = this.$('#person-backdrop');
         if (!backdropEl) return;
 
-        let backdropUrl = null;
-
-        // 1. Try Person's own backdrop
-        if (this._person.BackdropImageTags && this._person.BackdropImageTags.length > 0) {
-            backdropUrl = api.getImageUrl(this._person.Id, 'Backdrop', { maxWidth: 1920 });
-        }
-
-        // 2. Fallback: Try most recent Movie/Series with a backdrop
-        if (!backdropUrl && this._items.length > 0) {
-            const bestWork = this._items.find(i =>
-                (i.Type === 'Movie' || i.Type === 'Series') &&
-                i.BackdropImageTags &&
-                i.BackdropImageTags.length > 0
-            );
-
-            if (bestWork) {
-                backdropUrl = api.getImageUrl(bestWork.Id, 'Backdrop', { maxWidth: 1920 });
-            }
-        }
+        // Use smart backdrop logic from manager
+        const backdropUrl = BackdropManager.getPersonBackdropUrl(this._person, this._items);
 
         if (backdropUrl) {
-            backdropEl.style.backgroundImage = `url('${backdropUrl}')`;
-            backdropEl.style.opacity = '1'; // Fade in
+            BackdropManager.applyBackdrop(backdropEl, backdropUrl);
         }
     }
 

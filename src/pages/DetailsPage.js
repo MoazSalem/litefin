@@ -16,6 +16,7 @@ import { focusManager } from '../ui/FocusManager.js';
 
 import SimpleHeader from '../components/SimpleHeader.js';
 import FavoriteButton from '../components/FavoriteButton.js';
+import BackdropManager from '../utils/BackdropManager.js';
 
 class DetailsPage extends Page {
     constructor() {
@@ -257,17 +258,10 @@ class DetailsPage extends Page {
             posterContainer.innerHTML = '';
             posterContainer.appendChild(img);
 
-            // Backdrop (Fire and forget, don't hide loader for this)
-            const backdropId = item.BackdropImageTags?.length > 0 ? item.Id : item.ParentBackdropItemId;
-            if (backdropId) {
-                const backdropUrl = api.getImageUrl(backdropId, 'Backdrop', { maxWidth: 1920 });
-                // Preload backdrop then apply
-                const bgImg = new Image();
-                bgImg.onload = () => {
-                    this.$('#backdrop').style.backgroundImage = `url(${backdropUrl})`;
-                    this.$('#backdrop').style.opacity = '1';
-                };
-                bgImg.src = backdropUrl;
+            // Backdrop (Fire and forget, via Manager)
+            const backdropUrl = BackdropManager.getBackdropUrl(item);
+            if (backdropUrl) {
+                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
             }
         });
     }
