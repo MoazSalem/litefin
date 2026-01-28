@@ -117,12 +117,16 @@ class Page extends Component {
         super.destroy();
     }
 
-    /**
-     * Show loading state
-     * @param {boolean} show - Show or hide
-     */
     setLoading(show) {
         if (show) {
+            // Ensure loading element exists
+            let loader = this.el?.querySelector('.page-loading');
+            if (!loader && this.el) {
+                loader = document.createElement('div');
+                loader.className = 'page-loading';
+                loader.innerHTML = '<div class="loading-spinner"></div>';
+                this.el.appendChild(loader);
+            }
             this.el?.classList.add('loading');
         } else {
             this.el?.classList.remove('loading');

@@ -16,9 +16,7 @@ class FavoritesPage extends Page {
             <div class="page favorites-page home-page">
                 <div class="header-container"></div>
                 <main class="page-content" id="favorites-content">
-                    <div id="favorites-rows" class="home-rows">
-                        <div class="loading-spinner"></div>
-                    </div>
+                    <div id="favorites-rows" class="home-rows"></div>
                 </main>
             </div>
         `;
@@ -49,6 +47,8 @@ class FavoritesPage extends Page {
     }
 
     async _loadFavorites() {
+        this.setLoading(true);
+
         try {
             const userId = typeof api.userId === 'function' ? api.userId() : api._userId;
             if (!userId) throw new Error('User not authenticated');
@@ -60,6 +60,8 @@ class FavoritesPage extends Page {
                 api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Episode', SortBy: 'DateCreated', SortOrder: 'Descending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks' }),
                 api.get('/Persons', { Filters: 'IsFavorite', UserId: userId, SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio' })
             ]);
+
+            this.setLoading(false);
 
             const container = this.$('#favorites-rows');
             if (!container) return;
@@ -99,6 +101,7 @@ class FavoritesPage extends Page {
 
         } catch (e) {
             console.error('Failed to load favorites', e);
+            this.setLoading(false);
             const container = this.$('#favorites-rows');
             if (container) container.innerHTML = `<div class="page-error" style="display:block; padding: 20px;">Failed to load favorites: ${e.message || e}</div>`;
         }

@@ -121,10 +121,7 @@ class DetailsPage extends Page {
                     </section>
                 </div>
                 
-                <!-- Loading -->
-                <div class="page-loading">
-                    <div class="loading-spinner"></div>
-                </div>
+
             </div>
         `;
     }

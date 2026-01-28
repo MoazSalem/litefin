@@ -42,10 +42,7 @@ class HomePage extends Page {
                     </div>
                 </main>
                 
-                <!-- Loading state -->
-                <div class="page-loading">
-                    <div class="loading-spinner"></div>
-                </div>
+
             </div>
         `;
     }
