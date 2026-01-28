@@ -13,6 +13,7 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import SimpleHeader from '../components/SimpleHeader.js';
 
 class DetailsPage extends Page {
     constructor() {
@@ -24,7 +25,11 @@ class DetailsPage extends Page {
         this._seasons = null;
         this._episodes = null;
         this._people = null;
+        this._people = null;
         this._similar = null;
+
+        // Components
+        this._header = null;
     }
 
     render() {
@@ -38,22 +43,8 @@ class DetailsPage extends Page {
                 <!-- Scrollable Content -->
                 <div class="details-content page-content">
                     <!-- Nav Header -->
-                    <div class="nav-header media-row" id="details-nav-header">
-                        <button class="btn btn-icon" id="btn-details-back" tabindex="0">
-                            <!-- Arrow Left SVG -->
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
-                                <line x1="19" y1="12" x2="5" y2="12"></line>
-                                <polyline points="12 19 5 12 12 5"></polyline>
-                            </svg>
-                        </button>
-                        <button class="btn btn-icon" id="btn-details-home" tabindex="0">
-                            <!-- Home SVG -->
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="30" height="30">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+                    <div id="details-header-container"></div>
+
 
                     <!-- Main Split Layout (Marked as media-row for focus scrolling) -->
                     <div class="details-main-split media-row">
@@ -140,19 +131,30 @@ class DetailsPage extends Page {
     async onInit() {
         this._itemId = this.params.id;
 
-        // Setup focus
-        this._setupFocus();
+        try {
+            // Setup focus
+            this._setupFocus();
 
-        // Bind actions
-        this._bindActions();
+            // Bind actions
+            this._bindActions();
 
-        // Load item details
-        await this._loadDetails();
+            // Load item details
+            await this._loadDetails();
+        } catch (err) {
+            console.error('DetailsPage: onInit failed', err);
+        }
     }
 
     _setupFocus() {
-        // Register Header
-        this.registerFocusSection('details-nav-header', this.$('#details-nav-header'), {
+        // Initialize Header
+        this._header = new SimpleHeader({
+            id: 'details-nav-header',
+            parentId: 'details-page'
+        });
+        this._header.mount(this.$('#details-header-container'));
+
+        // Register Header Focus
+        this.registerFocusSection('details-nav-header', this._header.el, {
             orientation: 'horizontal',
             leaveDown: 'details-actions'
         });
@@ -169,9 +171,8 @@ class DetailsPage extends Page {
     }
 
     _bindActions() {
-        // Nav Buttons
-        this.$('#btn-details-back').onclick = () => router.back();
-        this.$('#btn-details-home').onclick = () => router.navigate('/home');
+        // Nav Buttons handled by SimpleHeader
+
 
         // Play button
         this.$('.play-btn')?.addEventListener('click', () => {
@@ -1091,6 +1092,11 @@ class DetailsPage extends Page {
     }
 
     destroy() {
+        if (this._header) {
+            this._header.destroy();
+            this._header = null;
+        }
+
         if (this._isRichMetaActive) {
             this._deactivateRichMeta();
         }

@@ -11,6 +11,7 @@ import Component from '../core/Component.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 class MediaGrid extends Component {
     constructor(config = {}) {
@@ -169,83 +170,10 @@ class MediaGrid extends Component {
      * just implment it here. Implementing here for now to match `Page.js` exactly.
      */
     _createCardHtml(item) {
-        // Reuse logic from Page.js structure, adapted for local scope
-        // We can import `api`
-
-        let imageUrl = '';
-        let imageInnerHtml = '';
-        const isLandscape = this.isLandscape;
-        const type = this.type;
-
-        // --- Image Resolution ---
-        if (type === 'episode-primary') {
-            if (item.ImageTags?.Primary) {
-                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
-            } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
-                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
-            } else if (item.SeriesThumbImageTag && item.SeriesId) {
-                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
-            }
-        } else if (isLandscape) {
-            if (item.ImageTags && item.ImageTags.Thumb) {
-                imageUrl = api.getImageUrl(item.Id, 'Thumb', { maxWidth: 400, tag: item.ImageTags.Thumb });
-            } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                imageUrl = api.getImageUrl(item.Id, 'Backdrop', { maxWidth: 400 });
-            } else {
-                imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
-            }
-        } else {
-            // Portrait
-            imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
-        }
-
-        // --- Overlays ---
-        let progressHtml = '';
-        if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
-            const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            progressHtml = `<div class="progress-bar" style="background: linear-gradient(to right, var(--jf-accent) ${progress}%, rgba(0,0,0,0.6) ${progress}%);"></div>`;
-        }
-
-        let badgeHtml = '';
-        if (item.UserData && item.UserData.UnplayedItemCount > 0) {
-            badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
-        }
-
-        // --- Text ---
-        let titleText = item.Name;
-        let subtitleText = '';
-
-        if (item.Type === 'Episode') {
-            if (isLandscape) {
-                titleText = item.SeriesName || item.Name;
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`;
-            } else {
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber}`;
-            }
-        } else {
-            // Movies/Shows - show year and role if available
-            let parts = [];
-            if (item.ProductionYear) parts.push(item.ProductionYear);
-            if (item._roleName) parts.push(`as ${item._roleName}`);
-            subtitleText = parts.join(' · ');
-        }
-
-        const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
-        const imagePart = imageUrl ? `<img src="${imageUrl}" alt="${item.Name}" loading="lazy" />` : imageInnerHtml;
-
-        return `
-            <button class="${cssClass}" data-item-id="${item.Id}" tabindex="0">
-                <div class="card-image">
-                    ${imagePart}
-                    ${progressHtml}
-                    ${badgeHtml}
-                </div>
-                <div class="card-info">
-                    <div class="card-title">${titleText}</div>
-                    ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
-                </div>
-            </button>
-        `;
+        return CardRenderer.createCardHtml(item, {
+            isLandscape: this.isLandscape,
+            type: this.type
+        });
     }
 }
 

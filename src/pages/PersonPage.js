@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
+import SimpleHeader from '../components/SimpleHeader.js';
 
 class PersonPage extends Page {
     constructor() {
@@ -19,6 +20,7 @@ class PersonPage extends Page {
         this._person = null;
         this._items = [];
         this._grids = {}; // Store component instances
+        this._header = null;
     }
 
     onInit() {
@@ -30,7 +32,13 @@ class PersonPage extends Page {
             return;
         }
 
-        this._loadPersonDetails();
+        try {
+            this._setupFocus();
+            this._loadPersonDetails();
+        } catch (err) {
+            console.error('PersonPage: onInit critical failure', err);
+            this.showError('Critical Error: ' + err.message);
+        }
     }
 
     render() {
@@ -42,23 +50,9 @@ class PersonPage extends Page {
                 </div>
 
                 <div class="page-content">
+                    <div class="page-error" style="display:none; padding: 20px; color: #ff6b6b; text-align: center;"></div>
                     <!-- Nav Header -->
-                    <div class="nav-header media-row" id="person-actions">
-                        <button class="btn btn-icon" id="btn-back" tabindex="0">
-                            <!-- Arrow Left SVG -->
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="32" height="32">
-                                <line x1="19" y1="12" x2="5" y2="12"></line>
-                                <polyline points="12 19 5 12 12 5"></polyline>
-                            </svg>
-                        </button>
-                        <button class="btn btn-icon" id="btn-home" tabindex="0">
-                            <!-- Home SVG -->
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" width="30" height="30">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                        </button>
-                    </div>
+                    <div id="person-header-container"></div>
 
                     <div class="details-main-split">
                         <!-- Left: Poster -->
@@ -149,7 +143,6 @@ class PersonPage extends Page {
             this.setLoading(false);
 
             // Focus Nav first
-            this._setupFocus();
             this.setActiveSection('person-actions');
         }
     }
@@ -426,8 +419,9 @@ class PersonPage extends Page {
 
         if (activeTypes.length === 0) return;
 
-        // 1. Header Logic
         const firstType = activeTypes[0];
+
+        // 1. Header Logic
         const headerEl = this.$('#person-actions');
         if (headerEl) {
             this.registerFocusSection('person-actions', headerEl, {
@@ -520,14 +514,42 @@ class PersonPage extends Page {
 
     _setupFocus() {
         if (!this.container) return;
-    }
 
-    destroy() {
-        // Destroy sub-components
-        Object.values(this._grids).forEach(comp => comp.destroy());
-        this._grids = {};
-        super.destroy();
+        // Initialize Header if not exists
+        if (!this._header) {
+            this._header = new SimpleHeader({
+                this._header = new SimpleHeader({
+                    id: 'person-actions',
+                    parentId: 'person-page'
+                });
+                this._header.mount(this.$('#person-header-container'));
+            }
+
+        // 1. Top Buttons (Back/Home)
+        this.registerFocusSection('person-actions', this._header.el, {
+                orientation: 'horizontal',
+                leaveDown: 'person-fav-actions'
+            });
+
+            // 2. Favorite Action Row
+            this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
+                orientation: 'horizontal',
+                leaveUp: 'person-actions',
+                leaveDown: null // Updated by _registerWorkSections
+            });
+        }
+
+        destroy() {
+            if (this._header) {
+                this._header.destroy();
+                this._header = null;
+            }
+
+            // Destroy sub-components
+            Object.values(this._grids).forEach(comp => comp.destroy());
+            this._grids = {};
+            super.destroy();
+        }
     }
-}
 
 export default PersonPage;

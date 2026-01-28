@@ -112,14 +112,19 @@ export default class Header extends Component {
         this._updateClock();
         const now = new Date();
         const delay = (60 - now.getSeconds()) * 1000;
-        setTimeout(() => {
+
+        // Clear existing
+        if (this._clockTimeout) clearTimeout(this._clockTimeout);
+        if (this._clockInterval) clearInterval(this._clockInterval);
+
+        this._clockTimeout = setTimeout(() => {
             this._updateClock();
-            if (this._clockInterval) clearInterval(this._clockInterval);
             this._clockInterval = setInterval(() => this._updateClock(), 60000);
         }, delay);
     }
 
     _updateClock() {
+        if (!this.el) return;
         const el = this.el.querySelector('.header-clock');
         if (el) {
             const now = new Date();
@@ -130,5 +135,10 @@ export default class Header extends Component {
             hours = hours ? hours : 12;
             el.textContent = `${hours}:${minutes} ${ampm}`;
         }
+    }
+    destroy() {
+        if (this._clockTimeout) clearTimeout(this._clockTimeout);
+        if (this._clockInterval) clearInterval(this._clockInterval);
+        super.destroy();
     }
 }
