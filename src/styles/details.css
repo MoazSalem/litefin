@@ -312,51 +312,44 @@
 }
 
 /* Icon Buttons (Heart/Check) */
-.btn-icon {
-    width: 72px;
-    height: 72px;
-    padding: 0;
-    /* font-size: 2rem; Removed as we use SVGs now */
-    border-radius: 50%;
+/* Higher specificity to override .details-actions .btn */
+.btn-icon,
+.details-actions .btn-icon,
+.person-actions-row .btn-icon {
+    width: 72px !important;
+    height: 72px !important;
+    padding: 0 !important;
+    border-radius: 50% !important;
+    /* Force circular shape */
     background: rgba(255, 255, 255, 0.1);
-    /* Consistent with other buttons */
     color: var(--jf-text-primary);
-    border: none;
+    border: none !important;
     display: flex;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(10px);
+    overflow: hidden;
+    cursor: pointer;
+    transition: transform 0.2s, background-color 0.2s;
 }
 
 .btn-icon svg {
     width: 28px;
     height: 28px;
     min-width: 28px;
-    /* Tizen fix: Ensure min-size */
     min-height: 28px;
     flex-shrink: 0;
-    /* Tizen fix: Prevent flex shrinking */
     stroke-width: 2.5;
 }
 
 .btn-icon.active {
     background: var(--jf-accent);
-    /* Obvious active state */
     color: white;
 }
 
 .btn-icon:focus {
-    transform: scale(1.1);
-    background: white;
-    color: var(--jf-background);
+    transform: scale(1.05);
     outline: none;
-}
-
-/* Specific focus state for ACTIVE buttons to distinguish them */
-.btn-icon.active:focus {
-    background: white;
-    color: var(--jf-accent);
-    /* Accent icon on white bg indicates active state while focused */
 }
 
 .details-overview {

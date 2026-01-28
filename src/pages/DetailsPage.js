@@ -13,7 +13,9 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+
 import SimpleHeader from '../components/SimpleHeader.js';
+import FavoriteButton from '../components/FavoriteButton.js';
 
 class DetailsPage extends Page {
     constructor() {
@@ -70,9 +72,7 @@ class DetailsPage extends Page {
                                 <button class="btn btn-icon watched-btn" tabindex="0" aria-label="Mark as watched">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </button>
-                                <button class="btn btn-icon favorite-btn" tabindex="0" aria-label="Add to favorites">
-                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>
-                                </button>
+                                <!-- Favorite Button Injected Here -->
                             </section>
 
                             <!-- Overview -->
@@ -184,11 +184,6 @@ class DetailsPage extends Page {
             this._play(true);
         });
 
-        // Favorite button
-        this.$('.favorite-btn')?.addEventListener('click', () => {
-            this._toggleFavorite();
-        });
-
         // Watched button
         this.$('.watched-btn')?.addEventListener('click', () => {
             this._toggleWatched();
@@ -206,6 +201,7 @@ class DetailsPage extends Page {
 
             // 2. Render Text Immediately (Instant Interaction)
             this._renderHeroText();
+            this._setupFavoriteButton(); // New method
             this._renderRichMetadata();
 
             // 3. Load Images & Wait for Poster (Premium Feel)
@@ -579,11 +575,7 @@ class DetailsPage extends Page {
             this.$('.resume-btn').innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
         }
 
-        // Favorite button
-        if (userData.IsFavorite) {
-            this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
-            this.$('.favorite-btn').classList.add('active');
-        }
+
 
         // Watched button
         if (userData.Played) {
@@ -1042,26 +1034,33 @@ class DetailsPage extends Page {
         });
     }
 
-    async _toggleFavorite() {
-        const isFavorite = this._item.UserData?.IsFavorite;
+    _setupFavoriteButton() {
+        const actionsContainer = this.$('#actions');
+        if (actionsContainer) {
+            if (this._favBtn) this._favBtn.destroy();
 
-        try {
-            if (isFavorite) {
-                await api.unmarkFavorite(this._itemId);
-                this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
-                this.$('.favorite-btn').classList.remove('active');
-            } else {
-                await api.markFavorite(this._itemId);
-                this.$('.favorite-btn').innerHTML = '<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path></svg>';
-                this.$('.favorite-btn').classList.add('active');
-            }
+            this._favBtn = new FavoriteButton({
+                itemId: this._item.Id,
+                initialState: this._item.UserData?.IsFavorite,
+                className: 'btn btn-icon favorite-btn',
+                onChange: (isFav) => {
+                    if (!this._item.UserData) this._item.UserData = {};
+                    this._item.UserData.IsFavorite = isFav;
+                }
+            });
 
-            this._item.UserData = this._item.UserData || {};
-            this._item.UserData.IsFavorite = !isFavorite;
-        } catch (error) {
-            console.error('Failed to toggle favorite', error);
+            // Remove any existing Favorite Button (if re-rendering)
+            const old = actionsContainer.querySelector('.favorite-btn');
+            if (old) old.remove();
+
+            this._favBtn.mount(actionsContainer);
+
+            // Refresh focus cache so FocusManager sees the new button
+            focusManager.invalidateCache('details-actions');
         }
     }
+
+
 
     async _toggleWatched() {
         const isPlayed = this._item.UserData?.Played;
@@ -1095,6 +1094,10 @@ class DetailsPage extends Page {
         if (this._header) {
             this._header.destroy();
             this._header = null;
+        }
+        if (this._favBtn) {
+            this._favBtn.destroy();
+            this._favBtn = null;
         }
 
         if (this._isRichMetaActive) {

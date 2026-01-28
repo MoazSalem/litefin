@@ -10,8 +10,10 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { eventBus } from '../core/EventBus.js';
 import MediaGrid from '../components/MediaGrid.js';
 import SimpleHeader from '../components/SimpleHeader.js';
+import FavoriteButton from '../components/FavoriteButton.js';
 
 class PersonPage extends Page {
     constructor() {
@@ -71,13 +73,7 @@ class PersonPage extends Page {
                             <div class="details-overview overview-text line-clamp-6" id="person-bio"></div>
 
                             <!-- Actions (Favorite) -->
-                            <div class="person-actions-row" id="person-fav-actions">
-                                <button class="btn btn-icon favorite-btn" id="btn-person-favorite" tabindex="0" aria-label="Favorite">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                                    </svg>
-                                </button>
-                            </div>
+                            <div class="person-actions-row" id="person-fav-actions"></div>
                         </div>
                     </div>
 
@@ -100,19 +96,11 @@ class PersonPage extends Page {
 
             if (btnBack) btnBack.onclick = () => router.back();
             if (btnHome) btnHome.onclick = () => router.navigate('/home');
-
-            // Favorite Button
-            const btnFav = this.$('#btn-person-favorite');
-            if (btnFav) {
-                btnFav.onclick = () => this._toggleFavorite();
-            }
+            if (btnHome) btnHome.onclick = () => router.navigate('/home');
 
             // 1. Fetch Person Details
             this._person = await api.getPerson(this._personId);
-            this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
-
-            this._updateFavoriteState();
 
             this._renderPersonInfo();
 
@@ -177,43 +165,106 @@ class PersonPage extends Page {
         }
     }
 
-    async _toggleFavorite() {
-        if (!this._person) return;
 
-        try {
-            const isFavorite = this._person.UserData?.IsFavorite;
-            if (isFavorite) {
-                await api.unmarkFavorite(this._personId);
-                this._person.UserData.IsFavorite = false;
-            } else {
-                await api.markFavorite(this._personId);
-                if (!this._person.UserData) this._person.UserData = {};
-                this._person.UserData.IsFavorite = true;
-            }
-            this._updateFavoriteState();
-        } catch (e) {
-            console.error('PersonPage: Failed to toggle favorite', e);
-        }
-    }
 
-    _updateFavoriteState() {
-        const btn = this.$('#btn-person-favorite');
-        if (!btn || !this._person) return;
+    _renderPersonInfo() {
+        const p = this._person;
 
-        const isFavorite = this._person.UserData?.IsFavorite;
-        if (isFavorite) {
-            btn.classList.add('active');
-            btn.innerHTML = `
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="text-red-500">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                    </svg>`;
+        // Render Favorite Button
+        const favContainer = this.$('#person-fav-actions');
+        console.log('PersonPage: Render Favorite Button', {
+            containerFound: !!favContainer,
+            personId: p.Id,
+            isFavorite: p.UserData?.IsFavorite
+        });
+
+        if (favContainer) {
+            // Destroy existing
+            if (this._favBtn) this._favBtn.destroy();
+
+            this._favBtn = new FavoriteButton({
+                itemId: p.Id,
+                initialState: p.UserData?.IsFavorite,
+                onChange: (isFav) => {
+                    // Update local model
+                    if (!p.UserData) p.UserData = {};
+                    p.UserData.IsFavorite = isFav;
+                }
+            });
+
+            // Clear and mount (force layout)
+            favContainer.innerHTML = '';
+            favContainer.style.display = 'flex'; // FORCE display
+            this._favBtn.mount(favContainer);
+
+            // Wait for next frame to ensure DOM is ready
+            requestAnimationFrame(() => {
+                focusManager.invalidateCache('person-fav-actions');
+                console.log('PersonPage: Favorite cache invalidated. Button offsetParent:', this._favBtn.el?.offsetParent);
+            });
+            console.log('PersonPage: Favorite Button mounted');
         } else {
-            btn.classList.remove('active');
-            btn.innerHTML = `
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                    </svg>`;
+            console.error('PersonPage: Could not find #person-fav-actions container');
+        }
 
+        // Name
+        const nameEl = this.$('#person-name');
+        if (nameEl) nameEl.textContent = p.Name;
+
+        // Poster
+        const posterContainer = this.$('#person-poster');
+        let imgHtml = '';
+        if (p.ImageTags?.Primary) {
+            const url = api.getImageUrl(p.Id, 'Primary', { maxWidth: 400 });
+            imgHtml = `<img src="${url}" alt="${p.Name}" class="loaded" />`;
+        } else {
+            imgHtml = `
+                <div class="person-fallback">
+                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
+                        <circle cx="12" cy="7" r="4" />
+                    </svg>
+                </div>`;
+        }
+        if (posterContainer) posterContainer.innerHTML = imgHtml;
+
+        // Meta (Born / Death / Place)
+        const metaEl = this.$('#person-meta');
+        if (metaEl) {
+            const parts = [];
+
+            if (p.PremiereDate) {
+                try {
+                    const born = new Date(p.PremiereDate).getFullYear();
+                    parts.push(`Born ${born}`);
+                } catch (e) { }
+            }
+
+            if (p.EndDate) {
+                try {
+                    const died = new Date(p.EndDate).getFullYear();
+                    parts.push(`Died ${died}`);
+                } catch (e) { }
+            }
+
+            if (p.ProductionLocations && p.ProductionLocations.length > 0) {
+                parts.push(p.ProductionLocations[0]);
+            }
+
+            metaEl.textContent = parts.join(' • ');
+        }
+
+        // Bio
+        const bioEl = this.$('#person-bio');
+        if (bioEl) {
+            bioEl.textContent = p.Overview || '';
+        }
+
+        // Force visibility immediately (bypass CSS transition issues)
+        const infoCol = this.$('#person-info-col');
+        if (infoCol) {
+            infoCol.style.opacity = '1';
+            infoCol.classList.add('visible');
         }
     }
 
@@ -225,7 +276,7 @@ class PersonPage extends Page {
             const result = await api.getPersonItemsWithRoles(this._personId);
             const itemsWithPeople = result.Items || [];
 
-            // Build role lookup map: itemId -> role name (store on instance for reuse)
+            // Build role lookup map
             this._roleMap = new Map();
             itemsWithPeople.forEach(item => {
                 if (item.People) {
@@ -241,7 +292,6 @@ class PersonPage extends Page {
 
             console.log(`PersonPage: Added ${this._roleMap.size} character roles`);
         } catch (error) {
-            // Silent fail - roles are optional enhancement
             console.warn('PersonPage: Could not load character roles', error);
         }
     }
@@ -276,61 +326,7 @@ class PersonPage extends Page {
         });
     }
 
-    _renderPersonInfo() {
-        const p = this._person;
 
-        // Name
-        const nameEl = this.$('#person-name');
-        if (nameEl) nameEl.textContent = p.Name;
-
-        // Poster
-        const posterContainer = this.$('#person-poster');
-        let imgHtml = '';
-        if (p.ImageTags?.Primary) {
-            // Person POSTER
-            const url = api.getImageUrl(p.Id, 'Primary', { maxWidth: 400 });
-            imgHtml = `<img src="${url}" alt="${p.Name}" class="loaded" />`;
-        } else {
-            // SVG Fallback
-            imgHtml = `
-                <div class="person-fallback">
-                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                        <circle cx="12" cy="7" r="4" />
-                    </svg>
-                </div>
-            `;
-        }
-        posterContainer.innerHTML = imgHtml;
-
-        // Bio
-        if (p.Overview) {
-            this.$('#person-bio').textContent = p.Overview;
-        } else {
-            this.$('#person-bio').style.display = 'none';
-        }
-
-        // Meta (Born / Place)
-        const metaContainer = this.$('#person-meta');
-        let metaHtml = '';
-
-        // Born
-        if (p.PremiereDate) {
-            const date = new Date(p.PremiereDate);
-            const bornDate = date.toLocaleDateString();
-            metaHtml += `<span class="meta-item">Born: ${bornDate}</span>`;
-        }
-
-        // ProductionLocations
-        if (p.ProductionLocations && p.ProductionLocations.length > 0) {
-            metaHtml += `<span class="meta-item">in ${p.ProductionLocations[0]}</span>`;
-        }
-
-        metaContainer.innerHTML = metaHtml;
-
-        // Fade in
-        this.$('#person-info-col').classList.add('visible');
-    }
 
     _renderWorks() {
         const worksContainer = this.$('#person-works');
@@ -518,38 +514,41 @@ class PersonPage extends Page {
         // Initialize Header if not exists
         if (!this._header) {
             this._header = new SimpleHeader({
-                this._header = new SimpleHeader({
-                    id: 'person-actions',
-                    parentId: 'person-page'
-                });
-                this._header.mount(this.$('#person-header-container'));
-            }
+                id: 'person-actions',
+                parentId: 'person-page'
+            });
+            this._header.mount(this.$('#person-header-container'));
+        }
 
         // 1. Top Buttons (Back/Home)
         this.registerFocusSection('person-actions', this._header.el, {
-                orientation: 'horizontal',
-                leaveDown: 'person-fav-actions'
-            });
+            orientation: 'horizontal',
+            leaveDown: 'person-fav-actions'
+        });
 
-            // 2. Favorite Action Row
-            this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
-                orientation: 'horizontal',
-                leaveUp: 'person-actions',
-                leaveDown: null // Updated by _registerWorkSections
-            });
-        }
-
-        destroy() {
-            if (this._header) {
-                this._header.destroy();
-                this._header = null;
-            }
-
-            // Destroy sub-components
-            Object.values(this._grids).forEach(comp => comp.destroy());
-            this._grids = {};
-            super.destroy();
-        }
+        // 2. Favorite Action Row
+        this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'person-actions',
+            leaveDown: null // Updated by _registerWorkSections
+        });
     }
+
+    destroy() {
+        if (this._header) {
+            this._header.destroy();
+            this._header = null;
+        }
+        if (this._favBtn) {
+            this._favBtn.destroy();
+            this._favBtn = null;
+        }
+
+        // Destroy sub-components
+        Object.values(this._grids).forEach(comp => comp.destroy());
+        this._grids = {};
+        super.destroy();
+    }
+}
 
 export default PersonPage;
