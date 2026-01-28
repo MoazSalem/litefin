@@ -110,11 +110,16 @@ class FavoritesPage extends Page {
     _renderSection(title, items, type, sectionId, prevId, nextId) {
         const container = this.$('#favorites-rows');
 
+        const itemsHtml = [];
+        for (let i = 0; i < items.length; i++) {
+            itemsHtml.push(this._renderCard(items[i], type));
+        }
+
         const sectionHtml = `
              <div class="media-row" id="${sectionId}-row">
                  <h2 class="row-title">${title}</h2>
                  <div class="row-items" id="${sectionId}-items">
-                     ${items.map(item => this._renderCard(item, type)).join('')}
+                     ${itemsHtml.join('')}
                  </div>
              </div>
          `;

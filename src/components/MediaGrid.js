@@ -89,7 +89,11 @@ class MediaGrid extends Component {
             ? this.items.slice(0, this.limit)
             : this.items;
 
-        return displayItems.map(item => this._createCardHtml(item)).join('');
+        const html = [];
+        for (let i = 0; i < displayItems.length; i++) {
+            html.push(this._createCardHtml(displayItems[i]));
+        }
+        return html.join('');
     }
 
     /**

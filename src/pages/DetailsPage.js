@@ -698,12 +698,13 @@ class DetailsPage extends Page {
 
         section.classList.remove('hidden');
 
-        container.innerHTML = this._episodes.map(ep => {
+        const htmlParts = [];
+        for (const ep of this._episodes) {
             const progress = ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
                 ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
                 : 0;
 
-            return `
+            htmlParts.push(`
                 <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
                     <div class="episode-thumb">
                         <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: 300 })}" alt="">
@@ -715,8 +716,9 @@ class DetailsPage extends Page {
                         <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
                     </div>
                 </button>
-            `;
-        }).join('');
+            `);
+        }
+        container.innerHTML = htmlParts.join('');
 
         // Click handlers
         container.querySelectorAll('.episode-card').forEach(card => {
