@@ -256,49 +256,50 @@
 }
 
 /* Action Buttons */
+/* Standardize buttons with border */
 .details-actions .btn {
     height: 72px;
-    /* Match icon button height */
     border-radius: 36px;
-    /* Pill shape */
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0 32px;
     font-size: 1.5rem;
     font-weight: 600;
-    border: none;
-    transition: transform 0.2s, background-color 0.2s, color 0.2s;
+    /* Added Border */
+    border: 2px solid transparent;
+    transition: transform 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
-/* Primary Play Button */
+/* Primary Play Button (Swapped) */
 .play-btn {
-    background: var(--jf-accent);
-    color: white;
+    background: white;
+    color: var(--jf-background);
 }
 
 .play-btn:focus {
     transform: scale(1.05);
-    background: white;
-    /* Invert on focus? Or just lighter accent? */
-    color: var(--jf-background);
+    /* Inverted Focus: Accent Bg, White Text */
+    background: var(--jf-accent);
+    color: white;
+    border-color: var(--jf-accent);
     outline: none;
-    /* Remove square border */
-    box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.3);
-    /* Soft ring instead? Or just scale? */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 /* Secondary Resume Button */
 .resume-btn {
     background: rgba(255, 255, 255, 0.1);
     color: white;
+    border: 2px solid rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(10px);
 }
 
 .resume-btn:focus {
     transform: scale(1.05);
-    background: white;
-    color: var(--jf-background);
+    background: var(--jf-accent);
+    border-color: var(--jf-accent);
+    color: white;
     outline: none;
 }
 
@@ -322,15 +323,16 @@
     border-radius: 50% !important;
     /* Force circular shape */
     background: rgba(255, 255, 255, 0.1);
+    /* Added consistent border */
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
     color: var(--jf-text-primary);
-    border: none !important;
     display: flex;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(10px);
     overflow: hidden;
     cursor: pointer;
-    transition: transform 0.2s, background-color 0.2s;
+    transition: transform 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s;
 }
 
 .btn-icon svg {
@@ -342,13 +344,21 @@
     stroke-width: 2.5;
 }
 
+/* Active State (Heart Filled / Checked) */
 .btn-icon.active {
-    background: var(--jf-accent);
-    color: white;
+    /* Updated: Matches Play Normal State */
+    background: white;
+    color: var(--jf-background);
+    border-color: white !important;
 }
 
+/* Focus State (Unified) */
 .btn-icon:focus {
     transform: scale(1.05);
+    /* Unified: Accent Bg, White Text */
+    background: var(--jf-accent);
+    color: white;
+    border-color: var(--jf-accent) !important;
     outline: none;
 }
 
@@ -367,6 +377,7 @@
 .line-clamp-6 {
     display: -webkit-box;
     -webkit-line-clamp: 6;
+    line-clamp: 6;
     -webkit-box-orient: vertical;
     overflow: hidden;
 }
@@ -590,6 +601,7 @@
     line-height: 1.4;
     display: -webkit-box;
     -webkit-line-clamp: 3;
+    line-clamp: 3;
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin: 0;
@@ -598,6 +610,7 @@
 
 /* Person Page Header */
 
+/* Nav Header (Shared) */
 /* Nav Header (Shared) */
 .nav-header {
     display: flex;
@@ -612,13 +625,15 @@
     margin-right: 16px;
     background: rgba(255, 255, 255, 0.05);
     /* Subtle */
-    border: 2px solid transparent;
+    /* Updated Border */
+    border: 2px solid rgba(255, 255, 255, 0.2) !important;
 }
 
 .nav-header .btn-icon:focus {
     background: var(--jf-accent);
     color: white;
-    border-color: white;
+    /* Unified Focus Border */
+    border-color: var(--jf-accent) !important;
     transform: scale(1.1);
 }
 
@@ -669,7 +684,8 @@
     /* Slightly smaller than main details buttons */
     border-radius: 28px;
     background: rgba(255, 255, 255, 0.1);
-    border: 2px solid transparent;
+    /* Updated Border */
+    border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     padding: 0 24px;
@@ -694,6 +710,7 @@
 .btn-icon-text:focus {
     background: var(--jf-accent);
     color: white;
+    border-color: var(--jf-accent);
     transform: scale(1.05);
     outline: none;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);

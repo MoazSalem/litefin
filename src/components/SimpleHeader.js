@@ -35,6 +35,7 @@ class SimpleHeader extends Component {
                         <polyline points="9 22 9 12 15 12 15 22"></polyline>
                     </svg>
                 </button>
+                <div class="header-title" id="${this.id}-title" style="margin-left: 20px; font-size: 1.5rem; font-weight: 600; opacity: 0; transition: opacity 0.3s;"></div>
             </div>
         `;
     }
@@ -49,6 +50,18 @@ class SimpleHeader extends Component {
 
         if (homeBtn) {
             homeBtn.onclick = () => router.navigate('/');
+        }
+    }
+
+    /**
+     * Set the header title
+     * @param {string} title 
+     */
+    setTitle(title) {
+        const titleEl = document.getElementById(`${this.id}-title`);
+        if (titleEl) {
+            titleEl.textContent = title;
+            titleEl.style.opacity = title ? '1' : '0';
         }
     }
 }

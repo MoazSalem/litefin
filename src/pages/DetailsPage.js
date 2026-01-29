@@ -16,6 +16,7 @@ import { focusManager } from '../ui/FocusManager.js';
 
 import SimpleHeader from '../components/SimpleHeader.js';
 import FavoriteButton from '../components/FavoriteButton.js';
+import EpisodeList from '../components/EpisodeList.js';
 import BackdropManager from '../utils/BackdropManager.js';
 
 class DetailsPage extends Page {
@@ -212,8 +213,10 @@ class DetailsPage extends Page {
             // 5. Load Secondary Data (Async/Background)
             this._loadSecondaryContent();
 
-            // Load similar items
-            this._loadSimilar();
+            // Load similar items (except for seasons)
+            if (this._item.Type !== 'Season') {
+                this._loadSimilar();
+            }
 
         } catch (error) {
             console.error('DetailsPage: Failed to load', error);
@@ -504,12 +507,14 @@ class DetailsPage extends Page {
         if (criticRating) metaHtml += `<span class="meta-item meta-tomato">${criticRating}</span>`;
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
-        const originalTitle = (item.OriginalTitle && item.OriginalTitle !== item.Name) ? item.OriginalTitle : '';
+        const isSeason = item.Type === 'Season';
+        const displayTitle = isSeason ? (item.SeriesName || item.Name) : item.Name;
+        const displaySubtitle = isSeason ? item.Name : ((item.OriginalTitle && item.OriginalTitle !== item.Name) ? item.OriginalTitle : '');
 
         this.$('#hero-info').innerHTML = `
             <div id="details-logo" class="details-logo"></div>
-            <h1 class="details-title">${item.Name}</h1>
-            ${originalTitle ? `<h2 class="details-original-title">${originalTitle}</h2>` : ''}
+            <h1 class="details-title">${displayTitle}</h1>
+            ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
             ${item.Type === 'Episode' ? `<p class="details-episode-info">S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.SeriesName}</p>` : ''}
             
             <div class="details-meta-row">
@@ -658,10 +663,8 @@ class DetailsPage extends Page {
         container.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card?.dataset?.itemId) {
-                // For seasons, we might have stored season ID in dataset differently in card renderer
-                // HomePage card uses item.Id as data-item-id. 
-                // So card.dataset.itemId IS the season ID.
-                this._loadEpisodes(this._itemId, card.dataset.itemId);
+                // Navigate directly to DetailsPage with Season ID
+                router.navigate(`/details/${card.dataset.itemId}`);
             }
         };
 
@@ -698,44 +701,136 @@ class DetailsPage extends Page {
 
         section.classList.remove('hidden');
 
-        const htmlParts = [];
-        for (const ep of this._episodes) {
-            const progress = ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
-                ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
-                : 0;
-
-            htmlParts.push(`
-                <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
-                    <div class="episode-thumb">
-                        <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: 300 })}" alt="">
-                        ${progress > 0 ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
-                    </div>
-                    <div class="episode-info">
-                        <span class="episode-number">E${ep.IndexNumber}</span>
-                        <span class="episode-title">${ep.Name}</span>
-                        <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
-                    </div>
-                </button>
-            `);
-        }
-        container.innerHTML = htmlParts.join('');
-
-        // Click handlers
-        container.querySelectorAll('.episode-card').forEach(card => {
-            card.addEventListener('click', () => {
-                router.navigate(`/details/${card.dataset.episodeId}`);
+        if (this._item.Type === 'Season') {
+            container.classList.add('vertical-list');
+            // Use vertical EpisodeList component
+            this._episodeList = new EpisodeList({
+                episodes: this._episodes,
+                seriesId: this._item.SeriesId,
+                onPlay: (episodeId) => {
+                    router.navigate(`/play/${episodeId}`);
+                },
+                onAction: (action, episodeId) => {
+                    if (action === 'info') {
+                        router.navigate(`/details/${episodeId}`);
+                    }
+                    console.log(`Episode action: ${action} on ${episodeId}`);
+                }
             });
-        });
+            this._episodeList.mount(container);
+        } else {
+            // Horizontal episode cards (for Series NextUp, etc.)
+            const htmlParts = [];
+            for (const ep of this._episodes) {
+                const progress = ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                    ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                    : 0;
 
+                htmlParts.push(`
+                    <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
+                        <div class="episode-thumb">
+                            <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: 300 })}" alt="">
+                            ${progress > 0 ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
+                        </div>
+                        <div class="episode-info">
+                            <span class="episode-number">E${ep.IndexNumber}</span>
+                            <span class="episode-title">${ep.Name}</span>
+                            <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
+                        </div>
+                    </button>
+                `);
+            }
+            container.innerHTML = htmlParts.join('');
+
+            // Click handlers
+            container.querySelectorAll('.episode-card').forEach(card => {
+                card.addEventListener('click', () => {
+                    router.navigate(`/details/${card.dataset.episodeId}`);
+                });
+            });
+        }
+
+        // Focus section registration
         const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
         const nextSection = this._getNextVisibleSection('details-episodes');
         const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
-        // Register focus section
+        // Register focus section - use appropriate selector
+        const selector = this._item.Type === 'Season'
+            ? '.episode-row-card, .episode-action-btn'
+            : '.episode-card';
+
+        // Helper for custom navigation
+        const onSeasonMove = (direction, focusedEl) => {
+            const currentRow = focusedEl.closest('.episode-row');
+            if (!currentRow) return false;
+
+            // Get all rows to determine index
+            const allRows = Array.from(container.querySelectorAll('.episode-row'));
+            const rowIndex = allRows.indexOf(currentRow);
+
+            if (direction === 'up') {
+                if (rowIndex > 0) {
+                    // Move to previous row's CARD (always reset to card for stability)
+                    const prevRow = allRows[rowIndex - 1];
+                    const target = prevRow.querySelector('.episode-row-card');
+                    focusManager.focusElement(target);
+                    return true;
+                }
+                // At top row - let it bubble to leaveUp
+                return false;
+            }
+
+            if (direction === 'down') {
+                if (rowIndex < allRows.length - 1) {
+                    // Move to next row's CARD
+                    const nextRow = allRows[rowIndex + 1];
+                    const target = nextRow.querySelector('.episode-row-card');
+                    focusManager.focusElement(target);
+                    return true;
+                }
+                // At bottom row - let it bubble to leaveDown
+                return false;
+            }
+
+            // Left/Right handled by 'horizontal' orientation (linear in DOM)
+            // But we might want to ensure it doesn't wrap to next row?
+            // Standard 'horizontal' in FocusManager checks index +/- 1.
+            // Since our DOM order is Card -> Btn1 -> Btn2 -> NextCard...
+            // "Right" from last Btn would go to NextCard. We probably DON'T want that?
+            // Ideally Right on last button should do nothing (or leaveRight?)
+            if (direction === 'right') {
+                const rowItems = Array.from(currentRow.querySelectorAll(selector.split(', ').join(',')));
+                const itemIndex = rowItems.indexOf(focusedEl);
+
+                // If we are at the end of the row, BLOCK movement to next row
+                if (itemIndex >= rowItems.length - 1) {
+                    return true; // Handled (blocked)
+                }
+            }
+
+            if (direction === 'left') {
+                const rowItems = Array.from(currentRow.querySelectorAll(selector.split(', ').join(',')));
+                const itemIndex = rowItems.indexOf(focusedEl);
+
+                // If at start of row (Card), let it bubble to leaveLeft (if any) or Sidebar?
+                // Standard horizontal will try index-1. 
+                // If index-1 is prev row's last button, that's bad.
+                // So we must BLOCK if itemIndex is 0.
+                if (itemIndex === 0) {
+                    return false; // Allow bubble to leave section
+                }
+            }
+
+            return false; // Fallback to standard local move
+        };
+
         this.registerFocusSection('details-episodes', container, {
-            orientation: 'vertical',
+            orientation: 'horizontal', // Use horizontal to handle Left/Right linear
             leaveUp: upwardLink,
-            leaveDown: leaveDownTarget
+            leaveDown: leaveDownTarget,
+            selector: selector,
+            onMove: this._item.Type === 'Season' ? onSeasonMove : null
         });
 
         // Update upward link's leaveDown
@@ -932,9 +1027,59 @@ class DetailsPage extends Page {
                 episodeUp = 'details-next-up';
             }
             this.registerFocusSection('details-episodes', this.$('#episodes-list'), {
-                orientation: 'vertical',
+                orientation: 'custom', // Use custom to denote managed logic, though FM doesn't strictly check for 'custom' string yet, it's good for clarity
                 leaveUp: episodeUp,
-                leaveDown: targetName
+                leaveDown: targetName,
+                onMove: (direction, focusedElement) => {
+                    if (!focusedElement) return false;
+                    const currentRow = focusedElement.closest('.episode-row');
+                    if (!currentRow) return false;
+
+                    // Horizontal Navigation (Within Row)
+                    if (direction === 'right' || direction === 'left') {
+                        // Find all focusables in this row
+                        const rowFocusables = Array.from(currentRow.querySelectorAll('.focusable, .episode-action-btn'));
+                        const currentIndex = rowFocusables.indexOf(focusedElement);
+
+                        if (direction === 'right') {
+                            if (currentIndex < rowFocusables.length - 1) {
+                                focusManager.focusElement(rowFocusables[currentIndex + 1]);
+                                return true;
+                            }
+                        } else {
+                            if (currentIndex > 0) {
+                                focusManager.focusElement(rowFocusables[currentIndex - 1]);
+                                return true;
+                            }
+                        }
+                        return false; // Allow FocusManager to handle section leaving (e.g. Left -> Menu?)
+                    }
+
+                    // Vertical Navigation (Between Rows)
+                    if (direction === 'down' || direction === 'up') {
+                        const rows = Array.from(this.$('#episodes-list').querySelectorAll('.episode-row'));
+                        const rowIndex = rows.indexOf(currentRow);
+
+                        let targetRow = null;
+                        if (direction === 'down') {
+                            if (rowIndex < rows.length - 1) targetRow = rows[rowIndex + 1];
+                            else return false; // Let FocusManager handle leaveDown
+                        } else {
+                            if (rowIndex > 0) targetRow = rows[rowIndex - 1];
+                            else return false; // Let FocusManager handle leaveUp
+                        }
+
+                        if (targetRow) {
+                            // Always focus the episodes card when moving vertically
+                            const targetCard = targetRow.querySelector('.episode-row-card');
+                            if (targetCard) {
+                                focusManager.focusElement(targetCard);
+                                return true;
+                            }
+                        }
+                    }
+                    return false;
+                }
             });
         } else if (sectionName === 'details-people') {
             const episodesVisible = !this.$('#episodes-section').classList.contains('hidden');

@@ -24,6 +24,7 @@ import './styles/library.css';
 import './styles/details.css';
 import './styles/search.css';
 import './styles/settings.css';
+import './styles/season.css';
 import './themes/classic/index.js';  // All classic themes
 
 import HomePage from './pages/HomePage.js';
@@ -34,6 +35,7 @@ import PersonPage from './pages/PersonPage.js'; // Import
 import SearchPage from './pages/SearchPage.js';
 import SettingsPage from './pages/SettingsPage.js';
 import FavoritesPage from './pages/FavoritesPage.js';
+// import SeasonPage from './pages/SeasonPage.js'; // Deprecated
 
 import { router } from './core/Router.js';
 
@@ -46,6 +48,12 @@ router.register('/person/:id', PersonPage); // Register
 router.register('/search', SearchPage);
 router.register('/settings', SettingsPage);
 router.register('/favorites', FavoritesPage);
+// Seasons now reuse DetailsPage
+router.register('/series/:id/season/:seasonId', {
+    init: (params) => {
+        router.navigate(`/details/${params.seasonId}`, { replace: true });
+    }
+});
 router.register('/', {
     init: () => {
         // Redirect logic handled in Auth check usually, or here

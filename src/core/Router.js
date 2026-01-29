@@ -92,7 +92,9 @@ class Router {
         }
 
         if (replace) {
-            // Replace current hash without adding to history
+            // Remove the current entry from internal history so the next one replaces it
+            this._history.pop();
+            // Replace current hash without adding to browser history
             window.location.replace(`#${path}`);
         } else {
             window.location.hash = path;
@@ -110,7 +112,7 @@ class Router {
 
             // Navigate to previous page
             const previousPath = this._history.pop();
-            this.navigate(previousPath, { replace: true });
+            this.navigate(previousPath);
             return true;
         }
 

@@ -116,6 +116,8 @@ class FocusManager {
             leaveDown: options.leaveDown || null,
             leaveLeft: options.leaveLeft || null,
             leaveRight: options.leaveRight || null,
+            // Custom Override
+            onMove: options.onMove || null,
             // Custom selector
             selector: options.selector || FOCUSABLE_SELECTOR
         };
@@ -213,6 +215,12 @@ class FocusManager {
 
         const config = this._sections.get(this._activeSection);
         if (!config) return;
+
+        // Custom Override Handler
+        if (config.onMove) {
+            const handled = config.onMove(direction, this._focusedElement);
+            if (handled) return; // Handler took care of it (returned true or truthy)
+        }
 
         const focusables = this._getFocusables(this._activeSection);
         if (!focusables.length) return;

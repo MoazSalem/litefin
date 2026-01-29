@@ -1,0 +1,233 @@
+/* .season-page inherits layout from .details-page */
+.season-page {
+    /* Additional overrides if necessary */
+    position: relative;
+    /* Force GPU acceleration for the whole page */
+    transform: translate3d(0, 0, 0);
+}
+
+/* Override DetailsPage grid for vertical episode list */
+#episodes-list.vertical-list {
+    display: block !important;
+}
+
+/* Vertical Episode List Container */
+.episode-list-container {
+    display: flex;
+    flex-direction: column;
+    padding: 0 60px 80px 60px;
+    /* Increased bottom padding */
+    margin-top: 20px;
+    /* PERFORMANCE: Force GPU layer for the whole list */
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* Episode List Item Row */
+.episode-row {
+    display: flex;
+    align-items: center;
+    height: 180px;
+    margin-bottom: 24px;
+    /* PERFORMANCE: Isolate layout calculations */
+    /* 'strict' might be too aggressive if content changes size, but 'content' is safer */
+    contain: layout style;
+}
+
+/* Remove margin from last item to prevent extra scrolling */
+.episode-row:last-child {
+    margin-bottom: 0;
+}
+
+/* Episode Card (Clickable Play Area) */
+/* Reuses .episode-card styling from details.css but adapted for row */
+.episode-row-card {
+    flex: 1;
+    display: flex;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    cursor: pointer;
+    position: relative;
+    /* For pseudo-element */
+
+    /* PERFORMANCE: Remove border transition, use transform only */
+    border: none;
+    transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+    text-align: left;
+    transform: translateZ(0);
+    will-change: transform;
+}
+
+/* PERFORMANCE HACK: Use pseudo-element for border to avoid reflow/repaint */
+.episode-row-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: var(--jf-border-radius);
+    border: 3px solid var(--jf-accent);
+    opacity: 0;
+    transition: opacity 0.2s ease-out;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.episode-row-card:focus {
+    transform: scale(1.02);
+    /* Make it pop slightly less than grid cards to avoid overlapping buttons too much? */
+    background: var(--jf-card-bg-hover);
+    z-index: 10;
+    outline: none;
+    /* No box-shadow */
+}
+
+.episode-row-card:focus::after {
+    opacity: 1;
+}
+
+/* Thumbnail Section */
+.episode-row-thumb {
+    width: 320px;
+    height: 100%;
+    flex-shrink: 0;
+    position: relative;
+    /* Fix potential image bleeds during transform */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
+}
+
+.episode-row-thumb img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    /* Async decoding */
+    content-visibility: auto;
+}
+
+/* Episode Info Section */
+.episode-row-info {
+    flex: 1;
+    padding: 20px 24px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    min-width: 0;
+    /* Ensure text doesn't trigger layout thrashing */
+    transform: translateZ(0);
+}
+
+.episode-row-index {
+    color: var(--jf-text-primary);
+    font-weight: 700;
+    font-size: 1.5rem;
+    margin-bottom: 6px;
+}
+
+.episode-row-title {
+    font-size: 1.3rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-bottom: 4px;
+}
+
+.episode-row-meta {
+    font-size: 1.15rem;
+    color: var(--jf-text-secondary);
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+}
+
+.episode-row-meta>* {
+    margin-right: 16px;
+}
+
+.episode-row-rating {
+    display: flex;
+    align-items: center;
+    color: #f5c518;
+    /* Star color */
+    font-weight: 600;
+}
+
+.episode-row-rating svg {
+    width: 14px;
+    height: 14px;
+    margin-right: 4px;
+    fill: currentColor;
+}
+
+.episode-row-overview {
+    font-size: 1.15rem;
+    color: var(--jf-text-secondary);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    opacity: 0.8;
+}
+
+/* Side Actions Panel */
+.episode-actions {
+    display: flex;
+    align-items: center;
+    /* gap: 12px; REPLACED below */
+    flex-shrink: 0;
+    margin-left: 24px;
+    /* Spacing from card */
+}
+
+/* Action Buttons (Mini Icon Buttons) */
+.episode-action-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-text-primary);
+    cursor: pointer;
+    /* PERFORMANCE: Simplified transition */
+    transition: transform 0.15s ease-out, background-color 0.15s, border-color 0.15s;
+    margin-right: 12px;
+    /* REPLACES gap: 12px */
+}
+
+.episode-action-btn:last-child {
+    margin-right: 0;
+}
+
+.episode-action-btn.active {
+    background: white;
+    color: var(--jf-background);
+    border-color: white;
+}
+
+/* Ensure focus always wins over active state for consistency */
+.episode-action-btn:focus,
+.episode-action-btn.active:focus {
+    transform: scale(1.15);
+    /* Slightly larger pop */
+    background: var(--jf-accent) !important;
+    border-color: var(--jf-accent) !important;
+    color: white !important;
+    outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.episode-action-btn svg {
+    width: 28px;
+    height: 28px;
+    stroke-width: 2.5;
+}
