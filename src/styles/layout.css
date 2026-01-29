@@ -12,6 +12,11 @@
     background: var(--jf-background);
     display: flex;
     flex-direction: column;
+    /* GLOBAL GPU ACCELERATION */
+    transform: translate3d(0, 0, 0);
+    backface-visibility: hidden;
+    perspective: 1000px;
+    will-change: transform;
 }
 
 .page-header {

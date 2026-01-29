@@ -18,9 +18,9 @@
     padding: 0 60px 80px 60px;
     /* Increased bottom padding */
     margin-top: 20px;
-    /* PERFORMANCE: Force GPU layer for the whole list */
-    transform: translateZ(0);
-    will-change: transform;
+    /* REDUNDANT: Parent .page already has GPU layer. Saving VRAM. */
+    /* transform: translateZ(0); */
+    /* will-change: transform; */
 }
 
 /* Episode List Item Row */
@@ -56,6 +56,7 @@
     border: none;
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     text-align: left;
+    /* KEEP: Interactive element needs layer for smooth scaling */
     transform: translateZ(0);
     will-change: transform;
 }
@@ -78,7 +79,7 @@
 
 .episode-row-card:focus {
     transform: scale(1.02);
-    /* Make it pop slightly less than grid cards to avoid overlapping buttons too much? */
+    /* Make it pop slightly less than grid cards */
     background: var(--jf-card-bg-hover);
     z-index: 10;
     outline: none;
@@ -116,8 +117,8 @@
     flex-direction: column;
     justify-content: center;
     min-width: 0;
-    /* Ensure text doesn't trigger layout thrashing */
-    transform: translateZ(0);
+    /* REDUNDANT: Text doesn't animate independently */
+    /* transform: translateZ(0); */
 }
 
 .episode-row-index {

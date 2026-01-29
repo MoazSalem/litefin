@@ -214,7 +214,7 @@
     flex-direction: column;
     z-index: 100;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-    backdrop-filter: blur(20px);
+    /* backdrop-filter: blur(20px); */
     max-height: 400px;
     overflow-y: auto;
     opacity: 0;

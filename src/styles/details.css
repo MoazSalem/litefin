@@ -289,10 +289,12 @@
 
 /* Secondary Resume Button */
 .resume-btn {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(40, 40, 40, 0.8);
+    /* Opaque fallback instead of blur */
     color: white;
     border: 2px solid rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(10px);
+    /* PERFORMANCE: Remove backdrop-filter */
+    /* backdrop-filter: blur(10px); */
 }
 
 .resume-btn:focus {
@@ -322,14 +324,16 @@
     padding: 0 !important;
     border-radius: 50% !important;
     /* Force circular shape */
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(40, 40, 40, 0.8);
+    /* Opaque fallback */
     /* Added consistent border */
     border: 2px solid rgba(255, 255, 255, 0.2) !important;
     color: var(--jf-text-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    backdrop-filter: blur(10px);
+    /* PERFORMANCE: Remove blur */
+    /* backdrop-filter: blur(10px); */
     overflow: hidden;
     cursor: pointer;
     transition: transform 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s;
@@ -372,6 +376,8 @@
     color: var(--jf-text-secondary);
     max-width: 1200px;
     margin-bottom: 12px;
+    /* Text rendering opt */
+    text-rendering: optimizeLegibility;
 }
 
 .line-clamp-6 {
@@ -430,12 +436,12 @@
     flex: 1;
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
-    /* Standardize gap for modern browsers */
-    /* Fallback for older engines if needed is margin on items */
+    /* gap: 8px; REMOVED for perf */
 }
 
 .meta-chip {
+    margin-right: 8px;
+    /* Replacement for gap */
     background: transparent;
     border: none;
     color: var(--jf-text-primary);
@@ -455,26 +461,12 @@
     text-decoration: underline;
 }
 
-/* Add commas between items except the last one?
-   Or just keep them as space-separated chips?
-   User image showed comma separated text.
-   Let's check the user request image.
-   "Crime, Thriller, Western" - Comma separated text.
-   So .meta-chip should be text-like, not pill-like.
-*/
-
 .meta-chip:not(:last-child)::after {
     content: ",";
     margin-right: 6px;
     color: var(--jf-text-secondary);
     display: inline-block;
 }
-
-/* Tags might need to be badges/pills though? User image: "Tags: vietnam veteran, sheriff..." - plain text comma list.
-   I will style them as text links with comas.
-   But if I want "pill" style for tags specifically?
-   User image shows everything as text lists. I will stick to that for elegance.
-*/
 
 /* See More Button Container */
 .see-more-container {
@@ -483,7 +475,7 @@
 }
 
 .see-more-btn {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(40, 40, 40, 0.8);
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 25px;
     color: var(--jf-text-primary);
@@ -511,21 +503,28 @@
 /* Smooth focus for cast/similar items (matches Home scaling) */
 .media-card {
     transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* GPU Force - KEEP: Interactive element */
+    transform: translateZ(0);
+    will-change: transform;
 }
 
 /* Seasons & Similar */
 .seasons-row,
 .similar-row {
     margin-bottom: 40px;
+    /* REDUNDANT: Container level */
+    /* transform: translateZ(0); */
 }
 
 /* Episodes */
 .episodes-list {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    gap: 30px;
+    /* gap: 30px; REMOVED */
     padding-bottom: 40px;
 }
+
+
 
 .episode-card {
     display: flex;
@@ -534,12 +533,12 @@
     border: none;
     border-radius: var(--jf-border-radius);
     padding: 0;
-    /* Remove padding to let image flush */
     cursor: pointer;
     text-align: left;
     overflow: hidden;
-    /* Clip image corners */
-    transition: transform 0.2s, box-shadow 0.2s, background-color 0.2s;
+    /* Optimize transition */
+    transition: transform 0.2s, background-color 0.2s;
+    /* Removed box-shadow */
 }
 
 .episode-card:last-child {
@@ -549,7 +548,7 @@
 .episode-card:focus {
     transform: scale(1.05);
     background: var(--jf-card-bg-hover);
-    box-shadow: var(--jf-shadow-lg);
+    /* box-shadow: var(--jf-shadow-lg); REMOVED expensive shadow */
     outline: 4px solid var(--jf-accent);
     z-index: 10;
 }
@@ -559,9 +558,7 @@
     aspect-ratio: 16/9;
     flex-shrink: 0;
     margin-right: 0;
-    /* Reset from previous row layout */
     border-radius: 0;
-    /* Flush with card */
     overflow: hidden;
     position: relative;
 }
@@ -611,7 +608,6 @@
 /* Person Page Header */
 
 /* Nav Header (Shared) */
-/* Nav Header (Shared) */
 .nav-header {
     display: flex;
     align-items: center;
@@ -623,8 +619,7 @@
     width: 60px;
     height: 60px;
     margin-right: 16px;
-    background: rgba(255, 255, 255, 0.05);
-    /* Subtle */
+    background: rgba(40, 40, 40, 0.8);
     /* Updated Border */
     border: 2px solid rgba(255, 255, 255, 0.2) !important;
 }
@@ -643,32 +638,46 @@
 
 /* Person Page Grids */
 .person-grid {
-    display: grid;
-    /* Auto-FILL: Prevents single items from becoming huge (adds empty cols) */
-    /* Min-Width 260px: Ensures cards act "bigger" as requested, while filling width */
-    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-    gap: 24px;
+    display: flex;
+    /* Changed from Grid to Flex Wrap for max compatibility */
+    flex-wrap: wrap;
     padding: 40px 60px 60px 60px;
     width: 100%;
     margin: 0;
     box-sizing: border-box;
+    /* REDUNDANT: Container level */
+    /* transform: translateZ(0); */
 }
 
 /* Ensure grid items don't stretch weirdly */
 .person-grid .media-card {
-    /* Allow card to fill the grid cell */
-    width: 100% !important;
-    margin: 0 !important;
-    /* Gap determines spacing */
+    /* Manual sizing instead of grid */
+    width: calc(20% - 20px) !important;
+    /* 5 items per row approx */
+    margin-right: 24px !important;
+    margin-bottom: 24px !important;
     flex: none !important;
     max-width: unset !important;
     min-width: 0 !important;
-    /* Allow shrinking if needed */
+}
+
+.person-grid .media-card:nth-child(5n) {
+    margin-right: 0 !important;
 }
 
 /* Landscape Grid (Episodes on Person Page) */
-.person-grid.landscape-grid {
-    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+.person-grid.landscape-grid .media-card {
+    width: calc(25% - 18px) !important;
+    /* 4 items per row */
+}
+
+.person-grid.landscape-grid .media-card:nth-child(5n) {
+    margin-right: 24px !important;
+    /* Reset 5n rule */
+}
+
+.person-grid.landscape-grid .media-card:nth-child(4n) {
+    margin-right: 0 !important;
 }
 
 /* Person Page Actions (Favorite) */
@@ -677,14 +686,15 @@
     margin-bottom: 24px;
     display: flex;
     align-items: center;
+    /* REDUNDANT: Container level */
+    /* transform: translateZ(0); */
 }
 
 .btn-icon-text {
     height: 56px;
-    /* Slightly smaller than main details buttons */
     border-radius: 28px;
-    background: rgba(255, 255, 255, 0.1);
-    /* Updated Border */
+    background: rgba(40, 40, 40, 0.8);
+    /* Opaque */
     border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
@@ -694,6 +704,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: all 0.2s ease;
+    /* No blur */
 }
 
 .btn-icon-text .icon {
@@ -717,6 +728,5 @@
 }
 
 .btn-icon-text.active .icon svg {
-    /* If we want filled heart to be accentuated */
     fill: currentColor;
 }
