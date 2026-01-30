@@ -54,10 +54,11 @@ class FavoritesPage extends Page {
             if (!userId) throw new Error('User not authenticated');
 
             // Parallel fetch of all favorite types
-            const [movies, shows, episodes, people] = await Promise.all([
+            const [movies, shows, seasons, episodes, people] = await Promise.all([
                 api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Movie', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear' }),
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Series', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ProductionYear' }),
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Episode', SortBy: 'DateCreated', SortOrder: 'Descending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks' }),
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Series', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData' }),
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Season', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData' }),
+                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Episode', SortBy: 'DateCreated', SortOrder: 'Descending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber' }),
                 api.get('/Persons', { Filters: 'IsFavorite', UserId: userId, SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio' })
             ]);
 
@@ -71,6 +72,7 @@ class FavoritesPage extends Page {
             const sectionsData = [];
             if (movies.TotalRecordCount > 0) sectionsData.push({ id: 'fav-movie', title: 'Movies', items: movies.Items, type: 'movie' });
             if (shows.TotalRecordCount > 0) sectionsData.push({ id: 'fav-series', title: 'Shows', items: shows.Items, type: 'series' });
+            if (seasons.TotalRecordCount > 0) sectionsData.push({ id: 'fav-season', title: 'Seasons', items: seasons.Items, type: 'season' });
             if (episodes.TotalRecordCount > 0) sectionsData.push({ id: 'fav-episode', title: 'Episodes', items: episodes.Items, type: 'episode' });
             if (people.TotalRecordCount > 0) sectionsData.push({ id: 'fav-person', title: 'People', items: people.Items, type: 'person' });
 
@@ -156,6 +158,8 @@ class FavoritesPage extends Page {
         const isEpisode = type === 'episode';
         const isPerson = type === 'person';
 
+        const isSeason = type === 'season';
+
         // Image options
         const imageOpts = { maxWidth: 300 };
         const imageUrl = api.getImageUrl(item.Id, 'Primary', imageOpts);
@@ -166,20 +170,41 @@ class FavoritesPage extends Page {
         let cardClass = 'media-card';
         if (isEpisode) cardClass += ' landscape';
 
-        const title = item.Name;
+        let title = item.Name;
         let subtitle = '';
 
         if (isEpisode) {
-            // "Show Title - S1:E2"
-            subtitle = item.ParentTitle || ''; // Show Name
+            // For Episodes:
+            // Title = Show Name (ParentTitle)
+            // Subtitle = "SxxExx - Episode Name"
+            title = item.ParentTitle || item.Name; // Default to Name if ParentTitle missing, but user wants Show Name
+
+            const seasonIndex = item.ParentIndexNumber != null ? item.ParentIndexNumber : '?';
+            const episodeIndex = item.IndexNumber != null ? item.IndexNumber : '?';
+            const epName = item.Name;
+            subtitle = `S${seasonIndex}E${episodeIndex} - ${epName}`;
+
+        } else if (isSeason) {
+            // For Seasons:
+            // Title = Show Name (ParentTitle)
+            // Subtitle = Season Name (item.Name)
+            title = item.ParentTitle || item.Name;
+            subtitle = item.Name; // e.g. "Season 1"
         } else if (item.ProductionYear && !isPerson) {
             subtitle = item.ProductionYear;
+        }
+
+        // Try getting count from root or UserData
+        let count = item.UnplayedItemCount;
+        if (count === undefined && item.UserData && item.UserData.UnplayedItemCount !== undefined) {
+            count = item.UserData.UnplayedItemCount;
         }
 
         return `
             <button class="${cardClass}" data-id="${item.Id}" tabindex="0">
                 <div class="card-image">
                     <img src="${imageUrl}" alt="${title}" loading="lazy" />
+                    ${count ? `<div class="count-badge">${count}</div>` : ''}
                 </div>
                 <div class="card-info">
                     <div class="card-title">${title}</div>

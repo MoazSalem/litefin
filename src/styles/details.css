@@ -42,6 +42,9 @@
     background-position: center top;
     opacity: 0;
     transition: opacity 1s ease-in-out;
+    /* Soften the bottom edge to blend with page background */
+    -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+    mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
 }
 
 .backdrop-gradient {

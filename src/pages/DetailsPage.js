@@ -564,18 +564,46 @@ class DetailsPage extends Page {
         const item = this._item;
         const userData = item.UserData || {};
 
-        // Resume button
-        if (userData.PlaybackPositionTicks > 0) {
-            this.$('.resume-btn')?.classList.remove('hidden');
-            const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-            this.$('.resume-btn').innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
+        const playBtn = this.$('.play-btn');
+        const resumeBtn = this.$('.resume-btn');
+        const watchedBtn = this.$('.watched-btn');
+
+        // Reset state first
+        if (playBtn) playBtn.classList.remove('hidden');
+        if (resumeBtn) {
+            resumeBtn.classList.add('hidden');
+            resumeBtn.classList.remove('btn-primary');
+            resumeBtn.classList.add('btn-secondary');
         }
 
+        // Resume Logic
+        if (userData.PlaybackPositionTicks > 0) {
+            // If resume point exists: Hide Play, Show Resume as Primary
+            if (playBtn) playBtn.classList.add('hidden');
 
+            if (resumeBtn) {
+                resumeBtn.classList.remove('hidden');
+                // Upgrade to primary style
+                resumeBtn.classList.remove('btn-secondary');
+                resumeBtn.classList.add('btn-primary');
+
+                const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
+                resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
+
+                // Ensure focus logic knows about this swap? 
+                // FocusManager should handle it as long as the visible one is focusable.
+
+                // CRITICAL: If we hid the Play button (which probably had focus or would get it),
+                // we must manually force focus to the Resume button so focus isn't lost.
+                requestAnimationFrame(() => {
+                    focusManager.focusElement(resumeBtn);
+                });
+            }
+        }
 
         // Watched button
         if (userData.Played) {
-            this.$('.watched-btn').classList.add('active');
+            if (watchedBtn) watchedBtn.classList.add('active');
         }
     }
 
