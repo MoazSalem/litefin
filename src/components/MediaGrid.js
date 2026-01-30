@@ -50,11 +50,10 @@ class MediaGrid extends Component {
                     ${this._renderItems()}
                 </div>
                 
-                <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'block' : 'none'}">
-                    <button class="btn see-more-btn" id="${btnId}" tabindex="0">
-                        ${this.expanded ? 'See Less' : 'See More'}
-                    </button>
-                </div>
+            <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'flex' : 'none'}; justify-content: center;">
+                <button class="btn see-more-btn" id="${btnId}" tabindex="0">
+                    ${this.expanded ? 'See Less' : 'See More'}
+                </button>
             </div>
         `;
     }
@@ -140,6 +139,7 @@ class MediaGrid extends Component {
         if (btnContainer) {
             if (this._shouldShowButton()) {
                 btnContainer.style.setProperty('display', 'flex', 'important');
+                btnContainer.style.justifyContent = 'center';
                 // Also ensure inner button is visible
                 const btn = btnContainer.querySelector('.see-more-btn');
                 if (btn) btn.style.setProperty('display', 'inline-block', 'important');

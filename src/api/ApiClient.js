@@ -492,14 +492,28 @@ class ApiClient {
         const defaults = {
             UserId: this._userId,
             SearchTerm: query,
-            IncludeItemTypes: 'Movie,Series,Episode',
+            IncludeItemTypes: 'Movie,Series,Episode,BoxSet',
+            Limit: 24,
+            Fields: 'PrimaryImageAspectRatio',
+            Recursive: true,
+            EnableTotalRecordCount: false,
+            MediaTypes: null
+        };
+
+        return this.get('/Items', { ...defaults, ...params });
+    }
+
+    async searchPeople(query, params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            SearchTerm: query,
             Limit: 24,
             Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
             EnableTotalRecordCount: false
         };
 
-        return this.get('/Items', { ...defaults, ...params });
+        return this.get('/Persons', { ...defaults, ...params });
     }
 
     // ========================================================================

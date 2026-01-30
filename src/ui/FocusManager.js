@@ -303,26 +303,30 @@ class FocusManager {
             let distMain = 0;  // parallel to direction
             let distCross = 0; // perpendicular to direction
 
+            // TOLERANCE: Ignore candidates that are "basically on the same line"
+            // This prevents Up/Down from selecting items in the SAME ROW due to subpixel jitter
+            const THRESHOLD = 10;
+
             if (direction === 'right') {
-                if (dx > 0) {
+                if (dx > THRESHOLD) {
                     isValid = true;
                     distMain = dx;
                     distCross = Math.abs(dy);
                 }
             } else if (direction === 'left') {
-                if (dx < 0) {
+                if (dx < -THRESHOLD) {
                     isValid = true;
                     distMain = Math.abs(dx);
                     distCross = Math.abs(dy);
                 }
             } else if (direction === 'down') {
-                if (dy > 0) {
+                if (dy > THRESHOLD) {
                     isValid = true;
                     distMain = dy;
                     distCross = Math.abs(dx);
                 }
             } else if (direction === 'up') {
-                if (dy < 0) {
+                if (dy < -THRESHOLD) {
                     isValid = true;
                     distMain = Math.abs(dy);
                     distCross = Math.abs(dx);

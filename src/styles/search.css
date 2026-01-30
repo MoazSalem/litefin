@@ -4,18 +4,49 @@
  * ============================================================================
  */
 
+/* Navigation Header Spacing */
+#search-header {
+    margin-bottom: 40px;
+    padding-bottom: 20px;
+    /* Optional: minimal separator or just space */
+}
+
+/* Match Home Page Section Titles */
+.row-title {
+    font-size: 2.5rem;
+    /* Increased from 2rem */
+    font-weight: 700;
+    margin-bottom: 20px;
+    /* Increased from 12px for better proportion */
+    padding: 0 60px;
+    color: var(--jf-text-primary);
+}
+
 .search-input-wrapper {
     flex: 1;
 }
 
 .search-input {
     width: 100%;
-    padding: 14px 20px;
-    font-size: 1.25rem;
-    background: var(--jf-input-bg);
-    border: 2px solid var(--jf-input-border);
-    border-radius: var(--jf-border-radius-lg);
+    height: 72px;
+    /* Increased to match global large button size */
+    padding: 0 32px;
+    box-sizing: border-box;
+    line-height: normal;
+    /* Let padding center it */
+    display: flex;
+    align-items: center;
+    font-size: 1.4rem;
+    /* Slightly larger text */
+    background: rgba(40, 40, 40, 0.8);
+    /* Match nav button bg */
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    /* Match nav button border */
+    border-radius: 36px;
+    /* Half of 72px */
+    /* Rounded full */
     color: var(--jf-text-primary);
+    transition: all 0.2s ease;
 }
 
 .search-input:focus {
@@ -25,75 +56,40 @@
 
 .search-empty,
 .search-no-results {
-    text-align: center;
-    padding: 80px 20px;
-    color: var(--jf-text-secondary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    /* Occupy vertical space to center */
+    color: var(--jf-text-primary);
+    /* Remove dimming */
+    opacity: 1;
 }
 
 .search-empty .empty-icon {
-    font-size: 4rem;
-    margin-bottom: 16px;
+    margin-bottom: 24px;
+    color: var(--jf-text-primary);
+    /* Ensure icon is bright */
 }
 
+.search-empty .empty-icon svg {
+    width: 80px;
+    height: 80px;
+    stroke: currentColor;
+    opacity: 1;
+    /* Fully visible */
+}
+
+/* 
+ * Result Grid Styling
+ * Ensuring consistency with MediaGrid and Home Styles 
+ */
 .result-section {
     margin-bottom: 32px;
 }
 
-.result-section-title {
-    font-size: 1.25rem;
-    margin-bottom: 16px;
-    color: var(--jf-text-primary);
-}
-
-.result-grid {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 16px;
-}
-
-.result-card {
-    width: 160px;
-    background: var(--jf-card-bg);
-    border: none;
-    border-radius: var(--jf-border-radius);
-    overflow: hidden;
-    cursor: pointer;
-    text-align: left;
-}
-
-.result-card:focus {
-    transform: scale(1.05);
-}
-
-.result-image {
-    aspect-ratio: 2/3;
-    background: var(--jf-background-alt);
-}
-
-.result-image img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-}
-
-.result-info {
-    padding: 10px;
-}
-
-.result-title {
-    color: var(--jf-text-primary);
-    font-size: 0.85rem;
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-.result-subtitle {
-    color: var(--jf-text-secondary);
-    font-size: 0.75rem;
-    margin: 4px 0 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+/* Override padding for search results to align with titles */
+.search-results .media-row {
+    margin-bottom: 32px;
 }

@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
+import MediaGrid from '../components/MediaGrid.js';
 
 class SearchPage extends Page {
     constructor() {
@@ -25,23 +26,28 @@ class SearchPage extends Page {
     render() {
         return `
             <div class="page search-page">
-                <!-- Header with search input -->
-                <header class="page-header">
-                    <button class="back-btn" tabindex="0">←</button>
-                    <div class="search-input-wrapper">
-                        <input 
-                            type="text" 
-                            id="search-input" 
-                            class="search-input"
-                            placeholder="Search movies, shows, episodes..."
-                            autocomplete="off"
-                            tabindex="0"
-                        >
-                    </div>
-                </header>
-                
                 <!-- Results -->
-                <main class="page-content">
+                <main class="page-content search-content">
+                    <!-- Header with search input (Scrollable) -->
+                    <div class="nav-header media-row" id="search-header">
+                        <button class="btn btn-icon back-btn" id="search-back-btn" tabindex="0" aria-label="Back">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <line x1="19" y1="12" x2="5" y2="12"></line>
+                                <polyline points="12 19 5 12 12 5"></polyline>
+                            </svg>
+                        </button>
+                        <div class="search-input-wrapper">
+                            <input 
+                                type="text" 
+                                id="search-input" 
+                                class="search-input"
+                                placeholder="Search..."
+                                autocomplete="off"
+                                tabindex="0"
+                            >
+                        </div>
+                    </div>
+                    
                     <!-- Results grid -->
                     <div class="search-results" id="search-results">
                         <!-- Results rendered here -->
@@ -81,8 +87,15 @@ class SearchPage extends Page {
         // Setup focus
         this._setupFocus();
 
-        // Focus search input
-        setTimeout(() => this._searchInput.focus(), 100);
+        // Initial Focus Sequence
+        // 1. Remove readonly to allow KB to open initially (user requested this "great" behavior)
+        this._searchInput.removeAttribute('readonly');
+
+        setTimeout(() => {
+            this._searchInput.focus();
+            // Note: We leave it editable so usage works immediately.
+            // It will become readonly only when user navigates AWAY (blur).
+        }, 100);
 
         // Show empty state
         this.$('#search-empty')?.classList.remove('hidden');
@@ -94,22 +107,43 @@ class SearchPage extends Page {
             router.back();
         });
 
-        // Search input
-        this._searchInput?.addEventListener('input', (e) => {
-            this._onSearchInput(e.target.value);
-        });
+        // Search input logic for specific Keyboard behavior
+        if (this._searchInput) {
+            // 1. On Input: Handle text changes
+            this._searchInput.addEventListener('input', (e) => {
+                this._onSearchInput(e.target.value);
+            });
 
-        this._searchInput?.addEventListener('keydown', (e) => {
-            // Down arrow moves to results
-            if (e.keyCode === 40 && this._results.length > 0) {
-                e.preventDefault();
-                this.setActiveSection('search-results');
-            }
-        });
+            // 2. On Blur: Make valid again but READONLY to prevent auto-popup on re-focus
+            this._searchInput.addEventListener('blur', () => {
+                this._searchInput.setAttribute('readonly', 'true');
+            });
+
+            // 3. On Click/Enter: Enable editing and trigger keyboard
+            this._searchInput.addEventListener('click', () => {
+                this._searchInput.removeAttribute('readonly');
+                this._searchInput.focus();
+            });
+
+            // 4. Handle Key navigation
+            this._searchInput.addEventListener('keydown', (e) => {
+                // Return/Enter key (13) is standard click, but sometimes handled nicely strictly here too if needed
+                if (e.keyCode === 13) {
+                    this._searchInput.removeAttribute('readonly');
+                    this._searchInput.focus();
+                }
+
+                // Down arrow moves to results
+                if (e.keyCode === 40 && this._results.length > 0) {
+                    e.preventDefault();
+                    this.setActiveSection('search-results');
+                }
+            });
+        }
     }
 
     _setupFocus() {
-        this.registerFocusSection('search-header', this.$('.page-header'), {
+        this.registerFocusSection('search-header', this.$('.nav-header'), {
             orientation: 'horizontal',
             leaveDown: 'search-results'
         });
@@ -147,8 +181,31 @@ class SearchPage extends Page {
         this.setLoading(true);
 
         try {
-            const response = await api.search(this._query, { Limit: 50 });
-            this._results = response.Items || [];
+            const mediaParams = {
+                Limit: 50,
+                // Removed Person from here as we query it separately
+                IncludeItemTypes: 'Movie,Series,Episode,BoxSet',
+                MediaTypes: null
+            };
+
+            const peopleParams = {
+                Limit: 20
+            };
+
+            console.log(`SearchPage: Searching for "${this._query}"`);
+
+            const [mediaResponse, peopleResponse] = await Promise.all([
+                api.search(this._query, mediaParams),
+                api.searchPeople(this._query, peopleParams)
+            ]);
+
+            const mediaItems = mediaResponse.Items || [];
+            const peopleItems = peopleResponse.Items || [];
+
+            // Combine results
+            this._results = [...mediaItems, ...peopleItems];
+
+            console.log(`SearchPage: Found ${mediaItems.length} media items and ${peopleItems.length} people`);
 
             if (this._results.length > 0) {
                 this._renderResults();
@@ -165,81 +222,142 @@ class SearchPage extends Page {
 
     _renderResults() {
         const container = this.$('#search-results');
+        container.innerHTML = '';
+        this._grids = {};
 
         // Group results by type
         const movies = this._results.filter(i => i.Type === 'Movie');
+        // Include both Series and BoxSets (Collections) as "Shows/Collections" or just Series
         const series = this._results.filter(i => i.Type === 'Series');
         const episodes = this._results.filter(i => i.Type === 'Episode');
+        const people = this._results.filter(i => i.Type === 'Person');
 
-        let html = '';
-
+        // 1. Movies
         if (movies.length > 0) {
-            html += this._renderResultSection('Movies', movies);
+            this._grids.movies = new MediaGrid({
+                id: 'search-movies',
+                title: 'Movies',
+                items: movies,
+                type: 'poster',
+                limit: 10,
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.movies.mount(container);
         }
+
+        // 2. Series
         if (series.length > 0) {
-            html += this._renderResultSection('Series', series);
+            this._grids.series = new MediaGrid({
+                id: 'search-series',
+                title: 'TV Shows',
+                items: series,
+                type: 'poster',
+                limit: 10,
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.series.mount(container);
         }
+
+        // 3. Episodes
         if (episodes.length > 0) {
-            html += this._renderResultSection('Episodes', episodes);
+            this._grids.episodes = new MediaGrid({
+                id: 'search-episodes',
+                title: 'Episodes',
+                items: episodes,
+                type: 'episode', // 'episode' or 'episode-primary'
+                isLandscape: true,
+                limit: 8,
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.episodes.mount(container);
         }
 
-        container.innerHTML = html;
+        // 4. People (Cast/Crew)
+        if (people.length > 0) {
+            this._grids.people = new MediaGrid({
+                id: 'search-people',
+                title: 'Cast & Crew',
+                items: people,
+                type: 'person', // Special card type? Or just poster.
+                limit: 10,
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.people.mount(container);
+        }
 
-        // Add click handlers
-        container.querySelectorAll('.result-card').forEach(card => {
-            card.addEventListener('click', () => {
-                router.navigate(`/details/${card.dataset.itemId}`);
+        // Register focus
+        this._registerSearchFocus();
+    }
+
+    _registerSearchFocus() {
+        const sectionOrder = ['movies', 'series', 'episodes', 'people'];
+        const activeTypes = sectionOrder.filter(type => this._grids[type]);
+
+        if (activeTypes.length === 0) return;
+
+        // Register Header Focus Hook
+        this.registerFocusSection('search-header', this.$('.nav-header'), {
+            orientation: 'horizontal',
+            leaveDown: `${this._grids[activeTypes[0]].id}-items`
+        });
+
+        // Loop through grids to chain them
+        activeTypes.forEach((type, index) => {
+            const gridComp = this._grids[type];
+            const baseId = gridComp.id;
+            const gridZone = `${baseId}-items`;
+            const btnZone = `${baseId}-btn-zone`;
+            const btnId = `${baseId}-btn`;
+
+            const btn = this.$(`#${btnId}`);
+            // Check visibility via offsetParent to avoid focus traps
+            const isButtonVisible = btn && btn.offsetParent !== null;
+            const btnContainer = this.$(`#${btnZone}`);
+
+            const prevType = index > 0 ? activeTypes[index - 1] : null;
+            const nextType = index < activeTypes.length - 1 ? activeTypes[index + 1] : null;
+
+            // --- Grid Zone ---
+            // UP
+            let gridLeaveUp;
+            if (prevType) {
+                const prevComp = this._grids[prevType];
+                const prevBtn = this.$(`#${prevComp.id}-btn`);
+                const prevBtnVisible = prevBtn && prevBtn.offsetParent !== null;
+                gridLeaveUp = prevBtnVisible ? `${prevComp.id}-btn-zone` : `${prevComp.id}-items`;
+            } else {
+                gridLeaveUp = 'search-header';
+            }
+
+            // DOWN
+            let gridLeaveDown = null;
+            if (isButtonVisible) {
+                gridLeaveDown = btnZone;
+            } else if (nextType) {
+                gridLeaveDown = `${this._grids[nextType].id}-items`;
+            }
+
+            this.registerFocusSection(gridZone, this.$(`#${gridZone}`), {
+                orientation: 'grid',
+                leaveUp: gridLeaveUp,
+                leaveDown: gridLeaveDown
             });
 
-            // Focus animation
-            card.addEventListener('focus', () => animationManager.focusScale(card, true));
-            card.addEventListener('blur', () => animationManager.focusScale(card, false));
+            // --- Button Zone ---
+            if (isButtonVisible && btnContainer) {
+                this.registerFocusSection(btnZone, btnContainer, {
+                    orientation: 'horizontal',
+                    leaveUp: gridZone,
+                    leaveDown: nextType ? `${this._grids[nextType].id}-items` : null
+                });
+            }
         });
-
-        // Register focus section
-        this.registerFocusSection('search-results', container, {
-            orientation: 'grid',
-            leaveUp: 'search-header'
-        });
-    }
-
-    _renderResultSection(title, items) {
-        return `
-            <div class="result-section">
-                <h3 class="result-section-title">${title}</h3>
-                <div class="result-grid">
-                    ${items.map(item => this._renderResultCard(item)).join('')}
-                </div>
-            </div>
-        `;
-    }
-
-    _renderResultCard(item) {
-        const imageUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 200 });
-
-        let subtitle = '';
-        if (item.Type === 'Episode') {
-            subtitle = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.SeriesName}`;
-        } else if (item.ProductionYear) {
-            subtitle = item.ProductionYear;
-        }
-
-        return `
-            <button class="result-card" data-item-id="${item.Id}" tabindex="0">
-                <div class="result-image">
-                    <img src="${imageUrl}" alt="${item.Name}" loading="lazy">
-                </div>
-                <div class="result-info">
-                    <p class="result-title">${item.Name}</p>
-                    <p class="result-subtitle">${subtitle}</p>
-                </div>
-            </button>
-        `;
     }
 
     _clearResults() {
         this.$('#search-results').innerHTML = '';
         this._results = [];
+        this._grids = {};
     }
 
     onBack() {
@@ -247,10 +365,13 @@ class SearchPage extends Page {
             // Clear search first
             this._searchInput.value = '';
             this._onSearchInput('');
+            // Optional: Don't focus if we want to leave
             this._searchInput.focus();
-        } else {
-            router.back();
+            return true; // Signal that we handled the back event (prevent app exit/router back)
         }
+
+        // If no query, return false/undefined to let App.js handle standard router.back()
+        return false;
     }
 }
 
