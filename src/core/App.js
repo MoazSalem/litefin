@@ -60,6 +60,25 @@ class App {
         // Setup global event handlers
         this._setupEventHandlers();
 
+        // ================================================================
+        // LAYOUT SETUP
+        // ================================================================
+        // Create Sidebar Container and Page Container if they don't exist
+        // This splits the view into [Sidebar | Page]
+
+        // 1. Check if we need to restructure the DOM
+        if (!document.getElementById('sidebar-container')) {
+            this.container.innerHTML = `
+                <div id="sidebar-container"></div>
+                <div id="page-container" class="page-container"></div>
+            `;
+        }
+
+        // 2. Initialize Sidebar
+        const { default: Sidebar } = await import('../components/Sidebar.js');
+        this.sidebar = new Sidebar();
+        this.sidebar.mount(document.getElementById('sidebar-container'));
+
         // Register routes (must await to ensure all pages are loaded)
         this._registerRoutes();
 
@@ -133,6 +152,28 @@ class App {
             } else {
                 eventBus.emit('app:visible');
             }
+        });
+
+        // Toggle sidebar visibility based on route
+        eventBus.on('router:navigate', ({ path }) => {
+            if (path === '/login') {
+                document.body.classList.add('no-sidebar');
+                if (this.sidebar) this.sidebar.setMode('hidden');
+            } else {
+                document.body.classList.remove('no-sidebar');
+                if (this.sidebar) this.sidebar.setMode('visible');
+            }
+        });
+
+        // Handle logout / Session Expiry
+        eventBus.on('auth:logout', () => {
+            console.log('App: User logged out - resetting to login');
+            router.reset('/login');
+        });
+
+        eventBus.on('auth:expired', () => {
+            console.log('App: Session expired - resetting to login');
+            router.reset('/login');
         });
 
         console.log('App: Event handlers setup');

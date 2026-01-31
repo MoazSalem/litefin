@@ -46,7 +46,7 @@ class Page extends Component {
         this.params = params;
 
         // Get main container
-        this.container = document.getElementById('app');
+        this.container = document.getElementById('page-container') || document.getElementById('app');
 
         // IMPORTANT: Clear the container (removes loading screen)
         this.container.innerHTML = '';

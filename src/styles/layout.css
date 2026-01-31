@@ -19,52 +19,11 @@
     will-change: transform;
 }
 
-.page-header {
+.library-actions-row {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    padding: 20px 40px;
-    background: rgba(0, 0, 0, 0.5);
-    /* Just a bit darker than app background */
-    flex-shrink: 0;
-}
-
-.page-header>* {
-    margin-right: 20px;
-}
-
-.page-header>*:last-child {
-    margin-right: 0;
-}
-
-/* Classic Light Theme overrides for Header */
-:root[data-theme="light"][data-layout="classic"] .page-header {
-    background: rgba(255, 255, 255, 0.95);
-    border-bottom: 2px solid rgba(0, 0, 0, 0.05);
-    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.05);
-}
-
-:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn {
-    color: #444;
-}
-
-:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn.active {
-    color: var(--jf-accent);
-    background: rgba(0, 164, 220, 0.1);
-}
-
-:root[data-theme="light"][data-layout="classic"] .header-mid .nav-text-btn:focus {
-    color: white;
-    background: var(--jf-accent);
-}
-
-:root[data-theme="light"][data-layout="classic"] .page-header .nav-btn {
-    color: #444;
-}
-
-:root[data-theme="light"][data-layout="classic"] .page-header .nav-btn:focus {
-    color: var(--jf-accent);
-    background: rgba(0, 164, 220, 0.1);
+    justify-content: flex-end;
+    padding: 30px 60px 0 60px;
 }
 
 .header-left {
@@ -158,4 +117,52 @@
     flex-shrink: 0;
     width: 60px;
     height: 1px;
+}
+
+/* ============================================================================
+ * Sidebar Layout Support
+ * ============================================================================ */
+
+/* Sidebar Container (Fixed Left) */
+#sidebar-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: var(--sidebar-width-collapsed, 100px);
+    /* Match sidebar.css var */
+    z-index: 1000;
+}
+
+/* Page Container (Fills rest of screen) */
+#page-container {
+    position: absolute;
+    top: 0;
+    left: var(--sidebar-width-collapsed, 100px);
+    right: 0;
+    bottom: 0;
+    /* PERFORMANCE: Disable transition of left property to avoid reflows */
+    /* transition: left 0.3s cubic-bezier(0.25, 0.1, 0.25, 1); */
+
+    /* Ensure pages mount here correctly */
+    display: flex;
+    flex-direction: column;
+}
+
+#page-container .page {
+    width: 100%;
+    height: 100%;
+}
+
+/* ============================================================================
+ * Utility Classes
+ * ============================================================================ */
+
+/* Hide sidebar and expand content area */
+body.no-sidebar #sidebar-container {
+    display: none;
+}
+
+body.no-sidebar #page-container {
+    left: 0;
 }

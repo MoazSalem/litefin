@@ -608,36 +608,7 @@
 }
 
 
-/* Person Page Header */
 
-/* Nav Header (Shared) */
-.nav-header {
-    display: flex;
-    align-items: center;
-    padding: 30px 60px 0 60px;
-    margin-bottom: 0;
-}
-
-.nav-header .btn-icon {
-    width: 60px;
-    height: 60px;
-    margin-right: 16px;
-    background: rgba(40, 40, 40, 0.8);
-    /* Updated Border */
-    border: 2px solid rgba(255, 255, 255, 0.2) !important;
-}
-
-.nav-header .btn-icon:focus {
-    background: var(--jf-accent);
-    color: white;
-    /* Unified Focus Border */
-    border-color: var(--jf-accent) !important;
-    transform: scale(1.1);
-}
-
-.nav-header .btn-icon svg {
-    display: block;
-}
 
 /* Person Page Grids */
 .person-grid {

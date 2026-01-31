@@ -3,7 +3,6 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
-import Header from '../components/Header.js';
 
 class FavoritesPage extends Page {
     constructor() {
@@ -14,7 +13,7 @@ class FavoritesPage extends Page {
     render() {
         return `
             <div class="page favorites-page home-page">
-                <div class="header-container"></div>
+
                 <main class="page-content" id="favorites-content">
                     <div id="favorites-rows" class="home-rows"></div>
                 </main>
@@ -23,27 +22,21 @@ class FavoritesPage extends Page {
     }
 
     async onInit() {
-        // Initialize Header
-        this.header = new Header({ props: { activeTab: 'favorites' } });
-        this.header.mount(this.$('.header-container'));
+
 
         this._bindNavigation();
         await this._loadFavorites();
     }
 
     onDestroyed() {
-        if (this.header) {
-            this.header.destroy();
-        }
+        // if (this.header) {
+        //     this.header.destroy();
+        // }
     }
 
     _bindNavigation() {
-        // Nav listeners handled by Header component now
-
-        // Register focus
-        this.registerFocusSection('header', this.$('.page-header'), {
-            orientation: 'horizontal'
-        });
+        // Nav listeners handled by Sidebar now
+        // We no longer register a 'header' focus section here because the Sidebar is global
     }
 
     async _loadFavorites() {
@@ -84,17 +77,13 @@ class FavoritesPage extends Page {
             // Render and Link Sections
             for (let i = 0; i < sectionsData.length; i++) {
                 const current = sectionsData[i];
-                const prevId = i > 0 ? sectionsData[i - 1].id : 'header';
+                const prevId = i > 0 ? sectionsData[i - 1].id : null;
                 const nextId = i < sectionsData.length - 1 ? sectionsData[i + 1].id : null;
 
                 this._renderSection(current.title, current.items, current.type, current.id, prevId, nextId);
             }
 
-            // Update Header to point to first section
-            this.registerFocusSection('header', this.$('.page-header'), {
-                orientation: 'horizontal',
-                leaveDown: sectionsData[0].id
-            });
+
 
             // Set initial focus to first content row
             if (sectionsData.length > 0) {
@@ -149,8 +138,9 @@ class FavoritesPage extends Page {
 
         this.registerFocusSection(sectionId, itemsContainer, {
             orientation: 'horizontal',
-            leaveUp: prevId,
-            leaveDown: nextId
+            leaveUp: prevId, // Remove header ref
+            leaveDown: nextId,
+            leaveLeft: 'sidebar'
         });
     }
 

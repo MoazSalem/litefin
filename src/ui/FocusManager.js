@@ -123,6 +123,7 @@ class FocusManager {
         };
 
         this._sections.set(name, config);
+        this.invalidateCache(name);
         console.log(`FocusManager: Registered section "${name}"`);
     }
 
@@ -159,12 +160,28 @@ class FocusManager {
             return;
         }
 
+        if (this._activeSection && this._activeSection !== name) {
+            this._previousSection = this._activeSection;
+        }
+
         this._activeSection = name;
         eventBus.emit('focus:sectionChanged', name);
 
         if (restoreFocus) {
             this._restoreFocus(name, fromElement);
         }
+    }
+
+    getPreviousSection() { return this._previousSection; }
+
+    getActionSection() { return this._activeSection; } // Alias if needed? No, getActiveSection exists.
+
+    /**
+     * Get config for a section
+     * @param {string} name
+     */
+    getSectionConfig(name) {
+        return this._sections.get(name);
     }
 
     /**
@@ -410,6 +427,8 @@ class FocusManager {
         const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
         const nextSection = config[key];
 
+        console.log(`[FocusManager] _leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}, exists=${this._sections.has(nextSection)}`);
+
         if (nextSection && this._sections.has(nextSection)) {
             const originElement = this._focusedElement; // Capture for spatial handover
 
@@ -449,9 +468,6 @@ class FocusManager {
         // RESOLUTION FIX: Find the SPECIFIC page content for this element, not just first in DOM
         // This fixes multi-page DOM issues where querySelector finds hidden pages.
         let pageContent = element.closest('.page-content');
-
-        // Fallback for safety
-        if (!pageContent) pageContent = document.querySelector('.page-content');
 
         this._pageContent = pageContent; // Cache for other ops if needed
 
@@ -622,6 +638,16 @@ class FocusManager {
         const focusables = this._getFocusables(sectionName);
         if (!focusables.length) return;
 
+        // Sidebar always starts at Home when entered
+        if (sectionName === 'sidebar') {
+            // Try to find Home button first
+            const homeBtn = focusables.find(el => el.id === 'sidebar-home');
+            const target = homeBtn || focusables[0];
+
+            this.focusElement(target, { skipScroll: true });
+            return;
+        }
+
         let target = null;
 
         // 1. Spatial Entry (Highest Priority)
@@ -681,6 +707,20 @@ class FocusManager {
 
     getActiveSection() { return this._activeSection; }
     getFocused() { return this._focusedElement; }
+
+    /**
+     * Find the registered section name that contains the element
+     * @param {HTMLElement} element 
+     */
+    getSectionForElement(element) {
+        if (!element) return null;
+        for (const [name, config] of this._sections.entries()) {
+            if (config.container.contains(element)) {
+                return name;
+            }
+        }
+        return null;
+    }
 
     destroy() {
         // document.removeEventListener('keydown', this._onKeyDown);

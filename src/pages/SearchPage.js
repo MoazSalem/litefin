@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
+import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 
 class SearchPage extends Page {
@@ -19,6 +20,7 @@ class SearchPage extends Page {
         this.title = 'Search';
 
         this._query = '';
+        this._lastSearchedQuery = ''; // Track to prevent redundant searches
         this._results = [];
         this._debounceTimer = null;
     }
@@ -29,13 +31,7 @@ class SearchPage extends Page {
                 <!-- Results -->
                 <main class="page-content search-content">
                     <!-- Header with search input (Scrollable) -->
-                    <div class="nav-header media-row" id="search-header">
-                        <button class="btn btn-icon back-btn" id="search-back-btn" tabindex="0" aria-label="Back">
-                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <line x1="19" y1="12" x2="5" y2="12"></line>
-                                <polyline points="12 19 5 12 12 5"></polyline>
-                            </svg>
-                        </button>
+                    <div class="search-controls" id="search-header">
                         <div class="search-input-wrapper">
                             <input 
                                 type="text" 
@@ -102,10 +98,7 @@ class SearchPage extends Page {
     }
 
     _bindEvents() {
-        // Back button
-        this.$('.back-btn')?.addEventListener('click', () => {
-            router.back();
-        });
+
 
         // Search input logic for specific Keyboard behavior
         if (this._searchInput) {
@@ -133,19 +126,34 @@ class SearchPage extends Page {
                     this._searchInput.focus();
                 }
 
-                // Down arrow moves to results
                 if (e.keyCode === 40 && this._results.length > 0) {
                     e.preventDefault();
-                    this.setActiveSection('search-results');
+                    // Move focus to first row's items - use RAF to ensure DOM is ready
+                    requestAnimationFrame(() => {
+                        const sectionOrder = ['movies', 'series', 'episodes', 'people'];
+                        const firstType = sectionOrder.find(type => this._grids[type]);
+                        if (firstType) {
+                            const sectionId = `${this._grids[firstType].id}-items`;
+                            const container = this.$(`#${sectionId}`);
+                            if (container) {
+                                const firstCard = container.querySelector('button, [tabindex="0"]');
+                                if (firstCard) {
+                                    this.setActiveSection(sectionId);
+                                    focusManager.focusElement(firstCard);
+                                }
+                            }
+                        }
+                    });
                 }
             });
         }
     }
 
     _setupFocus() {
-        this.registerFocusSection('search-header', this.$('.nav-header'), {
+        this.registerFocusSection('search-header', this.$('#search-header'), {
             orientation: 'horizontal',
-            leaveDown: 'search-results'
+            leaveDown: null, // Dynamically updated by _registerSearchFocus
+            leaveLeft: 'sidebar'
         });
 
         this.setActiveSection('search-header');
@@ -177,6 +185,10 @@ class SearchPage extends Page {
 
     async _search() {
         if (!this._query) return;
+
+        // Skip if already searched for this exact query (prevents flicker on keyboard dismiss)
+        if (this._query === this._lastSearchedQuery) return;
+        this._lastSearchedQuery = this._query;
 
         this.setLoading(true);
 
@@ -296,9 +308,10 @@ class SearchPage extends Page {
         if (activeTypes.length === 0) return;
 
         // Register Header Focus Hook
-        this.registerFocusSection('search-header', this.$('.nav-header'), {
+        this.registerFocusSection('search-header', this.$('#search-header'), {
             orientation: 'horizontal',
-            leaveDown: `${this._grids[activeTypes[0]].id}-items`
+            leaveDown: `${this._grids[activeTypes[0]].id}-items`,
+            leaveLeft: 'sidebar'
         });
 
         // Loop through grids to chain them
@@ -340,7 +353,8 @@ class SearchPage extends Page {
             this.registerFocusSection(gridZone, this.$(`#${gridZone}`), {
                 orientation: 'grid',
                 leaveUp: gridLeaveUp,
-                leaveDown: gridLeaveDown
+                leaveDown: gridLeaveDown,
+                leaveLeft: 'sidebar'
             });
 
             // --- Button Zone ---
@@ -356,21 +370,22 @@ class SearchPage extends Page {
 
     _clearResults() {
         this.$('#search-results').innerHTML = '';
+
+        // Unregister grid sections to prevent memory leaks and focus confusion
+        if (this._grids) {
+            Object.values(this._grids).forEach(grid => {
+                const baseId = grid.id;
+                focusManager.unregister(`${baseId}-items`);
+                focusManager.unregister(`${baseId}-btn-zone`);
+            });
+        }
+
         this._results = [];
         this._grids = {};
     }
 
     onBack() {
-        if (this._query) {
-            // Clear search first
-            this._searchInput.value = '';
-            this._onSearchInput('');
-            // Optional: Don't focus if we want to leave
-            this._searchInput.focus();
-            return true; // Signal that we handled the back event (prevent app exit/router back)
-        }
-
-        // If no query, return false/undefined to let App.js handle standard router.back()
+        // Just navigate back immediately, don't clear search first
         return false;
     }
 }

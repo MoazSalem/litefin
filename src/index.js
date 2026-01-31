@@ -18,6 +18,7 @@ import { debugOverlay } from './ui/DebugOverlay.js';
 import './styles/base.css';
 import './styles/layout.css';
 import './styles/components.css';
+import './styles/sidebar.css';
 import './styles/login.css';
 import './styles/home.css';
 import './styles/library.css';

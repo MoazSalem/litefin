@@ -28,9 +28,8 @@ class LibraryPage extends Page {
         return `
             <div class="page library-page">
                 <!-- Header -->
-                <header class="page-header">
-                    <button class="back-btn" tabindex="0">←</button>
-                    <h1 class="page-title" id="library-title">Library</h1>
+                <!-- Actions Row (Replaces legacy header) -->
+                <div class="library-actions-row" id="library-actions">
                     <nav class="header-nav">
                         <button class="nav-btn sort-btn" tabindex="0">
                             Sort: A-Z
@@ -39,7 +38,7 @@ class LibraryPage extends Page {
                             Filter
                         </button>
                     </nav>
-                </header>
+                </div>
                 
                 <!-- Grid container -->
                 <main class="page-content">
@@ -75,10 +74,7 @@ class LibraryPage extends Page {
     }
 
     _bindNavigation() {
-        // Back button
-        this.$('.back-btn')?.addEventListener('click', () => {
-            router.back();
-        });
+
 
         // Sort button
         this.$('.sort-btn')?.addEventListener('click', () => {
@@ -87,9 +83,10 @@ class LibraryPage extends Page {
     }
 
     _setupFocus() {
-        this.registerFocusSection('library-header', this.$('.page-header'), {
+        this.registerFocusSection('library-actions', this.$('#library-actions'), {
             orientation: 'horizontal',
-            leaveDown: 'library-grid'
+            leaveDown: 'library-grid',
+            leaveLeft: 'sidebar'
         });
     }
 
@@ -155,7 +152,7 @@ class LibraryPage extends Page {
         // Register grid section
         this.registerFocusSection('library-grid', container, {
             orientation: 'grid',
-            leaveUp: 'library-header'
+            leaveUp: 'library-actions'
         });
 
         this.setActiveSection('library-grid');

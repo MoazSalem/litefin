@@ -4,11 +4,14 @@
  * ============================================================================
  */
 
-/* Navigation Header Spacing */
+.search-controls {
+    display: flex;
+    align-items: center;
+    padding: 30px 60px 0 60px;
+}
+
 #search-header {
     margin-bottom: 40px;
-    padding-bottom: 20px;
-    /* Optional: minimal separator or just space */
 }
 
 /* Match Home Page Section Titles */

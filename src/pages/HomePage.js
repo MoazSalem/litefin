@@ -17,7 +17,6 @@ import { eventBus } from '../core/EventBus.js';
 import VirtualList from '../ui/VirtualList.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
-import Header from '../components/Header.js';
 
 class HomePage extends Page {
     constructor() {
@@ -32,7 +31,7 @@ class HomePage extends Page {
         return `
             <div class="page home-page">
                 <!-- Header -->
-                <div class="header-container"></div>
+
                 
                 <!-- Content rows -->
                 <main class="page-content" id="home-content">
@@ -55,9 +54,7 @@ class HomePage extends Page {
             return;
         }
 
-        // Initialize Header
-        this.header = new Header({ props: { activeTab: 'home' } });
-        this.header.mount(this.$('.header-container'));
+
 
         // Setup focus
         this._setupFocus();
@@ -70,23 +67,16 @@ class HomePage extends Page {
         if (this._clockInterval) {
             clearInterval(this._clockInterval);
         }
-        if (this.header) {
-            this.header.destroy();
-        }
+
     }
 
 
 
     _setupFocus() {
-        // Register header as focus section
-        this.registerFocusSection('home-header', this.$('.page-header'), {
-            orientation: 'horizontal',
-            leaveDown: 'home-row-0'
-        });
+
 
         // NOTE: We do NOT set active section here anymore.
-        // We wait for content to load so we don't show a floating focus ring on the menu
-        // while the page is just a loading spinner.
+        // We wait for content to load.
     }
 
     async _loadContent() {
@@ -193,7 +183,7 @@ class HomePage extends Page {
         // Final Focus Check: If nothing is focused yet (e.g. empty results or error),
         // focus the header so navigation is possible.
         if (!focusManager.getActiveSection()) {
-            this.setActiveSection('home-header');
+            this.setActiveSection('sidebar');
         }
     }
 
@@ -230,8 +220,9 @@ class HomePage extends Page {
             const rowEl = container.querySelector(`[data-row-index="${i}"]`);
             this.registerFocusSection(`home-row-${i}`, rowEl, {
                 orientation: 'horizontal',
-                leaveUp: i === 0 ? 'home-header' : `home-row-${i - 1}`,
-                leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null
+                leaveUp: i === 0 ? null : `home-row-${i - 1}`, // Top row doesn't leave up (sidebar is left)
+                leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null,
+                leaveLeft: 'sidebar' // Navigate to Sidebar on left
             });
         }
 
@@ -304,7 +295,7 @@ class HomePage extends Page {
                             focusManager.focusElement(firstCard);
                         } else {
                             // Worst case: back to header
-                            this.setActiveSection('home-header');
+                            this.setActiveSection('sidebar');
                         }
                     }
                 }

@@ -47,16 +47,15 @@ class SettingsPage extends Page {
 
         return `
             <div class="page settings-page">
-                <!-- Header -->
-                <header class="page-header">
-                    <button class="back-btn" tabindex="0">← Back</button>
-                    <h1 class="page-title">Settings</h1>
-                </header>
+
                 
                 <!-- Split View Container -->
                 <div class="settings-split-view">
                     <!-- Sidebar -->
                     <aside class="settings-sidebar" id="settings-sidebar">
+                        <div class="settings-sidebar-header">
+                            <h2>Settings</h2>
+                        </div>
                         ${tabs.map(tab => `
                             <button class="settings-menu-btn ${this.activeTab === tab.id ? 'active' : ''}" 
                                     data-tab="${tab.id}" tabindex="0">
@@ -253,7 +252,7 @@ class SettingsPage extends Page {
 
     _bindEvents() {
         // Back button
-        this.$('.back-btn')?.addEventListener('click', () => router.back());
+
 
         // Sidebar Navigation
         this.$$('.settings-menu-btn').forEach(btn => {
@@ -484,19 +483,17 @@ class SettingsPage extends Page {
             orientation: 'vertical',
             defaultIndex: 0,
             leaveRight: 'settings-content', // Right -> Go to content
-            leaveUp: 'settings-header'
+            leaveUp: null,
+            leaveLeft: 'sidebar' // Global Sidebar
         });
 
         this.registerFocusSection('settings-content', this.$('#settings-content-panel'), {
             orientation: 'grid', // Allow spatial navigation (2D) for buttons/inputs
             leaveLeft: 'settings-sidebar', // Left -> Back to sidebar
-            leaveUp: 'settings-header'
+            leaveUp: null
         });
 
-        this.registerFocusSection('settings-header', this.$('.page-header'), {
-            orientation: 'horizontal',
-            leaveDown: 'settings-sidebar'
-        });
+
 
         // If we are just setting up, default to sidebar focus if nothing else active
         // But if user was in sidebar, keep it there.

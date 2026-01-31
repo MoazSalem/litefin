@@ -14,7 +14,7 @@ import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 
-import SimpleHeader from '../components/SimpleHeader.js';
+
 import FavoriteButton from '../components/FavoriteButton.js';
 import EpisodeList from '../components/EpisodeList.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -33,7 +33,7 @@ class DetailsPage extends Page {
         this._similar = null;
 
         // Components
-        this._header = null;
+
     }
 
     render() {
@@ -46,8 +46,7 @@ class DetailsPage extends Page {
                 
                 <!-- Scrollable Content -->
                 <div class="details-content page-content">
-                    <!-- Nav Header -->
-                    <div id="details-header-container"></div>
+
 
 
                     <!-- Main Split Layout (Marked as media-row for focus scrolling) -->
@@ -145,24 +144,12 @@ class DetailsPage extends Page {
     }
 
     _setupFocus() {
-        // Initialize Header
-        this._header = new SimpleHeader({
-            id: 'details-nav-header',
-            parentId: 'details-page'
-        });
-        this._header.mount(this.$('#details-header-container'));
-
-        // Register Header Focus
-        this.registerFocusSection('details-nav-header', this._header.el, {
-            orientation: 'horizontal',
-            leaveDown: 'details-actions'
-        });
-
-        // Register Action Buttons - Update leaveUp to header
+        // Register Action Buttons
         this.registerFocusSection('details-actions', this.$('#actions'), {
             orientation: 'horizontal',
-            leaveUp: 'details-nav-header',
-            leaveDown: null // Will be updated dynamically
+            leaveUp: null, // Top of page
+            leaveDown: null, // Will be updated dynamically
+            leaveLeft: 'sidebar'
         });
 
         // Default to Play button (actions)
@@ -170,8 +157,6 @@ class DetailsPage extends Page {
     }
 
     _bindActions() {
-        // Nav Buttons handled by SimpleHeader
-
 
         // Play button
         this.$('.play-btn')?.addEventListener('click', () => {
@@ -373,7 +358,8 @@ class DetailsPage extends Page {
                 this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
                     orientation: 'vertical',
                     leaveUp: upwardLink,
-                    leaveDown: leaveDownTarget
+                    leaveDown: leaveDownTarget,
+                    leaveLeft: 'sidebar'
                 });
 
                 // Update upward link
@@ -654,7 +640,8 @@ class DetailsPage extends Page {
         this.registerFocusSection('details-next-up', container, {
             orientation: 'horizontal',
             leaveUp: upwardLink,
-            leaveDown: leaveDownTarget // Ensure down navigation works
+            leaveDown: leaveDownTarget, // Ensure down navigation works
+            leaveLeft: 'sidebar'
         });
 
         // Update upward link
@@ -703,7 +690,8 @@ class DetailsPage extends Page {
         this.registerFocusSection('details-seasons', container, {
             orientation: 'horizontal',
             leaveUp: upwardLink,
-            leaveDown: leaveDownTarget
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar'
         });
 
         // Update upward link
@@ -857,6 +845,7 @@ class DetailsPage extends Page {
             orientation: 'horizontal', // Use horizontal to handle Left/Right linear
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar',
             selector: selector,
             onMove: this._item.Type === 'Season' ? onSeasonMove : null
         });
@@ -897,7 +886,8 @@ class DetailsPage extends Page {
         this.registerFocusSection('details-people', container, {
             orientation: 'horizontal',
             leaveUp: upwardLink,
-            leaveDown: leaveDownTarget
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar'
         });
 
         // Update upward link's leaveDown
@@ -1010,7 +1000,8 @@ class DetailsPage extends Page {
             this.registerFocusSection('details-actions', this.$('#actions'), {
                 orientation: 'horizontal',
                 leaveUp: 'details-nav-header', // Preserve header link
-                leaveDown: actualTarget
+                leaveDown: actualTarget,
+                leaveLeft: 'sidebar'
             });
         } else if (sectionName === 'details-see-more') {
             const richMetaVisible = this.$('#rich-meta').innerHTML !== '';
@@ -1019,7 +1010,8 @@ class DetailsPage extends Page {
             this.registerFocusSection('details-see-more', this.$('.details-overview'), {
                 orientation: 'vertical',
                 leaveUp: 'details-actions',
-                leaveDown: nextTarget
+                leaveDown: nextTarget,
+                leaveLeft: 'sidebar'
             });
         } else if (sectionName === 'details-rich-meta') {
             const seeMoreVisible = this.$('.see-more-btn').style.display !== 'none';
@@ -1028,14 +1020,16 @@ class DetailsPage extends Page {
             this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
                 orientation: 'vertical',
                 leaveUp: upTarget,
-                leaveDown: targetName
+                leaveDown: targetName,
+                leaveLeft: 'sidebar'
             });
         } else if (sectionName === 'details-next-up') {
             const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
             this.registerFocusSection('details-next-up', this.$('#next-up-row'), {
                 orientation: 'horizontal',
                 leaveUp: 'details-rich-meta',
-                leaveDown: targetName
+                leaveDown: targetName,
+                leaveLeft: 'sidebar'
             });
         } else if (sectionName === 'details-seasons') {
             const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
@@ -1043,7 +1037,8 @@ class DetailsPage extends Page {
             this.registerFocusSection('details-seasons', this.$('#seasons-row'), {
                 orientation: 'horizontal',
                 leaveUp: upLink,
-                leaveDown: targetName
+                leaveDown: targetName,
+                leaveLeft: 'sidebar'
             });
         } else if (sectionName === 'details-episodes') {
             const seasonsVisible = !this.$('#seasons-section').classList.contains('hidden');
@@ -1058,6 +1053,7 @@ class DetailsPage extends Page {
                 orientation: 'custom', // Use custom to denote managed logic, though FM doesn't strictly check for 'custom' string yet, it's good for clarity
                 leaveUp: episodeUp,
                 leaveDown: targetName,
+                leaveLeft: 'sidebar',
                 onMove: (direction, focusedElement) => {
                     if (!focusedElement) return false;
                     const currentRow = focusedElement.closest('.episode-row');
@@ -1125,7 +1121,8 @@ class DetailsPage extends Page {
             this.registerFocusSection('details-people', this.$('#people-row'), {
                 orientation: 'horizontal',
                 leaveUp: peopleUp,
-                leaveDown: targetName
+                leaveDown: targetName,
+                leaveLeft: 'sidebar'
             });
         }
     }
@@ -1181,7 +1178,8 @@ class DetailsPage extends Page {
 
         this.registerFocusSection('details-similar', container, {
             orientation: 'horizontal',
-            leaveUp: upwardLink
+            leaveUp: upwardLink,
+            leaveLeft: 'sidebar'
         });
 
         this._updateLeaveDown(upwardLink, 'details-similar');

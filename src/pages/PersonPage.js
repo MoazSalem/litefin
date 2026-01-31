@@ -12,7 +12,7 @@ import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
 import MediaGrid from '../components/MediaGrid.js';
-import SimpleHeader from '../components/SimpleHeader.js';
+
 import FavoriteButton from '../components/FavoriteButton.js';
 import BackdropManager from '../utils/BackdropManager.js';
 
@@ -23,7 +23,7 @@ class PersonPage extends Page {
         this._person = null;
         this._items = [];
         this._grids = {}; // Store component instances
-        this._header = null;
+
     }
 
     onInit() {
@@ -54,8 +54,7 @@ class PersonPage extends Page {
 
                 <div class="page-content">
                     <div class="page-error" style="display:none; padding: 20px; color: #ff6b6b; text-align: center;"></div>
-                    <!-- Nav Header -->
-                    <div id="person-header-container"></div>
+
 
                     <div class="details-main-split">
                         <!-- Left: Poster -->
@@ -91,13 +90,7 @@ class PersonPage extends Page {
         this.setLoading(true);
 
         try {
-            // Setup Nav Buttons
-            const btnBack = this.$('#btn-back');
-            const btnHome = this.$('#btn-home');
 
-            if (btnBack) btnBack.onclick = () => router.back();
-            if (btnHome) btnHome.onclick = () => router.navigate('/home');
-            if (btnHome) btnHome.onclick = () => router.navigate('/home');
 
             // 1. Fetch Person Details
             this._person = await api.getPerson(this._personId);
@@ -132,7 +125,7 @@ class PersonPage extends Page {
             this.setLoading(false);
 
             // Focus Nav first
-            this.setActiveSection('person-actions');
+            this.setActiveSection('person-fav-actions');
         }
     }
 
@@ -400,23 +393,15 @@ class PersonPage extends Page {
 
         const firstType = activeTypes[0];
 
-        // 1. Header Logic
-        const headerEl = this.$('#person-actions');
-        if (headerEl) {
-            this.registerFocusSection('person-actions', headerEl, {
+        // 1.5 Favorite Button Row
+        const favActionsEl = this.$('#person-fav-actions');
+        if (favActionsEl) {
+            this.registerFocusSection('person-fav-actions', favActionsEl, {
                 orientation: 'horizontal',
-                leaveDown: 'person-fav-actions'
+                leaveUp: null, // Top of page
+                leaveDown: `person-${firstType}-items`,
+                leaveLeft: 'sidebar'
             });
-
-            // 1.5 Favorite Button Row
-            const favActionsEl = this.$('#person-fav-actions');
-            if (favActionsEl) {
-                this.registerFocusSection('person-fav-actions', favActionsEl, {
-                    orientation: 'horizontal',
-                    leaveUp: 'person-actions',
-                    leaveDown: `person-${firstType}-items`
-                });
-            }
         }
 
         // 2. Register Each Grid
@@ -470,7 +455,8 @@ class PersonPage extends Page {
                 this.registerFocusSection(gridZone, gridContainer, {
                     orientation: 'grid',
                     leaveUp: gridLeaveUp,
-                    leaveDown: gridLeaveDown
+                    leaveDown: gridLeaveDown,
+                    leaveLeft: 'sidebar'
                 });
             }
 
@@ -485,7 +471,8 @@ class PersonPage extends Page {
                 this.registerFocusSection(btnZone, btnContainer, {
                     orientation: 'horizontal',
                     leaveUp: btnLeaveUp,
-                    leaveDown: btnLeaveDown
+                    leaveDown: btnLeaveDown,
+                    leaveLeft: 'sidebar'
                 });
             }
         });
@@ -494,19 +481,12 @@ class PersonPage extends Page {
     _setupFocus() {
         if (!this.container) return;
 
-        // Initialize Header if not exists
-        if (!this._header) {
-            this._header = new SimpleHeader({
-                id: 'person-actions',
-                parentId: 'person-page'
-            });
-            this._header.mount(this.$('#person-header-container'));
-        }
-
-        // 1. Top Buttons (Back/Home)
-        this.registerFocusSection('person-actions', this._header.el, {
+        // 2. Favorite Action Row
+        this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
             orientation: 'horizontal',
-            leaveDown: 'person-fav-actions'
+            leaveUp: null,
+            leaveDown: null, // Updated by _registerWorkSections
+            leaveLeft: 'sidebar'
         });
 
         // 2. Favorite Action Row
@@ -518,10 +498,7 @@ class PersonPage extends Page {
     }
 
     destroy() {
-        if (this._header) {
-            this._header.destroy();
-            this._header = null;
-        }
+
         if (this._favBtn) {
             this._favBtn.destroy();
             this._favBtn = null;

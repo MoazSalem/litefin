@@ -1,0 +1,260 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Sidebar Styles
+ * ============================================================================
+ */
+
+:root {
+    --sidebar-width-collapsed: 100px;
+    --sidebar-width-expanded: 350px;
+    --sidebar-bg: var(--jf-background-alt, #101010);
+    --sidebar-transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* Logo Colors */
+    --jf-logo-fill: var(--jf-accent, #00a4dc);
+}
+
+.sidebar {
+    position: absolute;
+    /* Using absolute inside #sidebar-container to fill it */
+    top: 0;
+    left: 0;
+    bottom: 0;
+    /* Performant Animation: Fixed width + Clip Path */
+    width: var(--sidebar-width-expanded);
+    /* Always layout at full size */
+    background-color: var(--sidebar-bg);
+    display: flex;
+    flex-direction: column;
+    z-index: 1000;
+
+    /* Clip to collapsed size initially */
+    /* inset(top right bottom left) */
+    clip-path: inset(0 calc(100% - var(--sidebar-width-collapsed)) 0 0);
+    -webkit-clip-path: inset(0 calc(100% - var(--sidebar-width-collapsed)) 0 0);
+
+    transition: clip-path 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), -webkit-clip-path 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    overflow: hidden;
+    /* Hide overflow text when collapsed */
+    padding: 20px 0;
+    border-right: 1px solid rgba(255, 255, 255, 0.05);
+    /* Performance Optimization: Static shadow, GPU hint */
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+    white-space: nowrap;
+    will-change: clip-path;
+    transform: translateZ(0);
+    /* Force GPU layer */
+}
+
+/* Remove transform logic for hidden, just display toggle if needed, or translate */
+.sidebar.hidden {
+    transform: translateX(-100%);
+    /* Use translate for completely hiding off-screen */
+}
+
+.sidebar.expanded {
+    /* Reveal full width */
+    clip-path: inset(0 0 0 0);
+    -webkit-clip-path: inset(0 0 0 0);
+    /* No shadow animation needed */
+}
+
+/* Header / Logo */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    height: 60px;
+    margin-bottom: 40px;
+    padding-left: 0;
+    /* Centered in collapsed via flex */
+    /* Center logo in collapsed state? */
+    justify-content: flex-start;
+}
+
+.logo-icon {
+    width: var(--sidebar-width-collapsed);
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Center in the column */
+    flex-shrink: 0;
+    color: var(--jf-accent);
+}
+
+.logo-icon svg {
+    width: 40px;
+    height: 40px;
+}
+
+.sidebar-logo-svg path {
+    fill: var(--jf-logo-fill);
+}
+
+.logo-text {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: white;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    margin-left: 0px;
+}
+
+.sidebar.expanded .logo-text {
+    opacity: 1;
+    transition-delay: 0.1s;
+}
+
+/* Items */
+.sidebar-item {
+    display: flex;
+    align-items: center;
+    height: 72px;
+    /* Large touch targets */
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    padding: 0;
+    outline: none;
+    text-align: left;
+    position: relative;
+}
+
+.sidebar-item:focus {
+    background: var(--jf-accent);
+    color: white;
+}
+
+.sidebar-item.active {
+    color: var(--jf-accent);
+}
+
+.sidebar-item.active:focus {
+    color: white;
+}
+
+/* Icon Container - Fixed width for alignment */
+.item-icon {
+    width: var(--sidebar-width-collapsed);
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.item-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+/* Icon toggle: outline by default, filled when active */
+.item-icon .icon-outline {
+    display: block;
+}
+
+.item-icon .icon-filled {
+    display: none;
+}
+
+.sidebar-item.active .item-icon .icon-outline {
+    display: none;
+}
+
+.sidebar-item.active .item-icon .icon-filled {
+    display: block;
+}
+
+.sidebar-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid transparent;
+}
+
+.sidebar-item:focus .sidebar-avatar {
+    border-color: white;
+}
+
+/* Text - Hidden when collapsed */
+.item-text {
+    font-size: 1.4rem;
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    padding-right: 20px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar.expanded .item-text {
+    opacity: 1;
+    transition-delay: 0.1s;
+}
+
+/* Navigation & Libraries Container */
+.sidebar-nav,
+.sidebar-libraries {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+}
+
+/* Libraries Section */
+/* Libraries Section */
+.sidebar-libraries-wrapper {
+    margin-top: 0;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+
+    /* Hide completely when collapsed */
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+}
+
+.sidebar.expanded .sidebar-libraries-wrapper {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.2s ease, visibility 0s linear 0s;
+}
+
+.sidebar-section-header {
+    padding: 24px 24px 8px 24px;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--jf-text-tertiary);
+    font-weight: 800;
+    opacity: 0.7;
+}
+
+/* Hide divider as we use the header now */
+.sidebar-divider {
+    display: none;
+}
+
+.library-item {
+    height: 60px;
+    width: 100%;
+}
+
+.library-item .item-text {
+    font-size: 1.2rem;
+    font-weight: 600;
+    padding-left: 32px;
+    opacity: 1;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Page Pushing */
+/* This is controlled by LayoutManager or Base CSS usually, but we define the width var here */

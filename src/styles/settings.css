@@ -29,6 +29,19 @@
     overflow-y: auto;
 }
 
+.settings-sidebar-header {
+    padding: 0 40px 30px 40px;
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    margin-bottom: 20px;
+}
+
+.settings-sidebar-header h2 {
+    font-size: 2rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    margin: 0;
+}
+
 .settings-menu-btn {
     display: flex;
     align-items: center;
