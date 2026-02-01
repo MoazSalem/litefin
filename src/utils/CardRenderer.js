@@ -31,7 +31,7 @@ class CardRenderer {
             // Person Handling (SVG Fallback)
             let primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             if (primaryTag) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 300, tag: primaryTag });
+                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: primaryTag });
             } else {
                 // SVG Placeholder
                 imageInnerHtml = `
@@ -47,16 +47,16 @@ class CardRenderer {
         else if (type === 'episode-primary') {
             // Force Episode Primary Image (for Person Page grid)
             if (item.ImageTags?.Primary) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 640, tag: item.ImageTags.Primary });
             } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
                 // Fallback to season thumb
-                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
+                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 640, tag: item.ParentThumbImageTag });
             } else if (item.SeriesThumbImageTag && item.SeriesId) {
                 // Fallback to series thumb
-                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 640, tag: item.SeriesThumbImageTag });
             } else {
                 // Final Fallback: Series Primary if nothing else
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 300 });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 480 });
             }
         }
         else if (isLandscape) {
@@ -64,24 +64,33 @@ class CardRenderer {
             if (item.Type === 'Episode') {
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
                 if (item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 400, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 640, tag: item.ImageTags.Primary });
                 } else if (item.SeriesThumbImageTag && item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 400, tag: item.SeriesThumbImageTag });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 640, tag: item.SeriesThumbImageTag });
                 } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
-                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 400, tag: item.ParentThumbImageTag });
+                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: 640, tag: item.ParentThumbImageTag });
                 } else if (item.ParentBackdropItemId) {
-                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: 400 });
+                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: 640 });
                 } else if (item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: 400 });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: 640 });
+                }
+            } else if (type === 'library') {
+                // Libraries: Primary -> Thumb -> Backdrop
+                if (item.ImageTags?.Primary) {
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 640, tag: item.ImageTags.Primary });
+                } else if (item.ImageTags?.Thumb) {
+                    imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: 640, tag: item.ImageTags.Thumb });
+                } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                    imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: 640 });
                 }
             } else {
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
                 if (item.ImageTags && item.ImageTags.Thumb) {
-                    imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: 400, tag: item.ImageTags.Thumb });
+                    imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: 640, tag: item.ImageTags.Thumb });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                    imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: 400 });
+                    imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: 640 });
                 } else {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags?.Primary });
                 }
             }
         }
@@ -90,17 +99,17 @@ class CardRenderer {
             if (type === 'season') {
                 // Season: Own Primary -> Series Primary
                 if (item.ImageTags?.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 300, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags.Primary });
                 } else if (item.SeriesId) {
                     // Fallback to series primary if season has no image
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 300 });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 480 });
                 }
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 300 });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 480 });
             } else {
                 // Standard Item
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 300, tag: item.ImageTags?.Primary });
+                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags?.Primary });
             }
         }
 
