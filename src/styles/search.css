@@ -14,17 +14,6 @@
     margin-bottom: 40px;
 }
 
-/* Match Home Page Section Titles */
-.row-title {
-    font-size: 2.5rem;
-    /* Increased from 2rem */
-    font-weight: 700;
-    margin-bottom: 20px;
-    /* Increased from 12px for better proportion */
-    padding: 0 60px;
-    color: var(--jf-text-primary);
-}
-
 .search-input-wrapper {
     flex: 1;
 }

@@ -37,7 +37,7 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 60%;
+    height: 90%;
     background-size: cover;
     background-position: center top;
     opacity: 0;
@@ -54,7 +54,7 @@
     right: 0;
     bottom: 0;
     background: linear-gradient(to bottom,
-            rgba(16, 16, 16, 0.3) 0%,
+            rgba(16, 16, 16, 0.6) 0%,
             var(--jf-background) 100%);
 }
 
@@ -397,7 +397,7 @@
     margin-bottom: 50px;
     margin-left: 60px;
     margin-right: 60px;
-    padding: 20px;
+    padding: 0px 20px;
     /* Internal padding */
     border: 2px solid transparent;
     /* Focus border placeholder */
@@ -415,9 +415,8 @@
 
 .rich-meta-row {
     display: flex;
-    margin-bottom: 16px;
     align-items: baseline;
-    padding: 8px 0;
+    padding: 16px 0;
     /* Touch target spacing */
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     /* Row separators */
@@ -615,7 +614,7 @@
     display: flex;
     /* Changed from Grid to Flex Wrap for max compatibility */
     flex-wrap: wrap;
-    padding: 40px 60px 60px 60px;
+    padding: 16px 60px 60px 60px;
     width: 100%;
     margin: 0;
     box-sizing: border-box;

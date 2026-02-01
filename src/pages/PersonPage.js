@@ -400,7 +400,8 @@ class PersonPage extends Page {
                 orientation: 'horizontal',
                 leaveUp: null, // Top of page
                 leaveDown: `person-${firstType}-items`,
-                leaveLeft: 'sidebar'
+                leaveLeft: 'sidebar',
+                scrollOffsetTop: 500 // Ensure hero visibility when returning from below
             });
         }
 
@@ -479,21 +480,13 @@ class PersonPage extends Page {
     }
 
     _setupFocus() {
-        if (!this.container) return;
-
-        // 2. Favorite Action Row
+        // Initial registration for state consistency
         this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
             orientation: 'horizontal',
             leaveUp: null,
-            leaveDown: null, // Updated by _registerWorkSections
-            leaveLeft: 'sidebar'
-        });
-
-        // 2. Favorite Action Row
-        this.registerFocusSection('person-fav-actions', this.$('#person-fav-actions'), {
-            orientation: 'horizontal',
-            leaveUp: 'person-actions',
-            leaveDown: null // Updated by _registerWorkSections
+            leaveDown: null,
+            leaveLeft: 'sidebar',
+            scrollOffsetTop: 500
         });
     }
 

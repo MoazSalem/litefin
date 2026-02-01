@@ -281,7 +281,7 @@
 .user-name {
     color: var(--jf-text-primary);
     font-size: 1.4rem;
-    padding: 16px 12px;
+    padding: 16px 0px;
 }
 
 .selected-user {

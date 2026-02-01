@@ -359,7 +359,8 @@ class DetailsPage extends Page {
                     orientation: 'vertical',
                     leaveUp: upwardLink,
                     leaveDown: leaveDownTarget,
-                    leaveLeft: 'sidebar'
+                    leaveLeft: 'sidebar',
+                    enterTo: 'first'
                 });
 
                 // Update upward link
@@ -641,7 +642,8 @@ class DetailsPage extends Page {
             orientation: 'horizontal',
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget, // Ensure down navigation works
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            enterTo: 'first'
         });
 
         // Update upward link
@@ -691,7 +693,8 @@ class DetailsPage extends Page {
             orientation: 'horizontal',
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            enterTo: 'first'
         });
 
         // Update upward link
@@ -847,7 +850,8 @@ class DetailsPage extends Page {
             leaveDown: leaveDownTarget,
             leaveLeft: 'sidebar',
             selector: selector,
-            onMove: this._item.Type === 'Season' ? onSeasonMove : null
+            onMove: this._item.Type === 'Season' ? onSeasonMove : null,
+            enterTo: 'first'
         });
 
         // Update upward link's leaveDown
@@ -887,7 +891,8 @@ class DetailsPage extends Page {
             orientation: 'horizontal',
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            enterTo: 'first'
         });
 
         // Update upward link's leaveDown
@@ -923,7 +928,7 @@ class DetailsPage extends Page {
                     // Collapse
                     overviewEl.classList.add('line-clamp-6');
                     seeMoreBtn.textContent = 'See More';
-                    this.$('.details-page').scrollTop = 0; // Optional: Reset scroll
+                    this.el.scrollTop = 0; // Optional: Reset scroll
                 } else {
                     // Expand
                     overviewEl.classList.remove('line-clamp-6');
@@ -938,13 +943,13 @@ class DetailsPage extends Page {
 
     _getNextVisibleSection(currentSectionName) {
         const sections = [
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn').style.display !== 'none' },
-            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta').innerHTML !== '' },
-            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section').classList.contains('hidden') },
-            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section').classList.contains('hidden') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section').classList.contains('hidden') },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section').classList.contains('hidden') },
-            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section').classList.contains('hidden') }
+            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style.display !== 'none' },
+            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta')?.innerHTML !== '' },
+            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section')?.classList.contains('hidden') },
+            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section')?.classList.contains('hidden') },
+            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section')?.classList.contains('hidden') },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section')?.classList.contains('hidden') },
+            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section')?.classList.contains('hidden') }
         ];
 
         let foundCurrent = false;
@@ -962,13 +967,13 @@ class DetailsPage extends Page {
 
     _getPreviousVisibleSection(currentSectionName) {
         const sections = [
-            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section').classList.contains('hidden') },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section').classList.contains('hidden') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section').classList.contains('hidden') },
-            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section').classList.contains('hidden') },
-            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section').classList.contains('hidden') },
-            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta').innerHTML !== '' },
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn').style.display !== 'none' },
+            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section')?.classList.contains('hidden') },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section')?.classList.contains('hidden') },
+            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section')?.classList.contains('hidden') },
+            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section')?.classList.contains('hidden') },
+            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section')?.classList.contains('hidden') },
+            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta')?.innerHTML !== '' },
+            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style.display !== 'none' },
             { name: 'details-actions', elementId: '#actions', isVisible: () => true } // Actions are always visible
         ];
 
@@ -986,145 +991,24 @@ class DetailsPage extends Page {
     }
 
     _updateLeaveDown(sectionName, targetName) {
+        const config = focusManager.getSectionConfig(sectionName);
+        if (!config) return;
+
+        // Determine targets dynamically
+        const prev = this._getPreviousVisibleSection(sectionName);
+        const next = this._getNextVisibleSection(sectionName);
+
+        // Update links while PRESERVING other config (orientation, enterTo, onMove, etc.)
+        config.leaveUp = prev ? prev.targetName : 'sidebar';
+        config.leaveDown = targetName || (next ? next.targetName : null);
+
+        // Special case for actions: always leaveUp to sidebar (user profile)
         if (sectionName === 'details-actions') {
-            const seeMoreVisible = this.$('.see-more-btn').style.display !== 'none';
-            const richMetaVisible = this.$('#rich-meta').innerHTML !== '';
-            let actualTarget = targetName;
-
-            if (seeMoreVisible) {
-                actualTarget = 'details-see-more';
-            } else if (richMetaVisible) {
-                actualTarget = 'details-rich-meta';
-            }
-
-            this.registerFocusSection('details-actions', this.$('#actions'), {
-                orientation: 'horizontal',
-                leaveUp: 'details-nav-header', // Preserve header link
-                leaveDown: actualTarget,
-                leaveLeft: 'sidebar'
-            });
-        } else if (sectionName === 'details-see-more') {
-            const richMetaVisible = this.$('#rich-meta').innerHTML !== '';
-            const nextTarget = richMetaVisible ? 'details-rich-meta' : targetName;
-
-            this.registerFocusSection('details-see-more', this.$('.details-overview'), {
-                orientation: 'vertical',
-                leaveUp: 'details-actions',
-                leaveDown: nextTarget,
-                leaveLeft: 'sidebar'
-            });
-        } else if (sectionName === 'details-rich-meta') {
-            const seeMoreVisible = this.$('.see-more-btn').style.display !== 'none';
-            const upTarget = seeMoreVisible ? 'details-see-more' : 'details-actions';
-
-            this.registerFocusSection('details-rich-meta', this.$('#rich-meta-container'), {
-                orientation: 'vertical',
-                leaveUp: upTarget,
-                leaveDown: targetName,
-                leaveLeft: 'sidebar'
-            });
-        } else if (sectionName === 'details-next-up') {
-            const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
-            this.registerFocusSection('details-next-up', this.$('#next-up-row'), {
-                orientation: 'horizontal',
-                leaveUp: 'details-rich-meta',
-                leaveDown: targetName,
-                leaveLeft: 'sidebar'
-            });
-        } else if (sectionName === 'details-seasons') {
-            const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
-            const upLink = nextUpVisible ? 'details-next-up' : 'details-rich-meta';
-            this.registerFocusSection('details-seasons', this.$('#seasons-row'), {
-                orientation: 'horizontal',
-                leaveUp: upLink,
-                leaveDown: targetName,
-                leaveLeft: 'sidebar'
-            });
-        } else if (sectionName === 'details-episodes') {
-            const seasonsVisible = !this.$('#seasons-section').classList.contains('hidden');
-            const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
-            let episodeUp = 'details-actions';
-            if (seasonsVisible) {
-                episodeUp = 'details-seasons';
-            } else if (nextUpVisible) {
-                episodeUp = 'details-next-up';
-            }
-            this.registerFocusSection('details-episodes', this.$('#episodes-list'), {
-                orientation: 'custom', // Use custom to denote managed logic, though FM doesn't strictly check for 'custom' string yet, it's good for clarity
-                leaveUp: episodeUp,
-                leaveDown: targetName,
-                leaveLeft: 'sidebar',
-                onMove: (direction, focusedElement) => {
-                    if (!focusedElement) return false;
-                    const currentRow = focusedElement.closest('.episode-row');
-                    if (!currentRow) return false;
-
-                    // Horizontal Navigation (Within Row)
-                    if (direction === 'right' || direction === 'left') {
-                        // Find all focusables in this row
-                        const rowFocusables = Array.from(currentRow.querySelectorAll('.focusable, .episode-action-btn'));
-                        const currentIndex = rowFocusables.indexOf(focusedElement);
-
-                        if (direction === 'right') {
-                            if (currentIndex < rowFocusables.length - 1) {
-                                focusManager.focusElement(rowFocusables[currentIndex + 1]);
-                                return true;
-                            }
-                        } else {
-                            if (currentIndex > 0) {
-                                focusManager.focusElement(rowFocusables[currentIndex - 1]);
-                                return true;
-                            }
-                        }
-                        return false; // Allow FocusManager to handle section leaving (e.g. Left -> Menu?)
-                    }
-
-                    // Vertical Navigation (Between Rows)
-                    if (direction === 'down' || direction === 'up') {
-                        const rows = Array.from(this.$('#episodes-list').querySelectorAll('.episode-row'));
-                        const rowIndex = rows.indexOf(currentRow);
-
-                        let targetRow = null;
-                        if (direction === 'down') {
-                            if (rowIndex < rows.length - 1) targetRow = rows[rowIndex + 1];
-                            else return false; // Let FocusManager handle leaveDown
-                        } else {
-                            if (rowIndex > 0) targetRow = rows[rowIndex - 1];
-                            else return false; // Let FocusManager handle leaveUp
-                        }
-
-                        if (targetRow) {
-                            // Always focus the episodes card when moving vertically
-                            const targetCard = targetRow.querySelector('.episode-row-card');
-                            if (targetCard) {
-                                focusManager.focusElement(targetCard);
-                                return true;
-                            }
-                        }
-                    }
-                    return false;
-                }
-            });
-        } else if (sectionName === 'details-people') {
-            const episodesVisible = !this.$('#episodes-section').classList.contains('hidden');
-            const seasonsVisible = !this.$('#seasons-section').classList.contains('hidden');
-            const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
-
-            let peopleUp = 'details-actions';
-            if (episodesVisible) {
-                peopleUp = 'details-episodes';
-            } else if (seasonsVisible) {
-                peopleUp = 'details-seasons';
-            } else if (nextUpVisible) {
-                peopleUp = 'details-next-up';
-            }
-            this.registerFocusSection('details-people', this.$('#people-row'), {
-                orientation: 'horizontal',
-                leaveUp: peopleUp,
-                leaveDown: targetName,
-                leaveLeft: 'sidebar'
-            });
+            config.leaveUp = 'sidebar';
         }
+
+        // Re-register to apply changes
+        focusManager.register(sectionName, config.container, config);
     }
 
     async _loadSimilar() {
@@ -1179,7 +1063,8 @@ class DetailsPage extends Page {
         this.registerFocusSection('details-similar', container, {
             orientation: 'horizontal',
             leaveUp: upwardLink,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            enterTo: 'first'
         });
 
         this._updateLeaveDown(upwardLink, 'details-similar');

@@ -19,7 +19,7 @@ class CardRenderer {
      * @returns {string} HTML string
      */
     static createCardHtml(item, options = {}) {
-        const { isLandscape = false, type = 'poster' } = options;
+        const { isLandscape = false, type = 'poster', contextType = null } = options;
 
         let imageUrl = '';
         let imageInnerHtml = '';
@@ -162,9 +162,10 @@ class CardRenderer {
 
         const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         const imagePart = imageUrl ? `<img src="${imageUrl}" alt="${item.Name}" loading="lazy" />` : imageInnerHtml;
+        const finalContextType = contextType || item.Type;
 
         return `
-            <button class="${cssClass}" data-item-id="${itemId}" data-context-type="${item.Type}" tabindex="0">
+            <button class="${cssClass}" data-item-id="${itemId}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image">
                     ${imagePart}
                     ${progressHtml}

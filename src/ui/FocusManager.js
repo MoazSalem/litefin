@@ -116,8 +116,12 @@ class FocusManager {
             leaveDown: options.leaveDown || null,
             leaveLeft: options.leaveLeft || null,
             leaveRight: options.leaveRight || null,
+            // Directional Entry logic
+            enterTo: options.enterTo || null, // 'first' or null (spatial/memory)
             // Custom Override
             onMove: options.onMove || null,
+            // Custom Scroll Logic
+            scrollOffsetTop: options.scrollOffsetTop || 0,
             // Custom selector
             selector: options.selector || FOCUSABLE_SELECTOR
         };
@@ -464,6 +468,10 @@ class FocusManager {
             this._focusedElement.classList.remove('focused');
         }
 
+        // Get section config for custom scroll offsets
+        const sectionName = this.getSectionForElement(element);
+        const config = sectionName ? this._sections.get(sectionName) : null;
+
         // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
         // RESOLUTION FIX: Find the SPECIFIC page content for this element, not just first in DOM
         // This fixes multi-page DOM issues where querySelector finds hidden pages.
@@ -580,8 +588,11 @@ class FocusManager {
                 let finalScrollTop = currentScroll;
 
                 // Simple "Scroll Into View" logic
-                if (elementTop < currentScroll + topMargin) {
-                    finalScrollTop = Math.max(0, elementTop - topMargin);
+                const customOffset = config?.scrollOffsetTop || 0;
+                const effectiveTopMargin = Math.max(topMargin, customOffset);
+
+                if (elementTop < currentScroll + effectiveTopMargin) {
+                    finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
                 }
                 else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
                     if (elementHeight < viewHeight / 4) {
@@ -634,6 +645,9 @@ class FocusManager {
     }
 
     _restoreFocus(sectionName, fromElement = null) {
+        const config = this._sections.get(sectionName);
+        if (!config) return;
+
         const memory = this._focusMemory.get(sectionName);
         const focusables = this._getFocusables(sectionName);
         if (!focusables.length) return;
@@ -650,7 +664,14 @@ class FocusManager {
 
         let target = null;
 
-        // 1. Spatial Entry (Highest Priority)
+        // 0. Forced Entry Logic (Highest Priority)
+        if (config.enterTo === 'first' && focusables.length > 0) {
+            target = focusables[0];
+            this.focusElement(target, { skipScroll: this._useInstantScroll });
+            return;
+        }
+
+        // 1. Spatial Entry
         // If we came from another element (e.g. Button below grid), pick closest grid item
         if (fromElement && document.contains(fromElement)) {
             target = this._findSpatialClosest(fromElement, focusables);

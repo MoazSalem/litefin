@@ -22,11 +22,12 @@
 }
 
 .row-title {
-    font-size: 2rem;
-    font-weight: 700;
-    margin-bottom: 12px;
+    font-size: 2.0rem;
+    font-weight: 600;
+    margin-bottom: 16px;
     padding: 0 60px;
     color: var(--jf-text-primary);
+    letter-spacing: -0.5px;
 }
 
 .media-card {

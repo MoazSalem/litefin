@@ -153,6 +153,14 @@
     color: rgb(229, 231, 235);
 }
 
+.btn-option:disabled {
+    opacity: 0.4;
+    cursor: default;
+    background: rgba(30, 30, 30, 0.4);
+    transform: none !important;
+    border-color: transparent !important;
+}
+
 /* 
  * REMOVED Light Theme Overrides 
  * User requested consistent dark/glass style for all themes

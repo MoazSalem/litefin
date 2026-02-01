@@ -158,8 +158,8 @@ class Page extends Component {
      * Render a standard media card
      * Unified method for Home and Details pages
      */
-    _renderMediaCard(item, isLandscape = false, type = 'poster') {
-        return CardRenderer.createCardHtml(item, { isLandscape, type });
+    _renderMediaCard(item, isLandscape = false, type = 'poster', contextType = null) {
+        return CardRenderer.createCardHtml(item, { isLandscape, type, contextType });
     }
 }
 

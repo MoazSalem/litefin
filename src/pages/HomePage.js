@@ -207,7 +207,7 @@ class HomePage extends Page {
 
             // Inline card rendering to avoid function call overhead per item
             for (const item of row.items) {
-                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type));
+                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type, row.type));
             }
 
             htmlParts.push('</div></section>');

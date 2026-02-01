@@ -105,7 +105,7 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         <button class="btn btn-option layout-btn ${currentLayout === 'classic' ? 'active' : ''}" data-layout="classic" tabindex="0">Classic</button>
-                        <button class="btn btn-option layout-btn ${currentLayout === 'modern' ? 'active' : ''}" data-layout="modern" tabindex="0">Modern</button>
+                        <button class="btn btn-option layout-btn ${currentLayout === 'modern' ? 'active' : ''}" data-layout="modern" tabindex="-1" disabled>Modern (Soon)</button>
                     </div>
                 </div>
 
