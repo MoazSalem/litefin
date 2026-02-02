@@ -472,6 +472,12 @@ class FocusManager {
         const sectionName = this.getSectionForElement(element);
         const config = sectionName ? this._sections.get(sectionName) : null;
 
+        // Auto-switch active section if we are focusing an element in a different section
+        if (sectionName && this._activeSection !== sectionName) {
+            console.log(`[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`);
+            this.setActiveSection(sectionName, false); // false = Don't trigger restoreFocus (prevent loop)
+        }
+
         // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
         // RESOLUTION FIX: Find the SPECIFIC page content for this element, not just first in DOM
         // This fixes multi-page DOM issues where querySelector finds hidden pages.
@@ -665,8 +671,14 @@ class FocusManager {
         let target = null;
 
         // 0. Forced Entry Logic (Highest Priority)
+        // Support 'first' or 'active-element' (finds .active or .selected)
         if (config.enterTo === 'first' && focusables.length > 0) {
             target = focusables[0];
+            this.focusElement(target, { skipScroll: this._useInstantScroll });
+            return;
+        }
+        else if (config.enterTo === 'active-element' && focusables.length > 0) {
+            target = focusables.find(el => el.classList.contains('active') || el.classList.contains('selected')) || focusables[0];
             this.focusElement(target, { skipScroll: this._useInstantScroll });
             return;
         }

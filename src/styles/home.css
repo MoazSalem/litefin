@@ -51,12 +51,6 @@
     -webkit-backface-visibility: hidden;
 }
 
-/* Keep padding on last card so it can scroll fully into view */
-.media-card:last-child {
-    margin-right: 120px;
-    /* Large margin so last item fits fully on screen */
-}
-
 /* Landscape styling for "Continue Watching" & "Next Up" */
 .media-card.landscape {
     width: 400px;

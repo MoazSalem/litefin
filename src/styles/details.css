@@ -508,6 +508,7 @@
     /* GPU Force - KEEP: Interactive element */
     transform: translateZ(0);
     will-change: transform;
+    justify-self: center;
 }
 
 /* Seasons & Similar */

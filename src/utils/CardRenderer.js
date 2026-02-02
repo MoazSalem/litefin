@@ -178,6 +178,30 @@ class CardRenderer {
             </button>
         `;
     }
+
+    /**
+     * Create generic skeleton loader HTML
+     * @param {number} count - Number of items to generate
+     * @param {boolean} isLandscape - Layout mode
+     * @returns {string} HTML string
+     */
+    static createSkeletonHtml(count = 10, isLandscape = false) {
+        let html = '';
+        for (let i = 0; i < count; i++) {
+            html += `
+                <div class="media-card skeleton ${isLandscape ? 'landscape' : ''}">
+                    <div class="card-image skeleton-image pulse">
+                        <!-- Space reserved by .card-image padding -->
+                    </div>
+                    <div class="card-info">
+                        <div class="card-title skeleton-line pulse" style="width: 80%; margin: 0 auto;"></div>
+                        <div class="card-subtitle skeleton-line pulse" style="width: 50%; margin: 6px auto 0 auto;"></div>
+                    </div>
+                </div>
+            `;
+        }
+        return html;
+    }
 }
 
 export default CardRenderer;

@@ -338,7 +338,7 @@ class PersonPage extends Page {
                 title: 'Movies',
                 items: movies,
                 type: 'poster',
-                limit: 12,
+                limit: 10,
                 onSeeMore: () => {
                     this._registerWorkSections();
                     // Reapply character roles after grid re-renders
@@ -355,7 +355,7 @@ class PersonPage extends Page {
                 title: 'Shows',
                 items: shows,
                 type: 'poster',
-                limit: 12,
+                limit: 10,
                 onSeeMore: () => {
                     this._registerWorkSections();
                     // Reapply character roles after grid re-renders
@@ -373,7 +373,7 @@ class PersonPage extends Page {
                 items: episodes,
                 type: 'episode-primary', // Use special type
                 isLandscape: true, // Force landscape grid
-                limit: 10,
+                limit: 8,
                 onSeeMore: () => this._registerWorkSections()
             });
             this._grids.episodes.mount(worksContainer);

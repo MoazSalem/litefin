@@ -1,58 +1,493 @@
-/**
- * ============================================================================
- * Litefin Tizen - Library Styles
- * ============================================================================
- */
+/* ==========================================================================
+   Litefin Tizen - Library Page Styles
+   ========================================================================== */
 
-.library-grid {
-    height: calc(100vh - 140px);
-}
-
-.vgrid-item {
-    cursor: pointer;
-}
-
-.grid-card {
-    width: 100%;
-    height: 100%;
-    background: var(--jf-card-bg);
-    border-radius: var(--jf-border-radius);
+.library-page {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    box-sizing: border-box;
     overflow: hidden;
 }
 
-.grid-card .card-image {
-    height: 75%;
-    position: relative;
-    background: var(--jf-background-alt);
-}
-
-.grid-card .card-image img {
-    width: 100%;
+/* --- Scroll Container --- */
+.library-scroll-container {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
     height: 100%;
-    object-fit: cover;
+    /* Smooth scrolling */
+    scroll-behavior: smooth;
+
+    display: flex;
+    flex-direction: column;
 }
 
-.watched-badge {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: var(--jf-accent);
-    color: white;
-    width: 24px;
-    height: 24px;
+/* --- Header Section --- */
+.library-header {
+    /* No longer grid item, normal flow */
+    padding: 40px 60px 0 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    /* More breathing room between Title, Tabs, and Controls */
+    z-index: 10;
+}
+
+.library-title-row {
+    display: flex;
+    align-items: center;
+    /* justify-content: space-between; Old: Space between title and controls */
+    justify-content: flex-start;
+    /* Title on left */
+}
+
+.library-title {
+    font-size: 32px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--text-primary);
+}
+
+/* Tabs (Chip Style) */
+.library-tabs {
+    display: flex;
+    overflow-x: auto;
+    padding: 20px 0px;
+    justify-content: center;
+    scrollbar-width: none;
+    flex-wrap: wrap;
+}
+
+.tab-btn {
+    margin: 0 10px 10px 10px;
+    /* Spacing for Tizen */
+    padding: 12px 28px;
+    border-radius: 40px;
+    background-color: rgba(40, 40, 40, 0.8);
+    /* Match Resume/Icon btn in details */
+    color: var(--text-primary);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    font-size: 20px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.1s ease-out;
+    white-space: nowrap;
+}
+
+.tab-btn.active {
+    background-color: #ffffff;
+    /* Match Play btn in details */
+    color: #000000;
+    border-color: #ffffff;
+}
+
+/* Unified Focus Styles - Preserving Roundness */
+.tab-btn:focus,
+.tab-btn.focused,
+.control-btn:focus,
+.control-btn.focused,
+.pagination-btn:not(:disabled):focus,
+.pagination-btn.focused,
+.modal-option-btn:focus,
+.modal-option-btn.focused,
+.modal-close-btn:focus,
+.modal-close-btn.focused {
+    outline: none !important;
+    background-color: var(--jf-accent) !important;
+    color: #ffffff !important;
+    border-color: var(--jf-accent) !important;
+    transform: scale(1.05);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+    z-index: 10;
+}
+
+/* Specific Radius Enforcement on Focus (Fixes Tizen "Rectangle" bug) */
+.tab-btn:focus,
+.tab-btn.focused,
+.control-btn:focus,
+.control-btn.focused,
+.pagination-btn:focus,
+.pagination-btn.focused,
+.modal-close-btn:focus,
+.modal-close-btn.focused {
+    border-radius: 40px !important;
+}
+
+.modal-option-btn:focus,
+.modal-option-btn.focused {
+    border-radius: 16px !important;
+    margin-left: 12px;
+    margin-right: 12px;
+}
+
+/* Controls Row */
+.library-controls-row {
+    display: flex;
+    justify-content: center;
+    padding-bottom: 20px;
+    margin-top: -10px;
+}
+
+.library-controls {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.control-btn {
+    margin: 5px 10px;
+    /* Spacing for Tizen */
+    display: flex;
+    align-items: center;
+    padding: 12px 28px;
+    border-radius: 40px;
+    background-color: rgba(40, 40, 40, 0.8);
+    color: var(--text-primary);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.1s ease-out;
+}
+
+.control-svg {
+    width: 18px;
+    height: 18px;
+    display: block;
+    margin-right: 12px;
+    /* Fix for Tizen gap issues */
+}
+
+.count-indicator {
+    color: var(--text-muted);
+    font-size: 14px;
+    font-weight: 500;
+    margin-right: 15px;
+    /* Spacing before buttons */
+}
+
+/* --- Main Grid Content --- */
+
+/* 
+   We added .page-content to .library-scroll-container so FocusManager uses it for scrolling.
+   But .page-content (global) adds padding: 20px 40px. 
+   We must remove that padding from the container because children (Header/Content) have their own padding.
+*/
+.library-page .library-scroll-container.page-content {
+    /* Override global .page-content properties */
+    padding: 0 !important;
+    overflow-y: auto !important;
+    height: 100% !important;
+    /* Ensure no flex-basis conflict */
+    flex: 1 1 auto !important;
+    min-height: 0 !important;
+    /* Ensure positioning context for offsetTop calculations */
+    position: relative !important;
+}
+
+/* Cleanup old specific override if it exists (it shouldn't match anymore but good to be clean) */
+/* Empty rule removed */
+
+.library-content {
+    /* Normal flow inside scroll container */
+    position: relative;
+    padding: 20px 60px 40px 60px;
+    /* Standard padding */
+    flex: 1;
+    /* Pushes footer down */
+}
+
+.library-grid {
+    display: grid;
+    /* Responsive Grid using mix/max for TV */
+    /* Responsive Grid using mix/max for TV */
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    /* Hits strictly 5 per row at 1080p */
+    gap: 40px 30px;
+    padding-bottom: 0;
+    /* Let footer handle spacing */
+}
+
+/* Reset media-card styles for Grid context */
+.library-grid .media-card {
+    width: 100% !important;
+    /* Let grid column size it */
+    margin: 0 !important;
+    /* Let grid gap handle spacing */
+}
+
+/* Adjust for landscape items if needed via class modifier */
+/* Adjust for landscape items if needed via class modifier */
+.library-grid.landscape {
+    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+    /* Hits strictly 4 per row at 1080p */
+}
+
+/* --- Alpha Picker (Right Side) --- */
+.alpha-picker-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 10px 60px;
+    margin-bottom: 20px;
+    z-index: 20;
+}
+
+.alpha-picker {
+    display: flex;
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 40px;
+    padding: 12px 24px;
+}
+
+.alpha-btn {
+    font-size: 18px;
+    font-weight: 600;
+    color: var(--text-muted);
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 8px 12px;
+    text-align: center;
+    transition: all 0.15s ease;
     border-radius: 50%;
+    width: 44px;
+    height: 44px;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 0.75rem;
 }
 
-.grid-card .card-info {
-    padding: 8px 12px;
+.alpha-btn.active {
+    color: var(--jf-accent);
+    font-weight: 700;
+    transform: scale(1.2);
 }
 
-.card-year {
-    color: var(--jf-text-secondary);
-    font-size: 0.8rem;
-    margin: 2px 0 0;
+.alpha-btn:focus,
+.alpha-btn.focused {
+    outline: none !important;
+    /* Remove square focus */
+    color: var(--text-primary) !important;
+    background-color: var(--jf-accent) !important;
+    transform: scale(1.1);
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
+    border-radius: 50% !important;
+}
+
+/* --- Pagination Footer --- */
+.library-pagination {
+    padding: 60px 60px 80px 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 20px 48px;
+    margin: 0 20px;
+    /* Spacing for Tizen */
+    background-color: rgba(60, 60, 60, 0.8);
+    color: var(--text-primary);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: 60px;
+    /* Larger Pill */
+    font-size: 24px;
+    font-weight: 700;
+    transition: all 0.1s ease-out;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+}
+
+.pagination-btn:not(:disabled):focus,
+.pagination-btn.focused {
+    background-color: var(--jf-accent) !important;
+    border-color: var(--jf-accent) !important;
+    transform: scale(1.1);
+}
+
+.pagination-info {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 30px;
+}
+
+/* --- Modal / Overlay --- */
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+.library-modal {
+    background-color: #1a1a1a;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    padding: 24px;
+    width: 400px;
+    width: 500px;
+    /* Wider for TV */
+    max-width: 90%;
+    max-height: 80vh;
+    border-radius: 16px;
+    z-index: 10001;
+    /* Above overlay */
+    display: flex;
+    flex-direction: column;
+    /* gap: 20px; GAP NOT SUPPORTED IN TIZEN 4 (Chrome 56) */
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+    transform: scale(0.9);
+    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Spacer helpers for Flexbox gap polyfill */
+.library-modal>* {
+    margin-bottom: 20px;
+}
+
+.library-modal> :last-child {
+    margin-bottom: 0;
+}
+
+.modal-overlay.visible .library-modal {
+    transform: scale(1);
+}
+
+.modal-header h2 {
+    margin: 0;
+    font-size: 24px;
+    font-weight: 500;
+    color: var(--text-primary);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    /* Separator */
+    padding-bottom: 15px;
+}
+
+.modal-options {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    padding: 0px 0px;
+    /* gap: 10px; Replaced by margin */
+}
+
+.modal-option-btn {
+    margin: 0 0 12px 0;
+    /* Spacing for Tizen */
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(40, 40, 40, 0.8);
+    padding: 22px 30px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 16px;
+    color: var(--text-primary);
+    text-align: left;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: all 0.1s ease-out;
+}
+
+/* Handled by unified focus rule above */
+
+.modal-option-btn .check-icon {
+    opacity: 0;
+}
+
+.modal-option-btn.selected .check-icon {
+    opacity: 1;
+}
+
+.modal-close-btn {
+    margin-top: 20px;
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.1);
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 40px;
+    color: var(--text-primary);
+    font-size: 18px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.1s ease-out;
+}
+
+/* Handled by unified focus rule above */
+
+/* --- Skeleton Loader --- */
+.media-card.skeleton {
+    pointer-events: none;
+    cursor: default;
+}
+
+/* Skeletons use the real .card-image and .card-info classes for layout, 
+   so we only need to style the pulsing background and lines. */
+.skeleton-image {
+    background-color: rgba(255, 255, 255, 0.08);
+    /* Fallback */
+}
+
+.skeleton-line {
+    background-color: rgba(255, 255, 255, 0.08);
+    border-radius: 4px;
+}
+
+.skeleton-line.title {
+    height: 1.2rem;
+    width: 80%;
+    margin: 0 auto;
+}
+
+.skeleton-line.subtitle {
+    height: 1rem;
+    width: 50%;
+    margin: 8px auto 0 auto;
+}
+
+@keyframes pulse {
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
+}
+
+.pulse {
+    animation: pulse 1.5s infinite ease-in-out;
 }
