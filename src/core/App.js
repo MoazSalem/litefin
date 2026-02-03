@@ -192,6 +192,7 @@ class App {
         router.register('/login', LoginPage);
         router.register('/home', HomePage);
         router.register('/library/:id', LibraryPage);
+        router.register('/library/:id/genre/:genreId', LibraryPage); // Filtered by Genre
         router.register('/details/:id', DetailsPage);
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);

@@ -116,7 +116,6 @@
 
 .modal-option-btn:focus,
 .modal-option-btn.focused {
-    border-radius: 16px !important;
     margin-left: 12px;
     margin-right: 12px;
 }
@@ -136,12 +135,13 @@
     justify-content: center;
 }
 
-.control-btn {
+.control-btn,
+.pagination-btn {
     margin: 5px 10px;
     /* Spacing for Tizen */
     display: flex;
     align-items: center;
-    padding: 12px 28px;
+    padding: 12px 18px;
     border-radius: 40px;
     background-color: rgba(40, 40, 40, 0.8);
     color: var(--text-primary);
@@ -156,8 +156,12 @@
     width: 18px;
     height: 18px;
     display: block;
+    /* Spacing logic handled by parent flex/margins */
+}
+
+.control-btn-text {
+    margin-left: 12px;
     margin-right: 12px;
-    /* Fix for Tizen gap issues */
 }
 
 .count-indicator {
@@ -490,4 +494,346 @@
 
 .pulse {
     animation: pulse 1.5s infinite ease-in-out;
+}
+
+/* ==========================================================================
+   Library Modals - Unified Design System
+   ========================================================================== */
+
+/* Shared Overlay backdrop */
+#modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(10px);
+    /* Modern glass effect */
+    z-index: 10000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    opacity: 0;
+    visibility: hidden;
+    transition: all 0.3s ease;
+}
+
+#modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.library-modal {
+    background: var(--jf-background-alt, #151515);
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    position: relative;
+    max-height: 90vh;
+    /* Global constraint to prevent off-screen overflow */
+    color: var(--jf-text-primary);
+}
+
+.library-modal .modal-title {
+    padding: 30px 40px;
+    margin: 0;
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Split View (Filter) */
+.library-modal.split-view {
+    width: 90vw;
+    max-width: 1100px;
+    height: 80vh;
+}
+
+.filter-split-container {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+}
+
+.filter-sidebar,
+.settings-sidebar-ref {
+    /* Re-use logic from settings if needed */
+    width: 350px;
+    background: rgba(0, 0, 0, 0.2);
+    border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    padding: 20px 0;
+}
+
+/* Category Buttons (Shared Sidebar Style) */
+.filter-category-btn {
+    appearance: none;
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    text-align: left;
+    padding: 18px 40px;
+    margin: 4px 10px;
+    /* Added margin for vertical spacing on Tizen */
+    font-size: 1.25rem;
+    cursor: pointer;
+    border-left: 6px solid transparent;
+    border-radius: 8px;
+    /* Standardize corners */
+    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.filter-category-btn:focus {
+    background: var(--jf-accent);
+    color: white;
+    border-left-color: white;
+    padding-left: 45px;
+    outline: none;
+}
+
+.filter-category-btn.active {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--jf-text-primary);
+    border-left-color: var(--jf-accent);
+    font-weight: 600;
+}
+
+/* Main Content Panel */
+.filter-main {
+    flex: 1;
+    padding: 30px 40px;
+    overflow-y: auto;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    grid-auto-rows: max-content;
+    /* Redundant gap removed, using margin on children for Tizen */
+    align-content: start;
+}
+
+/* Scrollbar styling for modal lists */
+.filter-main::-webkit-scrollbar,
+.sort-column .modal-options::-webkit-scrollbar {
+    display: block;
+    width: 6px;
+}
+
+.filter-main::-webkit-scrollbar-thumb,
+.sort-column .modal-options::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+}
+
+/* Option Buttons (Radio/Checkbox) */
+.modal-option-btn {
+    appearance: none;
+    background: rgba(255, 255, 255, 0.03);
+    border: 2px solid transparent;
+    padding: 15px 20px;
+    margin: 5px;
+    /* Added explicit margin for Tizen flex/grid fallback */
+    color: var(--jf-text-secondary);
+    font-size: 1.15rem;
+    cursor: pointer;
+    text-align: left;
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    /* Redundant gap removed, using margin on children */
+    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.modal-option-btn .radio-icon,
+.modal-option-btn .checkbox-box {
+    margin-right: 16px;
+    /* Spacing fallback for Tizen gap */
+}
+
+.modal-option-btn:focus {
+    background: var(--jf-accent);
+    color: white;
+    transform: scale(1.05);
+    border-color: white;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    outline: none;
+}
+
+.modal-option-btn.selected {
+    color: var(--jf-text-primary);
+    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.1);
+}
+
+/* Selection Indicators (Glow/Accent) */
+.radio-icon,
+.checkbox-box {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    /* Brighter default border */
+    transition: all 0.2s;
+    flex-shrink: 0;
+    position: relative;
+    /* CRITICAL for indicator positioning */
+}
+
+.radio-icon {
+    border-radius: 50%;
+}
+
+.checkbox-box {
+    border-radius: 6px;
+}
+
+.modal-option-btn.selected .radio-icon,
+.modal-option-btn.selected .checkbox-box {
+    border-color: var(--jf-accent);
+}
+
+.modal-option-btn.selected .radio-icon::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background-color: var(--jf-accent);
+    box-shadow: 0 0 10px var(--jf-accent);
+}
+
+.check-mark {
+    font-size: 16px;
+    color: white;
+    opacity: 0;
+    transform: scale(0.5);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    width: 100%;
+    line-height: 1;
+}
+
+.modal-option-btn.selected .check-mark {
+    opacity: 1;
+    transform: scale(1);
+    color: white;
+}
+
+.modal-option-btn.selected .checkbox-box {
+    background-color: var(--jf-accent);
+    border-color: var(--jf-accent);
+    box-shadow: 0 0 10px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.5);
+}
+
+/* Actions Footer */
+.modal-actions {
+    padding: 30px 40px;
+    border-top: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    background: rgba(0, 0, 0, 0.2);
+    display: flex;
+    justify-content: flex-end;
+    /* Redundant gap removed, using margins on buttons instead for Tizen compatibility */
+}
+
+/* Unified Modal Action Buttons */
+.modal-action-btn {
+    padding: 12px 30px;
+    margin-left: 20px;
+    /* Increased margin for Tizen flex gap fallback */
+    border: 2px solid transparent;
+    border-radius: 8px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.modal-action-btn:first-child {
+    margin-left: 0;
+}
+
+.modal-action-btn:focus {
+    transform: scale(1.15);
+    border-color: white;
+    background-color: var(--jf-accent);
+    color: white;
+    box-shadow: 0 0 30px var(--jf-accent), 0 10px 20px rgba(0, 0, 0, 0.5);
+    z-index: 10;
+    outline: none;
+}
+
+.modal-action-btn.apply {
+    background-color: var(--jf-accent);
+    color: white;
+}
+
+.modal-action-btn.clear,
+.modal-action-btn.close {
+    background-color: rgba(255, 255, 255, 0.1);
+    color: var(--jf-text-primary);
+}
+
+.modal-action-btn.clear {
+    margin-right: auto;
+}
+
+.modal-action-btn.clear:focus,
+.modal-action-btn.close:focus {
+    background-color: rgba(255, 255, 255, 0.2);
+    color: white;
+}
+
+/* Sort Modal Specifics */
+.library-modal.sort-modal {
+    width: 800px;
+    height: 85vh;
+    /* Larger fixed height */
+}
+
+.sort-columns {
+    display: flex;
+    flex-direction: row;
+    gap: 0;
+    flex: 1;
+    min-height: 0;
+    /* Important for child scrolling */
+}
+
+.sort-column {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+    height: 100%;
+    min-height: 0;
+}
+
+.sort-column:last-child {
+    border-right: none;
+}
+
+.sort-column .modal-title {
+    padding: 20px 30px;
+    font-size: 1.4rem;
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+    background: rgba(0, 0, 0, 0.2);
+    /* Darker header background */
+}
+
+.sort-column .modal-options {
+    padding: 20px;
+    flex: 1;
+    overflow-y: auto;
+    min-height: 0;
 }

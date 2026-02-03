@@ -50,7 +50,6 @@ class LibraryPage extends Page {
             <div class="page library-page">
                 <!-- Scrollable Content Wrapper -->
                 <div class="library-scroll-container page-content" id="library-scroll-container">
-                    
                     <!-- Header Section -->
                     <header class="library-header" id="library-header">
                         <div class="library-title-row">
@@ -74,8 +73,10 @@ class LibraryPage extends Page {
                                         <svg viewBox="0 0 24 24" fill="none" class="control-svg">
                                             <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
-                                    </span> 
+                                    </span>
+                                    <span class="control-btn-text">  
                                     Shuffle
+                                    </span>
                                 </button>
                                 <button class="control-btn" id="btn-sort" tabindex="0">
                                     <span class="icon">
@@ -85,7 +86,9 @@ class LibraryPage extends Page {
                                             <path d="M11 18H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                         </svg>
                                     </span> 
+                                    <span class="control-btn-text">
                                     Sort
+                                    </span>
                                 </button>
                                 <button class="control-btn" id="btn-filter" tabindex="0">
                                     <span class="icon">
@@ -93,10 +96,30 @@ class LibraryPage extends Page {
                                             <path d="M21 4H3L10 12.42V19L14 21V12.42L21 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span> 
+                                    <span class="control-btn-text">
                                     Filter
+                                    </span>
                                 </button>
-                                <button class="control-btn" id="btn-prev-top" tabindex="0">Prev</button>
-                                <button class="control-btn" id="btn-next-top" tabindex="0">Next</button>
+                                <button class="control-btn" id="btn-prev-top" tabindex="0">
+                                    <span class="icon">
+                                        <svg viewBox="0 0 24 24" fill="none" class="control-svg">
+                                            <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span>
+                                    <span class="control-btn-text">
+                                    Prev
+                                    </span>
+                                </button>
+                                <button class="control-btn" id="btn-next-top" tabindex="0">
+                                    <span class="control-btn-text">
+                                    Next
+                                    </span>
+                                    <span class="icon">
+                                        <svg viewBox="0 0 24 24" fill="none" class="control-svg" style="margin-right: 0;">
+                                            <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span>
+                                </button>
                             </div>
                         </div>
 
@@ -122,9 +145,27 @@ class LibraryPage extends Page {
 
                      <!-- Footer Pagination -->
                     <footer class="library-pagination" id="library-pagination">
-                        <button class="pagination-btn" id="btn-prev" tabindex="0">Previous</button>
+                        <button class="pagination-btn" id="btn-prev" tabindex="0">
+                            <span class="icon">
+                                <svg viewBox="0 0 24 24" fill="none" class="control-svg">
+                                    <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                            <span class="control-btn-text">
+                            Previous
+                            </span>
+                        </button>
                         <span class="pagination-info" id="pagination-info">Page 1</span>
-                        <button class="pagination-btn" id="btn-next" tabindex="0">Next</button>
+                        <button class="pagination-btn" id="btn-next" tabindex="0">
+                            <span class="control-btn-text">
+                            Next
+                            </span>
+                            <span class="icon">
+                                <svg viewBox="0 0 24 24" fill="none" class="control-svg" style="margin-right: 0;">
+                                    <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                            </span>
+                        </button>
                     </footer>
                 </div>
 
@@ -155,11 +196,56 @@ class LibraryPage extends Page {
         // 3. Bind Events
         this._bindEvents();
 
-        // 4. Initial Data Load
-        await this._loadItems();
-
         // 5. Register Focus
         this._setupFocus();
+
+        // 4. Handle Genre Mode or Initial Data
+        if (this.params.genreId) {
+            this.state.viewType = 'Items'; // Force Items view for Genre
+            // Fetch Genre Info for Title
+            try {
+                const genre = await api.getItem(this.params.genreId);
+                if (genre) {
+                    this.$('#library-title').textContent = genre.Name; // Show Genre Name
+                    this.title = genre.Name;
+                }
+            } catch (e) {
+                console.error('Failed to fetch genre info', e);
+            }
+        }
+
+        await this._loadItems();
+    }
+
+    /**
+     * Handle back navigation
+     * @returns {boolean} True if handled
+     */
+    onBack() {
+        // Check if modal is open
+        const overlay = this.$('#modal-overlay');
+        if (overlay && overlay.classList.contains('visible')) {
+
+            // Check WHICH modal is open (Filter or Sort) based on content or ID?
+            // Current strict impl: We have Filter and Sort.
+            // Sort uses _closeModal, Filter uses _closeFilterModal.
+            // We can try closing both or checking content.
+
+            if (overlay.querySelector('.filter-modal')) {
+                this._closeFilterModal();
+                const btn = this.$('#btn-filter');
+                if (btn) focusManager.focusElement(btn);
+                return true;
+            } else {
+                // Assume Sort or standard modal
+                this._closeModal();
+                // Restore focus for sort?
+                const sortBtn = this.$('#btn-sort');
+                if (sortBtn) focusManager.focusElement(sortBtn);
+                return true;
+            }
+        }
+        return false;
     }
 
     _bindEvents() {
@@ -190,6 +276,38 @@ class LibraryPage extends Page {
         this.$('#modal-overlay')?.addEventListener('click', (e) => {
             if (e.target.id === 'modal-overlay') this._closeModal();
         });
+
+
+        // Horizontal Rows Header Click
+        // Attach to #library-content (stable parent)
+        this.$('#library-content')?.addEventListener('click', (e) => {
+            // Handle genre header clicks
+            const headerBtn = e.target.closest('.header-focusable');
+            if (headerBtn) {
+                const rowHeader = headerBtn.closest('.library-row-header');
+                if (!rowHeader) return;
+
+                const rowEl = rowHeader.parentElement; // .library-row
+                if (!rowEl) return;
+
+                const genreId = rowEl.dataset.genreId;
+
+                if (genreId) {
+                    console.log('Navigating to Genre:', genreId);
+                    // Navigate to Genre Filtered Page
+                    router.navigate(`/library/${this.state.libraryId}/genre/${genreId}`);
+                }
+                return;
+            }
+
+            // Handle media card clicks in horizontal rows
+            const mediaCard = e.target.closest('.media-card');
+            if (mediaCard?.dataset?.itemId) {
+                const itemId = mediaCard.dataset.itemId;
+                console.log('Navigating to item details:', itemId);
+                router.navigate(`/details/${itemId}`);
+            }
+        });
     }
 
     destroy() {
@@ -215,6 +333,7 @@ class LibraryPage extends Page {
 
     async _loadItems() {
         this.setLoading(true);
+
         // Show Skeleton instead of spinner
         const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming';
         const grid = this.$('#library-grid');
@@ -238,6 +357,52 @@ class LibraryPage extends Page {
             // Apply Filters
             if (this.state.nameStartsWith) {
                 params.NameStartsWith = this.state.nameStartsWith;
+            }
+
+            // Apply Genre Filter (From Route)
+            if (this.params.genreId) {
+                params.GenreIds = this.params.genreId;
+                params.Recursive = true;
+                params.IncludeItemTypes = 'Movie,Series,Episode'; // Broaden search for Genre view
+            }
+
+            // Apply Advanced Filters
+            if (this.state.filters) {
+                const f = this.state.filters;
+                const filtersParam = [];
+
+                // Boolean Filters that map to 'Filters' param
+                if (f.IsPlayed) filtersParam.push('IsPlayed');
+                if (f.IsUnplayed) filtersParam.push('IsUnplayed');
+                if (f.IsResumable) filtersParam.push('IsResumable');
+                if (f.IsFavorite) filtersParam.push('IsFavorite');
+
+                if (filtersParam.length > 0) {
+                    if (params.Filters) {
+                        params.Filters = params.Filters + ',' + filtersParam.join(',');
+                    } else {
+                        params.Filters = filtersParam.join(',');
+                    }
+                }
+
+                // Boolean params
+                if (f.HasSubtitles) params.HasSubtitles = true;
+                if (f.HasTrailer) params.HasTrailer = true;
+                if (f.HasSpecialFeature) params.HasSpecialFeature = true;
+                if (f.HasThemeSong) params.HasThemeSong = true;
+                if (f.HasThemeVideo) params.HasThemeVideo = true;
+
+                // Video Type booleans
+                if (f.IsHD !== undefined) params.IsHD = f.IsHD;
+                if (f.Is4K) params.Is4K = true;
+                if (f.Is3D) params.Is3D = true;
+
+                // Multi-value params
+                if (f.Genres) params.Genres = f.Genres.replace(/,/g, '|');
+                if (f.OfficialRatings) params.OfficialRatings = f.OfficialRatings.replace(/,/g, '|');
+                if (f.Tags) params.Tags = f.Tags.replace(/,/g, '|');
+                if (f.Years) params.Years = f.Years;
+                if (f.VideoTypes) params.VideoTypes = f.VideoTypes;
             }
 
             // Handle View Types
@@ -265,6 +430,54 @@ class LibraryPage extends Page {
                     result = { Items: result, TotalRecordCount: result.length };
                 }
 
+            } else if (viewType === 'Suggestions') {
+                // Fetch multiple rows for Suggestions
+                const [resume, nextUp, latest] = await Promise.all([
+                    api.getResumeItems({ Limit: 12, ParentId: this.state.libraryId }),
+                    api.getNextUp({ Limit: 12, ParentId: this.state.libraryId }),
+                    api.getLatestItems(this.state.libraryId, { Limit: 12 })
+                ]);
+
+                const rows = [];
+                if (resume.Items && resume.Items.length > 0) {
+                    rows.push({ title: 'Continue Watching', items: resume.Items });
+                }
+                if (nextUp.Items && nextUp.Items.length > 0) {
+                    rows.push({ title: 'Next Up', items: nextUp.Items });
+                }
+                if (latest && latest.length > 0) {
+                    rows.push({ title: 'Latest Added', items: latest });
+                }
+
+                this.state.items = []; // Clear grid items
+                this._renderHorizontalRows(rows);
+                this._updatePaginationUI();
+                return; // Skip grid render
+
+            } else if (viewType === 'Genres') {
+                // Fetch Genres List for Vertical Rows
+                result = await api.getGenres({
+                    ParentId: this.state.libraryId,
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 100 // Fetch plenty of genres
+                });
+
+                const allGenres = result.Items || [];
+
+                // create lazy rows
+                const rows = allGenres.map(genre => ({
+                    title: genre.Name,
+                    genreId: genre.Id,
+                    isLazy: true,
+                    items: [] // Empty initially
+                }));
+
+                this.state.items = [];
+                this._renderHorizontalRows(rows);
+                this._updatePaginationUI();
+                return;
+
             } else if (viewType === 'Upcoming') {
                 result = await api.getNextUp({ Limit: 40 }); // This is global, might need filtering by library if possible (not standard in API)
 
@@ -286,11 +499,6 @@ class LibraryPage extends Page {
                 // Fallback: Just show all collections for now or remove if context invalid.
                 result = await api.getItems(params);
 
-            } else if (viewType === 'Genres') {
-                // TODO: Fetch Genres
-                // result = await api.getGenres(...);
-                result = { Items: [], TotalRecordCount: 0 };
-            } else {
                 // Fallback
                 result = await api.getItems(params);
             }
@@ -306,6 +514,9 @@ class LibraryPage extends Page {
             this.$('#library-grid').innerHTML = `<p class="error-msg">Failed to load content</p>`;
         } finally {
             this.setLoading(false);
+            // Apply Header visibility and specialization AFTER content is loaded
+            // This ensures target move sections (like header-0) exist.
+            this._updateHeaderVisibility();
         }
     }
 
@@ -316,6 +527,14 @@ class LibraryPage extends Page {
 
         this.$('#pagination-info').textContent = `Page ${currentPage} of ${totalPages || 1}`;
 
+        // Hide/Show logic for single page or horizontal row views (Genres/Suggestions)
+        const isHorizontalView = this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions';
+        const isSinglePage = totalPages <= 1 || isHorizontalView;
+
+        // Hide bottom footer entirely if single page or horizontal view
+        const footer = this.$('#library-pagination');
+        if (footer) footer.style.display = isSinglePage ? 'none' : 'flex';
+
         // Disable/Enable buttons
         const isPrevDisabled = startIndex <= 0;
         const isNextDisabled = (startIndex + limit) >= totalRecordCount;
@@ -325,8 +544,20 @@ class LibraryPage extends Page {
 
         const btnPrevTop = this.$('#btn-prev-top');
         const btnNextTop = this.$('#btn-next-top');
-        if (btnPrevTop) btnPrevTop.disabled = isPrevDisabled;
-        if (btnNextTop) btnNextTop.disabled = isNextDisabled;
+
+        if (btnPrevTop) {
+            btnPrevTop.disabled = isPrevDisabled;
+            btnPrevTop.style.display = isSinglePage ? 'none' : '';
+        }
+        if (btnNextTop) {
+            btnNextTop.disabled = isNextDisabled;
+            btnNextTop.style.display = isSinglePage ? 'none' : '';
+        }
+
+        // Ensure we invalidate focus cache if we hide elements
+        if (isSinglePage) {
+            focusManager.invalidateCache('library-controls');
+        }
     }
 
     // ========================================================================
@@ -389,16 +620,12 @@ class LibraryPage extends Page {
     }
 
     _renderAlphaPicker() {
-        // Only show Alpha Picker for "Items" view (and maybe others later)
-        const showPicker = this.state.viewType === 'Items' || this.state.viewType === 'Episodes';
+        // Always show Alpha Picker as requested
+        const showPicker = true;
         const container = this.$('#alpha-picker-container');
 
         if (container) {
-            container.style.visibility = showPicker ? 'visible' : 'hidden';
-            // Disable focus if hidden
-            if (!showPicker) {
-                // focusManager.unregister('alpha-picker'); // Optional if we want to be strict
-            }
+            container.style.visibility = 'visible';
         }
 
         if (!showPicker) return;
@@ -431,6 +658,16 @@ class LibraryPage extends Page {
     _renderGrid(items) {
         const grid = this.$('#library-grid');
         if (!grid) return;
+
+        // Cleanup: Hide horizontal rows if they exist and restore grid
+        const rowsContainer = this.$('#library-rows');
+        if (rowsContainer) {
+            rowsContainer.style.display = 'none';
+        }
+        grid.style.display = ''; // Restore grid display
+
+        const pagination = this.$('#library-pagination');
+        if (pagination) pagination.style.display = ''; // Restore pagination
 
         // Use landscape cards via CSS class if needed (e.g. for Episodes)
         const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming';
@@ -465,14 +702,276 @@ class LibraryPage extends Page {
 
         grid.innerHTML = html;
 
-        // Re-register focus for grid items
-        focusManager.register('library-grid', this.$('#library-grid'), {
-            orientation: 'grid',
-            leaveUp: 'alpha-picker',
-            leaveDown: 'library-pagination',
+        // Update Alpha Picker navigation to point to grid
+        focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+            orientation: 'horizontal',
+            leaveUp: 'library-controls',
+            leaveDown: 'library-grid',
             leaveLeft: 'sidebar',
-            scrollOffsetTop: 60 // Header height buffer
+            enterTo: 'active-element'
         });
+
+        // Re-register focus for grid items
+        focusManager.register('library-grid', grid, {
+            orientation: 'grid',
+            leaveUp: 'library-controls', // or alpha picker
+            leaveLeft: 'sidebar',
+            selector: '.media-card',
+            scrollOffsetTop: 100
+        });
+    }
+
+    _renderHorizontalRows(rows) {
+        const grid = this.$('#library-grid');
+        const pagination = this.$('#library-pagination');
+        const emptyState = this.$('#empty-state');
+
+        // Hide standard grid/pagination
+        if (grid) grid.style.display = 'none';
+        if (pagination) pagination.style.display = 'none';
+        if (emptyState) emptyState.classList.add('hidden');
+
+        // Check/Create rows container
+        let container = this.$('#library-rows');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'library-rows';
+            container.className = 'library-rows-container';
+            // Insert before grid
+            grid.parentNode.insertBefore(container, grid);
+        } else {
+            container.innerHTML = '';
+            container.style.display = 'flex';
+        }
+
+        if (!rows || rows.length === 0) {
+            if (emptyState) emptyState.classList.remove('hidden');
+            return;
+        }
+
+        // Initialize Observer if lazy rows exist
+        if (rows.some(r => r.isLazy) && !this._genreObserver) {
+            this._genreObserver = new IntersectionObserver(this._onGenreRowIntersect.bind(this), {
+                root: null, // viewport
+                rootMargin: '500px', // Optimal: loads 1-2 rows ahead without overwhelming API
+                threshold: 0
+            });
+        }
+
+        // Determine what row 0 should point UP to (tabs if header hidden, else controls)
+        const collectionType = this.state.libraryInfo?.CollectionType;
+        const viewType = this.state.viewType;
+        const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
+        const isEpisodes = (viewType === 'Episodes');
+        const nextUpTarget = (isMovieMain || isEpisodes) ? 'library-controls' : 'library-tabs';
+
+        rows.forEach((row, rowIndex) => {
+            const rowId = `row-${rowIndex}`;
+            const headerId = `header-${rowIndex}`;
+            const listId = `list-${rowIndex}`;
+
+            // Determine item type for visual style
+            let itemType = 'poster';
+            if (row.title === 'Continue Watching' || row.title === 'Next Up') itemType = 'episode';
+
+            const isLandscape = itemType === 'episode';
+
+            const section = document.createElement('section');
+            section.className = `library-row ${isLandscape ? 'landscape' : ''}`;
+            section.id = rowId;
+            section.dataset.genreId = row.genreId || '';
+            section.dataset.listId = listId;
+            section.dataset.isLazy = row.isLazy ? 'true' : 'false';
+
+            const contentHtml = row.isLazy
+                ? CardRenderer.createSkeletonHtml(9, isLandscape)
+                : (row.items || []).map(item => CardRenderer.createCardHtml(item, {
+                    isLandscape: isLandscape,
+                    type: itemType,
+                    contextType: null
+                })).join('');
+
+            section.innerHTML = `
+                <div class="library-row-header" id="${headerId}">
+                    <div class="header-focusable" tabindex="0" id="${headerId}-btn">
+                        ${row.title}
+                    </div>
+                </div>
+                <div class="library-horizontal-list row-items ${isLandscape ? 'landscape' : ''}" id="${listId}">
+                    ${contentHtml}
+                </div>
+            `;
+
+            container.appendChild(section);
+
+            // Observe if lazy
+            if (row.isLazy && this._genreObserver) {
+                this._genreObserver.observe(section);
+            }
+
+            // Register Focus for Header
+            focusManager.register(headerId, section.querySelector(`#${headerId}`), {
+                orientation: 'horizontal',
+                leaveUp: rowIndex === 0 ? nextUpTarget : `list-${rowIndex - 1}`,
+                leaveDown: listId,
+                leaveLeft: 'sidebar',
+                selector: '.header-focusable'
+            });
+
+            // Register Focus for List (Horizontal)
+            focusManager.register(listId, section.querySelector(`#${listId}`), {
+                orientation: 'horizontal',
+                leaveUp: headerId,
+                leaveDown: rowIndex < rows.length - 1 ? `header-${rowIndex + 1}` : null,
+                leaveLeft: 'sidebar',
+                selector: '.media-card',
+                scrollOffsetTop: 150 // Extra space to account for header
+            });
+        });
+
+        // Update Alpha Picker to point to the first row header
+        if (rows.length > 0) {
+            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                orientation: 'horizontal',
+                leaveUp: 'library-controls',
+                leaveDown: 'header-0', // Point to first header
+                leaveLeft: 'sidebar',
+                enterTo: 'active-element'
+            });
+        }
+    }
+
+    _onGenreRowIntersect(entries) {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                const row = entry.target;
+                const genreId = row.dataset.genreId;
+                const listId = row.dataset.listId;
+
+                // Stop observing immediately
+                this._genreObserver.unobserve(row);
+
+                // Fetch Items for this row
+                this._fetchGenreItems(genreId, listId);
+
+                // PROACTIVE PRELOADING: Also load the next 3 rows for smoother scrolling
+                // This ensures content is ready before the user scrolls to it
+                const rowIndex = parseInt(listId.split('-')[1]);
+                this._preloadNextRows(rowIndex + 1, 3);
+            }
+        });
+    }
+
+    /**
+     * Preload the next N rows starting from a given index
+     * @param {number} startIndex - Starting row index
+     * @param {number} count - Number of rows to preload
+     */
+    _preloadNextRows(startIndex, count) {
+        const rowsContainer = this.$('#library-rows');
+        if (!rowsContainer) return;
+
+        const allRows = rowsContainer.querySelectorAll('.library-row[data-is-lazy="true"]');
+
+        for (let i = 0; i < allRows.length && count > 0; i++) {
+            const row = allRows[i];
+            const listEl = row.querySelector('[id^="list-"]');
+            if (!listEl) continue;
+
+            const rowIndex = parseInt(listEl.id.split('-')[1]);
+
+            // Only preload rows at or after startIndex
+            if (rowIndex >= startIndex) {
+                const genreId = row.dataset.genreId;
+                const listId = row.dataset.listId;
+
+                // Check if already loaded (no skeleton loaders)
+                const hasSkeleton = row.querySelector('.skeleton, .media-card-skeleton');
+                if (hasSkeleton) {
+                    // Stop observer for this row and load it
+                    this._genreObserver?.unobserve(row);
+                    this._fetchGenreItems(genreId, listId);
+                    count--;
+                }
+            }
+        }
+    }
+
+    async _fetchGenreItems(genreId, listId) {
+        const listContainer = this.$(`#${listId}`);
+        if (!listContainer) return;
+
+        try {
+            // Determine item types based on library collection type
+            const collectionType = this.state.libraryInfo?.CollectionType;
+            let includeItemTypes = 'Movie,Series'; // Default
+
+            if (collectionType === 'tvshows') {
+                includeItemTypes = 'Series'; // Only show series, not seasons or episodes
+            } else if (collectionType === 'movies') {
+                includeItemTypes = 'Movie'; // Only movies
+            }
+
+            const result = await api.getItems({
+                ParentId: this.state.libraryId,
+                GenreIds: genreId,
+                Limit: 9, // User asked for 9
+                Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                IncludeItemTypes: includeItemTypes,
+                Recursive: true,
+                SortBy: 'Random' // Randomize to make it look interesting?
+            });
+
+            const items = result.Items || [];
+
+            if (items.length === 0) {
+                console.log(`[LibraryPage] Row "${listId}" is empty, hiding row...`);
+
+                // HIDE the entire row completely
+                const rowSection = listContainer.closest('.library-row');
+                if (rowSection) {
+                    rowSection.style.display = 'none';
+                }
+
+                // Clear the list container (removes skeleton loaders)
+                listContainer.innerHTML = '';
+
+                // Note: We no longer need to manually patch navigation!
+                // FocusManager._leaveSection now auto-skips sections with no focusables
+
+                return;
+            }
+
+            const html = items.map(item => CardRenderer.createCardHtml(item, {
+                isLandscape: false, // Genres usually mix, but mostly posters
+                type: 'poster'
+            })).join('');
+
+            listContainer.innerHTML = html;
+
+            // Trigger fade-in animation by adding 'loaded' class
+            const rowSection = listContainer.closest('.library-row');
+            if (rowSection) {
+                rowSection.classList.add('loaded');
+
+                // Add staggered animation delay for premium cascading effect
+                const cards = listContainer.querySelectorAll('.media-card');
+                cards.forEach((card, index) => {
+                    card.style.animationDelay = `${index * 50}ms`;
+                });
+            }
+
+            // Invalidate FocusManager cache so it re-queries the new elements
+            focusManager.invalidateCache(listId);
+
+        } catch (e) {
+            console.error('Failed to load genre items', e);
+            // Hide row on error too
+            const rowSection = listContainer?.closest('.library-row');
+            if (rowSection) {
+                rowSection.style.display = 'none';
+            }
+        }
     }
 
     // ========================================================================
@@ -602,76 +1101,531 @@ class LibraryPage extends Page {
     }
 
     _updateControlsVisibility() {
-        // "Hidden for Shows"
-        const type = this.state.libraryInfo?.CollectionType;
+        // Shuffle button is now always available for all
         const btnShuffle = this.$('#btn-shuffle');
-
         if (btnShuffle) {
-            // Hide if TV Shows (or if logic demands it)
-            if (type === 'tvshows') {
-                btnShuffle.style.display = 'none';
-            } else {
-                btnShuffle.style.display = ''; // Restore default
-            }
+            btnShuffle.style.display = '';
         }
     }
 
     _handleSort() {
+        // Define Order Options (Common)
+        const orderOptions = [
+            { label: 'Ascending', value: 'Ascending' },
+            { label: 'Descending', value: 'Descending' }
+        ];
+
+        let sortOptions = [];
+        const isTv = this.state.libraryInfo?.CollectionType === 'tvshows';
+
+        if (isTv) {
+            // TV Show Specific Options
+            sortOptions = [
+                { label: 'Name', value: 'SortName' },
+                { label: 'Random', value: 'Random' },
+                { label: 'Community Rating', value: 'CommunityRating,SortName' },
+                { label: 'Date Show Added', value: 'DateCreated,SortName' },
+                { label: 'Date Episode Added', value: 'DateLastContentAdded,SortName' },
+                { label: 'Date Played', value: 'SeriesDatePlayed,SortName' },
+                { label: 'Parental Rating', value: 'OfficialRating,SortName' },
+                { label: 'Release Date', value: 'PremiereDate,SortName' }
+            ];
+        } else {
+            // Standard / Movie Options
+            sortOptions = [
+                { label: 'Name', value: 'SortName' },
+                { label: 'Random', value: 'Random' },
+                { label: 'Community Rating', value: 'CommunityRating,SortName' },
+                { label: 'Critics Rating', value: 'CriticRating,SortName' },
+                { label: 'Date Added', value: 'DateCreated,SortName' },
+                { label: 'Date Played', value: 'DatePlayed,SortName' },
+                { label: 'Parental Rating', value: 'OfficialRating,SortName' },
+                { label: 'Play Count', value: 'PlayCount,SortName' },
+                { label: 'Release Date', value: 'ProductionYear,PremiereDate,SortName' },
+                { label: 'Runtime', value: 'Runtime,SortName' }
+            ];
+        }
+
+        this._renderSortModal(sortOptions, orderOptions);
+    }
+
+    _renderSortModal(sortOptions, orderOptions) {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Current state
         const currentSort = this.state.sortBy;
         const currentOrder = this.state.sortOrder;
 
-        const options = [
-            { label: 'Name (A-Z)', value: 'SortName,Ascending', selected: currentSort === 'SortName' && currentOrder === 'Ascending' },
-            { label: 'Name (Z-A)', value: 'SortName,Descending', selected: currentSort === 'SortName' && currentOrder === 'Descending' },
-            { label: 'Date Added (Newest)', value: 'DateCreated,Descending', selected: currentSort === 'DateCreated' && currentOrder === 'Descending' },
-            { label: 'Date Added (Oldest)', value: 'DateCreated,Ascending', selected: currentSort === 'DateCreated' && currentOrder === 'Ascending' },
-            { label: 'Release Date (Newest)', value: 'PremiereDate,Descending', selected: currentSort === 'PremiereDate' && currentOrder === 'Descending' },
-            { label: 'Release Date (Oldest)', value: 'PremiereDate,Ascending', selected: currentSort === 'PremiereDate' && currentOrder === 'Ascending' },
-            { label: 'Rating (High-Low)', value: 'CommunityRating,Descending', selected: currentSort === 'CommunityRating' && currentOrder === 'Descending' },
-            { label: 'Play Count', value: 'PlayCount,Descending', selected: currentSort === 'PlayCount' },
-            { label: 'Runtime', value: 'Runtime,Descending', selected: currentSort === 'Runtime' }
-        ];
+        overlay.innerHTML = `
+            <div class="library-modal sort-modal">
+                <div class="sort-columns">
+                    <!-- Sort By Column -->
+                    <div class="sort-column" id="sort-by-col">
+                        <h2 class="modal-title">Sort By</h2>
+                        <div class="modal-options">
+                            ${sortOptions.map(opt => `
+                                <button class="modal-option-btn radio-btn ${opt.value === currentSort ? 'selected' : ''}" 
+                                        data-type="sort" 
+                                        data-value="${opt.value}"
+                                        tabindex="0">
+                                    <div class="radio-icon"></div>
+                                    <span>${opt.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
 
-        this._renderModal('Sort By', options, async (value) => {
-            const [sort, order] = value.split(',');
-            this.state.sortBy = sort;
-            this.state.sortOrder = order || 'Descending';
-            this.state.startIndex = 0;
-            await this._loadItems();
-            this._closeModal();
-            this.focus('btn-sort'); // Restore focus
-        });
-    }
+                    <!-- Sort Order Column -->
+                    <div class="sort-column" id="sort-order-col">
+                        <h2 class="modal-title">Order</h2>
+                        <div class="modal-options">
+                            ${orderOptions.map(opt => `
+                                <button class="modal-option-btn radio-btn ${opt.value === currentOrder ? 'selected' : ''}" 
+                                        data-type="order" 
+                                        data-value="${opt.value}"
+                                        tabindex="0">
+                                    <div class="radio-icon"></div>
+                                    <span>${opt.label}</span>
+                                </button>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>
 
-    _handleFilter() {
-        // Simple Filters for now
-        const currentFilters = this.state.filters; // Array
+                <div class="modal-actions">
+                    <button class="modal-action-btn close" id="btn-sort-close">Close</button>
+                    <button class="modal-action-btn apply" id="btn-sort-apply">Apply</button>
+                </div>
+            </div>
+        `;
 
-        const options = [
-            { label: 'Unplayed', value: 'IsUnplayed', selected: currentFilters.includes('IsUnplayed') },
-            { label: 'Played', value: 'IsPlayed', selected: currentFilters.includes('IsPlayed') },
-            { label: 'Favorites', value: 'IsFavorite', selected: currentFilters.includes('IsFavorite') },
-            { label: 'Resumable', value: 'IsResumable', selected: currentFilters.includes('IsResumable') }
-        ];
+        overlay.classList.remove('hidden'); // Ensure it's not display:none
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
 
-        this._renderModal('Filter', options, async (value) => {
-            // Toggle Logic
-            if (this.state.filters.includes(value)) {
-                this.state.filters = this.state.filters.filter(f => f !== value);
-            } else {
-                // Exclusive logic for Played/Unplayed?
-                if (value === 'IsUnplayed') this.state.filters = this.state.filters.filter(f => f !== 'IsPlayed');
-                if (value === 'IsPlayed') this.state.filters = this.state.filters.filter(f => f !== 'IsUnplayed');
+        // Trap focus
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
 
-                this.state.filters.push(value);
+        // Local temporary state for the modal
+        let tempSortBy = currentSort;
+        let tempSortOrder = currentOrder;
+
+        // Event Handling
+        const handleSelection = (type, value) => {
+            if (type === 'sort') {
+                tempSortBy = value;
+            } else if (type === 'order') {
+                tempSortOrder = value;
             }
 
+            // Update UI classes manually to show selection
+            const colId = type === 'sort' ? '#sort-by-col' : '#sort-order-col';
+            const col = overlay.querySelector(colId);
+            col.querySelectorAll('.modal-option-btn').forEach(btn => {
+                if (btn.dataset.value === value) btn.classList.add('selected');
+                else btn.classList.remove('selected');
+            });
+        };
+
+        // Bind Clicks
+        overlay.querySelectorAll('.modal-option-btn').forEach(btn => {
+            btn.addEventListener('click', () => handleSelection(btn.dataset.type, btn.dataset.value));
+        });
+
+        this.$('#btn-sort-apply')?.addEventListener('click', async () => {
+            // Commit the temporary state to the page state
+            this.state.sortBy = tempSortBy;
+            this.state.sortOrder = tempSortOrder;
+            this.state.startIndex = 0;
+
+            // Explicitly trigger reload
+            await this._loadItems();
+
+            this._closeModal();
+        });
+
+        this.$('#btn-sort-close')?.addEventListener('click', () => {
+            this._closeModal();
+        });
+
+        // Register Sections
+        focusManager.register('sort-by-col', overlay.querySelector('#sort-by-col'), {
+            orientation: 'vertical',
+            leaveLeft: 'sort-actions', // Shortcut to actions
+            leaveRight: 'sort-order-col',
+            leaveDown: 'sort-actions'
+        });
+
+        focusManager.register('sort-order-col', overlay.querySelector('#sort-order-col'), {
+            orientation: 'vertical',
+            leaveLeft: 'sort-by-col',
+            leaveRight: 'sort-actions', // Shortcut to actions
+            leaveDown: 'sort-actions'
+        });
+
+        focusManager.register('sort-actions', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            onMove: (direction) => {
+                if (direction === 'up') {
+                    // Return to the previous section using MEMORY (not spatial)
+                    const prev = focusManager.getPreviousSection();
+                    if (prev && ['sort-by-col', 'sort-order-col'].includes(prev)) {
+                        focusManager.setActiveSection(prev, true); // No fromElement = use memory
+                        return true;
+                    }
+                }
+                return false;
+            }
+        });
+
+        // Set initial focus
+        setTimeout(() => {
+            const selected = overlay.querySelector('#sort-by-col .selected') || overlay.querySelector('#sort-by-col .modal-option-btn');
+            if (selected) focusManager.focusElement(selected);
+        }, 50);
+    }
+
+    async _handleFilter() {
+        // 1. Fetch Dynamic Filters
+        // We need ParentId and IncludeItemTypes from current params/state
+        // Fix: Use libraryInfo or derive types.
+        let includeItemTypes = 'Movie,Series,Episode'; // Default broad
+
+        if (this.state.libraryInfo) {
+            const type = this.state.libraryInfo.CollectionType;
+            if (type === 'movies') includeItemTypes = 'Movie';
+            else if (type === 'tvshows') includeItemTypes = 'Series,Episode';
+            else if (type === 'music') includeItemTypes = 'MusicArtist,MusicAlbum,Audio';
+        }
+
+        const params = {
+            ParentId: this.state.parentId,
+            IncludeItemTypes: includeItemTypes,
+            Recursive: true
+        };
+
+        // If we are in a specific view, we might need to adjust params
+        // For now, let's just pass what we have.
+        let filtersData = null;
+        try {
+            filtersData = await api.getItemFilters(params);
+        } catch (e) {
+            console.error('Filter: Failed to fetch filters', e);
+            // We can still show static filters
+            filtersData = { Genres: [], OfficialRatings: [], Tags: [], Years: [] };
+        }
+
+        this._renderFilterModal(filtersData);
+    }
+
+    _renderFilterModal(data) {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Current Filters State
+        const currentFilters = this.state.filters || {};
+
+        // Sections Definition
+        const sections = [
+            {
+                title: 'Filters',
+                id: 'sec-filters',
+                items: [
+                    { label: 'Played', key: 'IsPlayed', type: 'boolean' },
+                    { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
+                    { label: 'Resumable', key: 'IsResumable', type: 'boolean' },
+                    { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
+                ]
+            },
+            {
+                title: 'Features',
+                id: 'sec-features',
+                items: [
+                    { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
+                    { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
+                    { label: 'Special Features', key: 'HasSpecialFeature', type: 'boolean' },
+                    { label: 'Theme Song', key: 'HasThemeSong', type: 'boolean' },
+                    { label: 'Theme Video', key: 'HasThemeVideo', type: 'boolean' }
+                ]
+            },
+            {
+                title: 'Genres',
+                id: 'sec-genres',
+                itemKey: 'Genres', // Key in state
+                items: data.Genres.map(g => ({ label: g, value: g, type: 'multi' }))
+            },
+            {
+                title: 'Parental Ratings',
+                id: 'sec-ratings',
+                itemKey: 'OfficialRatings',
+                items: data.OfficialRatings.map(r => ({ label: r, value: r, type: 'multi' }))
+            },
+            {
+                title: 'Tags',
+                id: 'sec-tags',
+                itemKey: 'Tags',
+                items: data.Tags.map(t => ({ label: t, value: t, type: 'multi' }))
+            },
+            {
+                title: 'Video Types',
+                id: 'sec-videotypes',
+                itemKey: 'VideoTypes', // Comma list
+                items: [
+                    { label: 'Bluray', value: 'Bluray', type: 'multi' },
+                    { label: 'DVD', value: 'Dvd', type: 'multi' },
+                    { label: '4K', key: 'Is4K', type: 'boolean' }, // Is4K is a separate bool usually
+                    { label: 'HD', key: 'IsHD', type: 'boolean' },
+                    { label: 'SD', key: 'IsSD', type: 'boolean' }, // Logic: IsHD=false usually
+                    { label: '3D', key: 'Is3D', type: 'boolean' }
+                ]
+            },
+            {
+                title: 'Years',
+                id: 'sec-years',
+                itemKey: 'Years',
+                items: data.Years.map(y => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
+            }
+        ];
+
+        // Filter out empty sections
+        const validSections = sections.filter(s => s.items.length > 0);
+
+        // Active Category State (Default to first)
+        let activeSectionId = this.state.activeFilterSection || validSections[0].id;
+        // Ensure active section is valid
+        if (!validSections.find(s => s.id === activeSectionId)) {
+            activeSectionId = validSections[0].id;
+        }
+
+        // Render HTML Structure
+        let html = `
+            <div class="library-modal filter-modal split-view">
+                <h2 class="modal-title">Filters</h2>
+                <div class="filter-split-container">
+                    <!-- Left Sidebar -->
+                    <div class="filter-sidebar" id="filter-sidebar">
+                        ${validSections.map(s => `
+                            <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
+                                    data-id="${s.id}" tabindex="0">
+                                ${s.title}
+                            </button>
+                        `).join('')}
+                    </div>
+
+                    <!-- Right Main Content -->
+                    <div class="filter-main" id="filter-main">
+                        <!-- Items rendered dynamically -->
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="modal-action-btn clear" id="btn-filter-clear">Clear</button>
+                    <button class="modal-action-btn close" id="btn-filter-close">Close</button>
+                    <button class="modal-action-btn apply" id="btn-filter-apply">Apply</button>
+                </div>
+            </div>
+        `;
+
+        overlay.innerHTML = html;
+        overlay.classList.remove('hidden');
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        // Logic to Render Items for Active Section
+        const renderItems = (sectionId) => {
+            const section = validSections.find(s => s.id === sectionId);
+            const container = overlay.querySelector('#filter-main');
+            if (!section || !container) return;
+
+            // Highlight active category in sidebar
+            overlay.querySelectorAll('.filter-category-btn').forEach(btn => {
+                if (btn.dataset.id === sectionId) btn.classList.add('active');
+                else btn.classList.remove('active');
+            });
+
+            this.state.activeFilterSection = sectionId;
+
+            // Render Items
+            container.innerHTML = section.items.map(item => {
+                // Determine checked state
+                let checked = false;
+                if (item.type === 'boolean') {
+                    checked = !!this.state.filters[item.key];
+                    if (item.key === 'IsSD') checked = this.state.filters['IsHD'] === false;
+                } else {
+                    const stored = this.state.filters[section.itemKey];
+                    if (stored) {
+                        const arr = stored.split(',');
+                        checked = arr.includes(item.value);
+                    }
+                }
+
+                return `
+                    <button class="modal-option-btn check-btn ${checked ? 'selected' : ''}"
+                            data-type="${item.type}"
+                            data-key="${item.key || section.itemKey}"
+                            data-value="${item.value || ''}"
+                            tabindex="0">
+                        <div class="checkbox-box">
+                            <span class="check-mark">✔</span>
+                        </div>
+                        <span class="btn-label">${item.label}</span>
+                    </button>
+                `;
+            }).join('');
+
+            // Clean up old focus section and re-register
+            focusManager.unregister('filter-items');
+            focusManager.register('filter-items', container, {
+                orientation: 'grid', // Allow spatial nav (Left/Right/Up/Down)
+                leaveLeft: 'filter-sidebar',
+                leaveRight: 'filter-actions', // Shortcut to actions
+                leaveDown: 'filter-actions', // Nav to buttons
+                selector: '.modal-option-btn'
+            });
+            // Force cache invalidation just in case
+            focusManager.invalidateCache('filter-items');
+        };
+
+        // item toggle logic
+        const handleItemToggle = (btn) => {
+            const key = btn.dataset.key;
+            const val = btn.dataset.value;
+            const type = btn.dataset.type;
+            const isSelected = btn.classList.contains('selected');
+
+            if (isSelected) btn.classList.remove('selected');
+            else btn.classList.add('selected');
+
+            // State Updates (Same as before)
+            if (type === 'boolean') {
+                if (key === 'IsSD') {
+                    if (!isSelected) this.state.filters['IsHD'] = false;
+                    else delete this.state.filters['IsHD'];
+                } else {
+                    if (!isSelected) this.state.filters[key] = true;
+                    else delete this.state.filters[key];
+                    if (key === 'IsPlayed' && !isSelected) delete this.state.filters['IsUnplayed'];
+                    if (key === 'IsUnplayed' && !isSelected) delete this.state.filters['IsPlayed'];
+                }
+            } else {
+                let current = this.state.filters[key] ? this.state.filters[key].split(',') : [];
+                if (!isSelected) current.push(val);
+                else current = current.filter(v => v !== val);
+
+                if (current.length > 0) this.state.filters[key] = current.join(',');
+                else delete this.state.filters[key];
+            }
+
+            // Refresh checks if needed (mutually exclusive)
+            if (key === 'IsPlayed' || key === 'IsUnplayed') {
+                renderItems(this.state.activeFilterSection);
+                // Note: re-rendering loses focus position inside list, 
+                // but for mutual active buttons it's ok-ish or we can do manual DOM update.
+                // Re-rendering is safest for consistency.
+            }
+        };
+
+        // Verify initial render
+        renderItems(activeSectionId);
+
+        // Events: Sidebar Focus/Click
+        overlay.querySelectorAll('.filter-category-btn').forEach(btn => {
+            const selectCategory = () => {
+                const id = btn.dataset.id;
+                if (this.state.activeFilterSection !== id) {
+                    renderItems(id);
+                }
+            };
+            btn.addEventListener('focus', selectCategory);
+            btn.addEventListener('click', selectCategory); // Click also selects
+        });
+
+        // Events: Main Content Delegation
+        overlay.querySelector('#filter-main').addEventListener('click', (e) => {
+            const btn = e.target.closest('.modal-option-btn');
+            if (btn) handleItemToggle(btn);
+        });
+
+        // Actions
+        this.$('#btn-filter-clear').addEventListener('click', () => {
+            this.state.filters = {};
+            renderItems(this.state.activeFilterSection);
+        });
+
+        this.$('#btn-filter-apply').addEventListener('click', async () => {
             this.state.startIndex = 0;
             await this._loadItems();
-            this._closeModal();
-            this.focus('btn-filter'); // Restore focus
+            this._closeFilterModal();
+
+            // Restore Focus safely
+            const btn = this.$('#btn-filter');
+            if (btn) focusManager.focusElement(btn);
         });
+
+        this.$('#btn-filter-close').addEventListener('click', () => {
+            this._closeFilterModal();
+            const btn = this.$('#btn-filter');
+            if (btn) focusManager.focusElement(btn);
+        });
+
+        // Focus Management Registration
+        focusManager.register('filter-sidebar', overlay.querySelector('.filter-sidebar'), {
+            orientation: 'vertical',
+            leaveRight: 'filter-items',
+            leaveLeft: 'filter-actions', // Shortcut to actions
+            leaveDown: 'filter-actions',
+            selector: '.filter-category-btn'
+        });
+
+        focusManager.register('filter-actions', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            onMove: (direction) => {
+                if (direction === 'up') {
+                    // Return to the previous section using MEMORY (not spatial)
+                    const prev = focusManager.getPreviousSection();
+                    if (prev && ['filter-sidebar', 'filter-items'].includes(prev)) {
+                        focusManager.setActiveSection(prev, true); // No fromElement = use memory
+                        return true;
+                    }
+                }
+                return false;
+            },
+            leaveLeft: 'filter-sidebar', // Return to sidebar
+            selector: '.modal-action-btn'
+        });
+
+        // Initial Focus
+        focusManager.setActiveSection('filter-sidebar');
+        const firstCat = overlay.querySelector('.filter-category-btn');
+        if (firstCat) firstCat.focus();
     }
+
+    _refreshFilterChecks(overlay) {
+        // No longer used, we re-render or handle manually
+    }
+
+    _closeFilterModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        focusManager.unregister('filter-sidebar');
+        focusManager.unregister('filter-items');
+        focusManager.unregister('filter-actions');
+        focusManager.unregister('filter-modal'); // Cleanup old name just in case
+
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+
+        // Cleanup content after animation
+        setTimeout(() => {
+            overlay.classList.add('hidden');
+            overlay.innerHTML = '';
+        }, 300);
+    }
+
 
     _renderModal(title, options, onSelect) {
         const overlay = this.$('#modal-overlay');
@@ -734,13 +1688,19 @@ class LibraryPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
 
-        focusManager.unregister('library-modal'); // Cleanup
+        // Unregister all specific modal sections
+        focusManager.unregister('library-modal');
+        focusManager.unregister('sort-by-col');
+        focusManager.unregister('sort-order-col');
+        focusManager.unregister('sort-actions'); // Updated name
+        focusManager.unregister('modal-close-btn');
 
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');
 
         // Cleanup content after animation
         setTimeout(() => {
+            overlay.classList.add('hidden');
             overlay.innerHTML = '';
         }, 300);
 
@@ -752,14 +1712,56 @@ class LibraryPage extends Page {
         }
     }
 
-    onBack() {
-        const overlay = this.$('#modal-overlay');
-        if (overlay && overlay.classList.contains('visible')) {
-            this._closeModal();
-            return true; // Handled
+    /**
+     * Update visibility of header elements (controls, alpha picker)
+     * and patch the focus chain to bridge the gaps.
+     */
+    _updateHeaderVisibility() {
+        const collectionType = this.state.libraryInfo?.CollectionType;
+        const viewType = this.state.viewType;
+
+        // Condition: only show for Movies (Items in movies lib) and Episodes
+        const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
+        const isEpisodes = (viewType === 'Episodes');
+        const shouldShow = isMovieMain || isEpisodes;
+
+        const controls = this.$('#library-controls');
+        const alphaPicker = this.$('#alpha-picker-container');
+
+        if (controls) controls.style.display = shouldShow ? 'flex' : 'none';
+        if (alphaPicker) alphaPicker.style.display = shouldShow ? 'block' : 'none';
+
+        // Bridge focus chain: library-tabs -> (controls -> alpha ->) content
+        const tabsContainer = this.$('#library-tabs');
+        if (tabsContainer) {
+            let nextTarget = 'library-controls';
+            if (!shouldShow) {
+                if (viewType === 'Genres' || viewType === 'Suggestions') {
+                    nextTarget = 'header-0';
+                } else {
+                    nextTarget = 'library-grid';
+                }
+            }
+
+            const tabsConfig = focusManager.getSectionConfig('library-tabs');
+            if (tabsConfig) {
+                focusManager.register('library-tabs', tabsContainer, {
+                    ...tabsConfig,
+                    leaveDown: nextTarget
+                });
+            }
         }
-        return false; // Propagate
+
+        // Update Grid leaveUp
+        const gridConfig = focusManager.getSectionConfig('library-grid');
+        if (gridConfig) {
+            focusManager.register('library-grid', this.$('#library-grid'), {
+                ...gridConfig,
+                leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs'
+            });
+        }
     }
+
 
     // ========================================================================
     // Focus Management

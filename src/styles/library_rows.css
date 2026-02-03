@@ -1,0 +1,120 @@
+/* --- Horizontal Rows (Suggestions / Hubs) --- */
+.library-rows-container {
+    width: 100%;
+    padding-bottom: 60px;
+    display: flex;
+    flex-direction: column;
+    gap: 30px;
+    /* Increased for premium TV feel */
+}
+
+/* Row Container */
+.library-row {
+    width: 100%;
+    overflow: visible;
+    /* CRITICAL: Allow focused cards to scale out of bounds */
+    display: flex;
+    flex-direction: column;
+}
+
+/* Fade-in animation for lazy-loaded content */
+.library-row.loaded .media-card {
+    animation: fadeInCard 0.3s ease-out forwards;
+}
+
+@keyframes fadeInCard {
+    from {
+        opacity: 0;
+        transform: translateY(10px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Row Header - Container */
+.library-row-header {
+    margin-bottom: 8px;
+    padding-left: 20px;
+    /* Align with sidebar/content */
+}
+
+/* The actual focusable button within the header */
+.header-focusable {
+    font-size: 36px;
+    /* Increased from 24px */
+    font-weight: 800;
+    /* Extra bold for TV prominence */
+    color: var(--jf-text-primary);
+    padding: 10px 24px;
+    border-radius: 16px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    background-color: transparent;
+    border: none;
+    outline: none;
+    transform-origin: left center;
+}
+
+.header-focusable:focus,
+.header-focusable.focused {
+    background-color: rgba(255, 255, 255, 0.15);
+    color: #fff;
+    transform: scale(1.08);
+    /* Apple-style pop */
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+}
+
+/* Light theme adjustment if needed */
+[data-theme="light"] .header-focusable:focus {
+    background-color: rgba(0, 0, 0, 0.1);
+    color: #000;
+}
+
+/* Horizontal Scroll List */
+.library-horizontal-list {
+    display: flex;
+    flex-direction: row;
+    overflow-x: auto;
+    overflow-y: visible;
+    /* Prevent vertical clipping */
+    gap: 24px;
+    /* Slightly more gap between cards */
+    padding: 30px 20px 40px 20px;
+    /* Increased top padding (was 10px) to prevent clipping */
+    /* Balanced padding */
+    scroll-behavior: smooth;
+
+    /* Hide scrollbar but keep functionality */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.library-horizontal-list::-webkit-scrollbar {
+    display: none;
+}
+
+/* TV Scaling: Increase card sizes for visibility */
+.library-horizontal-list .media-card {
+    flex: 0 0 auto;
+    width: 240px;
+    /* Increased from 200px */
+}
+
+/* Landscape override (Next Up / Continue Watching) */
+.library-horizontal-list.landscape .media-card {
+    width: 420px;
+    /* Increased from 350px */
+}
+
+/* Spacer for end of list */
+.library-horizontal-list::after {
+    content: '';
+    flex: 0 0 60px;
+    height: 1px;
+}

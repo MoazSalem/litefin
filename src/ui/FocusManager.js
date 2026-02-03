@@ -188,6 +188,11 @@ class FocusManager {
         return this._sections.get(name);
     }
 
+    // Alias for getSectionConfig
+    getConfig(name) {
+        return this.getSectionConfig(name);
+    }
+
     /**
      * Get focusable elements in section (OPTIMIZED)
      * Uses cache to avoid repeated expensive DOM queries.
@@ -429,9 +434,38 @@ class FocusManager {
         if (!config) return;
 
         const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
-        const nextSection = config[key];
+        let nextSection = config[key];
 
         console.log(`[FocusManager] _leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}, exists=${this._sections.has(nextSection)}`);
+
+        // Keep searching if target section exists but has no focusable elements
+        // This handles empty rows in library grids/lists
+        const maxSearchDepth = 20; // Prevent infinite loops
+        let searchDepth = 0;
+
+        while (nextSection && this._sections.has(nextSection) && searchDepth < maxSearchDepth) {
+            const nextConfig = this._sections.get(nextSection);
+            const focusables = this._getFocusables(nextSection, true); // Force refresh
+
+            if (focusables && focusables.length > 0) {
+                // Found a valid section with focusable elements!
+                console.log(`[FocusManager] _leaveSection: Found valid section ${nextSection} with ${focusables.length} focusables`);
+                break;
+            }
+
+            // Section is empty, try to skip to the next one in the same direction
+            console.log(`[FocusManager] _leaveSection: Section ${nextSection} is empty, skipping...`);
+            const skipToSection = nextConfig ? nextConfig[key] : null;
+
+            if (!skipToSection || !this._sections.has(skipToSection)) {
+                // No more sections to skip to
+                nextSection = null;
+                break;
+            }
+
+            nextSection = skipToSection;
+            searchDepth++;
+        }
 
         if (nextSection && this._sections.has(nextSection)) {
             const originElement = this._focusedElement; // Capture for spatial handover
@@ -464,8 +498,10 @@ class FocusManager {
         options = { ...defaults, ...options };
 
         // Cleanup old focus FIRST (lightweight)
+        // TIZEN FIX: Explicitly blur the old element to remove native :focus state
         if (this._focusedElement && this._focusedElement !== element) {
             this._focusedElement.classList.remove('focused');
+            this._focusedElement.blur(); // Clear native :focus styling on Tizen
         }
 
         // Get section config for custom scroll offsets
@@ -491,6 +527,16 @@ class FocusManager {
         let useRowScroll = options.skipScroll && !!pageContent;
         let row = null;
 
+        // Helper for cumulative offset calculation
+        const getCumulativeOffsetTop = (el, relativeTo) => {
+            let top = 0;
+            while (el && el !== relativeTo) {
+                top += el.offsetTop;
+                el = el.offsetParent;
+            }
+            return top;
+        };
+
         if (useRowScroll) {
             row = element.closest('.media-row');
             // If row is taller than viewport (e.g. Grid), disable row-alignment
@@ -503,7 +549,7 @@ class FocusManager {
         if (useRowScroll && row) {
             // For vertical row changes: scroll row section into view
             // SAMSUNG: Batch all reads first
-            const rowTop = row.offsetTop;
+            const rowTop = getCumulativeOffsetTop(row, pageContent);
             const rowHeight = row.offsetHeight;
             const rowBottom = rowTop + rowHeight;
 
@@ -512,20 +558,25 @@ class FocusManager {
             const viewBottom = currentScroll + viewHeight;
 
             // Check visibility with padding/buffer
-            const topCutoff = rowTop < currentScroll + 50;  // 50px buffer at top
-            const bottomCutoff = rowBottom > viewBottom - 50; // 50px buffer at bottom
+            // Increased to 80 to ensure full item clearance
+            const topCutoff = rowTop < currentScroll + 80;
+            const bottomCutoff = rowBottom > viewBottom - 80;
 
-            // If cut off at bottom, scroll down JUST enough to show it
-            // Align bottom of row with bottom of view (minus padding)
+            // If cut off at bottom, scroll down to show the full row
             if (bottomCutoff) {
-                const padding = 60; // Bottom buffer
-                const targetScroll = rowBottom - viewHeight + padding;
+                // Scroll to center the row if it fits, otherwise align bottom
+                const padding = 100;
+                let targetScroll;
+                if (rowHeight < viewHeight - 200) {
+                    targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
+                } else {
+                    targetScroll = rowBottom - viewHeight + padding;
+                }
                 pageContent.scrollTop = Math.max(0, targetScroll);
             }
-            // If cut off at top, scroll up JUST enough to show it
-            // Align top of row with top of view (minus padding)
+            // If cut off at top, scroll up
             else if (topCutoff) {
-                const padding = 100; // Top buffer (larger for title visibility)
+                const padding = 150; // Larger for title visibility
                 pageContent.scrollTop = Math.max(0, rowTop - padding);
             }
         }
@@ -536,15 +587,15 @@ class FocusManager {
                 // FIRST: Scroll the row into view vertically (if needed)
                 const row = element.closest('.media-row');
                 if (row && pageContent) {
-                    const rowTop = row.offsetTop;
+                    const rowTop = getCumulativeOffsetTop(row, pageContent);
                     const rowHeight = row.offsetHeight;
                     const rowBottom = rowTop + rowHeight;
                     const viewHeight = pageContent.clientHeight;
                     const currentScroll = pageContent.scrollTop;
                     const viewBottom = currentScroll + viewHeight;
 
-                    // Check if row is outside viewport
-                    if (rowTop < currentScroll + 50 || rowBottom > viewBottom - 50) {
+                    // Check if row is outside viewport (with buffers)
+                    if (rowTop < currentScroll + 80 || rowBottom > viewBottom - 80) {
                         // Scroll to center the row vertically
                         const targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
                         pageContent.scrollTop = Math.max(0, targetScroll);
@@ -575,21 +626,14 @@ class FocusManager {
                 }
             } else if (pageContent) {
                 // Generic Vertical Scroll (for Grids/Lists or Tall Rows)
-                // Fix: Calculate offset relative to pageContent (accumulate up the chain)
-                let currentEl = element;
-                let elementTop = 0;
-                while (currentEl && currentEl !== pageContent) {
-                    elementTop += currentEl.offsetTop;
-                    currentEl = currentEl.offsetParent;
-                }
-
+                const elementTop = getCumulativeOffsetTop(element, pageContent);
                 const elementHeight = element.offsetHeight;
-                const viewHeight = pageContent.clientHeight; // Redeclaration safe if scope correct
-                const currentScroll = pageContent.scrollTop; // Redeclaration safe if scope correct
+                const viewHeight = pageContent.clientHeight;
+                const currentScroll = pageContent.scrollTop;
 
                 // Margins for visibility comfort
-                const topMargin = 60; // Reduced from 100 to allow fitting more
-                const bottomMargin = 60; // Reduced from 100 to help footer buttons
+                const topMargin = 100; // Increased
+                const bottomMargin = 100; // Increased
 
                 let finalScrollTop = currentScroll;
 
@@ -601,7 +645,7 @@ class FocusManager {
                     finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
                 }
                 else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    if (elementHeight < viewHeight / 4) {
+                    if (elementHeight < viewHeight / 3) {
                         finalScrollTop = elementTop - (viewHeight / 2) + (elementHeight / 2);
                     } else {
                         finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;

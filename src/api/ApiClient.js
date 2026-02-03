@@ -485,6 +485,31 @@ class ApiClient {
     }
 
     // ========================================================================
+    // Genre Endpoints
+    // ========================================================================
+
+    async getGenres(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            EnableTotalRecordCount: false
+        };
+
+        return this.get('/Genres', { ...defaults, ...params });
+    }
+
+    async getItemFilters(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true
+        };
+        return this.get('/Items/Filters', { ...defaults, ...params });
+    }
+
+    // ========================================================================
     // Search Endpoints
     // ========================================================================
 
