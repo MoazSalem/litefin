@@ -377,7 +377,6 @@
     flex-direction: row;
     flex-wrap: wrap;
     justify-content: center;
-    gap: 8px;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 40px;
     padding: 12px 24px;
@@ -396,6 +395,7 @@
     border-radius: 50%;
     width: 44px;
     height: 44px;
+    margin: 4px;
     display: flex;
     align-items: center;
     justify-content: center;

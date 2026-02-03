@@ -13,6 +13,8 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import CardRenderer from '../utils/CardRenderer.js';
+import { imageService } from '../utils/ImageService.js';
 
 
 import FavoriteButton from '../components/FavoriteButton.js';
@@ -226,22 +228,28 @@ class DetailsPage extends Page {
             };
 
             // Poster
-            const posterUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: 400 });
-            const img = new Image();
-            img.onload = () => {
-                img.classList.add('loaded');
-                onPosterReady();
-            };
-            img.onerror = () => {
-                // If it fails, we still want to resolve to show the page
-                onPosterReady();
-            };
-            img.src = posterUrl;
-            img.alt = item.Name;
-
             const posterContainer = this.$('#poster');
             posterContainer.innerHTML = '';
-            posterContainer.appendChild(img);
+
+            if (item.ImageTags && item.ImageTags.Primary) {
+                const params = imageService.getParams('poster');
+                const posterUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
+                const img = new Image();
+                img.onload = () => {
+                    img.classList.add('loaded');
+                    onPosterReady();
+                };
+                img.onerror = () => {
+                    // If it fails, we still want to resolve to show the page
+                    onPosterReady();
+                };
+                img.src = posterUrl;
+                img.alt = item.Name;
+                posterContainer.appendChild(img);
+            } else {
+                // No primary image, resolve immediately
+                onPosterReady();
+            }
 
             // Backdrop (Fire and forget, via Manager)
             const backdropUrl = BackdropManager.getBackdropUrl(item);
@@ -470,8 +478,10 @@ class DetailsPage extends Page {
         const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
         const logoItemId = item.ImageTags?.Logo ? item.Id : (item.ParentLogoItemId || item.SeriesId);
 
-        if (logoTag && logoItemId) {
-            const logoUrl = api.getImageUrl(logoItemId, 'Logo', { maxWidth: 600, tag: logoTag });
+        if (logoItemId && logoTag) {
+            const params = imageService.getParams('thumb'); // Logo usually similar resolution needs as thumb
+            // Bump logo quality slightly as it is text
+            const logoUrl = api.getImageUrl(logoItemId, 'Logo', { maxWidth: params.maxWidth * 2, quality: 90, tag: logoTag });
             const img = new Image();
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
@@ -810,8 +820,8 @@ class DetailsPage extends Page {
                 htmlParts.push(`
                     <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
                         <div class="episode-thumb">
-                            <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: 300 })}" alt="">
-                            ${progress > 0 ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
+                            <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="">
+                        </div>    ${progress > 0 ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
                         </div>
                         <div class="episode-info">
                             <span class="episode-number">E${ep.IndexNumber}</span>

@@ -9,7 +9,9 @@
 
 import Component from '../core/Component.js';
 import { api } from '../api/index.js';
+import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+import { imageService } from '../utils/ImageService.js';
 
 class EpisodeList extends Component {
     /**
@@ -34,8 +36,9 @@ class EpisodeList extends Component {
 
     render() {
         // Prepare fallback URL (Series Backdrop or Primary)
-        this._fallbackUrl = api.getImageUrl(this.seriesId, 'Backdrop', { width: 400 }) ||
-            api.getImageUrl(this.seriesId, 'Primary', { width: 400 });
+        const params = imageService.getParams('thumb');
+        this._fallbackUrl = api.getImageUrl(this.seriesId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality }) ||
+            api.getImageUrl(this.seriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
 
         const htmlParts = this.episodes.map((ep, index) => this._renderEpisode(ep, index));
 
@@ -53,7 +56,8 @@ class EpisodeList extends Component {
      * @returns {string} HTML string
      */
     _renderEpisode(ep, index) {
-        const thumbUrl = api.getImageUrl(ep.Id, 'Primary', { width: 400 });
+        const params = imageService.getParams('thumb');
+        const thumbUrl = api.getImageUrl(ep.Id, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
         const runtime = ep.RunTimeTicks ? Math.round(ep.RunTimeTicks / 600000000) + 'm' : '';
         const rating = ep.CommunityRating ? ep.CommunityRating.toFixed(1) : '';
         const isPlayed = ep.UserData?.Played;

@@ -13,6 +13,7 @@ import { router } from '../core/Router.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { imageService } from '../utils/ImageService.js';
 
 class SettingsPage extends Page {
     constructor() {
@@ -120,6 +121,21 @@ class SettingsPage extends Page {
                                 ${this._getThemeDisplayName(theme)}
                             </button>
                         `).join('')}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Image Quality</span>
+                        <span class="setting-description">Adjust for device performance (requires restart)</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('image-quality-select', [
+            { value: 'low', label: 'Low (Fastest)' },
+            { value: 'medium', label: 'Medium (Balanced)' },
+            { value: 'high', label: 'High (High Quality)' },
+            { value: 'ultra', label: 'Ultra (Maximum)' }
+        ], imageService.getPreset() || 'medium')}
                     </div>
                 </div>
 
@@ -388,10 +404,13 @@ class SettingsPage extends Page {
                     const mapMap = {
                         'quality-select': 'pref:maxBitrate',
                         'audio-lang-select': 'pref:audioLang',
-                        'subtitle-select': 'pref:subtitleLang'
+                        'subtitle-select': 'pref:subtitleLang',
+                        'image-quality-select': 'pref:imageQuality' // Handled via ImageService really, but good for tracking
                     };
 
-                    if (mapMap[trigger.id]) {
+                    if (trigger.id === 'image-quality-select') {
+                        imageService.setPreset(value);
+                    } else if (mapMap[trigger.id]) {
                         localStorage.setItem(mapMap[trigger.id], value);
                     }
 

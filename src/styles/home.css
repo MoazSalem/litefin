@@ -128,7 +128,6 @@
     left: 0;
     right: 0;
     height: 6px;
-    background: rgba(0, 0, 0, 0.6);
     z-index: 2;
     border-radius: 0 0 var(--jf-border-radius) var(--jf-border-radius);
     overflow: hidden;

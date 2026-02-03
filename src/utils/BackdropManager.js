@@ -8,6 +8,7 @@
  */
 
 import { api } from '../api/index.js';
+import { imageService } from './ImageService.js';
 
 class BackdropManager {
 
@@ -18,8 +19,14 @@ class BackdropManager {
      * @param {Object} options - Options for image URL generation (maxWidth, etc.)
      * @returns {string|null} The backdrop URL or null if none found
      */
-    static getBackdropUrl(item, options = { maxWidth: 1920 }) {
+    static getBackdropUrl(item, options = null) {
         if (!item) return null;
+
+        // Default options from ImageService if not provided
+        if (!options) {
+            const params = imageService.getParams('backdrop');
+            options = { maxWidth: params.maxWidth, quality: params.quality };
+        }
 
         const backdropId = (item.BackdropImageTags && item.BackdropImageTags.length > 0)
             ? item.Id
@@ -41,7 +48,12 @@ class BackdropManager {
      * @param {Object} options - Options for image URL generation
      * @returns {string|null} The backdrop URL
      */
-    static getPersonBackdropUrl(person, works = [], options = { maxWidth: 1920 }) {
+    static getPersonBackdropUrl(person, works = [], options = null) {
+        // Default options from ImageService if not provided
+        if (!options) {
+            const params = imageService.getParams('backdrop');
+            options = { maxWidth: params.maxWidth, quality: params.quality };
+        }
         // 1. Try Person's own backdrop
         if (person.BackdropImageTags && person.BackdropImageTags.length > 0) {
             return api.getImageUrl(person.Id, 'Backdrop', options);

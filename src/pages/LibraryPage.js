@@ -783,6 +783,7 @@ class LibraryPage extends Page {
         focusManager.register('library-grid', grid, {
             orientation: 'grid',
             leaveUp: 'library-controls', // or alpha picker
+            leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
             selector: '.media-card',
             scrollOffsetTop: 100
@@ -1866,7 +1867,9 @@ class LibraryPage extends Page {
         if (gridConfig) {
             focusManager.register('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
-                leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs'
+                leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs',
+                // Explicitly preserve leaveDown if it exists (it might be pagination)
+                leaveDown: gridConfig.leaveDown || 'library-pagination'
             });
         }
     }

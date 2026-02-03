@@ -11,6 +11,8 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
+import CardRenderer from '../utils/CardRenderer.js';
+import { imageService } from '../utils/ImageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
@@ -190,8 +192,10 @@ class PersonPage extends Page {
         // Poster
         const posterContainer = this.$('#person-poster');
         let imgHtml = '';
-        if (p.ImageTags?.Primary) {
-            const url = api.getImageUrl(p.Id, 'Primary', { maxWidth: 400 });
+        if (p.ImageTags && p.ImageTags.Primary) {
+            const params = imageService.getParams('poster');
+            const url = api.getImageUrl(p.Id, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
+
             imgHtml = `<img src="${url}" alt="${p.Name}" class="loaded" />`;
         } else {
             imgHtml = `

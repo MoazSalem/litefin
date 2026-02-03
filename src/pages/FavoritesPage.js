@@ -3,6 +3,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { imageService } from '../utils/ImageService.js';
 
 class FavoritesPage extends Page {
     constructor() {
@@ -151,8 +152,8 @@ class FavoritesPage extends Page {
         const isSeason = type === 'season';
 
         // Image options
-        const imageOpts = { maxWidth: 300 };
-        const imageUrl = api.getImageUrl(item.Id, 'Primary', imageOpts);
+        const imageOpts = imageService.getParams('poster');
+        const imageUrl = api.getImageUrl(item.Id, 'Primary', { ...imageOpts, tag: item.ImageTags.Primary });
 
         // Layout class
         // Episodes: Landscape (user requested Primary Image, which for episodes is landscape thumb usually)
