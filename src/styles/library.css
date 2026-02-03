@@ -16,8 +16,17 @@
     overflow-y: auto;
     overflow-x: hidden;
     height: 100%;
-    /* Smooth scrolling */
-    scroll-behavior: smooth;
+
+    /* IMPORTANT: Use 'auto' not 'smooth' for scroll-behavior!
+     * FocusManager controls scrolling programmatically with adaptive behavior
+     * (instant for rapid navigation, smooth for single moves).
+     * CSS smooth-scroll conflicts with JS ScrollTo and causes laggy behavior. */
+    scroll-behavior: auto;
+
+    /* GPU acceleration hints for smooth scrolling on TV devices */
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    will-change: scroll-position;
 
     display: flex;
     flex-direction: column;

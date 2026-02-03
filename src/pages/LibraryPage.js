@@ -855,7 +855,8 @@ class LibraryPage extends Page {
             const isLandscape = itemType === 'episode';
 
             const section = document.createElement('section');
-            section.className = `library-row ${isLandscape ? 'landscape' : ''}`;
+            // IMPORTANT: Use .media-row class for FocusManager vertical scroll logic compatibility
+            section.className = `media-row library-row ${isLandscape ? 'landscape' : ''}`;
             section.id = rowId;
             section.dataset.genreId = row.genreId || '';
             section.dataset.listId = listId;
@@ -875,7 +876,7 @@ class LibraryPage extends Page {
                         ${row.title}
                     </div>
                 </div>
-                <div class="library-horizontal-list row-items ${isLandscape ? 'landscape' : ''}" id="${listId}">
+                <div class="row-items ${isLandscape ? 'landscape' : ''}" id="${listId}">
                     ${contentHtml}
                 </div>
             `;
@@ -1006,7 +1007,7 @@ class LibraryPage extends Page {
                 console.log(`[LibraryPage] Row "${listId}" is empty, hiding row...`);
 
                 // HIDE the entire row completely
-                const rowSection = listContainer.closest('.library-row');
+                const rowSection = listContainer.closest('.media-row');
                 if (rowSection) {
                     rowSection.style.display = 'none';
                 }
@@ -1028,15 +1029,11 @@ class LibraryPage extends Page {
             listContainer.innerHTML = html;
 
             // Trigger fade-in animation by adding 'loaded' class
-            const rowSection = listContainer.closest('.library-row');
+            // NOTE: Removed per-card staggered animation delays (index * 50ms)
+            // which caused significant rendering lag on TV devices
+            const rowSection = listContainer.closest('.media-row');
             if (rowSection) {
                 rowSection.classList.add('loaded');
-
-                // Add staggered animation delay for premium cascading effect
-                const cards = listContainer.querySelectorAll('.media-card');
-                cards.forEach((card, index) => {
-                    card.style.animationDelay = `${index * 50}ms`;
-                });
             }
 
             // Invalidate FocusManager cache so it re-queries the new elements
@@ -1045,7 +1042,7 @@ class LibraryPage extends Page {
         } catch (e) {
             console.error('Failed to load genre items', e);
             // Hide row on error too
-            const rowSection = listContainer?.closest('.library-row');
+            const rowSection = listContainer?.closest('.media-row');
             if (rowSection) {
                 rowSection.style.display = 'none';
             }

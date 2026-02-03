@@ -87,8 +87,15 @@
     padding: 20px 40px;
     position: relative;
     /* CRITICAL: Ensures offsetTop of children is relative to this scroll container */
-    scroll-behavior: smooth;
-    /* Global smooth scrolling */
+
+    /* Use 'auto' not 'smooth' - FocusManager handles scrolling programmatically
+     * with adaptive behavior (instant for rapid navigation, smooth for single moves). */
+    scroll-behavior: auto;
+
+    /* GPU acceleration for smoother scrolling on TV devices */
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    will-change: scroll-position;
 }
 
 /* Page loading styles moved to base.css */
@@ -100,6 +107,8 @@
 .row-items {
     display: flex;
     overflow-x: auto;
+    overflow-y: visible;
+    /* CRITICAL: Allow focused cards to scale out of bounds */
     padding: 16px 0 16px 60px;
     -webkit-overflow-scrolling: touch;
     transform: translateZ(0);
@@ -110,6 +119,14 @@
 
     /* Ensure no native smooth scroll interfering with our adaptive JS logic */
     scroll-behavior: auto;
+
+    /* Hide scrollbar but keep functionality */
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+}
+
+.row-items::-webkit-scrollbar {
+    display: none;
 }
 
 .row-items::after {

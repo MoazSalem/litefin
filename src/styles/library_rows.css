@@ -17,20 +17,18 @@
     flex-direction: column;
 }
 
-/* Fade-in animation for lazy-loaded content */
+/* Fade-in animation for lazy-loaded content - uses opacity only for GPU performance */
 .library-row.loaded .media-card {
-    animation: fadeInCard 0.3s ease-out forwards;
+    animation: fadeInCard 0.2s ease-out forwards;
 }
 
 @keyframes fadeInCard {
     from {
         opacity: 0;
-        transform: translateY(10px);
     }
 
     to {
         opacity: 1;
-        transform: translateY(0);
     }
 }
 
@@ -54,7 +52,8 @@
     align-items: center;
     gap: 12px;
     cursor: pointer;
-    transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+    /* Only transition specific properties - 'all' is expensive on TV devices */
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out, box-shadow 0.2s ease-out;
     background-color: transparent;
     border: none;
     outline: none;
@@ -76,45 +75,28 @@
     color: #000;
 }
 
-/* Horizontal Scroll List */
-.library-horizontal-list {
-    display: flex;
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: visible;
-    /* Prevent vertical clipping */
-    gap: 24px;
-    /* Slightly more gap between cards */
+/* ================================================================
+ * Card Sizing in Library Rows
+ * The horizontal scrolling is now handled by .row-items from layout.css
+ * We only need to specify the card widths specific to library rows
+ * ================================================================ */
+
+/* Library row uses .row-items for horizontal scrolling (from layout.css) */
+/* Additional padding customization for library context */
+.library-row .row-items {
     padding: 30px 20px 40px 20px;
-    /* Increased top padding (was 10px) to prevent clipping */
-    /* Balanced padding */
-    scroll-behavior: smooth;
-
-    /* Hide scrollbar but keep functionality */
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+    /* Larger top padding to prevent clip during scale animation */
+    gap: 24px;
 }
 
-.library-horizontal-list::-webkit-scrollbar {
-    display: none;
-}
-
-/* TV Scaling: Increase card sizes for visibility */
-.library-horizontal-list .media-card {
+/* TV Scaling: Card sizes for library genre rows */
+.library-row .media-card {
     flex: 0 0 auto;
     width: 240px;
-    /* Increased from 200px */
+    /* Larger card size for TV visibility */
 }
 
-/* Landscape override (Next Up / Continue Watching) */
-.library-horizontal-list.landscape .media-card {
+/* Landscape override (Continue Watching / Next Up style) */
+.library-row.landscape .media-card {
     width: 420px;
-    /* Increased from 350px */
-}
-
-/* Spacer for end of list */
-.library-horizontal-list::after {
-    content: '';
-    flex: 0 0 60px;
-    height: 1px;
 }
