@@ -139,7 +139,18 @@ class LibraryPage extends Page {
                         
                         <!-- Empty State -->
                         <div class="empty-state hidden" id="empty-state">
-                            <p>No items found</p>
+                            <div class="empty-state-content">
+                                <div class="empty-state-icon">
+                                    <svg viewBox="0 0 24 24" fill="none">
+                                        <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                    </svg>
+                                </div>
+                                <h2 class="empty-state-title">No items found</h2>
+                                <p class="empty-state-text">Try adjusting your filters or search to find what you're looking for.</p>
+                                <button class="empty-state-btn focusable" id="btn-reset-filters" tabindex="0">
+                                    Clear All Filters
+                                </button>
+                            </div>
                         </div>
                     </main>
 
@@ -199,7 +210,7 @@ class LibraryPage extends Page {
         // 5. Register Focus
         this._setupFocus();
 
-        // 4. Handle Genre Mode or Initial Data
+        // 4. Handle Genre/Studio Mode or Initial Data
         if (this.params.genreId) {
             this.state.viewType = 'Items'; // Force Items view for Genre
             // Fetch Genre Info for Title
@@ -212,6 +223,39 @@ class LibraryPage extends Page {
             } catch (e) {
                 console.error('Failed to fetch genre info', e);
             }
+        } else if (this.params.studioId) {
+            this.state.viewType = 'Items'; // Force Items view for Studio
+            // Fetch Studio Info for Title
+            try {
+                const studio = await api.getItem(this.params.studioId);
+                if (studio) {
+                    this.$('#library-title').textContent = studio.Name; // Show Studio Name
+                    this.title = studio.Name;
+                }
+            } catch (e) {
+                console.error('Failed to fetch studio info', e);
+            }
+        } else if (this.params.year) {
+            this.state.viewType = 'Items';
+            const year = decodeURIComponent(this.params.year);
+            this.$('#library-title').textContent = `Year: ${year}`;
+            this.title = year;
+        } else if (this.params.personId) {
+            this.state.viewType = 'Items';
+            try {
+                const person = await api.getItem(this.params.personId);
+                if (person) {
+                    this.$('#library-title').textContent = person.Name;
+                    this.title = person.Name;
+                }
+            } catch (e) {
+                console.error('Failed to fetch person info', e);
+            }
+        } else if (this.params.tagName) {
+            this.state.viewType = 'Items';
+            const tagName = decodeURIComponent(this.params.tagName);
+            this.$('#library-title').textContent = `Tag: ${tagName}`;
+            this.title = tagName;
         }
 
         await this._loadItems();
@@ -249,28 +293,16 @@ class LibraryPage extends Page {
     }
 
     _bindEvents() {
-        // Tabs Delegation
-        this.$('#library-tabs')?.addEventListener('click', this._onTabClick);
-
-        // Alpha Picker Delegation
-        const alphaPicker = this.$('#alpha-picker');
-        if (alphaPicker) {
-            alphaPicker.addEventListener('click', this._onAlphaClick);
-        }
-
-        // Grid Click Delegation
-        this.$('#library-grid')?.addEventListener('click', this._onGridClick);
-
-        // Pagination
+        this.$('#library-tabs')?.addEventListener('click', this._handleTabClick.bind(this));
+        this.$('#btn-shuffle')?.addEventListener('click', this._handleShuffle.bind(this));
+        this.$('#btn-sort')?.addEventListener('click', this._handleSort.bind(this));
+        this.$('#btn-filter')?.addEventListener('click', this._handleFilter.bind(this));
+        this.$('#alpha-picker')?.addEventListener('click', this._handleAlphaClick.bind(this));
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next-top')?.addEventListener('click', () => this._handlePageChange(1));
-
-        // Controls
-        this.$('#btn-shuffle')?.addEventListener('click', () => this._handleShuffle());
-        this.$('#btn-sort')?.addEventListener('click', () => this._handleSort());
-        this.$('#btn-filter')?.addEventListener('click', () => this._handleFilter());
+        this.$('#btn-reset-filters')?.addEventListener('click', this._handleResetFilters.bind(this));
 
         // Modal Overlay Close
         this.$('#modal-overlay')?.addEventListener('click', (e) => {
@@ -300,10 +332,19 @@ class LibraryPage extends Page {
                 return;
             }
 
-            // Handle media card clicks in horizontal rows
+            // Handle media card clicks in horizontal rows AND grid
             const mediaCard = e.target.closest('.media-card');
             if (mediaCard?.dataset?.itemId) {
                 const itemId = mediaCard.dataset.itemId;
+
+                // Special handling for Networks view: navigate to studio-filtered library
+                if (this.state.viewType === 'Networks') {
+                    console.log('Navigating to Studio:', itemId);
+                    router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
+                    return;
+                }
+
+                // Default: navigate to item details
                 console.log('Navigating to item details:', itemId);
                 router.navigate(`/details/${itemId}`);
             }
@@ -335,7 +376,7 @@ class LibraryPage extends Page {
         this.setLoading(true);
 
         // Show Skeleton instead of spinner
-        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming';
+        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
         const grid = this.$('#library-grid');
         if (grid) {
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape);
@@ -364,6 +405,30 @@ class LibraryPage extends Page {
                 params.GenreIds = this.params.genreId;
                 params.Recursive = true;
                 params.IncludeItemTypes = 'Movie,Series,Episode'; // Broaden search for Genre view
+            }
+
+            // Apply Studio Filter (From Route)
+            if (this.params.studioId) {
+                params.StudioIds = this.params.studioId;
+                params.IncludeItemTypes = 'Movie,Series,Episode';
+            }
+
+            // Apply Year Filter (From Route)
+            if (this.params.year) {
+                params.Years = decodeURIComponent(this.params.year);
+                params.IncludeItemTypes = 'Movie,Series,Episode';
+            }
+
+            // Apply Person Filter (From Route)
+            if (this.params.personId) {
+                params.PersonIds = this.params.personId;
+                params.IncludeItemTypes = 'Movie,Series,Episode';
+            }
+
+            // Apply Tag Filter (From Route)
+            if (this.params.tagName) {
+                params.Tags = decodeURIComponent(this.params.tagName);
+                params.IncludeItemTypes = 'Movie,Series,Episode';
             }
 
             // Apply Advanced Filters
@@ -479,7 +544,7 @@ class LibraryPage extends Page {
                 return;
 
             } else if (viewType === 'Upcoming') {
-                result = await api.getNextUp({ Limit: 40 }); // This is global, might need filtering by library if possible (not standard in API)
+                result = await api.getUpcoming({ ParentId: this.state.libraryId, Limit: 48 });
 
             } else if (viewType === 'Episodes') {
                 // Flattened episodes view
@@ -490,16 +555,13 @@ class LibraryPage extends Page {
                 params.Filters = 'IsFavorite';
                 result = await api.getItems(params);
 
+            } else if (viewType === 'Networks') {
+                // Fetch studios/networks for this library
+                result = await api.getStudios({ ParentId: this.state.libraryId });
+
             } else if (viewType === 'Collections') {
                 params.IncludeItemTypes = 'BoxSet';
                 params.Recursive = true;
-                // Collections usually sit at root, need to check if we can filter by Lib?
-                // Often Collections are their own Library. If this is a specific Movie lib, 
-                // we might just want BoxSets that contain items from this lib? Hard to do via API.
-                // Fallback: Just show all collections for now or remove if context invalid.
-                result = await api.getItems(params);
-
-                // Fallback
                 result = await api.getItems(params);
             }
 
@@ -669,9 +731,8 @@ class LibraryPage extends Page {
         const pagination = this.$('#library-pagination');
         if (pagination) pagination.style.display = ''; // Restore pagination
 
-        // Use landscape cards via CSS class if needed (e.g. for Episodes)
-        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming';
-        const isThumb = this.state.viewType === 'Networks'; // TODO: Logic for simple thumbs
+        // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks)
+        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
 
         if (isLandscape) {
             grid.classList.add('landscape');
@@ -683,6 +744,13 @@ class LibraryPage extends Page {
             grid.innerHTML = '';
             this.$('#empty-state').classList.remove('hidden');
             this.$('#count-indicator').textContent = '0 items';
+
+            // Register Empty State Button for focus
+            focusManager.register('empty-state-btn', this.$('#btn-reset-filters'), {
+                leaveUp: 'library-controls',
+                leaveLeft: 'sidebar'
+            });
+            focusManager.setActiveSection('empty-state-btn');
             return;
         }
 
@@ -696,7 +764,7 @@ class LibraryPage extends Page {
         // Generate HTML
         const html = items.map(item => CardRenderer.createCardHtml(item, {
             isLandscape: isLandscape,
-            type: this.state.viewType === 'Episodes' ? 'episode' : 'poster',
+            type: (this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming') ? 'episode' : (this.state.viewType === 'Networks' ? 'backdrop' : 'poster'),
             contextType: this.state.viewType === 'Upcoming' ? 'episode' : null // Handle special contexts
         })).join('');
 
@@ -745,7 +813,15 @@ class LibraryPage extends Page {
         }
 
         if (!rows || rows.length === 0) {
-            if (emptyState) emptyState.classList.remove('hidden');
+            if (emptyState) {
+                emptyState.classList.remove('hidden');
+                // Register Empty State Button for focus
+                focusManager.register('empty-state-btn', this.$('#btn-reset-filters'), {
+                    leaveUp: 'library-tabs',
+                    leaveLeft: 'sidebar'
+                });
+                focusManager.setActiveSection('empty-state-btn');
+            }
             return;
         }
 
@@ -762,8 +838,9 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
         const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
+        const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
         const isEpisodes = (viewType === 'Episodes');
-        const nextUpTarget = (isMovieMain || isEpisodes) ? 'library-controls' : 'library-tabs';
+        const nextUpTarget = (isMovieMain || isTVMain || isEpisodes) ? 'library-controls' : 'library-tabs';
 
         rows.forEach((row, rowIndex) => {
             const rowId = `row-${rowIndex}`;
@@ -1038,9 +1115,18 @@ class LibraryPage extends Page {
         if (!card) return;
 
         const itemId = card.dataset.itemId;
-        if (itemId) {
-            router.navigate(`/details/${itemId}`);
+        if (!itemId) return;
+
+        // Special handling for Networks view: navigate to studio-filtered library
+        if (this.state.viewType === 'Networks') {
+            console.log('Navigating to Studio:', itemId);
+            // Navigate to library filtered by this studio
+            router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
+            return;
         }
+
+        // Default: navigate to details page
+        router.navigate(`/details/${itemId}`);
     }
 
     async _handlePageChange(direction) {
@@ -1106,6 +1192,19 @@ class LibraryPage extends Page {
         if (btnShuffle) {
             btnShuffle.style.display = '';
         }
+    }
+
+    _handleResetFilters() {
+        console.log('[LibraryPage] Resetting all filters...');
+        this.state.filters = {};
+        this.state.nameStartsWith = null;
+        this.state.startIndex = 0;
+
+        // Update UI components that reflect these states
+        this._renderAlphaPicker();
+
+        // Reload items
+        this._loadItems();
     }
 
     _handleSort() {
@@ -1434,7 +1533,7 @@ class LibraryPage extends Page {
         overlay.setAttribute('aria-hidden', 'false');
 
         // Logic to Render Items for Active Section
-        const renderItems = (sectionId) => {
+        const renderItems = (sectionId, options = {}) => {
             const section = validSections.find(s => s.id === sectionId);
             const container = overlay.querySelector('#filter-main');
             if (!section || !container) return;
@@ -1487,6 +1586,16 @@ class LibraryPage extends Page {
             });
             // Force cache invalidation just in case
             focusManager.invalidateCache('filter-items');
+
+            // --- Focus Restoration ---
+            if (options.restoreFocus) {
+                const { key, value } = options.restoreFocus;
+                const selector = `.modal-option-btn[data-key="${key}"][data-value="${value || ''}"]`;
+                const nextBtn = container.querySelector(selector);
+                if (nextBtn) {
+                    focusManager.focusElement(nextBtn, { scroll: false });
+                }
+            }
         };
 
         // item toggle logic
@@ -1521,10 +1630,9 @@ class LibraryPage extends Page {
 
             // Refresh checks if needed (mutually exclusive)
             if (key === 'IsPlayed' || key === 'IsUnplayed') {
-                renderItems(this.state.activeFilterSection);
-                // Note: re-rendering loses focus position inside list, 
-                // but for mutual active buttons it's ok-ish or we can do manual DOM update.
-                // Re-rendering is safest for consistency.
+                renderItems(this.state.activeFilterSection, {
+                    restoreFocus: { key, value: val }
+                });
             }
         };
 
@@ -1720,10 +1828,11 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
 
-        // Condition: only show for Movies (Items in movies lib) and Episodes
+        // Condition: only show for Movies (Items), TV Shows (Items), and Episodes
         const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
+        const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
         const isEpisodes = (viewType === 'Episodes');
-        const shouldShow = isMovieMain || isEpisodes;
+        const shouldShow = isMovieMain || isTVMain || isEpisodes;
 
         const controls = this.$('#library-controls');
         const alphaPicker = this.$('#alpha-picker-container');

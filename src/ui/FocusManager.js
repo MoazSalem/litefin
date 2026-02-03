@@ -77,7 +77,32 @@ class FocusManager {
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
             if (this._focusedElement !== e.target) {
+                // If trap is active, check if focus is escaping
+                if (this._trapStack.length > 0) {
+                    const trapConfig = this._sections.get('__trap__');
+                    if (trapConfig && !trapConfig.container.contains(e.target)) {
+                        // Focus escaped the trap! Force it back
+                        console.warn('FocusManager: Focus escaped trap, forcing back');
+                        const focusables = this._getFocusables('__trap__', true);
+                        if (focusables.length > 0) {
+                            this.focusElement(focusables[0]);
+                        }
+                        return;
+                    }
+                }
+
                 this._focusedElement = e.target;
+
+                // Auto-sync active section if the element belongs to one (but not during trap)
+                if (this._trapStack.length === 0) {
+                    const sectionName = this.getSectionForElement(e.target);
+                    if (sectionName && this._activeSection !== sectionName) {
+                        this._activeSection = sectionName;
+                        eventBus.emit('focus:sectionChanged', sectionName);
+                        console.log(`FocusManager: Auto-synced active section to "${sectionName}" via focusin`);
+                    }
+                }
+
                 this._updateFocusMemory();
             }
         });
@@ -508,10 +533,20 @@ class FocusManager {
         const sectionName = this.getSectionForElement(element);
         const config = sectionName ? this._sections.get(sectionName) : null;
 
-        // Auto-switch active section if we are focusing an element in a different section
+        // Auto-switch active section if:
+        // 1. Element belongs to a section
+        // 2. We are not already in that section
+        // 3. We are NOT currently in a Trap (Traps manage their own focus)
         if (sectionName && this._activeSection !== sectionName) {
-            console.log(`[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`);
-            this.setActiveSection(sectionName, false); // false = Don't trigger restoreFocus (prevent loop)
+            // Check if we are in a trap (don't switch if we are, unless we're popping)
+            const isTrapped = this._trapStack.length > 0 && this._activeSection === '__trap__';
+
+            if (!isTrapped) {
+                console.log(`[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`);
+                this.setActiveSection(sectionName, false); // false = Don't trigger restoreFocus (prevent loop)
+            } else {
+                console.log(`[FocusManager] focusElement: Staying in trap "${this._activeSection}" despite element belonging to "${sectionName}"`);
+            }
         }
 
         // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
@@ -762,12 +797,20 @@ class FocusManager {
         }
     }
 
-    pushTrap(container) {
+    pushTrap(container, options = {}) {
         this._trapStack.push({
             section: this._activeSection,
             element: this._focusedElement
         });
-        this.register('__trap__', container, { orientation: 'grid' });
+        this.register('__trap__', container, {
+            orientation: options.orientation || 'grid',
+            selector: options.selector || undefined,
+            // Explicitly block all leaving directions
+            leaveUp: null,
+            leaveDown: null,
+            leaveLeft: null,
+            leaveRight: null
+        });
         this.setActiveSection('__trap__');
     }
 

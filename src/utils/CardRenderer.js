@@ -54,8 +54,8 @@ class CardRenderer {
             } else if (item.SeriesThumbImageTag && item.SeriesId) {
                 // Fallback to series thumb
                 imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: 640, tag: item.SeriesThumbImageTag });
-            } else {
-                // Final Fallback: Series Primary if nothing else
+            } else if (item.SeriesId) {
+                // Final Fallback: Series Primary if nothing else (only if SeriesId exists)
                 imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 480 });
             }
         }
@@ -89,8 +89,8 @@ class CardRenderer {
                     imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: 640, tag: item.ImageTags.Thumb });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
                     imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: 640 });
-                } else {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags?.Primary });
+                } else if (item.ImageTags?.Primary) {
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags.Primary });
                 }
             }
         }
@@ -107,9 +107,21 @@ class CardRenderer {
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
                 imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: 480 });
-            } else {
+            } else if (item.ImageTags?.Primary) {
                 // Standard Item
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags?.Primary });
+                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: 480, tag: item.ImageTags.Primary });
+            }
+        }
+
+        // --- 1.5 Special Fallbacks for Missing Images ---
+        if (!imageUrl && !imageInnerHtml) {
+            // Apply to Libraries (CollectionFolder), Studios, and anything specifically marked as Studio/Network
+            if (item.Type === 'CollectionFolder' || item.Type === 'Studio' || contextType === 'Studio' || contextType === 'Network') {
+                imageInnerHtml = `
+                    <div class="media-fallback">
+                        <div class="media-fallback-name">${item.Name}</div>
+                    </div>
+                `;
             }
         }
 

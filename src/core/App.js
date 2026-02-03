@@ -193,6 +193,10 @@ class App {
         router.register('/home', HomePage);
         router.register('/library/:id', LibraryPage);
         router.register('/library/:id/genre/:genreId', LibraryPage); // Filtered by Genre
+        router.register('/library/:id/studio/:studioId', LibraryPage); // Filtered by Studio/Network
+        router.register('/library/:id/year/:year', LibraryPage); // Filtered by Year
+        router.register('/library/:id/person/:personId', LibraryPage); // Filtered by Person
+        router.register('/library/:id/tag/:tagName', LibraryPage); // Filtered by Tag
         router.register('/details/:id', DetailsPage);
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);

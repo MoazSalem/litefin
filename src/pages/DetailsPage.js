@@ -281,9 +281,10 @@ class DetailsPage extends Page {
             if (!items || items.length === 0) return '';
             const valuesHtml = items.map(i => {
                 const name = i.Name || i; // Handle object or string
-                // Chips are NOT navigable initially (explicit tabindex="-1")
-                // FocusManager now ignores them even if they are buttons
-                return `<button class="meta-chip" tabindex="-1" data-meta-name="${name}">${name}</button>`;
+                const id = i.Id || '';
+                const type = label.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
+
+                return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
             }).join('');
 
             return `
@@ -294,9 +295,10 @@ class DetailsPage extends Page {
             `;
         };
 
-        // Genres
-        if (item.Genres && item.Genres.length > 0) {
-            htmlParts.push(createRow('Genres', item.Genres));
+        // Genres (Prefer GenreItems for IDs)
+        const genres = item.GenreItems || item.Genres;
+        if (genres && genres.length > 0) {
+            htmlParts.push(createRow('Genres', genres));
         }
 
         // Directors
@@ -347,6 +349,7 @@ class DetailsPage extends Page {
                     this._activateRichMeta();
                 };
 
+                // Both click and Enter key activate the trap mode
                 container.onclick = activateHandler;
                 container.onkeydown = activateHandler;
 
@@ -398,9 +401,30 @@ class DetailsPage extends Page {
             }
 
 
+            // Bind navigation handlers to each chip
+            validChips.forEach(chip => {
+                // Click handler
+                chip.onclick = (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this._handleMetaClick(chip);
+                };
 
-            // Push focus trap on the Wrapper (So internal nav works)
-            focusManager.pushTrap(wrapper);
+                // Enter key handler
+                chip.onkeydown = (e) => {
+                    if (e.keyCode === 13) { // Enter
+                        e.preventDefault();
+                        e.stopPropagation();
+                        this._handleMetaClick(chip);
+                    }
+                };
+            });
+
+            // Push focus trap with specific chip selector
+            focusManager.pushTrap(container, {
+                selector: '.meta-chip',
+                orientation: 'grid'
+            });
 
             // Force focus
             focusManager.focusElement(validChips[0]);
@@ -536,8 +560,7 @@ class DetailsPage extends Page {
         overviewEl.classList.add('line-clamp-6');
         this.$('.see-more-btn').style.display = 'none';
 
-        // Reveal the column (Fade In) to prevent layout jump
-        // We do this after content injection
+        // Reveal columns
         requestAnimationFrame(() => {
             this.$('.details-info-col').classList.add('visible');
             this._checkOverviewTruncation();
@@ -545,6 +568,45 @@ class DetailsPage extends Page {
 
         // Update buttons based on state
         this._updateButtons();
+    }
+
+    /**
+     * Handle navigation when a metadata item (Year, Genre, Studio, Person, etc.) is clicked
+     * @param {HTMLElement} element - The clicked button or chip
+     */
+    _handleMetaClick(element) {
+        const type = element.dataset.type;
+        const id = element.dataset.id;
+        const name = element.dataset.name || element.dataset.value;
+        const libraryId = this._item.ParentId || this._item.LibraryId; // Fallback to LibraryId if ParentId missing
+
+        if (!libraryId) {
+            console.warn('MetaNav: Could not determine LibraryId for item', this._item);
+        }
+
+        console.log(`MetaNav: Navigating to ${type} -> ${name} (${id})`);
+
+        switch (type) {
+            case 'year':
+                router.navigate(`/library/${libraryId}/year/${encodeURIComponent(name)}`);
+                break;
+            case 'genres':
+                router.navigate(`/library/${libraryId}/genre/${id}`);
+                break;
+            case 'studios':
+                router.navigate(`/library/${libraryId}/studio/${id}`);
+                break;
+            case 'directors':
+            case 'writers':
+                // Search by PersonId
+                router.navigate(`/library/${libraryId}/person/${id}`);
+                break;
+            case 'tags':
+                router.navigate(`/library/${libraryId}/tag/${encodeURIComponent(name)}`);
+                break;
+            default:
+                console.warn(`MetaNav: Unhandled metadata type "${type}"`);
+        }
     }
 
     _updateButtons() {

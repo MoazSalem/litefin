@@ -414,6 +414,36 @@ class ApiClient {
         return this.get('/Shows/NextUp', { ...defaults, ...params });
     }
 
+    /**
+     * Get upcoming episodes for a library
+     */
+    async getUpcoming(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Limit: 48,
+            Fields: 'AirTime,PrimaryImageAspectRatio',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Banner,Thumb',
+            EnableTotalRecordCount: false
+        };
+
+        return this.get('/Shows/Upcoming', { ...defaults, ...params });
+    }
+
+    /**
+     * Get studios/networks for a library
+     */
+    async getStudios(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            IncludeItemTypes: 'Series',
+            Recursive: true,
+            Fields: 'DateCreated,PrimaryImageAspectRatio'
+        };
+
+        return this.get(`/Studios`, { ...defaults, ...params });
+    }
+
     // ========================================================================
     // Item Endpoints
     // ========================================================================
