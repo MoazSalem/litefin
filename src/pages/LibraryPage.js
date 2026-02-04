@@ -506,25 +506,16 @@ class LibraryPage extends Page {
                 result = await api.getItems(params);
 
             } else if (viewType === 'Suggestions') {
-                // TODO: Special endpoint for suggestions?
-                // For now, use Latest Items as a proxy or stick to standard
-                delete params.Recursive;
-                delete params.SortBy; // Latest usually implies specific sort
-                result = await api.getLatestItems(this.state.libraryId, { Limit: 30 });
-                // Latest items endpoint returns generic array usually, not Items wrapper
-                if (Array.isArray(result)) {
-                    result = { Items: result, TotalRecordCount: result.length };
-                }
+                // Fetch multiple rows for Suggestions with Recommendations
+                const rows = [];
 
-            } else if (viewType === 'Suggestions') {
-                // Fetch multiple rows for Suggestions
+                // 1. Continue Watching & Next Up & Latest (Parallel Fetch)
                 const [resume, nextUp, latest] = await Promise.all([
                     api.getResumeItems({ Limit: 12, ParentId: this.state.libraryId }),
                     api.getNextUp({ Limit: 12, ParentId: this.state.libraryId }),
                     api.getLatestItems(this.state.libraryId, { Limit: 12 })
                 ]);
 
-                const rows = [];
                 if (resume.Items && resume.Items.length > 0) {
                     rows.push({ title: 'Continue Watching', items: resume.Items });
                 }
@@ -533,6 +524,43 @@ class LibraryPage extends Page {
                 }
                 if (latest && latest.length > 0) {
                     rows.push({ title: 'Latest Added', items: latest });
+                }
+
+                // 2. "Because You Watch..." (Based on active resume items)
+                if (resume.Items && resume.Items.length > 0) {
+                    // Pick a random item from likely candidates (first few)
+                    const candidates = resume.Items.slice(0, 3);
+                    const sourceItem = candidates[Math.floor(Math.random() * candidates.length)];
+                    try {
+                        const similar = await api.getSimilar(sourceItem.Id, { Limit: 12 });
+                        if (similar.Items && similar.Items.length > 0) {
+                            rows.push({ title: `Because you watch ${sourceItem.Name}`, items: similar.Items });
+                        }
+                    } catch (e) {
+                        console.warn('Failed to load similar suggestions', e);
+                    }
+                }
+
+                // 3. "Because You Like..." (Based on random Favorite in this library)
+                try {
+                    const favorites = await api.getItems({
+                        ParentId: this.state.libraryId,
+                        IsFavorite: true,
+                        SortBy: 'Random',
+                        Limit: 1,
+                        Recursive: true,
+                        IncludeItemTypes: 'Movie,Series'
+                    });
+
+                    if (favorites.Items && favorites.Items.length > 0) {
+                        const favItem = favorites.Items[0];
+                        const similarFav = await api.getSimilar(favItem.Id, { Limit: 12 });
+                        if (similarFav.Items && similarFav.Items.length > 0) {
+                            rows.push({ title: `Because you like ${favItem.Name}`, items: similarFav.Items });
+                        }
+                    }
+                } catch (e) {
+                    console.warn('Failed to load favorite suggestions', e);
                 }
 
                 this.state.items = []; // Clear grid items
@@ -591,7 +619,64 @@ class LibraryPage extends Page {
                 return;
 
             } else if (viewType === 'Upcoming') {
-                result = await api.getUpcoming({ ParentId: this.state.libraryId, Limit: 48 });
+                // Fetch upcoming items
+                result = await api.getUpcoming({ ParentId: this.state.libraryId, Limit: 60 });
+                const items = result.Items || [];
+
+                // Sort by date first to ensure correct grouping order
+                items.sort((a, b) => new Date(a.PremiereDate || a.AirTime) - new Date(b.PremiereDate || b.AirTime));
+
+                const rows = [];
+                let currentBatch = null;
+                let currentKey = '';
+
+                items.forEach(item => {
+                    const dateStr = item.PremiereDate || item.AirTime;
+                    if (!dateStr) return;
+
+                    const date = new Date(dateStr);
+                    const key = date.toDateString(); // Groups by day
+
+                    if (key !== currentKey) {
+                        if (currentBatch) rows.push(currentBatch);
+                        currentKey = key;
+                        currentBatch = {
+                            date: date,
+                            items: []
+                        };
+                    }
+                    currentBatch.items.push(item);
+                });
+                if (currentBatch) rows.push(currentBatch);
+
+                // Format Rows
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                const tomorrow = new Date(today);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+
+                const displayRows = rows.map(group => {
+                    const d = group.date;
+                    // Reset time for strictly date comparison
+                    const dZero = new Date(d);
+                    dZero.setHours(0, 0, 0, 0);
+
+                    let title = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
+
+                    if (dZero.getTime() === today.getTime()) title = 'Today';
+                    else if (dZero.getTime() === tomorrow.getTime()) title = 'Tomorrow';
+
+                    return {
+                        title: title,
+                        items: group.items,
+                        genreId: null // Static header
+                    };
+                });
+
+                this.state.items = [];
+                this._renderHorizontalRows(displayRows);
+                this._updatePaginationUI();
+                return;
 
             } else if (viewType === 'Episodes') {
                 // Flattened episodes view
@@ -962,12 +1047,20 @@ class LibraryPage extends Page {
             section.dataset.genreId = row.genreId || '';
 
             // Focusable Header (clickable to navigate to genre page)
-            const headerHtml = `
+            // Only make focusable if it's actionable (has genreId)
+            const isActionable = !!row.genreId;
+            const headerHtml = isActionable ? `
                 <div class="library-row-header" id="${headerId}">
-                    <button class="header-focusable" tabindex="0" data-genre-id="${row.genreId || ''}">
+                    <button class="header-focusable" tabindex="0" data-genre-id="${row.genreId}">
                         <span class="header-title">${row.title}</span>
                         <i class="fa-solid fa-chevron-right header-arrow"></i>
                     </button>
+                </div>
+            ` : `
+                 <div class="library-row-header" id="${headerId}">
+                    <div class="header-static">
+                        <span class="header-title">${row.title}</span>
+                    </div>
                 </div>
             `;
 

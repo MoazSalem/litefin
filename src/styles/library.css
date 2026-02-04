@@ -293,6 +293,7 @@
     overflow: hidden !important;
     /* Force Tizen 4 layer repaint to respect radius */
     -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
 }
 
 @keyframes fadeIn {

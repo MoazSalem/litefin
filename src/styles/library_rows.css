@@ -65,6 +65,16 @@
     transform-origin: left center;
 }
 
+.header-static {
+    font-size: 36px;
+    font-weight: 800;
+    color: var(--jf-text-primary);
+    padding: 10px 24px;
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
 .header-focusable:focus,
 .header-focusable.focused {
     background-color: rgba(255, 255, 255, 0.15);
@@ -72,6 +82,10 @@
     transform: scale(1.08);
     /* Apple-style pop */
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    overflow: hidden !important;
+    /* Force Tizen 4 layer repaint to respect radius */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    mask-image: radial-gradient(white, black);
 }
 
 /* Light theme adjustment if needed */
