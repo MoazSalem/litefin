@@ -93,6 +93,18 @@ class DetailsPage extends Page {
                     <div id="rich-meta-container" class="media-row">
                         <div class="details-rich-meta" id="rich-meta" tabindex="0"></div>
                     </div>
+
+                    <!-- Collection Movies (BoxSet) -->
+                    <section class="details-collection-movies media-row hidden" id="collection-movies-section">
+                        <h2 class="row-title">Movies in Collection</h2>
+                        <div class="collection-row row-items" id="collection-movies-row"></div>
+                    </section>
+
+                    <!-- Collection Shows (BoxSet) -->
+                    <section class="details-collection-shows media-row hidden" id="collection-shows-section">
+                        <h2 class="row-title">Shows in Collection</h2>
+                        <div class="collection-row row-items" id="collection-shows-row"></div>
+                    </section>
                     
                     <!-- Next Up (for series) -->
                     <section class="details-next-up media-row hidden" id="next-up-section">
@@ -270,6 +282,8 @@ class DetailsPage extends Page {
             ]);
         } else if (this._item.Type === 'Season') {
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
+        } else if (this._item.Type === 'BoxSet') {
+            await this._loadCollectionItems();
         }
 
         // Render people if available
@@ -281,6 +295,83 @@ class DetailsPage extends Page {
         // Load Logo Last (Heavy asset)
         this._loadLogo();
     }
+
+    async _loadCollectionItems() {
+        try {
+            const [movies, shows] = await Promise.all([
+                api.getItems({
+                    ParentId: this._itemId,
+                    IncludeItemTypes: 'Movie',
+                    Recursive: true,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Limit: 50 // Rational limit
+                }),
+                api.getItems({
+                    ParentId: this._itemId,
+                    IncludeItemTypes: 'Series',
+                    Recursive: true,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                    Limit: 50
+                })
+            ]);
+
+            const hasMovies = movies.Items && movies.Items.length > 0;
+            const hasShows = shows.Items && shows.Items.length > 0;
+
+            // Render Rows
+            if (hasMovies) {
+                this._renderCollectionRow('collection-movies-section', 'collection-movies-row', movies.Items);
+            }
+            if (hasShows) {
+                this._renderCollectionRow('collection-shows-section', 'collection-shows-row', shows.Items);
+            }
+
+            // Link Focus logic (Manual chaining for now, simplistic)
+            // Ideally we'd hook into the generic layout manager, but hardcoding the chain here works:
+            // RichMeta -> Movies -> Shows -> People
+
+            let lastSection = 'details-rich-meta';
+
+            if (hasMovies) {
+                this._updateLeaveDown(lastSection, 'collection-movies-section');
+                lastSection = 'collection-movies-section';
+            }
+
+            if (hasShows) {
+                this._updateLeaveDown(lastSection, 'collection-shows-section');
+                lastSection = 'collection-shows-section';
+            }
+
+            // Link last collection row to whatever is next (usually People or Similar)
+            // But People logic runs after this? No, _renderPeople runs after.
+            // We just need to ensure the standard flow picks it up.
+            // For now, let's leave it open, and let _renderPeople link back up to us if it can find us.
+
+        } catch (e) {
+            console.warn('DetailsPage: Failed to load collection items', e);
+        }
+    }
+
+    _renderCollectionRow(sectionId, listId, items, leaveUpTarget) {
+        const section = this.$(`#${sectionId}`);
+        const list = this.$(`#${listId}`);
+        if (!section || !list) return;
+
+        section.classList.remove('hidden');
+
+        list.innerHTML = items.map(item => this._renderMediaCard(item, false, 'poster')).join('');
+
+        // Register Focus with dynamic UP linking
+        this.registerFocusSection(sectionId, section, {
+            orientation: 'horizontal',
+            leaveLeft: 'sidebar',
+            leaveUp: leaveUpTarget || 'details-rich-meta',
+            enterTo: 'last-focused'
+        });
+
+        lazyLoader.observe(list);
+    }
+
 
     _renderRichMetadata() {
         const item = this._item;

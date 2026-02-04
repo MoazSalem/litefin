@@ -303,6 +303,28 @@ class LibraryPage extends Page {
         return false;
     }
 
+    _setupFocus() {
+        // Determine start section
+        // For BoxSets, tabs are hidden, so start at Controls or Grid
+        const collectionType = this.state.libraryInfo?.CollectionType;
+        const viewType = this.state.viewType;
+
+        if (collectionType === 'boxsets') {
+            // Try controls first (Sort/Filter), else Grid
+            // But controls are usually enabled for BoxSets now.
+            this.setActiveSection('library-controls');
+        } else {
+            // Standard views have tabs
+            // Ensure tabs are actually visible?
+            if (this.$('#library-tabs')?.style.display !== 'none') {
+                this.setActiveSection('library-tabs');
+            } else {
+                // Fallback (e.g. if tabs hidden for some reason)
+                this.setActiveSection('library-controls');
+            }
+        }
+    }
+
     _bindEvents() {
         this.$('#library-tabs')?.addEventListener('click', this._handleTabClick.bind(this));
         this.$('#btn-shuffle')?.addEventListener('click', this._handleShuffle.bind(this));
@@ -502,6 +524,9 @@ class LibraryPage extends Page {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
                     params.IncludeItemTypes = 'Movie';
+                } else if (this.state.libraryInfo?.CollectionType === 'boxsets') {
+                    params.IncludeItemTypes = 'BoxSet';
+                    params.Recursive = true;
                 }
                 result = await api.getItems(params);
 
@@ -711,6 +736,25 @@ class LibraryPage extends Page {
             // Apply Header visibility and specialization AFTER content is loaded
             this._updateControlsVisibility();
             this._updateHeaderVisibility();
+
+            // Force Focus Check - Ensure we don't drop focus after load
+            // Especially for BoxSets where tabs are hidden and initial focus might be lost
+            if (!document.activeElement || document.activeElement === document.body) {
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                if (collectionType === 'boxsets') {
+                    // Force controls or grid
+                    if (this.$('#library-controls')?.style.display !== 'none') {
+                        this.setActiveSection('library-controls');
+                    } else {
+                        this.setActiveSection('library-grid');
+                    }
+                } else {
+                    // Try to restore valid focus or default
+                    if (this.$('#library-tabs')?.style.display !== 'none') {
+                        // Don't force tabs if we are deep in pagination, but on loadItems usually tabs or grid
+                    }
+                }
+            }
         }
     }
 
@@ -760,6 +804,19 @@ class LibraryPage extends Page {
 
     _renderTabs() {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
+        const tabsContainer = this.$('#library-tabs');
+
+        // Hide tabs for BoxSets (Collections) library
+        if (collectionType === 'boxsets') {
+            if (tabsContainer) {
+                tabsContainer.style.display = 'none';
+                tabsContainer.innerHTML = '';
+            }
+            focusManager.unregister('library-tabs');
+            return;
+        }
+
+        if (tabsContainer) tabsContainer.style.display = '';
 
         // Define tabs based on collection type
         let tabs = [];
@@ -791,7 +848,6 @@ class LibraryPage extends Page {
             ];
         }
 
-        const tabsContainer = this.$('#library-tabs');
         if (!tabsContainer) return;
 
         tabsContainer.innerHTML = tabs.map(tab => `
@@ -2032,6 +2088,45 @@ class LibraryPage extends Page {
 
         // Bridge focus chain: library-tabs -> (controls -> alpha ->) content
         const tabsContainer = this.$('#library-tabs');
+
+        // Special Case: BoxSets (Collections) have NO tabs, but HAVE controls
+        // We need to bridge Sidebar -> Controls directly, and Controls -> Up (Sidebar?)
+        if (collectionType === 'boxsets' && shouldShow) {
+            // 1. Controls configuration
+            const controlsConfig = focusManager.getSectionConfig('library-controls');
+            if (controlsConfig) {
+                focusManager.register('library-controls', this.$('#library-controls'), {
+                    ...controlsConfig,
+                    leaveUp: 'sidebar', // No tabs above, go back to sidebar
+                    leaveDown: 'alpha-picker',
+                    leaveLeft: 'sidebar'
+                });
+            }
+
+            // 2. Alpha Picker configuration
+            const alphaConfig = focusManager.getSectionConfig('alpha-picker');
+            if (alphaConfig) {
+                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                    ...alphaConfig,
+                    leaveUp: 'library-controls',
+                    leaveDown: 'library-grid',
+                    leaveLeft: 'sidebar'
+                });
+            }
+
+            // 3. Grid configuration
+            const gridConfig = focusManager.getSectionConfig('library-grid');
+            if (gridConfig) {
+                focusManager.register('library-grid', this.$('#library-grid'), {
+                    ...gridConfig,
+                    leaveUp: 'alpha-picker',
+                    leaveDown: gridConfig.leaveDown || 'library-pagination'
+                });
+            }
+            // Skip standard tab logic
+            return;
+        }
+
         if (tabsContainer) {
             let nextTarget = 'library-controls';
 

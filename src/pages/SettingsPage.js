@@ -352,32 +352,65 @@ class SettingsPage extends Page {
             const trigger = container.querySelector('.custom-select-trigger');
             const optionsPanel = container.querySelector('.custom-select-options');
             const optionBtns = container.querySelectorAll('.select-option');
+            const dropdownId = `dropdown-${trigger.id}`;
+
+            const closeDropdown = () => {
+                container.classList.remove('open');
+                // Unregister modal section
+                focusManager.unregister(dropdownId);
+                // Return to settings content
+                focusManager.setActiveSection('settings-content');
+                // Invalidating content cache to ensure it sees the closed state
+                focusManager.invalidateCache('settings-content');
+            };
+
+            const openDropdown = () => {
+                // Close others
+                this.$$('.custom-select-container.open').forEach(c => {
+                    if (c !== container) {
+                        // Force close logic for others?
+                        c.classList.remove('open');
+                    }
+                });
+
+                container.classList.add('open');
+
+                // Register temporary modal section for this dropdown
+                focusManager.register(dropdownId, optionsPanel, {
+                    orientation: 'vertical',
+                    enterTo: 'last-focused',
+                    leaveRight: null, // Trap focus mostly
+                    leaveLeft: null,
+                    leaveUp: null, // Could allow closing?
+                    leaveDown: null,
+                });
+
+                // Set as active section
+                focusManager.setActiveSection(dropdownId);
+
+                // Focus logic
+                setTimeout(() => {
+                    const selected = container.querySelector('.select-option.selected') || optionBtns[0];
+                    if (selected) focusManager.focusElement(selected);
+                }, 50);
+            };
 
             // Trigger click
             trigger.addEventListener('click', (e) => {
-                // Close others
-                this.$$('.custom-select-container.open').forEach(c => {
-                    if (c !== container) c.classList.remove('open');
-                });
-
-                container.classList.toggle('open');
-
+                // Toggle
                 if (container.classList.contains('open')) {
-                    // Update FocusManager cache so it sees the new visible options
-                    focusManager.invalidateCache('settings-content');
-
-                    // Focus first option or selected option
-                    setTimeout(() => {
-                        const selected = container.querySelector('.select-option.selected') || optionBtns[0];
-                        focusManager.focusElement(selected);
-                    }, 50); // Small delay to ensure CSS transition/display matches
+                    closeDropdown();
+                    // Restore focus to trigger
+                    focusManager.focusElement(trigger);
+                } else {
+                    openDropdown();
                 }
             });
 
             // Option selection
             optionBtns.forEach(btn => {
                 btn.addEventListener('click', (e) => {
-                    e.stopPropagation(); // Prevent bubbling causing issues
+                    e.stopPropagation();
 
                     const value = btn.dataset.value;
                     const label = btn.innerText.trim();
@@ -390,22 +423,16 @@ class SettingsPage extends Page {
                     optionBtns.forEach(b => b.classList.remove('selected'));
                     btn.classList.add('selected');
 
-                    // 1. Restore Focus to Trigger immediately
+                    // Close & Restore
+                    closeDropdown();
                     focusManager.focusElement(trigger);
-
-                    // 2. Close Dropdown & Refresh Cache asynchronously
-                    // This ensures the DOM is updated (hidden) BEFORE we scan for focusables
-                    setTimeout(() => {
-                        container.classList.remove('open');
-                        focusManager.invalidateCache('settings-content');
-                    }, 10);
 
                     // Save value to localStorage
                     const mapMap = {
                         'quality-select': 'pref:maxBitrate',
                         'audio-lang-select': 'pref:audioLang',
                         'subtitle-select': 'pref:subtitleLang',
-                        'image-quality-select': 'pref:imageQuality' // Handled via ImageService really, but good for tracking
+                        'image-quality-select': 'pref:imageQuality'
                     };
 
                     if (trigger.id === 'image-quality-select') {
@@ -417,54 +444,23 @@ class SettingsPage extends Page {
                     console.log(`Setting ${trigger.id} saved: ${value}`);
                 });
 
-                // Improve keyboard handling within list
+                // Handle Escape/Back to close
                 btn.addEventListener('keydown', (e) => {
-                    const currentIndex = Array.from(optionBtns).indexOf(btn);
-
-                    if (e.key === 'ArrowDown') {
+                    if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'MediaBtnBack') {
                         e.preventDefault();
                         e.stopPropagation();
-                        const nextIndex = (currentIndex + 1) % optionBtns.length; // Loop to start
-                        focusManager.focusElement(optionBtns[nextIndex]);
+                        closeDropdown();
+                        focusManager.focusElement(trigger);
                     }
-                    else if (e.key === 'ArrowUp') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        // Loop to end
-                        const prevIndex = (currentIndex - 1 + optionBtns.length) % optionBtns.length;
-                        focusManager.focusElement(optionBtns[prevIndex]);
-                    }
-                    else if (e.key === 'ArrowLeft' || e.key === 'ArrowRight') {
-                        // Prevent leaking out sideways
-                        e.preventDefault();
-                        e.stopPropagation();
-                    }
-                    else if (e.key === 'Escape' || e.key === 'Backspace') { // Handle Backspace for remote "Back"
-                        container.classList.remove('open');
-                        focusManager.focusElement(trigger); // Then restore focus
-                        focusManager.invalidateCache('settings-content'); // Refresh cache
-                        e.stopPropagation();
-                    }
+                    // We REMOVED Arrow Up/Down logic because the FocusManager 
+                    // handles it automatically via the 'vertical' section we registered!
                 });
             });
 
-            // Close on click outside (rudimentary)
-            document.addEventListener('click', (e) => {
-                if (!container.contains(e.target) && container.classList.contains('open')) {
-                    container.classList.remove('open');
-                    focusManager.invalidateCache('settings-content');
-                }
-            });
-
-            // Close on focus loss from the entire component
-            container.addEventListener('focusout', (e) => {
-                // Wait to see where focus went
-                setTimeout(() => {
-                    if (!container.contains(document.activeElement)) {
-                        container.classList.remove('open');
-                    }
-                }, 0);
-            });
+            // Close on focus loss from the dropdown (Safety net)
+            // But be careful, focusManager might be moving focus within the dropdown
+            // We rely on 'leave' actions or specific close triggers usually.
+            // For now, let's trust explicit closing via selection or Back/Escape.
         });
     }
 
