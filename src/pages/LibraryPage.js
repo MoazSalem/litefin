@@ -101,6 +101,16 @@ class LibraryPage extends Page {
                                     Filter
                                     </span>
                                 </button>
+                                <button class="control-btn" id="btn-quick-reset" tabindex="0" style="display: none;">
+                                    <span class="icon">
+                                        <svg viewBox="0 0 24 24" fill="none" class="control-svg">
+                                            <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                        </svg>
+                                    </span> 
+                                    <span class="control-btn-text">
+                                    Reset
+                                    </span>
+                                </button>
                                 <button class="control-btn" id="btn-prev-top" tabindex="0">
                                     <span class="icon">
                                         <svg viewBox="0 0 24 24" fill="none" class="control-svg">
@@ -298,6 +308,7 @@ class LibraryPage extends Page {
         this.$('#btn-shuffle')?.addEventListener('click', this._handleShuffle.bind(this));
         this.$('#btn-sort')?.addEventListener('click', this._handleSort.bind(this));
         this.$('#btn-filter')?.addEventListener('click', this._handleFilter.bind(this));
+        this.$('#btn-quick-reset')?.addEventListener('click', this._handleResetFilters.bind(this));
         this.$('#alpha-picker')?.addEventListener('click', this._handleAlphaClick.bind(this));
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
@@ -578,7 +589,7 @@ class LibraryPage extends Page {
         } finally {
             this.setLoading(false);
             // Apply Header visibility and specialization AFTER content is loaded
-            // This ensures target move sections (like header-0) exist.
+            this._updateControlsVisibility();
             this._updateHeaderVisibility();
         }
     }
@@ -631,7 +642,6 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
 
         // Define tabs based on collection type
-        // TODO: Expand this based on real API capabilities/User requirements
         let tabs = [];
 
         if (collectionType === 'tvshows') {
@@ -745,13 +755,81 @@ class LibraryPage extends Page {
             grid.innerHTML = '';
             this.$('#empty-state').classList.remove('hidden');
             this.$('#count-indicator').textContent = '0 items';
+            this.$('#pagination-info').textContent = '';
 
-            // Register Empty State Button for focus
-            focusManager.register('empty-state-btn', this.$('#btn-reset-filters'), {
-                leaveUp: 'library-controls',
-                leaveLeft: 'sidebar'
-            });
-            focusManager.setActiveSection('empty-state-btn');
+            // Check if controls should be visible (logic matched with _updateHeaderVisibility)
+            const collectionType = this.state.libraryInfo?.CollectionType;
+            const viewType = this.state.viewType;
+            const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
+            const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
+            const isEpisodes = (viewType === 'Episodes');
+            const shouldShowControls = isMovieMain || isTVMain || isEpisodes;
+
+            const btnReset = this.$('#btn-reset-filters');
+            if (btnReset) {
+                btnReset.style.display = shouldShowControls ? '' : 'none';
+            }
+
+            if (shouldShowControls) {
+                // Register Empty State Button for focus
+                focusManager.register('empty-state-btn', this.$('#empty-state'), {
+                    leaveUp: 'alpha-picker', // Default to alpha picker
+                    leaveLeft: 'sidebar',
+                    selector: '#btn-reset-filters'
+                });
+
+                // Link Alpha Picker/Controls DOWN to Empty State Button
+                const alphaConfig = focusManager.getSectionConfig('alpha-picker');
+                if (alphaConfig) {
+                    focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                        ...alphaConfig,
+                        leaveDown: 'empty-state-btn'
+                    });
+                }
+
+                // Also update controls
+                const controlsConfig = focusManager.getSectionConfig('library-controls');
+                if (controlsConfig) {
+                    focusManager.register('library-controls', this.$('#library-controls'), {
+                        ...controlsConfig,
+                        leaveDown: this.$('#alpha-picker-container').style.display === 'none' ? 'empty-state-btn' : 'alpha-picker'
+                    });
+                }
+
+                // Check if we lost focus (e.g. was in grid)
+                const currentFocus = document.activeElement;
+                const focusesTabs = currentFocus && this.$('#library-tabs')?.contains(currentFocus);
+                const focusesSidebar = currentFocus && document.getElementById('sidebar')?.contains(currentFocus);
+                const hasValidFocus = focusesTabs || focusesSidebar;
+
+                if (!hasValidFocus) {
+                    focusManager.setActiveSection('empty-state-btn');
+                }
+            } else {
+                // Check if we lost focus (e.g. was in grid)
+                const currentFocus = document.activeElement;
+                const focusesTabs = currentFocus && this.$('#library-tabs')?.contains(currentFocus);
+                const focusesSidebar = currentFocus && document.getElementById('sidebar')?.contains(currentFocus);
+                // Also check if focusManager thinks we are in tabs (state persistence)
+                const activeSection = focusManager.getActionSection();
+                const isTabsActive = activeSection === 'library-tabs';
+
+                const hasValidFocus = focusesTabs || focusesSidebar;
+
+                if (!hasValidFocus) {
+                    // Try to restore focus to the active tab button
+                    const activeTabBtn = this.$(`.tab-btn[data-type="${this.state.viewType}"]`);
+                    if (activeTabBtn && (isTabsActive || !currentFocus || currentFocus === document.body)) {
+                        console.log('[LibraryPage] Restoring focus to active tab:', this.state.viewType);
+                        focusManager.setActiveSection('library-tabs');
+                        activeTabBtn.focus();
+                    } else {
+                        // Fallback to Sidebar if we really lost context
+                        console.log('[LibraryPage] Lost focus context, defaulting to sidebar');
+                        focusManager.setActiveSection('sidebar');
+                    }
+                }
+            }
             return;
         }
 
@@ -893,10 +971,7 @@ class LibraryPage extends Page {
             container.appendChild(section);
 
             // Lazy Load Images
-            // For synchronous rows: We rely on the parent container observation (called after loop)
-            // or we can observe this specific row here if we want to be granular.
-            // Since we added data-lazy-row, we can just observe the parent later.
-            // BUT to be safe and consistent with existing code flow:
+            // For synchronous rows: We rely on the parent
             if (!row.isLazy) {
                 // We don't call lazyLoader.observe(section) anymore because that observes IMAGES inside
                 // We want to observe the ROW itself.
@@ -1019,7 +1094,7 @@ class LibraryPage extends Page {
             const result = await api.getItems({
                 ParentId: this.state.libraryId,
                 GenreIds: genreId,
-                Limit: 9, // User asked for 9
+                Limit: 10,
                 Fields: 'PrimaryImageAspectRatio,ProductionYear',
                 IncludeItemTypes: includeItemTypes,
                 Recursive: true,
@@ -1040,6 +1115,8 @@ class LibraryPage extends Page {
                 // Clear the list container (removes skeleton loaders)
                 listContainer.innerHTML = '';
 
+                // Note: We no longer need to manually patch navigation!
+                // FocusManager._leaveSection now auto-skips sections with no focusables
                 // Note: We no longer need to manually patch navigation!
                 // FocusManager._leaveSection now auto-skips sections with no focusables
 
@@ -1185,15 +1262,25 @@ class LibraryPage extends Page {
     // ========================================================================
 
     async _handleShuffle() {
-        // "Open a random movie" -> Navigate to details of a random item
+        // "Open a random movie/show"
         try {
+            // Determine item types based on library type
+            const collectionType = this.state.libraryInfo?.CollectionType;
+            let includeItemTypes = 'Movie,Episode'; // Default fallback
+
+            if (collectionType === 'tvshows') {
+                includeItemTypes = 'Series'; // "Only Shows" -> Random Series
+            } else if (collectionType === 'movies') {
+                includeItemTypes = 'Movie';
+            }
+
             const params = {
                 ParentId: this.state.libraryId,
                 SortBy: 'Random',
                 Limit: 1,
                 Recursive: true,
-                IncludeItemTypes: 'Movie,Episode', // Safety net, usually context specific
-                ExcludeLocationTypes: 'Virtual', // Filter out missing files if possible
+                IncludeItemTypes: includeItemTypes,
+                ExcludeLocationTypes: 'Virtual', // Filter out missing files
             };
 
             // Respect current filters if any? Usually shuffle ignores view filters for global "Shuffle"
@@ -1213,11 +1300,21 @@ class LibraryPage extends Page {
     }
 
     _updateControlsVisibility() {
-        // Shuffle button is now always available for all
+        // Shuffle button is always available
         const btnShuffle = this.$('#btn-shuffle');
         if (btnShuffle) {
             btnShuffle.style.display = '';
         }
+
+        // Quick Reset button visibility based on filters
+        const btnReset = this.$('#btn-quick-reset');
+        if (btnReset) {
+            const hasFilters = this.state.filters && Object.keys(this.state.filters).length > 0;
+            btnReset.style.display = hasFilters ? '' : 'none';
+        }
+
+        // Invalidate FocusManager cache so it re-queries the visible elements in the section
+        focusManager.invalidateCache('library-controls');
     }
 
     _handleResetFilters() {
@@ -1228,6 +1325,7 @@ class LibraryPage extends Page {
 
         // Update UI components that reflect these states
         this._renderAlphaPicker();
+        this._updateControlsVisibility();
 
         // Reload items
         this._loadItems();

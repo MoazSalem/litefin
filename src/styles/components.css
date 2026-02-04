@@ -241,6 +241,9 @@
 
 /* Media Fallbacks & Gradients */
 .media-fallback {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     display: flex;
@@ -252,8 +255,8 @@
     background: #1a1a1a;
     /* Default */
     border-radius: var(--jf-border-radius);
-    position: relative;
     overflow: hidden;
+    z-index: 1;
 }
 
 /* Gradient Variants (Apple-style) */
@@ -294,13 +297,24 @@
 }
 
 .media-fallback-name {
-    font-size: 1.25rem;
-    font-weight: 600;
-    color: rgba(255, 255, 255, 0.8);
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.9);
     max-width: 90%;
-    white-space: nowrap;
+    margin-top: 10px;
+    line-height: 1.2;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
+    text-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+.landscape .media-fallback-name {
+    font-size: 2.2rem;
+    -webkit-line-clamp: 1;
+    line-clamp: 1;
 }
 
 /* Skeleton Enhancements */

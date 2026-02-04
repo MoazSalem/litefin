@@ -101,7 +101,9 @@
 .modal-option-btn:focus,
 .modal-option-btn.focused,
 .modal-close-btn:focus,
-.modal-close-btn.focused {
+.modal-close-btn.focused,
+.empty-state-btn:focus,
+.empty-state-btn.focused {
     outline: none !important;
     background-color: var(--jf-accent) !important;
     color: #ffffff !important;
@@ -119,7 +121,9 @@
 .pagination-btn:focus,
 .pagination-btn.focused,
 .modal-close-btn:focus,
-.modal-close-btn.focused {
+.modal-close-btn.focused,
+.empty-state-btn:focus,
+.empty-state-btn.focused {
     border-radius: 40px !important;
 }
 
@@ -285,7 +289,10 @@
     color: #ffffff !important;
     transform: scale(1.1);
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
-    outline: none;
+    outline: none !important;
+    overflow: hidden !important;
+    /* Force Tizen 4 layer repaint to respect radius */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
 @keyframes fadeIn {
@@ -312,42 +319,7 @@
 }
 
 /* Reset media-card styles for Grid context */
-/* --- Media Fallback Style --- */
-.media-fallback {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
-    padding: 20px;
-    box-sizing: border-box;
-    overflow: hidden;
-}
-
-.media-fallback-name {
-    font-size: 32px;
-    font-weight: 800;
-    color: var(--jf-text-primary);
-    text-align: center;
-    line-height: 1.1;
-    letter-spacing: -0.5px;
-    text-transform: uppercase;
-    opacity: 0.6;
-    word-break: break-word;
-    display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
-    -webkit-box-orient: vertical;
-}
-
-/* For landscape fallback cards, make text even larger */
-.media-card.landscape .media-fallback-name {
-    font-size: 44px;
-}
+/* --- Media Fallback Styles moved to components.css --- */
 
 .media-card:focus .media-fallback-name,
 .media-card.focused .media-fallback-name {
