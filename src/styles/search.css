@@ -41,7 +41,8 @@
     transition: all 0.2s ease;
 }
 
-.search-input:focus {
+.search-input:focus,
+.search-input.focused {
     border-color: var(--jf-accent);
     outline: none;
 }

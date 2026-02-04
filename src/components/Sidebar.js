@@ -185,6 +185,10 @@ class Sidebar extends Component {
     }
 
     onDestroyed() {
+        if (this._focusObserver) {
+            this._focusObserver.disconnect();
+            this._focusObserver = null;
+        }
         focusManager.unregister('sidebar');
         eventBus.off('router:navigate', this._onNavigate.bind(this));
     }
@@ -198,18 +202,34 @@ class Sidebar extends Component {
     }
 
     _bindEvents() {
-        // Expand on focus
-        this.el.addEventListener('focusin', () => this._expand(true));
-        this.el.addEventListener('focusout', (e) => {
-            // Only collapse if focus moved OUTSIDE the sidebar
-            if (!this.el.contains(e.relatedTarget)) {
+        // Expand on focus - Use MutationObserver since FocusManager disables native focus
+        // and manages the .focused class manually.
+        if (window.MutationObserver) {
+            this._focusObserver = new MutationObserver(() => {
+                const hasFocus = this.el.querySelector('.focused');
+                // If we have focus, expand. If we lost focus, check hover before collapsing.
+                if (hasFocus) {
+                    this._expand(true);
+                } else if (!this.el.matches(':hover')) {
+                    this._expand(false);
+                }
+            });
+
+            this._focusObserver.observe(this.el, {
+                attributes: true,
+                subtree: true,
+                attributeFilter: ['class']
+            });
+        }
+
+        // Toggle handling - Mouse
+        this.el.addEventListener('mouseenter', () => this._expand(true));
+        this.el.addEventListener('mouseleave', () => {
+            // Only collapse if we don't have focus
+            if (!this.el.querySelector('.focused')) {
                 this._expand(false);
             }
         });
-
-        // Toggle handling
-        this.el.addEventListener('mouseenter', () => this._expand(true)); // Mouse support
-        this.el.addEventListener('mouseleave', () => this._expand(false));
 
         // Navigation Clicks
         const items = this.el.querySelectorAll('.sidebar-item');

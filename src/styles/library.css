@@ -349,7 +349,8 @@
     font-size: 44px;
 }
 
-.media-card:focus .media-fallback-name {
+.media-card:focus .media-fallback-name,
+.media-card.focused .media-fallback-name {
     opacity: 0.9;
     transform: scale(1.05);
     transition: all 0.2s ease-out;
@@ -731,7 +732,8 @@
     transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
-.filter-category-btn:focus {
+.filter-category-btn:focus,
+.filter-category-btn.focused {
     background: var(--jf-accent);
     color: white;
     border-left-color: white;
@@ -796,7 +798,8 @@
     /* Spacing fallback for Tizen gap */
 }
 
-.modal-option-btn:focus {
+.modal-option-btn:focus,
+.modal-option-btn.focused {
     background: var(--jf-accent);
     color: white;
     transform: scale(1.05);
@@ -903,7 +906,8 @@
     margin-left: 0;
 }
 
-.modal-action-btn:focus {
+.modal-action-btn:focus,
+.modal-action-btn.focused {
     transform: scale(1.15);
     border-color: white;
     background-color: var(--jf-accent);
@@ -929,7 +933,9 @@
 }
 
 .modal-action-btn.clear:focus,
-.modal-action-btn.close:focus {
+.modal-action-btn.close:focus,
+.modal-action-btn.clear.focused,
+.modal-action-btn.close.focused {
     background-color: rgba(255, 255, 255, 0.2);
     color: white;
 }

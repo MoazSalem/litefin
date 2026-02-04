@@ -77,7 +77,8 @@
     z-index: 2;
 }
 
-.episode-row-card:focus {
+.episode-row-card:focus,
+.episode-row-card.focused {
     transform: scale(1.02);
     /* Make it pop slightly less than grid cards */
     background: var(--jf-card-bg-hover);
@@ -86,7 +87,8 @@
     /* No box-shadow */
 }
 
-.episode-row-card:focus::after {
+.episode-row-card:focus::after,
+.episode-row-card.focused::after {
     opacity: 1;
 }
 
@@ -217,7 +219,9 @@
 
 /* Ensure focus always wins over active state for consistency */
 .episode-action-btn:focus,
-.episode-action-btn.active:focus {
+.episode-action-btn.focused,
+.episode-action-btn.active:focus,
+.episode-action-btn.active.focused {
     transform: scale(1.15);
     /* Slightly larger pop */
     background: var(--jf-accent) !important;

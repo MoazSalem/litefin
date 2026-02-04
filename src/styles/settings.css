@@ -172,7 +172,8 @@
     border-color: var(--jf-accent);
 }
 
-.btn-option:focus {
+.btn-option:focus,
+.btn-option.focused {
     border-color: white;
     /* High contrast focus */
     background: var(--jf-accent-hover);
@@ -204,7 +205,8 @@
     text-align: left;
 }
 
-.custom-select-trigger:focus {
+.custom-select-trigger:focus,
+.custom-select-trigger.focused {
     background: var(--jf-accent);
     color: white;
     border-color: white;
@@ -267,7 +269,8 @@
 }
 
 .select-option:focus,
-.select-option:hover {
+.select-option:hover,
+.select-option.focused {
     background: rgba(255, 255, 255, 0.1);
     color: white;
     outline: none;
@@ -278,7 +281,8 @@
     font-weight: 600;
 }
 
-.select-option:focus.selected {
+.select-option:focus.selected,
+.select-option.focused.selected {
     color: white;
     background: var(--jf-accent);
 }
@@ -365,7 +369,8 @@
     border: 2px solid transparent;
 }
 
-.about-card:focus {
+.about-card:focus,
+.about-card.focused {
     background: rgba(255, 255, 255, 0.1);
     border-color: var(--jf-accent);
     box-shadow: 0 0 20px rgba(0, 0, 0, 0.3);

@@ -16,7 +16,9 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import VirtualList from '../ui/VirtualList.js';
 import { animationManager } from '../ui/AnimationManager.js';
+
 import { focusManager } from '../ui/FocusManager.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 
 class HomePage extends Page {
     constructor() {
@@ -201,7 +203,7 @@ class HomePage extends Page {
             // Determine card style based on row type
             const isLandscape = row.type === 'resume' || row.type === 'episode' || row.type === 'library';
 
-            htmlParts.push(`<section class="media-row" data-row-index="${i}">`);
+            htmlParts.push(`<section class="media-row" data-row-index="${i}" data-lazy-row="true">`);
             htmlParts.push(`<h2 class="row-title">${row.title}</h2>`);
             htmlParts.push(`<div class="row-items" id="row-items-${i}">`);
 
@@ -214,6 +216,9 @@ class HomePage extends Page {
         }
 
         container.innerHTML = htmlParts.join('');
+
+        // Start lazy loading
+        lazyLoader.observe(container);
 
         // Register focus sections for each row
         for (let i = 0; i < rowsData.length; i++) {

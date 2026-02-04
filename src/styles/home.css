@@ -58,7 +58,8 @@
 }
 
 /* Focus scales the whole unit */
-.media-card:focus {
+.media-card:focus,
+.media-card.focused {
     transform: scale(1.05);
     z-index: 1;
     outline: none;
@@ -83,7 +84,8 @@
     padding-bottom: 56.25%;
 }
 
-.media-card:focus .card-image {
+.media-card:focus .card-image,
+.media-card.focused .card-image {
     box-shadow: 0 0 0 3px var(--jf-accent);
 }
 

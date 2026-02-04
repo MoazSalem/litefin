@@ -19,7 +19,9 @@ import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import EpisodeList from '../components/EpisodeList.js';
+
 import BackdropManager from '../utils/BackdropManager.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 
 class DetailsPage extends Page {
     constructor() {
@@ -31,7 +33,7 @@ class DetailsPage extends Page {
         this._seasons = null;
         this._episodes = null;
         this._people = null;
-        this._people = null;
+
         this._similar = null;
 
         // Components
@@ -466,10 +468,11 @@ class DetailsPage extends Page {
     onBack() {
         // Intercept Back if inside the table
         if (this._isRichMetaActive) {
+            console.log('RichMeta: Back pressed, exiting trap');
             this._deactivateRichMeta();
-            return;
+            return true;
         }
-        super.onBack();
+        return super.onBack();
     }
 
     _loadLogo() {
@@ -693,6 +696,9 @@ class DetailsPage extends Page {
         }
         container.innerHTML = htmlParts.join('');
 
+        // Lazy Load
+        lazyLoader.observe(container);
+
         // Delegated click handler
         container.onclick = (e) => {
             const card = e.target.closest('.media-card');
@@ -747,6 +753,9 @@ class DetailsPage extends Page {
             htmlParts.push(this._renderMediaCard(season, false, 'season'));
         }
         container.innerHTML = htmlParts.join('');
+
+        // Lazy Load
+        lazyLoader.observe(container);
 
         // Delegated click handler
         container.onclick = (e) => {
@@ -808,7 +817,11 @@ class DetailsPage extends Page {
                     console.log(`Episode action: ${action} on ${episodeId}`);
                 }
             });
-            this._episodeList.mount(container);
+            this._episodeList.render(container);
+
+
+            // Lazy Load Episode Images (if list renders them)
+            lazyLoader.observe(container);
         } else {
             // Horizontal episode cards (for Series NextUp, etc.)
             const htmlParts = [];
@@ -941,6 +954,9 @@ class DetailsPage extends Page {
             htmlParts.push(this._renderMediaCard(person, false, 'person'));
         }
         container.innerHTML = htmlParts.join('');
+
+        // Lazy Load
+        lazyLoader.observe(container);
 
         // Delegated click handler - navigate to Person Details (if we had a page)
         // For now, maybe just focus? Or do nothing?
@@ -1109,6 +1125,9 @@ class DetailsPage extends Page {
         }
         container.innerHTML = htmlParts.join('');
 
+        // Lazy Load
+        lazyLoader.observe(container);
+
         container.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card?.dataset?.itemId) {
@@ -1202,14 +1221,7 @@ class DetailsPage extends Page {
         }
     }
 
-    onBack() {
-        if (this._isRichMetaActive) {
-            console.log('RichMeta: Back pressed, exiting trap');
-            this._deactivateRichMeta();
-            return true; // Consume event (don't exit page)
-        }
-        return super.onBack();
-    }
+
 
     destroy() {
         if (this._header) {

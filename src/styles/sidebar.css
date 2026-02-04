@@ -20,31 +20,32 @@
     top: 0;
     left: 0;
     bottom: 0;
-    /* Performant Animation: Fixed width + Clip Path */
-    width: var(--sidebar-width-expanded);
-    /* Always layout at full size */
+    /* Performant Animation: Width Transition */
+    width: var(--sidebar-width-collapsed);
+    /* Start collapsed */
     background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
     z-index: 1000;
 
-    /* Clip to collapsed size initially */
-    /* inset(top right bottom left) */
-    clip-path: inset(0 calc(100% - var(--sidebar-width-collapsed)) 0 0);
-    -webkit-clip-path: inset(0 calc(100% - var(--sidebar-width-collapsed)) 0 0);
-
-    transition: clip-path 0.3s cubic-bezier(0.25, 0.1, 0.25, 1), -webkit-clip-path 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+    /* Removed expensive clip-path */
+    /* Use width transition - on absolute element it's acceptable cost */
+    transition: width 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
 
     overflow: hidden;
     /* Hide overflow text when collapsed */
     padding: 20px 0;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
-    /* Performance Optimization: Static shadow, GPU hint */
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.5);
+
+    /* Performance Optimization: HARD shadow instead of soft blur */
+    /* Soft shadows are very expensive to repaint on width change */
+    box-shadow: 4px 0 0 rgba(0, 0, 0, 0.3);
+
     white-space: nowrap;
-    will-change: clip-path;
+    will-change: width;
     transform: translateZ(0);
     /* Force GPU layer */
+    contain: layout style;
 }
 
 /* Remove transform logic for hidden, just display toggle if needed, or translate */
@@ -55,8 +56,7 @@
 
 .sidebar.expanded {
     /* Reveal full width */
-    clip-path: inset(0 0 0 0);
-    -webkit-clip-path: inset(0 0 0 0);
+    width: var(--sidebar-width-expanded);
     /* No shadow animation needed */
 }
 
@@ -124,7 +124,8 @@
     position: relative;
 }
 
-.sidebar-item:focus {
+.sidebar-item:focus,
+.sidebar-item.focused {
     background: var(--jf-accent);
     color: white;
 }
@@ -133,7 +134,8 @@
     color: var(--jf-accent);
 }
 
-.sidebar-item.active:focus {
+.sidebar-item.active:focus,
+.sidebar-item.active.focused {
     color: white;
 }
 
@@ -177,7 +179,8 @@
     border: 2px solid transparent;
 }
 
-.sidebar-item:focus .sidebar-avatar {
+.sidebar-item:focus .sidebar-avatar,
+.sidebar-item.focused .sidebar-avatar {
     border-color: white;
 }
 

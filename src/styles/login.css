@@ -62,7 +62,8 @@
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
-.server-url-input:focus {
+.server-url-input:focus,
+.server-url-input.focused {
     border-color: var(--jf-accent);
     box-shadow: 0 0 0 2px rgba(0, 164, 220, 0.3);
 }
@@ -79,7 +80,8 @@
     margin: 0;
 }
 
-.connect-btn:focus {
+.connect-btn:focus,
+.connect-btn.focused {
     background: var(--jf-accent-hover);
     box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.3);
     outline: none;
@@ -180,6 +182,7 @@
 }
 
 .server-item:focus,
+.server-item.focused,
 .server-item:hover {
     background: var(--jf-card-bg-hover);
     outline: none;
@@ -240,7 +243,8 @@
     margin: 16px;
 }
 
-.user-card:focus {
+.user-card:focus,
+.user-card.focused {
     background: var(--jf-card-bg-hover);
     transform: scale(1.05);
     box-shadow: var(--jf-focus-ring);

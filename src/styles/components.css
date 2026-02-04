@@ -21,7 +21,8 @@
     margin-left: 8px;
 }
 
-.btn-primary:focus {
+.btn-primary:focus,
+.btn-primary.focused {
     background: var(--jf-accent-hover);
     box-shadow: var(--jf-focus-ring);
 }
@@ -31,7 +32,8 @@
     color: var(--jf-text-primary);
 }
 
-.btn-secondary:focus {
+.btn-secondary:focus,
+.btn-secondary.focused {
     background: var(--jf-button-hover);
 }
 
@@ -60,7 +62,8 @@
     background: rgba(0, 0, 0, 0.5);
 }
 
-.nav-text-btn:focus {
+.nav-text-btn:focus,
+.nav-text-btn.focused {
     border-color: var(--jf-accent);
     color: var(--jf-accent);
     box-shadow: none;
@@ -82,7 +85,8 @@
     margin-right: 8px;
 }
 
-.nav-btn:focus {
+.nav-btn:focus,
+.nav-btn.focused {
     background: var(--jf-accent);
     outline: none;
     box-shadow: none;
@@ -100,7 +104,8 @@
     color: var(--jf-text-primary);
 }
 
-.nav-btn.icon-only:focus {
+.nav-btn.icon-only:focus,
+.nav-btn.icon-only.focused {
     background: var(--jf-button-hover);
     color: var(--jf-accent);
     outline: none;
@@ -117,7 +122,8 @@
     border-radius: var(--jf-border-radius);
 }
 
-.back-btn:focus {
+.back-btn:focus,
+.back-btn.focused {
     background: var(--jf-accent-light);
     outline: none;
     box-shadow: none;
@@ -139,6 +145,7 @@
 }
 
 .btn-icon-small:focus,
+.btn-icon-small.focused,
 .btn-icon-small:hover {
     background: var(--jf-button-hover);
     color: var(--jf-accent);
@@ -155,7 +162,8 @@
     color: var(--jf-text-primary);
 }
 
-.text-input:focus {
+.text-input:focus,
+.text-input.focused {
     border-color: var(--jf-accent);
     outline: none;
 }
@@ -231,48 +239,100 @@
     display: none !important;
 }
 
-/* Toggle Switch */
-.toggle-switch {
+/* Media Fallbacks & Gradients */
+.media-fallback {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+    background: #1a1a1a;
+    /* Default */
+    border-radius: var(--jf-border-radius);
     position: relative;
-    width: 70px;
-    height: 36px;
-    background-color: rgba(255, 255, 255, 0.2);
-    border-radius: 36px;
-    cursor: pointer;
-    transition: background-color 0.3s, box-shadow 0.2s;
-    border: 2px solid transparent;
-    display: inline-block;
+    overflow: hidden;
 }
 
-.toggle-switch::after {
-    content: '';
-    position: absolute;
-    top: 3px;
-    left: 3px;
-    width: 26px;
-    height: 26px;
-    background-color: white;
-    border-radius: 50%;
-    transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+/* Gradient Variants (Apple-style) */
+.grad-1 {
+    background: linear-gradient(135deg, #007aff 0%, #004a99 100%);
 }
 
-.toggle-switch.active {
-    background-color: var(--jf-accent);
+.grad-2 {
+    background: linear-gradient(135deg, #af52de 0%, #7a35a1 100%);
 }
 
-.toggle-switch.active::after {
-    transform: translateX(34px);
+.grad-3 {
+    background: linear-gradient(135deg, #ff2d55 0%, #cc1d41 100%);
 }
 
-.toggle-switch:focus {
-    border-color: var(--jf-accent);
-    background-color: rgba(255, 255, 255, 0.3);
-    outline: none;
-    box-shadow: 0 0 0 4px rgba(0, 164, 220, 0.2);
+.grad-4 {
+    background: linear-gradient(135deg, #ff9500 0%, #cc7700 100%);
 }
 
-.toggle-switch.active:focus {
-    background-color: var(--jf-accent);
-    box-shadow: 0 0 0 4px rgba(0, 164, 220, 0.4);
+.grad-5 {
+    background: linear-gradient(135deg, #34c759 0%, #248a3d 100%);
+}
+
+.grad-6 {
+    background: linear-gradient(135deg, #5856d6 0%, #3e3ca3 100%);
+}
+
+.media-fallback-initials {
+    font-size: 4rem;
+    font-weight: 800;
+    color: rgba(255, 255, 255, 0.9);
+    margin-bottom: 8px;
+    text-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+
+.landscape .media-fallback-initials {
+    font-size: 3rem;
+}
+
+.media-fallback-name {
+    font-size: 1.25rem;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    max-width: 90%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Skeleton Enhancements */
+.media-card.skeleton {
+    cursor: default;
+    pointer-events: none;
+}
+
+.skeleton-image {
+    background-color: #1a1a1a;
+}
+
+.skeleton-line {
+    background-color: #2a2a2a;
+    height: 16px;
+    border-radius: 4px;
+}
+
+.pulse {
+    /* Keeping pulse as a secondary subtle animation if needed, 
+       but we mainly use skeleton-shimmer now */
+    animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }

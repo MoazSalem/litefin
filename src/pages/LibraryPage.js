@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 
 class LibraryPage extends Page {
     constructor() {
@@ -770,6 +771,9 @@ class LibraryPage extends Page {
 
         grid.innerHTML = html;
 
+        // Lazy Load Images
+        lazyLoader.observe(grid);
+
         // Update Alpha Picker navigation to point to grid
         focusManager.register('alpha-picker', this.$('#alpha-picker'), {
             orientation: 'horizontal',
@@ -860,6 +864,11 @@ class LibraryPage extends Page {
             section.id = rowId;
             section.dataset.genreId = row.genreId || '';
             section.dataset.listId = listId;
+
+            // Use data-lazy-row for synchronous rows to enable bulk image preloading
+            if (!row.isLazy) {
+                section.dataset.lazyRow = "true";
+            }
             section.dataset.isLazy = row.isLazy ? 'true' : 'false';
 
             const contentHtml = row.isLazy
@@ -882,6 +891,19 @@ class LibraryPage extends Page {
             `;
 
             container.appendChild(section);
+
+            // Lazy Load Images
+            // For synchronous rows: We rely on the parent container observation (called after loop)
+            // or we can observe this specific row here if we want to be granular.
+            // Since we added data-lazy-row, we can just observe the parent later.
+            // BUT to be safe and consistent with existing code flow:
+            if (!row.isLazy) {
+                // We don't call lazyLoader.observe(section) anymore because that observes IMAGES inside
+                // We want to observe the ROW itself.
+                // However, lazyLoader.observe(container) does NOT observe the container itself, but children.
+                // So if we pass 'section' to lazyLoader.observe, it won't see 'section' as a child.
+                // So we MUST rely on the parent container observation.
+            }
 
             // Observe if lazy
             if (row.isLazy && this._genreObserver) {
@@ -918,6 +940,9 @@ class LibraryPage extends Page {
                 enterTo: 'active-element'
             });
         }
+
+        // Finalize Lazy Loading for all synchronous rows at once
+        lazyLoader.observe(container);
     }
 
     _onGenreRowIntersect(entries) {
@@ -1027,6 +1052,9 @@ class LibraryPage extends Page {
             })).join('');
 
             listContainer.innerHTML = html;
+
+            // Lazy Load Images for this new row
+            lazyLoader.observe(listContainer);
 
             // Trigger fade-in animation by adding 'loaded' class
             // NOTE: Removed per-card staggered animation delays (index * 50ms)

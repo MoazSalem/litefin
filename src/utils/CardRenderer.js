@@ -128,16 +128,9 @@ class CardRenderer {
             }
         }
 
-        // --- 1.5 Special Fallbacks for Missing Images ---
-        if (!imageUrl && !imageInnerHtml) {
-            // Apply to Libraries (CollectionFolder), Studios, and anything specifically marked as Studio/Network
-            if (item.Type === 'CollectionFolder' || item.Type === 'Studio' || contextType === 'Studio' || contextType === 'Network') {
-                imageInnerHtml = `
-                    <div class="media-fallback">
-                        <div class="media-fallback-name">${item.Name}</div>
-                    </div>
-                `;
-            }
+        // --- 1.5 Premium Fallbacks for Missing Images ---
+        if (!imageUrl) {
+            imageInnerHtml = CardRenderer._getFallbackHtml(item, isLandscape);
         }
 
         // --- 2. Overlays (Progress & Badges) ---
@@ -188,12 +181,14 @@ class CardRenderer {
         // --- 4. HTML Assembly ---
 
         const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
-        const imagePart = imageUrl ? `<img src="${imageUrl}" alt="${item.Name}" loading="lazy" />` : imageInnerHtml;
+        // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
+        const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        const imagePart = imageUrl ? `<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />` : imageInnerHtml;
         const finalContextType = contextType || item.Type;
 
         return `
             <button class="${cssClass}" data-item-id="${itemId}" data-context-type="${finalContextType}" tabindex="0">
-                <div class="card-image">
+                <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
                     ${badgeHtml}
@@ -203,6 +198,34 @@ class CardRenderer {
                     ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
                 </div>
             </button>
+        `;
+    }
+
+    /**
+     * Helper to load a fallback gradient card with initials
+     * @private
+     */
+    static _getFallbackHtml(item, isLandscape) {
+        const name = item.Name || 'Unknown';
+
+        // Simple hash to consistently pick a gradient (1-6)
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const gradNum = (Math.abs(hash) % 6) + 1;
+
+        // Get Initials (up to 2 characters)
+        const words = name.split(/[\s_-]+/);
+        let initials = words[0] ? words[0][0] : '?';
+        if (words.length > 1 && words[1]) initials += words[1][0];
+        initials = initials.toUpperCase();
+
+        return `
+            <div class="media-fallback grad-${gradNum}">
+                <div class="media-fallback-initials">${initials}</div>
+                <div class="media-fallback-name">${name}</div>
+            </div>
         `;
     }
 
@@ -217,12 +240,12 @@ class CardRenderer {
         for (let i = 0; i < count; i++) {
             html += `
                 <div class="media-card skeleton ${isLandscape ? 'landscape' : ''}">
-                    <div class="card-image skeleton-image pulse">
+                    <div class="card-image skeleton-image skeleton-shimmer">
                         <!-- Space reserved by .card-image padding -->
                     </div>
                     <div class="card-info">
-                        <div class="card-title skeleton-line pulse" style="width: 80%; margin: 0 auto;"></div>
-                        <div class="card-subtitle skeleton-line pulse" style="width: 50%; margin: 6px auto 0 auto;"></div>
+                        <div class="card-title skeleton-line skeleton-shimmer" style="width: 80%; margin: 0 auto; height: 20px;"></div>
+                        <div class="card-subtitle skeleton-line skeleton-shimmer" style="width: 50%; margin: 8px auto 0 auto; height: 14px;"></div>
                     </div>
                 </div>
             `;

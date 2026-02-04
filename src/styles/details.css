@@ -280,7 +280,8 @@
     color: var(--jf-background);
 }
 
-.play-btn:focus {
+.play-btn:focus,
+.play-btn.focused {
     transform: scale(1.05);
     /* Inverted Focus: Accent Bg, White Text */
     background: var(--jf-accent);
@@ -300,7 +301,8 @@
     /* backdrop-filter: blur(10px); */
 }
 
-.resume-btn:focus {
+.resume-btn:focus,
+.resume-btn.focused {
     transform: scale(1.05);
     background: var(--jf-accent);
     border-color: var(--jf-accent);
@@ -360,7 +362,8 @@
 }
 
 /* Focus State (Unified) */
-.btn-icon:focus {
+.btn-icon:focus,
+.btn-icon.focused {
     transform: scale(1.05);
     /* Unified: Accent Bg, White Text */
     background: var(--jf-accent);
@@ -406,7 +409,8 @@
 }
 
 .details-rich-meta:focus,
-.details-rich-meta.active-table {
+.details-rich-meta.active-table,
+.details-rich-meta.focused {
     border-color: var(--jf-accent);
     /* Focus highlight */
     background-color: rgba(255, 255, 255, 0.02);
@@ -456,7 +460,8 @@
 }
 
 .meta-chip:hover,
-.meta-chip:focus {
+.meta-chip:focus,
+.meta-chip.focused {
     color: var(--jf-accent);
     opacity: 1;
     outline: none;
@@ -494,7 +499,8 @@
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-.see-more-btn:focus {
+.see-more-btn:focus,
+.see-more-btn.focused {
     background: var(--jf-accent);
     border-color: var(--jf-accent);
     color: white;
@@ -548,7 +554,8 @@
     margin-bottom: 0;
 }
 
-.episode-card:focus {
+.episode-card:focus,
+.episode-card.focused {
     transform: scale(1.05);
     background: var(--jf-card-bg-hover);
     /* box-shadow: var(--jf-shadow-lg); REMOVED expensive shadow */
@@ -692,7 +699,8 @@
     height: 24px;
 }
 
-.btn-icon-text:focus {
+.btn-icon-text:focus,
+.btn-icon-text.focused {
     background: var(--jf-accent);
     color: white;
     border-color: var(--jf-accent);

@@ -11,7 +11,9 @@ import Component from '../core/Component.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+
 import CardRenderer from '../utils/CardRenderer.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 
 class MediaGrid extends Component {
     constructor(config = {}) {
@@ -78,6 +80,10 @@ class MediaGrid extends Component {
 
         this._updateButtonVisibility();
         this._bindItemClicks();
+
+        // Lazy Load Images
+        const grid = document.getElementById(`${this.id}-items`);
+        if (grid) lazyLoader.observe(grid);
     }
 
     /**
@@ -106,6 +112,7 @@ class MediaGrid extends Component {
         if (grid) {
             grid.innerHTML = this._renderItems();
             this._bindItemClicks();
+            lazyLoader.observe(grid);
         }
 
         // Update button text

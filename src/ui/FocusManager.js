@@ -40,17 +40,119 @@ class FocusManager {
         // Focus trap stack (for modals)
         this._trapStack = [];
 
-        // Debounce handling
+        // Debounce handling - track PREVIOUS move time for rapid navigation detection
         this._lastMoveTime = 0;
+        this._prevMoveTime = 0;
 
         // SAMSUNG OPTIMIZATION: Cache DOM reference to avoid repeated queries
         this._pageContent = null;
+
+        // Animation state for smooth scrolling (separate for vertical/horizontal)
+        this._verticalScrollAnimationId = null;
+        this._horizontalScrollAnimationId = null;
 
         // Bound methods
         // this._onKeyDown = this._onKeyDown.bind(this);
 
         // Initialize
         this._init();
+    }
+
+    /**
+     * Cancel ongoing scroll animation
+     * @param {string} direction - 'vertical' or 'horizontal'
+     * @private
+     */
+    _cancelScrollAnimation(direction = 'vertical') {
+        if (direction === 'vertical') {
+            if (this._verticalScrollAnimationId) {
+                cancelAnimationFrame(this._verticalScrollAnimationId);
+                this._verticalScrollAnimationId = null;
+            }
+            this._verticalScrollTarget = null;
+        } else {
+            if (this._horizontalScrollAnimationId) {
+                cancelAnimationFrame(this._horizontalScrollAnimationId);
+                this._horizontalScrollAnimationId = null;
+            }
+            this._horizontalScrollTarget = null;
+        }
+    }
+
+    /**
+     * Time-based smooth scroll with easeOutQuad curve
+     * Uses a fixed duration animation with proper easing.
+     * Retargeting updates target and resets timing from current position.
+     * @param {HTMLElement} container - Scroll container element
+     * @param {number} targetScroll - Target scroll value
+     * @param {number} duration - Animation duration in ms. Default 200ms.
+     * @param {string} direction - 'vertical' or 'horizontal'
+     * @private
+     */
+    _smoothScrollTo(container, targetScroll, duration = 200, direction = 'vertical') {
+        const isVertical = direction === 'vertical';
+        const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
+        const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
+
+        const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
+
+        // If already at target, do nothing
+        if (Math.abs(targetScroll - currentScroll) < 1) {
+            if (isVertical) container.scrollTop = targetScroll;
+            else container.scrollLeft = targetScroll;
+            return;
+        }
+
+        // Create/update animation state
+        const now = performance.now();
+        this[stateKey] = {
+            container,
+            startScroll: currentScroll,
+            target: targetScroll,
+            startTime: now,
+            duration
+        };
+
+        // If animation already running, it will pick up new state
+        if (this[animIdKey]) {
+            return;
+        }
+
+        // easeOutQuad: fast start, smooth deceleration
+        const easeOutQuad = t => t * (2 - t);
+
+        const animate = () => {
+            const state = this[stateKey];
+            if (!state) return;
+
+            const elapsed = performance.now() - state.startTime;
+            const progress = Math.min(elapsed / state.duration, 1);
+            const eased = easeOutQuad(progress);
+
+            const distance = state.target - state.startScroll;
+            const newScroll = state.startScroll + (distance * eased);
+
+            if (isVertical) {
+                state.container.scrollTop = newScroll;
+            } else {
+                state.container.scrollLeft = newScroll;
+            }
+
+            if (progress < 1) {
+                this[animIdKey] = requestAnimationFrame(animate);
+            } else {
+                // Ensure we land exactly on target
+                if (isVertical) {
+                    state.container.scrollTop = state.target;
+                } else {
+                    state.container.scrollLeft = state.target;
+                }
+                this[animIdKey] = null;
+                this[stateKey] = null;
+            }
+        };
+
+        this[animIdKey] = requestAnimationFrame(animate);
     }
 
     /**
@@ -120,6 +222,10 @@ class FocusManager {
         // Simple debounce to prevent event flooding
         const now = Date.now();
         if (now - this._lastMoveTime < 50) return;
+
+        // Track previous move time BEFORE updating current
+        // This allows us to detect rapid key holds (moves < 200ms apart)
+        this._prevMoveTime = this._lastMoveTime;
         this._lastMoveTime = now;
 
         this._move(direction);
@@ -607,12 +713,17 @@ class FocusManager {
                 } else {
                     targetScroll = rowBottom - viewHeight + padding;
                 }
-                pageContent.scrollTop = Math.max(0, targetScroll);
+                // Use smooth scroll with easing for premium feel
+                // Use smooth scroll with easing for premium feel
+                this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
             }
             // If cut off at top, scroll up
             else if (topCutoff) {
                 const padding = 150; // Larger for title visibility
-                pageContent.scrollTop = Math.max(0, rowTop - padding);
+                const targetScroll = Math.max(0, rowTop - padding);
+                // Use smooth scroll with easing for premium feel
+                // Use smooth scroll with easing for premium feel
+                this._smoothScrollTo(pageContent, targetScroll);
             }
         }
         else if (options.scroll) {
@@ -631,9 +742,10 @@ class FocusManager {
 
                     // Check if row is outside viewport (with buffers)
                     if (rowTop < currentScroll + 80 || rowBottom > viewBottom - 80) {
-                        // Scroll to center the row vertically
+                        // Scroll to center the row vertically with smooth easing
                         const targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
-                        pageContent.scrollTop = Math.max(0, targetScroll);
+                        // Scroll to center the row vertically with smooth easing
+                        this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
                     }
                 }
 
@@ -646,19 +758,10 @@ class FocusManager {
                 const finalScrollLeft = Math.max(0, targetScroll);
 
                 // RAPID NAVIGATION CHECK:
-                // If user is holding button or clicking fast (<300ms), use instant scroll
-                // Otherwise use smooth scroll for premium feel
-                const isRapid = (Date.now() - this._lastMoveTime) < 300;
-                const behavior = isRapid ? 'auto' : 'smooth';
-
-                try {
-                    rowItems.scrollTo({
-                        left: finalScrollLeft,
-                        behavior: behavior
-                    });
-                } catch (e) {
-                    rowItems.scrollLeft = finalScrollLeft;
-                }
+                // If user is holding button (machine gun < 100ms), use instant scroll
+                // Otherwise use smooth scroll with easing for premium feel
+                // Always use smooth scroll for premium feel, even during rapid navigation
+                this._smoothScrollTo(rowItems, finalScrollLeft, 150, 'horizontal');
             } else if (pageContent) {
                 // Generic Vertical Scroll (for Grids/Lists or Tall Rows)
                 const elementTop = getCumulativeOffsetTop(element, pageContent);
@@ -687,29 +790,23 @@ class FocusManager {
                     }
                 }
 
-                // Apply Vertical Scroll
+                // Apply Vertical Scroll with smooth easing
                 if (finalScrollTop !== currentScroll) {
-                    // Check Tizen version/Capabilities if needed, but standard try/catch works
-                    try {
-                        const isRapid = (Date.now() - this._lastMoveTime) < 300;
-                        const behavior = isRapid ? 'auto' : 'smooth';
-
-                        pageContent.scrollTo({
-                            top: finalScrollTop,
-                            behavior: behavior
-                        });
-                    } catch (e) {
-                        // Fallback for older browsers
-                        pageContent.scrollTop = finalScrollTop;
-                    }
+                    // Always use Premium "Weighty" Animation
+                    this._smoothScrollTo(pageContent, finalScrollTop);
                 }
             }
         }
 
         // NOW set focus (after scroll is done)
         this._focusedElement = element;
+
+        // NOW modify the DOM (Dirty the layout)
         this._focusedElement.classList.add('focused');
-        this._focusedElement.focus({ preventScroll: true });
+
+        // NATIVE FOCUS DISABLED: eliminates scroll rebounding/fighting on Tizen
+        // FocusManager handles all input internally via EventBus.
+        // this._focusedElement.focus({ preventScroll: true });
 
         this._updateFocusMemory();
         eventBus.emit('focus:changed', element);
