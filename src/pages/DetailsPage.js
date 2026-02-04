@@ -817,7 +817,7 @@ class DetailsPage extends Page {
                     console.log(`Episode action: ${action} on ${episodeId}`);
                 }
             });
-            this._episodeList.render(container);
+            this._episodeList.mount(container);
 
 
             // Lazy Load Episode Images (if list renders them)
@@ -1023,8 +1023,8 @@ class DetailsPage extends Page {
                     seeMoreBtn.textContent = 'See Less';
                 }
 
-                // Keep focus on the button
-                seeMoreBtn.focus();
+                // Keep focus on the button using precision scroll
+                focusManager.focusElement(seeMoreBtn);
             };
         }
     }
@@ -1087,13 +1087,10 @@ class DetailsPage extends Page {
         const next = this._getNextVisibleSection(sectionName);
 
         // Update links while PRESERVING other config (orientation, enterTo, onMove, etc.)
-        config.leaveUp = prev ? prev.targetName : 'sidebar';
+        config.leaveUp = prev ? prev.targetName : null;
         config.leaveDown = targetName || (next ? next.targetName : null);
 
-        // Special case for actions: always leaveUp to sidebar (user profile)
-        if (sectionName === 'details-actions') {
-            config.leaveUp = 'sidebar';
-        }
+
 
         // Re-register to apply changes
         focusManager.register(sectionName, config.container, config);

@@ -127,12 +127,11 @@ class MediaGrid extends Component {
         // Invalidate focus cache for the grid items section
         focusManager.invalidateCache(`${this.id}-items`);
 
-        // Refocus button and scroll it into view after DOM update
+        // Refocus button and scroll it into view after DOM update using FocusManager
         setTimeout(() => {
             if (btn) {
-                btn.focus();
-                // Scroll the button into view so it's visible after content expansion
-                btn.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                // Focus element now uses our improved Tizen-ready scroll logic
+                focusManager.focusElement(btn);
             }
         }, 150);
     }

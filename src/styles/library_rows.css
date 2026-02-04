@@ -15,6 +15,8 @@
     /* CRITICAL: Allow focused cards to scale out of bounds */
     display: flex;
     flex-direction: column;
+    margin-bottom: 40px;
+    /* Fallback for older Tizen missing flex gap */
 }
 
 /* Fade-in animation for lazy-loaded content - uses opacity only for GPU performance */
@@ -34,7 +36,10 @@
 
 /* Row Header - Container */
 .library-row-header {
-    margin-bottom: 8px;
+    margin-top: 10px;
+    margin-bottom: 15px;
+    padding-top: 10px;
+    /* Internal safe zone for scrolling */
     padding-left: 20px;
     /* Align with sidebar/content */
 }
@@ -99,4 +104,36 @@
 /* Landscape override (Continue Watching / Next Up style) */
 .library-row.landscape .media-card {
     width: 420px;
+}
+
+/* ================================================================
+ * Genre Grids (Clean Standardized Grid)
+ * ================================================================ */
+.genre-grid-items {
+    display: grid;
+    /* Use fixed 240px to match home.css .media-card exactly */
+    grid-template-columns: repeat(auto-fill, 240px);
+    grid-gap: 32px;
+    gap: 32px;
+    padding: 24px 20px 80px 20px;
+    width: 100%;
+}
+
+.genre-grid-items .media-card {
+    /* Enforce fixed size for total consistency */
+    width: 240px !important;
+    max-width: 240px !important;
+    height: auto;
+    flex: none;
+    margin: 0 !important;
+}
+
+/* Landscape grid adjustment (Match home.css landscape 400px) */
+.genre-grid-items.landscape {
+    grid-template-columns: repeat(auto-fill, 400px);
+}
+
+.genre-grid-items.landscape .media-card {
+    width: 400px !important;
+    max-width: 400px !important;
 }

@@ -58,7 +58,7 @@ class PersonPage extends Page {
                     <div class="page-error" style="display:none; padding: 20px; color: #ff6b6b; text-align: center;"></div>
 
 
-                    <div class="details-main-split">
+                    <div class="details-main-split media-row">
                         <!-- Left: Poster -->
                         <div class="hero-poster" id="person-poster">
                             <!-- Img injected here -->
@@ -405,7 +405,7 @@ class PersonPage extends Page {
                 leaveUp: null, // Top of page
                 leaveDown: `person-${firstType}-items`,
                 leaveLeft: 'sidebar',
-                scrollOffsetTop: 500 // Ensure hero visibility when returning from below
+                scrollOffsetTop: 50 // Match standardized top alignment
             });
         }
 
@@ -490,7 +490,7 @@ class PersonPage extends Page {
             leaveUp: null,
             leaveDown: null,
             leaveLeft: 'sidebar',
-            scrollOffsetTop: 500
+            scrollOffsetTop: 50
         });
     }
 

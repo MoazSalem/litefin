@@ -613,6 +613,13 @@ class FocusManager {
             this.setActiveSection(nextSection, true, originElement);
 
             this._useInstantScroll = false;
+        } else if (direction === 'up') {
+            // No section to navigate to (at top of page)
+            // Still scroll to top to show full backdrop as visual feedback
+            const pageContent = this._focusedElement?.closest('.page-content');
+            if (pageContent && pageContent.scrollTop > 0) {
+                this._smoothScrollTo(pageContent, 0);
+            }
         }
     }
 
@@ -664,25 +671,38 @@ class FocusManager {
 
         // SCROLL FIRST - before focus
 
-        // Determine scroll strategy
-        let useRowScroll = options.skipScroll && !!pageContent;
-        let row = null;
-
-        // Helper for cumulative offset calculation
+        // TIZEN OPTIMIZATION: Use getBoundingClientRect for sub-pixel accuracy 
+        // and robustness against floating point offset errors on TV browsers.
         const getCumulativeOffsetTop = (el, relativeTo) => {
-            let top = 0;
-            while (el && el !== relativeTo) {
-                top += el.offsetTop;
-                el = el.offsetParent;
-            }
-            return top;
+            if (!el || !relativeTo) return 0;
+            const elRect = el.getBoundingClientRect();
+            const relRect = relativeTo.getBoundingClientRect();
+            return elRect.top - relRect.top + relativeTo.scrollTop;
         };
 
+        // Determine scroll strategy
+        // Row-based scroll should be used if we're in a media row and it's not too tall
+        let row = pageContent ? element.closest('.media-row') : null;
+        let useRowScroll = !!row;
+
         if (useRowScroll) {
-            row = element.closest('.media-row');
-            // If row is taller than viewport (e.g. Grid), disable row-alignment
-            // to prevent jumping to top when focusing bottom elements
-            if (row && row.offsetHeight > pageContent.clientHeight) {
+            // HERO EXCEPTION: Always use row-based scrolling for hero sections
+            // to ensure they snap to the standardized top offset (50px).
+            const isHero = row.classList.contains('details-main-split');
+
+            if (isHero) {
+                // FORCE TOP: For Hero, we want absolute 0, not "aligned to 50px"
+                // And we want it always, if we're not at 0.
+                if (pageContent.scrollTop > 0) {
+                    this._smoothScrollTo(pageContent, 0);
+                }
+                // Disable standard row logic so it doesn't try to realign
+                useRowScroll = false;
+                pageContent = null; // Prevent generic vertical scroll override
+            }
+            // If row is MUCH taller than viewport (e.g. very long list), disable row-alignment
+            // to prevent jumping to top when focusing bottom elements.
+            else if (row.offsetHeight > pageContent.clientHeight * 2.0) {
                 useRowScroll = false;
             }
         }
@@ -699,40 +719,60 @@ class FocusManager {
             const viewBottom = currentScroll + viewHeight;
 
             // Check visibility with padding/buffer
-            // Increased to 80 to ensure full item clearance
-            const topCutoff = rowTop < currentScroll + 80;
-            const bottomCutoff = rowBottom > viewBottom - 80;
+            // TIZEN: Use a more conservative 40px buffer for cutoffs
+            const topCutoff = rowTop < currentScroll + 40;
+            const bottomCutoff = rowBottom > viewBottom - 40;
 
-            // If cut off at bottom, scroll down to show the full row
+            // If cut off at bottom, scroll down
             if (bottomCutoff) {
-                // Scroll to center the row if it fits, otherwise align bottom
-                const padding = 100;
-                let targetScroll;
-                if (rowHeight < viewHeight - 200) {
-                    targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
-                } else {
-                    targetScroll = rowBottom - viewHeight + padding;
+                // Aim for top-alignment (the premium look)
+                let targetScroll = rowTop - (config.scrollOffsetTop || 50);
+
+                // SAFETY: Ensure the specific focused element is actually visible 
+                // at the target scroll position. If the row is very tall, 
+                // aligning to top might hide the bottom elements.
+                const elTop = getCumulativeOffsetTop(element, pageContent);
+                const elBottom = elTop + element.offsetHeight;
+
+                if (elBottom > targetScroll + viewHeight) {
+                    // Element is too far down, align element to bottom instead
+                    targetScroll = elBottom - viewHeight + 40;
                 }
-                // Use smooth scroll with easing for premium feel
-                // Use smooth scroll with easing for premium feel
+
                 this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
             }
             // If cut off at top, scroll up
             else if (topCutoff) {
-                const padding = 150; // Larger for title visibility
-                const targetScroll = Math.max(0, rowTop - padding);
-                // Use smooth scroll with easing for premium feel
-                // Use smooth scroll with easing for premium feel
-                this._smoothScrollTo(pageContent, targetScroll);
+                // SPECIAL CASE: For the Hero section (top of page), ALWAYS scroll to 0
+                // This ensures we don't get stuck with a small offset due to margins/padding
+                const isHero = row.classList.contains('details-main-split');
+
+                if (isHero) {
+                    this._smoothScrollTo(pageContent, 0);
+                } else {
+                    const padding = config.scrollOffsetTop || 50;
+                    let targetScroll = rowTop - padding;
+
+                    // SAFETY: Ensure the element isn't cut off at the top
+                    const elTop = getCumulativeOffsetTop(element, pageContent);
+                    if (elTop < targetScroll + 20) {
+                        targetScroll = elTop - padding;
+                    }
+
+                    this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
+                }
             }
         }
-        else if (options.scroll) {
+
+        // Horizontal Scroll Handling (Run independent of vertical row alignment)
+        if (options.scroll) {
             // For horizontal navigation within row
             const rowItems = element.closest('.row-items');
             if (rowItems) {
                 // FIRST: Scroll the row into view vertically (if needed)
+                // Only do this if we haven't already handled it via useRowScroll
                 const row = element.closest('.media-row');
-                if (row && pageContent) {
+                if (row && pageContent && !useRowScroll) {
                     const rowTop = getCumulativeOffsetTop(row, pageContent);
                     const rowHeight = row.offsetHeight;
                     const rowBottom = rowTop + rowHeight;

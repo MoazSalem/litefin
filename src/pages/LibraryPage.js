@@ -388,9 +388,18 @@ class LibraryPage extends Page {
         this.setLoading(true);
 
         // Show Skeleton instead of spinner
-        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
+        // Pre-emptive Cleanup: Hide horizontal rows early if switching to grid
+        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions');
+        const rowsContainer = this.$('#library-rows');
         const grid = this.$('#library-grid');
-        if (grid) {
+
+        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
+        if (!isHorizontalLayout) {
+            if (rowsContainer) rowsContainer.style.display = 'none';
+            if (grid) grid.style.display = '';
+        }
+
+        if (grid && !isHorizontalLayout) {
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape);
         }
 
@@ -532,26 +541,52 @@ class LibraryPage extends Page {
                 return; // Skip grid render
 
             } else if (viewType === 'Genres') {
-                // Fetch Genres List for Vertical Rows
+                // Fetch Genres List
                 result = await api.getGenres({
                     ParentId: this.state.libraryId,
                     SortBy: 'SortName',
                     SortOrder: 'Ascending',
-                    Limit: 100 // Fetch plenty of genres
+                    Limit: 50 // Fetch top 50 genres max to keep requests reasonable
                 });
 
                 const allGenres = result.Items || [];
 
-                // create lazy rows
-                const rows = allGenres.map(genre => ({
-                    title: genre.Name,
-                    genreId: genre.Id,
-                    isLazy: true,
-                    items: [] // Empty initially
-                }));
+                // Fetch items for ALL genres in parallel (Limit 12 per genre)
+                // We pre-load data so we don't need row-intersections
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                const includeItemTypes = collectionType === 'tvshows' ? 'Series' : (collectionType === 'movies' ? 'Movie' : 'Movie,Series');
+
+                const rowPromises = allGenres.map(async genre => {
+                    const params = {
+                        ParentId: this.state.libraryId,
+                        GenreIds: genre.Id,
+                        StartIndex: 0,
+                        Limit: 12, // Max 12 items as requested
+                        Recursive: true,
+                        IncludeItemTypes: includeItemTypes,
+                        Fields: 'PrimaryImageAspectRatio,ProductionYear,CommunityRating',
+                        ImageTypeLimit: 1,
+                        EnableImageTypes: 'Primary,Backdrop,Thumb'
+                    };
+
+                    try {
+                        const itemsResult = await api.getItems(params);
+                        return {
+                            title: genre.Name,
+                            genreId: genre.Id,
+                            isLazy: false, // Data is fully loaded
+                            items: itemsResult.Items || []
+                        };
+                    } catch (err) {
+                        console.warn(`Failed to load items for genre ${genre.Name}`, err);
+                        return null;
+                    }
+                });
+
+                const loadedRows = (await Promise.all(rowPromises)).filter(r => r && r.items.length > 0);
 
                 this.state.items = [];
-                this._renderHorizontalRows(rows);
+                this._renderHorizontalRows(loadedRows);
                 this._updatePaginationUI();
                 return;
 
@@ -871,13 +906,12 @@ class LibraryPage extends Page {
             scrollOffsetTop: 100
         });
     }
-
     _renderHorizontalRows(rows) {
         const grid = this.$('#library-grid');
         const pagination = this.$('#library-pagination');
         const emptyState = this.$('#empty-state');
 
-        // Hide standard grid/pagination
+        // Hide standard grid/pagination for horizontal row views
         if (grid) grid.style.display = 'none';
         if (pagination) pagination.style.display = 'none';
         if (emptyState) emptyState.classList.add('hidden');
@@ -889,16 +923,20 @@ class LibraryPage extends Page {
             container.id = 'library-rows';
             container.className = 'library-rows-container';
             // Insert before grid
-            grid.parentNode.insertBefore(container, grid);
+            if (grid && grid.parentNode) {
+                grid.parentNode.insertBefore(container, grid);
+            }
         } else {
             container.innerHTML = '';
             container.style.display = 'flex';
         }
 
+        if (!container) return;
+
+        // Handle empty state
         if (!rows || rows.length === 0) {
             if (emptyState) {
                 emptyState.classList.remove('hidden');
-                // Register Empty State Button for focus
                 focusManager.register('empty-state-btn', this.$('#btn-reset-filters'), {
                     leaveUp: 'library-tabs',
                     leaveLeft: 'sidebar'
@@ -908,62 +946,47 @@ class LibraryPage extends Page {
             return;
         }
 
-        // Initialize Observer if lazy rows exist
-        if (rows.some(r => r.isLazy) && !this._genreObserver) {
-            this._genreObserver = new IntersectionObserver(this._onGenreRowIntersect.bind(this), {
-                root: null, // viewport
-                rootMargin: '500px', // Optimal: loads 1-2 rows ahead without overwhelming API
-                threshold: 0
-            });
-        }
-
-        // Determine what row 0 should point UP to (tabs if header hidden, else controls)
-        const collectionType = this.state.libraryInfo?.CollectionType;
-        const viewType = this.state.viewType;
-        const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
-        const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
-        const isEpisodes = (viewType === 'Episodes');
-        const nextUpTarget = (isMovieMain || isTVMain || isEpisodes) ? 'library-controls' : 'library-tabs';
+        // Determine navigation target for the first row
+        // For horizontal views like Genres/Suggestions, controls/picker are hidden,
+        // so we navigate straight back to the tabs.
+        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions');
+        const nextUpTarget = isHorizontalLayout ? 'library-tabs' : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
-            const rowId = `row-${rowIndex}`;
             const headerId = `header-${rowIndex}`;
             const listId = `list-${rowIndex}`;
 
-            // Determine item type for visual style
-            let itemType = 'poster';
-            if (row.title === 'Continue Watching' || row.title === 'Next Up') itemType = 'episode';
-
-            const isLandscape = itemType === 'episode';
-
-            const section = document.createElement('section');
-            // IMPORTANT: Use .media-row class for FocusManager vertical scroll logic compatibility
-            section.className = `media-row library-row ${isLandscape ? 'landscape' : ''}`;
-            section.id = rowId;
+            const section = document.createElement('div');
+            section.className = 'library-row media-row'; // media-row for FocusManager scroll detection
+            section.dataset.index = rowIndex;
             section.dataset.genreId = row.genreId || '';
-            section.dataset.listId = listId;
 
-            // Use data-lazy-row for synchronous rows to enable bulk image preloading
-            if (!row.isLazy) {
-                section.dataset.lazyRow = "true";
-            }
-            section.dataset.isLazy = row.isLazy ? 'true' : 'false';
+            // Focusable Header (clickable to navigate to genre page)
+            const headerHtml = `
+                <div class="library-row-header" id="${headerId}">
+                    <button class="header-focusable" tabindex="0" data-genre-id="${row.genreId || ''}">
+                        <span class="header-title">${row.title}</span>
+                        <i class="fa-solid fa-chevron-right header-arrow"></i>
+                    </button>
+                </div>
+            `;
 
-            const contentHtml = row.isLazy
-                ? CardRenderer.createSkeletonHtml(9, isLandscape)
-                : (row.items || []).map(item => CardRenderer.createCardHtml(item, {
-                    isLandscape: isLandscape,
-                    type: itemType,
-                    contextType: null
+            // Grid Items (Max 12)
+            const displayItems = (row.items || []).slice(0, 12);
+            let contentHtml = '';
+
+            if (displayItems.length > 0) {
+                contentHtml = displayItems.map(item => CardRenderer.createCardHtml(item, {
+                    isLandscape: false,
+                    type: 'poster',
                 })).join('');
+            } else {
+                contentHtml = '<div class="empty-msg">No items</div>';
+            }
 
             section.innerHTML = `
-                <div class="library-row-header" id="${headerId}">
-                    <div class="header-focusable" tabindex="0" id="${headerId}-btn">
-                        ${row.title}
-                    </div>
-                </div>
-                <div class="row-items ${isLandscape ? 'landscape' : ''}" id="${listId}">
+                ${headerHtml}
+                <div class="genre-grid-items" id="${listId}">
                     ${contentHtml}
                 </div>
             `;
@@ -971,110 +994,58 @@ class LibraryPage extends Page {
             container.appendChild(section);
 
             // Lazy Load Images
-            // For synchronous rows: We rely on the parent
-            if (!row.isLazy) {
-                // We don't call lazyLoader.observe(section) anymore because that observes IMAGES inside
-                // We want to observe the ROW itself.
-                // However, lazyLoader.observe(container) does NOT observe the container itself, but children.
-                // So if we pass 'section' to lazyLoader.observe, it won't see 'section' as a child.
-                // So we MUST rely on the parent container observation.
-            }
+            lazyLoader.observe(section);
 
-            // Observe if lazy
-            if (row.isLazy && this._genreObserver) {
-                this._genreObserver.observe(section);
-            }
-
-            // Register Focus for Header
-            focusManager.register(headerId, section.querySelector(`#${headerId}`), {
-                orientation: 'horizontal',
-                leaveUp: rowIndex === 0 ? nextUpTarget : `list-${rowIndex - 1}`,
-                leaveDown: listId,
+            // Register SINGLE section for entire row (header + grid)
+            // This prevents section-change scroll logic from causing inconsistencies
+            const rowId = `row-${rowIndex}`;
+            focusManager.register(rowId, section, {
+                orientation: 'grid',
+                columns: 6,
+                // Navigation between rows
+                leaveUp: rowIndex === 0 ? nextUpTarget : `row-${rowIndex - 1}`,
+                leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : null,
                 leaveLeft: 'sidebar',
-                selector: '.header-focusable'
-            });
-
-            // Register Focus for List (Horizontal)
-            focusManager.register(listId, section.querySelector(`#${listId}`), {
-                orientation: 'horizontal',
-                leaveUp: headerId,
-                leaveDown: rowIndex < rows.length - 1 ? `header-${rowIndex + 1}` : null,
-                leaveLeft: 'sidebar',
-                selector: '.media-card',
-                scrollOffsetTop: 150 // Extra space to account for header
+                // Select both header button and media cards as focusable
+                selector: '.header-focusable, .media-card',
+                scrollOffsetTop: 50, // Ultra-tight top alignment
+                enterTo: 'first' // Land on header when entering from controls or another row
             });
         });
 
-        // Update Alpha Picker to point to the first row header
+        // Update Alpha Picker
         if (rows.length > 0) {
             focusManager.register('alpha-picker', this.$('#alpha-picker'), {
                 orientation: 'horizontal',
                 leaveUp: 'library-controls',
-                leaveDown: 'header-0', // Point to first header
+                leaveDown: 'row-0',
                 leaveLeft: 'sidebar',
                 enterTo: 'active-element'
             });
+
+            // Update library-controls to point to first row
+            focusManager.register('library-controls', this.$('#library-controls'), {
+                orientation: 'horizontal',
+                leaveUp: 'library-tabs',
+                leaveDown: 'row-0', // Direct to first row for Genres view
+                leaveLeft: 'sidebar'
+            });
+
+            // Update library-tabs to point to first row directly when controls hidden
+            focusManager.register('library-tabs', this.$('#library-tabs'), {
+                orientation: 'horizontal',
+                leaveUp: null,
+                leaveDown: 'row-0', // Direct to first row
+                leaveLeft: 'sidebar',
+                selector: '.tab-btn'
+            });
         }
 
-        // Finalize Lazy Loading for all synchronous rows at once
+        // Finalize Lazy Loading
         lazyLoader.observe(container);
     }
 
-    _onGenreRowIntersect(entries) {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                const row = entry.target;
-                const genreId = row.dataset.genreId;
-                const listId = row.dataset.listId;
 
-                // Stop observing immediately
-                this._genreObserver.unobserve(row);
-
-                // Fetch Items for this row
-                this._fetchGenreItems(genreId, listId);
-
-                // PROACTIVE PRELOADING: Also load the next 3 rows for smoother scrolling
-                // This ensures content is ready before the user scrolls to it
-                const rowIndex = parseInt(listId.split('-')[1]);
-                this._preloadNextRows(rowIndex + 1, 3);
-            }
-        });
-    }
-
-    /**
-     * Preload the next N rows starting from a given index
-     * @param {number} startIndex - Starting row index
-     * @param {number} count - Number of rows to preload
-     */
-    _preloadNextRows(startIndex, count) {
-        const rowsContainer = this.$('#library-rows');
-        if (!rowsContainer) return;
-
-        const allRows = rowsContainer.querySelectorAll('.library-row[data-is-lazy="true"]');
-
-        for (let i = 0; i < allRows.length && count > 0; i++) {
-            const row = allRows[i];
-            const listEl = row.querySelector('[id^="list-"]');
-            if (!listEl) continue;
-
-            const rowIndex = parseInt(listEl.id.split('-')[1]);
-
-            // Only preload rows at or after startIndex
-            if (rowIndex >= startIndex) {
-                const genreId = row.dataset.genreId;
-                const listId = row.dataset.listId;
-
-                // Check if already loaded (no skeleton loaders)
-                const hasSkeleton = row.querySelector('.skeleton, .media-card-skeleton');
-                if (hasSkeleton) {
-                    // Stop observer for this row and load it
-                    this._genreObserver?.unobserve(row);
-                    this._fetchGenreItems(genreId, listId);
-                    count--;
-                }
-            }
-        }
-    }
 
     async _fetchGenreItems(genreId, listId) {
         const listContainer = this.$(`#${listId}`);
@@ -1175,6 +1146,8 @@ class LibraryPage extends Page {
 
         // Render Alpha Picker state (show/hide)
         this._renderAlphaPicker();
+        // Bridge focus chain immediately (before loading) to prevent lost focus
+        this._updateHeaderVisibility();
 
         // Reload Items
         await this._loadItems();
@@ -1300,10 +1273,10 @@ class LibraryPage extends Page {
     }
 
     _updateControlsVisibility() {
-        // Shuffle button is always available
+        // Shuffle button is available except for Episodes view
         const btnShuffle = this.$('#btn-shuffle');
         if (btnShuffle) {
-            btnShuffle.style.display = '';
+            btnShuffle.style.display = (this.state.viewType === 'Episodes') ? 'none' : '';
         }
 
         // Quick Reset button visibility based on filters
@@ -1968,9 +1941,10 @@ class LibraryPage extends Page {
         const tabsContainer = this.$('#library-tabs');
         if (tabsContainer) {
             let nextTarget = 'library-controls';
+
             if (!shouldShow) {
                 if (viewType === 'Genres' || viewType === 'Suggestions') {
-                    nextTarget = 'header-0';
+                    nextTarget = 'row-0'; // Match the horizontal row ID
                 } else {
                     nextTarget = 'library-grid';
                 }
@@ -1985,13 +1959,31 @@ class LibraryPage extends Page {
             }
         }
 
+        // Ensure intermediate sections point to the right place too
+        if (shouldShow) {
+            const controlsConfig = focusManager.getSectionConfig('library-controls');
+            if (controlsConfig) {
+                focusManager.register('library-controls', this.$('#library-controls'), {
+                    ...controlsConfig,
+                    leaveDown: 'alpha-picker'
+                });
+            }
+
+            const alphaConfig = focusManager.getSectionConfig('alpha-picker');
+            if (alphaConfig) {
+                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                    ...alphaConfig,
+                    leaveDown: 'library-grid'
+                });
+            }
+        }
+
         // Update Grid leaveUp
         const gridConfig = focusManager.getSectionConfig('library-grid');
         if (gridConfig) {
             focusManager.register('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
                 leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs',
-                // Explicitly preserve leaveDown if it exists (it might be pagination)
                 leaveDown: gridConfig.leaveDown || 'library-pagination'
             });
         }
