@@ -14,6 +14,7 @@
 
 import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
+import { navigationState } from './NavigationState.js';
 
 class Router {
     constructor() {
@@ -31,6 +32,12 @@ class Router {
 
         // Bind hash change handler
         this._onHashChange = this._onHashChange.bind(this);
+
+        // Navigation state tracking
+        // Set to true when navigating back (triggers state restoration)
+        this._isBackNavigation = false;
+        // State to restore when back navigation completes
+        this._pendingRestoreState = null;
     }
 
     /**
@@ -110,8 +117,15 @@ class Router {
             // Remove current page from history
             this._history.pop();
 
-            // Navigate to previous page
-            const previousPath = this._history.pop();
+            // Get previous entry (now at top of stack)
+            const previousEntry = this._history.pop();
+
+            // Mark as back navigation and store pending state
+            this._isBackNavigation = true;
+            this._pendingRestoreState = previousEntry ? previousEntry.state : null;
+
+            // Navigate to previous path
+            const previousPath = previousEntry ? previousEntry.path : '/';
             this.navigate(previousPath);
             return true;
         }
@@ -164,13 +178,25 @@ class Router {
                     params[name] = match[index + 1];
                 });
 
-                // Destroy current page
+                // Capture state from current page before destroying
+                // This saves focus, scroll, and page-specific state
+                if (this._currentPage) {
+                    const capturedState = navigationState.captureState(this._currentPage);
+
+                    // Update the current history entry with captured state
+                    const currentEntry = this._history[this._history.length - 1];
+                    if (currentEntry && typeof currentEntry === 'object') {
+                        currentEntry.state = capturedState;
+                    }
+                }
+
+                // Destroy current page (after capturing state)
                 if (this._currentPage && typeof this._currentPage.destroy === 'function') {
                     this._currentPage.destroy();
                 }
 
-                // Add to history
-                this._history.push(path);
+                // Add to history as an object with path and state
+                this._history.push({ path: path, state: null });
                 if (this._history.length > this._maxHistory) {
                     this._history.shift();
                 }

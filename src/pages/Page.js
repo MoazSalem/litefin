@@ -12,7 +12,8 @@
 import Component from '../core/Component.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { api } from '../api/index.js';
+import { router } from '../core/Router.js';
+import { navigationState } from '../core/NavigationState.js';
 import CardRenderer from '../utils/CardRenderer.js';
 
 class Page extends Component {
@@ -63,8 +64,49 @@ class Page extends Component {
             document.title = `${this.title} - Litefin`;
         }
 
-        // Call page-specific initialization
+        // PHASE 1: Restore page-specific state BEFORE onInit
+        // This ensures filters, sort, pagination are set before content loads
+        const pendingState = router._isBackNavigation ? router._pendingRestoreState : null;
+        if (pendingState) {
+            navigationState.restorePageState(this, pendingState);
+            // Store for deferred restoration (async pages)
+            this._pendingNavState = pendingState;
+        }
+
+        // Clear router flags immediately
+        if (router._isBackNavigation) {
+            router._pendingRestoreState = null;
+            router._isBackNavigation = false;
+        }
+
+        // Call page-specific initialization (may be async)
+        // If page is sync, _pendingNavState will be consumed below
+        // If page is async, page must call restoreScrollFocusWhenReady() after content loads
         this.onInit();
+
+        // PHASE 2: For SYNC pages, restore scroll/focus immediately
+        // Async pages should call restoreScrollFocusWhenReady() themselves
+        // We use a small delay to allow sync onInit to complete
+        if (this._pendingNavState && !this._isAsyncPage) {
+            requestAnimationFrame(() => {
+                if (this._pendingNavState) {
+                    navigationState.restoreScrollFocus(this._pendingNavState);
+                    this._pendingNavState = null;
+                }
+            });
+        }
+    }
+
+    /**
+     * Call this from async pages after content is fully loaded
+     * to trigger scroll/focus restoration
+     */
+    restoreScrollFocusWhenReady() {
+        if (this._pendingNavState) {
+            console.log('[Page] Restoring scroll/focus (deferred)');
+            navigationState.restoreScrollFocus(this._pendingNavState);
+            this._pendingNavState = null;
+        }
     }
 
     /**
@@ -79,6 +121,25 @@ class Page extends Component {
      */
     onBack() {
         return false; // Not handled by default
+    }
+
+    /**
+     * Get page-specific state for navigation history.
+     * Override in subclass to save filters, sort, pagination, etc.
+     * @returns {Object|null} State object or null
+     */
+    getNavigationState() {
+        return null;
+    }
+
+    /**
+     * Restore page-specific state from navigation history.
+     * Override in subclass to restore filters, sort, pagination, etc.
+     * Called BEFORE scroll/focus restoration, so DOM changes happen first.
+     * @param {Object} state - Previously captured state
+     */
+    setNavigationState(state) {
+        // Override in subclass
     }
 
     /**

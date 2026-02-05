@@ -8,6 +8,9 @@ class FavoritesPage extends Page {
     constructor() {
         super();
         this.title = 'Favorites';
+
+        // Mark as async page for Navigation State
+        this._isAsyncPage = true;
     }
 
     render() {
@@ -26,6 +29,9 @@ class FavoritesPage extends Page {
 
         this._bindNavigation();
         await this._loadFavorites();
+
+        // Trigger deferred scroll/focus restoration
+        this.restoreScrollFocusWhenReady();
     }
 
     onDestroyed() {

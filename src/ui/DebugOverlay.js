@@ -55,7 +55,7 @@ class DebugOverlay {
             bottom: 0;
             left: 0;
             right: 0;
-            height: 200px;
+            height: 400px;
             background: rgba(0,0,0,0.85);
             color: #0f0;
             font-family: monospace;

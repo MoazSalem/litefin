@@ -36,6 +36,8 @@ class DetailsPage extends Page {
 
         // Components
 
+        // Mark as async page for Navigation State
+        this._isAsyncPage = true;
     }
 
     render() {
@@ -152,6 +154,9 @@ class DetailsPage extends Page {
 
             // Load item details
             await this._loadDetails();
+
+            // Trigger deferred scroll/focus restoration
+            this.restoreScrollFocusWhenReady();
         } catch (err) {
             console.error('DetailsPage: onInit failed', err);
         }

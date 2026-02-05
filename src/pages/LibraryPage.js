@@ -44,6 +44,10 @@ class LibraryPage extends Page {
         this._onAlphaClick = this._handleAlphaClick.bind(this);
         this._onPageChange = this._handlePageChange.bind(this);
         this._onGridClick = this._handleGridClick.bind(this);
+
+        // Mark as async page for Navigation State
+        // (Page.init won't restore scroll/focus until we call restoreScrollFocusWhenReady)
+        this._isAsyncPage = true;
     }
 
     render() {
@@ -270,6 +274,9 @@ class LibraryPage extends Page {
         }
 
         await this._loadItems();
+
+        // Trigger deferred scroll/focus restoration now that content is loaded
+        this.restoreScrollFocusWhenReady();
     }
 
     /**
@@ -370,6 +377,48 @@ class LibraryPage extends Page {
                 router.navigate(`/details/${itemId}`);
             }
         });
+    }
+
+    // ========================================================================
+    // Navigation State (for back navigation restoration)
+    // ========================================================================
+
+    /**
+     * Get page state for navigation history.
+     * Saves filters, sort, pagination, and tab selection.
+     */
+    getNavigationState() {
+        return {
+            viewType: this.state.viewType,
+            sortBy: this.state.sortBy,
+            sortOrder: this.state.sortOrder,
+            filters: [...this.state.filters], // Clone array
+            nameStartsWith: this.state.nameStartsWith,
+            startIndex: this.state.startIndex,
+            limit: this.state.limit
+        };
+    }
+
+    /**
+     * Restore page state from navigation history.
+     * Applied BEFORE content loads, so _loadItems uses these values.
+     */
+    setNavigationState(savedState) {
+        if (!savedState) return;
+
+        // Merge saved state into current state
+        // This will be used when _loadItems() is called in onInit()
+        Object.assign(this.state, {
+            viewType: savedState.viewType || this.state.viewType,
+            sortBy: savedState.sortBy || this.state.sortBy,
+            sortOrder: savedState.sortOrder || this.state.sortOrder,
+            filters: savedState.filters || [],
+            nameStartsWith: savedState.nameStartsWith || null,
+            startIndex: savedState.startIndex || 0,
+            limit: savedState.limit || this.state.limit
+        });
+
+        console.log('[LibraryPage] Navigation state restored:', savedState);
     }
 
     destroy() {
