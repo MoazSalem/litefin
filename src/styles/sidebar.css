@@ -36,11 +36,6 @@
     /* Hide overflow text when collapsed */
     padding: 20px 0;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
-
-    /* Performance Optimization: HARD shadow instead of soft blur */
-    /* Soft shadows are very expensive to repaint on width change */
-    box-shadow: 4px 0 0 rgba(0, 0, 0, 0.3);
-
     white-space: nowrap;
     will-change: width;
     transform: translateZ(0);
@@ -117,17 +112,18 @@
     border: none;
     color: var(--jf-text-secondary);
     cursor: pointer;
-    transition: all 0.2s ease;
     padding: 0;
     outline: none;
     text-align: left;
     position: relative;
+    box-shadow: none;
 }
 
 .sidebar-item:focus,
 .sidebar-item.focused {
     background: var(--jf-accent);
     color: white;
+    box-shadow: none;
 }
 
 .sidebar-item.active {
@@ -137,6 +133,7 @@
 .sidebar-item.active:focus,
 .sidebar-item.active.focused {
     color: white;
+    box-shadow: none;
 }
 
 /* Icon Container - Fixed width for alignment */

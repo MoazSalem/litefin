@@ -73,6 +73,9 @@
     /* Spacing for Tizen */
     padding: 12px 28px;
     border-radius: 40px;
+    -webkit-border-radius: 40px;
+    overflow: hidden;
+    background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
     /* Match Resume/Icon btn in details */
     color: var(--text-primary);
@@ -80,7 +83,6 @@
     font-size: 20px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.1s ease-out;
     white-space: nowrap;
 }
 
@@ -109,7 +111,6 @@
     color: #ffffff !important;
     border-color: var(--jf-accent) !important;
     transform: scale(1.05);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
     z-index: 10;
 }
 
@@ -125,13 +126,12 @@
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     border-radius: 40px !important;
+    -webkit-border-radius: 40px !important;
+    overflow: hidden !important;
 }
 
-.modal-option-btn:focus,
-.modal-option-btn.focused {
-    margin-left: 12px;
-    margin-right: 12px;
-}
+/* Specific Radius Enforcement removed, using components.css logic */
+
 
 /* Controls Row */
 .library-controls-row {
@@ -156,13 +156,15 @@
     align-items: center;
     padding: 12px 18px;
     border-radius: 40px;
+    -webkit-border-radius: 40px;
+    overflow: hidden;
+    background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
     color: var(--text-primary);
     border: 2px solid rgba(255, 255, 255, 0.2);
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.1s ease-out;
 }
 
 .control-svg {
@@ -276,10 +278,12 @@
     border: 2px solid rgba(255, 255, 255, 0.2);
     padding: 18px 48px;
     border-radius: 40px;
+    -webkit-border-radius: 40px;
+    overflow: hidden;
+    background-clip: padding-box;
     font-size: 22px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
 .empty-state-btn:focus,
@@ -288,10 +292,11 @@
     border-color: #ffffff !important;
     color: #ffffff !important;
     transform: scale(1.1);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
     outline: none !important;
     overflow: hidden !important;
     /* Force Tizen 4 layer repaint to respect radius */
+    border-radius: 40px !important;
+    -webkit-border-radius: 40px !important;
     -webkit-mask-image: -webkit-radial-gradient(white, black);
     mask-image: radial-gradient(white, black);
 }
@@ -326,7 +331,6 @@
 .media-card.focused .media-fallback-name {
     opacity: 0.9;
     transform: scale(1.05);
-    transition: all 0.2s ease-out;
 }
 
 .library-grid .media-card {
@@ -362,6 +366,9 @@
     justify-content: center;
     background: rgba(255, 255, 255, 0.05);
     border-radius: 40px;
+    -webkit-border-radius: 40px;
+    overflow: hidden;
+    background-clip: padding-box;
     padding: 12px 24px;
 }
 
@@ -374,8 +381,10 @@
     cursor: pointer;
     padding: 8px 12px;
     text-align: center;
-    transition: all 0.15s ease;
     border-radius: 50%;
+    -webkit-border-radius: 50%;
+    overflow: hidden;
+    background-clip: padding-box;
     width: 44px;
     height: 44px;
     margin: 4px;
@@ -417,10 +426,12 @@
     color: var(--text-primary);
     border: 2px solid rgba(255, 255, 255, 0.3);
     border-radius: 60px;
+    -webkit-border-radius: 60px;
+    overflow: hidden;
+    background-clip: padding-box;
     /* Larger Pill */
     font-size: 24px;
     font-weight: 700;
-    transition: all 0.1s ease-out;
 }
 
 .pagination-btn:disabled {
@@ -443,27 +454,8 @@
 }
 
 /* --- Modal / Overlay --- */
-.modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-    opacity: 0;
-    pointer-events: none;
-    transition: opacity 0.3s ease;
-}
+/* .modal-overlay moved to components.css */
 
-.modal-overlay.visible {
-    opacity: 1;
-    pointer-events: auto;
-}
 
 .library-modal {
     background-color: #1a1a1a;
@@ -481,7 +473,6 @@
     display: flex;
     flex-direction: column;
     /* gap: 20px; GAP NOT SUPPORTED IN TIZEN 4 (Chrome 56) */
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
     transform: scale(0.9);
     transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
@@ -518,34 +509,8 @@
     /* gap: 10px; Replaced by margin */
 }
 
-.modal-option-btn {
-    margin: 0 0 12px 0;
-    /* Spacing for Tizen */
-    appearance: none;
-    -webkit-appearance: none;
-    background: rgba(40, 40, 40, 0.8);
-    padding: 22px 30px;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 16px;
-    color: var(--text-primary);
-    text-align: left;
-    cursor: pointer;
-    font-size: 20px;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: all 0.1s ease-out;
-}
+/* .modal-option-btn moved to components.css */
 
-/* Handled by unified focus rule above */
-
-.modal-option-btn .check-icon {
-    opacity: 0;
-}
-
-.modal-option-btn.selected .check-icon {
-    opacity: 1;
-}
 
 .modal-close-btn {
     margin-top: 20px;
@@ -557,7 +522,6 @@
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.1s ease-out;
 }
 
 /* Handled by unified focus rule above */
@@ -615,37 +579,18 @@
    ========================================================================== */
 
 /* Shared Overlay backdrop */
-#modal-overlay {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
-    backdrop-filter: blur(10px);
-    /* Modern glass effect */
-    z-index: 10000;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    opacity: 0;
-    visibility: hidden;
-    transition: all 0.3s ease;
-}
+/* #modal-overlay moved to components.css */
 
-#modal-overlay.visible {
-    opacity: 1;
-    visibility: visible;
-}
 
 .library-modal {
     background: var(--jf-background-alt, #151515);
     background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
     border-radius: 16px;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 0 1px rgba(255, 255, 255, 0.1);
+    -webkit-border-radius: 16px;
+    overflow: hidden;
+    background-clip: padding-box;
     display: flex;
     flex-direction: column;
-    overflow: hidden;
     position: relative;
     max-height: 90vh;
     /* Global constraint to prevent off-screen overflow */
@@ -701,8 +646,10 @@
     cursor: pointer;
     border-left: 6px solid transparent;
     border-radius: 8px;
+    -webkit-border-radius: 8px;
+    overflow: hidden;
+    background-clip: padding-box;
     /* Standardize corners */
-    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 
 .filter-category-btn:focus,
@@ -712,6 +659,7 @@
     border-left-color: white;
     padding-left: 45px;
     outline: none;
+    box-shadow: none;
 }
 
 .filter-category-btn.active {
@@ -747,40 +695,8 @@
 }
 
 /* Option Buttons (Radio/Checkbox) */
-.modal-option-btn {
-    appearance: none;
-    background: rgba(255, 255, 255, 0.03);
-    border: 2px solid transparent;
-    padding: 15px 20px;
-    margin: 5px;
-    /* Added explicit margin for Tizen flex/grid fallback */
-    color: var(--jf-text-secondary);
-    font-size: 1.15rem;
-    cursor: pointer;
-    text-align: left;
-    border-radius: 10px;
-    display: flex;
-    align-items: center;
-    /* Redundant gap removed, using margin on children */
-    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-}
+/* .modal-option-btn DUPLICATE removed */
 
-.modal-option-btn .radio-icon,
-.modal-option-btn .checkbox-box {
-    margin-right: 16px;
-    /* Spacing fallback for Tizen gap */
-}
-
-.modal-option-btn:focus,
-.modal-option-btn.focused {
-    background: var(--jf-accent);
-    color: white;
-    transform: scale(1.05);
-    border-color: white;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-    z-index: 10;
-    outline: none;
-}
 
 .modal-option-btn.selected {
     color: var(--jf-text-primary);
@@ -790,15 +706,15 @@
 /* Selection Indicators (Glow/Accent) */
 .radio-icon,
 .checkbox-box {
-    width: 24px;
-    height: 24px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    /* Brighter default border */
-    transition: all 0.2s;
+    width: 28px;
+    height: 28px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    margin-right: 25px;
+    /* Spacing between icon and text */
     flex-shrink: 0;
     position: relative;
-    /* CRITICAL for indicator positioning */
 }
+
 
 .radio-icon {
     border-radius: 50%;
@@ -810,7 +726,8 @@
 
 .modal-option-btn.selected .radio-icon,
 .modal-option-btn.selected .checkbox-box {
-    border-color: var(--jf-accent);
+    border-color: #ffffff;
+    color: #ffffff;
 }
 
 .modal-option-btn.selected .radio-icon::after {
@@ -822,8 +739,7 @@
     width: 12px;
     height: 12px;
     border-radius: 50%;
-    background-color: var(--jf-accent);
-    box-shadow: 0 0 10px var(--jf-accent);
+    background-color: #ffffff;
 }
 
 .check-mark {
@@ -831,7 +747,6 @@
     color: white;
     opacity: 0;
     transform: scale(0.5);
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -849,7 +764,6 @@
 .modal-option-btn.selected .checkbox-box {
     background-color: var(--jf-accent);
     border-color: var(--jf-accent);
-    box-shadow: 0 0 10px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.5);
 }
 
 /* Actions Footer */
@@ -869,10 +783,12 @@
     /* Increased margin for Tizen flex gap fallback */
     border: 2px solid transparent;
     border-radius: 8px;
+    -webkit-border-radius: 8px;
+    overflow: hidden;
+    background-clip: padding-box;
     font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
 .modal-action-btn:first-child {
@@ -885,7 +801,6 @@
     border-color: white;
     background-color: var(--jf-accent);
     color: white;
-    box-shadow: 0 0 30px var(--jf-accent), 0 10px 20px rgba(0, 0, 0, 0.5);
     z-index: 10;
     outline: none;
 }
@@ -915,10 +830,12 @@
 
 /* Sort Modal Specifics */
 .library-modal.sort-modal {
-    width: 800px;
+    width: 900px;
+    /* Slightly wider */
     height: 85vh;
     /* Larger fixed height */
 }
+
 
 .sort-columns {
     display: flex;
@@ -931,12 +848,15 @@
 
 .sort-column {
     flex: 1;
+    min-width: 350px;
+    /* Prevent columns from being too narrow */
     display: flex;
     flex-direction: column;
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
     height: 100%;
     min-height: 0;
 }
+
 
 .sort-column:last-child {
     border-right: none;

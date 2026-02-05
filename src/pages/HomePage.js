@@ -10,11 +10,10 @@
  */
 
 import Page from './Page.js';
-import { api, auth } from '../api/index.js';
+import { api } from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
-import VirtualList from '../ui/VirtualList.js';
 import { animationManager } from '../ui/AnimationManager.js';
 
 import { focusManager } from '../ui/FocusManager.js';

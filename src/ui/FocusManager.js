@@ -616,11 +616,32 @@ class FocusManager {
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
-            const pageContent = this._focusedElement?.closest('.page-content');
-            if (pageContent && pageContent.scrollTop > 0) {
-                this._smoothScrollTo(pageContent, 0);
+            const scrollContainer = this._getScrollContainer(this._focusedElement);
+            if (scrollContainer && scrollContainer.scrollTop > 0) {
+                this._smoothScrollTo(scrollContainer, 0);
             }
         }
+    }
+
+    /**
+     * Identify the nearest parent that should handle scrolling.
+     * Searches for known scroll containers or falls back to .page-content.
+     * @param {HTMLElement} element 
+     * @returns {HTMLElement|null}
+     * @private
+     */
+    _getScrollContainer(element) {
+        if (!element) return this._pageContent;
+
+        // Check for specific scrollable containers used in modals/filters
+        const container = element.closest('.modal-options, .filter-main, .page-content');
+
+        // Update cached pageContent if we found the main one
+        if (container && container.classList.contains('page-content')) {
+            this._pageContent = container;
+        }
+
+        return container || this._pageContent;
     }
 
     /**
@@ -662,10 +683,9 @@ class FocusManager {
             }
         }
 
-        // SAMSUNG OPTIMIZATION: Cache page-content DOM reference
-        // RESOLUTION FIX: Find the SPECIFIC page content for this element, not just first in DOM
-        // This fixes multi-page DOM issues where querySelector finds hidden pages.
-        let pageContent = element.closest('.page-content');
+        // SAMSUNG OPTIMIZATION: Cache scroll container DOM reference
+        // RESOLUTION FIX: Identify the CORRECT scrollable container (Page, Modal, or Filter)
+        let pageContent = this._getScrollContainer(element);
 
         this._pageContent = pageContent; // Cache for other ops if needed
 

@@ -34,7 +34,10 @@
     flex-shrink: 0;
     width: 240px;
     background: transparent;
-    border: none;
+    border: 3px solid transparent;
+    /* Ensure base border for layout stability */
+    background-clip: padding-box;
+    /* Prepare for focus border */
     border-radius: 0;
     overflow: visible;
     cursor: pointer;
@@ -63,6 +66,7 @@
     transform: scale(1.05);
     z-index: 1;
     outline: none;
+    /* border-color handled on .card-image */
 }
 
 .media-card .card-image {
@@ -74,9 +78,12 @@
     overflow: hidden;
     background: var(--jf-background-alt);
     border-radius: var(--jf-border-radius);
-    /* PERFORMANCE: Removed box-shadow - expensive to paint */
-    /* box-shadow: var(--jf-shadow-sm); */
+
+    /* Focus Border: Moved here, transparent by default */
+    border: 3px solid transparent;
+    background-clip: padding-box;
 }
+
 
 .media-card.landscape .card-image {
     /* aspect-ratio: 16/9; Not supported in Chromium 69 */
@@ -86,7 +93,8 @@
 
 .media-card:focus .card-image,
 .media-card.focused .card-image {
-    box-shadow: 0 0 0 3px var(--jf-accent);
+    /* Apply border color to image only */
+    border-color: var(--jf-focus-border-color);
 }
 
 .media-card .card-image img {

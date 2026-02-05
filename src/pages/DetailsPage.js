@@ -11,9 +11,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
-import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
-import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
 
 
@@ -1026,8 +1024,7 @@ class DetailsPage extends Page {
             leaveDown: leaveDownTarget,
             leaveLeft: 'sidebar',
             selector: selector,
-            onMove: this._item.Type === 'Season' ? onSeasonMove : null,
-            enterTo: 'first'
+            onMove: this._item.Type === 'Season' ? onSeasonMove : null
         });
 
         // Update upward link's leaveDown

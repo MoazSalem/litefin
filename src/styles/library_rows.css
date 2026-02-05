@@ -58,9 +58,9 @@
     gap: 12px;
     cursor: pointer;
     /* Only transition specific properties - 'all' is expensive on TV devices */
-    transition: transform 0.2s ease-out, background-color 0.2s ease-out, box-shadow 0.2s ease-out;
+    transition: transform 0.2s ease-out, background-color 0.2s ease-out;
     background-color: transparent;
-    border: none;
+    border: 3px solid transparent;
     outline: none;
     transform-origin: left center;
 }
@@ -81,7 +81,7 @@
     color: #fff;
     transform: scale(1.08);
     /* Apple-style pop */
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    border-color: var(--jf-focus-border-color);
     overflow: hidden !important;
     /* Force Tizen 4 layer repaint to respect radius */
     -webkit-mask-image: -webkit-radial-gradient(white, black);
@@ -129,7 +129,7 @@
     grid-template-columns: repeat(auto-fill, 240px);
     grid-gap: 32px;
     gap: 32px;
-    padding: 24px 20px 80px 20px;
+    padding: 24px 20px 0px 20px;
     width: 100%;
 }
 

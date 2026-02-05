@@ -8,7 +8,8 @@
 .btn {
     padding: 20px 40px;
     font-size: 1.5rem;
-    border: none;
+    border: 3px solid transparent;
+
     border-radius: var(--jf-border-radius);
     cursor: pointer;
     margin: 12px;
@@ -24,7 +25,8 @@
 .btn-primary:focus,
 .btn-primary.focused {
     background: var(--jf-accent-hover);
-    box-shadow: var(--jf-focus-ring);
+    border-color: var(--jf-focus-border-color);
+    outline: none;
 }
 
 .btn-secondary {
@@ -42,37 +44,16 @@
     color: white;
 }
 
-.nav-text-btn {
-    background: transparent;
-    border: 3px solid transparent;
-    /* Reserve space */
-    color: var(--jf-text-secondary);
-    font-size: 1.25rem;
-    font-weight: 600;
-    padding: 10px 24px;
-    cursor: pointer;
-    border-radius: 50px;
-    /* Pill shape */
-    transition: all 0.2s ease;
-    outline: none;
-}
-
-.nav-text-btn.active {
-    color: var(--jf-accent);
-    background: rgba(0, 0, 0, 0.5);
-}
-
-.nav-text-btn:focus,
-.nav-text-btn.focused {
-    border-color: var(--jf-accent);
-    color: var(--jf-accent);
-    box-shadow: none;
+.btn-danger:focus,
+.btn-danger.focused {
+    background: #ff5252;
     outline: none;
 }
 
 .nav-btn {
     background: var(--jf-button-bg);
-    border: none;
+    border: 3px solid transparent;
+    background-clip: padding-box;
     color: var(--jf-text-primary);
     padding: 10px 20px;
     border-radius: var(--jf-border-radius);
@@ -80,6 +61,7 @@
     display: flex;
     align-items: center;
 }
+
 
 .nav-btn>*:not(:last-child) {
     margin-right: 8px;
@@ -89,6 +71,7 @@
 .nav-btn.focused {
     background: var(--jf-accent);
     outline: none;
+    border-color: var(--jf-focus-border-color);
     box-shadow: none;
 }
 
@@ -114,7 +97,8 @@
 
 .back-btn {
     background: transparent;
-    border: none;
+    border: 3px solid transparent;
+    background-clip: padding-box;
     color: var(--jf-text-primary);
     font-size: 1.5rem;
     cursor: pointer;
@@ -122,16 +106,18 @@
     border-radius: var(--jf-border-radius);
 }
 
+
 .back-btn:focus,
 .back-btn.focused {
     background: var(--jf-accent-light);
     outline: none;
+    border-color: var(--jf-focus-border-color);
     box-shadow: none;
 }
 
 .btn-icon-small {
     background: transparent;
-    border: none;
+    border: 3px solid transparent;
     color: var(--jf-text-secondary);
     font-size: 1.2rem;
     cursor: pointer;
@@ -149,6 +135,7 @@
 .btn-icon-small:hover {
     background: var(--jf-button-hover);
     color: var(--jf-accent);
+    border-color: var(--jf-focus-border-color);
 }
 
 /* Inputs */
@@ -158,13 +145,16 @@
     font-size: 1.75rem;
     background: var(--jf-input-bg);
     border: 3px solid var(--jf-input-border);
+    background-clip: padding-box;
     border-radius: var(--jf-border-radius);
     color: var(--jf-text-primary);
 }
 
+
 .text-input:focus,
 .text-input.focused {
-    border-color: var(--jf-accent);
+    border-color: var(--jf-focus-border-color);
+
     outline: none;
 }
 
@@ -349,4 +339,121 @@
     50% {
         opacity: 0.5;
     }
+}
+
+/* ==========================================================================
+   Consolidated Modal Styles (Shared)
+   ========================================================================== */
+
+.modal-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: rgba(0, 0, 0, 0.7);
+    z-index: 10000;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+    /* Performance: Avoid backdrop-filter on Tizen */
+}
+
+.modal-overlay.visible {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+.modal-option-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 0 30px;
+    height: 80px;
+    /* Explicit height for vertical centering on TV */
+    margin-bottom: 12px;
+    border: 3px solid transparent;
+    /* Layout stability */
+    border-radius: 16px;
+    -webkit-border-radius: 16px;
+    overflow: hidden;
+    background-clip: padding-box;
+    color: var(--jf-text-primary);
+    text-align: left;
+    cursor: pointer;
+    font-size: 1.2rem;
+    font-weight: 500;
+    display: flex;
+    justify-content: flex-start;
+    /* Left align for sort menu */
+    align-items: center;
+    flex-shrink: 0;
+    /* Prevent shrinking/distortion on TV browsers */
+    transition: background-color 0.2s ease, border-color 0.2s ease;
+}
+
+
+
+.modal-option-btn:hover,
+.modal-option-btn:focus,
+.modal-option-btn.focused {
+    background: var(--jf-accent);
+    color: white;
+    border-color: rgba(255, 255, 255, 0.5);
+    /* Subtle white inner border */
+    outline: none;
+    box-shadow: none;
+    transform: none;
+    /* Removed scale to prevent squeezing/distortion */
+}
+
+
+.modal-option-btn.selected {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--jf-text-secondary);
+}
+
+.modal-option-btn .check-icon {
+    display: none;
+    margin-left: auto;
+    /* Push to right side */
+    width: 20px;
+    height: 20px;
+
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='20 6 9 17 4 12'%3E%3C/polyline%3E%3C/svg%3E");
+    background-size: contain;
+    background-repeat: no-repeat;
+}
+
+.modal-option-btn.selected .check-icon {
+    display: block;
+}
+
+.modal-actions {
+    padding: 20px;
+    display: flex;
+    justify-content: flex-end;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.modal-action-btn {
+    padding: 12px 32px;
+    border-radius: 30px;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    border: none;
+    font-size: 1rem;
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.modal-action-btn:focus,
+.modal-action-btn:hover {
+    background: var(--jf-accent);
+    outline: none;
 }

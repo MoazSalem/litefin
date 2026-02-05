@@ -56,7 +56,8 @@
     --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.35);
     --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.45);
     --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.55);
-    --jf-focus-ring: 0 0 0 3px var(--jf-accent-light);
+    --jf-focus-border-color: var(--jf-accent);
+
 
     /* ========================================================================
        Border Radius

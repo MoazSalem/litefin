@@ -7,81 +7,82 @@
  */
 
 [data-theme="wmc"] {
-    /* ========================================================================
+   /* ========================================================================
        Base Colors - Dark with green tint
        ======================================================================== */
-    --jf-background: #0a120a;
-    --jf-background-alt: #101a10;
-    --jf-surface: #152015;
-    --jf-card-bg: #1a2a1a;
-    --jf-card-bg-hover: #253525;
+   --jf-background: #0a120a;
+   --jf-background-alt: #101a10;
+   --jf-surface: #152015;
+   --jf-card-bg: #1a2a1a;
+   --jf-card-bg-hover: #253525;
 
-    /* ========================================================================
+   /* ========================================================================
        Accent Colors - WMC Green
        ======================================================================== */
-    --jf-accent: #52b043;
-    --jf-accent-hover: #45963a;
-    --jf-accent-light: rgba(82, 176, 67, 0.18);
+   --jf-accent: #52b043;
+   --jf-accent-hover: #45963a;
+   --jf-accent-light: rgba(82, 176, 67, 0.18);
 
-    /* ========================================================================
+   /* ========================================================================
        Text Colors
        ======================================================================== */
-    --jf-text-primary: #e8f0e8;
-    --jf-text-secondary: #b0c8b0;
-    --jf-text-tertiary: #708870;
-    --jf-text-on-accent: #ffffff;
+   --jf-text-primary: #e8f0e8;
+   --jf-text-secondary: #b0c8b0;
+   --jf-text-tertiary: #708870;
+   --jf-text-on-accent: #ffffff;
 
-    /* ========================================================================
+   /* ========================================================================
        UI Elements
        ======================================================================== */
-    --jf-navbar-bg: #0d150d;
-    --jf-sidebar-bg: #101a10;
-    --jf-input-bg: #152015;
-    --jf-input-border: #2a4028;
-    --jf-button-bg: #1e301e;
-    --jf-button-hover: #2a4028;
-    --jf-divider: #1e301e;
+   --jf-navbar-bg: #0d150d;
+   --jf-sidebar-bg: #101a10;
+   --jf-input-bg: #152015;
+   --jf-input-border: #2a4028;
+   --jf-button-bg: #1e301e;
+   --jf-button-hover: #2a4028;
+   --jf-divider: #1e301e;
 
-    /* ========================================================================
+   /* ========================================================================
        Semantic Colors
        ======================================================================== */
-    --jf-success: #52b043;
-    --jf-warning: #f9a825;
-    --jf-error: #ef5350;
-    --jf-info: #42a5f5;
+   --jf-success: #52b043;
+   --jf-warning: #f9a825;
+   --jf-error: #ef5350;
+   --jf-info: #42a5f5;
 
-    /* ========================================================================
+   /* ========================================================================
        Shadows & Effects
        ======================================================================== */
-    --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
-    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-    --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-    --jf-focus-ring: 0 0 0 3px var(--jf-accent-light);
+   --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+   --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+   --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+   --jf-focus-border-color: var(--jf-accent);
 
-    /* ========================================================================
+
+   /* ========================================================================
        Border Radius - Rounded like WMC
        ======================================================================== */
-    --jf-border-radius: 6px;
-    --jf-border-radius-lg: 12px;
+   --jf-border-radius: 6px;
+   --jf-border-radius-lg: 12px;
 
-    /* ========================================================================
+   /* ========================================================================
        Transitions
        ======================================================================== */
-    --jf-transition-fast: 150ms ease;
-    --jf-transition-normal: 250ms ease;
+   --jf-transition-fast: 150ms ease;
+   --jf-transition-normal: 250ms ease;
 }
 
 /* WMC gradient overlay */
 [data-theme="wmc"] .page::before {
-    content: '';
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: radial-gradient(ellipse at center,
-            rgba(82, 176, 67, 0.05) 0%,
-            transparent 70%);
-    pointer-events: none;
-    z-index: -1;
+   content: '';
+   position: fixed;
+   top: 0;
+   left: 0;
+   right: 0;
+   bottom: 0;
+   background: radial-gradient(ellipse at center,
+         rgba(82, 176, 67, 0.05) 0%,
+         transparent 70%);
+   pointer-events: none;
+   z-index: -1;
 }

@@ -71,6 +71,9 @@ class SettingsPage extends Page {
                         ${this._renderActiveTabContent()}
                     </main>
                 </div>
+                
+                <!-- Modal Overlay -->
+                <div class="modal-overlay" id="modal-overlay" aria-hidden="true"></div>
             </div>
         `;
     }
@@ -230,7 +233,7 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-actions centered">
-                    <button class="btn btn-danger switch-user-btn" tabindex="0">
+                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0">
                         Sign Out
                     </button>
                 </div>
@@ -325,109 +328,130 @@ class SettingsPage extends Page {
         this._bindDropdownEvents();
     }
 
-    _renderDropdown(id, options, selectedValue) {
-        const selectedOption = options.find(o => o.value === selectedValue) || options[0];
+    _renderDropdown(id, options, currentValue) {
+        // Find current label
+        const currentOption = options.find(o => o.value === currentValue) || options[0];
+        const currentLabel = currentOption ? currentOption.label : 'Select';
 
+        // Render as a button that triggers the modal
         return `
-            <div class="custom-select-container" id="${id}-container">
-                <button class="custom-select-trigger" id="${id}" tabindex="0" data-value="${selectedOption.value}">
-                    <span class="current-value">${selectedOption.label}</span>
-                    <span class="chevron">▼</span>
-                </button>
-                <div class="custom-select-options">
-                    ${options.map(opt => `
-                        <button class="select-option ${opt.value === selectedValue ? 'selected' : ''}" 
-                                data-value="${opt.value}" 
-                                tabindex="-1">
-                            ${opt.label}
-                        </button>
-                    `).join('')}
-                </div>
-            </div>
+            <button class="setting-action-btn select-btn" id="${id}-btn" 
+                    data-id="${id}" 
+                    data-value="${currentValue}"
+                    data-options='${JSON.stringify(options).replace(/'/g, "&#39;")}'
+                    tabindex="0">
+                <span class="btn-label">${currentLabel}</span>
+            </button>
         `;
     }
 
-    _bindDropdownEvents() {
-        this.$$('.custom-select-container').forEach(container => {
-            const trigger = container.querySelector('.custom-select-trigger');
-            const optionsPanel = container.querySelector('.custom-select-options');
-            const optionBtns = container.querySelectorAll('.select-option');
-            const dropdownId = `dropdown-${trigger.id}`;
+    _renderSelectionModal(title, options, currentValue, onSelect) {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
 
-            const closeDropdown = () => {
-                container.classList.remove('open');
-                // Unregister modal section
-                focusManager.unregister(dropdownId);
-                // Return to settings content
-                focusManager.setActiveSection('settings-content');
-                // Invalidating content cache to ensure it sees the closed state
-                focusManager.invalidateCache('settings-content');
-            };
+        // Store focus context for restoration
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
 
-            const openDropdown = () => {
-                // Close others
-                this.$$('.custom-select-container.open').forEach(c => {
-                    if (c !== container) {
-                        // Force close logic for others?
-                        c.classList.remove('open');
-                    }
-                });
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${title}</h2>
+                </div>
+                <div class="modal-options">
+                    ${options.map(opt => `
+                        <button class="modal-option-btn ${opt.value === currentValue ? 'selected' : ''}" 
+                                data-value="${opt.value}"
+                                tabindex="0">
+                            <span>${opt.label}</span>
+                            <div class="check-icon"></div>
+                        </button>
+                    `).join('')}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                </div>
+            </div>
+        `;
 
-                container.classList.add('open');
+        // Show Overlay
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
 
-                // Register temporary modal section for this dropdown
-                focusManager.register(dropdownId, optionsPanel, {
-                    orientation: 'vertical',
-                    enterTo: 'last-focused',
-                    leaveRight: null, // Trap focus mostly
-                    leaveLeft: null,
-                    leaveUp: null, // Could allow closing?
-                    leaveDown: null,
-                });
-
-                // Set as active section
-                focusManager.setActiveSection(dropdownId);
-
-                // Focus logic
-                setTimeout(() => {
-                    const selected = container.querySelector('.select-option.selected') || optionBtns[0];
-                    if (selected) focusManager.focusElement(selected);
-                }, 50);
-            };
-
-            // Trigger click
-            trigger.addEventListener('click', (e) => {
-                // Toggle
-                if (container.classList.contains('open')) {
-                    closeDropdown();
-                    // Restore focus to trigger
-                    focusManager.focusElement(trigger);
-                } else {
-                    openDropdown();
-                }
+        // Bind Events
+        overlay.querySelectorAll('.modal-option-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                onSelect(btn.dataset.value);
+                this._closeSelectionModal();
             });
+        });
 
-            // Option selection
-            optionBtns.forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
+        overlay.querySelector('#btn-modal-cancel').addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._closeSelectionModal();
+        });
 
-                    const value = btn.dataset.value;
-                    const label = btn.innerText.trim();
+        // Register Focus Sections
+        focusManager.register('modal-options', overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            leaveDown: 'modal-actions',
+            leaveUp: 'modal-actions',
+            enterTo: 'last-focused'
+        });
 
-                    // Update Trigger
-                    trigger.querySelector('.current-value').innerText = label;
-                    trigger.dataset.value = value;
+        focusManager.register('modal-actions', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'modal-options'
+        });
 
-                    // Update Selection State
-                    optionBtns.forEach(b => b.classList.remove('selected'));
-                    btn.classList.add('selected');
+        // Set Focus
+        focusManager.setActiveSection('modal-options');
+        setTimeout(() => {
+            const selected = overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
+            if (selected) focusManager.focusElement(selected);
+        }, 50);
+    }
 
-                    // Close & Restore
-                    closeDropdown();
-                    focusManager.focusElement(trigger);
+    _closeSelectionModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay || !overlay.classList.contains('visible')) return;
 
-                    // Save value to localStorage
+        overlay.classList.remove('visible');
+        overlay.setAttribute('aria-hidden', 'true');
+        overlay.innerHTML = '';
+
+        // Unregister modal focus
+        focusManager.unregister('modal-options');
+        focusManager.unregister('modal-actions');
+
+        // Restore Section & Focus
+        if (this._prevSection) {
+            focusManager.setActiveSection(this._prevSection, false);
+        }
+        if (this._prevFocus) {
+            focusManager.focusElement(this._prevFocus);
+        }
+
+        this._prevFocus = null;
+        this._prevSection = null;
+    }
+
+    _bindDropdownEvents() {
+        this.$$('.select-btn').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                const id = btn.dataset.id;
+                const options = JSON.parse(btn.dataset.options);
+                const currentValue = btn.dataset.value;
+                const title = btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
+
+                this._renderSelectionModal(title, options, currentValue, (newValue) => {
+                    // Update State
+                    btn.dataset.value = newValue;
+                    const newLabel = options.find(o => o.value === newValue)?.label;
+                    btn.querySelector('.btn-label').innerText = newLabel;
+
+                    // Save Logic
                     const mapMap = {
                         'quality-select': 'pref:maxBitrate',
                         'audio-lang-select': 'pref:audioLang',
@@ -435,32 +459,15 @@ class SettingsPage extends Page {
                         'image-quality-select': 'pref:imageQuality'
                     };
 
-                    if (trigger.id === 'image-quality-select') {
-                        imageService.setPreset(value);
-                    } else if (mapMap[trigger.id]) {
-                        localStorage.setItem(mapMap[trigger.id], value);
+                    if (id === 'image-quality-select') {
+                        imageService.setPreset(newValue);
+                    } else if (mapMap[id]) {
+                        localStorage.setItem(mapMap[id], newValue);
                     }
 
-                    console.log(`Setting ${trigger.id} saved: ${value}`);
-                });
-
-                // Handle Escape/Back to close
-                btn.addEventListener('keydown', (e) => {
-                    if (e.key === 'Escape' || e.key === 'Backspace' || e.key === 'MediaBtnBack') {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        closeDropdown();
-                        focusManager.focusElement(trigger);
-                    }
-                    // We REMOVED Arrow Up/Down logic because the FocusManager 
-                    // handles it automatically via the 'vertical' section we registered!
+                    console.log(`Setting ${id} saved: ${newValue}`);
                 });
             });
-
-            // Close on focus loss from the dropdown (Safety net)
-            // But be careful, focusManager might be moving focus within the dropdown
-            // We rely on 'leave' actions or specific close triggers usually.
-            // For now, let's trust explicit closing via selection or Back/Escape.
         });
     }
 
@@ -549,6 +556,13 @@ class SettingsPage extends Page {
     }
 
     onBack() {
+        // Check if modal is open
+        const overlay = this.$('#modal-overlay');
+        if (overlay && overlay.classList.contains('visible')) {
+            this._closeSelectionModal();
+            return true;
+        }
+
         // Standard TV UX: Back button goes to previous page
         router.back();
         return true; // Signal that we handled the back event

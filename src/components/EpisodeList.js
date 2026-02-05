@@ -9,7 +9,6 @@
 
 import Component from '../core/Component.js';
 import { api } from '../api/index.js';
-import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { imageService } from '../utils/ImageService.js';
 

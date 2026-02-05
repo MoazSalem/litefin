@@ -8,9 +8,6 @@
 
 import Page from './Page.js';
 import { api } from '../api/index.js';
-import { router } from '../core/Router.js';
-import { eventBus } from '../core/EventBus.js';
-import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 

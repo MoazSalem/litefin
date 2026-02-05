@@ -280,25 +280,12 @@ class LibraryPage extends Page {
         // Check if modal is open
         const overlay = this.$('#modal-overlay');
         if (overlay && overlay.classList.contains('visible')) {
-
-            // Check WHICH modal is open (Filter or Sort) based on content or ID?
-            // Current strict impl: We have Filter and Sort.
-            // Sort uses _closeModal, Filter uses _closeFilterModal.
-            // We can try closing both or checking content.
-
             if (overlay.querySelector('.filter-modal')) {
                 this._closeFilterModal();
-                const btn = this.$('#btn-filter');
-                if (btn) focusManager.focusElement(btn);
-                return true;
             } else {
-                // Assume Sort or standard modal
                 this._closeModal();
-                // Restore focus for sort?
-                const sortBtn = this.$('#btn-sort');
-                if (sortBtn) focusManager.focusElement(sortBtn);
-                return true;
             }
+            return true;
         }
         return false;
     }
@@ -1498,6 +1485,10 @@ class LibraryPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
 
+        // Store focus context
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
         // Current state
         const currentSort = this.state.sortBy;
         const currentOrder = this.state.sortOrder;
@@ -1669,6 +1660,10 @@ class LibraryPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
 
+        // Store focus context
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
         // Current Filters State
         const currentFilters = this.state.filters || {};
 
@@ -1778,6 +1773,10 @@ class LibraryPage extends Page {
         overlay.classList.add('visible');
         overlay.setAttribute('aria-hidden', 'false');
 
+        // Local observer for lazy loading filter items
+        let filterObserver = null;
+        const BATCH_SIZE = 50;
+
         // Logic to Render Items for Active Section
         const renderItems = (sectionId, options = {}) => {
             const section = validSections.find(s => s.id === sectionId);
@@ -1792,55 +1791,128 @@ class LibraryPage extends Page {
 
             this.state.activeFilterSection = sectionId;
 
-            // Render Items
-            container.innerHTML = section.items.map(item => {
-                // Determine checked state
-                let checked = false;
-                if (item.type === 'boolean') {
-                    checked = !!this.state.filters[item.key];
-                    if (item.key === 'IsSD') checked = this.state.filters['IsHD'] === false;
+            // --- Lazy Loading Setup ---
+            // Disconnect previous observer
+            if (filterObserver) {
+                filterObserver.disconnect();
+                filterObserver = null;
+            }
+
+            // Determine initial batch size
+            // If we need to restore focus to a deep item, load enough to reach it
+            let initialCount = BATCH_SIZE;
+            if (options.restoreFocus) {
+                const { key, value } = options.restoreFocus;
+                // Find index of target item
+                const targetIndex = section.items.findIndex(item => {
+                    const itemKey = item.key || section.itemKey;
+                    const itemValue = item.value || '';
+                    return itemKey === key && itemValue === value;
+                });
+
+                if (targetIndex !== -1) {
+                    // Load up to target + buffer
+                    initialCount = Math.max(BATCH_SIZE, targetIndex + 20);
+                }
+            }
+
+            const totalItems = section.items.length;
+            let loadedCount = 0;
+
+            // Helper to render a chunk of items
+            const appendItems = (startIndex, count) => {
+                const chunk = section.items.slice(startIndex, startIndex + count);
+                const html = chunk.map(item => {
+                    // Determine checked state
+                    let checked = false;
+                    if (item.type === 'boolean') {
+                        checked = !!this.state.filters[item.key];
+                        if (item.key === 'IsSD') checked = this.state.filters['IsHD'] === false;
+                    } else {
+                        const stored = this.state.filters[section.itemKey];
+                        if (stored) {
+                            const arr = stored.split(',');
+                            checked = arr.includes(item.value);
+                        }
+                    }
+
+                    return `
+                        <button class="modal-option-btn check-btn ${checked ? 'selected' : ''}"
+                                data-type="${item.type}"
+                                data-key="${item.key || section.itemKey}"
+                                data-value="${item.value || ''}"
+                                tabindex="0">
+                            <div class="checkbox-box">
+                                <span class="check-mark">✔</span>
+                            </div>
+                            <span class="btn-label">${item.label}</span>
+                        </button>
+                    `;
+                }).join('');
+
+                // If starting from 0, replace content, otherwise append
+                if (startIndex === 0) {
+                    container.innerHTML = html;
                 } else {
-                    const stored = this.state.filters[section.itemKey];
-                    if (stored) {
-                        const arr = stored.split(',');
-                        checked = arr.includes(item.value);
+                    // Remove old sentinel if exists
+                    const oldSentinel = container.querySelector('.filter-sentinel');
+                    if (oldSentinel) oldSentinel.remove();
+
+                    container.insertAdjacentHTML('beforeend', html);
+                }
+
+                loadedCount += chunk.length;
+
+                // Add Sentinel if more items exist
+                if (loadedCount < totalItems) {
+                    const sentinelHtml = `<div class="filter-sentinel" style="height: 20px; width: 100%;"></div>`;
+                    container.insertAdjacentHTML('beforeend', sentinelHtml);
+
+                    const sentinel = container.querySelector('.filter-sentinel');
+                    if (sentinel && filterObserver) {
+                        filterObserver.observe(sentinel);
                     }
                 }
 
-                return `
-                    <button class="modal-option-btn check-btn ${checked ? 'selected' : ''}"
-                            data-type="${item.type}"
-                            data-key="${item.key || section.itemKey}"
-                            data-value="${item.value || ''}"
-                            tabindex="0">
-                        <div class="checkbox-box">
-                            <span class="check-mark">✔</span>
-                        </div>
-                        <span class="btn-label">${item.label}</span>
-                    </button>
-                `;
-            }).join('');
+                // Update FocusManager registry and cache
+                // Note: Invalidate cache is crucial as DOM size changes
+                focusManager.register('filter-items', container, {
+                    orientation: 'grid',
+                    leaveLeft: 'filter-sidebar',
+                    leaveRight: 'filter-actions',
+                    leaveDown: 'filter-actions',
+                    selector: '.modal-option-btn'
+                });
+                focusManager.invalidateCache('filter-items');
+            };
 
-            // Clean up old focus section and re-register
-            focusManager.unregister('filter-items');
-            focusManager.register('filter-items', container, {
-                orientation: 'grid', // Allow spatial nav (Left/Right/Up/Down)
-                leaveLeft: 'filter-sidebar',
-                leaveRight: 'filter-actions', // Shortcut to actions
-                leaveDown: 'filter-actions', // Nav to buttons
-                selector: '.modal-option-btn'
-            });
-            // Force cache invalidation just in case
-            focusManager.invalidateCache('filter-items');
+            // Start Observer
+            if ('IntersectionObserver' in window) {
+                filterObserver = new IntersectionObserver((entries) => {
+                    entries.forEach(entry => {
+                        if (entry.isIntersecting) {
+                            // Load next batch
+                            appendItems(loadedCount, BATCH_SIZE);
+                        }
+                    });
+                }, { root: container, rootMargin: '200px' });
+            }
+
+            // Render Initial Batch
+            appendItems(0, initialCount);
 
             // --- Focus Restoration ---
             if (options.restoreFocus) {
                 const { key, value } = options.restoreFocus;
-                const selector = `.modal-option-btn[data-key="${key}"][data-value="${value || ''}"]`;
-                const nextBtn = container.querySelector(selector);
-                if (nextBtn) {
-                    focusManager.focusElement(nextBtn, { scroll: false });
-                }
+
+                // Allow DOM to settle
+                setTimeout(() => {
+                    const selector = `.modal-option-btn[data-key="${key}"][data-value="${value || ''}"]`;
+                    const nextBtn = container.querySelector(selector);
+                    if (nextBtn) {
+                        focusManager.focusElement(nextBtn, { scroll: true }); // Ensure we scroll to it
+                    }
+                }, 0);
             }
         };
 
@@ -1978,6 +2050,15 @@ class LibraryPage extends Page {
             overlay.classList.add('hidden');
             overlay.innerHTML = '';
         }, 300);
+
+        // Restore focus
+        if (this._prevFocus && document.body.contains(this._prevFocus)) {
+            focusManager.focusElement(this._prevFocus);
+        } else if (this._prevSection) {
+            focusManager.setActiveSection(this._prevSection);
+        }
+        this._prevFocus = null;
+        this._prevSection = null;
     }
 
 
@@ -2064,6 +2145,8 @@ class LibraryPage extends Page {
         } else if (this._prevSection) {
             focusManager.setActiveSection(this._prevSection);
         }
+        this._prevFocus = null;
+        this._prevSection = null;
     }
 
     /**

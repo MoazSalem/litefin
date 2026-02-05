@@ -38,7 +38,6 @@
     /* Half of 72px */
     /* Rounded full */
     color: var(--jf-text-primary);
-    transition: all 0.2s ease;
 }
 
 .search-input:focus,

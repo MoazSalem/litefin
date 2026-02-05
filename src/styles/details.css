@@ -89,10 +89,11 @@
     flex-shrink: 0;
     margin-right: 60px;
     background-color: transparent;
-    /* Removed placeholder bg as requested */
     border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    background-clip: padding-box;
     position: relative;
-    /* For potential spinner if needed */
 }
 
 .hero-poster img {
@@ -101,9 +102,8 @@
     /* Fill container */
     object-fit: cover;
     border-radius: var(--jf-border-radius);
-    box-shadow: var(--jf-shadow-lg);
+    -webkit-border-radius: var(--jf-border-radius);
     opacity: 0;
-    /* Start hidden, fade in */
     transition: opacity 0.3s ease-in;
 }
 
@@ -263,51 +263,38 @@
 .details-actions .btn {
     height: 72px;
     border-radius: 36px;
+    -webkit-border-radius: 36px;
+    overflow: hidden;
+    background-clip: padding-box;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 0 32px;
     font-size: 1.5rem;
     font-weight: 600;
-    /* Added Border */
-    border: 2px solid transparent;
     transition: transform 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s;
+    border: 3px solid transparent;
+    background-clip: padding-box;
 }
 
+
 /* Primary Play Button (Swapped) */
-.play-btn {
+/* Unified Primary Play/Resume Buttons */
+.play-btn,
+.resume-btn {
     background: white;
     color: var(--jf-background);
 }
 
 .play-btn:focus,
-.play-btn.focused {
-    transform: scale(1.05);
-    /* Inverted Focus: Accent Bg, White Text */
-    background: var(--jf-accent);
-    color: white;
-    border-color: var(--jf-accent);
-    outline: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
-}
-
-/* Secondary Resume Button */
-.resume-btn {
-    background: rgba(40, 40, 40, 0.8);
-    /* Opaque fallback instead of blur */
-    color: white;
-    border: 2px solid rgba(255, 255, 255, 0.2);
-    /* PERFORMANCE: Remove backdrop-filter */
-    /* backdrop-filter: blur(10px); */
-}
-
+.play-btn.focused,
 .resume-btn:focus,
 .resume-btn.focused {
     transform: scale(1.05);
     background: var(--jf-accent);
-    border-color: var(--jf-accent);
     color: white;
-    outline: none;
+    border-color: white;
+    outline: none !important;
 }
 
 /* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */
@@ -328,18 +315,15 @@
     height: 72px !important;
     padding: 0 !important;
     border-radius: 50% !important;
-    /* Force circular shape */
+    -webkit-border-radius: 50% !important;
     background: rgba(40, 40, 40, 0.8);
-    /* Opaque fallback */
-    /* Added consistent border */
     border: 2px solid rgba(255, 255, 255, 0.2) !important;
     color: var(--jf-text-primary);
     display: flex;
     align-items: center;
     justify-content: center;
-    /* PERFORMANCE: Remove blur */
-    /* backdrop-filter: blur(10px); */
     overflow: hidden;
+    background-clip: padding-box;
     cursor: pointer;
     transition: transform 0.2s, background-color 0.2s, color 0.2s, border-color 0.2s;
 }
@@ -365,11 +349,10 @@
 .btn-icon:focus,
 .btn-icon.focused {
     transform: scale(1.05);
-    /* Unified: Accent Bg, White Text */
     background: var(--jf-accent);
     color: white;
-    border-color: var(--jf-accent) !important;
-    outline: none;
+    border-color: white !important;
+    outline: none !important;
 }
 
 .details-overview {
@@ -396,17 +379,15 @@
 
 /* Rich Metadata */
 .details-rich-meta {
-    margin-top: 10px;
-    margin-bottom: 50px;
-    margin-left: 60px;
-    margin-right: 60px;
+    margin: 10px 60px 50px 60px;
     padding: 0px 20px;
-    /* Internal padding */
     border: 2px solid transparent;
-    /* Focus border placeholder */
     border-radius: var(--jf-border-radius);
-    transition: border-color 0.2s, background-color 0.2s;
+    -webkit-border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    background-clip: padding-box;
 }
+
 
 .details-rich-meta:focus,
 .details-rich-meta.active-table,
@@ -449,22 +430,26 @@
     margin-right: 8px;
     /* Replacement for gap */
     background: transparent;
-    border: none;
+    border: 2px solid transparent;
+    /* Added base border to prevent layout jump */
+    border-radius: 4px;
+    background-clip: padding-box;
     color: var(--jf-text-primary);
     font-size: 1.1rem;
-    padding: 0;
+    padding: 2px 6px;
     cursor: pointer;
     text-decoration: none;
     opacity: 0.9;
-    transition: opacity 0.2s, color 0.2s;
+    transition: opacity 0.2s, color 0.2s, border-color 0.2s;
 }
+
 
 .meta-chip:hover,
 .meta-chip:focus,
 .meta-chip.focused {
     color: var(--jf-accent);
     opacity: 1;
-    outline: none;
+    outline: none !important;
     text-decoration: underline;
 }
 
@@ -485,13 +470,14 @@
     background: rgba(40, 40, 40, 0.8);
     border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 25px;
+    -webkit-border-radius: 25px;
+    overflow: hidden;
+    background-clip: padding-box;
     color: var(--jf-text-primary);
     font-size: 1.3rem;
     font-weight: 600;
     padding: 12px 32px;
-    cursor: pointer;
     display: inline-block;
-    transition: all 0.2s ease;
 }
 
 .see-more-btn:hover {
@@ -502,9 +488,9 @@
 .see-more-btn:focus,
 .see-more-btn.focused {
     background: var(--jf-accent);
-    border-color: var(--jf-accent);
+    border-color: white;
     color: white;
-    outline: none;
+    outline: none !important;
     transform: scale(1.05);
 }
 
@@ -539,16 +525,17 @@
     display: flex;
     flex-direction: column;
     background: var(--jf-card-bg);
-    border: none;
+    border: 4px solid transparent;
+    /* Added base border to prevent jump */
     border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
     padding: 0;
     cursor: pointer;
     text-align: left;
     overflow: hidden;
-    /* Optimize transition */
-    transition: transform 0.2s, background-color 0.2s;
-    /* Removed box-shadow */
+    background-clip: padding-box;
 }
+
 
 .episode-card:last-child {
     margin-bottom: 0;
@@ -558,8 +545,8 @@
 .episode-card.focused {
     transform: scale(1.05);
     background: var(--jf-card-bg-hover);
-    /* box-shadow: var(--jf-shadow-lg); REMOVED expensive shadow */
-    outline: 4px solid var(--jf-accent);
+    outline: none !important;
+    border: 4px solid white;
     z-index: 10;
 }
 
@@ -674,8 +661,10 @@
 .btn-icon-text {
     height: 56px;
     border-radius: 28px;
+    -webkit-border-radius: 28px;
+    overflow: hidden;
+    background-clip: padding-box;
     background: rgba(40, 40, 40, 0.8);
-    /* Opaque */
     border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
@@ -683,9 +672,7 @@
     color: var(--jf-text-primary);
     font-size: 1.2rem;
     font-weight: 600;
-    cursor: pointer;
     transition: all 0.2s ease;
-    /* No blur */
 }
 
 .btn-icon-text .icon {
@@ -703,10 +690,9 @@
 .btn-icon-text.focused {
     background: var(--jf-accent);
     color: white;
-    border-color: var(--jf-accent);
+    border-color: white;
     transform: scale(1.05);
-    outline: none;
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    outline: none !important;
 }
 
 .btn-icon-text.active .icon svg {

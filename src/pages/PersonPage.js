@@ -10,8 +10,6 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { eventBus } from '../core/EventBus.js';
-import CardRenderer from '../utils/CardRenderer.js';
 import { imageService } from '../utils/ImageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 

@@ -56,14 +56,12 @@ body {
     outline: none;
 }
 
-/* Custom focus indicator for TV navigation */
-/* Custom focus indicator for TV navigation */
+/* Custom focus indicator for TV navigation is handled per-component for rounded corners */
 .focusable:focus,
 .focusable.focused,
 [tabindex]:focus,
 [tabindex].focused {
-    outline: 3px solid var(--jf-accent);
-    outline-offset: 2px;
+    outline: none !important;
 }
 
 /* ============================================================================
@@ -378,6 +376,5 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.6);
     z-index: 2;
 }
