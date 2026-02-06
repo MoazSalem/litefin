@@ -47,6 +47,35 @@ body {
     color: var(--jf-text-primary);
 }
 
+/* Tizen AVPlayer Transparency Mode
+   When the player is active, we need body and #app to be transparent
+   so the hardware video plane (which renders BEHIND HTML) is visible. */
+body.player-active {
+    background-color: transparent !important;
+}
+
+body.player-active #app {
+    background-color: transparent !important;
+}
+
+/* Also make html, .page, and page-container transparent for AVPlayer */
+body.player-active,
+html.player-active {
+    background-color: transparent !important;
+}
+
+body.player-active .page {
+    background: transparent !important;
+}
+
+body.player-active #page-container {
+    background: transparent !important;
+}
+
+body.player-active #sidebar-container {
+    display: none !important;
+}
+
 /* ============================================================================
    Focus Management
    ============================================================================ */

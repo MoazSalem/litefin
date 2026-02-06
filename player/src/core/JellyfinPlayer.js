@@ -180,6 +180,10 @@ export class JellyfinPlayer extends EventEmitter {
                 throw new Error('Media source not found');
             }
 
+            if (playbackInfo.PlaySessionId) {
+                mediaSource.PlaySessionId = playbackInfo.PlaySessionId;
+            }
+
             this._currentMediaSource = mediaSource;
             this._currentItem = options.item || { Id: options.itemId };
 

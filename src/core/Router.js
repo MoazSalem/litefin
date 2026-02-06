@@ -98,6 +98,9 @@ class Router {
             state.set('router:pageState', pageState);
         }
 
+        // Track this navigation so _onHashChange knows it was expected
+        this._lastNavigatePath = path;
+
         if (replace) {
             // Remove the current entry from internal history so the next one replaces it
             this._history.pop();
@@ -117,16 +120,20 @@ class Router {
             // Remove current page from history
             this._history.pop();
 
-            // Get previous entry (now at top of stack)
-            const previousEntry = this._history.pop();
+            // PEEK the previous entry (it stays in history)
+            const previousEntry = this._history[this._history.length - 1];
 
-            // Mark as back navigation and store pending state
-            this._isBackNavigation = true;
+            // Store pending state for restoration
             this._pendingRestoreState = previousEntry ? previousEntry.state : null;
 
-            // Navigate to previous path
+            // Navigate to previous path using REPLACE
             const previousPath = previousEntry ? previousEntry.path : '/';
-            this.navigate(previousPath);
+
+            // Track this navigation so _onHashChange knows it was expected  
+            this._lastNavigatePath = previousPath;
+
+            // Use window.location.replace to change hash without triggering push
+            window.location.replace(`#${previousPath}`);
             return true;
         }
 
@@ -165,6 +172,9 @@ class Router {
     _onHashChange() {
         const path = this.getCurrentPath();
 
+        // Clear expected navigation tracking (used to detect unexpected hash changes)
+        this._lastNavigatePath = null;
+
         console.log(`Router: Navigating to "${path}"`);
 
         // Find matching route
@@ -196,9 +206,18 @@ class Router {
                 }
 
                 // Add to history as an object with path and state
-                this._history.push({ path: path, state: null });
-                if (this._history.length > this._maxHistory) {
-                    this._history.shift();
+                // Skip if: back navigation via replace (path already at top)
+                const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
+
+                if (this._isBackNavigation) {
+                    // Clear the flag and skip the push
+                    this._isBackNavigation = false;
+                } else if (path !== topPath) {
+                    // Only push if path is different from top of history
+                    this._history.push({ path: path, state: null });
+                    if (this._history.length > this._maxHistory) {
+                        this._history.shift();
+                    }
                 }
 
                 // Create new page instance
@@ -243,6 +262,9 @@ class Router {
 
 // Export singleton instance
 export const router = new Router();
+
+// Expose router on window for components that can't import (e.g., OSD IIFE)
+window.router = router;
 
 // Also export class for testing
 export default Router;

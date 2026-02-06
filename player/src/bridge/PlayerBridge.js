@@ -1,7 +1,7 @@
 /**
  * PlayerBridge - WebView ↔ Host Communication
  * 
- * Exposes player controls via window.JellyfinPlayer and handles
+ * Exposes player controls via window.JellyfinPlayerAPI and handles
  * postMessage communication with host apps (e.g., Litefin).
  * 
  * @module bridge/PlayerBridge
@@ -30,8 +30,10 @@ export class PlayerBridge {
      * Attach bridge to window and start listening for messages
      */
     attach() {
-        // Expose API on window for host app access
-        window.JellyfinPlayer = this._createApi();
+        // Expose instance API on window for host app access
+        // NOTE: We use a DIFFERENT name than window.JellyfinPlayer to avoid
+        // overwriting the library reference, which is needed to call init() again.
+        window.JellyfinPlayerAPI = this._createApi();
 
         // Forward player events to host
         this._setupEventForwarding();
@@ -39,7 +41,7 @@ export class PlayerBridge {
         // Listen for commands from host
         this._cleanupListener = listenToHost(this._handleHostMessage.bind(this));
 
-        debug.log('[PlayerBridge] Attached to window.JellyfinPlayer');
+        debug.log('[PlayerBridge] Attached to window.JellyfinPlayerAPI');
 
         // Notify host that player is ready
         postToHost('ready', { version: '0.1.0' });
@@ -322,7 +324,7 @@ export class PlayerBridge {
 
         debug.log('[PlayerBridge] Received command:', command, params);
 
-        const api = window.JellyfinPlayer;
+        const api = window.JellyfinPlayerAPI;
         if (!api) return;
 
         try {
@@ -396,6 +398,6 @@ export class PlayerBridge {
             this._cleanupListener = null;
         }
 
-        delete window.JellyfinPlayer;
+        delete window.JellyfinPlayerAPI;
     }
 }

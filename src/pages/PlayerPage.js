@@ -34,6 +34,9 @@ class PlayerPage extends Page {
 
         // OSD controller reference
         this._osd = null;
+
+        // Track reporting state
+        this._hasReportedStart = false;
     }
 
     render() {
@@ -88,6 +91,11 @@ class PlayerPage extends Page {
             // Show loading
             this._showLoading(true);
 
+            // Enable Tizen AVPlayer transparency mode
+            // This makes body/app transparent so hardware video plane is visible
+            document.body.classList.add('player-active');
+            document.documentElement.classList.add('player-active');
+
             // Load item details
             this._item = await api.getItem(itemId);
             this.title = this._item.Name;
@@ -119,20 +127,36 @@ class PlayerPage extends Page {
         // Get the container element
         const container = this.$('#player-container');
 
+        // Debug: Log the state of window.JellyfinPlayer
+        console.log('[PlayerPage] _initPlayer called');
+        console.log('[PlayerPage] window.JellyfinPlayer exists:', !!window.JellyfinPlayer);
+        console.log('[PlayerPage] window.JellyfinPlayer.default exists:', !!window.JellyfinPlayer?.default);
+        console.log('[PlayerPage] window.JellyfinPlayer type:', typeof window.JellyfinPlayer);
+        if (window.JellyfinPlayer) {
+            console.log('[PlayerPage] window.JellyfinPlayer.init exists:', typeof window.JellyfinPlayer.init);
+            console.log('[PlayerPage] window.JellyfinPlayer keys:', Object.keys(window.JellyfinPlayer).join(', '));
+        }
+
         // Check if JellyfinPlayer is available (loaded from jellyfin-player.min.js)
         // Handle UMD bundle potentially having .default
         const playerLib = window.JellyfinPlayer?.default || window.JellyfinPlayer;
 
         if (!playerLib || typeof playerLib.init !== 'function') {
+            console.error('[PlayerPage] playerLib validation failed:', {
+                playerLib: !!playerLib,
+                initType: typeof playerLib?.init
+            });
             throw new Error('JellyfinPlayer library not loaded correctly');
         }
 
+        console.log('[PlayerPage] Calling playerLib.init...');
         this._player = playerLib.init({
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
             useTizenPlayer: this._isTizen()
         });
+        console.log('[PlayerPage] Player initialized:', !!this._player);
 
         // Listen for player events
         this._player.on('ready', () => this._onPlayerReady());
@@ -211,6 +235,14 @@ class PlayerPage extends Page {
                 player: this._player,
                 item: this._item
             });
+
+            // Pass title manually since OSD looks for it in URL
+            const titleEl = document.getElementById('osdTitle');
+            if (titleEl && this._item.Name) {
+                titleEl.textContent = this._item.Name;
+            }
+        } else {
+            console.warn('[PlayerPage] PlayerOSD global object NOT found');
         }
     }
 
@@ -234,19 +266,39 @@ class PlayerPage extends Page {
     _onPlaying() {
         console.log('[PlayerPage] Playing');
         eventBus.emit('player:playing', { item: this._item });
+
+        // Report progress (Start/Unpause)
+        // If we haven't reported start yet, do it now
+        if (!this._hasReportedStart) {
+            this._reportPlaybackStart();
+            this._hasReportedStart = true;
+        } else {
+            this._reportPlaybackProgress();
+        }
     }
 
     _onPaused() {
         console.log('[PlayerPage] Paused');
         eventBus.emit('player:paused', { item: this._item });
+
+        // Report paused state
+        this._reportPlaybackProgress(true);
     }
 
     _onEnded() {
-        console.log('[PlayerPage] Ended');
+        console.log('[PlayerPage] Ended event received');
 
-        // Report playback stopped
+        // If we're already exiting (e.g., user pressed back which called stop()),
+        // don't call router.back() again - _stopAndExit already handles navigation
+        if (this._isExiting) {
+            console.log('[PlayerPage] Already exiting, skipping duplicate navigation');
+            eventBus.emit('player:ended', { item: this._item });
+            return;
+        }
+
+        // Natural end of playback - report and navigate back
+        this._isExiting = true;
         this._reportPlaybackStopped().then(() => {
-            // Navigate back
             router.back();
         });
 
@@ -259,7 +311,64 @@ class PlayerPage extends Page {
     }
 
     _onTimeUpdate(positionTicks) {
-        // Report progress periodically (handled by player internally)
+        // Report progress periodically (every 10 seconds approx)
+        const now = Date.now();
+        if (!this._lastReportTime || (now - this._lastReportTime > 10000)) {
+            this._reportPlaybackProgress();
+            this._lastReportTime = now;
+        }
+    }
+
+    async _reportPlaybackStart() {
+        if (!this._player || !this._item) return;
+
+        try {
+            const mediaSource = this._player.getCurrentMediaSource();
+            const playerState = this._getPlayerState();
+
+            const info = {
+                ItemId: this._item.Id,
+                PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
+                MediaSourceId: mediaSource?.Id,
+                ...playerState
+            };
+
+            await api.reportPlaybackStart(info);
+        } catch (error) {
+            console.warn('[PlayerPage] Failed to report playback start:', error);
+        }
+    }
+
+    async _reportPlaybackProgress(isPaused = false) {
+        if (!this._player || !this._item) return;
+
+        try {
+            const mediaSource = this._player.getCurrentMediaSource();
+            const playerState = this._getPlayerState();
+
+            const info = {
+                ItemId: this._item.Id,
+                PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
+                MediaSourceId: mediaSource?.Id,
+                ...playerState,
+                IsPaused: isPaused,
+                EventName: isPaused ? 'Pause' : 'TimeUpdate'
+            };
+
+            await api.reportPlaybackProgress(info);
+        } catch (error) {
+            console.warn('[PlayerPage] Failed to report progress:', error);
+        }
+    }
+
+    _getPlayerState() {
+        return {
+            PositionTicks: this._player.getCurrentPositionTicks(),
+            VolumeLevel: this._player.getVolume ? this._player.getVolume() : 100,
+            IsMuted: this._player.isMuted ? this._player.isMuted() : false,
+            AudioStreamIndex: this._player.getCurrentAudioStreamIndex ? this._player.getCurrentAudioStreamIndex() : undefined,
+            SubtitleStreamIndex: this._player.getCurrentSubtitleStreamIndex ? this._player.getCurrentSubtitleStreamIndex() : undefined
+        };
     }
 
     // ========================================================================
@@ -358,18 +467,28 @@ class PlayerPage extends Page {
     // ========================================================================
 
     onBack() {
+        console.log('[PlayerPage] onBack() called');
+
         // If OSD is showing a menu, close it first
         if (this._osd?.isMenuOpen?.()) {
+            console.log('[PlayerPage] OSD menu is open, closing menu');
             this._osd.closeMenu();
             return true;
         }
 
+        console.log('[PlayerPage] No menu open, calling _stopAndExit()');
         // Stop playback and go back
         this._stopAndExit();
         return true;
     }
 
     async _stopAndExit() {
+        // Prevent multiple calls
+        if (this._isExiting) {
+            return;
+        }
+        this._isExiting = true;
+
         try {
             // Stop the player
             if (this._player?.stop) {
@@ -391,22 +510,32 @@ class PlayerPage extends Page {
     // ========================================================================
 
     destroy() {
-        // Stop playback
-        if (this._player?.stop) {
-            this._player.stop();
+        console.log('[PlayerPage] destroy() called');
+
+        // Destroy player (this also calls stop internally)
+        if (this._player?.destroy) {
+            console.log('[PlayerPage] Destroying player instance');
+            this._player.destroy();
         }
+        this._player = null;
 
         // Clean up focus sections
         focusManager.unregister('player-error');
 
         // Clean up OSD
         if (this._osd?.destroy) {
+            console.log('[PlayerPage] Destroying OSD');
             this._osd.destroy();
         }
 
         // Remove global reference
         window.playerInstance = null;
 
+        // Disable Tizen AVPlayer transparency mode
+        document.body.classList.remove('player-active');
+        document.documentElement.classList.remove('player-active');
+
+        console.log('[PlayerPage] destroy() complete');
         super.destroy();
     }
 }

@@ -17,7 +17,10 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: #000;
+    /* On Tizen, AVPlayer renders on a hardware plane BEHIND HTML.
+       We must use a transparent background so the video is visible.
+       For web/browser fallback, the <video> element itself has a black bg. */
+    background: transparent;
     z-index: 2000;
     /* Above sidebar (1000) */
 }
@@ -32,7 +35,8 @@
     left: 0;
     width: 100%;
     height: 100%;
-    background: #000;
+    /* Transparent to allow Tizen AVPlayer video to show through */
+    background: transparent;
 }
 
 .player-container video {

@@ -13,6 +13,7 @@ import { eventBus } from './core/EventBus.js';
 import { auth } from './api/index.js';
 import { layoutManager } from './ui/LayoutManager.js';
 import { debugOverlay } from './ui/DebugOverlay.js';
+import './player/jellyfin-player-osd.js'; // Import OSD to include in bundle
 
 // Import styles
 import './styles/base.css';

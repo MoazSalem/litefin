@@ -77,15 +77,8 @@ export class TizenAVPlayer {
             // Use LETTER_BOX to preserve aspect ratio
             this._avplay.setDisplayMethod('PLAYER_DISPLAY_MODE_LETTER_BOX');
 
-            // Explicitly show the window (needed on some Tizen versions for AVPlay)
-            try {
-                if (window.tizen && window.tizen.tvwindow) {
-                    window.tizen.tvwindow.show(
-                        () => debug.log('[TizenAVPlayer] Window shown'),
-                        (e) => debug.error('[TizenAVPlayer] Window show failed:', e)
-                    );
-                }
-            } catch (ignore) { }
+            // NOTE: Do NOT call tizen.tvwindow.show() here. That API is for TV tuner/HDMI input,
+            // not for AVPlay. Calling it can cause the video plane to render above HTML elements.
 
         } catch (e) {
             debug.error('[TizenAVPlayer] Failed to set display:', e);

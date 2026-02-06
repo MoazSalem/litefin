@@ -435,9 +435,12 @@
         const isLeftRight = [37, 39].includes(e.keyCode);
 
         // Back key: If OSD visible, hide it. If hidden, exit player.
+        // Stop propagation to prevent TizenAdapter/App.js from ALSO handling back
         if (isBackKey) {
-            executeAction('back');
             e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation(); // Prevent other keydown listeners on document
+            executeAction('back');
             return;
         }
 
@@ -585,14 +588,24 @@
                     hide();
                 } else {
                     if (player.stop) player.stop();
-                    history.back();
+                    // Use app router instead of browser history to maintain history stack
+                    if (window.router && window.router.back) {
+                        window.router.back();
+                    } else {
+                        history.back();
+                    }
                 }
                 break;
 
             case 'exit':
                 // Always exit
                 if (player.stop) player.stop();
-                history.back();
+                // Use app router instead of browser history to maintain history stack
+                if (window.router && window.router.back) {
+                    window.router.back();
+                } else {
+                    history.back();
+                }
                 break;
 
             case 'togglePlay':
