@@ -234,6 +234,8 @@ body {
 @import 'sidebar.css';
 @import 'library.css';
 @import 'library_rows.css';
+@import 'player-page.css';
+@import 'player-osd.css';
 
 /* ============================================================================
    Typography

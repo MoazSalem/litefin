@@ -50,11 +50,25 @@ class PlayerPage extends Page {
                     <div class="loading-text">Loading...</div>
                 </div>
 
-                <!-- Error Overlay -->
+                <!-- Error Overlay (Redesigned for TV) -->
                 <div class="player-error hidden" id="player-error">
-                    <div class="error-icon">⚠</div>
-                    <div class="error-message"></div>
-                    <button class="btn btn-primary" id="error-back-btn">Go Back</button>
+                    <div class="error-panel glass-panel">
+                        <div class="error-content">
+                            <div class="error-icon-container">
+                                <svg width="50" height="50" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <circle cx="12" cy="12" r="10"></circle>
+                                    <line x1="12" y1="8" x2="12" y2="10"></line>
+                                    <line x1="12" y1="12" x2="12" y2="16"></line>
+                                </svg>
+                            </div>
+                            <h2 class="error-title">Playback Error</h2>
+                            <p class="error-message"></p>
+                        </div>
+                        <div class="error-actions">
+                            <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
+                            <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- OSD Overlay (controlled by jellyfin-player-osd.js) -->
@@ -106,13 +120,15 @@ class PlayerPage extends Page {
         const container = this.$('#player-container');
 
         // Check if JellyfinPlayer is available (loaded from jellyfin-player.min.js)
-        if (typeof window.JellyfinPlayer === 'undefined') {
-            throw new Error('JellyfinPlayer not loaded');
+        // Handle UMD bundle potentially having .default
+        const playerLib = window.JellyfinPlayer?.default || window.JellyfinPlayer;
+
+        if (!playerLib || typeof playerLib.init !== 'function') {
+            throw new Error('JellyfinPlayer library not loaded correctly');
         }
 
-        // Initialize the player
-        this._player = window.JellyfinPlayer.init({
-            container: container,
+        this._player = playerLib.init({
+            container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
             useTizenPlayer: this._isTizen()
@@ -290,12 +306,56 @@ class PlayerPage extends Page {
                 messageEl.textContent = message;
             }
 
-            // Focus the back button
+            // Bind buttons
+            const retryBtn = this.$('#error-retry-btn');
             const backBtn = this.$('#error-back-btn');
+
+            if (retryBtn) {
+                retryBtn.onclick = () => this._retryPlayback();
+            }
+
             if (backBtn) {
                 backBtn.onclick = () => router.back();
-                focusManager.focusElement(backBtn);
             }
+
+            // Register Focus Section
+            focusManager.register('player-error', errorEl.querySelector('.error-actions'), {
+                orientation: 'horizontal',
+                enterTo: 'last-focused'
+            });
+
+            // Focus retry button by default
+            focusManager.setActiveSection('player-error');
+            focusManager.focusElement(retryBtn || backBtn);
+        }
+    }
+
+    /**
+     * Attempt to restart playback after an error
+     */
+    async _retryPlayback() {
+        // Hide error and unregister focus
+        const errorEl = this.$('#player-error');
+        if (errorEl) {
+            errorEl.classList.add('hidden');
+            focusManager.unregister('player-error');
+        }
+
+        try {
+            this._showLoading(true);
+
+            // Re-initialize if player instance was lost or in bad state
+            if (!this._player || this._player.isDestroyed) {
+                await this._initPlayer();
+            }
+
+            // Restart playback
+            await this._startPlayback();
+
+            this._showLoading(false);
+        } catch (error) {
+            console.error('[PlayerPage] Retry failed:', error);
+            this._showError(error.message || 'Retry failed. Check your connection.');
         }
     }
 
@@ -356,6 +416,9 @@ class PlayerPage extends Page {
         if (this._player?.stop) {
             this._player.stop();
         }
+
+        // Clean up focus sections
+        focusManager.unregister('player-error');
 
         // Clean up OSD
         if (this._osd?.destroy) {

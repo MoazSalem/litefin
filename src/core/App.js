@@ -157,7 +157,7 @@ class App {
 
         // Toggle sidebar visibility based on route
         eventBus.on('router:navigate', ({ path }) => {
-            if (path === '/login') {
+            if (path === '/login' || path.startsWith('/player')) {
                 document.body.classList.add('no-sidebar');
                 if (this.sidebar) this.sidebar.setMode('hidden');
             } else {

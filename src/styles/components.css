@@ -27,6 +27,7 @@
     background: var(--jf-accent-hover);
     border-color: var(--jf-focus-border-color);
     outline: none;
+    color: #FFF;
 }
 
 .btn-secondary {

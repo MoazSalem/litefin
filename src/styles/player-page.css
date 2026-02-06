@@ -18,7 +18,8 @@
     right: 0;
     bottom: 0;
     background: #000;
-    z-index: 1000;
+    z-index: 2000;
+    /* Above sidebar (1000) */
 }
 
 /* ==========================================================================
@@ -99,31 +100,136 @@
     right: 0;
     bottom: 0;
     display: flex;
-    flex-direction: column;
     justify-content: center;
     align-items: center;
     background: rgba(0, 0, 0, 0.9);
-    z-index: 100;
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
-}
-
-.player-error.hidden {
+    z-index: 2100;
+    /* Above player container */
     opacity: 0;
+    transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }
 
-.player-error .error-icon {
-    font-size: 64px;
-    margin-bottom: 24px;
+.player-error:not(.hidden) {
+    opacity: 1;
+    pointer-events: auto;
 }
 
-.player-error .error-message {
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 18px;
+/* Glassmorphism Utility */
+.glass-panel {
+    background: rgba(40, 40, 40, 0.5) !important;
+    backdrop-filter: blur(30px) !important;
+    -webkit-backdrop-filter: blur(30px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Glass Panel for Error */
+.error-panel {
+    width: 600px;
+    padding: 60px;
+    border-radius: 40px;
+    background: rgba(40, 40, 40, 0.5);
+    backdrop-filter: blur(30px);
+    -webkit-backdrop-filter: blur(30px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     text-align: center;
-    max-width: 400px;
-    margin-bottom: 32px;
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    transform: translateY(20px);
+    transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.player-error:not(.hidden) .error-panel {
+    transform: translateY(0);
+}
+
+.error-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+}
+
+.error-icon-container {
+    width: 100px;
+    height: 100px;
+    min-width: 100px;
+    min-height: 100px;
+    flex: 0 0 100px;
+    margin: 0 auto 32px auto;
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+    border-radius: 50%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.error-icon-container svg {
+    width: 50px !important;
+    height: 50px !important;
+    min-width: 50px;
+    min-height: 50px;
+    flex: none;
+}
+
+.error-title {
+    font-size: 42px;
+    font-weight: 700;
+    color: #fff;
+    margin-bottom: 16px;
+    letter-spacing: -0.5px;
+}
+
+.error-message {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 22px;
+    line-height: 1.5;
+    margin-bottom: 48px;
+    max-width: 100%;
+}
+
+.error-actions {
+    display: flex;
+    width: 100%;
+    justify-content: center;
+}
+
+.error-actions .btn {
+    flex: 1;
+    height: 72px;
+    border-radius: 36px;
+    font-size: 24px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 10px;
+    /* Use margin instead of gap for Tizen compatibility */
+    transition: all 0.2s ease;
+}
+
+.error-actions .btn-primary {
+    background: #fff;
+    color: #000;
+}
+
+.error-actions .btn-primary:focus {
+    background: #6B5CE7;
+    color: #fff;
+    transform: scale(1.05);
+}
+
+.error-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.1);
+    color: #fff;
+}
+
+.error-actions .btn-secondary:focus {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.05);
 }
 
 /* ==========================================================================
