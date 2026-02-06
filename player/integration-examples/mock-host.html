@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Jellyfin Player - Integration Mock</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #222;
+            color: #ccc;
+            margin: 0;
+            display: flex;
+            height: 100vh;
+        }
+
+        #host-panel {
+            width: 350px;
+            background: #333;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            border-right: 1px solid #444;
+            overflow-y: auto;
+        }
+
+        #webview-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+        }
+
+        iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+        }
+
+        h2,
+        h3 {
+            color: #fff;
+            margin: 0 0 10px 0;
+        }
+
+        .control-group {
+            background: #2a2a2a;
+            padding: 15px;
+            border-radius: 6px;
+        }
+
+        button {
+            background: #00a4dc;
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            width: 100%;
+            margin-bottom: 5px;
+        }
+
+        button:hover {
+            background: #0091c7;
+        }
+
+        input {
+            width: 100%;
+            background: #444;
+            border: 1px solid #555;
+            color: white;
+            padding: 5px;
+            margin-bottom: 5px;
+            box-sizing: border-box;
+        }
+
+        #log {
+            background: #111;
+            color: #0f0;
+            padding: 10px;
+            font-family: monospace;
+            font-size: 12px;
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #444;
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- HOST APP SIMULATION -->
+    <div id="host-panel">
+        <h2>Host App (Litefin)</h2>
+
+        <div class="control-group">
+            <h3>Lifecycle</h3>
+            <button onclick="loadPlayer()">Load Player</button>
+            <button onclick="loadSettings()">Load Settings</button>
+        </div>
+
+        <div class="control-group">
+            <h3>Simulate Playback</h3>
+            <input type="text" id="serverId" placeholder="Server URL" value="https://demo.jellyfin.org">
+            <input type="text" id="itemId" placeholder="Item ID" value="ExampleItemId">
+            <input type="text" id="token" placeholder="Auth Token" value="ExampleToken">
+            <button onclick="testConnection()">Test Connection (CORS Check)</button>
+            <button onclick="sendPlayCommand()">Send Play Command</button>
+        </div>
+
+        <div class="control-group">
+            <h3>Bridge Log</h3>
+            <div id="log"></div>
+            <button onclick="document.getElementById('log').innerHTML=''" style="margin-top:5px; background:#555">Clear
+                Log</button>
+        </div>
+    </div>
+
+    <!-- WEBVIEW SIMULATION -->
+    <div id="webview-container">
+        <!-- This iframe acts as the WebView -->
+        <iframe id="webview" src="about:blank"></iframe>
+    </div>
+
+    <script>
+        const webview = document.getElementById('webview');
+        const log = document.getElementById('log');
+
+        function logMsg(msg, type = 'info') {
+            const entry = document.createElement('div');
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            entry.style.color = type === 'in' ? '#ff80ed' : (type === 'out' ? '#00a4dc' : '#0f0');
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        // Helper to test if we can reach the server (CORS check)
+        async function testConnection() {
+            const serverId = document.getElementById('serverId').value;
+            logMsg(`Testing connection to ${serverId}...`, 'out');
+
+            try {
+                const start = Date.now();
+                // append /System/Info/Public to check open endpoint
+                const res = await fetch(`${serverId}/System/Info/Public`);
+                const duration = Date.now() - start;
+
+                if (res.ok) {
+                    logMsg(`Success! (${duration}ms) Server is reachable.`, 'in');
+                } else {
+                    logMsg(`Failed! Status: ${res.status}`, 'in');
+                }
+            } catch (e) {
+                logMsg(`Error: ${e.message}. Likely CORS blocked.`, 'in');
+                console.error(e);
+            }
+        }
+
+        // 1. Load Player Page
+        function loadPlayer() {
+            logMsg('Loading player.html...', 'out');
+            // In real app: webview.loadUrl(...)
+            // Here we point iframe to local file
+            webview.src = '../dist/player.html';
+        }
+
+        // 2. Load Settings Page
+        function loadSettings() {
+            logMsg('Loading settings.html...', 'out');
+            webview.src = '../dist/settings.html';
+        }
+
+        // 3. Send Play Command (Simulate init + play)
+        function sendPlayCommand() {
+            const serverId = document.getElementById('serverId').value;
+            const itemId = document.getElementById('itemId').value;
+            const token = document.getElementById('token').value;
+
+            logMsg(`Sending PLAY: ${itemId}`, 'out');
+
+            // Post message to iframe
+            webview.contentWindow.postMessage({
+                command: 'play',
+                target: 'jellyfin-player',
+                serverUrl: serverId,
+                itemId: itemId,
+                authToken: token
+            }, '*');
+
+            // Also try direct JS injection simulation if supported
+            // webview.contentWindow.JellyfinPlayer.play(...)
+        }
+
+        // 4. Listen for Events from Player
+        window.addEventListener('message', (event) => {
+            // Filter own messages
+            if (event.source === window) return;
+
+            const data = event.data;
+            logMsg(`Received: ${JSON.stringify(data)}`, 'in');
+        });
+
+    </script>
+</body>
+
+</html>

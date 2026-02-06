@@ -1,0 +1,53 @@
+{
+  "name": "@jellyfin/player",
+  "version": "0.1.0",
+  "description": "Standalone Jellyfin video player with unified settings, supporting HTML5 and Tizen AVPlay backends",
+  "main": "dist/jellyfin-player.js",
+  "module": "src/index.js",
+  "files": [
+    "dist",
+    "html",
+    "src"
+  ],
+  "scripts": {
+    "build": "webpack --mode production",
+    "build:dev": "webpack --mode development",
+    "build:deploy": "webpack --mode development && copy dist\\jellyfin-player.js ..\\src\\player\\jellyfin-player.min.js",
+    "watch": "webpack --mode development --watch"
+  },
+  "keywords": [
+    "jellyfin",
+    "video-player",
+    "tizen",
+    "hls",
+    "media-player"
+  ],
+  "license": "GPL-2.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jellyfin/jellyfin-player.git"
+  },
+  "dependencies": {
+    "dompurify": "^3.0.0",
+    "hls.js": "^1.5.0",
+    "screenfull": "^5.2.0"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.24.0",
+    "@babel/preset-env": "^7.24.0",
+    "babel-loader": "^9.1.0",
+    "css-loader": "^6.10.0",
+    "css-minimizer-webpack-plugin": "^6.0.0",
+    "html-loader": "^5.0.0",
+    "html-webpack-plugin": "^5.6.0",
+    "mini-css-extract-plugin": "^2.8.0",
+    "sass": "^1.71.0",
+    "sass-loader": "^14.1.0",
+    "terser-webpack-plugin": "^5.3.0",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.0"
+  },
+  "browserslist": [
+    "Chrome >= 76"
+  ]
+}
