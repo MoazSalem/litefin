@@ -32,7 +32,8 @@ function getPlugins() {
             patterns: [
                 { from: 'src/config.xml', to: 'config.xml' },
                 { from: 'icon.png', to: 'icon.png' },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
+                { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+                { from: 'src/player', to: 'player', noErrorOnMissing: true }
             ]
         })
     ];
