@@ -50,48 +50,7 @@
    Loading State
    ========================================================================== */
 
-.player-loading {
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    align-items: center;
-    background: rgba(0, 0, 0, 0.8);
-    z-index: 100;
-    opacity: 1;
-    transition: opacity 0.3s ease-out;
-}
 
-.player-loading.hidden {
-    opacity: 0;
-    pointer-events: none;
-}
-
-.player-loading .loading-spinner {
-    width: 60px;
-    height: 60px;
-    border: 4px solid rgba(255, 255, 255, 0.2);
-    border-top-color: var(--accent-primary, #6B5CE7);
-    border-radius: 50%;
-    animation: spin 1s linear infinite;
-}
-
-.player-loading .loading-text {
-    margin-top: 16px;
-    color: rgba(255, 255, 255, 0.8);
-    font-size: 16px;
-    font-weight: 500;
-}
-
-@keyframes spin {
-    to {
-        transform: rotate(360deg);
-    }
-}
 
 /* ==========================================================================
    Error State
@@ -468,12 +427,6 @@
     }
 }
 
-/* Focus Ring for Remote Navigation */
-.player-page .osd-btn:focus {
-    box-shadow: 0 0 0 3px rgba(107, 92, 231, 0.5);
-}
-
 .player-page .progress-bar:focus {
-    box-shadow: 0 0 0 3px rgba(107, 92, 231, 0.5);
     border-radius: 5px;
 }

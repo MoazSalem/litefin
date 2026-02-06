@@ -47,11 +47,7 @@ class PlayerPage extends Page {
                     <!-- Video element will be injected by JellyfinPlayer -->
                 </div>
 
-                <!-- Loading Overlay -->
-                <div class="player-loading" id="player-loading">
-                    <div class="loading-spinner"></div>
-                    <div class="loading-text">Loading...</div>
-                </div>
+
 
                 <!-- Error Overlay (Redesigned for TV) -->
                 <div class="player-error hidden" id="player-error">
@@ -376,10 +372,7 @@ class PlayerPage extends Page {
     // ========================================================================
 
     _showLoading(show) {
-        const loadingEl = this.$('#player-loading');
-        if (loadingEl) {
-            loadingEl.classList.toggle('hidden', !show);
-        }
+        this.setLoading(show);
     }
 
     _showError(message) {

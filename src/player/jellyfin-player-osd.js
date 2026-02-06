@@ -123,24 +123,27 @@
     let trackMenuSubtitleMode = 'primary'; // 'primary' or 'secondary'
 
     // ========================================================================
-    // Material Design Icons
+    // Icons
     // ========================================================================
 
+    // Helper to create SVG icon
+    const createIcon = (path) => `<svg class="osd-icon" viewBox="0 0 24 24"><path d="${path}"/></svg>`;
+
     const ICONS = {
-        arrowBack: '<span class="material-icons">arrow_back</span>',
-        skipPrevious: '<span class="material-icons">skip_previous</span>',
-        skipNext: '<span class="material-icons">skip_next</span>',
-        fastRewind: '<span class="material-icons">fast_rewind</span>',
-        fastForward: '<span class="material-icons">fast_forward</span>',
-        play: '<span class="material-icons">play_arrow</span>',
-        pause: '<span class="material-icons">pause</span>',
-        closedCaption: '<span class="material-icons">closed_caption</span>',
-        audiotrack: '<span class="material-icons">audiotrack</span>',
-        settings: '<span class="material-icons">settings</span>',
-        favorite: '<span class="material-icons">favorite_border</span>',
-        favoriteFilled: '<span class="material-icons">favorite</span>',
-        sync: '<span class="material-icons">sync</span>',
-        check: '<span class="material-icons">check</span>'
+        arrowBack: createIcon('M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z'),
+        skipPrevious: createIcon('M6 6h2v12H6zm3.5 6l8.5 6V6z'),
+        skipNext: createIcon('M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z'),
+        fastRewind: createIcon('M11 18V6l-8.5 6 8.5 6zm.5-6l8.5 6V6l-8.5 6z'),
+        fastForward: createIcon('M4 18l8.5-6L4 6v12zm9-12v12l8.5-6L13 6z'),
+        play: createIcon('M8 5v14l11-7z'),
+        pause: createIcon('M6 19h4V5H6v14zm8-14v14h4V5h-4z'),
+        closedCaption: createIcon('M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z'),
+        audiotrack: createIcon('M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z'),
+        settings: createIcon('M19.14 12.94c0.04-0.3 0.06-0.61 0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14 0.23-0.41 0.12-0.61l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39 0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4 2.81c-0.04-0.24-0.24-0.41-0.48-0.41h-3.84c-0.24 0-0.43 0.17-0.47 0.41L9.25 5.35c-0.59 0.24-1.13 0.57-1.62 0.94L5.24 5.33c-0.22-0.08-0.47 0-0.59 0.22L2.74 8.87c-0.12 0.21-0.08 0.47 0.12 0.61l2.03 1.58c-0.05 0.3-0.07 0.63-0.07 0.94s0.02 0.64 0.07 0.94l-2.03 1.58c-0.18 0.14-0.23 0.41-0.12 0.61l1.92 3.32c0.12 0.22 0.37 0.29 0.59 0.22l2.39-0.96c0.5 0.38 1.03 0.7 1.62 0.94l0.36 2.54c0.05 0.24 0.24 0.41 0.48 0.41h3.84c0.24 0 0.43-0.17 0.47-0.41l0.36-2.54c0.59-0.24 1.13-0.56 1.62-0.94l2.39 0.96c0.22 0.08 0.47 0 0.59-0.22l1.92-3.32c0.12-0.22 0.07-0.47-0.12-0.61L19.14 12.94zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z'),
+        favorite: createIcon('M16.5 3c-1.74 0-3.41.81-4.5 2.09C10.91 3.81 9.24 3 7.5 3 4.42 3 2 5.42 2 8.5c0 3.78 3.4 6.86 8.55 11.54L12 21.35l1.45-1.32C18.6 15.36 22 12.28 22 8.5 22 5.42 19.58 3 16.5 3zm-4.4 15.55l-.1.1-.1-.1C7.14 14.24 4 11.39 4 8.5 4 6.5 5.5 5 7.5 5c1.54 0 3.04.99 3.57 2.36h1.87C13.46 5.99 14.96 5 16.5 5c2 0 3.5 1.5 3.5 3.5 0 2.89-3.14 5.74-7.9 10.05z'),
+        favoriteFilled: createIcon('M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z'),
+        sync: createIcon('M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z'),
+        check: createIcon('M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z')
     };
 
     // ========================================================================
@@ -155,8 +158,8 @@
         }
 
         Object.assign(CONFIG, options);
-        addMaterialIcons();
         render();
+        cacheFocusableElements(); // Cache DOM elements for fast focus updates
         bindEvents();
         startUpdates();
         hide();
@@ -196,14 +199,7 @@
         }
     }
 
-    function addMaterialIcons() {
-        if (!document.querySelector('link[href*="material-icons"]')) {
-            const link = document.createElement('link');
-            link.rel = 'stylesheet';
-            link.href = 'https://fonts.googleapis.com/icon?family=Material+Icons';
-            document.head.appendChild(link);
-        }
-    }
+
 
     // ========================================================================
     // Rendering - Tizen TV Layout
@@ -319,7 +315,8 @@
             posSlider.addEventListener('mouseup', () => isDraggingSeekbar = false);
         }
 
-        document.addEventListener('keydown', handleKeyDown);
+        // Use capture phase so OSD gets keys BEFORE TizenAdapter's bubbling listener
+        document.addEventListener('keydown', handleKeyDown, { capture: true });
         document.addEventListener('mousemove', handleActivity);
         document.addEventListener('touchstart', handleActivity);
     }
@@ -370,23 +367,35 @@
     let currentFocusRow = 1;
     let currentFocusIndex = 2; // Start on play button (index 2 in controls)
 
-    function getFocusableElements() {
+    // Cached DOM elements (populated after render)
+    let cachedHeaderRow = [];
+    let cachedControlsRow = [];
+    let cachedSeekbar = null;
+
+    /**
+     * Cache focusable elements after OSD is rendered.
+     * Called once after render() to avoid repeated DOM queries.
+     */
+    function cacheFocusableElements() {
         // Header row - just the back button
         const headerBackBtn = osdElement.querySelector('.osd-back-btn');
-        const headerRow = headerBackBtn ? [headerBackBtn] : [];
+        cachedHeaderRow = headerBackBtn ? [headerBackBtn] : [];
 
         // Get all buttons in controls row (left + right)
         const controlsLeft = Array.from(osdElement.querySelectorAll('.osd-controls-left .osd-btn'));
         const controlsRight = Array.from(osdElement.querySelectorAll('.osd-controls-right .osd-btn'));
-        const controlsRow = [...controlsLeft, ...controlsRight];
+        cachedControlsRow = [...controlsLeft, ...controlsRight];
 
         // The seekbar
-        const seekbar = osdElement.querySelector('.osd-slider');
+        cachedSeekbar = osdElement.querySelector('.osd-slider');
+    }
 
+    function getFocusableElements() {
+        // Return cached elements (no DOM queries)
         return {
-            headerRow,
-            controlsRow,
-            seekbar
+            headerRow: cachedHeaderRow,
+            controlsRow: cachedControlsRow,
+            seekbar: cachedSeekbar
         };
     }
 
@@ -466,7 +475,7 @@
                 // OSD visible + Enter/OK - activate current focused control
                 const { headerRow, controlsRow } = getFocusableElements();
                 if (currentFocusRow === 0 && headerRow[0]) {
-                    executeAction('back');
+                    executeAction('exit');
                 } else if (currentFocusRow === 1 && controlsRow[currentFocusIndex]) {
                     const action = controlsRow[currentFocusIndex].dataset.action;
                     if (action) executeAction(action);
@@ -479,6 +488,8 @@
                 executeAction('togglePlay');
             }
             e.preventDefault();
+            e.stopPropagation();
+            e.stopImmediatePropagation(); // Prevent TizenAdapter from also handling Enter
             return;
         }
 
@@ -1157,7 +1168,8 @@
     function destroy() {
         stopUpdates();
         if (autoHideTimer) clearTimeout(autoHideTimer);
-        document.removeEventListener('keydown', handleKeyDown);
+        // CRITICAL: Must match the capture phase used in addEventListener
+        document.removeEventListener('keydown', handleKeyDown, { capture: true });
         document.removeEventListener('mousemove', handleActivity);
         document.removeEventListener('touchstart', handleActivity);
         if (trackMenuOverlay) {
