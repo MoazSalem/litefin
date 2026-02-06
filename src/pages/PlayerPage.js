@@ -152,41 +152,20 @@ class PlayerPage extends Page {
     async _startPlayback() {
         const item = this._item;
 
-        // Build playback info
-        const playbackInfo = {
-            ItemId: item.Id,
-            StartTimeTicks: this._resumePosition,
-            MediaSourceId: item.MediaSources?.[0]?.Id || item.Id,
-            AutoOpenLiveStream: true,
-            PlayMethod: this._isTizen() ? 'DirectStream' : 'Transcode'
-        };
-
-        // Get the stream URL from the server
-        const playbackData = await api.getPlaybackInfo(item.Id, playbackInfo);
-
-        if (!playbackData.MediaSources?.length) {
-            throw new Error('No media sources available');
-        }
-
-        const mediaSource = playbackData.MediaSources[0];
-        const streamUrl = this._buildStreamUrl(mediaSource);
-
-        // Start playback
+        // Start playback using the player's internal logic
+        // This handles PlaybackInfo fetching, media source selection, and stream URL building
         await this._player.play({
-            url: streamUrl,
-            title: item.Name,
-            startPosition: this._resumePosition,
-            item: item,
-            mediaSource: mediaSource
+            itemId: item.Id,
+            userId: api.userId, // Required for playback info
+            startPositionTicks: this._resumePosition,
+            mediaSourceId: item.MediaSources?.[0]?.Id,
+            audioStreamIndex: undefined, // Let player select default
+            subtitleStreamIndex: undefined // Let player select default
         });
 
         // Report playback start to server
-        await api.reportPlaybackStart({
-            ItemId: item.Id,
-            MediaSourceId: mediaSource.Id,
-            PlaySessionId: playbackData.PlaySessionId,
-            PlayMethod: playbackInfo.PlayMethod
-        });
+        // Note: The player emits PLAYBACK_START event which could be used, 
+        // but for now we'll rely on the player's internal logic or add reporting here if needed.
 
         // Initialize OSD
         this._initOSD();
