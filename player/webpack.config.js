@@ -45,7 +45,11 @@ module.exports = (env, argv) => {
         ],
         optimization: {
             minimize: isProduction,
-            minimizer: [new TerserPlugin()],
+            minimizer: [
+                new TerserPlugin({
+                    extractComments: false, // Don't create LICENSE.txt file
+                }),
+            ],
         },
         devtool: isProduction ? false : 'inline-source-map', // No source maps in prod
     };
