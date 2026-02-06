@@ -11,7 +11,7 @@ module.exports = (env, argv) => {
     return {
         entry: './src/index.js',
         output: {
-            path: path.resolve(__dirname, 'dist'),
+            path: path.resolve(__dirname, '../src/player'),
             filename: isProduction ? 'jellyfin-player.min.js' : 'jellyfin-player.js',
             library: {
                 name: 'JellyfinPlayer',
@@ -19,7 +19,7 @@ module.exports = (env, argv) => {
                 export: 'default',
             },
             globalObject: 'this',
-            clean: true,
+            clean: false, // Don't clean src/player as it has OSD files
         },
         module: {
             rules: [

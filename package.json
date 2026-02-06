@@ -5,7 +5,8 @@
     "main": "src/index.js",
     "type": "module",
     "scripts": {
-        "build": "webpack --config webpack.config.cjs",
+        "build:player": "cd player && npm run build",
+        "build": "npm run build:player && webpack --config webpack.config.cjs",
         "build:es6": "webpack --config webpack.config.cjs --config-name es6",
         "build:normal": "webpack --config webpack.config.cjs --config-name normal",
         "build:legacy": "webpack --config webpack.config.cjs --config-name legacy",
