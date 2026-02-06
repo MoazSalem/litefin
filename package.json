@@ -13,10 +13,10 @@
         "dev": "webpack --config webpack.config.cjs --config-name normal-watch",
         "lint": "eslint src/",
         "clean": "rimraf dist/ *.wgt",
-        "package": "gulp buildPackage",
-        "package:es6": "gulp buildPackageES6",
-        "package:normal": "gulp buildPackageNormal",
-        "package:legacy": "gulp buildPackageLegacy"
+        "package": "npm run build:player && gulp buildPackage",
+        "package:es6": "npm run build:player && gulp buildPackageES6",
+        "package:normal": "npm run build:player && gulp buildPackageNormal",
+        "package:legacy": "npm run build:player && gulp buildPackageLegacy"
     },
     "keywords": [
         "jellyfin",
