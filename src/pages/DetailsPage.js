@@ -70,7 +70,7 @@ class DetailsPage extends Page {
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                     <span>Play</span>
                                 </button>
-                                <button class="btn btn-secondary resume-btn hidden" tabindex="0">
+                                <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                     <span>Resume</span>
                                 </button>
@@ -197,30 +197,29 @@ class DetailsPage extends Page {
         this.setLoading(true);
 
         try {
-            // 1. Fetch Item (Blocking) - minimal fields if possible, but we need overview/people
-            // Note: We request 'People' here, which is fine, usually fast.
+            // 1. Fetch Item (with People data)
             this._item = await api.getItem(this._itemId, { Fields: 'People' });
             this.title = this._item.Name;
 
-            // 2. Render Text Immediately (Instant Interaction)
+            // 2. Render all text content immediately
             this._renderHeroText();
-            this._setupFavoriteButton(); // New method
+            this._setupFavoriteButton();
             this._renderRichMetadata();
 
-            // 3. Load Images & Wait for Poster (Premium Feel)
-            // We wait for the poster to load so the page "pops" in fully formed.
+            // 3. Load Images (wait for poster to be ready)
             await this._loadImages();
 
-            // 4. Dismis Loading Overlay NOW
-            this.setLoading(false);
+            // 4. Load ALL secondary content (seasons, episodes, people, etc.)
+            // We wait for this so the navigation chain is fully built
+            await this._loadSecondaryContent();
 
-            // 5. Load Secondary Data (Async/Background)
-            this._loadSecondaryContent();
-
-            // Load similar items (except for seasons)
+            // 5. Load similar items (except for seasons)
             if (this._item.Type !== 'Season') {
-                this._loadSimilar();
+                await this._loadSimilar();
             }
+
+            // 6. FINALLY dismiss loading - page is now 100% ready and navigable
+            this.setLoading(false);
 
         } catch (error) {
             console.error('DetailsPage: Failed to load', error);
@@ -233,11 +232,12 @@ class DetailsPage extends Page {
         return new Promise((resolve) => {
             const item = this._item;
 
-            // Safety timeout: If image takes > 2s, show content anyway
+            // Safety timeout: If image takes > 800ms, show content anyway
+            // Reduced from 2s for faster page interaction
             const timeout = setTimeout(() => {
                 console.warn('DetailsPage: Poster load timed out, showing content');
                 resolve();
-            }, 2000);
+            }, 400);
 
             const onPosterReady = () => {
                 clearTimeout(timeout);
@@ -295,8 +295,55 @@ class DetailsPage extends Page {
             this._renderPeople();
         }
 
-        // Load Logo Last (Heavy asset)
+        // Load Logo (non-blocking, fire and forget)
         this._loadLogo();
+
+        // CRITICAL: Wait for DOM to render, then rebuild navigation chain
+        // This ensures visibility checks are accurate since DOM is fully updated
+        await new Promise((resolve) => {
+            requestAnimationFrame(() => {
+                this._rebuildNavigationChain();
+                resolve();
+            });
+        });
+    }
+
+    /**
+     * Rebuilds the entire navigation chain after all sections have been rendered.
+     * This ensures visibility checks are accurate since DOM is fully updated.
+     */
+    _rebuildNavigationChain() {
+        // Get all registered sections and rebuild their leaveUp/leaveDown links
+        const sectionOrder = [
+            'details-actions',
+            'details-see-more',
+            'details-rich-meta',
+            'collection-movies-section',
+            'collection-shows-section',
+            'details-next-up',
+            'details-seasons',
+            'details-episodes',
+            'details-people',
+            'details-similar'
+        ];
+
+        // For each section that exists, update its links
+        for (const sectionName of sectionOrder) {
+            const config = focusManager.getSectionConfig(sectionName);
+            if (!config) continue;
+
+            // Calculate correct up/down links based on current DOM state
+            const prev = this._getPreviousVisibleSection(sectionName);
+            const next = this._getNextVisibleSection(sectionName);
+
+            config.leaveUp = prev ? prev.targetName : null;
+            config.leaveDown = next ? next.targetName : null;
+
+            // Re-register with updated links
+            focusManager.register(sectionName, config.container, config);
+        }
+
+        console.log('[NAV] Navigation chain rebuilt after DOM ready');
     }
 
     async _loadCollectionItems() {
@@ -321,19 +368,22 @@ class DetailsPage extends Page {
             const hasMovies = movies.Items && movies.Items.length > 0;
             const hasShows = shows.Items && shows.Items.length > 0;
 
-            // Render Rows
+            // Determine what is ABOVE the collection rows (use dynamic helper)
+            const aboveCollection = this._getPreviousVisibleSection('collection-movies-section')?.targetName || 'details-rich-meta';
+
+            // Render Rows with correct UP linking
             if (hasMovies) {
-                this._renderCollectionRow('collection-movies-section', 'collection-movies-row', movies.Items);
+                this._renderCollectionRow('collection-movies-section', 'collection-movies-row', movies.Items, aboveCollection);
             }
             if (hasShows) {
-                this._renderCollectionRow('collection-shows-section', 'collection-shows-row', shows.Items);
+                // Shows row's UP goes to Movies (if exists) or to whatever is above collection
+                const showsUpTarget = hasMovies ? 'collection-movies-section' : aboveCollection;
+                this._renderCollectionRow('collection-shows-section', 'collection-shows-row', shows.Items, showsUpTarget);
             }
 
-            // Link Focus logic (Manual chaining for now, simplistic)
-            // Ideally we'd hook into the generic layout manager, but hardcoding the chain here works:
-            // RichMeta -> Movies -> Shows -> People
-
-            let lastSection = 'details-rich-meta';
+            // Link Focus chain (DOWN direction)
+            // Whatever is above -> Movies -> Shows -> Next section
+            let lastSection = aboveCollection;
 
             if (hasMovies) {
                 this._updateLeaveDown(lastSection, 'collection-movies-section');
@@ -345,10 +395,11 @@ class DetailsPage extends Page {
                 lastSection = 'collection-shows-section';
             }
 
-            // Link last collection row to whatever is next (usually People or Similar)
-            // But People logic runs after this? No, _renderPeople runs after.
-            // We just need to ensure the standard flow picks it up.
-            // For now, let's leave it open, and let _renderPeople link back up to us if it can find us.
+            // Link last collection row to whatever is next (People, Similar, etc.)
+            const nextSection = this._getNextVisibleSection(lastSection);
+            if (nextSection) {
+                this._updateLeaveDown(lastSection, nextSection.targetName);
+            }
 
         } catch (e) {
             console.warn('DetailsPage: Failed to load collection items', e);
@@ -725,9 +776,13 @@ class DetailsPage extends Page {
         const watchedBtn = this.$('.watched-btn');
 
         // Reset state first
-        if (playBtn) playBtn.classList.remove('hidden');
+        if (playBtn) {
+            playBtn.classList.remove('hidden');
+            playBtn.setAttribute('tabindex', '0'); // Make focusable
+        }
         if (resumeBtn) {
             resumeBtn.classList.add('hidden');
+            resumeBtn.setAttribute('tabindex', '-1'); // Remove from focus order when hidden
             resumeBtn.classList.remove('btn-primary');
             resumeBtn.classList.add('btn-secondary');
         }
@@ -735,19 +790,20 @@ class DetailsPage extends Page {
         // Resume Logic
         if (userData.PlaybackPositionTicks > 0) {
             // If resume point exists: Hide Play, Show Resume as Primary
-            if (playBtn) playBtn.classList.add('hidden');
+            if (playBtn) {
+                playBtn.classList.add('hidden');
+                playBtn.setAttribute('tabindex', '-1'); // Remove from focus order when hidden
+            }
 
             if (resumeBtn) {
                 resumeBtn.classList.remove('hidden');
+                resumeBtn.setAttribute('tabindex', '0'); // Make focusable when visible
                 // Upgrade to primary style
                 resumeBtn.classList.remove('btn-secondary');
                 resumeBtn.classList.add('btn-primary');
 
                 const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
                 resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
-
-                // Ensure focus logic knows about this swap? 
-                // FocusManager should handle it as long as the visible one is focusable.
 
                 // CRITICAL: If we hid the Play button (which probably had focus or would get it),
                 // we must manually force focus to the Resume button so focus isn't lost.
@@ -1123,14 +1179,26 @@ class DetailsPage extends Page {
     }
 
     _getNextVisibleSection(currentSectionName) {
+        // Helper to check if a section exists and is not hidden
+        const isNotHidden = (id) => {
+            const el = this.$(id);
+            return el && !el.classList.contains('hidden');
+        };
+
         const sections = [
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style.display !== 'none' },
-            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta')?.innerHTML !== '' },
-            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section')?.classList.contains('hidden') },
-            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section')?.classList.contains('hidden') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section')?.classList.contains('hidden') },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section')?.classList.contains('hidden') },
-            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section')?.classList.contains('hidden') }
+            // Actions is always first and visible - needed so we can find what's after it
+            { name: 'details-actions', elementId: '#actions', isVisible: () => true },
+            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none' },
+            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => !!this.$('#rich-meta')?.innerHTML },
+            // Collection rows (BoxSet contents)
+            { name: 'collection-movies-section', elementId: '#collection-movies-row', isVisible: () => isNotHidden('#collection-movies-section') },
+            { name: 'collection-shows-section', elementId: '#collection-shows-row', isVisible: () => isNotHidden('#collection-shows-section') },
+            // Standard content rows
+            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
+            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
+            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => isNotHidden('#episodes-section') },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
         ];
 
         let foundCurrent = false;
@@ -1147,14 +1215,24 @@ class DetailsPage extends Page {
     }
 
     _getPreviousVisibleSection(currentSectionName) {
+        // Helper to check if a section exists and is not hidden
+        const isNotHidden = (id) => {
+            const el = this.$(id);
+            return el && !el.classList.contains('hidden');
+        };
+
         const sections = [
-            { name: 'details-similar', elementId: '#similar-row', isVisible: () => !this.$('#similar-section')?.classList.contains('hidden') },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => !this.$('#people-section')?.classList.contains('hidden') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => !this.$('#episodes-section')?.classList.contains('hidden') },
-            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => !this.$('#seasons-section')?.classList.contains('hidden') },
-            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => !this.$('#next-up-section')?.classList.contains('hidden') },
-            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => this.$('#rich-meta')?.innerHTML !== '' },
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style.display !== 'none' },
+            { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => isNotHidden('#episodes-section') },
+            { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
+            { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
+            // Collection rows (BoxSet contents) - in reverse order
+            { name: 'collection-shows-section', elementId: '#collection-shows-row', isVisible: () => isNotHidden('#collection-shows-section') },
+            { name: 'collection-movies-section', elementId: '#collection-movies-row', isVisible: () => isNotHidden('#collection-movies-section') },
+            // Standard
+            { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => !!this.$('#rich-meta')?.innerHTML },
+            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none' },
             { name: 'details-actions', elementId: '#actions', isVisible: () => true } // Actions are always visible
         ];
 
@@ -1175,17 +1253,13 @@ class DetailsPage extends Page {
         const config = focusManager.getSectionConfig(sectionName);
         if (!config) return;
 
-        // Determine targets dynamically
-        const prev = this._getPreviousVisibleSection(sectionName);
+        // ONLY update leaveDown - do NOT touch leaveUp!
+        // leaveUp is set correctly during initial section registration.
+        // This function is specifically for linking DOWN direction.
         const next = this._getNextVisibleSection(sectionName);
-
-        // Update links while PRESERVING other config (orientation, enterTo, onMove, etc.)
-        config.leaveUp = prev ? prev.targetName : null;
         config.leaveDown = targetName || (next ? next.targetName : null);
 
-
-
-        // Re-register to apply changes
+        // Re-register to apply changes (preserves existing leaveUp)
         focusManager.register(sectionName, config.container, config);
     }
 
@@ -1225,21 +1299,8 @@ class DetailsPage extends Page {
             }
         };
 
-        const peopleVisible = !this.$('#people-section').classList.contains('hidden');
-        const episodesVisible = !this.$('#episodes-section').classList.contains('hidden');
-        const seasonsVisible = !this.$('#seasons-section').classList.contains('hidden');
-        const nextUpVisible = !this.$('#next-up-section').classList.contains('hidden');
-
-        let upwardLink = 'details-actions';
-        if (peopleVisible) {
-            upwardLink = 'details-people';
-        } else if (episodesVisible) {
-            upwardLink = 'details-episodes';
-        } else if (seasonsVisible) {
-            upwardLink = 'details-seasons';
-        } else if (nextUpVisible) {
-            upwardLink = 'details-next-up';
-        }
+        // Use dynamic helper to find the previous visible section (includes collection rows)
+        const upwardLink = this._getPreviousVisibleSection('details-similar')?.targetName || 'details-actions';
 
         this.registerFocusSection('details-similar', container, {
             orientation: 'horizontal',

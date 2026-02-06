@@ -447,7 +447,7 @@ class LibraryPage extends Page {
 
         // Show Skeleton instead of spinner
         // Pre-emptive Cleanup: Hide horizontal rows early if switching to grid
-        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions');
+        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming');
         const rowsContainer = this.$('#library-rows');
         const grid = this.$('#library-grid');
 
@@ -455,6 +455,9 @@ class LibraryPage extends Page {
         if (!isHorizontalLayout) {
             if (rowsContainer) rowsContainer.style.display = 'none';
             if (grid) grid.style.display = '';
+        } else {
+            if (rowsContainer) rowsContainer.style.display = '';
+            if (grid) grid.style.display = 'none';
         }
 
         if (grid && !isHorizontalLayout) {
@@ -570,18 +573,22 @@ class LibraryPage extends Page {
                 // Fetch multiple rows for Suggestions with Recommendations
                 const rows = [];
 
+
+                const collectionType = this.state.libraryInfo?.CollectionType;
+                const suggestionTypes = collectionType === 'tvshows' ? 'Series' : 'Movie,Series';
+
                 // 1. Continue Watching & Next Up & Latest (Parallel Fetch)
                 const [resume, nextUp, latest] = await Promise.all([
                     api.getResumeItems({ Limit: 12, ParentId: this.state.libraryId }),
                     api.getNextUp({ Limit: 12, ParentId: this.state.libraryId }),
-                    api.getLatestItems(this.state.libraryId, { Limit: 12 })
+                    api.getLatestItems(this.state.libraryId, { Limit: 12, IncludeItemTypes: suggestionTypes })
                 ]);
 
                 if (resume.Items && resume.Items.length > 0) {
-                    rows.push({ title: 'Continue Watching', items: resume.Items });
+                    rows.push({ title: 'Continue Watching', items: resume.Items, isLandscape: true, cardType: 'backdrop', contextType: 'resume' });
                 }
                 if (nextUp.Items && nextUp.Items.length > 0) {
-                    rows.push({ title: 'Next Up', items: nextUp.Items });
+                    rows.push({ title: 'Next Up', items: nextUp.Items, isLandscape: true, cardType: 'backdrop', contextType: 'nextUp' });
                 }
                 if (latest && latest.length > 0) {
                     rows.push({ title: 'Latest Added', items: latest });
@@ -589,13 +596,18 @@ class LibraryPage extends Page {
 
                 // 2. "Because You Watch..." (Based on active resume items)
                 if (resume.Items && resume.Items.length > 0) {
-                    // Pick a random item from likely candidates (first few)
+                    // Pick a random item from likely candidates
                     const candidates = resume.Items.slice(0, 3);
                     const sourceItem = candidates[Math.floor(Math.random() * candidates.length)];
+
+                    // If it's an episode, use the Series ID for better suggestions
+                    const targetId = (sourceItem.Type === 'Episode' && sourceItem.SeriesId) ? sourceItem.SeriesId : sourceItem.Id;
+                    const targetName = (sourceItem.Type === 'Episode' && sourceItem.SeriesName) ? sourceItem.SeriesName : sourceItem.Name;
+
                     try {
-                        const similar = await api.getSimilar(sourceItem.Id, { Limit: 12 });
+                        const similar = await api.getSimilar(targetId, { Limit: 12, IncludeItemTypes: suggestionTypes });
                         if (similar.Items && similar.Items.length > 0) {
-                            rows.push({ title: `Because you watch ${sourceItem.Name}`, items: similar.Items });
+                            rows.push({ title: `Because you watch ${targetName}`, items: similar.Items });
                         }
                     } catch (e) {
                         console.warn('Failed to load similar suggestions', e);
@@ -615,7 +627,7 @@ class LibraryPage extends Page {
 
                     if (favorites.Items && favorites.Items.length > 0) {
                         const favItem = favorites.Items[0];
-                        const similarFav = await api.getSimilar(favItem.Id, { Limit: 12 });
+                        const similarFav = await api.getSimilar(favItem.Id, { Limit: 12, IncludeItemTypes: suggestionTypes });
                         if (similarFav.Items && similarFav.Items.length > 0) {
                             rows.push({ title: `Because you like ${favItem.Name}`, items: similarFav.Items });
                         }
@@ -735,6 +747,9 @@ class LibraryPage extends Page {
                 });
 
                 this.state.items = [];
+                // CRITICAL: Reset totalRecordCount to prevent stale pagination footer
+                this.state.totalRecordCount = 0;
+
                 this._renderHorizontalRows(displayRows);
                 this._updatePaginationUI();
                 return;
@@ -900,6 +915,7 @@ class LibraryPage extends Page {
             leaveUp: null, // Top of content
             leaveDown: 'library-controls',
             leaveLeft: 'sidebar',
+            enterTo: 'active-element', // Focus active tab
             scrollOffsetTop: 400 // Large offset to ensure full top visibility
         });
     }
@@ -1056,7 +1072,7 @@ class LibraryPage extends Page {
         const html = items.map(item => CardRenderer.createCardHtml(item, {
             isLandscape: isLandscape,
             type: (this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming') ? 'episode' : (this.state.viewType === 'Networks' ? 'backdrop' : 'poster'),
-            contextType: this.state.viewType === 'Upcoming' ? 'episode' : null // Handle special contexts
+            contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null // Handle special contexts
         })).join('');
 
         grid.innerHTML = html;
@@ -1081,6 +1097,19 @@ class LibraryPage extends Page {
             leaveLeft: 'sidebar',
             selector: '.media-card',
             scrollOffsetTop: 100
+        });
+
+        // Ensure library-controls points correctly to alpha-picker (fix for switching from Suggestions)
+        // Check if alpha picker is actually visible
+        const alphaContainer = this.$('#alpha-picker-container');
+        const isAlphaVisible = alphaContainer && alphaContainer.style.display !== 'none';
+
+        focusManager.register('library-controls', this.$('#library-controls'), {
+            orientation: 'horizontal',
+            leaveUp: 'library-tabs',
+            leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
+            leaveLeft: 'sidebar',
+            selector: 'button'
         });
     }
     _renderHorizontalRows(rows) {
@@ -1114,20 +1143,47 @@ class LibraryPage extends Page {
         if (!rows || rows.length === 0) {
             if (emptyState) {
                 emptyState.classList.remove('hidden');
-                focusManager.register('empty-state-btn', this.$('#btn-reset-filters'), {
-                    leaveUp: 'library-tabs',
-                    leaveLeft: 'sidebar'
-                });
-                focusManager.setActiveSection('empty-state-btn');
+
+                const btnReset = this.$('#btn-reset-filters');
+                const isUpcoming = this.state.viewType === 'Upcoming';
+                const isSuggestions = this.state.viewType === 'Suggestions';
+
+                // Hide reset button for views where standard filters don't apply
+                if (btnReset) {
+                    if (isUpcoming || isSuggestions) {
+                        btnReset.style.display = 'none';
+                        this.$('#count-indicator').textContent = 'No items found'; // Better message
+                    } else {
+                        btnReset.style.display = '';
+                        // Only register focus if the button is visible
+                        focusManager.register('empty-state-btn', btnReset, {
+                            leaveUp: 'library-tabs',
+                            leaveLeft: 'sidebar'
+                        });
+                        focusManager.setActiveSection('empty-state-btn');
+                        return;
+                    }
+                }
+
+                // If button is hidden (Upcoming/Suggestions), we need to set focus somewhere valid
+                // Try focusing the active tab
+                const activeTab = this.$(`.tab-btn[data-type="${this.state.viewType}"]`);
+                if (activeTab) {
+                    focusManager.setActiveSection('library-tabs');
+                    activeTab.focus();
+                } else {
+                    focusManager.setActiveSection('sidebar');
+                }
             }
             return;
         }
 
         // Determine navigation target for the first row
-        // For horizontal views like Genres/Suggestions, controls/picker are hidden,
+        // For horizontal views like Suggestions/Upcoming, controls/picker are hidden,
         // so we navigate straight back to the tabs.
-        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions');
-        const nextUpTarget = isHorizontalLayout ? 'library-tabs' : 'library-controls';
+        // NOTE: Genres uses grid layout with focusable headers, so it goes through controls.
+        const isHorizontalLayout = (this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming');
+        const nextUpTarget = (isHorizontalLayout || this.state.viewType === 'Genres') ? 'library-tabs' : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -1162,16 +1218,21 @@ class LibraryPage extends Page {
 
             if (displayItems.length > 0) {
                 contentHtml = displayItems.map(item => CardRenderer.createCardHtml(item, {
-                    isLandscape: false,
-                    type: 'poster',
+                    isLandscape: row.isLandscape || false,
+                    type: row.cardType || 'poster',
+                    contextType: row.contextType || null
                 })).join('');
             } else {
                 contentHtml = '<div class="empty-msg">No items</div>';
             }
 
+            // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
+            const isHorizontalRow = (this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions');
+            const containerClass = isHorizontalRow ? 'row-items' : 'genre-grid-items';
+
             section.innerHTML = `
                 ${headerHtml}
-                <div class="genre-grid-items" id="${listId}">
+                <div class="${containerClass}" id="${listId}">
                     ${contentHtml}
                 </div>
             `;
@@ -1184,17 +1245,48 @@ class LibraryPage extends Page {
             // Register SINGLE section for entire row (header + grid)
             // This prevents section-change scroll logic from causing inconsistencies
             const rowId = `row-${rowIndex}`;
+            // Simplify selector for Upcoming which has no headers
+            const selector = (this.state.viewType === 'Upcoming') ? '.media-card' : '.header-focusable, .media-card';
+            // Use horizontal orientation for Upcoming/Suggestions, grid for Genres
+            const orientation = isHorizontalRow ? 'horizontal' : 'grid';
+
+            // Custom onMove handler for grid rows to ensure UP navigates to header
+            const onMoveHandler = !isHorizontalRow ? (direction, currentElement) => {
+                if (direction === 'up' && currentElement?.classList.contains('media-card')) {
+                    // Check if there's ANY card above this one (spatially)
+                    const currentRect = currentElement.getBoundingClientRect();
+                    const cards = Array.from(section.querySelectorAll('.media-card'));
+                    const hasCardAbove = cards.some(card => {
+                        if (card === currentElement) return false;
+                        const cardRect = card.getBoundingClientRect();
+                        // Card is above if its center Y is at least 10px higher
+                        return (cardRect.top + cardRect.height / 2) < (currentRect.top + currentRect.height / 2) - 10;
+                    });
+
+                    // If no card above, navigate to header
+                    if (!hasCardAbove) {
+                        const headerBtn = section.querySelector('.header-focusable');
+                        if (headerBtn) {
+                            focusManager.focusElement(headerBtn);
+                            return true; // Handled
+                        }
+                    }
+                }
+                return false; // Let default handling proceed
+            } : null;
+
             focusManager.register(rowId, section, {
-                orientation: 'grid',
-                columns: 6,
+                orientation: orientation,
+                columns: 6, // Only used for grid orientation
                 // Navigation between rows
                 leaveUp: rowIndex === 0 ? nextUpTarget : `row-${rowIndex - 1}`,
                 leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : null,
                 leaveLeft: 'sidebar',
                 // Select both header button and media cards as focusable
-                selector: '.header-focusable, .media-card',
+                selector: selector,
                 scrollOffsetTop: 50, // Ultra-tight top alignment
-                enterTo: 'first' // Land on header when entering from controls or another row
+                enterTo: null, // Allow spatial entry (don't force header)
+                onMove: onMoveHandler
             });
         });
 
@@ -1213,7 +1305,8 @@ class LibraryPage extends Page {
                 orientation: 'horizontal',
                 leaveUp: 'library-tabs',
                 leaveDown: 'row-0', // Direct to first row for Genres view
-                leaveLeft: 'sidebar'
+                leaveLeft: 'sidebar',
+                selector: 'button'
             });
 
             // Update library-tabs to point to first row directly when controls hidden
@@ -1222,12 +1315,21 @@ class LibraryPage extends Page {
                 leaveUp: null,
                 leaveDown: 'row-0', // Direct to first row
                 leaveLeft: 'sidebar',
+                enterTo: 'active-element',
                 selector: '.tab-btn'
             });
         }
 
         // Finalize Lazy Loading
         lazyLoader.observe(container);
+
+        // CRITICAL: Use requestAnimationFrame to ensure DOM is painted before focus cache is built
+        // This fixes issues where offsetParent is null because the browser hasn't painted yet
+        requestAnimationFrame(() => {
+            rows.forEach((_, rowIndex) => {
+                focusManager.invalidateCache(`row-${rowIndex}`);
+            });
+        });
     }
 
 
@@ -2263,7 +2365,7 @@ class LibraryPage extends Page {
             let nextTarget = 'library-controls';
 
             if (!shouldShow) {
-                if (viewType === 'Genres' || viewType === 'Suggestions') {
+                if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
                     nextTarget = 'row-0'; // Match the horizontal row ID
                 } else {
                     nextTarget = 'library-grid';
@@ -2321,6 +2423,7 @@ class LibraryPage extends Page {
             leaveUp: null,
             leaveDown: 'library-controls',
             leaveLeft: 'sidebar',
+            enterTo: 'active-element',
             scrollOffsetTop: 400
         });
 
@@ -2329,7 +2432,8 @@ class LibraryPage extends Page {
             orientation: 'horizontal',
             leaveUp: 'library-tabs',
             leaveDown: 'alpha-picker',
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            selector: 'button'
         });
 
         // Alpha Picker

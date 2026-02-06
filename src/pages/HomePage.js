@@ -146,7 +146,8 @@ class HomePage extends Page {
                 rowsData.push({
                     title: 'Next Up',
                     items: nextUp.Items,
-                    type: 'episode'
+                    type: 'episode',
+                    contextType: 'nextUp' // Trigger spoiler prevention
                 });
             }
 
@@ -208,7 +209,7 @@ class HomePage extends Page {
 
             // Inline card rendering to avoid function call overhead per item
             for (const item of row.items) {
-                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type, row.type));
+                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type));
             }
 
             htmlParts.push('</div></section>');

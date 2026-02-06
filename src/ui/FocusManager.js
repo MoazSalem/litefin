@@ -339,11 +339,21 @@ class FocusManager {
             return this._focusablesCache.get(sectionName);
         }
 
-        // Query focusables - rely on tabindex for visibility (much faster)
-        // Skip expensive getBoundingClientRect checks
-        const focusables = Array.from(
+        // Query focusables and filter out hidden elements
+        // We check display:none explicitly to prevent focusing hidden controls
+        const allElements = Array.from(
             config.container.querySelectorAll(config.selector)
-        ).filter(el => el.offsetParent !== null); // Basic visibility check only
+        );
+
+        const focusables = allElements.filter(el => {
+            // Filter out elements with display: none
+            const style = window.getComputedStyle(el);
+            if (style.display === 'none') return false;
+
+            // Also check if element or any parent is hidden
+            // This is more robust than offsetParent check alone
+            return el.offsetParent !== null || style.position === 'fixed';
+        });
 
         this._focusablesCache.set(sectionName, focusables);
         return focusables;
@@ -454,6 +464,8 @@ class FocusManager {
             // Calculate vector
             const dx = center2.x - center1.x;
             const dy = center2.y - center1.y;
+
+            // 1. Check Direction
 
             // 1. Check Direction
             let isValid = false;
@@ -890,8 +902,9 @@ class FocusManager {
         const config = this._sections.get(sectionName);
         if (!config) return;
 
-        const memory = this._focusMemory.get(sectionName);
         const focusables = this._getFocusables(sectionName);
+
+        const memory = this._focusMemory.get(sectionName);
         if (!focusables.length) return;
 
         // Sidebar always starts at Home when entered
@@ -921,6 +934,7 @@ class FocusManager {
 
         // 1. Spatial Entry
         // If we came from another element (e.g. Button below grid), pick closest grid item
+
         if (fromElement && document.contains(fromElement)) {
             target = this._findSpatialClosest(fromElement, focusables);
         }

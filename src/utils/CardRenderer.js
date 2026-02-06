@@ -68,8 +68,12 @@ class CardRenderer {
             const params = imageService.getParams('backdrop');
 
             if (item.Type === 'Episode') {
+                // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
+                const isSpoilerFree = ['nextUp', 'upcoming', 'resume'].includes(contextType);
+
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
-                if (item.ImageTags && item.ImageTags.Primary) {
+                // If spoiler free, skip Primary logic unless nothing else exists
+                if (!isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
                     imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
                 } else if (item.SeriesThumbImageTag && item.SeriesId) {
                     imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesThumbImageTag });
@@ -79,6 +83,9 @@ class CardRenderer {
                     imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
                 } else if (item.SeriesId) {
                     imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
+                } else if (isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
+                    // Fallback to primary if forced but nothing else found
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
                 }
             } else if (type === 'library') {
                 // Libraries: Primary -> Thumb -> Backdrop
@@ -114,9 +121,23 @@ class CardRenderer {
                     imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
                 }
             } else if (type === 'resume') {
-                // Resume cards usually use primary or thumb
+                // Resume cards
                 const params = imageService.getParams('thumb');
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+
+                // Spoiler Prevention for Episodes
+                if (item.Type === 'Episode' && item.SeriesId) {
+                    // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
+                    if (item.SeriesPrimaryImageTag) {
+                        imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesPrimaryImageTag });
+                    } else if (item.SeriesThumbImageTag) {
+                        imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesThumbImageTag });
+                    } else {
+                        // Fallback
+                        imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    }
+                } else {
+                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                }
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
                 const params = imageService.getParams('poster');

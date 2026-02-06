@@ -1,6 +1,6 @@
 {
     "name": "litefin-tizen",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Native Jellyfin client for Samsung Tizen TVs",
     "main": "src/index.js",
     "type": "module",

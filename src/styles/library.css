@@ -876,3 +876,38 @@
     overflow-y: auto;
     min-height: 0;
 }
+
+/* --- Rows Layout --- */
+.library-row {
+    margin-bottom: 30px;
+    padding: 0 40px;
+    /* Align with header */
+    scroll-margin-top: 150px;
+    /* Visibility buffer */
+}
+
+.library-row-header {
+    margin-bottom: 15px;
+    display: flex;
+    align-items: center;
+}
+
+/* Horizontal Scroll Container (Upcoming, Suggestions) */
+.row-items {
+    display: flex;
+    overflow-x: auto;
+    padding: 10px 0;
+    /* Space for focus ring */
+    gap: 20px;
+    scrollbar-width: none;
+    align-items: center;
+    /* Vertical alignment */
+}
+
+
+
+/* Ensure focus rings don't clip */
+.media-card {
+    margin: 5px;
+    /* Extra robustness */
+}

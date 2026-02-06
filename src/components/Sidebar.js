@@ -142,6 +142,11 @@ class Sidebar extends Component {
         this._loadLibraries();
         this._updateActiveState();
 
+        // Listen for auth events to update user profile
+        eventBus.on('auth:login', this._onAuthChange.bind(this));
+        eventBus.on('auth:logout', this._onAuthChange.bind(this));
+        eventBus.on('auth:restored', this._onAuthChange.bind(this));
+
         // Register focus
         focusManager.register('sidebar', this.el, {
             orientation: 'vertical',
@@ -191,6 +196,39 @@ class Sidebar extends Component {
         }
         focusManager.unregister('sidebar');
         eventBus.off('router:navigate', this._onNavigate.bind(this));
+
+        // Remove auth listeners
+        eventBus.off('auth:login', this._onAuthChange.bind(this));
+        eventBus.off('auth:logout', this._onAuthChange.bind(this));
+        eventBus.off('auth:restored', this._onAuthChange.bind(this));
+    }
+
+    /**
+     * Handle auth changes (login/logout)
+     */
+    _onAuthChange() {
+        const userBtn = this.el.querySelector('#sidebar-user');
+        if (userBtn) {
+            // Update Avatar
+            const avatarContainer = userBtn.querySelector('.user-avatar-container');
+            if (avatarContainer) {
+                avatarContainer.innerHTML = this._renderUserAvatar();
+            }
+            // Update Name
+            const nameSpan = userBtn.querySelector('.user-name');
+            if (nameSpan) {
+                nameSpan.textContent = this._getUserName();
+            }
+        }
+
+        // Reload libraries if logged in
+        if (auth.isAuthenticated()) {
+            this._loadLibraries();
+        } else {
+            // Clear libraries on logout
+            const container = this.el.querySelector('#sidebar-libraries');
+            if (container) container.innerHTML = '';
+        }
     }
 
     /**

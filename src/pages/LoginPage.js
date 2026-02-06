@@ -240,43 +240,65 @@ class LoginPage extends Page {
         // Change Server button - goes back to server selection
         this.$('.change-server-btn')?.addEventListener('click', () => this._goToServerSelection());
 
-        // Enter key on inputs - open keyboard first, or submit if already editable
+        // Enter key on inputs - just trigger click
+        // On TV, Enter usually triggers click automatically on inputs/buttons
+        // But we add specific click handler to unlock
+        this._serverInput?.addEventListener('click', (e) => {
+            if (this._serverInput.readOnly) {
+                // First interaction: enable editing and open keyboard
+                // e.preventDefault(); // Don't prevent default, let browser focus handle it if possible
+                this._serverInput.readOnly = false;
+                this._serverInput.focus();
+            }
+        });
+
+        // Keydown for submitting only (Second Enter)
         this._serverInput?.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) {
-                if (this._serverInput.readOnly) {
-                    // First Enter press: enable editing and open keyboard
-                    this._serverInput.readOnly = false;
-                    this._serverInput.focus();
-                } else {
-                    // Second Enter press: submit
+                if (!this._serverInput.readOnly) {
+                    // Submit if already editable
                     this._serverInput.readOnly = true;
                     this._connectToServer();
+                } else {
+                    // If readonly, user pressed Enter. 
+                    // Explicitly trigger click logic if TV doesn't auto-click
+                    this._serverInput.click();
                 }
             }
         });
 
         // Restore readonly when input loses focus
         this._serverInput?.addEventListener('blur', () => {
-            this._serverInput.readOnly = true;
+            setTimeout(() => {
+                // Only lock if we really lost focus (not just to keyboard)
+                // but usually Tizen keyboard keeps focus on input
+                this._serverInput.readOnly = true;
+            }, 200);
+        });
+
+        // Password Input
+        this._passwordInput?.addEventListener('click', (e) => {
+            if (this._passwordInput.readOnly) {
+                this._passwordInput.readOnly = false;
+                this._passwordInput.focus();
+            }
         });
 
         this._passwordInput?.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) {
-                if (this._passwordInput.readOnly) {
-                    // First Enter press: enable editing and open keyboard
-                    this._passwordInput.readOnly = false;
-                    this._passwordInput.focus();
-                } else {
-                    // Second Enter press: submit
+                if (!this._passwordInput.readOnly) {
                     this._passwordInput.readOnly = true;
                     this._login();
+                } else {
+                    this._passwordInput.click();
                 }
             }
         });
 
-        // Restore readonly when input loses focus
         this._passwordInput?.addEventListener('blur', () => {
-            this._passwordInput.readOnly = true;
+            setTimeout(() => {
+                this._passwordInput.readOnly = true;
+            }, 200);
         });
 
         // Manual Login inputs handling
@@ -286,19 +308,29 @@ class LoginPage extends Page {
 
     _setupInputHandler(input, onSubmit) {
         if (!input) return;
+
+        input.addEventListener('click', () => {
+            if (input.readOnly) {
+                input.readOnly = false;
+                input.focus();
+            }
+        });
+
         input.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) {
-                if (input.readOnly) {
-                    input.readOnly = false;
-                    input.focus();
-                } else {
+                if (!input.readOnly) {
                     input.readOnly = true;
                     if (onSubmit) onSubmit();
+                } else {
+                    input.click();
                 }
             }
         });
+
         input.addEventListener('blur', () => {
-            if (input) input.readOnly = true;
+            setTimeout(() => {
+                input.readOnly = true;
+            }, 200);
         });
     }
 

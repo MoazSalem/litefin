@@ -54,35 +54,46 @@
 .server-url-input {
     flex: 1;
     background: #1a1a1a;
-    border: 2px solid #333;
-    padding: 20px 28px;
+    border: 4px solid transparent;
+    /* Prepare for border */
+    padding: 18px 26px;
+    /* Adjust padding for border */
     font-size: 1.75rem;
     border-radius: 6px;
     color: #fff;
-    transition: border-color 0.2s;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
 }
 
 .server-url-input:focus,
 .server-url-input.focused {
     border-color: var(--jf-accent);
+    background-color: #2a2a2a;
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    outline: none;
 }
 
 .connect-btn {
     background: var(--jf-accent);
     color: white;
-    border: none;
-    padding: 0 40px;
+    border: 4px solid transparent;
+    padding: 0 36px;
+    /* Adjust for border */
     font-size: 1.5rem;
     font-weight: 600;
     border-radius: 6px;
     cursor: pointer;
     margin: 0;
+    transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
 }
 
 .connect-btn:focus,
 .connect-btn.focused {
     background: var(--jf-accent-hover);
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.05);
     outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
 }
 
 .login-actions {
@@ -220,13 +231,16 @@
 }
 
 /* Users grid */
+/* Users grid - Centered and flexible */
 .users-grid {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    margin: -12px;
-    width: calc(100% + 24px);
-    padding-bottom: 24px;
+    /* Center items horizontally */
+    gap: 24px;
+    max-width: 1600px;
+    /* Allow enough space for 6 items */
+    margin: 0 auto 40px auto;
 }
 
 .user-card {
@@ -236,8 +250,14 @@
     padding: 30px;
     cursor: pointer;
     text-align: center;
-    width: 220px;
-    margin: 16px;
+    width: 200px;
+    /* Slightly reduced to fit 6 comfortably */
+    margin: 12px;
+    transition: transform var(--jf-transition-fast), background var(--jf-transition-fast);
+    /* Ensure content doesn't break layout */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
 }
 
 .user-card:focus,
@@ -299,4 +319,48 @@
     width: 100px;
     height: 100px;
     border-radius: 50%;
+}
+
+/* Generic Input Focus */
+.login-page .text-input {
+    border: 4px solid transparent;
+    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+}
+
+.login-page .text-input:focus,
+.login-page .text-input.focused {
+    border-color: var(--jf-accent);
+    background-color: #2a2a2a;
+    transform: scale(1.02);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+    outline: none;
+}
+
+/* Generic Button Focus */
+.login-page .btn {
+    border: 4px solid transparent;
+    transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
+}
+
+.login-page .btn:focus,
+.login-page .btn.focused {
+    border-color: rgba(255, 255, 255, 0.7);
+    transform: scale(1.03);
+    outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+}
+
+/* User Card Focus */
+.user-card:focus,
+.user-card.focused {
+    transform: translateY(-5px);
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    /* Subtle border for users */
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.user-card:focus .user-avatar,
+.user-card.focused .user-avatar {
+    border-color: var(--jf-accent);
 }
