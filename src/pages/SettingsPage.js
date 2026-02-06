@@ -14,6 +14,7 @@ import { layoutManager } from '../ui/LayoutManager.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 class SettingsPage extends Page {
     constructor() {
@@ -30,9 +31,14 @@ class SettingsPage extends Page {
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
             },
             {
-                id: 'playback',
-                label: 'Playback',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polygon points="10 8 16 12 10 16 10 8"/></svg>'
+                id: 'player',
+                label: 'Player',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
+            },
+            {
+                id: 'subtitles',
+                label: 'Subtitles',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>'
             },
             {
                 id: 'account',
@@ -82,8 +88,10 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
-            case 'playback':
-                return this._renderPlaybackTab();
+            case 'player':
+                return this._renderPlayerTab();
+            case 'subtitles':
+                return this._renderSubtitlesTab();
             case 'account':
                 return this._renderAccountTab();
             case 'about':
@@ -159,18 +167,24 @@ class SettingsPage extends Page {
         `;
     }
 
-    _renderPlaybackTab() {
+    /**
+     * Render Player tab with video/audio quality and playback behavior
+     */
+    _renderPlayerTab() {
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Playback</h2>
+                <h2 class="content-title">Player</h2>
+                
+                <!-- Video Quality Section -->
+                <h3 class="setting-section-title">Video Quality</h3>
                 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">Max Streaming Bitrate</span>
-                        <span class="setting-description">Limit bandwith usage</span>
+                        <span class="setting-description">Quality when streaming over internet</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('quality-select', [
+                        ${this._renderDropdown('max-bitrate-select', [
             { value: 'auto', label: 'Auto (Recommended)' },
             { value: '120000000', label: '4K - 120 Mbps' },
             { value: '60000000', label: '4K - 60 Mbps' },
@@ -192,24 +206,156 @@ class SettingsPage extends Page {
             { value: 'eng', label: 'English' },
             { value: 'ara', label: 'Arabic' },
             { value: 'spa', label: 'Spanish' },
-            { value: 'fre', label: 'French' }
+            { value: 'fre', label: 'French' },
+            { value: 'jpn', label: 'Japanese' },
+            { value: 'kor', label: 'Korean' }
         ], localStorage.getItem('pref:audioLang') || 'auto')}
                     </div>
                 </div>
 
-                 <div class="setting-item">
+                <!-- Playback Behavior Section -->
+                <h3 class="setting-section-title">Playback Behavior</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Skip Forward Duration</span>
+                        <span class="setting-description">Seconds to skip when pressing forward</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('skip-forward-select', [
+            { value: '5000', label: '5 seconds' },
+            { value: '10000', label: '10 seconds' },
+            { value: '15000', label: '15 seconds' },
+            { value: '30000', label: '30 seconds' }
+        ], String(PlayerSettings.get('skipForwardLength')))}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Skip Back Duration</span>
+                        <span class="setting-description">Seconds to skip when pressing back</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('skip-back-select', [
+            { value: '5000', label: '5 seconds' },
+            { value: '10000', label: '10 seconds' },
+            { value: '15000', label: '15 seconds' },
+            { value: '30000', label: '30 seconds' }
+        ], String(PlayerSettings.get('skipBackLength')))}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Auto-play Next Episode</span>
+                        <span class="setting-description">Automatically play next episode when current ends</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableNextEpisodeAutoPlay') ? 'active' : ''}" 
+                                 id="toggle-auto-next" 
+                                 data-setting="enableNextEpisodeAutoPlay"
+                                 tabindex="0"
+                                 aria-label="Toggle auto-play next">
+                        </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render Subtitles tab with appearance and behavior settings
+     */
+    _renderSubtitlesTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title">Subtitles</h2>
+                
+                <!-- Subtitle Behavior Section -->
+                <h3 class="setting-section-title">Behavior</h3>
+                
+                <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">Preferred Subtitle Language</span>
                         <span class="setting-description">Default language for subtitles</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-select', [
+                        ${this._renderDropdown('subtitle-lang-select', [
             { value: 'none', label: 'None' },
             { value: 'eng', label: 'English' },
             { value: 'ara', label: 'Arabic' },
             { value: 'spa', label: 'Spanish' },
-            { value: 'fre', label: 'French' }
+            { value: 'fre', label: 'French' },
+            { value: 'jpn', label: 'Japanese' },
+            { value: 'kor', label: 'Korean' }
         ], localStorage.getItem('pref:subtitleLang') || 'none')}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Subtitle Mode</span>
+                        <span class="setting-description">When to show subtitles automatically</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('subtitle-mode-select', [
+            { value: 'Default', label: 'Default (Server preference)' },
+            { value: 'Smart', label: 'Smart (Foreign audio only)' },
+            { value: 'OnlyForced', label: 'Only Forced' },
+            { value: 'Always', label: 'Always' },
+            { value: 'None', label: 'None' }
+        ], PlayerSettings.get('subtitleMode'))}
+                    </div>
+                </div>
+
+                <!-- Subtitle Appearance Section -->
+                <h3 class="setting-section-title">Appearance</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Text Size</span>
+                        <span class="setting-description">Subtitle text size</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('subtitle-size-select', [
+            { value: 'small', label: 'Small' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'large', label: 'Large' },
+            { value: 'larger', label: 'Larger' },
+            { value: 'extralarge', label: 'Extra Large' }
+        ], PlayerSettings.get('subtitleSize'))}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Text Style</span>
+                        <span class="setting-description">Shadow and outline style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('subtitle-shadow-select', [
+            { value: 'none', label: 'None' },
+            { value: 'dropshadow', label: 'Drop Shadow' },
+            { value: 'raised', label: 'Raised' },
+            { value: 'depressed', label: 'Depressed' },
+            { value: 'uniform', label: 'Uniform Outline' }
+        ], PlayerSettings.get('subtitleDropShadow'))}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Background</span>
+                        <span class="setting-description">Subtitle background style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('subtitle-bg-select', [
+            { value: 'transparent', label: 'Transparent' },
+            { value: 'rgba(0,0,0,0.5)', label: 'Semi-transparent' },
+            { value: 'rgba(0,0,0,0.8)', label: 'Dark' },
+            { value: '#000000', label: 'Solid Black' }
+        ], PlayerSettings.get('subtitleTextBackground'))}
                     </div>
                 </div>
             </div>
@@ -312,9 +458,18 @@ class SettingsPage extends Page {
                 const isHidden = localStorage.getItem('pref:hideMyMedia') === 'true';
                 const newValue = !isHidden;
                 localStorage.setItem('pref:hideMyMedia', newValue);
-
-                // Toggle active class
                 myMediaBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Auto-play Next Episode
+        const autoNextBtn = this.$('#toggle-auto-next');
+        if (autoNextBtn) {
+            autoNextBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableNextEpisodeAutoPlay');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableNextEpisodeAutoPlay', newValue);
+                autoNextBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -446,23 +601,45 @@ class SettingsPage extends Page {
                 const title = btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
 
                 this._renderSelectionModal(title, options, currentValue, (newValue) => {
-                    // Update State
+                    // Update button state
                     btn.dataset.value = newValue;
                     const newLabel = options.find(o => o.value === newValue)?.label;
                     btn.querySelector('.btn-label').innerText = newLabel;
 
-                    // Save Logic
-                    const mapMap = {
-                        'quality-select': 'pref:maxBitrate',
+                    // =========================================================
+                    // SAVE LOGIC - Map dropdown IDs to storage
+                    // =========================================================
+
+                    // localStorage-based settings (pref: prefix)
+                    const localStorageMap = {
+                        'max-bitrate-select': 'pref:maxBitrate',
                         'audio-lang-select': 'pref:audioLang',
-                        'subtitle-select': 'pref:subtitleLang',
+                        'subtitle-lang-select': 'pref:subtitleLang',
                         'image-quality-select': 'pref:imageQuality'
                     };
 
+                    // PlayerSettings-based settings (player: prefix)
+                    const playerSettingsMap = {
+                        'skip-forward-select': 'skipForwardLength',
+                        'skip-back-select': 'skipBackLength',
+                        'subtitle-mode-select': 'subtitleMode',
+                        'subtitle-size-select': 'subtitleSize',
+                        'subtitle-shadow-select': 'subtitleDropShadow',
+                        'subtitle-bg-select': 'subtitleTextBackground'
+                    };
+
+                    // Route to appropriate storage
                     if (id === 'image-quality-select') {
                         imageService.setPreset(newValue);
-                    } else if (mapMap[id]) {
-                        localStorage.setItem(mapMap[id], newValue);
+                    } else if (localStorageMap[id]) {
+                        localStorage.setItem(localStorageMap[id], newValue);
+                    } else if (playerSettingsMap[id]) {
+                        // Convert to number for numeric settings
+                        const key = playerSettingsMap[id];
+                        const val = (key === 'skipForwardLength' || key === 'skipBackLength')
+                            ? parseInt(newValue, 10)
+                            : newValue;
+                        PlayerSettings.set(key, val);
                     }
 
                     console.log(`Setting ${id} saved: ${newValue}`);
