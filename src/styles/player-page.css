@@ -1,0 +1,369 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Player Page Styles
+ * ============================================================================
+ * Styles for full-screen video player, OSD, and subtitle overlays.
+ * Uses glassmorphism and smooth animations following Apple HIG.
+ * ============================================================================
+ */
+
+/* ==========================================================================
+   Player Page Container
+   ========================================================================== */
+
+.player-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: #000;
+    z-index: 1000;
+}
+
+/* ==========================================================================
+   Video Container
+   ========================================================================== */
+
+.player-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #000;
+}
+
+.player-container video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    background: #000;
+}
+
+/* ==========================================================================
+   Loading State
+   ========================================================================== */
+
+.player-loading {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.8);
+    z-index: 100;
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+
+.player-loading.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.player-loading .loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.2);
+    border-top-color: var(--accent-primary, #6B5CE7);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+.player-loading .loading-text {
+    margin-top: 16px;
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 16px;
+    font-weight: 500;
+}
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ==========================================================================
+   Error State
+   ========================================================================== */
+
+.player-error {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    background: rgba(0, 0, 0, 0.9);
+    z-index: 100;
+    opacity: 1;
+    transition: opacity 0.3s ease-out;
+}
+
+.player-error.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+.player-error .error-icon {
+    font-size: 64px;
+    margin-bottom: 24px;
+}
+
+.player-error .error-message {
+    color: rgba(255, 255, 255, 0.8);
+    font-size: 18px;
+    text-align: center;
+    max-width: 400px;
+    margin-bottom: 32px;
+}
+
+/* ==========================================================================
+   OSD (On-Screen Display) Overlay
+   ========================================================================== */
+
+.player-osd {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 50;
+    opacity: 0;
+    transition: opacity 0.3s ease-out;
+}
+
+.player-osd.visible {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* OSD Header (Title, Time) */
+.osd-header {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 40px 60px;
+    background: linear-gradient(to bottom,
+            rgba(0, 0, 0, 0.8) 0%,
+            rgba(0, 0, 0, 0) 100%);
+}
+
+.osd-title {
+    font-size: 32px;
+    font-weight: 600;
+    color: #fff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+    margin: 0 0 8px 0;
+}
+
+.osd-subtitle {
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.7);
+    text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* OSD Footer (Controls) */
+.osd-footer {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    padding: 60px;
+    background: linear-gradient(to top,
+            rgba(0, 0, 0, 0.9) 0%,
+            rgba(0, 0, 0, 0.7) 50%,
+            rgba(0, 0, 0, 0) 100%);
+}
+
+/* Progress Bar */
+.osd-progress {
+    margin-bottom: 24px;
+}
+
+.progress-bar {
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: height 0.2s ease, transform 0.2s ease;
+}
+
+.progress-bar:focus,
+.progress-bar:hover {
+    height: 10px;
+    transform: scaleY(1.2);
+}
+
+.progress-fill {
+    height: 100%;
+    background: var(--accent-primary, #6B5CE7);
+    border-radius: 3px;
+    transition: width 0.1s linear;
+    position: relative;
+}
+
+.progress-fill::after {
+    content: '';
+    position: absolute;
+    right: -8px;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 16px;
+    height: 16px;
+    background: #fff;
+    border-radius: 50%;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+.progress-bar:focus .progress-fill::after,
+.progress-bar:hover .progress-fill::after {
+    opacity: 1;
+}
+
+/* Time Display */
+.osd-time {
+    display: flex;
+    justify-content: space-between;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.7);
+    margin-top: 8px;
+}
+
+/* Control Buttons */
+.osd-controls {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+}
+
+.osd-btn {
+    width: 56px;
+    height: 56px;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    backdrop-filter: blur(10px);
+    border-radius: 50%;
+    color: #fff;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.osd-btn:focus,
+.osd-btn:hover {
+    background: rgba(255, 255, 255, 0.2);
+    transform: scale(1.1);
+    outline: none;
+}
+
+.osd-btn:active {
+    transform: scale(0.95);
+}
+
+.osd-btn svg {
+    width: 24px;
+    height: 24px;
+    fill: currentColor;
+}
+
+/* Play/Pause Button (Larger) */
+.osd-btn-play {
+    width: 72px;
+    height: 72px;
+    background: var(--accent-primary, #6B5CE7);
+}
+
+.osd-btn-play:focus,
+.osd-btn-play:hover {
+    background: var(--accent-primary-hover, #7B6CF7);
+}
+
+.osd-btn-play svg {
+    width: 32px;
+    height: 32px;
+}
+
+/* Secondary Controls (Right Side) */
+.osd-secondary-controls {
+    position: absolute;
+    right: 60px;
+    bottom: 160px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+/* ==========================================================================
+   Subtitle Overlay
+   ========================================================================== */
+
+.subtitle-overlay {
+    position: absolute;
+    bottom: 12%;
+    left: 10%;
+    right: 10%;
+    text-align: center;
+    z-index: 40;
+    pointer-events: none;
+}
+
+.subtitle-line {
+    display: inline-block;
+    background: rgba(0, 0, 0, 0.75);
+    color: #fff;
+    font-size: 32px;
+    font-weight: 500;
+    padding: 8px 16px;
+    border-radius: 4px;
+    line-height: 1.4;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8);
+}
+
+/* Secondary Subtitle (Top) */
+.subtitle-overlay.secondary {
+    bottom: auto;
+    top: 10%;
+}
+
+.subtitle-overlay.secondary .subtitle-line {
+    font-size: 28px;
+    opacity: 0.9;
+}
+
+/* ==========================================================================
+   Tizen-Specific Styles
+   ========================================================================== */
+
+/* Hide cursor on TV */
+@media (tv) {
+    .player-page * {
+        cursor: none;
+    }
+}
+
+/* Focus Ring for Remote Navigation */
+.player-page .osd-btn:focus {
+    box-shadow: 0 0 0 3px rgba(107, 92, 231, 0.5);
+}
+
+.player-page .progress-bar:focus {
+    box-shadow: 0 0 0 3px rgba(107, 92, 231, 0.5);
+    border-radius: 5px;
+}

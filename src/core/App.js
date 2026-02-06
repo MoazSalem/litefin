@@ -19,6 +19,7 @@ import DetailsPage from '../pages/DetailsPage.js';
 import SearchPage from '../pages/SearchPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
+import PlayerPage from '../pages/PlayerPage.js';
 
 class App {
     constructor() {
@@ -176,6 +177,23 @@ class App {
             router.reset('/login');
         });
 
+        // ================================================================
+        // PLAYER EVENTS
+        // ================================================================
+        // Handle playback requests from any page (DetailsPage, HomePage, etc.)
+        eventBus.on('player:play', ({ item, resume }) => {
+            console.log('App: Playback requested for:', item?.Name);
+
+            if (!item?.Id) {
+                console.error('App: Cannot play - no item ID provided');
+                return;
+            }
+
+            // Navigate to player page with item ID and resume flag
+            const resumeParam = resume ? 'true' : 'false';
+            router.navigate(`/player/${item.Id}/${resumeParam}`);
+        });
+
         console.log('App: Event handlers setup');
     }
 
@@ -201,6 +219,7 @@ class App {
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
+        router.register('/player/:id/:resume', PlayerPage); // Video player page
 
         // Default route - check auth and redirect appropriately
         router.register('/', {

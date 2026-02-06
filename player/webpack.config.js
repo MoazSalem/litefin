@@ -1,9 +1,6 @@
 const path = require('path');
 const webpack = require('webpack');
-const MiniCssExtractPlugin = require('mini-css-extract-plugin');
-const HtmlWebpackPlugin = require('html-webpack-plugin');
 const TerserPlugin = require('terser-webpack-plugin');
-const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
 
 module.exports = (env, argv) => {
     const isProduction = argv.mode === 'production';
@@ -33,13 +30,10 @@ module.exports = (env, argv) => {
                         },
                     },
                 },
+                // Ignore SCSS imports - styles handled by litefin
                 {
                     test: /\.s[ac]ss$/i,
-                    use: [
-                        MiniCssExtractPlugin.loader,
-                        'css-loader',
-                        'sass-loader',
-                    ],
+                    use: 'null-loader',
                 },
             ],
         },
@@ -48,31 +42,11 @@ module.exports = (env, argv) => {
             new webpack.DefinePlugin({
                 __DEBUG__: JSON.stringify(!isProduction),
             }),
-            new MiniCssExtractPlugin({
-                filename: 'jellyfin-player.css',
-            }),
-            new HtmlWebpackPlugin({
-                template: './html/player.template.html',
-                filename: 'player.html',
-                inject: 'head',
-            }),
-            new HtmlWebpackPlugin({
-                template: './html/settings.template.html',
-                filename: 'settings.html',
-                inject: 'head',
-            }),
         ],
         optimization: {
             minimize: isProduction,
-            minimizer: [
-                new TerserPlugin(),
-                new CssMinimizerPlugin(),
-            ],
+            minimizer: [new TerserPlugin()],
         },
-        devtool: isProduction ? 'source-map' : 'inline-source-map',
-        devServer: {
-            static: './dist',
-            hot: true,
-        },
+        devtool: isProduction ? false : 'inline-source-map', // No source maps in prod
     };
 };
