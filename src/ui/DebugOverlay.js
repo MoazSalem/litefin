@@ -13,62 +13,150 @@ class DebugOverlay {
         this._overlay = null;
         this._content = null;
         this._isVisible = false;
+
+        this._logsEnabled = false;
+        this._overlayEnabled = false;
+
+        // Default settings
+        this._width = 'small';
+        this._height = 'small';
+        this._position = 'bottom-right';
+
+        // Store original methods
+        this._originalConsole = {
+            log: console.log,
+            error: console.error,
+            warn: console.warn,
+            info: console.info,
+            debug: console.debug
+        };
     }
 
     /**
      * Initialize the debug overlay
-     * @param {boolean} [enabled=false] - Whether debug mode is enabled
+     * @param {boolean} [enableLogs=false]
+     * @param {boolean} [enableOverlay=false]
+     * @param {string} [width='small']
+     * @param {string} [height='small']
+     * @param {string} [position='bottom-right']
      */
-    init(enabled = false) {
+    init(enableLogs = false, enableOverlay = false, width = 'small', height = 'small', position = 'bottom-right') {
         if (this._initialized) return;
 
-        if (enabled) {
-            // Debug Mode ON: Create overlay and intercept logs
+        this._logsEnabled = enableLogs;
+        this._overlayEnabled = enableOverlay;
+        this._width = width;
+        this._height = height;
+        this._position = position;
+
+        // Always intercept, but control output via flags
+        this._interceptConsole();
+
+        // Initialize UI if needed
+        if (this._overlayEnabled) {
             this._createElements();
-            this._interceptConsole();
             this.show();
-            console.log('DebugOverlay: Debug Mode ENABLED');
-        } else {
-            // Debug Mode OFF: Suppress logs to clean up output
-            // We replace console methods with empty functions
-            // This prevents "spam" in the native console and any visible output
-            console.log = () => { };
-            console.warn = () => { };
-            console.error = () => { };
-            console.info = () => { };
-            console.debug = () => { };
+        }
+
+        if (this._logsEnabled) {
+            this._originalConsole.log('DebugOverlay: Initialized', {
+                logs: enableLogs,
+                overlay: enableOverlay,
+                width,
+                height,
+                position
+            });
         }
 
         this._initialized = true;
     }
+
+    setWidth(width) {
+        this._width = width;
+        this._updateStyles();
+    }
+
+    setHeight(height) {
+        this._height = height;
+        this._updateStyles();
+    }
+
+    setPosition(position) {
+        this._position = position;
+        this._updateStyles();
+    }
+
+    get Width() { return this._width; }
+    get Height() { return this._height; }
+    get Position() { return this._position; }
+
+    /**
+     * Enable or disable console logs
+     * @param {boolean} enabled
+     */
+    setLogsEnabled(enabled) {
+        this._logsEnabled = enabled;
+        // Log status change using original console to ensure it's seen if enabling
+        if (enabled) {
+            this._originalConsole.log('DebugOverlay: Debug Mode ENABLED');
+        }
+    }
+
+    /**
+     * Enable or disable the visual overlay
+     * @param {boolean} enabled 
+     */
+    setOverlayEnabled(enabled) {
+        this._overlayEnabled = enabled;
+
+        if (enabled) {
+            if (!this._overlay) {
+                this._createElements();
+            }
+            this.show();
+            if (this._logsEnabled) {
+                console.log('DebugOverlay: Overlay ENABLED');
+            }
+        } else {
+            this.hide();
+        }
+    }
+
+    get isLogsEnabled() { return this._logsEnabled; }
+    get isOverlayEnabled() { return this._overlayEnabled; }
 
     /**
      * Create overlay DOM elements and append to body
      * @private
      */
     _createElements() {
+        if (this._overlay) return;
+
         // Container
         this._overlay = document.createElement('div');
         this._overlay.id = 'debug-overlay';
+
+        // Base styles
         this._overlay.style.cssText = `
             position: fixed;
-            bottom: 0;
-            left: 0;
-            right: 0;
-            height: 800px;
             background: rgba(0,0,0,0.85);
             color: #0f0;
-            font-family: monospace;
-            font-size: 14px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
             overflow-y: auto;
             z-index: 99999;
             padding: 10px;
             pointer-events: none;
-            border-top: 2px solid #0f0;
+            border: 1px solid #0f0;
             display: none;
             text-align: left;
             line-height: 1.4;
+            box-shadow: 0 0 10px rgba(0,0,0,0.5);
+            border-radius: 4px;
         `;
+
+        // Apply dynamic styles
+        this._updateStyles();
 
         // Header
         const header = document.createElement('div');
@@ -78,8 +166,9 @@ class DebugOverlay {
             font-weight: bold;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         `;
-        header.textContent = `DEBUG CONSOLE - v${new Date().toLocaleTimeString()}`;
+        header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v0.2</span>`;
         this._overlay.appendChild(header);
 
         // Content area
@@ -87,8 +176,69 @@ class DebugOverlay {
         this._content.id = 'debug-content';
         this._overlay.appendChild(this._content);
 
-        // Append to body
+        // Append to body (ensure it's on top)
         document.body.appendChild(this._overlay);
+    }
+
+    _updateStyles() {
+        if (!this._overlay) return;
+
+        // Width
+        let widthStr;
+        switch (this._width) {
+            case 'full': widthStr = '100%'; break;
+            case 'large': widthStr = '800px'; break;
+            case 'medium': widthStr = '600px'; break;
+            case 'small':
+            default: widthStr = '450px'; break;
+        }
+
+        // Height
+        let heightStr;
+        switch (this._height) {
+            case 'full': heightStr = '100%'; break;
+            case 'large': heightStr = '600px'; break;
+            case 'medium': heightStr = '400px'; break;
+            case 'small':
+            default: heightStr = '300px'; break;
+        }
+
+        this._overlay.style.width = widthStr;
+        this._overlay.style.height = heightStr;
+
+        // Font size adjustments based on size? 
+        // Keep it simple for now, fixed font size or maybe slightly larger for 'large' config?
+        // Let's stick to standard 13px unless user asks
+        this._overlay.style.fontSize = '13px';
+
+        // Position
+        // Reset all positions first
+        this._overlay.style.top = 'auto';
+        this._overlay.style.bottom = 'auto';
+        this._overlay.style.left = 'auto';
+        this._overlay.style.right = 'auto';
+
+        const margin = (this._width === 'full' || this._height === 'full') ? '0' : '20px';
+
+        switch (this._position) {
+            case 'top-left':
+                this._overlay.style.top = margin;
+                this._overlay.style.left = margin;
+                break;
+            case 'top-right':
+                this._overlay.style.top = margin;
+                this._overlay.style.right = margin;
+                break;
+            case 'bottom-left':
+                this._overlay.style.bottom = margin;
+                this._overlay.style.left = margin;
+                break;
+            case 'bottom-right':
+            default:
+                this._overlay.style.bottom = margin;
+                this._overlay.style.right = margin;
+                break;
+        }
     }
 
     /**
@@ -96,12 +246,8 @@ class DebugOverlay {
      * @private
      */
     _interceptConsole() {
-        const originalLog = console.log;
-        const originalError = console.error;
-        const originalWarn = console.warn;
-
         const addLog = (type, args) => {
-            if (!this._content) return;
+            if (!this._overlayEnabled || !this._content) return;
 
             const line = document.createElement('div');
             line.style.borderBottom = '1px solid #333';
@@ -125,28 +271,40 @@ class DebugOverlay {
             line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
             this._content.appendChild(line);
 
-            // Limit log lines to prevent memory issues
             if (this._content.children.length > 200) {
                 this._content.removeChild(this._content.firstChild);
             }
-
-            // Auto-scroll
             this._overlay.scrollTop = this._overlay.scrollHeight;
         };
 
+        // Wrap methods
         console.log = (...args) => {
-            originalLog.apply(console, args);
-            addLog('log', args);
+            if (this._logsEnabled) {
+                this._originalConsole.log.apply(console, args);
+                addLog('log', args);
+            }
         };
 
         console.error = (...args) => {
-            originalError.apply(console, args);
-            addLog('error', args);
+            if (this._logsEnabled) {
+                this._originalConsole.error.apply(console, args);
+                addLog('error', args);
+            }
         };
 
         console.warn = (...args) => {
-            originalWarn.apply(console, args);
-            addLog('warn', args);
+            if (this._logsEnabled) {
+                this._originalConsole.warn.apply(console, args);
+                addLog('warn', args);
+            }
+        };
+
+        // Suppress others if logs disabled
+        console.info = (...args) => {
+            if (this._logsEnabled) this._originalConsole.info.apply(console, args);
+        };
+        console.debug = (...args) => {
+            if (this._logsEnabled) this._originalConsole.debug.apply(console, args);
         };
     }
 

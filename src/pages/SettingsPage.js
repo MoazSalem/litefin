@@ -15,6 +15,7 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { debugOverlay } from '../ui/DebugOverlay.js';
 
 class SettingsPage extends Page {
     constructor() {
@@ -49,6 +50,11 @@ class SettingsPage extends Page {
                 id: 'about',
                 label: 'About',
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+            },
+            {
+                id: 'debug',
+                label: 'Debug',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>'
             }
         ];
 
@@ -96,6 +102,8 @@ class SettingsPage extends Page {
                 return this._renderAccountTab();
             case 'about':
                 return this._renderAboutTab();
+            case 'debug':
+                return this._renderDebugTab();
             default:
                 return this._renderAppearanceTab();
         }
@@ -404,6 +412,89 @@ class SettingsPage extends Page {
         `;
     }
 
+    _renderDebugTab() {
+        const logsEnabled = debugOverlay.isLogsEnabled;
+        const overlayEnabled = debugOverlay.isOverlayEnabled;
+
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title">Debug</h2>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Enable Debug Logs</span>
+                        <span class="setting-description">Allow application to output logs to console</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${logsEnabled ? 'active' : ''}" 
+                                id="toggle-debug-logs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Show Debug Overlay</span>
+                        <span class="setting-description">Display logs on screen (requires Debug Logs)</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${overlayEnabled ? 'active' : ''}" 
+                                id="toggle-debug-overlay" 
+                                tabindex="0"
+                                ${!logsEnabled ? 'disabled style="opacity: 0.5"' : ''}>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Overlay Width</span>
+                        <span class="setting-description">Horizontal size of the debug window</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('debug-width-select', [
+            { value: 'small', label: 'Small' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'large', label: 'Large' },
+            { value: 'full', label: 'Full Screen' }
+        ], debugOverlay.Width || 'small')}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Overlay Height</span>
+                        <span class="setting-description">Vertical size of the debug window</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('debug-height-select', [
+            { value: 'small', label: 'Small' },
+            { value: 'medium', label: 'Medium' },
+            { value: 'large', label: 'Large' },
+            { value: 'full', label: 'Full Screen' }
+        ], debugOverlay.Height || 'small')}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Overlay Position</span>
+                        <span class="setting-description">Screen location of the debug window</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('debug-position-select', [
+            { value: 'top-left', label: 'Top Left' },
+            { value: 'top-right', label: 'Top Right' },
+            { value: 'bottom-left', label: 'Bottom Left' },
+            { value: 'bottom-right', label: 'Bottom Right' }
+        ], debugOverlay.Position || 'bottom-right')}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     onMounted() {
         this._bindEvents();
         this._setupFocus();
@@ -593,59 +684,121 @@ class SettingsPage extends Page {
     }
 
     _bindDropdownEvents() {
+        // Use a map to handle setting IDs to storage keys/methods easily
+        const settingsMap = {
+            'layout': { key: 'layout', type: 'local' },
+            'theme': { key: 'theme', type: 'local' },
+            'image-quality-select': { key: 'imageQuality', type: 'service' },
+            'max-bitrate-select': { key: 'pref:maxBitrate', type: 'local' },
+            'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
+            'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
+            'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
+            'skip-back-select': { key: 'skipBackLength', type: 'player' },
+            'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
+            'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+            'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
+            'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
+            'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+            'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
+            'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
+            'debug-width-select': { key: 'debug_width', type: 'debug' },
+            'debug-height-select': { key: 'debug_height', type: 'debug' },
+            'debug-position-select': { key: 'debug_position', type: 'debug' }
+        };
+
         this.$$('.select-btn').forEach(btn => {
             btn.addEventListener('click', (e) => {
                 const id = btn.dataset.id;
                 const options = JSON.parse(btn.dataset.options);
                 const currentValue = btn.dataset.value;
+                const settingConfig = settingsMap[id];
                 const title = btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
 
                 this._renderSelectionModal(title, options, currentValue, (newValue) => {
-                    // Update button state
-                    btn.dataset.value = newValue;
+                    // Update button UI
                     const newLabel = options.find(o => o.value === newValue)?.label;
-                    btn.querySelector('.btn-label').innerText = newLabel;
+                    const labelSpan = btn.querySelector('.btn-label');
+                    if (labelSpan) labelSpan.innerText = newLabel;
+                    btn.dataset.value = newValue;
 
-                    // =========================================================
-                    // SAVE LOGIC - Map dropdown IDs to storage
-                    // =========================================================
-
-                    // localStorage-based settings (pref: prefix)
-                    const localStorageMap = {
-                        'max-bitrate-select': 'pref:maxBitrate',
-                        'audio-lang-select': 'pref:audioLang',
-                        'subtitle-lang-select': 'pref:subtitleLang',
-                        'image-quality-select': 'pref:imageQuality'
-                    };
-
-                    // PlayerSettings-based settings (player: prefix)
-                    const playerSettingsMap = {
-                        'skip-forward-select': 'skipForwardLength',
-                        'skip-back-select': 'skipBackLength',
-                        'subtitle-mode-select': 'subtitleMode',
-                        'subtitle-size-select': 'subtitleSize',
-                        'subtitle-shadow-select': 'subtitleDropShadow',
-                        'subtitle-bg-select': 'subtitleTextBackground'
-                    };
-
-                    // Route to appropriate storage
-                    if (id === 'image-quality-select') {
-                        imageService.setPreset(newValue);
-                    } else if (localStorageMap[id]) {
-                        localStorage.setItem(localStorageMap[id], newValue);
-                    } else if (playerSettingsMap[id]) {
-                        // Convert to number for numeric settings
-                        const key = playerSettingsMap[id];
-                        const val = (key === 'skipForwardLength' || key === 'skipBackLength')
-                            ? parseInt(newValue, 10)
-                            : newValue;
-                        PlayerSettings.set(key, val);
+                    // Save Setting based on type
+                    if (settingConfig) {
+                        if (settingConfig.type === 'local') {
+                            localStorage.setItem(settingConfig.key, newValue);
+                            if (settingConfig.key === 'layout' || settingConfig.key === 'theme') {
+                                window.location.reload();
+                            }
+                        } else if (settingConfig.type === 'service') {
+                            imageService.setPreset(newValue);
+                        } else if (settingConfig.type === 'player') {
+                            const val = (settingConfig.key === 'skipForwardLength' || settingConfig.key === 'skipBackLength')
+                                ? parseInt(newValue, 10)
+                                : newValue;
+                            PlayerSettings.set(settingConfig.key, val);
+                        } else if (settingConfig.type === 'debug') {
+                            localStorage.setItem(settingConfig.key, newValue);
+                            if (settingConfig.key === 'debug_width') {
+                                debugOverlay.setWidth(newValue);
+                            } else if (settingConfig.key === 'debug_height') {
+                                debugOverlay.setHeight(newValue);
+                            } else if (settingConfig.key === 'debug_position') {
+                                debugOverlay.setPosition(newValue);
+                            }
+                        }
                     }
 
                     console.log(`Setting ${id} saved: ${newValue}`);
                 });
             });
         });
+
+        // Debug Toggles
+        const toggleLogs = this.$('#toggle-debug-logs');
+        if (toggleLogs) {
+            toggleLogs.addEventListener('click', () => {
+                const newState = !toggleLogs.classList.contains('active');
+                toggleLogs.classList.toggle('active');
+
+                // Update DebugOverlay
+                debugOverlay.setLogsEnabled(newState);
+
+                // Persist
+                localStorage.setItem('debug_logs_enabled', newState);
+
+                // Update overlay toggle state
+                const toggleOverlay = this.$('#toggle-debug-overlay');
+                if (toggleOverlay) {
+                    if (newState) {
+                        toggleOverlay.removeAttribute('disabled');
+                        toggleOverlay.style.opacity = '1';
+                    } else {
+                        toggleOverlay.setAttribute('disabled', 'true');
+                        toggleOverlay.style.opacity = '0.5';
+
+                        // Force disable overlay if logs are disabled
+                        if (toggleOverlay.classList.contains('active')) {
+                            toggleOverlay.classList.remove('active');
+                            debugOverlay.setOverlayEnabled(false);
+                            localStorage.setItem('debug_overlay_enabled', false);
+                        }
+                    }
+                }
+            });
+        }
+
+        const toggleOverlay = this.$('#toggle-debug-overlay');
+        if (toggleOverlay) {
+            toggleOverlay.addEventListener('click', () => {
+                const newState = !toggleOverlay.classList.contains('active');
+                toggleOverlay.classList.toggle('active');
+
+                // Update DebugOverlay
+                debugOverlay.setOverlayEnabled(newState);
+
+                // Persist
+                localStorage.setItem('debug_overlay_enabled', newState);
+            });
+        }
     }
 
     _switchTab(tabId, force = false) {
@@ -663,61 +816,45 @@ class SettingsPage extends Page {
             panel.innerHTML = this._renderActiveTabContent();
             this._bindContentEvents(); // Re-bind events for new content
 
-            // CRITICAL: Invalidate focus cache because DOM elements changed
+            // Invalidate focus cache
             focusManager.invalidateCache('settings-content');
-
-            // Re-setup focus to ensure sections are linked correctly
             this._setupFocus();
-
-            // If we switched via functionality that wants the sidebar to stay focused, we don't move focus.
-            // But checking if we are currently in the sidebar is good practice.
-            // (FocusManager handles staying on focused element if possible, but element is same).
         }
     }
 
     _setupFocus() {
         // Navigation: Sidebar <-> Content
-
-        this.registerFocusSection('settings-sidebar', this.$('#settings-sidebar'), {
+        focusManager.register('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',
-            defaultIndex: 0,
-            leaveRight: 'settings-content', // Right -> Go to content
-            leaveUp: null,
-            leaveLeft: 'sidebar' // Global Sidebar
+            leaveRight: 'settings-content',
+            enterTo: 'last-focused'
         });
 
-        this.registerFocusSection('settings-content', this.$('#settings-content-panel'), {
-            orientation: 'grid', // Allow spatial navigation (2D) for buttons/inputs
-            leaveLeft: 'settings-sidebar', // Left -> Back to sidebar
-            leaveUp: null
+        focusManager.register('settings-content', this.$('#settings-content-panel'), {
+            orientation: 'grid',
+            leaveLeft: 'settings-sidebar',
+            enterTo: 'last-focused'
         });
-
-
-
-        // If we are just setting up, default to sidebar focus if nothing else active
-        // But if user was in sidebar, keep it there.
     }
 
     _setLayout(layout) {
         layoutManager.setLayout(layout);
-        this._switchTab('appearance', true); // Re-render to update classes
+        this._switchTab('appearance', true);
 
-        // Restore focus to the selected button
         setTimeout(() => {
             const btn = this.$(`.layout-btn[data-layout="${layout}"]`);
             if (btn) focusManager.focusElement(btn);
-        }, 0);
+        }, 50);
     }
 
     _setTheme(theme) {
         layoutManager.setTheme(theme);
-        this._switchTab('appearance', true); // Re-render
+        this._switchTab('appearance', true);
 
-        // Restore focus to the selected button
         setTimeout(() => {
             const btn = this.$(`.theme-btn[data-theme="${theme}"]`);
             if (btn) focusManager.focusElement(btn);
-        }, 0);
+        }, 50);
     }
 
     _getThemeDisplayName(theme) {
@@ -733,16 +870,14 @@ class SettingsPage extends Page {
     }
 
     onBack() {
-        // Check if modal is open
         const overlay = this.$('#modal-overlay');
         if (overlay && overlay.classList.contains('visible')) {
             this._closeSelectionModal();
             return true;
         }
 
-        // Standard TV UX: Back button goes to previous page
         router.back();
-        return true; // Signal that we handled the back event
+        return true;
     }
 
     _renderUserAvatar(user) {
@@ -755,7 +890,6 @@ class SettingsPage extends Page {
             return `<img src="${imageUrl}" class="user-avatar" alt="${user.Name}" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
                     <div class="user-avatar-placeholder hidden">${user.Name[0].toUpperCase()}</div>`;
         }
-
         return `<div class="user-avatar-placeholder">${user?.Name ? user.Name[0].toUpperCase() : '?'}</div>`;
     }
 }

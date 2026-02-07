@@ -69,10 +69,15 @@ router.register('/', {
  */
 async function bootstrap() {
     // Init Debug Mode
-    // Set to 'false' to suppress all logs and hide overlay
-    // Set to 'true' to enable overlay and console logs
-    const DEBUG_MODE = false;
-    debugOverlay.init(DEBUG_MODE);
+    // Read settings from storage (set by SettingsPage)
+    // Default to false if not set
+    const DEBUG_LOGS = localStorage.getItem('debug_logs_enabled') === 'true';
+    const DEBUG_OVERLAY = localStorage.getItem('debug_overlay_enabled') === 'true';
+    const DEBUG_WIDTH = localStorage.getItem('debug_width') || 'small';
+    const DEBUG_HEIGHT = localStorage.getItem('debug_height') || 'small';
+    const DEBUG_POSITION = localStorage.getItem('debug_position') || 'bottom-right';
+
+    debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
 
     console.log('Litefin: Starting...');
 
