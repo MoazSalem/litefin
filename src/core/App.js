@@ -10,6 +10,7 @@
 import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { router } from './Router.js';
+import { api } from '../api/ApiClient.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -149,10 +150,27 @@ class App {
         // Handle app visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
+                // App going to background - on Tizen this may mean app is closing
                 eventBus.emit('app:hidden');
+                // Also emit beforeExit so active players can report stopped
+                eventBus.emit('app:beforeExit');
+                // Close WebSocket - user goes offline on server dashboard
+                api.closeWebSocket();
             } else {
                 eventBus.emit('app:visible');
+                // Reopen WebSocket when app becomes visible again
+                // This makes user appear online again without re-login
+                if (state.get('user:authenticated')) {
+                    api.openWebSocket();
+                }
             }
+        });
+
+        // Handle app close (browser mode)
+        window.addEventListener('beforeunload', () => {
+            eventBus.emit('app:beforeExit');
+            // Close WebSocket - user goes offline
+            api.closeWebSocket();
         });
 
         // Toggle sidebar visibility based on route
@@ -195,6 +213,38 @@ class App {
         });
 
         console.log('App: Event handlers setup');
+    }
+
+    /**
+     * End session on server when app is closing
+     * Uses synchronous XHR because async may not complete before app closes
+     * @private
+     */
+    _endSessionOnServer() {
+        // Skip if not authenticated
+        if (!state.get('user:authenticated')) {
+            return;
+        }
+
+        const serverUrl = api._serverUrl;
+        if (!serverUrl) return;
+
+        const authHeader = api.getAuthHeader();
+        if (!authHeader) return;
+
+        console.log('App: Ending session on server...');
+
+        try {
+            // Use synchronous XHR - async won't complete before app exits
+            const xhr = new XMLHttpRequest();
+            xhr.open('POST', `${serverUrl}/Sessions/Logout`, false); // false = synchronous
+            xhr.setRequestHeader('X-Emby-Authorization', authHeader);
+            xhr.setRequestHeader('Content-Type', 'application/json');
+            xhr.send();
+            console.log('App: Session ended on server');
+        } catch (e) {
+            console.warn('App: Failed to end session on server:', e);
+        }
     }
 
     /**

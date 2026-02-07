@@ -103,32 +103,62 @@ class AuthManager {
      * @returns {Promise<boolean>} True if session was valid
      */
     async _restoreSession() {
+        console.log('AuthManager: _restoreSession() called');
+
         const serverUrl = localStorage.getItem(STORAGE_KEYS.SERVER_URL);
         const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
         const userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
 
+        console.log('AuthManager: Stored credentials check:', {
+            hasServerUrl: !!serverUrl,
+            hasAccessToken: !!accessToken,
+            hasUserId: !!userId
+        });
+
         // Need all three to restore
         if (!serverUrl || !accessToken || !userId) {
+            console.log('AuthManager: Missing credentials, cannot restore');
             return false;
         }
 
         // Configure API with saved values
         api.setServer(serverUrl);
         api.setAuth(accessToken, userId);
+        console.log('AuthManager: API configured with saved credentials');
 
         // Validate token by fetching user info
         try {
+            console.log('AuthManager: Validating token by fetching current user...');
             const user = await api.getCurrentUser();
+            console.log('AuthManager: Token valid, user:', user?.Name);
 
             // Token is valid - restore state
             state.set('user:data', user);
             state.set('user:authenticated', true);
             state.set('server:connected', true);
 
+            // Report capabilities to establish session (make user appear online)
+            // MUST await this on Tizen - fire-and-forget doesn't complete reliably
+            console.log('AuthManager: Reporting capabilities to server...');
+            try {
+                await api.reportCapabilities({
+                    PlayableMediaTypes: ['Video', 'Audio'],
+                    SupportedCommands: ['PlayState', 'DisplayMessage', 'SetVolume', 'Mute', 'Unmute'],
+                    SupportsMediaControl: true,
+                    SupportsPersistentIdentifier: true
+                });
+                console.log('AuthManager: ✓ Session capabilities reported on restore - user should be online');
+            } catch (e) {
+                console.error('AuthManager: ✗ Failed to report capabilities on restore:', e);
+            }
+
+            // Open WebSocket for real-time online status tracking
+            api.openWebSocket();
+
             return true;
         } catch (error) {
             // Token is invalid - clear stored credentials
-            console.warn('AuthManager: Saved token is invalid');
+            console.warn('AuthManager: Token validation failed:', error);
             this._clearStorage();
             return false;
         }
@@ -232,6 +262,30 @@ class AuthManager {
             // Configure API with new credentials
             api.setAuth(accessToken, userId);
 
+            // CRITICAL: Report device capabilities to establish session with server
+            // Without this, the server won't track user as "online" or receive playback updates
+            try {
+                await api.reportCapabilities({
+                    PlayableMediaTypes: ['Video', 'Audio'],
+                    SupportedCommands: [
+                        'PlayState',
+                        'DisplayMessage',
+                        'SetVolume',
+                        'Mute',
+                        'Unmute'
+                    ],
+                    SupportsMediaControl: true,
+                    SupportsPersistentIdentifier: true
+                });
+                console.log('AuthManager: Session capabilities reported to server');
+            } catch (capError) {
+                console.warn('AuthManager: Failed to report capabilities:', capError);
+                // Don't fail login if this fails - user can still use the app
+            }
+
+            // Open WebSocket for real-time online status tracking
+            api.openWebSocket();
+
             // Update state
             state.set('user:authenticated', true);
             state.set('user:data', user);
@@ -272,40 +326,42 @@ class AuthManager {
     async logout() {
         console.log('AuthManager: Logging out...');
 
-        // Get current token for server notification
-        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        // Close WebSocket first (marks user offline immediately)
+        api.closeWebSocket();
 
-        // ALWAYS clear local state first - don't wait for server
+        // Get current credentials BEFORE clearing (needed for server notification)
+        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        const serverUrl = api._serverUrl;
+
+        // Notify server FIRST (while we still have valid credentials)
+        if (accessToken && serverUrl) {
+            const url = `${serverUrl}/Sessions/Logout`;
+            const authHeader = api.getAuthHeader(accessToken);
+
+            console.log('AuthManager: Notifying server of logout...');
+            try {
+                await fetch(url, {
+                    method: 'POST',
+                    headers: {
+                        'X-Emby-Authorization': authHeader,
+                        'Content-Type': 'application/json'
+                    }
+                });
+                console.log('AuthManager: Server notified of logout');
+            } catch (e) {
+                console.warn('AuthManager: Server logout request failed:', e.message);
+            }
+        }
+
+        // THEN clear local state
         console.log('AuthManager: Clearing local credentials...');
         this._clearStorage();
         api.clearAuth();
         state.set('user:authenticated', false);
         state.set('user:data', null);
 
-        // Then try to notify server (best effort)
-        if (accessToken) {
-            // Use detached fetch to facilitate background execution without blocking UI
-            // and without modifying the global 'api' instance state (race condition prevention)
-            const serverUrl = api._serverUrl; // Access internal property or add getter if needed
-            if (serverUrl) {
-                const url = `${serverUrl}/Sessions/Logout`;
-                // Fix: Pass token to getAuthHeader since we cleared state
-                const authHeader = api.getAuthHeader(accessToken);
-
-                console.log('AuthManager: Notifying server (background)...');
-                fetch(url, {
-                    method: 'POST',
-                    headers: {
-                        'X-Emby-Authorization': authHeader
-                    }
-                }).catch(e => {
-                    console.warn('AuthManager: Server logout background request failed:', e.message);
-                });
-            }
-        }
-
         eventBus.emit('auth:logout');
-        console.log('AuthManager: Logout complete (local state cleared)');
+        console.log('AuthManager: Logout complete');
     }
 
 

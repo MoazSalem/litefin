@@ -165,7 +165,8 @@ class ApiClient {
         // Build fetch options
         const fetchOptions = {
             method,
-            headers
+            headers,
+            keepalive: options.keepalive
         };
 
         // Add body for POST/PUT requests
@@ -188,6 +189,11 @@ class ApiClient {
             if (!response.ok) {
                 const error = await this._handleError(response);
                 throw error;
+            }
+
+            // Handle 204 No Content (common for session reporting endpoints)
+            if (response.status === 204) {
+                return null;
             }
 
             // Parse response based on content type
@@ -271,8 +277,8 @@ class ApiClient {
     /**
      * POST request helper
      */
-    async post(endpoint, body = null) {
-        return this.request(endpoint, { method: 'POST', body });
+    async post(endpoint, body = null, options = {}) {
+        return this.request(endpoint, { method: 'POST', body, ...options });
     }
 
     /**
@@ -614,6 +620,16 @@ class ApiClient {
         });
     }
 
+    /**
+     * Report device capabilities to the server
+     * CRITICAL: Must be called after login to establish session
+     * Without this, the server won't track playback status
+     * @param {Object} capabilities - Device/app capabilities
+     */
+    async reportCapabilities(capabilities) {
+        return this.post('/Sessions/Capabilities/Full', capabilities);
+    }
+
     async reportPlaybackStart(info) {
         return this.post('/Sessions/Playing', info);
     }
@@ -623,7 +639,8 @@ class ApiClient {
     }
 
     async reportPlaybackStopped(info) {
-        return this.post('/Sessions/Playing/Stopped', info);
+        // Use keepalive to ensure request completes even if app is closing
+        return this.post('/Sessions/Playing/Stopped', info, { keepalive: true });
     }
 
     // ========================================================================
@@ -644,6 +661,133 @@ class ApiClient {
 
     async unmarkPlayed(itemId) {
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
+    }
+
+    // ========================================================================
+    // WebSocket Connection (for online/offline status)
+    // ========================================================================
+
+    /**
+     * Open WebSocket connection to server
+     * This maintains the "online" status on the Jellyfin dashboard
+     * When WebSocket connects, server marks user online
+     * When WebSocket disconnects, server marks user offline
+     */
+    openWebSocket() {
+        // Must have server URL and access token
+        if (!this._serverUrl || !this._accessToken) {
+            console.warn('ApiClient: Cannot open WebSocket - not authenticated');
+            return;
+        }
+
+        // Already connected
+        if (this._webSocket && this._webSocket.readyState === WebSocket.OPEN) {
+            console.log('ApiClient: WebSocket already connected');
+            return;
+        }
+
+        // Close any existing connection
+        this.closeWebSocket();
+
+        // Convert http(s) to ws(s)
+        const wsUrl = this._serverUrl
+            .replace('https://', 'wss://')
+            .replace('http://', 'ws://');
+
+        // Build WebSocket URL with auth
+        const fullUrl = `${wsUrl}/socket?api_key=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
+
+        console.log('ApiClient: Opening WebSocket connection...');
+
+        try {
+            this._webSocket = new WebSocket(fullUrl);
+
+            // Connection opened
+            this._webSocket.onopen = () => {
+                console.log('ApiClient: WebSocket connected - user is now online');
+                eventBus.emit('websocket:connected');
+
+                // Start keepalive ping interval (every 30 seconds)
+                this._startWebSocketKeepalive();
+            };
+
+            // Message received (for remote control commands, etc.)
+            this._webSocket.onmessage = (event) => {
+                try {
+                    const message = JSON.parse(event.data);
+                    // Emit message for other parts of app to handle if needed
+                    eventBus.emit('websocket:message', message);
+                } catch (e) {
+                    // Ignore non-JSON messages (keepalive responses, etc.)
+                }
+            };
+
+            // Connection closed
+            this._webSocket.onclose = (event) => {
+                console.log('ApiClient: WebSocket disconnected - user appears offline');
+                this._stopWebSocketKeepalive();
+                eventBus.emit('websocket:disconnected');
+            };
+
+            // Connection error
+            this._webSocket.onerror = (error) => {
+                console.warn('ApiClient: WebSocket error:', error);
+                this._stopWebSocketKeepalive();
+            };
+
+        } catch (e) {
+            console.error('ApiClient: Failed to create WebSocket:', e);
+        }
+    }
+
+    /**
+     * Close WebSocket connection
+     * This will cause the server to mark the user as offline
+     */
+    closeWebSocket() {
+        this._stopWebSocketKeepalive();
+
+        if (this._webSocket) {
+            console.log('ApiClient: Closing WebSocket connection');
+            this._webSocket.onclose = null; // Prevent event handler from firing
+            this._webSocket.close();
+            this._webSocket = null;
+        }
+    }
+
+    /**
+     * Start keepalive ping to maintain connection
+     * Sends a KeepAlive message every 30 seconds
+     * @private
+     */
+    _startWebSocketKeepalive() {
+        this._stopWebSocketKeepalive(); // Clear any existing interval
+
+        this._keepaliveInterval = setInterval(() => {
+            if (this._webSocket && this._webSocket.readyState === WebSocket.OPEN) {
+                // Send Jellyfin-style keepalive message
+                this._webSocket.send(JSON.stringify({ MessageType: 'KeepAlive' }));
+            }
+        }, 30000); // 30 seconds
+    }
+
+    /**
+     * Stop keepalive ping
+     * @private
+     */
+    _stopWebSocketKeepalive() {
+        if (this._keepaliveInterval) {
+            clearInterval(this._keepaliveInterval);
+            this._keepaliveInterval = null;
+        }
+    }
+
+    /**
+     * Check if WebSocket is connected
+     * @returns {boolean} True if connected
+     */
+    get isWebSocketConnected() {
+        return this._webSocket && this._webSocket.readyState === WebSocket.OPEN;
     }
 
     // ========================================================================

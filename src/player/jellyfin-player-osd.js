@@ -598,8 +598,28 @@
                 if (isOsdVisible) {
                     hide();
                 } else {
+                    // Use PlayerPage's exit function for proper reporting
+                    if (window.playerExit) {
+                        window.playerExit();
+                    } else {
+                        // Fallback if not available
+                        if (player.stop) player.stop();
+                        if (window.router && window.router.back) {
+                            window.router.back();
+                        } else {
+                            history.back();
+                        }
+                    }
+                }
+                break;
+
+            case 'exit':
+                // Always exit - use PlayerPage's exit for proper reporting
+                if (window.playerExit) {
+                    window.playerExit();
+                } else {
+                    // Fallback if not available
                     if (player.stop) player.stop();
-                    // Use app router instead of browser history to maintain history stack
                     if (window.router && window.router.back) {
                         window.router.back();
                     } else {
@@ -608,20 +628,16 @@
                 }
                 break;
 
-            case 'exit':
-                // Always exit
-                if (player.stop) player.stop();
-                // Use app router instead of browser history to maintain history stack
-                if (window.router && window.router.back) {
-                    window.router.back();
-                } else {
-                    history.back();
-                }
-                break;
-
             case 'togglePlay':
                 if (player.togglePlay) player.togglePlay();
-                setTimeout(updatePlayPauseButton, 100);
+                // Check state after toggle and update UI + report to server
+                setTimeout(() => {
+                    updatePlayPauseButton();
+                    const isPaused = player.isPaused ? player.isPaused() : false;
+                    if (window.reportPauseState) {
+                        window.reportPauseState(isPaused);
+                    }
+                }, 250);
                 break;
 
             case 'rewind':

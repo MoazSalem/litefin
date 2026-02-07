@@ -104,6 +104,10 @@ class PlayerPage extends Page {
             // Initialize the player
             await this._initPlayer();
 
+            // Listen for app close/hide events to report playback stopped
+            this._onAppBeforeExit = () => this._handleAppExit();
+            eventBus.on('app:beforeExit', this._onAppBeforeExit);
+
             // Start playback
             await this._startPlayback();
 
@@ -164,6 +168,17 @@ class PlayerPage extends Page {
 
         // Expose player instance globally for OSD
         window.playerInstance = this._player;
+
+        // Expose functions for OSD to call proper reporting
+        // These bridge the gap between the standalone OSD and PlayerPage's server reporting
+        window.playerExit = () => this._stopAndExit();
+        window.reportPauseState = (isPaused) => {
+            if (isPaused) {
+                this._reportPlaybackProgress('pause');
+            } else {
+                this._reportPlaybackProgress('unpause');
+            }
+        };
     }
 
     /**
@@ -269,7 +284,8 @@ class PlayerPage extends Page {
             this._reportPlaybackStart();
             this._hasReportedStart = true;
         } else {
-            this._reportPlaybackProgress();
+            // Send 'unpause' event when resuming from pause
+            this._reportPlaybackProgress('unpause');
         }
     }
 
@@ -277,8 +293,8 @@ class PlayerPage extends Page {
         console.log('[PlayerPage] Paused');
         eventBus.emit('player:paused', { item: this._item });
 
-        // Report paused state
-        this._reportPlaybackProgress(true);
+        // Report paused state with explicit 'pause' event
+        this._reportPlaybackProgress('pause');
     }
 
     _onEnded() {
@@ -335,21 +351,38 @@ class PlayerPage extends Page {
         }
     }
 
-    async _reportPlaybackProgress(isPaused = false) {
+    /**
+     * Report playback progress to server
+     * @param {string} eventName - Event type: 'timeupdate', 'pause', 'unpause'
+     */
+    async _reportPlaybackProgress(eventName = 'timeupdate') {
         if (!this._player || !this._item) return;
 
         try {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState();
+            const isPaused = eventName === 'pause';
+
+            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+
+            if (!playSessionId) {
+                console.warn('[PlayerPage] Skipping progress report - no PlaySessionId');
+                return;
+            }
 
             const info = {
                 ItemId: this._item.Id,
-                PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
+                PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: isPaused ? 'Pause' : 'TimeUpdate'
+                EventName: eventName
             };
+
+            // Debug: Log progress reports for pause/unpause events
+            if (eventName !== 'timeupdate') {
+                console.log(`[PlayerPage] Reporting ${eventName}, IsPaused:`, isPaused);
+            }
 
             await api.reportPlaybackProgress(info);
         } catch (error) {
@@ -357,13 +390,37 @@ class PlayerPage extends Page {
         }
     }
 
+    /**
+     * Get comprehensive player state for reporting
+     * Aligned with jellyfin-web's PlayState structure
+     * @returns {Object} Player state object
+     */
     _getPlayerState() {
+        const mediaSource = this._player?.getCurrentMediaSource?.();
+        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
         return {
-            PositionTicks: this._player.getCurrentPositionTicks(),
-            VolumeLevel: this._player.getVolume ? this._player.getVolume() : 100,
-            IsMuted: this._player.isMuted ? this._player.isMuted() : false,
-            AudioStreamIndex: this._player.getCurrentAudioStreamIndex ? this._player.getCurrentAudioStreamIndex() : undefined,
-            SubtitleStreamIndex: this._player.getCurrentSubtitleStreamIndex ? this._player.getCurrentSubtitleStreamIndex() : undefined
+            // Core position and volume
+            PositionTicks: positionTicks,
+            VolumeLevel: this._player?.getVolume?.() ?? 100,
+            IsMuted: this._player?.isMuted?.() ?? false,
+
+            // Stream indices
+            AudioStreamIndex: this._player?.getCurrentAudioStreamIndex?.(),
+            SubtitleStreamIndex: this._player?.getCurrentSubtitleStreamIndex?.(),
+
+            // Playback method (DirectPlay, DirectStream, Transcode)
+            PlayMethod: mediaSource?.PlayMethod || 'DirectPlay',
+
+            // Seeking capability
+            CanSeek: (mediaSource?.RunTimeTicks || 0) > 0,
+
+            // Playback rate (1.0 = normal speed)
+            PlaybackRate: this._player?.getPlaybackRate?.() ?? 1.0,
+
+            // Queue modes (litefin doesn't support playlists yet)
+            RepeatMode: 'RepeatNone',
+            ShuffleMode: 'Sorted'
         };
     }
 
@@ -440,18 +497,70 @@ class PlayerPage extends Page {
         }
     }
 
-    async _reportPlaybackStopped() {
-        if (!this._player) return;
+    /**
+     * Report playback stopped to server
+     * @param {Object} [capturedMediaSource] - Pre-captured media source (for when called after stop)
+     * @param {number} [capturedPosition] - Pre-captured position ticks
+     */
+    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null) {
+        if (!this._item) return;
 
         try {
-            const currentPosition = this._player.getCurrentPositionTicks?.() || 0;
+            // Use captured values or read from player (if still available)
+            const mediaSource = capturedMediaSource ?? this._player?.getCurrentMediaSource?.();
+            const positionTicks = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+
+            if (!playSessionId) {
+                console.warn('[PlayerPage] Skipping stopped report - no PlaySessionId');
+                return;
+            }
+
+            console.log('[PlayerPage] Reporting playback stopped, position:', positionTicks);
 
             await api.reportPlaybackStopped({
                 ItemId: this._item.Id,
-                PositionTicks: currentPosition
+                // Critical: Include session identifiers for proper server cleanup
+                PlaySessionId: playSessionId,
+                MediaSourceId: mediaSource?.Id,
+                PositionTicks: positionTicks
             });
+
+            console.log('[PlayerPage] ✓ Playback stopped reported');
         } catch (error) {
             console.warn('[PlayerPage] Failed to report playback stopped:', error);
+        }
+    }
+
+    /**
+     * Handle app exit/hide - report playback stopped immediately
+     * Called when app is about to close or go to background
+     */
+    _handleAppExit() {
+        console.log('[PlayerPage] App exit detected, reporting playback stopped');
+
+        // Capture info before it's too late
+        const mediaSource = this._player?.getCurrentMediaSource?.();
+        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
+
+        if (!playSessionId) {
+            console.warn('[PlayerPage] Skipping exit report - no PlaySessionId');
+            return;
+        }
+
+        // Use synchronous-ish reporting (fire and forget, no await)
+        // App may close before async completes
+        if (this._item) {
+            api.reportPlaybackStopped({
+                ItemId: this._item.Id,
+                PlaySessionId: playSessionId,
+                MediaSourceId: mediaSource?.Id,
+                PositionTicks: positionTicks
+            }).catch(err => {
+                console.warn('[PlayerPage] Failed to report on exit:', err);
+            });
         }
     }
 
@@ -483,13 +592,17 @@ class PlayerPage extends Page {
         this._isExiting = true;
 
         try {
+            // Capture session info BEFORE stopping (stop clears internal state)
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
             // Stop the player
             if (this._player?.stop) {
                 await this._player.stop();
             }
 
-            // Report stopped
-            await this._reportPlaybackStopped();
+            // Report stopped with captured values
+            await this._reportPlaybackStopped(mediaSource, positionTicks);
         } catch (error) {
             console.warn('[PlayerPage] Error during stop:', error);
         }
@@ -511,6 +624,12 @@ class PlayerPage extends Page {
             this._player.destroy();
         }
         this._player = null;
+
+        // Remove app exit listener
+        if (this._onAppBeforeExit) {
+            eventBus.off('app:beforeExit', this._onAppBeforeExit);
+            this._onAppBeforeExit = null;
+        }
 
         // Clean up focus sections
         focusManager.unregister('player-error');
