@@ -17,6 +17,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
+import { tizenAdapter } from '../tizen/TizenAdapter.js';
 
 // ============================================================================
 // Storage Keys
@@ -82,17 +83,8 @@ class AuthManager {
             console.log('AuthManager: Generated new device ID');
         }
 
-        // Get device name - NO SPACES allowed
-        let deviceName = 'SamsungTV';
-        if (typeof tizen !== 'undefined') {
-            try {
-                const model = webapis.productinfo.getModel();
-                // Remove all spaces and special characters
-                deviceName = `Samsung${model.replace(/[^a-zA-Z0-9]/g, '')}`;
-            } catch (e) {
-                // Use default
-            }
-        }
+        // Get device name - Encoded to handle spaces safely in headers
+        const deviceName = encodeURIComponent(tizenAdapter.getDeviceName());
 
         api.setDevice(deviceId, deviceName);
     }

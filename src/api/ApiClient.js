@@ -19,7 +19,7 @@ const REQUEST_TIMEOUT = 30000;
 // ============================================================================
 // ApiClient Class
 // ============================================================================
-class ApiClient {
+export class ApiClient {
     constructor() {
         // Server configuration
         this._serverUrl = null;
@@ -28,9 +28,9 @@ class ApiClient {
 
         // Device identification - NO SPACES in any of these values
         this._deviceId = null;
-        this._deviceName = 'LitefinTizenTv';
+        this._deviceName = tizenAdapter.getDeviceName();
         this._clientName = 'Litefin';
-        this._clientVersion = '0.1.0';
+        this._clientVersion = __APP_VERSION__;
     }
 
     // ========================================================================
@@ -76,8 +76,8 @@ class ApiClient {
     setDevice(deviceId, deviceName = null) {
         this._deviceId = deviceId;
         if (deviceName) {
-            // Remove ALL spaces and special characters - critical for header safety
-            this._deviceName = deviceName.replace(/[^a-zA-Z0-9]/g, '');
+            // Allow alphanumeric, spaces, hyphens, underscores, dots, and percent encoding
+            this._deviceName = deviceName.replace(/[^a-zA-Z0-9 \-_\.%]/g, '');
         }
     }
 
@@ -182,6 +182,7 @@ class ApiClient {
             const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
             fetchOptions.signal = controller.signal;
 
+            console.log(`ApiClient: Fetching ${url}...`);
             const response = await fetch(url, fetchOptions);
             clearTimeout(timeoutId);
 
@@ -209,7 +210,7 @@ class ApiClient {
                 throw new Error('Request timeout');
             }
 
-            console.error(`ApiClient: Request failed - ${error.message}`);
+            console.error(`ApiClient: Request to ${endpoint} failed:`, error.message || error);
             eventBus.emit('api:error', { endpoint, error });
             throw error;
         }
@@ -315,7 +316,7 @@ class ApiClient {
      * Returns users with HasPassword field
      */
     async getPublicUsers() {
-        return this.get('/Users/Public');
+        return this.get('Users/Public');
     }
 
     /**
@@ -807,7 +808,7 @@ class ApiClient {
 /**
  * Test if an address is a valid Jellyfin server
  */
-async function testServer(address, timeout = 1000) {
+export async function testServer(address, timeout = 1000) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
@@ -840,18 +841,59 @@ async function testServer(address, timeout = 1000) {
             version: info.Version,
             operatingSystem: info.OperatingSystem
         };
-    } catch {
+    } catch (err) {
         return null;
+    }
+}
+
+let activeDiscoveryController = null;
+
+/**
+ * Cancel any active discovery process
+ */
+export function cancelDiscovery() {
+    if (activeDiscoveryController) {
+        console.log('ApiClient: Cancelling discovery scan...');
+        activeDiscoveryController.abort();
+        activeDiscoveryController = null;
     }
 }
 
 /**
  * Discover Jellyfin servers on local network
  */
-async function discoverServers(onProgress = null, onServerFound = null) {
+export async function discoverServers(onProgress = null, onServerFound = null) {
+    // Cancel any existing scan first
+    cancelDiscovery();
+
     console.log('ApiClient: Starting server discovery...');
+
+    activeDiscoveryController = new AbortController();
+    const signal = activeDiscoveryController.signal;
+
     const foundServers = [];
     const scannedIps = new Set();
+
+    // 1. Identify unique subnets to scan
+    const subnets = new Set();
+
+    // Local subnet
+    const localIP = await tizenAdapter.getIPAddress();
+    if (localIP) {
+        const parts = localIP.split('.');
+        if (parts.length === 4) {
+            subnets.add(`${parts[0]}.${parts[1]}.${parts[2]}.`);
+        }
+    }
+
+    // Common subnets
+    ['192.168.1.', '192.168.0.', '10.0.0.'].forEach(s => subnets.add(s));
+
+    const uniqueSubnets = Array.from(subnets);
+    const totalIPs = uniqueSubnets.length * 254;
+    let globalScannedCount = 0;
+
+    console.log(`ApiClient: Scanning ${uniqueSubnets.length} subnets (${totalIPs} IPs total)`);
 
     const scanSubnet = async (prefix) => {
         const batch = [];
@@ -865,9 +907,11 @@ async function discoverServers(onProgress = null, onServerFound = null) {
 
         const CHUNK_SIZE = 60;
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
+            if (signal.aborted) return;
+
             const chunk = batch.slice(i, i + CHUNK_SIZE);
             const results = await Promise.all(
-                chunk.map(addr => testServer(addr, 500))
+                chunk.map(addr => testServer(addr, 800))
             );
 
             results.filter(s => s).forEach(s => {
@@ -878,33 +922,36 @@ async function discoverServers(onProgress = null, onServerFound = null) {
                 }
             });
 
-            if (onProgress) onProgress(scannedIps.size, 600);
+            globalScannedCount += chunk.length;
+            if (onProgress) onProgress(globalScannedCount, totalIPs);
+
+            // Small yield to let UI breathe
+            await new Promise(r => setTimeout(r, 10));
         }
     };
 
-    // Scan local subnet first
-    const localIP = await tizenAdapter.getIPAddress();
-    if (localIP) {
-        const parts = localIP.split('.');
-        if (parts.length === 4) {
-            const subnet = `${parts[0]}.${parts[1]}.${parts[2]}.`;
-            console.log(`ApiClient: Scanning local subnet ${subnet}x`);
-            await scanSubnet(subnet);
-        }
+    // Execute scans sequentially to avoid flooding network on weak TV hardware
+    for (const subnet of uniqueSubnets) {
+        if (signal.aborted) break;
+        console.log(`ApiClient: Scanning subnet ${subnet}x`);
+        await scanSubnet(subnet);
     }
 
-    // Scan common subnets
-    const standardSubnets = ['192.168.0.', '192.168.1.', '10.0.0.'];
-    await Promise.all(standardSubnets.map(subnet => scanSubnet(subnet)));
+    if (signal.aborted) {
+        console.log('ApiClient: Discovery cancelled');
+    } else {
+        console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
+    }
 
-    console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
+    if (activeDiscoveryController?.signal === signal) {
+        activeDiscoveryController = null;
+    }
+
     return foundServers;
 }
 
-// Export singleton
+// Create singleton instance
 export const api = new ApiClient();
 
-// Export discovery functions
-export { discoverServers, testServer };
-
-export default ApiClient;
+// Default export is the api instance for convenience
+export default api;

@@ -168,7 +168,7 @@ class DebugOverlay {
             justify-content: space-between;
             align-items: center;
         `;
-        header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v0.2</span>`;
+        header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v${__APP_VERSION__}</span>`;
         this._overlay.appendChild(header);
 
         // Content area

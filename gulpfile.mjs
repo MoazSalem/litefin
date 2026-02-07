@@ -10,8 +10,13 @@ const execAsync = promisify(exec);
 
 console.info("Building Litefin Tizen app");
 
-const pkg = JSON.parse(readFileSync("./package.json", "utf8"));
-const version = pkg.version;
+// Read version from config.xml (Single Source of Truth)
+// We already validated this regex in webpack.config.cjs
+const configXmlContent = readFileSync("./config.xml", "utf8");
+const versionMatch = configXmlContent.match(/<widget[^>]*\sversion="([^"]+)"/);
+const version = versionMatch ? versionMatch[1] : '0.0.0';
+
+console.log(`Package Version: ${version}`);
 
 // ============================================================================
 // Clean tasks
@@ -136,11 +141,29 @@ async function packageLegacy() {
 }
 
 // ============================================================================
+// Sync task
+// ============================================================================
+
+async function syncVersion() {
+    const fs = await import('fs');
+    const pkg = JSON.parse(fs.readFileSync('./package.json', 'utf8'));
+
+    if (pkg.version !== version) {
+        console.info(`Syncing package.json version: ${pkg.version} -> ${version}`);
+        pkg.version = version;
+        fs.writeFileSync('./package.json', JSON.stringify(pkg, null, 4));
+    } else {
+        console.info('package.json version is already up to date');
+    }
+}
+
+// ============================================================================
 // Main tasks
 // ============================================================================
 
 // Build and package all 3 versions (default for npm run package)
 const buildPackage = gulp.series(
+    syncVersion,
     cleanDist,
     cleanWgt,
     webpackAll,
@@ -148,15 +171,15 @@ const buildPackage = gulp.series(
 );
 
 // Individual build+package tasks
-const buildPackageES6 = gulp.series(cleanDist, webpackES6, packageES6);
-const buildPackageNormal = gulp.series(cleanDist, webpackNormal, packageNormal);
-const buildPackageLegacy = gulp.series(cleanDist, webpackLegacy, packageLegacy);
+const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
+const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
+const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
 
 // Just build (no packaging)
-const build = gulp.series(cleanDist, webpackAll);
-const buildES6 = gulp.series(cleanDist, webpackES6);
-const buildNormal = gulp.series(cleanDist, webpackNormal);
-const buildLegacy = gulp.series(cleanDist, webpackLegacy);
+const build = gulp.series(syncVersion, cleanDist, webpackAll);
+const buildES6 = gulp.series(syncVersion, cleanDist, webpackES6);
+const buildNormal = gulp.series(syncVersion, cleanDist, webpackNormal);
+const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
 
 export {
     clean,

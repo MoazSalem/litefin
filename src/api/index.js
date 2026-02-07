@@ -4,7 +4,7 @@
  * ============================================================================
  */
 
-export { api, discoverServers, testServer } from './ApiClient.js';
+export { api, discoverServers, cancelDiscovery, testServer } from './ApiClient.js';
 export { auth } from './AuthManager.js';
 export { getDeviceProfile, detectCapabilities, getAutoProfile } from './DeviceProfile.js';
 

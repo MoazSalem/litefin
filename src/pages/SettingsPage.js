@@ -401,7 +401,7 @@ class SettingsPage extends Page {
                 <h2 class="content-title">About Litefin</h2>
                 
                 <div class="about-card" tabindex="0">
-                    <h3 class="app-version">Version 0.2.0</h3>
+                    <h3 class="app-version">Version ${__APP_VERSION__}</h3>
                     <p class="about-desc">
                         A lightweight, community-driven Jellyfin client optimized for Tizen TVs.
                         Built with love for speed and simplicity.

@@ -8,7 +8,7 @@
  */
 
 import Page from './Page.js';
-import { auth, api, discoverServers } from '../api/index.js';
+import { auth, api, discoverServers, cancelDiscovery } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
@@ -35,6 +35,12 @@ class LoginPage extends Page {
         this._discoveredServers = []; // Servers found via LAN discovery
         this._isDiscovering = false;
         this._isLoggingIn = false;
+    }
+
+    destroy() {
+        // Stop any active discovery when leaving page
+        cancelDiscovery();
+        super.destroy();
     }
 
     render() {
@@ -301,6 +307,12 @@ class LoginPage extends Page {
             }, 200);
         });
 
+        // Enable arrow key cursor movement
+        this._enableInputNavigation(this._serverInput);
+        this._enableInputNavigation(this._passwordInput);
+        this._enableInputNavigation(this._manualUsername);
+        this._enableInputNavigation(this._manualPassword);
+
         // Manual Login inputs handling
         this._setupInputHandler(this._manualUsername, () => this._manualPassword.focus());
         this._setupInputHandler(this._manualPassword, () => this._handleManualLogin());
@@ -331,6 +343,21 @@ class LoginPage extends Page {
             setTimeout(() => {
                 input.readOnly = true;
             }, 200);
+        });
+    }
+
+    /**
+     * Enable arrow keys to move cursor within input instead of changing focus
+     */
+    _enableInputNavigation(input) {
+        if (!input) return;
+
+        input.addEventListener('keydown', (e) => {
+            // STOP propagation for Left/Right arrows ONLY when editing
+            // This allows spatial nav to work when input is read-only (navigation mode)
+            if (!input.readOnly && (e.keyCode === 37 || e.keyCode === 39)) {
+                e.stopPropagation();
+            }
         });
     }
 
@@ -462,6 +489,8 @@ class LoginPage extends Page {
             this._serverUrl = serverUrl;
 
             // Connect to server
+            // Stop scanning first
+            cancelDiscovery();
             await auth.connectToServer(serverUrl);
 
             // Get public users
@@ -566,6 +595,9 @@ class LoginPage extends Page {
                 // No password required - login directly
                 console.log(`LoginPage: User "${user.Name}" has no password, logging in directly`);
                 this._showState(STATE.LOADING);
+
+                // Stop any running discovery just in case
+                cancelDiscovery();
 
                 await auth.login(user.Name, '');
                 router.navigate('/home', { replace: true });

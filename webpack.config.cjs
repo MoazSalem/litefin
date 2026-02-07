@@ -9,7 +9,18 @@
  * ============================================================================
  */
 
+const webpack = require('webpack');
 const path = require('path');
+const fs = require('fs');
+
+// Read version from config.xml (Single Source of Truth)
+const configXmlPath = path.resolve(__dirname, 'config.xml');
+const configXmlContent = fs.readFileSync(configXmlPath, 'utf8');
+const versionMatch = configXmlContent.match(/<widget[^>]*\sversion="([^"]+)"/);
+const APP_VERSION = versionMatch ? versionMatch[1] : '0.0.0';
+
+console.log(`Building Litefin v${APP_VERSION}`);
+
 const HtmlWebpackPlugin = require('html-webpack-plugin');
 const MiniCssExtractPlugin = require('mini-css-extract-plugin');
 const CssMinimizerPlugin = require('css-minimizer-webpack-plugin');
@@ -30,11 +41,14 @@ function getPlugins() {
         }),
         new CopyWebpackPlugin({
             patterns: [
-                { from: 'src/config.xml', to: 'config.xml' },
+                { from: 'config.xml', to: 'config.xml' }, // Copy root config.xml
                 { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
                 { from: 'src/player', to: 'player', noErrorOnMissing: true }
             ]
+        }),
+        new webpack.DefinePlugin({
+            __APP_VERSION__: JSON.stringify(APP_VERSION)
         })
     ];
 }

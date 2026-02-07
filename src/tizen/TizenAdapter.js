@@ -308,6 +308,29 @@ class TizenAdapter {
     }
 
     /**
+     * Get device name
+     * @returns {string} Device name (e.g. "Samsung Smart TV" or "Web Browser")
+     */
+    getDeviceName() {
+        if (this._isTizen) {
+            // Could try to get specific model if needed, but "Samsung Smart TV" is standard
+            return 'Samsung Smart TV';
+        }
+        return 'Web Browser';
+    }
+
+    /**
+     * Get device manufacturer
+     * @returns {string} Manufacturer name
+     */
+    getManufacturer() {
+        if (this._isTizen) {
+            return 'Samsung';
+        }
+        return 'Generic';
+    }
+
+    /**
      * Get key codes map
      * @returns {Object} Key code constants
      */
