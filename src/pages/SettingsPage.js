@@ -79,7 +79,7 @@ class SettingsPage extends Page {
                     </aside>
 
                     <!-- Content Panel -->
-                    <main class="settings-content-panel" id="settings-content-panel">
+                    <main class="settings-content-panel page-content" id="settings-content-panel">
                         ${this._renderActiveTabContent()}
                     </main>
                 </div>
@@ -498,7 +498,7 @@ class SettingsPage extends Page {
                         <span class="setting-name">Overlay Position</span>
                         <span class="setting-description">Screen location of the debug window</span>
                     </div>
-                    <div class="setting-control">
+            <div class="setting-control">
                         ${this._renderDropdown('debug-position-select', [
             { value: 'top-left', label: 'Top Left' },
             { value: 'top-right', label: 'Top Right' },
@@ -506,6 +506,24 @@ class SettingsPage extends Page {
             { value: 'bottom-right', label: 'Bottom Right' }
         ], debugOverlay.Position || 'bottom-right')}
                     </div>
+                </div>
+
+                <!-- Module Filters -->
+                <h3 class="setting-section-title">Module Filters</h3>
+                <div class="module-filters-grid">
+                    ${debugOverlay.getKnownModules().map(module => `
+                        <div class="setting-item compact">
+                            <div class="setting-label">
+                                <span class="setting-name">${module}</span>
+                            </div>
+                            <div class="setting-control">
+                                <button class="toggle-switch module-filter-toggle ${debugOverlay.isModuleEnabled(module) ? 'active' : ''}" 
+                                        data-module="${module}"
+                                        tabindex="0">
+                                </button>
+                            </div>
+                        </div>
+                    `).join('')}
                 </div>
             </div>
         `;
@@ -806,16 +824,29 @@ class SettingsPage extends Page {
         const toggleOverlay = this.$('#toggle-debug-overlay');
         if (toggleOverlay) {
             toggleOverlay.addEventListener('click', () => {
+                if (toggleOverlay.getAttribute('disabled')) return;
+
                 const newState = !toggleOverlay.classList.contains('active');
                 toggleOverlay.classList.toggle('active');
 
                 // Update DebugOverlay
                 debugOverlay.setOverlayEnabled(newState);
-
-                // Persist
                 localStorage.setItem('debug_overlay_enabled', newState);
             });
         }
+
+        // Module Filter Toggles
+        this.$$('.module-filter-toggle').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const module = btn.dataset.module;
+                const newState = !btn.classList.contains('active');
+
+                btn.classList.toggle('active');
+                debugOverlay.toggleModule(module, newState);
+            });
+        });
+
+
     }
 
     _switchTab(tabId, force = false) {

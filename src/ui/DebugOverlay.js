@@ -30,6 +30,24 @@ class DebugOverlay {
             info: console.info,
             debug: console.debug
         };
+
+        // Known modules for filtering
+        this._knownModules = [
+            'Router',
+            'FocusManager',
+            'TizenAdapter',
+            'AuthManager',
+            'ApiClient',
+            'DeviceProfile',
+            'Player',
+            'StateManager',
+            'EventBus',
+            'NavigationState'
+        ];
+
+        // Filter state (Map: ModuleName -> Boolean)
+        this._moduleFilters = new Map();
+        this._loadModulePreferences();
     }
 
     /**
@@ -245,9 +263,37 @@ class DebugOverlay {
      * Intercept console.log/error/warn
      * @private
      */
+    /**
+     * Intercept console.log/error/warn
+     * @private
+     */
     _interceptConsole() {
         const addLog = (type, args) => {
             if (!this._overlayEnabled || !this._content) return;
+
+            // STRINGIFY FIRST to check for module prefixes
+            const textArgs = args.map(arg => {
+                if (typeof arg === 'object') {
+                    try {
+                        return JSON.stringify(arg);
+                    } catch (e) {
+                        return '[Object]';
+                    }
+                }
+                return String(arg);
+            });
+            const fullText = textArgs.join(' ');
+
+            // FILTERING LOGIC
+            // Check for prefixes like "Router:", "[FocusManager]", "TizenAdapter:"
+            const moduleMatch = fullText.match(/^(?:\[?(\w+)\]?:?)\s/);
+            if (moduleMatch) {
+                const moduleName = moduleMatch[1];
+                // If this module is tracked AND disabled, skip logging
+                if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
+                    return;
+                }
+            }
 
             const line = document.createElement('div');
             line.style.borderBottom = '1px solid #333';
@@ -257,18 +303,7 @@ class DebugOverlay {
             if (type === 'error') line.style.color = '#f55';
             else if (type === 'warn') line.style.color = '#fa0';
 
-            const text = args.map(arg => {
-                if (typeof arg === 'object') {
-                    try {
-                        return JSON.stringify(arg);
-                    } catch (e) {
-                        return '[Object]';
-                    }
-                }
-                return String(arg);
-            }).join(' ');
-
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
+            line.textContent = `[${new Date().toLocaleTimeString()}] ${fullText}`;
             this._content.appendChild(line);
 
             if (this._content.children.length > 200) {
@@ -280,6 +315,23 @@ class DebugOverlay {
         // Wrap methods
         console.log = (...args) => {
             if (this._logsEnabled) {
+                // Check filter for console output too?
+                // The user asked "work in both browser console and overlay"
+                // So we should verify filter before calling original console.
+
+                // We need to construct string to check filter
+                const firstArg = args[0];
+                if (typeof firstArg === 'string') {
+                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
+                    if (moduleMatch) {
+                        const moduleName = moduleMatch[1];
+                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
+                            // Suppress completely
+                            return;
+                        }
+                    }
+                }
+
                 this._originalConsole.log.apply(console, args);
                 addLog('log', args);
             }
@@ -287,6 +339,17 @@ class DebugOverlay {
 
         console.error = (...args) => {
             if (this._logsEnabled) {
+                const firstArg = args[0];
+                if (typeof firstArg === 'string') {
+                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
+                    if (moduleMatch) {
+                        const moduleName = moduleMatch[1];
+                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
+                            return;
+                        }
+                    }
+                }
+
                 this._originalConsole.error.apply(console, args);
                 addLog('error', args);
             }
@@ -294,6 +357,17 @@ class DebugOverlay {
 
         console.warn = (...args) => {
             if (this._logsEnabled) {
+                const firstArg = args[0];
+                if (typeof firstArg === 'string') {
+                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
+                    if (moduleMatch) {
+                        const moduleName = moduleMatch[1];
+                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
+                            return;
+                        }
+                    }
+                }
+
                 this._originalConsole.warn.apply(console, args);
                 addLog('warn', args);
             }
@@ -324,6 +398,50 @@ class DebugOverlay {
 
     toggle() {
         this._isVisible ? this.hide() : this.show();
+    }
+
+    /**
+     * Load filter preferences from localStorage
+     * @private
+     */
+    _loadModulePreferences() {
+        this._knownModules.forEach(module => {
+            const key = `debug_filter_${module}`;
+            const stored = localStorage.getItem(key);
+            // Default to TRUE (enabled) if not set
+            const isEnabled = stored === null ? true : stored === 'true';
+            this._moduleFilters.set(module, isEnabled);
+        });
+    }
+
+    /**
+     * Toggle visibility for a specific module
+     * @param {string} moduleName 
+     * @param {boolean} enabled 
+     */
+    toggleModule(moduleName, enabled) {
+        if (!this._knownModules.includes(moduleName)) return;
+
+        this._moduleFilters.set(moduleName, enabled);
+        localStorage.setItem(`debug_filter_${moduleName}`, enabled);
+
+        this._originalConsole.log(`DebugOverlay: Module filter '${moduleName}' set to ${enabled}`);
+    }
+
+    /**
+     * Check if a module is enabled
+     * @param {string} moduleName 
+     */
+    isModuleEnabled(moduleName) {
+        if (!this._moduleFilters.has(moduleName)) return true;
+        return this._moduleFilters.get(moduleName);
+    }
+
+    /**
+     * Get list of known modules
+     */
+    getKnownModules() {
+        return this._knownModules;
     }
 }
 
