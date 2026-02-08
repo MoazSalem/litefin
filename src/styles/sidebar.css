@@ -90,7 +90,7 @@
 .logo-text {
     font-size: 1.8rem;
     font-weight: 700;
-    color: white;
+    color: var(--jf-text-primary);
     opacity: 0;
     transition: opacity 0.2s ease;
     margin-left: 0px;
@@ -122,7 +122,9 @@
 .sidebar-item:focus,
 .sidebar-item.focused {
     background: var(--jf-accent);
+    background: var(--jf-accent);
     color: white;
+    box-shadow: none;
     box-shadow: none;
 }
 
@@ -178,7 +180,7 @@
 
 .sidebar-item:focus .sidebar-avatar,
 .sidebar-item.focused .sidebar-avatar {
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
 }
 
 /* Text - Hidden when collapsed */

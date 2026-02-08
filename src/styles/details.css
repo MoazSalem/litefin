@@ -282,8 +282,8 @@
 /* Unified Primary Play/Resume Buttons */
 .play-btn,
 .resume-btn {
-    background: white;
-    color: var(--jf-background);
+    background: var(--jf-primary-btn-bg);
+    color: var(--jf-primary-btn-color);
 }
 
 .play-btn:focus,
@@ -293,7 +293,7 @@
     transform: scale(1.05);
     background: var(--jf-accent);
     color: white;
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     outline: none !important;
 }
 
@@ -316,9 +316,9 @@
     padding: 0 !important;
     border-radius: 50% !important;
     -webkit-border-radius: 50% !important;
-    background: rgba(40, 40, 40, 0.8);
-    border: 2px solid rgba(255, 255, 255, 0.2) !important;
-    color: var(--jf-text-primary);
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border) !important;
+    color: var(--jf-action-btn-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -340,9 +340,9 @@
 /* Active State (Heart Filled / Checked) */
 .btn-icon.active {
     /* Updated: Matches Play Normal State */
-    background: white;
-    color: var(--jf-background);
-    border-color: white !important;
+    background: var(--jf-action-btn-active-bg);
+    color: var(--jf-action-btn-active-color);
+    border-color: var(--jf-action-btn-active-border) !important;
 }
 
 /* Focus State (Unified) */
@@ -351,7 +351,7 @@
     transform: scale(1.05);
     background: var(--jf-accent);
     color: white;
-    border-color: white !important;
+    border-color: var(--jf-button-border-focus) !important;
     outline: none !important;
 }
 
@@ -488,7 +488,7 @@
 .see-more-btn:focus,
 .see-more-btn.focused {
     background: var(--jf-accent);
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     color: white;
     outline: none !important;
     transform: scale(1.05);
@@ -546,7 +546,7 @@
     transform: scale(1.05);
     background: var(--jf-card-bg-hover);
     outline: none !important;
-    border: 4px solid white;
+    border: 4px solid var(--jf-button-border-focus);
     z-index: 10;
 }
 
@@ -663,13 +663,14 @@
     border-radius: 28px;
     -webkit-border-radius: 28px;
     overflow: hidden;
+    overflow: hidden;
     background-clip: padding-box;
-    background: rgba(40, 40, 40, 0.8);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: var(--jf-action-btn-bg);
+    border: 2px solid var(--jf-action-btn-border);
     display: flex;
     align-items: center;
     padding: 0 24px;
-    color: var(--jf-text-primary);
+    color: var(--jf-action-btn-color);
     font-size: 1.2rem;
     font-weight: 600;
     transition: all 0.2s ease;
@@ -690,7 +691,7 @@
 .btn-icon-text.focused {
     background: var(--jf-accent);
     color: white;
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
     outline: none !important;
 }

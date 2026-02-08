@@ -30,34 +30,36 @@
 }
 
 .settings-sidebar-header {
-    padding: 0 40px 30px 40px;
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    padding: 0 40px;
     margin-bottom: 20px;
+    margin-top: 10px;
 }
 
 .settings-sidebar-header h2 {
-    font-size: 2rem;
+    font-size: 2.2rem;
     font-weight: 700;
     color: var(--jf-text-primary);
     margin: 0;
+    letter-spacing: -0.5px;
 }
 
 .settings-menu-btn {
     display: flex;
     align-items: center;
-    padding: 20px 40px;
+    padding: 16px 24px;
     background: transparent;
     border: none;
     color: var(--jf-text-secondary);
-    font-size: 1.4rem;
+    font-size: 1.3rem;
+    font-weight: 500;
     cursor: pointer;
     text-align: left;
-    margin: 4px 10px;
-    border-left: 6px solid transparent;
-    border-radius: 8px;
-    -webkit-border-radius: 8px;
+    margin: 4px 20px;
+    border-radius: 12px;
+    -webkit-border-radius: 12px;
     overflow: hidden;
     background-clip: padding-box;
+    transition: all 0.2s ease;
 }
 
 .settings-menu-btn .menu-icon {
@@ -76,16 +78,15 @@
 }
 
 .settings-menu-btn.active {
-    background: rgba(255, 255, 255, 0.05);
+    background: rgba(255, 255, 255, 0.1);
     color: var(--jf-text-primary);
-    border-left-color: var(--jf-accent);
+    font-weight: 600;
 }
 
 .settings-menu-btn:focus,
 .settings-menu-btn.focused {
     background: var(--jf-accent);
     color: white;
-    border-left-color: white;
     outline: none !important;
 }
 
@@ -100,10 +101,21 @@
 .content-title {
     font-size: 2.5rem;
     font-weight: 300;
-    margin-bottom: 40px;
     color: var(--jf-text-primary);
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     padding-bottom: 20px;
+    letter-spacing: -0.5px;
+}
+
+.setting-section-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-top: 20px;
+    margin-bottom: 20px;
+    padding-bottom: 10px;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
 }
 
 /* Setting Items */
@@ -112,8 +124,16 @@
     justify-content: space-between;
     align-items: center;
     padding: 24px 0;
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+    padding: 24px 0;
     min-height: 80px;
+    transition: background-color 0.2s ease;
+    border-radius: 16px;
+    padding-left: 16px;
+    padding-right: 16px;
+}
+
+.setting-item:focus-within {
+    background-color: rgba(255, 255, 255, 0.03);
 }
 
 .setting-label {
@@ -147,10 +167,10 @@
 .btn-option {
     padding: 12px 24px;
     font-size: 1.1rem;
-    background: rgba(30, 30, 30, 0.8);
+    background: rgba(40, 40, 40, 0.8);
     border: 3px solid transparent;
-    border-radius: 12px;
-    -webkit-border-radius: 12px;
+    border-radius: 40px;
+    -webkit-border-radius: 40px;
     overflow: hidden;
     background-clip: padding-box;
     min-width: 100px;
@@ -167,20 +187,16 @@
     border-color: transparent !important;
 }
 
-/* 
- * REMOVED Light Theme Overrides 
- * User requested consistent dark/glass style for all themes
- */
-
 .btn-option.active {
     background: var(--jf-accent);
     color: white;
-    border-color: var(--jf-accent);
+    border-color: var(--jf-button-border-focus);
+    /* Subtle white inner border */
 }
 
 .btn-option:focus,
 .btn-option.focused {
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     /* High contrast focus */
     background: var(--jf-accent-hover);
     transform: scale(1.05);
@@ -192,10 +208,10 @@
 .select-btn {
     padding: 12px 24px;
     font-size: 1.1rem;
-    background: rgba(30, 30, 30, 0.8);
+    background: rgba(40, 40, 40, 0.8);
     border: 3px solid transparent;
-    border-radius: 12px;
-    -webkit-border-radius: 12px;
+    border-radius: 40px;
+    -webkit-border-radius: 40px;
     overflow: hidden;
     background-clip: padding-box;
     min-width: 200px;
@@ -209,7 +225,7 @@
 .select-btn.focused {
     background: var(--jf-accent);
     color: white;
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
 }
 
@@ -378,7 +394,7 @@
 .switch-user-btn.focused {
     background: #ff3b30;
     /* Apple Red */
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
 }
 
 /* About Card */
@@ -423,7 +439,7 @@
 .toggle-switch {
     width: 60px;
     height: 34px;
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: var(--jf-switch-bg);
     border-radius: 34px;
     -webkit-border-radius: 34px;
     overflow: hidden;
@@ -441,7 +457,8 @@
     left: 3px;
     width: 24px;
     height: 24px;
-    background-color: white;
+    background-color: var(--jf-switch-handle);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     border-radius: 50%;
 }
 
@@ -455,7 +472,7 @@
 
 .toggle-switch:focus,
 .toggle-switch.focused {
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
 }
 

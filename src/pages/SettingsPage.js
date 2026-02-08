@@ -117,6 +117,9 @@ class SettingsPage extends Page {
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title">Appearance</h2>
+
+                <!-- Theme Section -->
+                <h3 class="setting-section-title">Theme</h3>
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -125,7 +128,7 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         <button class="btn btn-option layout-btn ${currentLayout === 'classic' ? 'active' : ''}" data-layout="classic" tabindex="0">Classic</button>
-                        <button class="btn btn-option layout-btn ${currentLayout === 'modern' ? 'active' : ''}" data-layout="modern" tabindex="-1" disabled>Modern (Soon)</button>
+                        <button class="btn btn-option layout-btn ${currentLayout === 'modern' ? 'active' : ''}" data-layout="modern" tabindex="-1" disabled>Modern (later)</button>
                     </div>
                 </div>
 
@@ -134,14 +137,33 @@ class SettingsPage extends Page {
                         <span class="setting-name">Color Theme</span>
                         <span class="setting-description">Select your preferred color scheme</span>
                     </div>
-                    <div class="setting-control theme-options" id="theme-options">
-                        ${availableThemes.map(theme => `
-                            <button class="btn btn-option theme-btn ${currentTheme === theme ? 'active' : ''}" data-theme="${theme}" tabindex="0">
-                                ${this._getThemeDisplayName(theme)}
-                            </button>
-                        `).join('')}
+                    <div class="setting-control">
+                        ${this._renderDropdown('theme-select', availableThemes.map(t => ({
+            value: t,
+            label: this._getThemeDisplayName(t)
+        })), currentTheme)}
                     </div>
                 </div>
+
+                <!-- Home Screen Section -->
+                <h3 class="setting-section-title">Home Screen</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Home Screen Customization</span>
+                        <span class="setting-description">Hide "My Media" row from home screen</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${localStorage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-my-media" 
+                                 tabindex="0"
+                                 aria-label="Toggle My Media visibility">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Image Related Section -->
+                <h3 class="setting-section-title">Image Related</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -155,20 +177,6 @@ class SettingsPage extends Page {
             { value: 'high', label: 'High (High Quality)' },
             { value: 'ultra', label: 'Ultra (Maximum)' }
         ], imageService.getPreset() || 'medium')}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name">Home Screen Customization</span>
-                        <span class="setting-description">Hide "My Media" row from home screen</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${localStorage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
-                                 id="toggle-my-media" 
-                                 tabindex="0"
-                                 aria-label="Toggle My Media visibility">
-                        </button>
                     </div>
                 </div>
             </div>
@@ -436,6 +444,9 @@ class SettingsPage extends Page {
             <div class="settings-tab-content">
                 <h2 class="content-title">Debug</h2>
 
+                <!-- Logging Section -->
+                <h3 class="setting-section-title">Logging</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">Enable Debug Logs</span>
@@ -567,12 +578,7 @@ class SettingsPage extends Page {
             });
         });
 
-        // Theme buttons
-        this.$$('.theme-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                this._setTheme(btn.dataset.theme);
-            });
-        });
+
 
 
 
@@ -721,7 +727,7 @@ class SettingsPage extends Page {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
             'layout': { key: 'layout', type: 'local' },
-            'theme': { key: 'theme', type: 'local' },
+            'theme-select': { key: 'theme', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'max-resolution-select': { key: 'litefin_max_resolution', type: 'local' },
             'max-bitrate-select': { key: 'pref:maxBitrate', type: 'local' },
@@ -758,9 +764,14 @@ class SettingsPage extends Page {
 
                     // Save Setting based on type
                     if (settingConfig) {
-                        if (settingConfig.type === 'local') {
+                        if (id === 'theme-select') {
+                            // SPECIAL CASE: Theme changes should be handled by LayoutManager
+                            // It handles persistence (litefin:theme) and DOM updates
+                            layoutManager.setTheme(newValue);
+                            // No reload needed!
+                        } else if (settingConfig.type === 'local') {
                             localStorage.setItem(settingConfig.key, newValue);
-                            if (settingConfig.key === 'layout' || settingConfig.key === 'theme' || settingConfig.key === 'litefin_max_resolution') {
+                            if (settingConfig.key === 'layout' || settingConfig.key === 'litefin_max_resolution') {
                                 window.location.reload();
                             }
                         } else if (settingConfig.type === 'service') {
@@ -875,12 +886,24 @@ class SettingsPage extends Page {
         focusManager.register('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',
             leaveRight: 'settings-content',
+            leaveLeft: 'sidebar',
             enterTo: 'last-focused'
         });
 
         focusManager.register('settings-content', this.$('#settings-content-panel'), {
-            orientation: 'grid',
-            leaveLeft: 'settings-sidebar',
+            orientation: 'vertical',
+            // Custom Left Navigation: Always return to the ACTIVE sidebar tab
+            // This ensures predictable navigation ("Back to parent") behavior
+            onMove: (dir) => {
+                if (dir === 'left') {
+                    const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
+                    if (activeBtn) {
+                        focusManager.focusElement(activeBtn);
+                        return true; // Handled
+                    }
+                }
+                return false;
+            },
             enterTo: 'last-focused'
         });
     }

@@ -213,7 +213,7 @@
 .episode-action-btn.active {
     background: white;
     color: var(--jf-background);
-    border-color: white;
+    border-color: var(--jf-button-border-focus);
 }
 
 /* Ensure focus always wins over active state for consistency */
@@ -221,10 +221,9 @@
 .episode-action-btn.focused,
 .episode-action-btn.active:focus,
 .episode-action-btn.active.focused {
-    transform: scale(1.15);
     /* Slightly larger pop */
     background: var(--jf-accent) !important;
-    border-color: var(--jf-accent) !important;
+    border-color: var(--jf-button-border-focus) !important;
     color: white !important;
     outline: none;
 }

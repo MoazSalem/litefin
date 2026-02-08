@@ -41,6 +41,8 @@
    --jf-button-bg: #e0e0e0;
    --jf-button-hover: #d0d0d0;
    --jf-divider: #e0e0e0;
+   --jf-switch-bg: #e0e0e0;
+   --jf-switch-handle: #ffffff;
 
    /* ========================================================================
        Semantic Colors
@@ -57,6 +59,19 @@
    --jf-shadow-md: 0 4px 8px rgba(0, 0, 0, 0.1);
    --jf-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
    --jf-focus-border-color: var(--jf-accent);
+   --jf-button-border-focus: #333333;
+
+   /* Action Buttons */
+   --jf-action-btn-bg: rgba(0, 0, 0, 0.05);
+   --jf-action-btn-border: rgba(0, 0, 0, 0.1);
+   --jf-action-btn-color: var(--jf-text-primary);
+   --jf-action-btn-active-bg: var(--jf-accent);
+   --jf-action-btn-active-border: var(--jf-accent);
+   --jf-action-btn-active-color: #ffffff;
+
+   /* Primary Buttons (Play/Resume) */
+   --jf-primary-btn-bg: var(--jf-accent);
+   --jf-primary-btn-color: #ffffff;
 
 
    /* ========================================================================

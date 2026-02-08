@@ -25,7 +25,7 @@
 .btn-primary:focus,
 .btn-primary.focused {
     background: var(--jf-accent-hover);
-    border-color: var(--jf-focus-border-color);
+    border-color: var(--jf-button-border-focus);
     outline: none;
     color: #FFF;
 }
@@ -72,7 +72,7 @@
 .nav-btn.focused {
     background: var(--jf-accent);
     outline: none;
-    border-color: var(--jf-focus-border-color);
+    border-color: var(--jf-button-border-focus);
     box-shadow: none;
 }
 
@@ -112,7 +112,7 @@
 .back-btn.focused {
     background: var(--jf-accent-light);
     outline: none;
-    border-color: var(--jf-focus-border-color);
+    border-color: var(--jf-button-border-focus);
     box-shadow: none;
 }
 
@@ -136,7 +136,7 @@
 .btn-icon-small:hover {
     background: var(--jf-button-hover);
     color: var(--jf-accent);
-    border-color: var(--jf-focus-border-color);
+    border-color: var(--jf-button-border-focus);
 }
 
 /* Inputs */
@@ -154,8 +154,7 @@
 
 .text-input:focus,
 .text-input.focused {
-    border-color: var(--jf-focus-border-color);
-
+    border-color: var(--jf-button-border-focus);
     outline: none;
 }
 
