@@ -37,6 +37,10 @@ class PlayerPage extends Page {
 
         // Track reporting state
         this._hasReportedStart = false;
+
+        // Cached media source for stop reporting
+        // (player clears this internally after stop, so we need a copy)
+        this._cachedMediaSource = null;
     }
 
     render() {
@@ -107,6 +111,172 @@ class PlayerPage extends Page {
             // Listen for app close/hide events to report playback stopped
             this._onAppBeforeExit = () => this._handleAppExit();
             eventBus.on('app:beforeExit', this._onAppBeforeExit);
+
+            // ================================================================
+            // REMOTE CONTROL HANDLERS
+            // ================================================================
+            // Handle remote pause/play/stop commands from Jellyfin dashboard
+            // IMPORTANT: These must also report state changes to the server!
+
+            this._onRemotePause = () => {
+                console.log('[PlayerPage] Remote: Pause');
+                if (this._player?.pause) {
+                    this._player.pause();
+                    // Report pause state to server
+                    this._reportPlaybackProgress('pause');
+                }
+            };
+            eventBus.on('remote:pause', this._onRemotePause);
+
+            this._onRemotePlay = () => {
+                console.log('[PlayerPage] Remote: Play/Resume');
+                // Player library uses unpause() or togglePlay() - not play()
+                if (this._player?.unpause) {
+                    this._player.unpause();
+                } else if (this._player?.togglePlay && this._player?.isPaused?.()) {
+                    // Only toggle if paused (to avoid pausing when already playing)
+                    this._player.togglePlay();
+                }
+                // Report unpause state to server
+                this._reportPlaybackProgress('unpause');
+            };
+            eventBus.on('remote:play', this._onRemotePlay);
+
+            this._onRemotePlayPause = () => {
+                console.log('[PlayerPage] Remote: PlayPause');
+                const wasPaused = this._player?.isPaused?.();
+                if (this._player?.togglePlay) {
+                    this._player.togglePlay();
+                }
+                // Report state change based on what state we WERE in
+                if (wasPaused) {
+                    this._reportPlaybackProgress('unpause');
+                } else {
+                    this._reportPlaybackProgress('pause');
+                }
+            };
+            eventBus.on('remote:playpause', this._onRemotePlayPause);
+
+            this._onRemoteStop = () => {
+                console.log('[PlayerPage] Remote: Stop');
+                // _stopAndExit already handles reporting stopped to server
+                this._stopAndExit();
+            };
+            eventBus.on('remote:stop', this._onRemoteStop);
+
+            this._onRemoteSeek = (positionTicks) => {
+                console.log('[PlayerPage] Remote: Seek to', positionTicks);
+                // Player uses seek() not seekTo() - same as OSD
+                if (this._player?.seek) {
+                    this._player.seek(positionTicks);
+                    // Report new position to server after a brief delay for seek to complete
+                    setTimeout(() => this._reportPlaybackProgress('timeupdate'), 200);
+                } else {
+                    console.warn('[PlayerPage] Player has no seek method');
+                }
+            };
+            eventBus.on('remote:seek', this._onRemoteSeek);
+
+            // Volume controls - these don't need server reporting (volume is local)
+            // Note: On Tizen, volume may be controlled via system API not player API
+            this._onRemoteVolume = (volume) => {
+                console.log('[PlayerPage] Remote: SetVolume', volume);
+                if (this._player?.setVolume) {
+                    this._player.setVolume(volume);
+                } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
+                    // Tizen system volume (0-100)
+                    try {
+                        tizen.tvaudiocontrol.setVolume(Math.round(volume));
+                        console.log('[PlayerPage] Set Tizen system volume to', volume);
+                    } catch (e) {
+                        console.warn('[PlayerPage] Tizen volume control failed:', e);
+                    }
+                } else {
+                    console.warn('[PlayerPage] No volume control available');
+                }
+            };
+            eventBus.on('remote:volume', this._onRemoteVolume);
+
+            this._onRemoteVolumeUp = () => {
+                console.log('[PlayerPage] Remote: VolumeUp');
+                if (this._player?.getVolume && this._player?.setVolume) {
+                    const vol = this._player.getVolume();
+                    this._player.setVolume(Math.min(100, vol + 10));
+                } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
+                    try {
+                        tizen.tvaudiocontrol.setVolumeUp();
+                    } catch (e) {
+                        console.warn('[PlayerPage] Tizen volume up failed:', e);
+                    }
+                }
+            };
+            eventBus.on('remote:volumeup', this._onRemoteVolumeUp);
+
+            this._onRemoteVolumeDown = () => {
+                console.log('[PlayerPage] Remote: VolumeDown');
+                if (this._player?.getVolume && this._player?.setVolume) {
+                    const vol = this._player.getVolume();
+                    this._player.setVolume(Math.max(0, vol - 10));
+                } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
+                    try {
+                        tizen.tvaudiocontrol.setVolumeDown();
+                    } catch (e) {
+                        console.warn('[PlayerPage] Tizen volume down failed:', e);
+                    }
+                }
+            };
+            eventBus.on('remote:volumedown', this._onRemoteVolumeDown);
+
+            this._onRemoteMute = (muted) => {
+                console.log('[PlayerPage] Remote: Mute', muted);
+                if (this._player?.setMuted) {
+                    this._player.setMuted(muted);
+                } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
+                    try {
+                        tizen.tvaudiocontrol.setMute(muted);
+                    } catch (e) {
+                        console.warn('[PlayerPage] Tizen mute control failed:', e);
+                    }
+                }
+                // Report mute state to server
+                this._reportPlaybackProgress('timeupdate');
+            };
+            eventBus.on('remote:mute', this._onRemoteMute);
+
+            this._onRemoteToggleMute = () => {
+                console.log('[PlayerPage] Remote: ToggleMute');
+                if (this._player?.isMuted && this._player?.setMuted) {
+                    this._player.setMuted(!this._player.isMuted());
+                } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
+                    try {
+                        const isMuted = tizen.tvaudiocontrol.isMute();
+                        tizen.tvaudiocontrol.setMute(!isMuted);
+                    } catch (e) {
+                        console.warn('[PlayerPage] Tizen toggle mute failed:', e);
+                    }
+                }
+                // Report mute state to server
+                this._reportPlaybackProgress('timeupdate');
+            };
+            eventBus.on('remote:togglemute', this._onRemoteToggleMute);
+
+            // Next/Previous track handlers
+            // Note: Litefin doesn't support playlists yet, so these navigate series episodes
+            this._onRemoteNext = async () => {
+                console.log('[PlayerPage] Remote: NextTrack');
+                // TODO: If this is a series, could navigate to next episode
+                // For now, log that this feature isn't supported
+                console.warn('[PlayerPage] Next track not supported - no playlist support yet');
+            };
+            eventBus.on('remote:next', this._onRemoteNext);
+
+            this._onRemotePrevious = async () => {
+                console.log('[PlayerPage] Remote: PreviousTrack');
+                // TODO: If this is a series, could navigate to previous episode
+                // For now, log that this feature isn't supported
+                console.warn('[PlayerPage] Previous track not supported - no playlist support yet');
+            };
+            eventBus.on('remote:previous', this._onRemotePrevious);
 
             // Start playback
             await this._startPlayback();
@@ -338,6 +508,10 @@ class PlayerPage extends Page {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState();
 
+            // Cache mediaSource for later use in stop reporting
+            // (player clears internal state after stop, so we need this)
+            this._cachedMediaSource = mediaSource;
+
             const info = {
                 ItemId: this._item.Id,
                 PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
@@ -399,15 +573,12 @@ class PlayerPage extends Page {
         const mediaSource = this._player?.getCurrentMediaSource?.();
         const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
-        return {
+        // Build base state
+        const state = {
             // Core position and volume
             PositionTicks: positionTicks,
             VolumeLevel: this._player?.getVolume?.() ?? 100,
             IsMuted: this._player?.isMuted?.() ?? false,
-
-            // Stream indices
-            AudioStreamIndex: this._player?.getCurrentAudioStreamIndex?.(),
-            SubtitleStreamIndex: this._player?.getCurrentSubtitleStreamIndex?.(),
 
             // Playback method (DirectPlay, DirectStream, Transcode)
             PlayMethod: mediaSource?.PlayMethod || 'DirectPlay',
@@ -422,6 +593,19 @@ class PlayerPage extends Page {
             RepeatMode: 'RepeatNone',
             ShuffleMode: 'Sorted'
         };
+
+        // Only include stream indices if they are defined (undefined causes 400 errors)
+        const audioIndex = this._player?.getCurrentAudioStreamIndex?.();
+        if (audioIndex !== undefined && audioIndex !== null) {
+            state.AudioStreamIndex = audioIndex;
+        }
+
+        const subtitleIndex = this._player?.getCurrentSubtitleStreamIndex?.();
+        if (subtitleIndex !== undefined && subtitleIndex !== null) {
+            state.SubtitleStreamIndex = subtitleIndex;
+        }
+
+        return state;
     }
 
     // ========================================================================
@@ -506,28 +690,55 @@ class PlayerPage extends Page {
         if (!this._item) return;
 
         try {
-            // Use captured values or read from player (if still available)
-            const mediaSource = capturedMediaSource ?? this._player?.getCurrentMediaSource?.();
+            // Use captured values, then player methods, then cached values as fallback
+            const mediaSource = capturedMediaSource ??
+                this._player?.getCurrentMediaSource?.() ??
+                this._cachedMediaSource;
             const positionTicks = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
             if (!playSessionId) {
-                console.warn('[PlayerPage] Skipping stopped report - no PlaySessionId');
+                console.warn('[PlayerPage] Skipping stopped report - no PlaySessionId (mediaSource:', !!mediaSource, ')');
                 return;
             }
 
             console.log('[PlayerPage] Reporting playback stopped, position:', positionTicks);
 
-            await api.reportPlaybackStopped({
+            // ================================================================
+            // TIZEN FIX: Use synchronous XHR to ensure request completes
+            // before navigation. Async fetch gets cancelled during page cleanup
+            // on Tizen but not on web browsers.
+            // ================================================================
+            const data = {
                 ItemId: this._item.Id,
-                // Critical: Include session identifiers for proper server cleanup
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks
-            });
+            };
 
-            console.log('[PlayerPage] ✓ Playback stopped reported');
+            const url = `${api.serverUrl}/Sessions/Playing/Stopped`;
+            const authHeader = api.getAuthHeader();
+
+            try {
+                // Use synchronous XHR - it blocks but ensures completion
+                const xhr = new XMLHttpRequest();
+                xhr.open('POST', url, false); // false = synchronous
+                xhr.setRequestHeader('Content-Type', 'application/json');
+                xhr.setRequestHeader('X-Emby-Authorization', authHeader);
+                xhr.send(JSON.stringify(data));
+
+                if (xhr.status >= 200 && xhr.status < 300) {
+                    console.log('[PlayerPage] ✓ Playback stopped reported (sync)');
+                } else {
+                    console.warn('[PlayerPage] Stop report failed:', xhr.status, xhr.statusText);
+                }
+            } catch (xhrError) {
+                console.warn('[PlayerPage] Sync XHR failed, falling back to async:', xhrError);
+                // Fallback to async (works on web)
+                await api.reportPlaybackStopped(data);
+                console.log('[PlayerPage] ✓ Playback stopped reported (async fallback)');
+            }
         } catch (error) {
             console.warn('[PlayerPage] Failed to report playback stopped:', error);
         }
@@ -630,6 +841,20 @@ class PlayerPage extends Page {
             eventBus.off('app:beforeExit', this._onAppBeforeExit);
             this._onAppBeforeExit = null;
         }
+
+        // Remove remote control event listeners
+        if (this._onRemotePause) eventBus.off('remote:pause', this._onRemotePause);
+        if (this._onRemotePlay) eventBus.off('remote:play', this._onRemotePlay);
+        if (this._onRemotePlayPause) eventBus.off('remote:playpause', this._onRemotePlayPause);
+        if (this._onRemoteStop) eventBus.off('remote:stop', this._onRemoteStop);
+        if (this._onRemoteSeek) eventBus.off('remote:seek', this._onRemoteSeek);
+        if (this._onRemoteVolume) eventBus.off('remote:volume', this._onRemoteVolume);
+        if (this._onRemoteVolumeUp) eventBus.off('remote:volumeup', this._onRemoteVolumeUp);
+        if (this._onRemoteVolumeDown) eventBus.off('remote:volumedown', this._onRemoteVolumeDown);
+        if (this._onRemoteMute) eventBus.off('remote:mute', this._onRemoteMute);
+        if (this._onRemoteToggleMute) eventBus.off('remote:togglemute', this._onRemoteToggleMute);
+        if (this._onRemoteNext) eventBus.off('remote:next', this._onRemoteNext);
+        if (this._onRemotePrevious) eventBus.off('remote:previous', this._onRemotePrevious);
 
         // Clean up focus sections
         focusManager.unregister('player-error');

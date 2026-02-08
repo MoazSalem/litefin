@@ -11,6 +11,7 @@ import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { router } from './Router.js';
 import { api } from '../api/ApiClient.js';
+import { webSocketHandler } from '../api/WebSocketHandler.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -210,6 +211,39 @@ class App {
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
             router.navigate(`/player/${item.Id}/${resumeParam}`);
+        });
+
+        // ================================================================
+        // WebSocket Remote Control
+        // ================================================================
+        // Initialize handler for remote commands from Jellyfin dashboard
+        webSocketHandler.init();
+
+        // Handle remote:playnow - start playback of item from server
+        eventBus.on('remote:playnow', async ({ itemIds, startPositionTicks }) => {
+            if (!itemIds || itemIds.length === 0) return;
+
+            try {
+                // Get the first item to play
+                const item = await api.getItem(itemIds[0]);
+                if (item) {
+                    eventBus.emit('player:play', {
+                        item,
+                        resume: startPositionTicks > 0
+                    });
+                }
+            } catch (e) {
+                console.error('App: Failed to handle remote:playnow', e);
+            }
+        });
+
+        // Navigation commands - handle when not in player
+        eventBus.on('remote:home', () => {
+            router.navigate('/home');
+        });
+
+        eventBus.on('remote:back', () => {
+            router.back();
         });
 
         console.log('App: Event handlers setup');
