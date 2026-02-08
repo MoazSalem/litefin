@@ -269,7 +269,14 @@ class TizenAdapter {
                     }
                 }
 
-                console.log('TizenAdapter: Device info:', this._deviceInfo);
+                console.log('TizenAdapter: Device info (Physical):', this._deviceInfo);
+
+                const manualRes = localStorage.getItem('litefin_max_resolution');
+                if (manualRes) {
+                    console.log(`TizenAdapter: ⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: ${manualRes}`);
+                } else {
+                    console.log(`TizenAdapter: ⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: 2160p (Default)`);
+                }
             });
         } catch (e) {
             console.error('TizenAdapter: Failed to get device info:', e);

@@ -188,6 +188,22 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name">Max Resolution</span>
+                        <span class="setting-description">Manually override max resolution to bypass detection issues</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('max-resolution-select', [
+            { value: 'auto', label: 'Auto (Detect)' },
+            { value: '720p', label: '720p HD' },
+            { value: '1080p', label: '1080p FHD' },
+            { value: '2160p', label: '4K UHD (Default)' },
+            { value: '4320p', label: '8K UHD' }
+        ], localStorage.getItem('litefin_max_resolution') || '2160p')}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name">Max Streaming Bitrate</span>
                         <span class="setting-description">Quality when streaming over internet</span>
                     </div>
@@ -689,6 +705,7 @@ class SettingsPage extends Page {
             'layout': { key: 'layout', type: 'local' },
             'theme': { key: 'theme', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
+            'max-resolution-select': { key: 'litefin_max_resolution', type: 'local' },
             'max-bitrate-select': { key: 'pref:maxBitrate', type: 'local' },
             'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
@@ -725,7 +742,7 @@ class SettingsPage extends Page {
                     if (settingConfig) {
                         if (settingConfig.type === 'local') {
                             localStorage.setItem(settingConfig.key, newValue);
-                            if (settingConfig.key === 'layout' || settingConfig.key === 'theme') {
+                            if (settingConfig.key === 'layout' || settingConfig.key === 'theme' || settingConfig.key === 'litefin_max_resolution') {
                                 window.location.reload();
                             }
                         } else if (settingConfig.type === 'service') {

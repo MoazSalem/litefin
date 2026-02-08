@@ -19,11 +19,17 @@ export function getDeviceProfile(options = {}) {
     const {
         enableHEVC = true,
         enable4K = true,
+        enable8K = false,
         enableHDR = false
     } = options;
 
     // Max bitrate based on resolution
-    const maxBitrate = enable4K ? 120000000 : 40000000;  // 120 Mbps for 4K, 40 Mbps for 1080p
+    let maxBitrate = 40000000; // Default 1080p (40 Mbps)
+    if (enable8K) {
+        maxBitrate = 200000000; // 200 Mbps for 8K
+    } else if (enable4K) {
+        maxBitrate = 120000000; // 120 Mbps for 4K
+    }
 
     // ========================================================================
     // Video codecs
@@ -251,6 +257,33 @@ export function detectCapabilities() {
         enableHDR: false
     };
 
+    // Check for Manual Resolution Setting (Default to 4K if not set)
+    const manualRes = localStorage.getItem('litefin_max_resolution') || '2160p';
+
+    if (manualRes !== 'auto') {
+        console.log(`DeviceProfile: Using manual resolution setting: ${manualRes}`);
+        switch (manualRes) {
+            case '720p':
+                capabilities.enable4K = false;
+                capabilities.enableHEVC = false; // Usually safe to disable HEVC for lower end
+                break;
+            case '1080p':
+                capabilities.enable4K = false;
+                capabilities.enableHEVC = true;
+                break;
+            case '2160p': // 4K
+                capabilities.enable4K = true;
+                capabilities.enableHEVC = true;
+                break;
+            case '4320p': // 8K
+                capabilities.enable4K = true;
+                capabilities.enable8K = true;
+                capabilities.enableHEVC = true;
+                break;
+        }
+        return capabilities;
+    }
+
     // Detect from Tizen APIs if available
     if (typeof webapis !== 'undefined' && webapis.productinfo) {
         try {
@@ -266,6 +299,9 @@ export function detectCapabilities() {
             console.warn('DeviceProfile: Could not detect capabilities', e);
         }
     }
+
+    // Final logging of what we are sending
+    console.log('DeviceProfile: Final Capabilities determined:', JSON.stringify(capabilities, null, 2));
 
     return capabilities;
 }
