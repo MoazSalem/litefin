@@ -306,6 +306,18 @@
     flex-shrink: 0;
 }
 
+/* Reset Button */
+.reset-btn {
+    /* Identical to other icon buttons but positioned explicitly if needed */
+    margin-right: 16px !important;
+}
+
+.reset-btn svg {
+    /* Smaller icon visually */
+    width: 28px;
+    height: 28px;
+}
+
 /* Icon Buttons (Heart/Check) */
 /* Higher specificity to override .details-actions .btn */
 .btn-icon,

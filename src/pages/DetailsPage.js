@@ -71,8 +71,13 @@ class DetailsPage extends Page {
                                     <span>Play</span>
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
-                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                                     <span>Resume</span>
+                                </button>
+                                <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="Reset Progress">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                                        <path d="M3 3v5h5"/>
+                                    </svg>
                                 </button>
                                 <button class="btn btn-icon watched-btn" tabindex="0" aria-label="Mark as watched">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -191,6 +196,11 @@ class DetailsPage extends Page {
         this.$('.watched-btn')?.addEventListener('click', () => {
             this._toggleWatched();
         });
+
+        // Reset button
+        this.$('.reset-btn')?.addEventListener('click', () => {
+            this._resetProgress();
+        });
     }
 
     async _loadDetails() {
@@ -220,6 +230,25 @@ class DetailsPage extends Page {
 
             // 6. FINALLY dismiss loading - page is now 100% ready and navigable
             this.setLoading(false);
+
+            // FIX: Ensure Focus Manager knows about the Resume button if it appeared
+            // Invalidating cache forces a re-scan of focusable elements
+            focusManager.invalidateCache('details-actions');
+
+            // If we have resume progress, FORCE focus to the resume button
+            // This fixes the issue where focus is lost or stays on Play when returning from playback
+            if (this._item.UserData?.PlaybackPositionTicks > 0) {
+                const resumeBtn = this.$('.resume-btn');
+                if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
+                    console.log('DetailsPage: Forcing focus to Resume button');
+
+                    // CRITICAL: Clear pending nav state so it doesn't overwrite our focus
+                    // The router tries to restore previous focus (e.g. Play button) after this method
+                    this._pendingNavState = null;
+
+                    focusManager.focusElement(resumeBtn);
+                }
+            }
 
         } catch (error) {
             console.error('DetailsPage: Failed to load', error);
@@ -798,20 +827,42 @@ class DetailsPage extends Page {
             if (resumeBtn) {
                 resumeBtn.classList.remove('hidden');
                 resumeBtn.setAttribute('tabindex', '0'); // Make focusable when visible
-                // Upgrade to primary style
-                resumeBtn.classList.remove('btn-secondary');
-                resumeBtn.classList.add('btn-primary');
-
-                const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-                resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
-
-                // CRITICAL: If we hid the Play button (which probably had focus or would get it),
-                // we must manually force focus to the Resume button so focus isn't lost.
-                requestAnimationFrame(() => {
-                    focusManager.focusElement(resumeBtn);
-                });
             }
-        }
+
+            // Show Reset Button when Resume is active
+            const resetBtn = this.$('.reset-btn');
+            if (resetBtn) {
+                resetBtn.classList.remove('hidden');
+                resetBtn.setAttribute('tabindex', '0');
+            }
+        } else {
+            // No resume point: Show Play, Hide Resume & Reset
+            if (playBtn) {
+                playBtn.classList.remove('hidden');
+                playBtn.setAttribute('tabindex', '0');
+            }
+
+            if (resumeBtn) {
+                resumeBtn.classList.add('hidden');
+                resumeBtn.setAttribute('tabindex', '-1');
+            }
+
+            const resetBtn = this.$('.reset-btn');
+            if (resetBtn) {
+                resetBtn.classList.add('hidden');
+                resetBtn.setAttribute('tabindex', '-1');
+            }
+        }    // Upgrade to primary style
+        resumeBtn.classList.remove('btn-secondary');
+        resumeBtn.classList.add('btn-primary');
+
+        const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
+        resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
+
+        // CRITICAL: If we hid the Play button (which probably had focus or would get it),
+        // we must manually force focus to the Resume button so focus isn't lost.
+        requestAnimationFrame(() => {
+        });
 
         // Watched button
         if (userData.Played) {
@@ -1373,6 +1424,37 @@ class DetailsPage extends Page {
     }
 
 
+
+    async _resetProgress() {
+        try {
+            // Use unmarkPlayed API - this clears PlaybackPositionTicks AND marks as unwatched.
+            // Jellyfin doesn't have a dedicated "reset progress" endpoint.
+            // DELETE /Users/{userId}/PlayedItems/{itemId} does both.
+            await api.unmarkPlayed(this._itemId);
+
+            // Update local state to reflect changes
+            if (this._item.UserData) {
+                this._item.UserData.PlaybackPositionTicks = 0;
+                this._item.UserData.Played = false;
+            }
+
+            // Refresh button visibility
+            this._updateButtons();
+
+            // CRITICAL: Invalidate focus cache so FocusManager knows Resume/Reset are gone
+            // and Play button is now the primary focusable in this section.
+            focusManager.invalidateCache('details-actions');
+
+            // Force focus to Play button since Reset/Resume are now hidden
+            const playBtn = this.$('.play-btn');
+            if (playBtn) {
+                focusManager.focusElement(playBtn);
+            }
+
+        } catch (error) {
+            console.error('DetailsPage: Failed to reset progress', error);
+        }
+    }
 
     destroy() {
         if (this._header) {
