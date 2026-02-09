@@ -403,7 +403,7 @@ class PlayerPage extends Page {
         // but for now we'll rely on the player's internal logic or add reporting here if needed.
 
         // Initialize OSD
-        this._initOSD();
+        await this._initOSD();
     }
 
     /**
@@ -437,8 +437,19 @@ class PlayerPage extends Page {
     /**
      * Initialize the OSD controller
      */
-    _initOSD() {
-        // OSD is loaded as a global script (jellyfin-player-osd.js)
+    async _initOSD() {
+        // Dynamically import the OSD script if it hasn't been loaded yet
+        // This keeps the OSD code out of the main bundle until needed
+        if (typeof window.PlayerOSD === 'undefined') {
+            try {
+                await import('../player/jellyfin-player-osd.js');
+                console.log('[PlayerPage] PlayerOSD dynamically loaded');
+            } catch (err) {
+                console.error('[PlayerPage] Failed to load PlayerOSD script:', err);
+                return;
+            }
+        }
+
         if (typeof window.PlayerOSD !== 'undefined') {
             this._osd = window.PlayerOSD;
             this._osd.init({
@@ -454,7 +465,7 @@ class PlayerPage extends Page {
                 titleEl.textContent = this._item.Name;
             }
         } else {
-            console.warn('[PlayerPage] PlayerOSD global object NOT found');
+            console.warn('[PlayerPage] PlayerOSD global object NOT found after import attempt');
         }
     }
 
