@@ -1,9 +1,9 @@
 /**
  * TizenAVPlayer - Tizen Native Video Backend
- * 
+ *
  * Uses Tizen's AVPlay API for hardware-accelerated playback on Samsung TVs.
  * Provides better codec support and performance than HTML5 video on Tizen.
- * 
+ *
  * @module core/TizenAVPlayer
  */
 
@@ -24,7 +24,7 @@ export class TizenAVPlayer {
     constructor(options) {
         this.container = options.container;
         this.settings = options.settings;
-        this.onEvent = options.onEvent || (() => { });
+        this.onEvent = options.onEvent || (() => {});
 
         // ====================================================================
         // State
@@ -42,6 +42,14 @@ export class TizenAVPlayer {
 
         // Position tracking
         this._positionTimer = null;
+
+        // Pending track selection (applied on buffering complete)
+        this._pendingAudioIndex = null;
+        this._pendingSubtitleIndex = null;
+
+        // Current track indices (Jellyfin indices)
+        this._currentAudioStreamIndex = null;
+        this._currentSubtitleStreamIndex = null;
 
         // Check Tizen availability
         this._avplay = window.tizen?.avplay || window.webapis?.avplay || null;
@@ -79,7 +87,6 @@ export class TizenAVPlayer {
 
             // NOTE: Do NOT call tizen.tvwindow.show() here. That API is for TV tuner/HDMI input,
             // not for AVPlay. Calling it can cause the video plane to render above HTML elements.
-
         } catch (e) {
             debug.error('[TizenAVPlayer] Failed to set display:', e);
         }
@@ -108,7 +115,7 @@ export class TizenAVPlayer {
             await this._stopInternal();
 
             // Give Tizen time to cleanup (helps with buffer errors on rapid changes)
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise((resolve) => setTimeout(resolve, 200));
 
             // Open the media
             this._avplay.open(options.url);
@@ -132,11 +139,28 @@ export class TizenAVPlayer {
             this._avplay.play();
             this._isPlaying = true;
 
+            // Start playback
+            this._avplay.play();
+            this._isPlaying = true;
+
+            // Store selected tracks to be applied after buffering completes
+            // This is more reliable on Tizen TVs
+            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+                this._pendingAudioIndex = options.audioStreamIndex;
+            }
+
+            if (options.subtitleStreamIndex !== undefined) {
+                this._pendingSubtitleIndex = options.subtitleStreamIndex;
+            }
+
+            // Initialize current indices
+            this._currentAudioStreamIndex = options.audioStreamIndex;
+            this._currentSubtitleStreamIndex = options.subtitleStreamIndex;
+
             // Start position tracking
             this._startPositionTracking();
 
             this.onEvent({ type: 'playbackstart' });
-
         } catch (e) {
             debug.error('[TizenAVPlayer] Playback failed:', e);
             this.onEvent({ type: 'error', data: { message: e.message } });
@@ -187,6 +211,10 @@ export class TizenAVPlayer {
             onbufferingcomplete: () => {
                 debug.log('[TizenAVPlayer] Buffering complete');
                 this.onEvent({ type: 'playing' });
+
+                // Apply pending track selections once buffering is done
+                // This is the most reliable time to switch tracks on Tizen
+                this._applyPendingTracks();
             },
             oncurrentplaytime: (time) => {
                 // This is called periodically with current time in ms
@@ -220,6 +248,48 @@ export class TizenAVPlayer {
     }
 
     /**
+     * Apply any pending audio/subtitle track selections
+     * @private
+     */
+    _applyPendingTracks() {
+        if (this._pendingAudioIndex !== null) {
+            const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
+            if (tizenAudioIndex !== null) {
+                try {
+                    this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                    this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                    this._pendingAudioIndex = null; // Clear pending
+                } catch (e) {
+                    debug.warn('[TizenAVPlayer] Failed to apply audio track:', e);
+                }
+            }
+        }
+
+        if (this._pendingSubtitleIndex !== null) {
+            if (this._pendingSubtitleIndex === -1) {
+                try {
+                    this._avplay.setSilentSubtitle(true);
+                    this._pendingSubtitleIndex = null;
+                } catch (e) {
+                    debug.warn('[TizenAVPlayer] Failed to disable subtitles:', e);
+                }
+            } else {
+                const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
+                if (tizenSubIndex !== null) {
+                    try {
+                        this._avplay.setSilentSubtitle(false);
+                        this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                        this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                        this._pendingSubtitleIndex = null;
+                    } catch (e) {
+                        debug.warn('[TizenAVPlayer] Failed to apply subtitle track:', e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
      * Start position tracking timer
      * @private
      */
@@ -246,6 +316,96 @@ export class TizenAVPlayer {
         if (this._positionTimer) {
             clearInterval(this._positionTimer);
             this._positionTimer = null;
+        }
+    }
+
+    /**
+     * Find Tizen internal audio track index for a given Jellyfin StreamIndex
+     * @private
+     * @param {number} streamIndex - Jellyfin Audio StreamIndex
+     * @returns {number|null} Tizen track index or null if not found
+     */
+    _findTizenAudioIndex(streamIndex) {
+        try {
+            const trackInfo = this._avplay.getTotalTrackInfo();
+
+            // Tizen returns objects like { type: 'AUDIO', index: 0, extra_info: ... }
+            const audioTracks = trackInfo.filter((t) => t.type === 'AUDIO');
+
+            // We need to map Jellyfin StreamIndex to Tizen's index
+            // Strategy: Assume Tizen and Jellyfin see audio tracks in the same order
+            // 1. Find which N-th audio track this is in Jellyfin MediaSource
+            if (!this._currentPlayOptions?.mediaSource?.MediaStreams) {
+                debug.warn('[TizenAVPlayer] No MediaStreams info to map audio index');
+                return null;
+            }
+
+            const jellyfinAudioStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
+                (s) => s.Type === 'Audio'
+            );
+            const targetStreamIndexInAudioList = jellyfinAudioStreams.findIndex((s) => s.Index === streamIndex);
+
+            if (targetStreamIndexInAudioList === -1) {
+                debug.warn('[TizenAVPlayer] Requested audio stream index not found in MediaSource:', streamIndex);
+                return null;
+            }
+
+            // 2. Select the N-th available audio track in Tizen
+            if (audioTracks[targetStreamIndexInAudioList]) {
+                const tizenIndex = audioTracks[targetStreamIndexInAudioList].index;
+                debug.log(`[TizenAVPlayer] Mapped Jellyfin Audio ${streamIndex} to Tizen index ${tizenIndex}`);
+                return parseInt(tizenIndex, 10);
+            }
+
+            debug.warn('[TizenAVPlayer] Could not map audio stream index (out of bounds)');
+            return null;
+        } catch (e) {
+            debug.error('[TizenAVPlayer] Error mapping audio index:', e);
+            return null;
+        }
+    }
+
+    /**
+     * Find Tizen internal subtitle track index for a given Jellyfin StreamIndex
+     * @private
+     * @param {number} streamIndex - Jellyfin Subtitle StreamIndex
+     * @returns {number|null} Tizen track index or null if not found
+     */
+    _findTizenSubtitleIndex(streamIndex) {
+        try {
+            const trackInfo = this._avplay.getTotalTrackInfo();
+            const textTracks = trackInfo.filter((t) => t.type === 'TEXT');
+
+            if (!this._currentPlayOptions?.mediaSource?.MediaStreams) {
+                return null;
+            }
+
+            const jellyfinSubStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
+                (s) => s.Type === 'Subtitle' && !s.IsExternal
+            );
+            // Note: External subtitles are handled separately by player, we only care about internal ones here for Tizen native switch
+            // But verify if Tizen lists external ones too? For now assume internal.
+
+            const targetStreamIndexInSubList = jellyfinSubStreams.findIndex((s) => s.Index === streamIndex);
+
+            if (targetStreamIndexInSubList === -1) {
+                // Might be external or not found
+                debug.warn('[TizenAVPlayer] Requested subtitle stream not found in internal list:', streamIndex);
+                return null;
+            }
+
+            if (textTracks[targetStreamIndexInSubList]) {
+                const tizenIndex = textTracks[targetStreamIndexInSubList].index;
+                debug.log(
+                    `[TizenAVPlayer] Mapped Jellyfin Subtitle ${streamIndex} (Nth: ${targetStreamIndexInSubList}) to Tizen index ${tizenIndex}`
+                );
+                return parseInt(tizenIndex, 10);
+            }
+
+            return null;
+        } catch (e) {
+            debug.error('[TizenAVPlayer] Error mapping subtitle index:', e);
+            return null;
         }
     }
 
@@ -389,8 +549,6 @@ export class TizenAVPlayer {
      * @param {number} index - Audio stream index
      */
     setAudioStreamIndex(index) {
-        debug.log('[TizenAVPlayer] setAudioStreamIndex called with:', index);
-
         if (!this._avplay) {
             debug.error('[TizenAVPlayer] No avplay instance');
             return;
@@ -402,16 +560,12 @@ export class TizenAVPlayer {
 
         try {
             const tracks = this._avplay.getTotalTrackInfo();
-            debug.log('[TizenAVPlayer] All tracks:', JSON.stringify(tracks));
-
-            const audioTracks = tracks.filter(t => t.type === 'AUDIO');
-            debug.log('[TizenAVPlayer] Audio tracks:', JSON.stringify(audioTracks));
+            const audioTracks = tracks.filter((t) => t.type === 'AUDIO');
 
             if (index >= 0 && index < audioTracks.length) {
                 const track = audioTracks[index];
-                debug.log('[TizenAVPlayer] Setting audio track:', track);
                 this._avplay.setSelectTrack('AUDIO', track.index);
-                debug.log('[TizenAVPlayer] Audio track set successfully');
+                this._currentAudioStreamIndex = index; // Update state
             } else {
                 debug.error('[TizenAVPlayer] Invalid audio index:', index, 'max:', audioTracks.length - 1);
             }
@@ -430,14 +584,16 @@ export class TizenAVPlayer {
         try {
             if (index < 0) {
                 this._avplay.setSilentSubtitle(true);
+                this._currentSubtitleStreamIndex = index; // Update state
             } else {
                 this._avplay.setSilentSubtitle(false);
 
                 const tracks = this._avplay.getTotalTrackInfo();
-                const textTracks = tracks.filter(t => t.type === 'TEXT');
+                const textTracks = tracks.filter((t) => t.type === 'TEXT');
 
                 if (textTracks[index]) {
                     this._avplay.setSelectTrack('TEXT', textTracks[index].index);
+                    this._currentSubtitleStreamIndex = index; // Update state
                 }
             }
         } catch (e) {
@@ -534,5 +690,20 @@ export class TizenAVPlayer {
         this._avplay = null;
         this._currentSrc = null;
         this._currentPlayOptions = null;
+    }
+    /**
+     * Get current audio stream index
+     * @returns {number|null}
+     */
+    getCurrentAudioStreamIndex() {
+        return this._currentAudioStreamIndex;
+    }
+
+    /**
+     * Get current subtitle stream index
+     * @returns {number|null}
+     */
+    getCurrentSubtitleStreamIndex() {
+        return this._currentSubtitleStreamIndex;
     }
 }

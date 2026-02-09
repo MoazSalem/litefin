@@ -452,7 +452,7 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: rgba(0, 60, 100, 0.9);
+    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.85));
     display: flex;
     align-items: center;
     justify-content: center;

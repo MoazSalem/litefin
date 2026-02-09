@@ -17,6 +17,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
+import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 
@@ -333,6 +334,7 @@ class PlayerPage extends Page {
         this._player.on('error', (err) => this._onPlayerError(err));
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
+        this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
 
         // Expose player instance globally for OSD
         window.playerInstance = this._player;
@@ -355,15 +357,45 @@ class PlayerPage extends Page {
     async _startPlayback() {
         const item = this._item;
 
+        // Get saved stream preferences from MediaSource
+        const mediaSource = item.MediaSources?.[0];
+
+        // 1. Check for pre-selected tracks from DetailsPage (stored in state)
+        const preSelectedAudio = state.get('player:initialAudioIndex');
+        const preSelectedSubtitle = state.get('player:initialSubtitleIndex');
+
+        // Clear state to prevent persistence to future playbacks
+        state.set('player:initialAudioIndex', null);
+        state.set('player:initialSubtitleIndex', null);
+
+        // 2. Fallback to default from MediaSource
+        // Handle case where index might be 0 (falsey)
+        const savedAudioIndex =
+            preSelectedAudio !== null && preSelectedAudio !== undefined
+                ? preSelectedAudio
+                : mediaSource?.DefaultAudioStreamIndex;
+
+        const savedSubtitleIndex =
+            preSelectedSubtitle !== null && preSelectedSubtitle !== undefined
+                ? preSelectedSubtitle
+                : mediaSource?.DefaultSubtitleStreamIndex;
+
+        console.log('[PlayerPage] Starting playback with resolved preferences:', {
+            audio: savedAudioIndex,
+            subtitle: savedSubtitleIndex,
+            preSelectedAudio,
+            preSelectedSubtitle
+        });
+
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         await this._player.play({
             itemId: item.Id,
             userId: api.userId, // Required for playback info
             startPositionTicks: this._resumePosition,
-            mediaSourceId: item.MediaSources?.[0]?.Id,
-            audioStreamIndex: undefined, // Let player select default
-            subtitleStreamIndex: undefined // Let player select default
+            mediaSourceId: mediaSource?.Id,
+            audioStreamIndex: savedAudioIndex,
+            subtitleStreamIndex: savedSubtitleIndex
         });
 
         // Report playback start to server
@@ -562,6 +594,13 @@ class PlayerPage extends Page {
             overlay.innerHTML = '';
             overlay.classList.add('hidden');
         }
+    }
+
+    _onMediaStreamsChange(data) {
+        if (!this._item || !this._player) return;
+
+        console.log('[PlayerPage] Media streams changed, reporting progress to persist selection');
+        this._reportPlaybackProgress('timeupdate');
     }
 
     /**

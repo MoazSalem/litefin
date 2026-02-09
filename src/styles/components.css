@@ -351,7 +351,7 @@
     left: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(0, 0, 0, 0.7);
+    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.7));
     z-index: 10000;
     display: flex;
     justify-content: center;
@@ -367,6 +367,48 @@
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
+}
+
+.settings-modal {
+    background: var(--jf-background-alt, #151515);
+    background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
+    border-radius: 20px;
+    -webkit-border-radius: 20px;
+    overflow: hidden;
+    background-clip: padding-box;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    width: 600px;
+    max-width: 90%;
+    max-height: 80vh;
+    animation: modal-fade-in 0.3s ease-out;
+}
+
+@keyframes modal-fade-in {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+.settings-modal .modal-header {
+    padding: 20px 30px;
+    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    background: rgba(255, 255, 255, 0.02);
+}
+
+.settings-modal .modal-header h2 {
+    margin: 0;
+    font-size: 1.5rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+}
+
+.settings-modal .modal-options {
+    padding: 20px;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-option-btn {

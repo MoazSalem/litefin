@@ -221,6 +221,30 @@ export class HtmlVideoPlayer {
             // HLS.js events
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 debug.log('[HtmlVideoPlayer] HLS manifest parsed');
+
+                // Apply saved tracks
+                if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
+                    // HLS.js audio tracks are 0-indexed based on manifest
+                    // Jellyfin's stream index matches these usually
+                    // Note: HLS.js uses 'audioTrack' property
+                    // We might need to map stream index to HLS track index if they differ
+                    // For now, assuming direct mapping or we iterate to find match
+                    if (options.audioStreamIndex < hls.audioTracks.length) {
+                        hls.audioTrack = options.audioStreamIndex;
+                        debug.log('[HtmlVideoPlayer] Set HLS audio track:', options.audioStreamIndex);
+                    }
+                }
+
+                if (options.subtitleStreamIndex !== undefined) {
+                    // HLS.js subtitle tracks
+                    if (options.subtitleStreamIndex === -1) {
+                        hls.subtitleTrack = -1; // Disabled
+                    } else if (options.subtitleStreamIndex < hls.subtitleTracks.length) {
+                        hls.subtitleTrack = options.subtitleStreamIndex;
+                        debug.log('[HtmlVideoPlayer] Set HLS subtitle track:', options.subtitleStreamIndex);
+                    }
+                }
+
                 video.play().then(resolve).catch(reject);
             });
 

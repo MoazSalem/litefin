@@ -641,6 +641,7 @@ export class ApiClient {
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
+
     // ========================================================================
     // WebSocket Connection (for online/offline status)
     // ========================================================================

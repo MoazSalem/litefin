@@ -82,6 +82,12 @@ class DetailsPage extends Page {
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </button>
                                 <!-- Favorite Button Injected Here -->
+                                <button class="btn btn-icon audio-btn" tabindex="0" aria-label="Audio Tracks">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
+                                </button>
+                                <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="Subtitle Tracks">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+                                </button>
                             </section>
 
                             <!-- Overview -->
@@ -198,6 +204,16 @@ class DetailsPage extends Page {
         // Reset button
         this.$('.reset-btn')?.addEventListener('click', () => {
             this._resetProgress();
+        });
+
+        // Subtitle button
+        this.$('.subtitle-btn')?.addEventListener('click', () => {
+            this._showSubtitleTrackMenu();
+        });
+
+        // Audio button
+        this.$('.audio-btn')?.addEventListener('click', () => {
+            this._showAudioTrackMenu();
         });
     }
 
@@ -644,7 +660,13 @@ class DetailsPage extends Page {
     }
 
     onBack() {
-        // Intercept Back if inside the table
+        // 1. Track Menu (Higher priority if overlay)
+        if (this._isTrackMenuOpen) {
+            this._closeTrackMenu();
+            return true;
+        }
+
+        // 2. Rich Meta Trap
         if (this._isRichMetaActive) {
             console.log('RichMeta: Back pressed, exiting trap');
             this._deactivateRichMeta();
@@ -1420,8 +1442,162 @@ class DetailsPage extends Page {
 
         eventBus.emit('player:play', {
             item: itemToPlay,
-            resume
+            resume,
+            audioStreamIndex: this._selectedAudioIndex,
+            subtitleStreamIndex: this._selectedSubtitleIndex
         });
+    }
+
+    _showAudioTrackMenu() {
+        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+
+        const key = 'Audio';
+        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+
+        // Find current selection (or default)
+        let currentIndex = this._selectedAudioIndex;
+        if (currentIndex === undefined) {
+            const defaultStream = tracks.find((s) => s.Index === this._item.MediaSources[0].DefaultAudioStreamIndex);
+            currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
+        }
+
+        this._renderTrackSelectionMenu('Audio', tracks, currentIndex, (index) => {
+            if (this._selectedAudioIndex === index) return;
+
+            this._selectedAudioIndex = index;
+            console.log('Selected Audio Index:', index);
+        });
+    }
+
+    _showSubtitleTrackMenu() {
+        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+
+        const key = 'Subtitle';
+        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+
+        let currentIndex = this._selectedSubtitleIndex;
+        if (currentIndex === undefined) {
+            currentIndex = this._item.MediaSources[0].DefaultSubtitleStreamIndex; // Can be -1/null
+        }
+
+        // Add "Off" option
+        const displayTracks = [{ Index: -1, DisplayTitle: 'Off', Title: 'Off' }, ...tracks];
+
+        this._renderTrackSelectionMenu('Subtitles', displayTracks, currentIndex, (index) => {
+            if (this._selectedSubtitleIndex === index) return;
+
+            this._selectedSubtitleIndex = index;
+            console.log('Selected Subtitle Index:', index);
+        });
+    }
+
+    _renderTrackSelectionMenu(title, tracks, currentIndex, onSelect) {
+        // Reuse or create overlay
+        let overlay = document.getElementById('details-track-menu');
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'details-track-menu';
+            overlay.className = 'modal-overlay visible';
+            document.body.appendChild(overlay);
+        } else {
+            overlay.classList.add('visible');
+        }
+
+        // Generate HTML - Using settings-modal structure
+        const optionsHtml = tracks
+            .map((track, i) => {
+                const isSelected = track.Index === currentIndex;
+                const label = track.DisplayTitle || track.Title || track.Language || `Track ${track.Index}`;
+                return `
+                <button class="modal-option-btn ${isSelected ? 'selected' : ''}" data-index="${track.Index}" tabindex="0">
+                    <span>${label}</span>
+                    <div class="check-icon"></div>
+                </button>
+            `;
+            })
+            .join('');
+
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${title}</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        // Focus management - Register as a new section
+        const optionsContainer = overlay.querySelector('.modal-options');
+        const actionsContainer = overlay.querySelector('.modal-actions');
+        const optionsSection = 'details-track-menu';
+        const actionsSection = 'details-track-menu-actions';
+
+        this._isTrackMenuOpen = true;
+
+        // Register the options section
+        focusManager.register(optionsSection, optionsContainer, {
+            orientation: 'vertical',
+            leaveDown: actionsSection,
+            leaveUp: actionsSection,
+            enterTo: 'active-element',
+            defaultElement:
+                overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn')
+        });
+
+        // Register the actions section (Cancel button)
+        focusManager.register(actionsSection, actionsContainer, {
+            orientation: 'horizontal',
+            leaveUp: optionsSection
+        });
+
+        // Set active immediately
+        focusManager.setActiveSection(optionsSection);
+
+        // Helper to close menu
+        this._closeTrackMenu = () => {
+            if (!this._isTrackMenuOpen) return;
+
+            this._isTrackMenuOpen = false;
+            overlay.classList.remove('visible');
+
+            // Unregister focus sections
+            focusManager.unregister(optionsSection);
+            focusManager.unregister(actionsSection);
+
+            // Clean up DOM after animation
+            setTimeout(() => {
+                if (!this._isTrackMenuOpen) overlay.remove();
+            }, 300);
+
+            // Restore focus to actions
+            focusManager.setActiveSection('details-actions');
+        };
+
+        // Click outside to close
+        overlay.onclick = (e) => {
+            if (e.target === overlay) this._closeTrackMenu();
+        };
+
+        // Bind click events for options
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                const index = parseInt(btn.dataset.index);
+                onSelect(index);
+                this._closeTrackMenu();
+            };
+        });
+
+        // Bind cancel button
+        overlay.querySelector('#btn-modal-cancel').onclick = (e) => {
+            e.stopPropagation();
+            this._closeTrackMenu();
+        };
     }
 
     _setupFavoriteButton() {
@@ -1444,6 +1620,12 @@ class DetailsPage extends Page {
             if (old) old.remove();
 
             this._favBtn.mount(actionsContainer);
+
+            // Move Favorite Button BEFORE Audio/Subtitle buttons if they exist
+            const audioBtn = actionsContainer.querySelector('.audio-btn');
+            if (audioBtn && this._favBtn.el) {
+                actionsContainer.insertBefore(this._favBtn.el, audioBtn);
+            }
 
             // Refresh focus cache so FocusManager sees the new button
             focusManager.invalidateCache('details-actions');

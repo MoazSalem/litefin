@@ -200,13 +200,18 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', ({ item, resume }) => {
+        // Handle playback requests from any page (DetailsPage, HomePage, etc.)
+        eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex }) => {
             console.log('App: Playback requested for:', item?.Name);
 
             if (!item?.Id) {
                 console.error('App: Cannot play - no item ID provided');
                 return;
             }
+
+            // Store track selection in state for PlayerPage to consume
+            if (audioStreamIndex !== undefined) state.set('player:initialAudioIndex', audioStreamIndex);
+            if (subtitleStreamIndex !== undefined) state.set('player:initialSubtitleIndex', subtitleStreamIndex);
 
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
