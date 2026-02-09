@@ -23,7 +23,6 @@ class PersonPage extends Page {
         this._person = null;
         this._items = [];
         this._grids = {}; // Store component instances
-
     }
 
     onInit() {
@@ -90,8 +89,6 @@ class PersonPage extends Page {
         this.setLoading(true);
 
         try {
-
-
             // 1. Fetch Person Details
             this._person = await api.getPerson(this._personId);
             this.title = this._person.Name;
@@ -105,9 +102,9 @@ class PersonPage extends Page {
             // Debug log to verify data
             console.log('PersonPage: Loaded items', {
                 total: this._items.length,
-                movies: this._items.filter(i => i.Type === 'Movie').length,
-                shows: this._items.filter(i => i.Type === 'Series').length,
-                episodes: this._items.filter(i => i.Type === 'Episode').length
+                movies: this._items.filter((i) => i.Type === 'Movie').length,
+                shows: this._items.filter((i) => i.Type === 'Series').length,
+                episodes: this._items.filter((i) => i.Type === 'Episode').length
             });
 
             this._renderWorks();
@@ -117,7 +114,6 @@ class PersonPage extends Page {
 
             // 3. Background: Fetch role names and update UI when ready
             this._loadRolesInBackground();
-
         } catch (error) {
             console.error('PersonPage: Failed to load', error);
             this.showError('Failed to load person details');
@@ -140,8 +136,6 @@ class PersonPage extends Page {
             BackdropManager.applyBackdrop(backdropEl, backdropUrl);
         }
     }
-
-
 
     _renderPersonInfo() {
         const p = this._person;
@@ -176,7 +170,10 @@ class PersonPage extends Page {
             // Wait for next frame to ensure DOM is ready
             requestAnimationFrame(() => {
                 focusManager.invalidateCache('person-fav-actions');
-                console.log('PersonPage: Favorite cache invalidated. Button offsetParent:', this._favBtn.el?.offsetParent);
+                console.log(
+                    'PersonPage: Favorite cache invalidated. Button offsetParent:',
+                    this._favBtn.el?.offsetParent
+                );
             });
             console.log('PersonPage: Favorite Button mounted');
         } else {
@@ -215,14 +212,14 @@ class PersonPage extends Page {
                 try {
                     const born = new Date(p.PremiereDate).getFullYear();
                     parts.push(`Born ${born}`);
-                } catch (e) { }
+                } catch (e) {}
             }
 
             if (p.EndDate) {
                 try {
                     const died = new Date(p.EndDate).getFullYear();
                     parts.push(`Died ${died}`);
-                } catch (e) { }
+                } catch (e) {}
             }
 
             if (p.ProductionLocations && p.ProductionLocations.length > 0) {
@@ -256,9 +253,9 @@ class PersonPage extends Page {
 
             // Build role lookup map
             this._roleMap = new Map();
-            itemsWithPeople.forEach(item => {
+            itemsWithPeople.forEach((item) => {
                 if (item.People) {
-                    const person = item.People.find(p => p.Id === this._personId);
+                    const person = item.People.find((p) => p.Id === this._personId);
                     if (person?.Role) {
                         this._roleMap.set(item.Id, person.Role);
                     }
@@ -304,8 +301,6 @@ class PersonPage extends Page {
         });
     }
 
-
-
     _renderWorks() {
         const worksContainer = this.$('#person-works');
         worksContainer.innerHTML = ''; // Clear previous
@@ -313,22 +308,20 @@ class PersonPage extends Page {
         // Helper: Find character name for this person in an item
         const getRole = (item) => {
             if (!item.People) return null;
-            const person = item.People.find(p => p.Id === this._personId);
+            const person = item.People.find((p) => p.Id === this._personId);
             return person?.Role || null;
         };
 
         // Categories - get all movies/shows with roles, limit episodes to 100
         const movies = this._items
-            .filter(i => i.Type === 'Movie')
-            .map(item => ({ ...item, _roleName: getRole(item) }));
+            .filter((i) => i.Type === 'Movie')
+            .map((item) => ({ ...item, _roleName: getRole(item) }));
 
         const shows = this._items
-            .filter(i => i.Type === 'Series')
-            .map(item => ({ ...item, _roleName: getRole(item) }));
+            .filter((i) => i.Type === 'Series')
+            .map((item) => ({ ...item, _roleName: getRole(item) }));
 
-        const episodes = this._items
-            .filter(i => i.Type === 'Episode')
-            .slice(0, 100);
+        const episodes = this._items.filter((i) => i.Type === 'Episode').slice(0, 100);
 
         // Create Components
         this._grids = {};
@@ -389,7 +382,7 @@ class PersonPage extends Page {
         // We iterate our created grids in order of appearance
         // Order: movies, shows, episodes
         const sectionOrder = ['movies', 'shows', 'episodes'];
-        const activeTypes = sectionOrder.filter(type => this._grids[type]);
+        const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
         if (activeTypes.length === 0) return;
 
@@ -415,7 +408,7 @@ class PersonPage extends Page {
             // IDs defined in MediaGrid
             const gridZone = `${baseId}-items`; // The grid container
             const btnZone = `${baseId}-btn-zone`; // Wrapper around button (custom reg name)
-            const btnId = `${baseId}-btn`;      // The actual button ID
+            const btnId = `${baseId}-btn`; // The actual button ID
 
             const gridContainer = this.$(`#${gridZone}`);
             const btn = this.$(`#${btnId}`);
@@ -493,14 +486,13 @@ class PersonPage extends Page {
     }
 
     destroy() {
-
         if (this._favBtn) {
             this._favBtn.destroy();
             this._favBtn = null;
         }
 
         // Destroy sub-components
-        Object.values(this._grids).forEach(comp => comp.destroy());
+        Object.values(this._grids).forEach((comp) => comp.destroy());
         this._grids = {};
         super.destroy();
     }

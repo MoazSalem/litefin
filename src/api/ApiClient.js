@@ -4,7 +4,7 @@
  * ============================================================================
  * HTTP client wrapper for Jellyfin server API communication.
  * Handles authentication headers, error handling, and request management.
- * 
+ *
  * Based on jellyfin-web patterns for compatibility.
  * ============================================================================
  */
@@ -61,13 +61,6 @@ export class ApiClient {
     }
 
     /**
-     * Get current user ID
-     */
-    userId() {
-        return this._userId;
-    }
-
-    /**
      * Set device identification
      * Device name is sanitized to remove spaces and special characters
      * @param {string} deviceId - Unique device ID
@@ -77,7 +70,7 @@ export class ApiClient {
         this._deviceId = deviceId;
         if (deviceName) {
             // Allow alphanumeric, spaces, hyphens, underscores, dots, and percent encoding
-            this._deviceName = deviceName.replace(/[^a-zA-Z0-9 \-_\.%]/g, '');
+            this._deviceName = deviceName.replace(/[^a-zA-Z0-9 \-_.%]/g, '');
         }
     }
 
@@ -150,10 +143,9 @@ export class ApiClient {
 
         // DEBUG: Store last requested URL
         this.lastUrl = url;
-        // Note: URL doesn't include params if they were passed within options, 
+        // Note: URL doesn't include params if they were passed within options,
         // but 'get' helper appends them to 'endpoint' string passed here.
         // So 'url' here is the FULL URL with query string.
-
 
         // Build headers
         const headers = {
@@ -204,7 +196,6 @@ export class ApiClient {
             }
 
             return await response.text();
-
         } catch (error) {
             if (error.name === 'AbortError') {
                 throw new Error('Request timeout');
@@ -324,24 +315,6 @@ export class ApiClient {
      */
     async getCurrentUser() {
         return this.get(`/Users/${this._userId}`);
-    }
-
-    /**
-     * Get user profile image URL
-     */
-    getUserImageUrl(userId, options = {}) {
-        if (!this._serverUrl) return '';
-
-        const type = options.type || 'Primary';
-        const url = `${this._serverUrl}/Users/${userId}/Images/${type}`;
-        const query = [];
-
-        if (options.maxWidth) query.push(`maxWidth=${options.maxWidth}`);
-        if (options.maxHeight) query.push(`maxHeight=${options.maxHeight}`);
-        if (options.tag) query.push(`tag=${options.tag}`);
-        if (options.quality) query.push(`quality=${options.quality}`);
-
-        return query.length > 0 ? `${url}?${query.join('&')}` : url;
     }
 
     /**
@@ -695,9 +668,7 @@ export class ApiClient {
         this.closeWebSocket();
 
         // Convert http(s) to ws(s)
-        const wsUrl = this._serverUrl
-            .replace('https://', 'wss://')
-            .replace('http://', 'ws://');
+        const wsUrl = this._serverUrl.replace('https://', 'wss://').replace('http://', 'ws://');
 
         // Build WebSocket URL with auth
         const fullUrl = `${wsUrl}/socket?api_key=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
@@ -739,7 +710,6 @@ export class ApiClient {
                 console.warn('ApiClient: WebSocket error:', error);
                 this._stopWebSocketKeepalive();
             };
-
         } catch (e) {
             console.error('ApiClient: Failed to create WebSocket:', e);
         }
@@ -799,10 +769,18 @@ export class ApiClient {
     // Getters
     // ========================================================================
 
-    get serverUrl() { return this._serverUrl; }
-    get userId() { return this._userId; }
-    get accessToken() { return this._accessToken; }
-    get isAuthenticated() { return !!this._accessToken; }
+    get serverUrl() {
+        return this._serverUrl;
+    }
+    get userId() {
+        return this._userId;
+    }
+    get accessToken() {
+        return this._accessToken;
+    }
+    get isAuthenticated() {
+        return !!this._accessToken;
+    }
 }
 
 // ============================================================================
@@ -891,7 +869,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
     }
 
     // Common subnets
-    ['192.168.1.', '192.168.0.', '10.0.0.'].forEach(s => subnets.add(s));
+    ['192.168.1.', '192.168.0.', '10.0.0.'].forEach((s) => subnets.add(s));
 
     const uniqueSubnets = Array.from(subnets);
     const totalIPs = uniqueSubnets.length * 254;
@@ -914,23 +892,23 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             if (signal.aborted) return;
 
             const chunk = batch.slice(i, i + CHUNK_SIZE);
-            const results = await Promise.all(
-                chunk.map(addr => testServer(addr, 800))
-            );
+            const results = await Promise.all(chunk.map((addr) => testServer(addr, 800)));
 
-            results.filter(s => s).forEach(s => {
-                if (!foundServers.find(existing => existing.address === s.address)) {
-                    console.log(`ApiClient: Found server at ${s.address}`);
-                    foundServers.push(s);
-                    if (onServerFound) onServerFound(s);
-                }
-            });
+            results
+                .filter((s) => s)
+                .forEach((s) => {
+                    if (!foundServers.find((existing) => existing.address === s.address)) {
+                        console.log(`ApiClient: Found server at ${s.address}`);
+                        foundServers.push(s);
+                        if (onServerFound) onServerFound(s);
+                    }
+                });
 
             globalScannedCount += chunk.length;
             if (onProgress) onProgress(globalScannedCount, totalIPs);
 
             // Small yield to let UI breathe
-            await new Promise(r => setTimeout(r, 10));
+            await new Promise((r) => setTimeout(r, 10));
         }
     };
 

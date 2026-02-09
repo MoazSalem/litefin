@@ -4,7 +4,7 @@
  * ============================================================================
  * Global publish/subscribe event system for decoupled communication between
  * components. Enables loose coupling and makes testing easier.
- * 
+ *
  * Usage:
  *   EventBus.on('user:login', (user) => console.log('Logged in:', user));
  *   EventBus.emit('user:login', { name: 'John' });

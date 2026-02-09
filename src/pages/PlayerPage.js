@@ -4,7 +4,7 @@
  * ============================================================================
  * Full-screen video player page with OSD (On-Screen Display) controls.
  * Hosts the Jellyfin Player and manages playback lifecycle.
- * 
+ *
  * Features:
  * - Tizen AVPlay integration for hardware-accelerated playback
  * - OSD controls with remote navigation support
@@ -283,7 +283,6 @@ class PlayerPage extends Page {
 
             // Hide loading
             this._showLoading(false);
-
         } catch (error) {
             console.error('[PlayerPage] Failed to initialize:', error);
             this._showError(error.message || 'Failed to load video');
@@ -294,9 +293,6 @@ class PlayerPage extends Page {
      * Initialize the Jellyfin Player instance
      */
     async _initPlayer() {
-        // Get the container element
-        const container = this.$('#player-container');
-
         // Debug: Log the state of window.JellyfinPlayer
         console.log('[PlayerPage] _initPlayer called');
         console.log('[PlayerPage] window.JellyfinPlayer exists:', !!window.JellyfinPlayer);
@@ -369,7 +365,7 @@ class PlayerPage extends Page {
         });
 
         // Report playback start to server
-        // Note: The player emits PLAYBACK_START event which could be used, 
+        // Note: The player emits PLAYBACK_START event which could be used,
         // but for now we'll rely on the player's internal logic or add reporting here if needed.
 
         // Initialize OSD
@@ -431,8 +427,7 @@ class PlayerPage extends Page {
      * Check if running on Tizen platform
      */
     _isTizen() {
-        return typeof window.tizen !== 'undefined' ||
-            typeof window.webapis?.avplay !== 'undefined';
+        return typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined';
     }
 
     // ========================================================================
@@ -495,7 +490,7 @@ class PlayerPage extends Page {
     _onTimeUpdate(positionTicks) {
         // Report progress periodically (every 10 seconds approx)
         const now = Date.now();
-        if (!this._lastReportTime || (now - this._lastReportTime > 10000)) {
+        if (!this._lastReportTime || now - this._lastReportTime > 10000) {
             this._reportPlaybackProgress();
             this._lastReportTime = now;
         }
@@ -691,15 +686,18 @@ class PlayerPage extends Page {
 
         try {
             // Use captured values, then player methods, then cached values as fallback
-            const mediaSource = capturedMediaSource ??
-                this._player?.getCurrentMediaSource?.() ??
-                this._cachedMediaSource;
+            const mediaSource =
+                capturedMediaSource ?? this._player?.getCurrentMediaSource?.() ?? this._cachedMediaSource;
             const positionTicks = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
             if (!playSessionId) {
-                console.warn('[PlayerPage] Skipping stopped report - no PlaySessionId (mediaSource:', !!mediaSource, ')');
+                console.warn(
+                    '[PlayerPage] Skipping stopped report - no PlaySessionId (mediaSource:',
+                    !!mediaSource,
+                    ')'
+                );
                 return;
             }
 
@@ -769,7 +767,7 @@ class PlayerPage extends Page {
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks
-            }).catch(err => {
+            }).catch((err) => {
                 console.warn('[PlayerPage] Failed to report on exit:', err);
             });
         }

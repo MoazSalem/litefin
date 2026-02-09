@@ -101,7 +101,7 @@ class App {
      */
     _initializeState() {
         // App settings
-        state.set('app:layout', 'classic');  // 'classic' or 'modern'
+        state.set('app:layout', 'classic'); // 'classic' or 'modern'
         state.set('app:theme', 'dark');
 
         // User state - only set defaults if not already set by auth.init()
@@ -286,7 +286,7 @@ class App {
      * @private
      */
     _registerRoutes() {
-        // NOTE: Using synchronous registration to avoid dynamic import() 
+        // NOTE: Using synchronous registration to avoid dynamic import()
         // which is not supported in Tizen 4's Chromium 56 engine
 
         // Import pages at top of file (see imports above)

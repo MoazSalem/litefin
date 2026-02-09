@@ -18,7 +18,9 @@ const FOCUSABLE_SELECTOR = `
     select:not([disabled]):not([tabindex="-1"]),
     textarea:not([disabled]):not([tabindex="-1"]),
     [tabindex]:not([tabindex="-1"])
-`.replace(/\s+/g, ' ').trim();
+`
+    .replace(/\s+/g, ' ')
+    .trim();
 
 class FocusManager {
     constructor() {
@@ -119,7 +121,7 @@ class FocusManager {
         }
 
         // easeOutQuad: fast start, smooth deceleration
-        const easeOutQuad = t => t * (2 - t);
+        const easeOutQuad = (t) => t * (2 - t);
 
         const animate = () => {
             const state = this[stateKey];
@@ -130,7 +132,7 @@ class FocusManager {
             const eased = easeOutQuad(progress);
 
             const distance = state.target - state.startScroll;
-            const newScroll = state.startScroll + (distance * eased);
+            const newScroll = state.startScroll + distance * eased;
 
             if (isVertical) {
                 state.container.scrollTop = newScroll;
@@ -162,10 +164,22 @@ class FocusManager {
     _init() {
         // Listen for key events from TizenAdapter
         // PREVENT DEFAULT on all handled keys to avoid browser/native double-handling
-        eventBus.on('key:up', (e) => { e?.preventDefault(); this._handleKey('up'); });
-        eventBus.on('key:down', (e) => { e?.preventDefault(); this._handleKey('down'); });
-        eventBus.on('key:left', (e) => { e?.preventDefault(); this._handleKey('left'); });
-        eventBus.on('key:right', (e) => { e?.preventDefault(); this._handleKey('right'); });
+        eventBus.on('key:up', (e) => {
+            e?.preventDefault();
+            this._handleKey('up');
+        });
+        eventBus.on('key:down', (e) => {
+            e?.preventDefault();
+            this._handleKey('down');
+        });
+        eventBus.on('key:left', (e) => {
+            e?.preventDefault();
+            this._handleKey('left');
+        });
+        eventBus.on('key:right', (e) => {
+            e?.preventDefault();
+            this._handleKey('right');
+        });
 
         eventBus.on('key:enter', (e) => {
             e?.preventDefault(); // Prevent native button click (we trigger it manually)
@@ -216,7 +230,7 @@ class FocusManager {
 
     /**
      * Handle directional key press
-     * @param {string} direction 
+     * @param {string} direction
      */
     _handleKey(direction) {
         // Simple debounce to prevent event flooding
@@ -264,7 +278,7 @@ class FocusManager {
 
     /**
      * Unregister a section
-     * @param {string} name 
+     * @param {string} name
      */
     unregister(name) {
         this._sections.delete(name);
@@ -285,8 +299,8 @@ class FocusManager {
 
     /**
      * Set the active section and focus inside it
-     * @param {string} name 
-     * @param {boolean} restoreFocus 
+     * @param {string} name
+     * @param {boolean} restoreFocus
      * @param {HTMLElement} [fromElement] - Element user is coming FROM (for spatial entry)
      */
     setActiveSection(name, restoreFocus = true, fromElement = null) {
@@ -307,9 +321,13 @@ class FocusManager {
         }
     }
 
-    getPreviousSection() { return this._previousSection; }
+    getPreviousSection() {
+        return this._previousSection;
+    }
 
-    getActionSection() { return this._activeSection; } // Alias if needed? No, getActiveSection exists.
+    getActionSection() {
+        return this._activeSection;
+    } // Alias if needed? No, getActiveSection exists.
 
     /**
      * Get config for a section
@@ -327,7 +345,7 @@ class FocusManager {
     /**
      * Get focusable elements in section (OPTIMIZED)
      * Uses cache to avoid repeated expensive DOM queries.
-     * @param {string} sectionName 
+     * @param {string} sectionName
      * @param {boolean} forceRefresh - Force cache refresh
      */
     _getFocusables(sectionName, forceRefresh = false) {
@@ -341,11 +359,9 @@ class FocusManager {
 
         // Query focusables and filter out hidden elements
         // We check display:none explicitly to prevent focusing hidden controls
-        const allElements = Array.from(
-            config.container.querySelectorAll(config.selector)
-        );
+        const allElements = Array.from(config.container.querySelectorAll(config.selector));
 
-        const focusables = allElements.filter(el => {
+        const focusables = allElements.filter((el) => {
             // Filter out elements with display: none
             const style = window.getComputedStyle(el);
             if (style.display === 'none') return false;
@@ -361,7 +377,7 @@ class FocusManager {
 
     /**
      * Invalidate focusables cache for a section
-     * @param {string} sectionName 
+     * @param {string} sectionName
      */
     invalidateCache(sectionName) {
         if (sectionName) {
@@ -373,7 +389,7 @@ class FocusManager {
 
     /**
      * Core movement logic
-     * @param {string} direction 
+     * @param {string} direction
      */
     _move(direction) {
         if (!this._activeSection) return;
@@ -408,15 +424,13 @@ class FocusManager {
             } else if (direction === 'right') {
                 if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
-        }
-        else if (config.orientation === 'vertical') {
+        } else if (config.orientation === 'vertical') {
             if (direction === 'up') {
                 if (currentIndex > 0) nextElement = focusables[currentIndex - 1];
             } else if (direction === 'down') {
                 if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
-        }
-        else {
+        } else {
             // 'grid' or default - Use Spatial Navigation
             console.log(`[FocusManager] Spatial Move: ${direction} from`, this._focusedElement);
             nextElement = this._findSpatialNext(this._focusedElement, focusables, direction);
@@ -469,7 +483,7 @@ class FocusManager {
 
             // 1. Check Direction
             let isValid = false;
-            let distMain = 0;  // parallel to direction
+            let distMain = 0; // parallel to direction
             let distCross = 0; // perpendicular to direction
 
             // TOLERANCE: Ignore candidates that are "basically on the same line"
@@ -522,7 +536,7 @@ class FocusManager {
             }
 
             // Calculate final score
-            const score = distMain + (distCross * 3.0);
+            const score = distMain + distCross * 3.0;
 
             if (score < minScore) {
                 minScore = score;
@@ -570,7 +584,7 @@ class FocusManager {
     /**
      * Leave current section (OPTIMIZED)
      * Uses instant scroll when changing sections vertically.
-     * @param {string} direction 
+     * @param {string} direction
      */
     _leaveSection(direction) {
         const config = this._sections.get(this._activeSection);
@@ -579,7 +593,9 @@ class FocusManager {
         const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
         let nextSection = config[key];
 
-        console.log(`[FocusManager] _leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}, exists=${this._sections.has(nextSection)}`);
+        console.log(
+            `[FocusManager] _leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}, exists=${this._sections.has(nextSection)}`
+        );
 
         // Keep searching if target section exists but has no focusable elements
         // This handles empty rows in library grids/lists
@@ -592,7 +608,9 @@ class FocusManager {
 
             if (focusables && focusables.length > 0) {
                 // Found a valid section with focusable elements!
-                console.log(`[FocusManager] _leaveSection: Found valid section ${nextSection} with ${focusables.length} focusables`);
+                console.log(
+                    `[FocusManager] _leaveSection: Found valid section ${nextSection} with ${focusables.length} focusables`
+                );
                 break;
             }
 
@@ -619,7 +637,7 @@ class FocusManager {
             }
 
             // Set flag for instant scroll when changing rows
-            this._useInstantScroll = (direction === 'up' || direction === 'down');
+            this._useInstantScroll = direction === 'up' || direction === 'down';
 
             // Pass originElement to allow selecting closest target in new section
             this.setActiveSection(nextSection, true, originElement);
@@ -638,7 +656,7 @@ class FocusManager {
     /**
      * Identify the nearest parent that should handle scrolling.
      * Searches for known scroll containers or falls back to .page-content.
-     * @param {HTMLElement} element 
+     * @param {HTMLElement} element
      * @returns {HTMLElement|null}
      * @private
      */
@@ -659,7 +677,7 @@ class FocusManager {
     /**
      * Focus a specific element (OPTIMIZED per Samsung Tizen Guidelines)
      * - Cache DOM queries
-     * - Batch reads before writes  
+     * - Batch reads before writes
      * - Scroll first, then focus
      */
     focusElement(element, options = {}) {
@@ -688,10 +706,14 @@ class FocusManager {
             const isTrapped = this._trapStack.length > 0 && this._activeSection === '__trap__';
 
             if (!isTrapped) {
-                console.log(`[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`);
+                console.log(
+                    `[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`
+                );
                 this.setActiveSection(sectionName, false); // false = Don't trigger restoreFocus (prevent loop)
             } else {
-                console.log(`[FocusManager] focusElement: Staying in trap "${this._activeSection}" despite element belonging to "${sectionName}"`);
+                console.log(
+                    `[FocusManager] focusElement: Staying in trap "${this._activeSection}" despite element belonging to "${sectionName}"`
+                );
             }
         }
 
@@ -703,7 +725,7 @@ class FocusManager {
 
         // SCROLL FIRST - before focus
 
-        // TIZEN OPTIMIZATION: Use getBoundingClientRect for sub-pixel accuracy 
+        // TIZEN OPTIMIZATION: Use getBoundingClientRect for sub-pixel accuracy
         // and robustness against floating point offset errors on TV browsers.
         const getCumulativeOffsetTop = (el, relativeTo) => {
             if (!el || !relativeTo) return 0;
@@ -714,7 +736,7 @@ class FocusManager {
 
         // Determine scroll strategy
         // Row-based scroll should be used if we're in a media row and it's not too tall
-        let row = pageContent ? element.closest('.media-row') : null;
+        const row = pageContent ? element.closest('.media-row') : null;
         let useRowScroll = !!row;
 
         if (useRowScroll) {
@@ -760,8 +782,8 @@ class FocusManager {
                 // Aim for top-alignment (the premium look)
                 let targetScroll = rowTop - (config.scrollOffsetTop || 50);
 
-                // SAFETY: Ensure the specific focused element is actually visible 
-                // at the target scroll position. If the row is very tall, 
+                // SAFETY: Ensure the specific focused element is actually visible
+                // at the target scroll position. If the row is very tall,
                 // aligning to top might hide the bottom elements.
                 const elTop = getCumulativeOffsetTop(element, pageContent);
                 const elBottom = elTop + element.offsetHeight;
@@ -815,7 +837,7 @@ class FocusManager {
                     // Check if row is outside viewport (with buffers)
                     if (rowTop < currentScroll + 80 || rowBottom > viewBottom - 80) {
                         // Scroll to center the row vertically with smooth easing
-                        const targetScroll = rowTop - (viewHeight / 2) + (rowHeight / 2);
+                        const targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
                         // Scroll to center the row vertically with smooth easing
                         this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
                     }
@@ -826,7 +848,7 @@ class FocusManager {
                 const elementWidth = element.offsetWidth;
                 const containerWidth = rowItems.clientWidth;
 
-                const targetScroll = elementLeft - (containerWidth / 2) + (elementWidth / 2);
+                const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
                 const finalScrollLeft = Math.max(0, targetScroll);
 
                 // RAPID NAVIGATION CHECK:
@@ -853,10 +875,9 @@ class FocusManager {
 
                 if (elementTop < currentScroll + effectiveTopMargin) {
                     finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
-                }
-                else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
+                } else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
                     if (elementHeight < viewHeight / 3) {
-                        finalScrollTop = elementTop - (viewHeight / 2) + (elementHeight / 2);
+                        finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
                     } else {
                         finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
                     }
@@ -910,7 +931,7 @@ class FocusManager {
         // Sidebar always starts at Home when entered
         if (sectionName === 'sidebar') {
             // Try to find Home button first
-            const homeBtn = focusables.find(el => el.id === 'sidebar-home');
+            const homeBtn = focusables.find((el) => el.id === 'sidebar-home');
             const target = homeBtn || focusables[0];
 
             this.focusElement(target, { skipScroll: true });
@@ -925,9 +946,10 @@ class FocusManager {
             target = focusables[0];
             this.focusElement(target, { skipScroll: this._useInstantScroll });
             return;
-        }
-        else if (config.enterTo === 'active-element' && focusables.length > 0) {
-            target = focusables.find(el => el.classList.contains('active') || el.classList.contains('selected')) || focusables[0];
+        } else if (config.enterTo === 'active-element' && focusables.length > 0) {
+            target =
+                focusables.find((el) => el.classList.contains('active') || el.classList.contains('selected')) ||
+                focusables[0];
             this.focusElement(target, { skipScroll: this._useInstantScroll });
             return;
         }
@@ -996,12 +1018,16 @@ class FocusManager {
         }
     }
 
-    getActiveSection() { return this._activeSection; }
-    getFocused() { return this._focusedElement; }
+    getActiveSection() {
+        return this._activeSection;
+    }
+    getFocused() {
+        return this._focusedElement;
+    }
 
     /**
      * Find the registered section name that contains the element
-     * @param {HTMLElement} element 
+     * @param {HTMLElement} element
      */
     getSectionForElement(element) {
         if (!element) return null;

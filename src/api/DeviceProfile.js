@@ -16,12 +16,7 @@
  * @returns {Object} Device profile
  */
 export function getDeviceProfile(options = {}) {
-    const {
-        enableHEVC = true,
-        enable4K = true,
-        enable8K = false,
-        enableHDR = false
-    } = options;
+    const { enableHEVC = true, enable4K = true, enable8K = false, enableHDR = false } = options;
 
     // Max bitrate based on resolution
     let maxBitrate = 40000000; // Default 1080p (40 Mbps)
@@ -42,7 +37,7 @@ export function getDeviceProfile(options = {}) {
 
     // Video profiles for H.264
     const h264Profiles = 'high|main|baseline|constrained baseline';
-    const h264Levels = enable4K ? '52' : '42';  // 5.2 for 4K, 4.2 for 1080p
+    const h264Levels = enable4K ? '52' : '42'; // 5.2 for 4K, 4.2 for 1080p
 
     // ========================================================================
     // Audio codecs
@@ -294,7 +289,6 @@ export function detectCapabilities() {
 
             // Check HDR support (only for newer TVs)
             // Note: Most Tizen TVs don't expose this directly
-
         } catch (e) {
             console.warn('DeviceProfile: Could not detect capabilities', e);
         }

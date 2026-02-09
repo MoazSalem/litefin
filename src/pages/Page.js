@@ -112,7 +112,7 @@ class Page extends Component {
     /**
      * Override in subclass for page-specific init
      */
-    onInit() { }
+    onInit() {}
 
     /**
      * Handle back button press

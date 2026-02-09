@@ -306,7 +306,7 @@ class Toast {
      * Clear all toasts
      */
     clear() {
-        this._toasts.forEach(t => this._removeToast(t));
+        this._toasts.forEach((t) => this._removeToast(t));
     }
 }
 

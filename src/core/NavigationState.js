@@ -5,7 +5,7 @@
  * Centralized service for capturing and restoring page state during navigation.
  * Stores focus position, scroll position, and page-specific state (filters, etc.)
  * in the navigation history stack.
- * 
+ *
  * Tizen 4 Compatible: No async/await in critical paths, no WeakMap/WeakRef.
  * ============================================================================
  */
@@ -42,9 +42,7 @@ class NavigationState {
 
             // Page-specific state (filters, sort, pagination, etc.)
             // Pages implement getNavigationState() to provide this
-            pageState: (typeof pageInstance.getNavigationState === 'function')
-                ? pageInstance.getNavigationState()
-                : null
+            pageState: typeof pageInstance.getNavigationState === 'function' ? pageInstance.getNavigationState() : null
         };
 
         if (this._debug) {

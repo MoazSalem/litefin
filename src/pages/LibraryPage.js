@@ -301,7 +301,6 @@ class LibraryPage extends Page {
         // Determine start section
         // For BoxSets, tabs are hidden, so start at Controls or Grid
         const collectionType = this.state.libraryInfo?.CollectionType;
-        const viewType = this.state.viewType;
 
         if (collectionType === 'boxsets') {
             // Try controls first (Sort/Filter), else Grid
@@ -336,7 +335,6 @@ class LibraryPage extends Page {
         this.$('#modal-overlay')?.addEventListener('click', (e) => {
             if (e.target.id === 'modal-overlay') this._closeModal();
         });
-
 
         // Horizontal Rows Header Click
         // Attach to #library-content (stable parent)
@@ -447,11 +445,17 @@ class LibraryPage extends Page {
 
         // Show Skeleton instead of spinner
         // Pre-emptive Cleanup: Hide horizontal rows early if switching to grid
-        const isHorizontalLayout = (this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming');
+        const isHorizontalLayout =
+            this.state.viewType === 'Genres' ||
+            this.state.viewType === 'Suggestions' ||
+            this.state.viewType === 'Upcoming';
         const rowsContainer = this.$('#library-rows');
         const grid = this.$('#library-grid');
 
-        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
+        const isLandscape =
+            this.state.viewType === 'Episodes' ||
+            this.state.viewType === 'Upcoming' ||
+            this.state.viewType === 'Networks';
         if (!isHorizontalLayout) {
             if (rowsContainer) rowsContainer.style.display = 'none';
             if (grid) grid.style.display = '';
@@ -474,7 +478,7 @@ class LibraryPage extends Page {
                 Recursive: true,
                 Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,DateCreated,ProductionYear,CommunityRating,OfficialRating',
                 ImageTypeLimit: 1,
-                EnableImageTypes: 'Primary,Backdrop,Thumb',
+                EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
 
             // Apply Filters
@@ -568,11 +572,9 @@ class LibraryPage extends Page {
                     params.Recursive = true;
                 }
                 result = await api.getItems(params);
-
             } else if (viewType === 'Suggestions') {
                 // Fetch multiple rows for Suggestions with Recommendations
                 const rows = [];
-
 
                 const collectionType = this.state.libraryInfo?.CollectionType;
                 const suggestionTypes = collectionType === 'tvshows' ? 'Series' : 'Movie,Series';
@@ -585,10 +587,22 @@ class LibraryPage extends Page {
                 ]);
 
                 if (resume.Items && resume.Items.length > 0) {
-                    rows.push({ title: 'Continue Watching', items: resume.Items, isLandscape: true, cardType: 'backdrop', contextType: 'resume' });
+                    rows.push({
+                        title: 'Continue Watching',
+                        items: resume.Items,
+                        isLandscape: true,
+                        cardType: 'backdrop',
+                        contextType: 'resume'
+                    });
                 }
                 if (nextUp.Items && nextUp.Items.length > 0) {
-                    rows.push({ title: 'Next Up', items: nextUp.Items, isLandscape: true, cardType: 'backdrop', contextType: 'nextUp' });
+                    rows.push({
+                        title: 'Next Up',
+                        items: nextUp.Items,
+                        isLandscape: true,
+                        cardType: 'backdrop',
+                        contextType: 'nextUp'
+                    });
                 }
                 if (latest && latest.length > 0) {
                     rows.push({ title: 'Latest Added', items: latest });
@@ -601,11 +615,18 @@ class LibraryPage extends Page {
                     const sourceItem = candidates[Math.floor(Math.random() * candidates.length)];
 
                     // If it's an episode, use the Series ID for better suggestions
-                    const targetId = (sourceItem.Type === 'Episode' && sourceItem.SeriesId) ? sourceItem.SeriesId : sourceItem.Id;
-                    const targetName = (sourceItem.Type === 'Episode' && sourceItem.SeriesName) ? sourceItem.SeriesName : sourceItem.Name;
+                    const targetId =
+                        sourceItem.Type === 'Episode' && sourceItem.SeriesId ? sourceItem.SeriesId : sourceItem.Id;
+                    const targetName =
+                        sourceItem.Type === 'Episode' && sourceItem.SeriesName
+                            ? sourceItem.SeriesName
+                            : sourceItem.Name;
 
                     try {
-                        const similar = await api.getSimilar(targetId, { Limit: 12, IncludeItemTypes: suggestionTypes });
+                        const similar = await api.getSimilar(targetId, {
+                            Limit: 12,
+                            IncludeItemTypes: suggestionTypes
+                        });
                         if (similar.Items && similar.Items.length > 0) {
                             rows.push({ title: `Because you watch ${targetName}`, items: similar.Items });
                         }
@@ -627,7 +648,10 @@ class LibraryPage extends Page {
 
                     if (favorites.Items && favorites.Items.length > 0) {
                         const favItem = favorites.Items[0];
-                        const similarFav = await api.getSimilar(favItem.Id, { Limit: 12, IncludeItemTypes: suggestionTypes });
+                        const similarFav = await api.getSimilar(favItem.Id, {
+                            Limit: 12,
+                            IncludeItemTypes: suggestionTypes
+                        });
                         if (similarFav.Items && similarFav.Items.length > 0) {
                             rows.push({ title: `Because you like ${favItem.Name}`, items: similarFav.Items });
                         }
@@ -640,7 +664,6 @@ class LibraryPage extends Page {
                 this._renderHorizontalRows(rows);
                 this._updatePaginationUI();
                 return; // Skip grid render
-
             } else if (viewType === 'Genres') {
                 // Fetch Genres List
                 result = await api.getGenres({
@@ -655,9 +678,10 @@ class LibraryPage extends Page {
                 // Fetch items for ALL genres in parallel (Limit 12 per genre)
                 // We pre-load data so we don't need row-intersections
                 const collectionType = this.state.libraryInfo?.CollectionType;
-                const includeItemTypes = collectionType === 'tvshows' ? 'Series' : (collectionType === 'movies' ? 'Movie' : 'Movie,Series');
+                const includeItemTypes =
+                    collectionType === 'tvshows' ? 'Series' : collectionType === 'movies' ? 'Movie' : 'Movie,Series';
 
-                const rowPromises = allGenres.map(async genre => {
+                const rowPromises = allGenres.map(async (genre) => {
                     const params = {
                         ParentId: this.state.libraryId,
                         GenreIds: genre.Id,
@@ -684,13 +708,12 @@ class LibraryPage extends Page {
                     }
                 });
 
-                const loadedRows = (await Promise.all(rowPromises)).filter(r => r && r.items.length > 0);
+                const loadedRows = (await Promise.all(rowPromises)).filter((r) => r && r.items.length > 0);
 
                 this.state.items = [];
                 this._renderHorizontalRows(loadedRows);
                 this._updatePaginationUI();
                 return;
-
             } else if (viewType === 'Upcoming') {
                 // Fetch upcoming items
                 result = await api.getUpcoming({ ParentId: this.state.libraryId, Limit: 60 });
@@ -703,7 +726,7 @@ class LibraryPage extends Page {
                 let currentBatch = null;
                 let currentKey = '';
 
-                items.forEach(item => {
+                items.forEach((item) => {
                     const dateStr = item.PremiereDate || item.AirTime;
                     if (!dateStr) return;
 
@@ -728,7 +751,7 @@ class LibraryPage extends Page {
                 const tomorrow = new Date(today);
                 tomorrow.setDate(tomorrow.getDate() + 1);
 
-                const displayRows = rows.map(group => {
+                const displayRows = rows.map((group) => {
                     const d = group.date;
                     // Reset time for strictly date comparison
                     const dZero = new Date(d);
@@ -753,20 +776,16 @@ class LibraryPage extends Page {
                 this._renderHorizontalRows(displayRows);
                 this._updatePaginationUI();
                 return;
-
             } else if (viewType === 'Episodes') {
                 // Flattened episodes view
                 params.IncludeItemTypes = 'Episode';
                 result = await api.getItems(params);
-
             } else if (viewType === 'Favorites') {
                 params.Filters = 'IsFavorite';
                 result = await api.getItems(params);
-
             } else if (viewType === 'Networks') {
                 // Fetch studios/networks for this library
                 result = await api.getStudios({ ParentId: this.state.libraryId });
-
             } else if (viewType === 'Collections') {
                 params.IncludeItemTypes = 'BoxSet';
                 params.Recursive = true;
@@ -778,7 +797,6 @@ class LibraryPage extends Page {
 
             this._renderGrid(this.state.items);
             this._updatePaginationUI();
-
         } catch (e) {
             console.error('LibraryPage: Failed to load items', e);
             this.$('#library-grid').innerHTML = `<p class="error-msg">Failed to load content</p>`;
@@ -826,7 +844,7 @@ class LibraryPage extends Page {
 
         // Disable/Enable buttons
         const isPrevDisabled = startIndex <= 0;
-        const isNextDisabled = (startIndex + limit) >= totalRecordCount;
+        const isNextDisabled = startIndex + limit >= totalRecordCount;
 
         this.$('#btn-prev').disabled = isPrevDisabled;
         this.$('#btn-next').disabled = isNextDisabled;
@@ -901,13 +919,17 @@ class LibraryPage extends Page {
 
         if (!tabsContainer) return;
 
-        tabsContainer.innerHTML = tabs.map(tab => `
+        tabsContainer.innerHTML = tabs
+            .map(
+                (tab) => `
             <button class="tab-btn ${this.state.viewType === tab.id ? 'active' : ''}" 
                     data-type="${tab.id}" 
                     tabindex="0">
                 ${tab.label}
             </button>
-        `).join('');
+        `
+            )
+            .join('');
 
         // Re-register focus to capture new buttons
         focusManager.register('library-tabs', this.$('#library-tabs'), {
@@ -936,16 +958,18 @@ class LibraryPage extends Page {
 
         const activeChar = this.state.nameStartsWith;
 
-        picker.innerHTML = this.state.alphaPickerChars.map(char => {
-            const isActive = char === activeChar || (char === '#' && activeChar === '0-9'); // Simplify # logic
-            return `
+        picker.innerHTML = this.state.alphaPickerChars
+            .map((char) => {
+                const isActive = char === activeChar || (char === '#' && activeChar === '0-9'); // Simplify # logic
+                return `
                 <button class="alpha-btn ${isActive ? 'active' : ''}" 
                         data-char="${char}" 
                         tabindex="0">
                     ${char}
                 </button>
             `;
-        }).join('');
+            })
+            .join('');
 
         focusManager.register('alpha-picker', this.$('#alpha-picker'), {
             orientation: 'horizontal',
@@ -971,7 +995,10 @@ class LibraryPage extends Page {
         if (pagination) pagination.style.display = ''; // Restore pagination
 
         // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks)
-        const isLandscape = this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming' || this.state.viewType === 'Networks';
+        const isLandscape =
+            this.state.viewType === 'Episodes' ||
+            this.state.viewType === 'Upcoming' ||
+            this.state.viewType === 'Networks';
 
         if (isLandscape) {
             grid.classList.add('landscape');
@@ -988,9 +1015,9 @@ class LibraryPage extends Page {
             // Check if controls should be visible (logic matched with _updateHeaderVisibility)
             const collectionType = this.state.libraryInfo?.CollectionType;
             const viewType = this.state.viewType;
-            const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
-            const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
-            const isEpisodes = (viewType === 'Episodes');
+            const isMovieMain = collectionType === 'movies' && viewType === 'Items';
+            const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
+            const isEpisodes = viewType === 'Episodes';
             const shouldShowControls = isMovieMain || isTVMain || isEpisodes;
 
             const btnReset = this.$('#btn-reset-filters');
@@ -1020,7 +1047,10 @@ class LibraryPage extends Page {
                 if (controlsConfig) {
                     focusManager.register('library-controls', this.$('#library-controls'), {
                         ...controlsConfig,
-                        leaveDown: this.$('#alpha-picker-container').style.display === 'none' ? 'empty-state-btn' : 'alpha-picker'
+                        leaveDown:
+                            this.$('#alpha-picker-container').style.display === 'none'
+                                ? 'empty-state-btn'
+                                : 'alpha-picker'
                     });
                 }
 
@@ -1069,11 +1099,20 @@ class LibraryPage extends Page {
         this.$('#count-indicator').textContent = `${start}-${end} of ${this.state.totalRecordCount}`;
 
         // Generate HTML
-        const html = items.map(item => CardRenderer.createCardHtml(item, {
-            isLandscape: isLandscape,
-            type: (this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming') ? 'episode' : (this.state.viewType === 'Networks' ? 'backdrop' : 'poster'),
-            contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null // Handle special contexts
-        })).join('');
+        const html = items
+            .map((item) =>
+                CardRenderer.createCardHtml(item, {
+                    isLandscape: isLandscape,
+                    type:
+                        this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming'
+                            ? 'episode'
+                            : this.state.viewType === 'Networks'
+                              ? 'backdrop'
+                              : 'poster',
+                    contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null // Handle special contexts
+                })
+            )
+            .join('');
 
         grid.innerHTML = html;
 
@@ -1182,8 +1221,9 @@ class LibraryPage extends Page {
         // For horizontal views like Suggestions/Upcoming, controls/picker are hidden,
         // so we navigate straight back to the tabs.
         // NOTE: Genres uses grid layout with focusable headers, so it goes through controls.
-        const isHorizontalLayout = (this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming');
-        const nextUpTarget = (isHorizontalLayout || this.state.viewType === 'Genres') ? 'library-tabs' : 'library-controls';
+        const isHorizontalLayout = this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming';
+        const nextUpTarget =
+            isHorizontalLayout || this.state.viewType === 'Genres' ? 'library-tabs' : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -1197,14 +1237,16 @@ class LibraryPage extends Page {
             // Focusable Header (clickable to navigate to genre page)
             // Only make focusable if it's actionable (has genreId)
             const isActionable = !!row.genreId;
-            const headerHtml = isActionable ? `
+            const headerHtml = isActionable
+                ? `
                 <div class="library-row-header" id="${headerId}">
                     <button class="header-focusable" tabindex="0" data-genre-id="${row.genreId}">
                         <span class="header-title">${row.title}</span>
                         <i class="fa-solid fa-chevron-right header-arrow"></i>
                     </button>
                 </div>
-            ` : `
+            `
+                : `
                  <div class="library-row-header" id="${headerId}">
                     <div class="header-static">
                         <span class="header-title">${row.title}</span>
@@ -1217,17 +1259,21 @@ class LibraryPage extends Page {
             let contentHtml = '';
 
             if (displayItems.length > 0) {
-                contentHtml = displayItems.map(item => CardRenderer.createCardHtml(item, {
-                    isLandscape: row.isLandscape || false,
-                    type: row.cardType || 'poster',
-                    contextType: row.contextType || null
-                })).join('');
+                contentHtml = displayItems
+                    .map((item) =>
+                        CardRenderer.createCardHtml(item, {
+                            isLandscape: row.isLandscape || false,
+                            type: row.cardType || 'poster',
+                            contextType: row.contextType || null
+                        })
+                    )
+                    .join('');
             } else {
                 contentHtml = '<div class="empty-msg">No items</div>';
             }
 
             // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
-            const isHorizontalRow = (this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions');
+            const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
             const containerClass = isHorizontalRow ? 'row-items' : 'genre-grid-items';
 
             section.innerHTML = `
@@ -1246,34 +1292,36 @@ class LibraryPage extends Page {
             // This prevents section-change scroll logic from causing inconsistencies
             const rowId = `row-${rowIndex}`;
             // Simplify selector for Upcoming which has no headers
-            const selector = (this.state.viewType === 'Upcoming') ? '.media-card' : '.header-focusable, .media-card';
+            const selector = this.state.viewType === 'Upcoming' ? '.media-card' : '.header-focusable, .media-card';
             // Use horizontal orientation for Upcoming/Suggestions, grid for Genres
             const orientation = isHorizontalRow ? 'horizontal' : 'grid';
 
             // Custom onMove handler for grid rows to ensure UP navigates to header
-            const onMoveHandler = !isHorizontalRow ? (direction, currentElement) => {
-                if (direction === 'up' && currentElement?.classList.contains('media-card')) {
-                    // Check if there's ANY card above this one (spatially)
-                    const currentRect = currentElement.getBoundingClientRect();
-                    const cards = Array.from(section.querySelectorAll('.media-card'));
-                    const hasCardAbove = cards.some(card => {
-                        if (card === currentElement) return false;
-                        const cardRect = card.getBoundingClientRect();
-                        // Card is above if its center Y is at least 10px higher
-                        return (cardRect.top + cardRect.height / 2) < (currentRect.top + currentRect.height / 2) - 10;
-                    });
+            const onMoveHandler = !isHorizontalRow
+                ? (direction, currentElement) => {
+                      if (direction === 'up' && currentElement?.classList.contains('media-card')) {
+                          // Check if there's ANY card above this one (spatially)
+                          const currentRect = currentElement.getBoundingClientRect();
+                          const cards = Array.from(section.querySelectorAll('.media-card'));
+                          const hasCardAbove = cards.some((card) => {
+                              if (card === currentElement) return false;
+                              const cardRect = card.getBoundingClientRect();
+                              // Card is above if its center Y is at least 10px higher
+                              return cardRect.top + cardRect.height / 2 < currentRect.top + currentRect.height / 2 - 10;
+                          });
 
-                    // If no card above, navigate to header
-                    if (!hasCardAbove) {
-                        const headerBtn = section.querySelector('.header-focusable');
-                        if (headerBtn) {
-                            focusManager.focusElement(headerBtn);
-                            return true; // Handled
-                        }
-                    }
-                }
-                return false; // Let default handling proceed
-            } : null;
+                          // If no card above, navigate to header
+                          if (!hasCardAbove) {
+                              const headerBtn = section.querySelector('.header-focusable');
+                              if (headerBtn) {
+                                  focusManager.focusElement(headerBtn);
+                                  return true; // Handled
+                              }
+                          }
+                      }
+                      return false; // Let default handling proceed
+                  }
+                : null;
 
             focusManager.register(rowId, section, {
                 orientation: orientation,
@@ -1332,8 +1380,6 @@ class LibraryPage extends Page {
         });
     }
 
-
-
     async _fetchGenreItems(genreId, listId) {
         const listContainer = this.$(`#${listId}`);
         if (!listContainer) return;
@@ -1381,10 +1427,14 @@ class LibraryPage extends Page {
                 return;
             }
 
-            const html = items.map(item => CardRenderer.createCardHtml(item, {
-                isLandscape: false, // Genres usually mix, but mostly posters
-                type: 'poster'
-            })).join('');
+            const html = items
+                .map((item) =>
+                    CardRenderer.createCardHtml(item, {
+                        isLandscape: false, // Genres usually mix, but mostly posters
+                        type: 'poster'
+                    })
+                )
+                .join('');
 
             listContainer.innerHTML = html;
 
@@ -1401,7 +1451,6 @@ class LibraryPage extends Page {
 
             // Invalidate FocusManager cache so it re-queries the new elements
             focusManager.invalidateCache(listId);
-
         } catch (e) {
             console.error('Failed to load genre items', e);
             // Hide row on error too
@@ -1493,7 +1542,7 @@ class LibraryPage extends Page {
     }
 
     async _handlePageChange(direction) {
-        const newIndex = this.state.startIndex + (direction * this.state.limit);
+        const newIndex = this.state.startIndex + direction * this.state.limit;
 
         // Bounds check
         if (newIndex < 0 || newIndex >= this.state.totalRecordCount) return;
@@ -1540,7 +1589,7 @@ class LibraryPage extends Page {
                 Limit: 1,
                 Recursive: true,
                 IncludeItemTypes: includeItemTypes,
-                ExcludeLocationTypes: 'Virtual', // Filter out missing files
+                ExcludeLocationTypes: 'Virtual' // Filter out missing files
             };
 
             // Respect current filters if any? Usually shuffle ignores view filters for global "Shuffle"
@@ -1563,7 +1612,7 @@ class LibraryPage extends Page {
         // Shuffle button is available except for Episodes view
         const btnShuffle = this.$('#btn-shuffle');
         if (btnShuffle) {
-            btnShuffle.style.display = (this.state.viewType === 'Episodes') ? 'none' : '';
+            btnShuffle.style.display = this.state.viewType === 'Episodes' ? 'none' : '';
         }
 
         // Quick Reset button visibility based on filters
@@ -1651,7 +1700,9 @@ class LibraryPage extends Page {
                     <div class="sort-column" id="sort-by-col">
                         <h2 class="modal-title">Sort By</h2>
                         <div class="modal-options">
-                            ${sortOptions.map(opt => `
+                            ${sortOptions
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentSort ? 'selected' : ''}" 
                                         data-type="sort" 
                                         data-value="${opt.value}"
@@ -1659,7 +1710,9 @@ class LibraryPage extends Page {
                                     <div class="radio-icon"></div>
                                     <span>${opt.label}</span>
                                 </button>
-                            `).join('')}
+                            `
+                                )
+                                .join('')}
                         </div>
                     </div>
 
@@ -1667,7 +1720,9 @@ class LibraryPage extends Page {
                     <div class="sort-column" id="sort-order-col">
                         <h2 class="modal-title">Order</h2>
                         <div class="modal-options">
-                            ${orderOptions.map(opt => `
+                            ${orderOptions
+                                .map(
+                                    (opt) => `
                                 <button class="modal-option-btn radio-btn ${opt.value === currentOrder ? 'selected' : ''}" 
                                         data-type="order" 
                                         data-value="${opt.value}"
@@ -1675,7 +1730,9 @@ class LibraryPage extends Page {
                                     <div class="radio-icon"></div>
                                     <span>${opt.label}</span>
                                 </button>
-                            `).join('')}
+                            `
+                                )
+                                .join('')}
                         </div>
                     </div>
                 </div>
@@ -1710,14 +1767,14 @@ class LibraryPage extends Page {
             // Update UI classes manually to show selection
             const colId = type === 'sort' ? '#sort-by-col' : '#sort-order-col';
             const col = overlay.querySelector(colId);
-            col.querySelectorAll('.modal-option-btn').forEach(btn => {
+            col.querySelectorAll('.modal-option-btn').forEach((btn) => {
                 if (btn.dataset.value === value) btn.classList.add('selected');
                 else btn.classList.remove('selected');
             });
         };
 
         // Bind Clicks
-        overlay.querySelectorAll('.modal-option-btn').forEach(btn => {
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.addEventListener('click', () => handleSelection(btn.dataset.type, btn.dataset.value));
         });
 
@@ -1769,7 +1826,9 @@ class LibraryPage extends Page {
 
         // Set initial focus
         setTimeout(() => {
-            const selected = overlay.querySelector('#sort-by-col .selected') || overlay.querySelector('#sort-by-col .modal-option-btn');
+            const selected =
+                overlay.querySelector('#sort-by-col .selected') ||
+                overlay.querySelector('#sort-by-col .modal-option-btn');
             if (selected) focusManager.focusElement(selected);
         }, 50);
     }
@@ -1815,9 +1874,6 @@ class LibraryPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
-        // Current Filters State
-        const currentFilters = this.state.filters || {};
-
         // Sections Definition
         const sections = [
             {
@@ -1845,19 +1901,19 @@ class LibraryPage extends Page {
                 title: 'Genres',
                 id: 'sec-genres',
                 itemKey: 'Genres', // Key in state
-                items: data.Genres.map(g => ({ label: g, value: g, type: 'multi' }))
+                items: data.Genres.map((g) => ({ label: g, value: g, type: 'multi' }))
             },
             {
                 title: 'Parental Ratings',
                 id: 'sec-ratings',
                 itemKey: 'OfficialRatings',
-                items: data.OfficialRatings.map(r => ({ label: r, value: r, type: 'multi' }))
+                items: data.OfficialRatings.map((r) => ({ label: r, value: r, type: 'multi' }))
             },
             {
                 title: 'Tags',
                 id: 'sec-tags',
                 itemKey: 'Tags',
-                items: data.Tags.map(t => ({ label: t, value: t, type: 'multi' }))
+                items: data.Tags.map((t) => ({ label: t, value: t, type: 'multi' }))
             },
             {
                 title: 'Video Types',
@@ -1876,33 +1932,37 @@ class LibraryPage extends Page {
                 title: 'Years',
                 id: 'sec-years',
                 itemKey: 'Years',
-                items: data.Years.map(y => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
+                items: data.Years.map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
             }
         ];
 
         // Filter out empty sections
-        const validSections = sections.filter(s => s.items.length > 0);
+        const validSections = sections.filter((s) => s.items.length > 0);
 
         // Active Category State (Default to first)
         let activeSectionId = this.state.activeFilterSection || validSections[0].id;
         // Ensure active section is valid
-        if (!validSections.find(s => s.id === activeSectionId)) {
+        if (!validSections.find((s) => s.id === activeSectionId)) {
             activeSectionId = validSections[0].id;
         }
 
         // Render HTML Structure
-        let html = `
+        const html = `
             <div class="library-modal filter-modal split-view">
                 <h2 class="modal-title">Filters</h2>
                 <div class="filter-split-container">
                     <!-- Left Sidebar -->
                     <div class="filter-sidebar" id="filter-sidebar">
-                        ${validSections.map(s => `
+                        ${validSections
+                            .map(
+                                (s) => `
                             <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
                                     data-id="${s.id}" tabindex="0">
                                 ${s.title}
                             </button>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </div>
 
                     <!-- Right Main Content -->
@@ -1930,12 +1990,12 @@ class LibraryPage extends Page {
 
         // Logic to Render Items for Active Section
         const renderItems = (sectionId, options = {}) => {
-            const section = validSections.find(s => s.id === sectionId);
+            const section = validSections.find((s) => s.id === sectionId);
             const container = overlay.querySelector('#filter-main');
             if (!section || !container) return;
 
             // Highlight active category in sidebar
-            overlay.querySelectorAll('.filter-category-btn').forEach(btn => {
+            overlay.querySelectorAll('.filter-category-btn').forEach((btn) => {
                 if (btn.dataset.id === sectionId) btn.classList.add('active');
                 else btn.classList.remove('active');
             });
@@ -1955,7 +2015,7 @@ class LibraryPage extends Page {
             if (options.restoreFocus) {
                 const { key, value } = options.restoreFocus;
                 // Find index of target item
-                const targetIndex = section.items.findIndex(item => {
+                const targetIndex = section.items.findIndex((item) => {
                     const itemKey = item.key || section.itemKey;
                     const itemValue = item.value || '';
                     return itemKey === key && itemValue === value;
@@ -1973,21 +2033,22 @@ class LibraryPage extends Page {
             // Helper to render a chunk of items
             const appendItems = (startIndex, count) => {
                 const chunk = section.items.slice(startIndex, startIndex + count);
-                const html = chunk.map(item => {
-                    // Determine checked state
-                    let checked = false;
-                    if (item.type === 'boolean') {
-                        checked = !!this.state.filters[item.key];
-                        if (item.key === 'IsSD') checked = this.state.filters['IsHD'] === false;
-                    } else {
-                        const stored = this.state.filters[section.itemKey];
-                        if (stored) {
-                            const arr = stored.split(',');
-                            checked = arr.includes(item.value);
+                const html = chunk
+                    .map((item) => {
+                        // Determine checked state
+                        let checked = false;
+                        if (item.type === 'boolean') {
+                            checked = !!this.state.filters[item.key];
+                            if (item.key === 'IsSD') checked = this.state.filters['IsHD'] === false;
+                        } else {
+                            const stored = this.state.filters[section.itemKey];
+                            if (stored) {
+                                const arr = stored.split(',');
+                                checked = arr.includes(item.value);
+                            }
                         }
-                    }
 
-                    return `
+                        return `
                         <button class="modal-option-btn check-btn ${checked ? 'selected' : ''}"
                                 data-type="${item.type}"
                                 data-key="${item.key || section.itemKey}"
@@ -1999,7 +2060,8 @@ class LibraryPage extends Page {
                             <span class="btn-label">${item.label}</span>
                         </button>
                     `;
-                }).join('');
+                    })
+                    .join('');
 
                 // If starting from 0, replace content, otherwise append
                 if (startIndex === 0) {
@@ -2039,14 +2101,17 @@ class LibraryPage extends Page {
 
             // Start Observer
             if ('IntersectionObserver' in window) {
-                filterObserver = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            // Load next batch
-                            appendItems(loadedCount, BATCH_SIZE);
-                        }
-                    });
-                }, { root: container, rootMargin: '200px' });
+                filterObserver = new IntersectionObserver(
+                    (entries) => {
+                        entries.forEach((entry) => {
+                            if (entry.isIntersecting) {
+                                // Load next batch
+                                appendItems(loadedCount, BATCH_SIZE);
+                            }
+                        });
+                    },
+                    { root: container, rootMargin: '200px' }
+                );
             }
 
             // Render Initial Batch
@@ -2091,7 +2156,7 @@ class LibraryPage extends Page {
             } else {
                 let current = this.state.filters[key] ? this.state.filters[key].split(',') : [];
                 if (!isSelected) current.push(val);
-                else current = current.filter(v => v !== val);
+                else current = current.filter((v) => v !== val);
 
                 if (current.length > 0) this.state.filters[key] = current.join(',');
                 else delete this.state.filters[key];
@@ -2109,7 +2174,7 @@ class LibraryPage extends Page {
         renderItems(activeSectionId);
 
         // Events: Sidebar Focus/Click
-        overlay.querySelectorAll('.filter-category-btn').forEach(btn => {
+        overlay.querySelectorAll('.filter-category-btn').forEach((btn) => {
             const selectCategory = () => {
                 const id = btn.dataset.id;
                 if (this.state.activeFilterSection !== id) {
@@ -2212,7 +2277,6 @@ class LibraryPage extends Page {
         this._prevSection = null;
     }
 
-
     _renderModal(title, options, onSelect) {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
@@ -2223,14 +2287,18 @@ class LibraryPage extends Page {
                     <h2>${title}</h2>
                 </div>
                 <div class="modal-options page-content" id="modal-options">
-                    ${options.map(opt => `
+                    ${options
+                        .map(
+                            (opt) => `
                         <button class="modal-option-btn ${opt.selected ? 'selected' : ''}" 
                                 data-value="${opt.value}" 
                                 tabindex="0">
                             <span>${opt.label}</span>
                             <span class="check-icon">✓</span>
                         </button>
-                    `).join('')}
+                    `
+                        )
+                        .join('')}
                 </div>
                 <button class="modal-close-btn" id="modal-close">Close</button>
             </div>
@@ -2242,7 +2310,7 @@ class LibraryPage extends Page {
 
         // Bind clicks
         const optionBtns = overlay.querySelectorAll('.modal-option-btn');
-        optionBtns.forEach(btn => {
+        optionBtns.forEach((btn) => {
             btn.addEventListener('click', () => onSelect(btn.dataset.value));
         });
 
@@ -2261,7 +2329,7 @@ class LibraryPage extends Page {
 
         // Force focus to first option
         setTimeout(() => {
-            // "focusSection" didn't exist. Use setActiveSection with restoreFocus=true 
+            // "focusSection" didn't exist. Use setActiveSection with restoreFocus=true
             // OR find the first button manually for stricter control.
             const firstBtn = this.$('.modal-option-btn');
             if (firstBtn) {
@@ -2309,9 +2377,9 @@ class LibraryPage extends Page {
         const viewType = this.state.viewType;
 
         // Condition: only show for Movies (Items), TV Shows (Items), and Episodes
-        const isMovieMain = (collectionType === 'movies' && viewType === 'Items');
-        const isTVMain = (collectionType === 'tvshows' && viewType === 'Items');
-        const isEpisodes = (viewType === 'Episodes');
+        const isMovieMain = collectionType === 'movies' && viewType === 'Items';
+        const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
+        const isEpisodes = viewType === 'Episodes';
         const shouldShow = isMovieMain || isTVMain || isEpisodes;
 
         const controls = this.$('#library-controls');
@@ -2409,59 +2477,6 @@ class LibraryPage extends Page {
                 leaveDown: gridConfig.leaveDown || 'library-pagination'
             });
         }
-    }
-
-
-    // ========================================================================
-    // Focus Management
-    // ========================================================================
-
-    _setupFocus() {
-        // Tabs (Top)
-        focusManager.register('library-tabs', this.$('#library-tabs'), {
-            orientation: 'horizontal',
-            leaveUp: null,
-            leaveDown: 'library-controls',
-            leaveLeft: 'sidebar',
-            enterTo: 'active-element',
-            scrollOffsetTop: 400
-        });
-
-        // Controls (Middle - Below Tabs)
-        focusManager.register('library-controls', this.$('#library-controls'), {
-            orientation: 'horizontal',
-            leaveUp: 'library-tabs',
-            leaveDown: 'alpha-picker',
-            leaveLeft: 'sidebar',
-            selector: 'button'
-        });
-
-        // Alpha Picker
-        focusManager.register('alpha-picker', this.$('#alpha-picker'), {
-            orientation: 'horizontal',
-            leaveUp: 'library-controls',
-            leaveDown: 'library-grid',
-            leaveLeft: 'sidebar',
-            enterTo: 'active-element' // Focus the selected char
-        });
-
-        // Main Grid
-        focusManager.register('library-grid', this.$('#library-grid'), {
-            orientation: 'grid', // Assuming FocusManager supports grid or we trick it
-            leaveUp: 'alpha-picker',
-            leaveDown: 'library-pagination',
-            leaveLeft: 'sidebar'
-        });
-
-        // Pagination
-        focusManager.register('library-pagination', this.$('#library-pagination'), {
-            orientation: 'horizontal',
-            leaveUp: 'library-grid',
-            leaveLeft: 'sidebar'
-        });
-
-        // Set initial focus
-        this.setActiveSection('library-tabs');
     }
 }
 

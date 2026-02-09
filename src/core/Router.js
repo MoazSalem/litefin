@@ -4,7 +4,7 @@
  * ============================================================================
  * Simple hash-based router for single-page navigation. Uses URL hash to
  * manage current page state without requiring History API support.
- * 
+ *
  * Usage:
  *   router.register('/home', HomePage);
  *   router.register('/library/:id', LibraryPage);
@@ -129,7 +129,7 @@ class Router {
             // Navigate to previous path using REPLACE
             const previousPath = previousEntry ? previousEntry.path : '/';
 
-            // Track this navigation so _onHashChange knows it was expected  
+            // Track this navigation so _onHashChange knows it was expected
             this._lastNavigatePath = previousPath;
 
             // Use window.location.replace to change hash without triggering push

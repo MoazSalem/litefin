@@ -11,7 +11,6 @@ import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
 
 class BackdropManager {
-
     /**
      * Get the backdrop URL for an item.
      * Handles fallback to parent backdrop if the item itself has none.
@@ -28,9 +27,8 @@ class BackdropManager {
             options = { maxWidth: params.maxWidth, quality: params.quality };
         }
 
-        const backdropId = (item.BackdropImageTags && item.BackdropImageTags.length > 0)
-            ? item.Id
-            : item.ParentBackdropItemId;
+        const backdropId =
+            item.BackdropImageTags && item.BackdropImageTags.length > 0 ? item.Id : item.ParentBackdropItemId;
 
         if (backdropId) {
             return api.getImageUrl(backdropId, 'Backdrop', options);
@@ -61,10 +59,9 @@ class BackdropManager {
 
         // 2. Fallback: Try most recent Movie/Series with a backdrop
         if (works && works.length > 0) {
-            const bestWork = works.find(i =>
-                (i.Type === 'Movie' || i.Type === 'Series') &&
-                i.BackdropImageTags &&
-                i.BackdropImageTags.length > 0
+            const bestWork = works.find(
+                (i) =>
+                    (i.Type === 'Movie' || i.Type === 'Series') && i.BackdropImageTags && i.BackdropImageTags.length > 0
             );
 
             if (bestWork) {
@@ -101,12 +98,12 @@ class BackdropManager {
 
     /**
      * Clears the backdrop from an element (resets opacity and image).
-     * @param {HTMLElement} element 
+     * @param {HTMLElement} element
      */
     static clearBackdrop(element) {
         if (!element) return;
         element.style.opacity = '0';
-        // Optional: clear image after transition to avoid flash? 
+        // Optional: clear image after transition to avoid flash?
         // For now just clearing opacity is visually sufficient for fade-out.
         // We can clear the image after a timeout if needed.
         setTimeout(() => {

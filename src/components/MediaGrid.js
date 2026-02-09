@@ -8,7 +8,6 @@
  */
 
 import Component from '../core/Component.js';
-import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 
@@ -90,9 +89,7 @@ class MediaGrid extends Component {
      * Render the grid items strings
      */
     _renderItems() {
-        const displayItems = (this._shouldShowButton() && !this.expanded)
-            ? this.items.slice(0, this.limit)
-            : this.items;
+        const displayItems = this._shouldShowButton() && !this.expanded ? this.items.slice(0, this.limit) : this.items;
 
         const html = [];
         for (let i = 0; i < displayItems.length; i++) {
@@ -159,7 +156,7 @@ class MediaGrid extends Component {
         const grid = document.getElementById(`${this.id}-items`);
         if (!grid) return;
 
-        grid.querySelectorAll('.media-card').forEach(card => {
+        grid.querySelectorAll('.media-card').forEach((card) => {
             card.onclick = () => {
                 router.navigate(`/details/${card.dataset.itemId}`);
             };
@@ -168,15 +165,15 @@ class MediaGrid extends Component {
 
     /**
      * Helper to render card HTML (Copied/Adapted from Page.js)
-     *Ideally this logic should be in a separate MediaCard component or helper, 
-     * but for now we duplicate the logic to keep this component meaningful self-contained 
+     *Ideally this logic should be in a separate MediaCard component or helper,
+     * but for now we duplicate the logic to keep this component meaningful self-contained
      * or accept a render callback.
-     * 
-     * To properly "Extract", I should probably move the `_renderMediaCard` logic from Page.js 
+     *
+     * To properly "Extract", I should probably move the `_renderMediaCard` logic from Page.js
      * to a shared utility or keep using Page.js if this component is used inside a page.
-     * 
+     *
      * BUT: Since this is a standalone component, it doesn't extend Page.js.
-     * I will create a static helper in a new file `src/utils/CardRenderer.js` OR 
+     * I will create a static helper in a new file `src/utils/CardRenderer.js` OR
      * just implment it here. Implementing here for now to match `Page.js` exactly.
      */
     _createCardHtml(item) {

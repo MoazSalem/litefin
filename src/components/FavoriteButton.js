@@ -16,7 +16,7 @@ class FavoriteButton extends Component {
 
         this.itemId = config.itemId;
         this.isFavorite = !!config.initialState;
-        this.onChange = config.onChange || (() => { });
+        this.onChange = config.onChange || (() => {});
         this.className = config.className || 'btn btn-icon favorite-btn';
         this.id = config.id || `fav-${this.itemId}`;
     }
@@ -83,7 +83,6 @@ class FavoriteButton extends Component {
 
             // Notify parent
             this.onChange(this.isFavorite);
-
         } catch (error) {
             console.error('FavoriteButton: Failed to toggle', error);
         }

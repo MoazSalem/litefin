@@ -30,10 +30,14 @@ class CardRenderer {
 
         if (type === 'person') {
             // Person Handling (SVG Fallback)
-            let primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
+            const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
             if (primaryTag) {
                 const params = imageService.getParams('poster');
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: primaryTag });
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: primaryTag
+                });
             } else {
                 // SVG Placeholder
                 imageInnerHtml = `
@@ -45,25 +49,38 @@ class CardRenderer {
                     </div>
                 `;
             }
-        }
-        else if (type === 'episode-primary') {
+        } else if (type === 'episode-primary') {
             // Force Episode Primary Image (for Person Page grid)
             const params = imageService.getParams('thumb');
             if (item.ImageTags?.Primary) {
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
             } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
                 // Fallback to season thumb
-                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ParentThumbImageTag });
+                imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ParentThumbImageTag
+                });
             } else if (item.SeriesThumbImageTag && item.SeriesId) {
                 // Fallback to series thumb
-                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesThumbImageTag });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.SeriesThumbImageTag
+                });
             } else if (item.SeriesId) {
                 // Final Fallback: Series Primary if nothing else (only if SeriesId exists)
                 const seriesParams = imageService.getParams('poster'); // Series primary is usually a poster
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: seriesParams.maxWidth, quality: seriesParams.quality });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                    maxWidth: seriesParams.maxWidth,
+                    quality: seriesParams.quality
+                });
             }
-        }
-        else if (isLandscape) {
+        } else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             const params = imageService.getParams('backdrop');
 
@@ -74,51 +91,105 @@ class CardRenderer {
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
                 // If spoiler free, skip Primary logic unless nothing else exists
                 if (!isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 } else if (item.SeriesThumbImageTag && item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesThumbImageTag });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.SeriesThumbImageTag
+                    });
                 } else if (item.ParentThumbItemId && item.ParentThumbImageTag) {
-                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ParentThumbImageTag });
+                    imageUrl = api.getImageUrl(item.ParentThumbItemId, 'Thumb', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ParentThumbImageTag
+                    });
                 } else if (item.ParentBackdropItemId) {
-                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
+                    imageUrl = api.getImageUrl(item.ParentBackdropItemId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                 } else if (item.SeriesId) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                 } else if (isSpoilerFree && item.ImageTags && item.ImageTags.Primary) {
                     // Fallback to primary if forced but nothing else found
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 }
             } else if (type === 'library') {
                 // Libraries: Primary -> Thumb -> Backdrop
                 if (item.ImageTags?.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 } else if (item.ImageTags?.Thumb) {
-                    imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Thumb });
+                    imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Thumb
+                    });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                    imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
+                    imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                 }
             } else {
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
                 if (item.ImageTags && item.ImageTags.Thumb) {
-                    imageUrl = api.getImageUrl(itemId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Thumb });
+                    imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Thumb
+                    });
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                    imageUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality });
+                    imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                 } else if (item.ImageTags?.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 }
             }
-        }
-        else {
+        } else {
             // Portrait (Poster) Preference
             if (type === 'season') {
                 // Season: Own Primary -> Series Primary
                 const params = imageService.getParams('poster');
                 if (item.ImageTags && item.ImageTags.Primary) {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 } else if (item.SeriesPrimaryImageTag) {
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesPrimaryImageTag });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.SeriesPrimaryImageTag
+                    });
                 } else if (item.SeriesId) {
                     // Fallback without tag
-                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
+                    imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                 }
             } else if (type === 'resume') {
                 // Resume cards
@@ -128,24 +199,47 @@ class CardRenderer {
                 if (item.Type === 'Episode' && item.SeriesId) {
                     // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
                     if (item.SeriesPrimaryImageTag) {
-                        imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesPrimaryImageTag });
+                        imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                            maxWidth: params.maxWidth,
+                            quality: params.quality,
+                            tag: item.SeriesPrimaryImageTag
+                        });
                     } else if (item.SeriesThumbImageTag) {
-                        imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth: params.maxWidth, quality: params.quality, tag: item.SeriesThumbImageTag });
+                        imageUrl = api.getImageUrl(item.SeriesId, 'Thumb', {
+                            maxWidth: params.maxWidth,
+                            quality: params.quality,
+                            tag: item.SeriesThumbImageTag
+                        });
                     } else {
                         // Fallback
-                        imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                        imageUrl = api.getImageUrl(itemId, 'Primary', {
+                            maxWidth: params.maxWidth,
+                            quality: params.quality,
+                            tag: item.ImageTags.Primary
+                        });
                     }
                 } else {
-                    imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                    imageUrl = api.getImageUrl(itemId, 'Primary', {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality,
+                        tag: item.ImageTags.Primary
+                    });
                 }
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
                 const params = imageService.getParams('poster');
-                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
+                imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality
+                });
             } else if (item.ImageTags?.Primary) {
                 // Standard Item
                 const params = imageService.getParams('poster');
-                imageUrl = api.getImageUrl(itemId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality, tag: item.ImageTags.Primary });
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
             }
         }
 
@@ -160,7 +254,13 @@ class CardRenderer {
         let progressHtml = '';
         if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            progressHtml = `<div class="progress-bar" style="background: linear-gradient(to right, var(--jf-accent) ${progress}%, rgba(0,0,0,0.6) ${progress}%);"></div>`;
+            // TIZEN FIX: Simple ES5 string concatenation
+            progressHtml =
+                '<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100; border-radius: 0 0 8px 8px; overflow: hidden;">' +
+                '<div style="width: ' +
+                progress +
+                '%; height: 100%; background-color: #00a4dc;"></div>' +
+                '</div>';
         }
 
         // Unplayed Count Badge
@@ -180,21 +280,21 @@ class CardRenderer {
             if (isLandscape) {
                 // Next Up Style
                 titleText = item.SeriesName || item.Name;
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name}`;
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name} `;
             } else {
                 // Poster Style
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber}`;
+                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} `;
             }
         } else if (type === 'season') {
             // For seasons, item.Name is "Season 1", usually fine.
         } else {
             // Movies/Shows - show year and role if available
-            let parts = [];
+            const parts = [];
             if (item.ProductionYear) parts.push(item.ProductionYear);
 
             // Support both standard Role and _roleName (from MediaGrid mapping)
             const role = item.Role || item._roleName;
-            if (role) parts.push(`as ${role}`);
+            if (role) parts.push(`as ${role} `);
 
             subtitleText = parts.join(' · ');
         }
@@ -204,7 +304,9 @@ class CardRenderer {
         const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-        const imagePart = imageUrl ? `<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />` : imageInnerHtml;
+        const imagePart = imageUrl
+            ? `<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />`
+            : imageInnerHtml;
         const finalContextType = contextType || item.Type;
 
         return `

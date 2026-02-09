@@ -4,7 +4,7 @@
  * ============================================================================
  * GPU-accelerated animation utilities optimized for TV performance.
  * Uses CSS transforms and opacity for smooth 60fps animations.
- * 
+ *
  * Features:
  * - Predefined TV-optimized animations
  * - Automatic GPU layer promotion
@@ -71,11 +71,7 @@ class AnimationManager {
      * @returns {Promise} Resolves when animation completes
      */
     animate(element, properties, options = {}) {
-        const {
-            duration = DURATION.normal,
-            easing = EASING.ease,
-            delay = 0
-        } = options;
+        const { duration = DURATION.normal, easing = EASING.ease, delay = 0 } = options;
 
         // Skip if reduced motion
         if (this._prefersReducedMotion) {
@@ -90,7 +86,7 @@ class AnimationManager {
             // Set up transition
             const props = Object.keys(properties);
             element.style.transition = props
-                .map(prop => `${this._kebabCase(prop)} ${duration}ms ${easing} ${delay}ms`)
+                .map((prop) => `${this._kebabCase(prop)} ${duration}ms ${easing} ${delay}ms`)
                 .join(', ');
 
             // Apply properties
@@ -128,10 +124,14 @@ class AnimationManager {
         element.style.opacity = '0';
         element.style.display = '';
 
-        await this.animate(element, { opacity: '1' }, {
-            duration: options.duration || DURATION.fast,
-            ...options
-        });
+        await this.animate(
+            element,
+            { opacity: '1' },
+            {
+                duration: options.duration || DURATION.fast,
+                ...options
+            }
+        );
     }
 
     /**
@@ -140,10 +140,14 @@ class AnimationManager {
      * @param {Object} [options] - Animation options
      */
     async fadeOut(element, options = {}) {
-        await this.animate(element, { opacity: '0' }, {
-            duration: options.duration || DURATION.fast,
-            ...options
-        });
+        await this.animate(
+            element,
+            { opacity: '0' },
+            {
+                duration: options.duration || DURATION.fast,
+                ...options
+            }
+        );
 
         if (options.hide !== false) {
             element.style.display = 'none';
@@ -157,13 +161,17 @@ class AnimationManager {
      * @param {Object} [options] - Animation options
      */
     async scale(element, scale, options = {}) {
-        await this.animate(element, {
-            transform: `scale(${scale}) translateZ(0)`
-        }, {
-            duration: options.duration || DURATION.fast,
-            easing: EASING.spring,
-            ...options
-        });
+        await this.animate(
+            element,
+            {
+                transform: `scale(${scale}) translateZ(0)`
+            },
+            {
+                duration: options.duration || DURATION.fast,
+                easing: EASING.spring,
+                ...options
+            }
+        );
     }
 
     /**
@@ -195,14 +203,18 @@ class AnimationManager {
         element.style.opacity = '0';
         element.style.display = '';
 
-        await this.animate(element, {
-            transform: 'translateX(0) translateY(0) translateZ(0)',
-            opacity: '1'
-        }, {
-            duration: options.duration || DURATION.normal,
-            easing: EASING.easeOut,
-            ...options
-        });
+        await this.animate(
+            element,
+            {
+                transform: 'translateX(0) translateY(0) translateZ(0)',
+                opacity: '1'
+            },
+            {
+                duration: options.duration || DURATION.normal,
+                easing: EASING.easeOut,
+                ...options
+            }
+        );
     }
 
     /**
@@ -230,14 +242,18 @@ class AnimationManager {
                 break;
         }
 
-        await this.animate(element, {
-            transform: endTransform,
-            opacity: '0'
-        }, {
-            duration: options.duration || DURATION.normal,
-            easing: EASING.easeIn,
-            ...options
-        });
+        await this.animate(
+            element,
+            {
+                transform: endTransform,
+                opacity: '0'
+            },
+            {
+                duration: options.duration || DURATION.normal,
+                easing: EASING.easeIn,
+                ...options
+            }
+        );
 
         if (options.hide !== false) {
             element.style.display = 'none';
@@ -267,7 +283,7 @@ class AnimationManager {
      */
     async stagger(elements, animateFn, staggerDelay = 50) {
         const promises = elements.map((el, index) => {
-            return new Promise(resolve => {
+            return new Promise((resolve) => {
                 setTimeout(async () => {
                     await animateFn(el, index);
                     resolve();
@@ -283,7 +299,7 @@ class AnimationManager {
      * @private
      */
     _kebabCase(str) {
-        return str.replace(/[A-Z]/g, m => `-${m.toLowerCase()}`);
+        return str.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
     }
 }
 

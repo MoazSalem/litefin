@@ -4,7 +4,7 @@
  * ============================================================================
  * Manages dual-layout support for Classic and Modern UI modes.
  * Provides component factories and layout-specific configuration.
- * 
+ *
  * Usage:
  *   layoutManager.setLayout('modern');
  *   const Card = layoutManager.getComponent('Card');

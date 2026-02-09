@@ -3,13 +3,13 @@
  * Litefin Tizen - Auth Manager
  * ============================================================================
  * Handles user authentication, session management, and credential storage.
- * 
+ *
  * Features:
  * - Session persistence (auto-login on app restart)
  * - HasPassword detection (auto-login for passwordless users)
  * - Manual login with username/password
  * - Proper logout with server notification
- * 
+ *
  * Based on jellyfin-web patterns for compatibility.
  * ============================================================================
  */
@@ -259,13 +259,7 @@ class AuthManager {
             try {
                 await api.reportCapabilities({
                     PlayableMediaTypes: ['Video', 'Audio'],
-                    SupportedCommands: [
-                        'PlayState',
-                        'DisplayMessage',
-                        'SetVolume',
-                        'Mute',
-                        'Unmute'
-                    ],
+                    SupportedCommands: ['PlayState', 'DisplayMessage', 'SetVolume', 'Mute', 'Unmute'],
                     SupportsMediaControl: true,
                     SupportsPersistentIdentifier: true
                 });
@@ -356,8 +350,6 @@ class AuthManager {
         console.log('AuthManager: Logout complete');
     }
 
-
-
     // ========================================================================
     // Event Handlers
     // ========================================================================
@@ -403,8 +395,8 @@ class AuthManager {
      */
     _generateUUID() {
         return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-            const r = Math.random() * 16 | 0;
-            const v = c === 'x' ? r : (r & 0x3 | 0x8);
+            const r = (Math.random() * 16) | 0;
+            const v = c === 'x' ? r : (r & 0x3) | 0x8;
             return v.toString(16);
         });
     }

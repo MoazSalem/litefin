@@ -55,8 +55,6 @@ class HomePage extends Page {
             return;
         }
 
-
-
         // Setup focus
         this._setupFocus();
 
@@ -68,14 +66,9 @@ class HomePage extends Page {
         if (this._clockInterval) {
             clearInterval(this._clockInterval);
         }
-
     }
 
-
-
     _setupFocus() {
-
-
         // NOTE: We do NOT set active section here anymore.
         // We wait for content to load.
     }
@@ -108,8 +101,8 @@ class HomePage extends Page {
                 api.getResumeItems(),
                 api.getNextUp(),
                 // Map libraries to fetch requests
-                ...this._libraries.map(lib =>
-                    api.getLatestItems(lib.Id, { Limit: 20 }).catch(e => {
+                ...this._libraries.map((lib) =>
+                    api.getLatestItems(lib.Id, { Limit: 20 }).catch((e) => {
                         console.warn(`Failed to load latest for ${lib.Name}`, e);
                         return null; // Return null on error, filter later
                     })
@@ -169,7 +162,6 @@ class HomePage extends Page {
             if (rowsData.length === 0 && this._libraries.length === 0) {
                 this.showError('No libraries found. Please check your Jellyfin user permissions.');
             }
-
         } catch (error) {
             console.error('HomePage: Failed to load content', error);
 
@@ -312,8 +304,6 @@ class HomePage extends Page {
         // Show exit confirmation or go to login
         eventBus.emit('app:exitRequested');
     }
-
-
 }
 
 export default HomePage;

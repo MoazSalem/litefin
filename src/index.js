@@ -23,12 +23,11 @@ import './styles/library.css';
 import './styles/sidebar.css';
 import './styles/login.css';
 import './styles/home.css';
-import './styles/library.css';
 import './styles/details.css';
 import './styles/search.css';
 import './styles/settings.css';
 import './styles/season.css';
-import './themes/classic/index.js';  // All classic themes
+import './themes/classic/index.js'; // All classic themes
 
 import HomePage from './pages/HomePage.js';
 import LoginPage from './pages/LoginPage.js';

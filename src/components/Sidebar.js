@@ -171,7 +171,7 @@ class Sidebar extends Component {
                     // 2. Fallback: Find first visible focusable to identify valid section
                     const selector = 'button:not([disabled]), [tabindex]:not([tabindex="-1"])';
                     const candidates = pageContainer.querySelectorAll(selector);
-                    const target = Array.from(candidates).find(el => el.offsetParent !== null);
+                    const target = Array.from(candidates).find((el) => el.offsetParent !== null);
 
                     if (target) {
                         const section = focusManager.getSectionForElement(target);
@@ -233,7 +233,7 @@ class Sidebar extends Component {
 
     /**
      * Set visibility mode
-     * @param {'visible'|'hidden'} mode 
+     * @param {'visible'|'hidden'} mode
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
@@ -271,7 +271,7 @@ class Sidebar extends Component {
 
         // Navigation Clicks
         const items = this.el.querySelectorAll('.sidebar-item');
-        items.forEach(item => {
+        items.forEach((item) => {
             item.onclick = () => {
                 const path = item.dataset.path;
                 if (path) {
@@ -316,7 +316,7 @@ class Sidebar extends Component {
             header.textContent = 'Media Libraries';
             container.appendChild(header);
 
-            items.forEach(lib => {
+            items.forEach((lib) => {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
@@ -330,7 +330,6 @@ class Sidebar extends Component {
 
                 container.appendChild(btn);
             });
-
         } catch (e) {
             console.warn('Sidebar: Failed to load libraries', e);
         }
@@ -361,7 +360,7 @@ class Sidebar extends Component {
 
     _updateActiveState() {
         const items = this.el.querySelectorAll('.sidebar-item');
-        items.forEach(item => {
+        items.forEach((item) => {
             const itemPath = item.dataset.path;
             if (itemPath && this.activePath.startsWith(itemPath)) {
                 // Approximate match (e.g. /home matches /home)

@@ -39,3 +39,7 @@ npm-debug.log*
 
 # Sign files
 .sign/
+
+# Agents Stuff
+knowledge.md
+/.agents

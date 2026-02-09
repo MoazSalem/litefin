@@ -14,7 +14,6 @@ import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 
-
 import FavoriteButton from '../components/FavoriteButton.js';
 import EpisodeList from '../components/EpisodeList.js';
 
@@ -181,7 +180,6 @@ class DetailsPage extends Page {
     }
 
     _bindActions() {
-
         // Play button
         this.$('.play-btn')?.addEventListener('click', () => {
             this._play();
@@ -249,7 +247,6 @@ class DetailsPage extends Page {
                     focusManager.focusElement(resumeBtn);
                 }
             }
-
         } catch (error) {
             console.error('DetailsPage: Failed to load', error);
             this.showError('Failed to load details');
@@ -279,7 +276,10 @@ class DetailsPage extends Page {
 
             if (item.ImageTags && item.ImageTags.Primary) {
                 const params = imageService.getParams('poster');
-                const posterUrl = api.getImageUrl(item.Id, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
+                const posterUrl = api.getImageUrl(item.Id, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality
+                });
                 const img = new Image();
                 img.onload = () => {
                     img.classList.add('loaded');
@@ -308,10 +308,7 @@ class DetailsPage extends Page {
     async _loadSecondaryContent() {
         // Load additional data based on type
         if (this._item.Type === 'Series') {
-            await Promise.all([
-                this._loadNextUp(),
-                this._loadSeasons()
-            ]);
+            await Promise.all([this._loadNextUp(), this._loadSeasons()]);
         } else if (this._item.Type === 'Season') {
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'BoxSet') {
@@ -398,16 +395,27 @@ class DetailsPage extends Page {
             const hasShows = shows.Items && shows.Items.length > 0;
 
             // Determine what is ABOVE the collection rows (use dynamic helper)
-            const aboveCollection = this._getPreviousVisibleSection('collection-movies-section')?.targetName || 'details-rich-meta';
+            const aboveCollection =
+                this._getPreviousVisibleSection('collection-movies-section')?.targetName || 'details-rich-meta';
 
             // Render Rows with correct UP linking
             if (hasMovies) {
-                this._renderCollectionRow('collection-movies-section', 'collection-movies-row', movies.Items, aboveCollection);
+                this._renderCollectionRow(
+                    'collection-movies-section',
+                    'collection-movies-row',
+                    movies.Items,
+                    aboveCollection
+                );
             }
             if (hasShows) {
                 // Shows row's UP goes to Movies (if exists) or to whatever is above collection
                 const showsUpTarget = hasMovies ? 'collection-movies-section' : aboveCollection;
-                this._renderCollectionRow('collection-shows-section', 'collection-shows-row', shows.Items, showsUpTarget);
+                this._renderCollectionRow(
+                    'collection-shows-section',
+                    'collection-shows-row',
+                    shows.Items,
+                    showsUpTarget
+                );
             }
 
             // Link Focus chain (DOWN direction)
@@ -429,7 +437,6 @@ class DetailsPage extends Page {
             if (nextSection) {
                 this._updateLeaveDown(lastSection, nextSection.targetName);
             }
-
         } catch (e) {
             console.warn('DetailsPage: Failed to load collection items', e);
         }
@@ -442,7 +449,7 @@ class DetailsPage extends Page {
 
         section.classList.remove('hidden');
 
-        list.innerHTML = items.map(item => this._renderMediaCard(item, false, 'poster')).join('');
+        list.innerHTML = items.map((item) => this._renderMediaCard(item, false, 'poster')).join('');
 
         // Register Focus with dynamic UP linking
         this.registerFocusSection(sectionId, section, {
@@ -455,7 +462,6 @@ class DetailsPage extends Page {
         lazyLoader.observe(list);
     }
 
-
     _renderRichMetadata() {
         const item = this._item;
         const htmlParts = [];
@@ -463,13 +469,15 @@ class DetailsPage extends Page {
         // Helper to create row
         const createRow = (label, items) => {
             if (!items || items.length === 0) return '';
-            const valuesHtml = items.map(i => {
-                const name = i.Name || i; // Handle object or string
-                const id = i.Id || '';
-                const type = label.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
+            const valuesHtml = items
+                .map((i) => {
+                    const name = i.Name || i; // Handle object or string
+                    const id = i.Id || '';
+                    const type = label.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
 
-                return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
-            }).join('');
+                    return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
+                })
+                .join('');
 
             return `
                 <div class="rich-meta-row">
@@ -486,13 +494,13 @@ class DetailsPage extends Page {
         }
 
         // Directors
-        const directors = (item.People || []).filter(p => p.Type === 'Director');
+        const directors = (item.People || []).filter((p) => p.Type === 'Director');
         if (directors.length > 0) {
             htmlParts.push(createRow('Directors', directors));
         }
 
         // Writers
-        const writers = (item.People || []).filter(p => p.Type === 'Writer');
+        const writers = (item.People || []).filter((p) => p.Type === 'Writer');
         if (writers.length > 0) {
             htmlParts.push(createRow('Writers', writers));
         }
@@ -521,8 +529,6 @@ class DetailsPage extends Page {
                     // Only Enter (13) if key event
                     if (e.type === 'keydown' && e.keyCode !== 13) return;
 
-
-
                     // Prevent bubbling if clicking internal chips already valid
                     if (e.target.classList.contains('meta-chip') && this._isRichMetaActive) {
                         return;
@@ -538,7 +544,8 @@ class DetailsPage extends Page {
                 container.onkeydown = activateHandler;
 
                 // Register Focus Section
-                const upwardLink = this._getPreviousVisibleSection('details-rich-meta')?.targetName || 'details-actions';
+                const upwardLink =
+                    this._getPreviousVisibleSection('details-rich-meta')?.targetName || 'details-actions';
                 const nextSection = this._getNextVisibleSection('details-rich-meta');
                 const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
@@ -560,16 +567,14 @@ class DetailsPage extends Page {
         if (this._isRichMetaActive) return;
 
         const container = this.$('#rich-meta'); // The Table
-        const wrapper = this.$('#rich-meta-container'); // The Section
         if (!container) return;
-
 
         this._isRichMetaActive = true;
         container.classList.add('active-table');
 
         // Enable chips
         const chips = container.querySelectorAll('.meta-chip');
-        chips.forEach(chip => chip.setAttribute('tabindex', '0'));
+        chips.forEach((chip) => chip.setAttribute('tabindex', '0'));
 
         // Disable container from auto-focus
         container.setAttribute('tabindex', '-1');
@@ -584,9 +589,8 @@ class DetailsPage extends Page {
                 return;
             }
 
-
             // Bind navigation handlers to each chip
-            validChips.forEach(chip => {
+            validChips.forEach((chip) => {
                 // Click handler
                 chip.onclick = (e) => {
                     e.preventDefault();
@@ -596,7 +600,8 @@ class DetailsPage extends Page {
 
                 // Enter key handler
                 chip.onkeydown = (e) => {
-                    if (e.keyCode === 13) { // Enter
+                    if (e.keyCode === 13) {
+                        // Enter
                         e.preventDefault();
                         e.stopPropagation();
                         this._handleMetaClick(chip);
@@ -621,13 +626,12 @@ class DetailsPage extends Page {
         const container = this.$('#rich-meta');
         if (!container) return;
 
-
         this._isRichMetaActive = false;
         container.classList.remove('active-table');
 
         // Disable chips
         const chips = container.querySelectorAll('.meta-chip');
-        chips.forEach(chip => chip.setAttribute('tabindex', '-1'));
+        chips.forEach((chip) => chip.setAttribute('tabindex', '-1'));
 
         // Pop trap (Restores focus to previous element = container)
         focusManager.popTrap();
@@ -653,12 +657,16 @@ class DetailsPage extends Page {
         const item = this._item;
         // Check for Logo using ImageTags.Logo or ParentLogoImageTag
         const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
-        const logoItemId = item.ImageTags?.Logo ? item.Id : (item.ParentLogoItemId || item.SeriesId);
+        const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
 
         if (logoItemId && logoTag) {
             const params = imageService.getParams('thumb'); // Logo usually similar resolution needs as thumb
             // Bump logo quality slightly as it is text
-            const logoUrl = api.getImageUrl(logoItemId, 'Logo', { maxWidth: params.maxWidth * 2, quality: 90, tag: logoTag });
+            const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
+                maxWidth: params.maxWidth * 2,
+                quality: 90,
+                tag: logoTag
+            });
             const img = new Image();
             img.onload = () => {
                 const logoContainer = this.$('#details-logo');
@@ -688,7 +696,7 @@ class DetailsPage extends Page {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
 
             // Ends At
-            const endTime = new Date(Date.now() + (item.RunTimeTicks / 10000));
+            const endTime = new Date(Date.now() + item.RunTimeTicks / 10000);
             const timeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
             endsAtText = `Ends at ${timeString}`;
         }
@@ -706,8 +714,12 @@ class DetailsPage extends Page {
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
         const isSeason = item.Type === 'Season';
-        const displayTitle = isSeason ? (item.SeriesName || item.Name) : item.Name;
-        const displaySubtitle = isSeason ? item.Name : ((item.OriginalTitle && item.OriginalTitle !== item.Name) ? item.OriginalTitle : '');
+        const displayTitle = isSeason ? item.SeriesName || item.Name : item.Name;
+        const displaySubtitle = isSeason
+            ? item.Name
+            : item.OriginalTitle && item.OriginalTitle !== item.Name
+              ? item.OriginalTitle
+              : '';
 
         this.$('#hero-info').innerHTML = `
             <div id="details-logo" class="details-logo"></div>
@@ -724,7 +736,7 @@ class DetailsPage extends Page {
         const overviewEl = this.$('.overview-text');
 
         // Tagline
-        const tagline = (item.Taglines && item.Taglines.length > 0) ? item.Taglines[0] : '';
+        const tagline = item.Taglines && item.Taglines.length > 0 ? item.Taglines[0] : '';
 
         // Find or create tagline element
         let taglineEl = this.$('.details-tagline');
@@ -852,7 +864,7 @@ class DetailsPage extends Page {
                 resetBtn.classList.add('hidden');
                 resetBtn.setAttribute('tabindex', '-1');
             }
-        }    // Upgrade to primary style
+        } // Upgrade to primary style
         resumeBtn.classList.remove('btn-secondary');
         resumeBtn.classList.add('btn-primary');
 
@@ -861,8 +873,7 @@ class DetailsPage extends Page {
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
-        requestAnimationFrame(() => {
-        });
+        requestAnimationFrame(() => {});
 
         // Watched button
         if (userData.Played) {
@@ -1020,22 +1031,29 @@ class DetailsPage extends Page {
             });
             this._episodeList.mount(container);
 
-
             // Lazy Load Episode Images (if list renders them)
             lazyLoader.observe(container);
         } else {
             // Horizontal episode cards (for Series NextUp, etc.)
             const htmlParts = [];
             for (const ep of this._episodes) {
-                const progress = ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
-                    ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
-                    : 0;
+                const progress =
+                    ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                        ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                        : 0;
 
                 htmlParts.push(`
                     <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
                         <div class="episode-thumb">
                             <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="">
-                        </div>    ${progress > 0 ? `<div class="progress-bar"><div class="progress" style="width: ${progress}%"></div></div>` : ''}
+                            ${
+                                progress > 0
+                                    ? '<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;">' +
+                                      '<div style="width: ' +
+                                      progress +
+                                      '%; height: 100%; background-color: #00a4dc;"></div></div>'
+                                    : ''
+                            }
                         </div>
                         <div class="episode-info">
                             <span class="episode-number">E${ep.IndexNumber}</span>
@@ -1048,7 +1066,7 @@ class DetailsPage extends Page {
             container.innerHTML = htmlParts.join('');
 
             // Click handlers
-            container.querySelectorAll('.episode-card').forEach(card => {
+            container.querySelectorAll('.episode-card').forEach((card) => {
                 card.addEventListener('click', () => {
                     router.navigate(`/details/${card.dataset.episodeId}`);
                 });
@@ -1061,9 +1079,7 @@ class DetailsPage extends Page {
         const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
         // Register focus section - use appropriate selector
-        const selector = this._item.Type === 'Season'
-            ? '.episode-row-card, .episode-action-btn'
-            : '.episode-card';
+        const selector = this._item.Type === 'Season' ? '.episode-row-card, .episode-action-btn' : '.episode-card';
 
         // Helper for custom navigation
         const onSeasonMove = (direction, focusedEl) => {
@@ -1119,7 +1135,7 @@ class DetailsPage extends Page {
                 const itemIndex = rowItems.indexOf(focusedEl);
 
                 // If at start of row (Card), let it bubble to leaveLeft (if any) or Sidebar?
-                // Standard horizontal will try index-1. 
+                // Standard horizontal will try index-1.
                 // If index-1 is prev row's last button, that's bad.
                 // So we must BLOCK if itemIndex is 0.
                 if (itemIndex === 0) {
@@ -1239,15 +1255,31 @@ class DetailsPage extends Page {
         const sections = [
             // Actions is always first and visible - needed so we can find what's after it
             { name: 'details-actions', elementId: '#actions', isVisible: () => true },
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none' },
+            {
+                name: 'details-see-more',
+                elementId: '#details-overview',
+                isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none'
+            },
             { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => !!this.$('#rich-meta')?.innerHTML },
             // Collection rows (BoxSet contents)
-            { name: 'collection-movies-section', elementId: '#collection-movies-row', isVisible: () => isNotHidden('#collection-movies-section') },
-            { name: 'collection-shows-section', elementId: '#collection-shows-row', isVisible: () => isNotHidden('#collection-shows-section') },
+            {
+                name: 'collection-movies-section',
+                elementId: '#collection-movies-row',
+                isVisible: () => isNotHidden('#collection-movies-section')
+            },
+            {
+                name: 'collection-shows-section',
+                elementId: '#collection-shows-row',
+                isVisible: () => isNotHidden('#collection-shows-section')
+            },
             // Standard content rows
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => isNotHidden('#episodes-section') },
+            {
+                name: 'details-episodes',
+                elementId: '#episodes-list',
+                isVisible: () => isNotHidden('#episodes-section')
+            },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
         ];
@@ -1275,15 +1307,31 @@ class DetailsPage extends Page {
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
-            { name: 'details-episodes', elementId: '#episodes-list', isVisible: () => isNotHidden('#episodes-section') },
+            {
+                name: 'details-episodes',
+                elementId: '#episodes-list',
+                isVisible: () => isNotHidden('#episodes-section')
+            },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
             // Collection rows (BoxSet contents) - in reverse order
-            { name: 'collection-shows-section', elementId: '#collection-shows-row', isVisible: () => isNotHidden('#collection-shows-section') },
-            { name: 'collection-movies-section', elementId: '#collection-movies-row', isVisible: () => isNotHidden('#collection-movies-section') },
+            {
+                name: 'collection-shows-section',
+                elementId: '#collection-shows-row',
+                isVisible: () => isNotHidden('#collection-shows-section')
+            },
+            {
+                name: 'collection-movies-section',
+                elementId: '#collection-movies-row',
+                isVisible: () => isNotHidden('#collection-movies-section')
+            },
             // Standard
             { name: 'details-rich-meta', elementId: '#rich-meta', isVisible: () => !!this.$('#rich-meta')?.innerHTML },
-            { name: 'details-see-more', elementId: '#details-overview', isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none' },
+            {
+                name: 'details-see-more',
+                elementId: '#details-overview',
+                isVisible: () => this.$('.see-more-btn')?.style?.display !== 'none'
+            },
             { name: 'details-actions', elementId: '#actions', isVisible: () => true } // Actions are always visible
         ];
 
@@ -1367,7 +1415,7 @@ class DetailsPage extends Page {
         let itemToPlay = this._item;
 
         if (this._item.Type === 'Series' && this._episodes?.length > 0) {
-            itemToPlay = this._episodes.find(ep => !ep.UserData?.Played) || this._episodes[0];
+            itemToPlay = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
         }
 
         eventBus.emit('player:play', {
@@ -1402,8 +1450,6 @@ class DetailsPage extends Page {
         }
     }
 
-
-
     async _toggleWatched() {
         const isPlayed = this._item.UserData?.Played;
 
@@ -1422,8 +1468,6 @@ class DetailsPage extends Page {
             console.error('Failed to toggle watched', error);
         }
     }
-
-
 
     async _resetProgress() {
         try {
@@ -1450,7 +1494,6 @@ class DetailsPage extends Page {
             if (playBtn) {
                 focusManager.focusElement(playBtn);
             }
-
         } catch (error) {
             console.error('DetailsPage: Failed to reset progress', error);
         }

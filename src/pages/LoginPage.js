@@ -10,7 +10,6 @@
 import Page from './Page.js';
 import { auth, api, discoverServers, cancelDiscovery } from '../api/index.js';
 import { router } from '../core/Router.js';
-import { eventBus } from '../core/EventBus.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 
@@ -239,7 +238,7 @@ class LoginPage extends Page {
         this.$('.manual-signin-btn')?.addEventListener('click', () => this._handleManualLogin());
 
         // Back buttons (for password and manual screens)
-        this.$$('.back-btn').forEach(btn => {
+        this.$$('.back-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._goBack());
         });
 
@@ -266,7 +265,7 @@ class LoginPage extends Page {
                     this._serverInput.readOnly = true;
                     this._connectToServer();
                 } else {
-                    // If readonly, user pressed Enter. 
+                    // If readonly, user pressed Enter.
                     // Explicitly trigger click logic if TV doesn't auto-click
                     this._serverInput.click();
                 }
@@ -527,7 +526,9 @@ class LoginPage extends Page {
     }
 
     _renderUsers() {
-        const html = this._users.map((user, index) => `
+        const html = this._users
+            .map(
+                (user, index) => `
             <button class="user-card" data-user-index="${index}" tabindex="0">
                 <div class="user-avatar-wrapper">
                     <img 
@@ -540,7 +541,9 @@ class LoginPage extends Page {
                 </div>
                 <span class="user-name">${user.Name}</span>
             </button>
-        `).join('');
+        `
+            )
+            .join('');
 
         this._usersGrid.innerHTML = html;
 
@@ -548,7 +551,7 @@ class LoginPage extends Page {
         focusManager.invalidateCache('login-users');
 
         // Add click and keyboard handlers
-        this._usersGrid.querySelectorAll('.user-card').forEach(card => {
+        this._usersGrid.querySelectorAll('.user-card').forEach((card) => {
             card.addEventListener('click', () => {
                 const index = parseInt(card.dataset.userIndex);
                 console.log(`LoginPage: User card clicked, index=${index}`);
@@ -660,7 +663,7 @@ class LoginPage extends Page {
             console.log('LoginPage: AuthManager.login success. Navigating to home...');
 
             // Short delay to ensure state propagation
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Success! Navigate to home
             router.navigate('/home', { replace: true });
@@ -707,7 +710,7 @@ class LoginPage extends Page {
             console.log('LoginPage: AuthManager.login success. Navigating to home...');
 
             // Short delay to ensure state propagation
-            await new Promise(resolve => setTimeout(resolve, 50));
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             router.navigate('/home', { replace: true });
         } catch (error) {
@@ -760,7 +763,7 @@ class LoginPage extends Page {
         this._state = newState;
 
         // Hide all sections
-        this.$$('.login-section').forEach(section => {
+        this.$$('.login-section').forEach((section) => {
             section.classList.add('hidden');
         });
 
@@ -832,7 +835,6 @@ class LoginPage extends Page {
             // Ensure final list is synced
             this._discoveredServers = servers;
             this._renderDiscoveredServers();
-
         } catch (error) {
             console.error('LoginPage: Discovery failed', error);
             if (this._discoveryStatus) {
@@ -865,19 +867,23 @@ class LoginPage extends Page {
         }
 
         // Render server items
-        this._serverList.innerHTML = this._discoveredServers.map((server, index) => `
+        this._serverList.innerHTML = this._discoveredServers
+            .map(
+                (server, index) => `
             <li class="server-item" data-server-index="${index}" tabindex="0">
                 <span class="server-name">${server.name}</span>
                 <span class="server-address">${server.address}</span>
                 <span class="server-version">v${server.version || '?'}</span>
             </li>
-        `).join('');
+        `
+            )
+            .join('');
 
         // Invalid focus cache so new items are found
         focusManager.invalidateCache('login-server');
 
         // Bind click events
-        this._serverList.querySelectorAll('.server-item:not(.empty)').forEach(item => {
+        this._serverList.querySelectorAll('.server-item:not(.empty)').forEach((item) => {
             item.addEventListener('click', () => {
                 const index = parseInt(item.dataset.serverIndex);
                 this._selectDiscoveredServer(index);
@@ -935,10 +941,12 @@ class LoginPage extends Page {
             if (type === 'error') line.style.color = '#f55';
             else if (type === 'warn') line.style.color = '#fa0';
 
-            const text = args.map(arg => {
-                if (typeof arg === 'object') return JSON.stringify(arg);
-                return String(arg);
-            }).join(' ');
+            const text = args
+                .map((arg) => {
+                    if (typeof arg === 'object') return JSON.stringify(arg);
+                    return String(arg);
+                })
+                .join(' ');
 
             line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
             content.appendChild(line);

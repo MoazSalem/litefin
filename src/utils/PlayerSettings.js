@@ -4,7 +4,7 @@
  * ============================================================================
  * Centralized settings manager for the Jellyfin Player integration.
  * Uses localStorage with 'player:' prefix for all settings.
- * 
+ *
  * Settings are organized into categories:
  * - Audio: Channel configuration, codecs
  * - Video: Bitrate limits, preferred codecs

@@ -136,7 +136,7 @@ class TizenAdapter {
                 'Info'
             ];
 
-            keys.forEach(key => {
+            keys.forEach((key) => {
                 try {
                     tizen.tvinputdevice.registerKey(key);
                 } catch (e) {
@@ -255,11 +255,9 @@ class TizenAdapter {
                 // Check for 4K/8K support
                 if (typeof webapis !== 'undefined' && webapis.productinfo) {
                     try {
-                        if (webapis.productinfo.is8KPanelSupported &&
-                            webapis.productinfo.is8KPanelSupported()) {
+                        if (webapis.productinfo.is8KPanelSupported && webapis.productinfo.is8KPanelSupported()) {
                             this._deviceInfo.maxResolution = '8K';
-                        } else if (webapis.productinfo.isUdPanelSupported &&
-                            webapis.productinfo.isUdPanelSupported()) {
+                        } else if (webapis.productinfo.isUdPanelSupported && webapis.productinfo.isUdPanelSupported()) {
                             this._deviceInfo.maxResolution = '4K';
                         } else {
                             this._deviceInfo.maxResolution = 'FHD';
@@ -356,12 +354,16 @@ class TizenAdapter {
             }
 
             try {
-                tizen.systeminfo.getPropertyValue('NETWORK', (network) => {
-                    resolve(network.ipAddress || null);
-                }, (error) => {
-                    console.warn('TizenAdapter: Failed to get network info', error);
-                    resolve(null);
-                });
+                tizen.systeminfo.getPropertyValue(
+                    'NETWORK',
+                    (network) => {
+                        resolve(network.ipAddress || null);
+                    },
+                    (error) => {
+                        console.warn('TizenAdapter: Failed to get network info', error);
+                        resolve(null);
+                    }
+                );
             } catch (e) {
                 console.error('TizenAdapter: Error getting IP:', e);
                 resolve(null);

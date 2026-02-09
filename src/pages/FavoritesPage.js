@@ -1,4 +1,3 @@
-
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
@@ -25,8 +24,6 @@ class FavoritesPage extends Page {
     }
 
     async onInit() {
-
-
         this._bindNavigation();
         await this._loadFavorites();
 
@@ -54,11 +51,46 @@ class FavoritesPage extends Page {
 
             // Parallel fetch of all favorite types
             const [movies, shows, seasons, episodes, people] = await Promise.all([
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Movie', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear' }),
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Series', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData' }),
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Season', SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData' }),
-                api.getItems({ Filters: 'IsFavorite', IncludeItemTypes: 'Episode', SortBy: 'DateCreated', SortOrder: 'Descending', Limit: 50, Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber' }),
-                api.get('/Persons', { Filters: 'IsFavorite', UserId: userId, SortBy: 'SortName', SortOrder: 'Ascending', Limit: 50, Fields: 'PrimaryImageAspectRatio' })
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'Movie',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,DateCreated,ProductionYear'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'Series',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear,UnplayedItemCount,UserData'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'Season',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ParentTitle,ProductionYear,UnplayedItemCount,UserData'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'Episode',
+                    SortBy: 'DateCreated',
+                    SortOrder: 'Descending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
+                }),
+                api.get('/Persons', {
+                    Filters: 'IsFavorite',
+                    UserId: userId,
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio'
+                })
             ]);
 
             this.setLoading(false);
@@ -69,14 +101,20 @@ class FavoritesPage extends Page {
 
             // Prepare sections data
             const sectionsData = [];
-            if (movies.TotalRecordCount > 0) sectionsData.push({ id: 'fav-movie', title: 'Movies', items: movies.Items, type: 'movie' });
-            if (shows.TotalRecordCount > 0) sectionsData.push({ id: 'fav-series', title: 'Shows', items: shows.Items, type: 'series' });
-            if (seasons.TotalRecordCount > 0) sectionsData.push({ id: 'fav-season', title: 'Seasons', items: seasons.Items, type: 'season' });
-            if (episodes.TotalRecordCount > 0) sectionsData.push({ id: 'fav-episode', title: 'Episodes', items: episodes.Items, type: 'episode' });
-            if (people.TotalRecordCount > 0) sectionsData.push({ id: 'fav-person', title: 'People', items: people.Items, type: 'person' });
+            if (movies.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-movie', title: 'Movies', items: movies.Items, type: 'movie' });
+            if (shows.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-series', title: 'Shows', items: shows.Items, type: 'series' });
+            if (seasons.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-season', title: 'Seasons', items: seasons.Items, type: 'season' });
+            if (episodes.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-episode', title: 'Episodes', items: episodes.Items, type: 'episode' });
+            if (people.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-person', title: 'People', items: people.Items, type: 'person' });
 
             if (sectionsData.length === 0) {
-                container.innerHTML = '<div class="page-error" style="display:block; position:static; margin:40px;">No favorites found. Go add some!</div>';
+                container.innerHTML =
+                    '<div class="page-error" style="display:block; position:static; margin:40px;">No favorites found. Go add some!</div>';
                 return;
             }
 
@@ -89,18 +127,16 @@ class FavoritesPage extends Page {
                 this._renderSection(current.title, current.items, current.type, current.id, prevId, nextId);
             }
 
-
-
             // Set initial focus to first content row
             if (sectionsData.length > 0) {
                 this.setActiveSection(sectionsData[0].id);
             }
-
         } catch (e) {
             console.error('Failed to load favorites', e);
             this.setLoading(false);
             const container = this.$('#favorites-rows');
-            if (container) container.innerHTML = `<div class="page-error" style="display:block; padding: 20px;">Failed to load favorites: ${e.message || e}</div>`;
+            if (container)
+                container.innerHTML = `<div class="page-error" style="display:block; padding: 20px;">Failed to load favorites: ${e.message || e}</div>`;
         }
     }
 
@@ -179,7 +215,6 @@ class FavoritesPage extends Page {
             const episodeIndex = item.IndexNumber != null ? item.IndexNumber : '?';
             const epName = item.Name;
             subtitle = `S${seasonIndex}E${episodeIndex} - ${epName}`;
-
         } else if (isSeason) {
             // For Seasons:
             // Title = Show Name (ParentTitle)

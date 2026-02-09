@@ -104,9 +104,15 @@ class DebugOverlay {
         this._updateStyles();
     }
 
-    get Width() { return this._width; }
-    get Height() { return this._height; }
-    get Position() { return this._position; }
+    get Width() {
+        return this._width;
+    }
+    get Height() {
+        return this._height;
+    }
+    get Position() {
+        return this._position;
+    }
 
     /**
      * Enable or disable console logs
@@ -122,7 +128,7 @@ class DebugOverlay {
 
     /**
      * Enable or disable the visual overlay
-     * @param {boolean} enabled 
+     * @param {boolean} enabled
      */
     setOverlayEnabled(enabled) {
         this._overlayEnabled = enabled;
@@ -140,8 +146,12 @@ class DebugOverlay {
         }
     }
 
-    get isLogsEnabled() { return this._logsEnabled; }
-    get isOverlayEnabled() { return this._overlayEnabled; }
+    get isLogsEnabled() {
+        return this._logsEnabled;
+    }
+    get isOverlayEnabled() {
+        return this._overlayEnabled;
+    }
 
     /**
      * Create overlay DOM elements and append to body
@@ -204,27 +214,43 @@ class DebugOverlay {
         // Width
         let widthStr;
         switch (this._width) {
-            case 'full': widthStr = '100%'; break;
-            case 'large': widthStr = '800px'; break;
-            case 'medium': widthStr = '600px'; break;
+            case 'full':
+                widthStr = '100%';
+                break;
+            case 'large':
+                widthStr = '800px';
+                break;
+            case 'medium':
+                widthStr = '600px';
+                break;
             case 'small':
-            default: widthStr = '450px'; break;
+            default:
+                widthStr = '450px';
+                break;
         }
 
         // Height
         let heightStr;
         switch (this._height) {
-            case 'full': heightStr = '100%'; break;
-            case 'large': heightStr = '600px'; break;
-            case 'medium': heightStr = '400px'; break;
+            case 'full':
+                heightStr = '100%';
+                break;
+            case 'large':
+                heightStr = '600px';
+                break;
+            case 'medium':
+                heightStr = '400px';
+                break;
             case 'small':
-            default: heightStr = '300px'; break;
+            default:
+                heightStr = '300px';
+                break;
         }
 
         this._overlay.style.width = widthStr;
         this._overlay.style.height = heightStr;
 
-        // Font size adjustments based on size? 
+        // Font size adjustments based on size?
         // Keep it simple for now, fixed font size or maybe slightly larger for 'large' config?
         // Let's stick to standard 13px unless user asks
         this._overlay.style.fontSize = '13px';
@@ -236,7 +262,7 @@ class DebugOverlay {
         this._overlay.style.left = 'auto';
         this._overlay.style.right = 'auto';
 
-        const margin = (this._width === 'full' || this._height === 'full') ? '0' : '20px';
+        const margin = this._width === 'full' || this._height === 'full' ? '0' : '20px';
 
         switch (this._position) {
             case 'top-left':
@@ -272,7 +298,7 @@ class DebugOverlay {
             if (!this._overlayEnabled || !this._content) return;
 
             // STRINGIFY FIRST to check for module prefixes
-            const textArgs = args.map(arg => {
+            const textArgs = args.map((arg) => {
                 if (typeof arg === 'object') {
                     try {
                         return JSON.stringify(arg);
@@ -405,7 +431,7 @@ class DebugOverlay {
      * @private
      */
     _loadModulePreferences() {
-        this._knownModules.forEach(module => {
+        this._knownModules.forEach((module) => {
             const key = `debug_filter_${module}`;
             const stored = localStorage.getItem(key);
             // Default to TRUE (enabled) if not set
@@ -416,8 +442,8 @@ class DebugOverlay {
 
     /**
      * Toggle visibility for a specific module
-     * @param {string} moduleName 
-     * @param {boolean} enabled 
+     * @param {string} moduleName
+     * @param {boolean} enabled
      */
     toggleModule(moduleName, enabled) {
         if (!this._knownModules.includes(moduleName)) return;
@@ -430,7 +456,7 @@ class DebugOverlay {
 
     /**
      * Check if a module is enabled
-     * @param {string} moduleName 
+     * @param {string} moduleName
      */
     isModuleEnabled(moduleName) {
         if (!this._moduleFilters.has(moduleName)) return true;

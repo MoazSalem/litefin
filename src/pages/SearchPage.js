@@ -95,8 +95,6 @@ class SearchPage extends Page {
     }
 
     _bindEvents() {
-
-
         // Search input logic for specific Keyboard behavior
         if (this._searchInput) {
             // 1. On Input: Handle text changes
@@ -128,7 +126,7 @@ class SearchPage extends Page {
                     // Move focus to first row's items - use RAF to ensure DOM is ready
                     requestAnimationFrame(() => {
                         const sectionOrder = ['movies', 'series', 'episodes', 'people'];
-                        const firstType = sectionOrder.find(type => this._grids[type]);
+                        const firstType = sectionOrder.find((type) => this._grids[type]);
                         if (firstType) {
                             const sectionId = `${this._grids[firstType].id}-items`;
                             const container = this.$(`#${sectionId}`);
@@ -235,11 +233,11 @@ class SearchPage extends Page {
         this._grids = {};
 
         // Group results by type
-        const movies = this._results.filter(i => i.Type === 'Movie');
+        const movies = this._results.filter((i) => i.Type === 'Movie');
         // Include both Series and BoxSets (Collections) as "Shows/Collections" or just Series
-        const series = this._results.filter(i => i.Type === 'Series');
-        const episodes = this._results.filter(i => i.Type === 'Episode');
-        const people = this._results.filter(i => i.Type === 'Person');
+        const series = this._results.filter((i) => i.Type === 'Series');
+        const episodes = this._results.filter((i) => i.Type === 'Episode');
+        const people = this._results.filter((i) => i.Type === 'Person');
 
         // 1. Movies
         if (movies.length > 0) {
@@ -300,7 +298,7 @@ class SearchPage extends Page {
 
     _registerSearchFocus() {
         const sectionOrder = ['movies', 'series', 'episodes', 'people'];
-        const activeTypes = sectionOrder.filter(type => this._grids[type]);
+        const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
         if (activeTypes.length === 0) return;
 
@@ -370,7 +368,7 @@ class SearchPage extends Page {
 
         // Unregister grid sections to prevent memory leaks and focus confusion
         if (this._grids) {
-            Object.values(this._grids).forEach(grid => {
+            Object.values(this._grids).forEach((grid) => {
                 const baseId = grid.id;
                 focusManager.unregister(`${baseId}-items`);
                 focusManager.unregister(`${baseId}-btn-zone`);

@@ -4,10 +4,10 @@
  * ============================================================================
  * Base class for all UI components. Provides lifecycle hooks, DOM management,
  * and event handling. Components should extend this class.
- * 
+ *
  * Lifecycle:
  *   constructor() -> render() -> mount() -> [updates] -> destroy()
- * 
+ *
  * Usage:
  *   class MyComponent extends Component {
  *       render() { return '<div>Hello</div>'; }
@@ -166,22 +166,22 @@ class Component {
     /**
      * Called after component is mounted to DOM
      */
-    onMounted() { }
+    onMounted() {}
 
     /**
      * Called after component updates
      */
-    onUpdated() { }
+    onUpdated() {}
 
     /**
      * Called before component is destroyed
      */
-    onBeforeDestroy() { }
+    onBeforeDestroy() {}
 
     /**
      * Called after component is destroyed
      */
-    onDestroyed() { }
+    onDestroyed() {}
 
     // ========================================================================
     // Helper methods

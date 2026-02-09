@@ -8,10 +8,9 @@
  */
 
 import Page from './Page.js';
-import { auth } from '../api/index.js';
+import { auth, api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { layoutManager } from '../ui/LayoutManager.js';
-import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -69,13 +68,17 @@ class SettingsPage extends Page {
                         <div class="settings-sidebar-header">
                             <h2>Settings</h2>
                         </div>
-                        ${tabs.map(tab => `
+                        ${tabs
+                            .map(
+                                (tab) => `
                             <button class="settings-menu-btn ${this.activeTab === tab.id ? 'active' : ''}" 
                                     data-tab="${tab.id}" tabindex="0">
                                 <span class="menu-icon">${tab.icon}</span>
                                 <span class="menu-label">${tab.label}</span>
                             </button>
-                        `).join('')}
+                        `
+                            )
+                            .join('')}
                     </aside>
 
                     <!-- Content Panel -->
@@ -138,10 +141,14 @@ class SettingsPage extends Page {
                         <span class="setting-description">Select your preferred color scheme</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('theme-select', availableThemes.map(t => ({
-            value: t,
-            label: this._getThemeDisplayName(t)
-        })), currentTheme)}
+                        ${this._renderDropdown(
+                            'theme-select',
+                            availableThemes.map((t) => ({
+                                value: t,
+                                label: this._getThemeDisplayName(t)
+                            })),
+                            currentTheme
+                        )}
                     </div>
                 </div>
 
@@ -171,12 +178,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Adjust for device performance (requires restart)</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('image-quality-select', [
-            { value: 'low', label: 'Low (Fastest)' },
-            { value: 'medium', label: 'Medium (Balanced)' },
-            { value: 'high', label: 'High (High Quality)' },
-            { value: 'ultra', label: 'Ultra (Maximum)' }
-        ], imageService.getPreset() || 'medium')}
+                        ${this._renderDropdown(
+                            'image-quality-select',
+                            [
+                                { value: 'low', label: 'Low (Fastest)' },
+                                { value: 'medium', label: 'Medium (Balanced)' },
+                                { value: 'high', label: 'High (High Quality)' },
+                                { value: 'ultra', label: 'Ultra (Maximum)' }
+                            ],
+                            imageService.getPreset() || 'medium'
+                        )}
                     </div>
                 </div>
             </div>
@@ -200,13 +211,17 @@ class SettingsPage extends Page {
                         <span class="setting-description">Manually override max resolution to bypass detection issues</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('max-resolution-select', [
-            { value: 'auto', label: 'Auto (Detect)' },
-            { value: '720p', label: '720p HD' },
-            { value: '1080p', label: '1080p FHD' },
-            { value: '2160p', label: '4K UHD (Default)' },
-            { value: '4320p', label: '8K UHD' }
-        ], localStorage.getItem('litefin_max_resolution') || '2160p')}
+                        ${this._renderDropdown(
+                            'max-resolution-select',
+                            [
+                                { value: 'auto', label: 'Auto (Detect)' },
+                                { value: '720p', label: '720p HD' },
+                                { value: '1080p', label: '1080p FHD' },
+                                { value: '2160p', label: '4K UHD (Default)' },
+                                { value: '4320p', label: '8K UHD' }
+                            ],
+                            localStorage.getItem('litefin_max_resolution') || '2160p'
+                        )}
                     </div>
                 </div>
 
@@ -216,14 +231,18 @@ class SettingsPage extends Page {
                         <span class="setting-description">Quality when streaming over internet</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('max-bitrate-select', [
-            { value: 'auto', label: 'Auto (Recommended)' },
-            { value: '120000000', label: '4K - 120 Mbps' },
-            { value: '60000000', label: '4K - 60 Mbps' },
-            { value: '20000000', label: '1080p - 20 Mbps' },
-            { value: '10000000', label: '1080p - 10 Mbps' },
-            { value: '4000000', label: '720p - 4 Mbps' }
-        ], localStorage.getItem('pref:maxBitrate') || 'auto')}
+                        ${this._renderDropdown(
+                            'max-bitrate-select',
+                            [
+                                { value: 'auto', label: 'Auto (Recommended)' },
+                                { value: '120000000', label: '4K - 120 Mbps' },
+                                { value: '60000000', label: '4K - 60 Mbps' },
+                                { value: '20000000', label: '1080p - 20 Mbps' },
+                                { value: '10000000', label: '1080p - 10 Mbps' },
+                                { value: '4000000', label: '720p - 4 Mbps' }
+                            ],
+                            localStorage.getItem('pref:maxBitrate') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -233,15 +252,19 @@ class SettingsPage extends Page {
                         <span class="setting-description">Default language for audio tracks</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('audio-lang-select', [
-            { value: 'auto', label: 'Auto' },
-            { value: 'eng', label: 'English' },
-            { value: 'ara', label: 'Arabic' },
-            { value: 'spa', label: 'Spanish' },
-            { value: 'fre', label: 'French' },
-            { value: 'jpn', label: 'Japanese' },
-            { value: 'kor', label: 'Korean' }
-        ], localStorage.getItem('pref:audioLang') || 'auto')}
+                        ${this._renderDropdown(
+                            'audio-lang-select',
+                            [
+                                { value: 'auto', label: 'Auto' },
+                                { value: 'eng', label: 'English' },
+                                { value: 'ara', label: 'Arabic' },
+                                { value: 'spa', label: 'Spanish' },
+                                { value: 'fre', label: 'French' },
+                                { value: 'jpn', label: 'Japanese' },
+                                { value: 'kor', label: 'Korean' }
+                            ],
+                            localStorage.getItem('pref:audioLang') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -254,12 +277,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Seconds to skip when pressing forward</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('skip-forward-select', [
-            { value: '5000', label: '5 seconds' },
-            { value: '10000', label: '10 seconds' },
-            { value: '15000', label: '15 seconds' },
-            { value: '30000', label: '30 seconds' }
-        ], String(PlayerSettings.get('skipForwardLength')))}
+                        ${this._renderDropdown(
+                            'skip-forward-select',
+                            [
+                                { value: '5000', label: '5 seconds' },
+                                { value: '10000', label: '10 seconds' },
+                                { value: '15000', label: '15 seconds' },
+                                { value: '30000', label: '30 seconds' }
+                            ],
+                            String(PlayerSettings.get('skipForwardLength'))
+                        )}
                     </div>
                 </div>
 
@@ -269,12 +296,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Seconds to skip when pressing back</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('skip-back-select', [
-            { value: '5000', label: '5 seconds' },
-            { value: '10000', label: '10 seconds' },
-            { value: '15000', label: '15 seconds' },
-            { value: '30000', label: '30 seconds' }
-        ], String(PlayerSettings.get('skipBackLength')))}
+                        ${this._renderDropdown(
+                            'skip-back-select',
+                            [
+                                { value: '5000', label: '5 seconds' },
+                                { value: '10000', label: '10 seconds' },
+                                { value: '15000', label: '15 seconds' },
+                                { value: '30000', label: '30 seconds' }
+                            ],
+                            String(PlayerSettings.get('skipBackLength'))
+                        )}
                     </div>
                 </div>
 
@@ -313,15 +344,19 @@ class SettingsPage extends Page {
                         <span class="setting-description">Default language for subtitles</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-lang-select', [
-            { value: 'none', label: 'None' },
-            { value: 'eng', label: 'English' },
-            { value: 'ara', label: 'Arabic' },
-            { value: 'spa', label: 'Spanish' },
-            { value: 'fre', label: 'French' },
-            { value: 'jpn', label: 'Japanese' },
-            { value: 'kor', label: 'Korean' }
-        ], localStorage.getItem('pref:subtitleLang') || 'none')}
+                        ${this._renderDropdown(
+                            'subtitle-lang-select',
+                            [
+                                { value: 'none', label: 'None' },
+                                { value: 'eng', label: 'English' },
+                                { value: 'ara', label: 'Arabic' },
+                                { value: 'spa', label: 'Spanish' },
+                                { value: 'fre', label: 'French' },
+                                { value: 'jpn', label: 'Japanese' },
+                                { value: 'kor', label: 'Korean' }
+                            ],
+                            localStorage.getItem('pref:subtitleLang') || 'none'
+                        )}
                     </div>
                 </div>
 
@@ -331,13 +366,17 @@ class SettingsPage extends Page {
                         <span class="setting-description">When to show subtitles automatically</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-mode-select', [
-            { value: 'Default', label: 'Default (Server preference)' },
-            { value: 'Smart', label: 'Smart (Foreign audio only)' },
-            { value: 'OnlyForced', label: 'Only Forced' },
-            { value: 'Always', label: 'Always' },
-            { value: 'None', label: 'None' }
-        ], PlayerSettings.get('subtitleMode'))}
+                        ${this._renderDropdown(
+                            'subtitle-mode-select',
+                            [
+                                { value: 'Default', label: 'Default (Server preference)' },
+                                { value: 'Smart', label: 'Smart (Foreign audio only)' },
+                                { value: 'OnlyForced', label: 'Only Forced' },
+                                { value: 'Always', label: 'Always' },
+                                { value: 'None', label: 'None' }
+                            ],
+                            PlayerSettings.get('subtitleMode')
+                        )}
                     </div>
                 </div>
 
@@ -350,13 +389,17 @@ class SettingsPage extends Page {
                         <span class="setting-description">Subtitle text size</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-size-select', [
-            { value: 'small', label: 'Small' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'large', label: 'Large' },
-            { value: 'larger', label: 'Larger' },
-            { value: 'extralarge', label: 'Extra Large' }
-        ], PlayerSettings.get('subtitleSize'))}
+                        ${this._renderDropdown(
+                            'subtitle-size-select',
+                            [
+                                { value: 'small', label: 'Small' },
+                                { value: 'medium', label: 'Medium' },
+                                { value: 'large', label: 'Large' },
+                                { value: 'larger', label: 'Larger' },
+                                { value: 'extralarge', label: 'Extra Large' }
+                            ],
+                            PlayerSettings.get('subtitleSize')
+                        )}
                     </div>
                 </div>
 
@@ -366,13 +409,17 @@ class SettingsPage extends Page {
                         <span class="setting-description">Shadow and outline style</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-shadow-select', [
-            { value: 'none', label: 'None' },
-            { value: 'dropshadow', label: 'Drop Shadow' },
-            { value: 'raised', label: 'Raised' },
-            { value: 'depressed', label: 'Depressed' },
-            { value: 'uniform', label: 'Uniform Outline' }
-        ], PlayerSettings.get('subtitleDropShadow'))}
+                        ${this._renderDropdown(
+                            'subtitle-shadow-select',
+                            [
+                                { value: 'none', label: 'None' },
+                                { value: 'dropshadow', label: 'Drop Shadow' },
+                                { value: 'raised', label: 'Raised' },
+                                { value: 'depressed', label: 'Depressed' },
+                                { value: 'uniform', label: 'Uniform Outline' }
+                            ],
+                            PlayerSettings.get('subtitleDropShadow')
+                        )}
                     </div>
                 </div>
 
@@ -382,12 +429,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Subtitle background style</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('subtitle-bg-select', [
-            { value: 'transparent', label: 'Transparent' },
-            { value: 'rgba(0,0,0,0.5)', label: 'Semi-transparent' },
-            { value: 'rgba(0,0,0,0.8)', label: 'Dark' },
-            { value: '#000000', label: 'Solid Black' }
-        ], PlayerSettings.get('subtitleTextBackground'))}
+                        ${this._renderDropdown(
+                            'subtitle-bg-select',
+                            [
+                                { value: 'transparent', label: 'Transparent' },
+                                { value: 'rgba(0,0,0,0.5)', label: 'Semi-transparent' },
+                                { value: 'rgba(0,0,0,0.8)', label: 'Dark' },
+                                { value: '#000000', label: 'Solid Black' }
+                            ],
+                            PlayerSettings.get('subtitleTextBackground')
+                        )}
                     </div>
                 </div>
             </div>
@@ -480,12 +531,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Horizontal size of the debug window</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('debug-width-select', [
-            { value: 'small', label: 'Small' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'large', label: 'Large' },
-            { value: 'full', label: 'Full Screen' }
-        ], debugOverlay.Width || 'small')}
+                        ${this._renderDropdown(
+                            'debug-width-select',
+                            [
+                                { value: 'small', label: 'Small' },
+                                { value: 'medium', label: 'Medium' },
+                                { value: 'large', label: 'Large' },
+                                { value: 'full', label: 'Full Screen' }
+                            ],
+                            debugOverlay.Width || 'small'
+                        )}
                     </div>
                 </div>
 
@@ -495,12 +550,16 @@ class SettingsPage extends Page {
                         <span class="setting-description">Vertical size of the debug window</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown('debug-height-select', [
-            { value: 'small', label: 'Small' },
-            { value: 'medium', label: 'Medium' },
-            { value: 'large', label: 'Large' },
-            { value: 'full', label: 'Full Screen' }
-        ], debugOverlay.Height || 'small')}
+                        ${this._renderDropdown(
+                            'debug-height-select',
+                            [
+                                { value: 'small', label: 'Small' },
+                                { value: 'medium', label: 'Medium' },
+                                { value: 'large', label: 'Large' },
+                                { value: 'full', label: 'Full Screen' }
+                            ],
+                            debugOverlay.Height || 'small'
+                        )}
                     </div>
                 </div>
 
@@ -510,19 +569,26 @@ class SettingsPage extends Page {
                         <span class="setting-description">Screen location of the debug window</span>
                     </div>
             <div class="setting-control">
-                        ${this._renderDropdown('debug-position-select', [
-            { value: 'top-left', label: 'Top Left' },
-            { value: 'top-right', label: 'Top Right' },
-            { value: 'bottom-left', label: 'Bottom Left' },
-            { value: 'bottom-right', label: 'Bottom Right' }
-        ], debugOverlay.Position || 'bottom-right')}
+                        ${this._renderDropdown(
+                            'debug-position-select',
+                            [
+                                { value: 'top-left', label: 'Top Left' },
+                                { value: 'top-right', label: 'Top Right' },
+                                { value: 'bottom-left', label: 'Bottom Left' },
+                                { value: 'bottom-right', label: 'Bottom Right' }
+                            ],
+                            debugOverlay.Position || 'bottom-right'
+                        )}
                     </div>
                 </div>
 
                 <!-- Module Filters -->
                 <h3 class="setting-section-title">Module Filters</h3>
                 <div class="module-filters-grid">
-                    ${debugOverlay.getKnownModules().map(module => `
+                    ${debugOverlay
+                        .getKnownModules()
+                        .map(
+                            (module) => `
                         <div class="setting-item compact">
                             <div class="setting-label">
                                 <span class="setting-name">${module}</span>
@@ -534,7 +600,9 @@ class SettingsPage extends Page {
                                 </button>
                             </div>
                         </div>
-                    `).join('')}
+                    `
+                        )
+                        .join('')}
                 </div>
             </div>
         `;
@@ -554,15 +622,14 @@ class SettingsPage extends Page {
     _bindEvents() {
         // Back button
 
-
         // Sidebar Navigation
-        this.$$('.settings-menu-btn').forEach(btn => {
+        this.$$('.settings-menu-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
                 this._switchTab(tab);
             });
 
-            // Also switch on focus for hover-like preview? 
+            // Also switch on focus for hover-like preview?
             // Better to switch on click/enter for stability, or debounce focus.
             // Let's stick to click/enter (standard behavior)
         });
@@ -572,15 +639,11 @@ class SettingsPage extends Page {
 
     _bindContentEvents() {
         // Layout buttons
-        this.$$('.layout-btn').forEach(btn => {
+        this.$$('.layout-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 this._setLayout(btn.dataset.layout);
             });
         });
-
-
-
-
 
         // Toggle My Media
         const myMediaBtn = this.$('#toggle-my-media');
@@ -616,7 +679,7 @@ class SettingsPage extends Page {
 
     _renderDropdown(id, options, currentValue) {
         // Find current label
-        const currentOption = options.find(o => o.value === currentValue) || options[0];
+        const currentOption = options.find((o) => o.value === currentValue) || options[0];
         const currentLabel = currentOption ? currentOption.label : 'Select';
 
         // Render as a button that triggers the modal
@@ -624,7 +687,7 @@ class SettingsPage extends Page {
             <button class="setting-action-btn select-btn" id="${id}-btn" 
                     data-id="${id}" 
                     data-value="${currentValue}"
-                    data-options='${JSON.stringify(options).replace(/'/g, "&#39;")}'
+                    data-options='${JSON.stringify(options).replace(/'/g, '&#39;')}'
                     tabindex="0">
                 <span class="btn-label">${currentLabel}</span>
             </button>
@@ -645,14 +708,18 @@ class SettingsPage extends Page {
                     <h2>${title}</h2>
                 </div>
                 <div class="modal-options">
-                    ${options.map(opt => `
+                    ${options
+                        .map(
+                            (opt) => `
                         <button class="modal-option-btn ${opt.value === currentValue ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
                             <span>${opt.label}</span>
                             <div class="check-icon"></div>
                         </button>
-                    `).join('')}
+                    `
+                        )
+                        .join('')}
                 </div>
                 <div class="modal-actions">
                     <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
@@ -665,7 +732,7 @@ class SettingsPage extends Page {
         overlay.setAttribute('aria-hidden', 'false');
 
         // Bind Events
-        overlay.querySelectorAll('.modal-option-btn').forEach(btn => {
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 onSelect(btn.dataset.value);
@@ -694,7 +761,8 @@ class SettingsPage extends Page {
         // Set Focus
         focusManager.setActiveSection('modal-options');
         setTimeout(() => {
-            const selected = overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
+            const selected =
+                overlay.querySelector('.modal-option-btn.selected') || overlay.querySelector('.modal-option-btn');
             if (selected) focusManager.focusElement(selected);
         }, 50);
     }
@@ -726,7 +794,7 @@ class SettingsPage extends Page {
     _bindDropdownEvents() {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
-            'layout': { key: 'layout', type: 'local' },
+            layout: { key: 'layout', type: 'local' },
             'theme-select': { key: 'theme', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'max-resolution-select': { key: 'litefin_max_resolution', type: 'local' },
@@ -739,25 +807,23 @@ class SettingsPage extends Page {
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
-            'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
-            'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
-            'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' }
         };
 
-        this.$$('.select-btn').forEach(btn => {
+        this.$$('.select-btn').forEach((btn) => {
             btn.addEventListener('click', (e) => {
                 const id = btn.dataset.id;
                 const options = JSON.parse(btn.dataset.options);
                 const currentValue = btn.dataset.value;
                 const settingConfig = settingsMap[id];
-                const title = btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
+                const title =
+                    btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
 
                 this._renderSelectionModal(title, options, currentValue, (newValue) => {
                     // Update button UI
-                    const newLabel = options.find(o => o.value === newValue)?.label;
+                    const newLabel = options.find((o) => o.value === newValue)?.label;
                     const labelSpan = btn.querySelector('.btn-label');
                     if (labelSpan) labelSpan.innerText = newLabel;
                     btn.dataset.value = newValue;
@@ -777,9 +843,10 @@ class SettingsPage extends Page {
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);
                         } else if (settingConfig.type === 'player') {
-                            const val = (settingConfig.key === 'skipForwardLength' || settingConfig.key === 'skipBackLength')
-                                ? parseInt(newValue, 10)
-                                : newValue;
+                            const val =
+                                settingConfig.key === 'skipForwardLength' || settingConfig.key === 'skipBackLength'
+                                    ? parseInt(newValue, 10)
+                                    : newValue;
                             PlayerSettings.set(settingConfig.key, val);
                         } else if (settingConfig.type === 'debug') {
                             localStorage.setItem(settingConfig.key, newValue);
@@ -847,7 +914,7 @@ class SettingsPage extends Page {
         }
 
         // Module Filter Toggles
-        this.$$('.module-filter-toggle').forEach(btn => {
+        this.$$('.module-filter-toggle').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const module = btn.dataset.module;
                 const newState = !btn.classList.contains('active');
@@ -856,8 +923,6 @@ class SettingsPage extends Page {
                 debugOverlay.toggleModule(module, newState);
             });
         });
-
-
     }
 
     _switchTab(tabId, force = false) {
@@ -865,7 +930,7 @@ class SettingsPage extends Page {
         this.activeTab = tabId;
 
         // Update sidebar UI
-        this.$$('.settings-menu-btn').forEach(btn => {
+        this.$$('.settings-menu-btn').forEach((btn) => {
             btn.classList.toggle('active', btn.dataset.tab === tabId);
         });
 

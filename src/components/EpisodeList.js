@@ -27,7 +27,7 @@ class EpisodeList extends Component {
         this.episodes = config.episodes || [];
         this.seriesId = config.seriesId;
         this.onPlay = config.onPlay || ((id) => router.navigate(`/play/${id}`));
-        this.onAction = config.onAction || (() => { });
+        this.onAction = config.onAction || (() => {});
 
         // Fallback image URL for missing episode thumbnails
         this._fallbackUrl = null;
@@ -36,7 +36,8 @@ class EpisodeList extends Component {
     render() {
         // Prepare fallback URL (Series Backdrop or Primary)
         const params = imageService.getParams('thumb');
-        this._fallbackUrl = api.getImageUrl(this.seriesId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality }) ||
+        this._fallbackUrl =
+            api.getImageUrl(this.seriesId, 'Backdrop', { maxWidth: params.maxWidth, quality: params.quality }) ||
             api.getImageUrl(this.seriesId, 'Primary', { maxWidth: params.maxWidth, quality: params.quality });
 
         const htmlParts = this.episodes.map((ep, index) => this._renderEpisode(ep, index));
@@ -105,10 +106,14 @@ class EpisodeList extends Component {
                         <div class="episode-row-index">${ep.IndexNumber ? ep.IndexNumber + '. ' : ''}${ep.Name}</div>
                         <div class="episode-row-meta">
                             <span>${runtime}</span>
-                            ${rating ? `<div class="episode-row-rating">
+                            ${
+                                rating
+                                    ? `<div class="episode-row-rating">
                                 <svg viewBox="0 0 24 24"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
                                 ${rating}
-                            </div>` : ''}
+                            </div>`
+                                    : ''
+                            }
                         </div>
                         <div class="episode-row-overview">${ep.Overview || ''}</div>
                     </div>
@@ -174,7 +179,7 @@ class EpisodeList extends Component {
 
     /**
      * Toggle favorite status
-     * @param {string} id - Episode ID  
+     * @param {string} id - Episode ID
      * @param {HTMLElement} btn - Button element
      */
     async _toggleFav(id, btn) {

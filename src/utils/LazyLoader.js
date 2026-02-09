@@ -16,43 +16,46 @@ class LazyLoader {
     _init() {
         // Tizen 4 (Chrome 56) supports IntersectionObserver
         if ('IntersectionObserver' in window) {
-            this.observer = new IntersectionObserver((entries, observer) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        const target = entry.target;
+            this.observer = new IntersectionObserver(
+                (entries, observer) => {
+                    entries.forEach((entry) => {
+                        if (entry.isIntersecting) {
+                            const target = entry.target;
 
-                        // Case 1: Lazy Row (Load all children)
-                        if (target.hasAttribute('data-lazy-row')) {
-                            this._loadRow(target);
+                            // Case 1: Lazy Row (Load all children)
+                            if (target.hasAttribute('data-lazy-row')) {
+                                this._loadRow(target);
 
-                            // AGGRESSIVE PRELOAD: Load next 3 sibling rows immediately
-                            // This ensures that even if margin is ignored, we logically load ahead
-                            let next = target.nextElementSibling;
-                            let count = 0;
-                            while (next && count < 3) {
-                                if (next.hasAttribute('data-lazy-row')) {
-                                    this._loadRow(next);
+                                // AGGRESSIVE PRELOAD: Load next 3 sibling rows immediately
+                                // This ensures that even if margin is ignored, we logically load ahead
+                                let next = target.nextElementSibling;
+                                let count = 0;
+                                while (next && count < 3) {
+                                    if (next.hasAttribute('data-lazy-row')) {
+                                        this._loadRow(next);
+                                    }
+                                    next = next.nextElementSibling;
+                                    count++;
                                 }
-                                next = next.nextElementSibling;
-                                count++;
+                            }
+                            // Case 2: Individual Image (Grid)
+                            else if (target.dataset.src) {
+                                this._loadImage(target);
+
+                                // AGGRESSIVE PRELOAD: Load next 20 images in grid sequence
+                                // Simulates "Page Loading" - once we hit a new section, load a full screen ahead
+                                this._batchPreloadImages(target);
                             }
                         }
-                        // Case 2: Individual Image (Grid)
-                        else if (target.dataset.src) {
-                            this._loadImage(target);
-
-                            // AGGRESSIVE PRELOAD: Load next 20 images in grid sequence
-                            // Simulates "Page Loading" - once we hit a new section, load a full screen ahead
-                            this._batchPreloadImages(target);
-                        }
-                    }
-                });
-            }, {
-                // Preload 2.5 screens worth of content
-                // Dynamic calculation ensures consistent tolerance across 720p/1080p/4K resolutions
-                rootMargin: `${Math.ceil(window.innerHeight * 2.5)}px`,
-                threshold: 0.01
-            });
+                    });
+                },
+                {
+                    // Preload 2.5 screens worth of content
+                    // Dynamic calculation ensures consistent tolerance across 720p/1080p/4K resolutions
+                    rootMargin: `${Math.ceil(window.innerHeight * 2.5)}px`,
+                    threshold: 0.01
+                }
+            );
         } else {
             console.warn('LazyLoader: IntersectionObserver not supported. Fallback to immediate load.');
         }
@@ -60,14 +63,14 @@ class LazyLoader {
 
     /**
      * Helper to load all images in a row container
-     * @param {HTMLElement} row 
+     * @param {HTMLElement} row
      * @private
      */
     _loadRow(row) {
         if (!row) return;
 
         const images = row.querySelectorAll('img[data-src]');
-        images.forEach(img => {
+        images.forEach((img) => {
             img.src = img.dataset.src;
             img.onload = () => {
                 img.classList.add('loaded');
@@ -118,14 +121,14 @@ class LazyLoader {
     /**
      * Helper to batch preload subsequent images in a grid
      * Finds next 20 images in the DOM sequence from the current image
-     * @param {HTMLElement} startImg 
+     * @param {HTMLElement} startImg
      * @private
      */
     _batchPreloadImages(startImg) {
         if (!startImg) return;
 
         // Find parent card to traverse siblings
-        let currentCard = startImg.closest('.media-card');
+        const currentCard = startImg.closest('.media-card');
         if (!currentCard) return; // Should not happen in standard grid
 
         let nextCard = currentCard.nextElementSibling;
@@ -151,7 +154,7 @@ class LazyLoader {
         // If no observer (older browser?), just load immediately
         if (!this.observer) {
             const images = container.querySelectorAll('img[data-src]');
-            images.forEach(img => {
+            images.forEach((img) => {
                 img.src = img.dataset.src;
                 img.removeAttribute('data-src');
             });
@@ -160,7 +163,7 @@ class LazyLoader {
 
         // Observe individual images (vertical grids)
         const images = container.querySelectorAll('img[data-src]');
-        images.forEach(img => {
+        images.forEach((img) => {
             // Only observe if NOT inside a lazy row (avoid double observation)
             if (!img.closest('[data-lazy-row]')) {
                 this.observer.observe(img);
@@ -170,12 +173,12 @@ class LazyLoader {
         // Observe lazy rows (horizontal scrollers)
         // This solves horizontal clipping issues by loading the whole row when it enters the viewport
         const rows = container.querySelectorAll('[data-lazy-row]');
-        rows.forEach(row => this.observer.observe(row));
+        rows.forEach((row) => this.observer.observe(row));
     }
 
     /**
      * Observe a specific single element
-     * @param {HTMLElement} img 
+     * @param {HTMLElement} img
      * @private
      */
     observeElement(img) {
