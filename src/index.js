@@ -25,6 +25,7 @@ import './styles/login.css';
 import './styles/home.css';
 import './styles/details.css';
 import './styles/search.css';
+import './styles/player-osd.css';
 import './styles/settings.css';
 import './styles/season.css';
 import './themes/classic/index.js'; // All classic themes

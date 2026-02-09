@@ -18,6 +18,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
+import SubtitleStyles from '../utils/SubtitleStyles.js';
 
 class PlayerPage extends Page {
     constructor() {
@@ -331,6 +332,7 @@ class PlayerPage extends Page {
         this._player.on('ended', () => this._onEnded());
         this._player.on('error', (err) => this._onPlayerError(err));
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
+        this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
 
         // Expose player instance globally for OSD
         window.playerInstance = this._player;
@@ -518,6 +520,47 @@ class PlayerPage extends Page {
             await api.reportPlaybackStart(info);
         } catch (error) {
             console.warn('[PlayerPage] Failed to report playback start:', error);
+        }
+    }
+
+    _onSubtitleChange(data) {
+        const overlay = document.getElementById('subtitle-overlay');
+        if (!overlay) return;
+
+        // Clear existing timeout
+        if (this._subtitleTimeout) {
+            clearTimeout(this._subtitleTimeout);
+            this._subtitleTimeout = null;
+        }
+
+        if (data && data.text) {
+            // Render subtitle
+            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            overlay.classList.remove('hidden');
+
+            // Apply user styles
+            const styles = SubtitleStyles.getTextStyles();
+            // Apply to the span
+            const span = overlay.querySelector('.subtitle-line');
+            if (span) {
+                SubtitleStyles.applyStyles(span, styles);
+            }
+
+            // Apply container styles (position)
+            const windowStyles = SubtitleStyles.getWindowStyles();
+            SubtitleStyles.applyStyles(overlay, windowStyles);
+
+            // Clear after duration
+            if (data.duration > 0) {
+                this._subtitleTimeout = setTimeout(() => {
+                    overlay.innerHTML = '';
+                    overlay.classList.add('hidden');
+                }, data.duration);
+            }
+        } else {
+            // Clear subtitle
+            overlay.innerHTML = '';
+            overlay.classList.add('hidden');
         }
     }
 
@@ -834,6 +877,12 @@ class PlayerPage extends Page {
             this._player.destroy();
         }
         this._player = null;
+
+        // Clear subtitle timeout
+        if (this._subtitleTimeout) {
+            clearTimeout(this._subtitleTimeout);
+            this._subtitleTimeout = null;
+        }
 
         // Remove app exit listener
         if (this._onAppBeforeExit) {

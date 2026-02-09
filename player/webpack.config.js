@@ -1,3 +1,4 @@
+/* eslint-env node */
 const path = require('path');
 const webpack = require('webpack');
 const TerserPlugin = require('terser-webpack-plugin');
@@ -13,10 +14,10 @@ module.exports = (env, argv) => {
             library: {
                 name: 'JellyfinPlayer',
                 type: 'umd',
-                export: 'default',
+                export: 'default'
             },
             globalObject: 'this',
-            clean: false, // Don't clean src/player as it has OSD files
+            clean: false // Don't clean src/player as it has OSD files
         },
         module: {
             rules: [
@@ -26,31 +27,34 @@ module.exports = (env, argv) => {
                     use: {
                         loader: 'babel-loader',
                         options: {
-                            presets: ['@babel/preset-env'],
-                        },
-                    },
+                            presets: ['@babel/preset-env']
+                        }
+                    }
                 },
                 // Ignore SCSS imports - styles handled by litefin
                 {
                     test: /\.s[ac]ss$/i,
-                    use: 'null-loader',
-                },
-            ],
+                    use: 'null-loader'
+                }
+            ]
         },
         plugins: [
             // Define __DEBUG__ constant based on build mode
             new webpack.DefinePlugin({
-                __DEBUG__: JSON.stringify(!isProduction),
-            }),
+                __DEBUG__: JSON.stringify(!isProduction)
+            })
         ],
         optimization: {
             minimize: isProduction,
             minimizer: [
                 new TerserPlugin({
-                    extractComments: false, // Don't create LICENSE.txt file
-                }),
-            ],
+                    extractComments: false // Don't create LICENSE.txt file
+                })
+            ]
         },
         devtool: isProduction ? false : 'inline-source-map', // No source maps in prod
+        performance: {
+            hints: false
+        }
     };
 };

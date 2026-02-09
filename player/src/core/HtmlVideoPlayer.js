@@ -1,9 +1,9 @@
 /**
  * HtmlVideoPlayer - HTML5 Video Backend
- * 
+ *
  * Core video playback using HTML5 video element with HLS.js support.
  * Extracted and simplified from jellyfin-web's htmlVideoPlayer plugin.
- * 
+ *
  * @module core/HtmlVideoPlayer
  */
 
@@ -34,7 +34,7 @@ export class HtmlVideoPlayer {
     constructor(options) {
         this.container = options.container;
         this.settings = options.settings;
-        this.onEvent = options.onEvent || (() => { });
+        this.onEvent = options.onEvent || (() => {});
 
         // ====================================================================
         // State
@@ -173,8 +173,7 @@ export class HtmlVideoPlayer {
             return false;
         }
 
-        const isHlsStream = options.isHls ||
-            (options.url && options.url.includes('.m3u8'));
+        const isHlsStream = options.isHls || (options.url && options.url.includes('.m3u8'));
 
         if (!isHlsStream) {
             return false;
@@ -399,7 +398,7 @@ export class HtmlVideoPlayer {
         if (!audioTracks || audioTracks.length < 2) return;
 
         for (let i = 0; i < audioTracks.length; i++) {
-            audioTracks[i].enabled = (i === index);
+            audioTracks[i].enabled = i === index;
         }
     }
 
@@ -417,7 +416,7 @@ export class HtmlVideoPlayer {
         const textTracks = video.textTracks;
         if (textTracks) {
             for (let i = 0; i < textTracks.length; i++) {
-                textTracks[i].mode = (i === index) ? 'showing' : 'hidden';
+                textTracks[i].mode = i === index ? 'showing' : 'hidden';
             }
         }
 

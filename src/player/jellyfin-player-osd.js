@@ -22,15 +22,15 @@
 
     // Only set up debug overlay if debug mode is enabled
     if (DEBUG_ENABLED) {
-        function initDebugOverlay() {
+        const initDebugOverlay = function() {
             if (!document.getElementById('debug-overlay')) {
                 const overlay = document.createElement('div');
                 overlay.id = 'debug-overlay';
                 document.body.appendChild(overlay);
             }
-        }
+        };
 
-        function logToOverlay(type, args) {
+        const logToOverlay = function(type, args) {
             initDebugOverlay();
             const overlay = document.getElementById('debug-overlay');
             if (overlay) {
@@ -559,7 +559,6 @@
         // ============================================================
         // D-Pad Navigation (Up/Down for OSD navigation)
         // ============================================================
-        const { headerRow, controlsRow } = getFocusableElements();
 
         switch (e.keyCode) {
             case 38: // Up arrow
@@ -596,8 +595,12 @@
     // ========================================================================
 
     function executeAction(action) {
-        const player = window.playerInstance;
-        if (!player) return;
+        // precise-player-link
+        const player = window.playerInstance || CONFIG.player;
+        if (!player) {
+            console.warn('[OSD] executeAction: No player instance available');
+            return;
+        }
 
         switch (action) {
             case 'back':
@@ -647,15 +650,17 @@
                 }, 250);
                 break;
 
-            case 'rewind':
+            case 'rewind': {
                 const skipBackMs = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || CONFIG.seekStepBack;
                 performDebouncedSeek(-skipBackMs * 10000); // Convert MS to Ticks
                 break;
+            }
 
-            case 'fastForward':
+            case 'fastForward': {
                 const skipFwdMs = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || CONFIG.seekStepForward;
                 performDebouncedSeek(skipFwdMs * 10000); // Convert MS to Ticks
                 break;
+            }
 
             case 'previousTrack':
             case 'nextTrack':
@@ -851,7 +856,7 @@
     }
 
     function updatePlayPauseButton() {
-        const player = window.playerInstance;
+        const player = window.playerInstance || CONFIG.player;
         const btn = document.getElementById('osdPlayPauseBtn');
         if (!btn || !player) return;
 
@@ -910,8 +915,8 @@
     // Track Selection Menu
     // ========================================================================
 
-    function openTrackMenu(type, mode) {
-        const player = window.playerInstance;
+    async function openTrackMenu(type, mode) {
+        const player = window.playerInstance || CONFIG.player;
         if (!player) return;
 
         trackMenuType = type;
@@ -927,23 +932,31 @@
         let title = '';
         let currentIndex = -1;
 
-        if (type === 'subtitles') {
-            tracks = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
+        try {
+            if (type === 'subtitles') {
+                const tracksRaw = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
+                tracks = Promise.resolve(tracksRaw).then ? await tracksRaw : tracksRaw;
 
-            if (trackMenuSubtitleMode === 'secondary') {
-                title = 'Secondary Subtitle';
-                currentIndex = currentSecondarySubtitleIndex;
-            } else {
-                title = 'Subtitles';
-                currentIndex = currentSubtitleIndex;
+                if (trackMenuSubtitleMode === 'secondary') {
+                    title = 'Secondary Subtitle';
+                    currentIndex = currentSecondarySubtitleIndex;
+                } else {
+                    title = 'Subtitles';
+                    currentIndex = currentSubtitleIndex;
+                }
+
+                // Add "Off" option at the beginning
+                tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
+            } else if (type === 'audio') {
+                const tracksRaw = player.getAudioTracks ? player.getAudioTracks() : [];
+                tracks = Promise.resolve(tracksRaw).then ? await tracksRaw : tracksRaw;
+                
+                title = 'Audio';
+                currentIndex = currentAudioIndex;
             }
-
-            // Add "Off" option at the beginning
-            tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
-        } else if (type === 'audio') {
-            tracks = player.getAudioTracks ? player.getAudioTracks() : [];
-            title = 'Audio';
-            currentIndex = currentAudioIndex;
+        } catch (e) {
+            console.error('[OSD] Failed to get tracks:', e);
+            return;
         }
 
         if (tracks.length === 0) {
@@ -1147,6 +1160,8 @@
                     updateTrackMenuFocus();
                 }
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 return true;
 
             case 40: // Down
@@ -1155,26 +1170,40 @@
                     updateTrackMenuFocus();
                 }
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
+                return true;
+
+            case 37: // Left
+            case 39: // Right
+                // Prevent focus from leaving the menu
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 return true;
 
             case 13: // Enter
-                // Check if focused option is the mode-switch button
-                const focusedOption = options[trackMenuFocusIndex];
-                if (focusedOption && focusedOption.classList.contains('track-mode-switch')) {
-                    // Handle mode switch
-                    const action = focusedOption.dataset.action;
-                    if (action === 'switch-secondary') {
-                        openTrackMenu('subtitles', 'secondary');
-                    } else if (action === 'switch-primary') {
-                        openTrackMenu('subtitles', 'primary');
+                {
+                    // Check if focused option is the mode-switch button
+                    const focusedOption = options[trackMenuFocusIndex];
+                    if (focusedOption && focusedOption.classList.contains('track-mode-switch')) {
+                        // Handle mode switch
+                        const action = focusedOption.dataset.action;
+                        if (action === 'switch-secondary') {
+                            openTrackMenu('subtitles', 'secondary');
+                        } else if (action === 'switch-primary') {
+                            openTrackMenu('subtitles', 'primary');
+                        }
+                    } else {
+                        // Handle track selection - adjust index if header exists
+                        const hasHeader = trackMenuType === 'subtitles';
+                        const trackIndex = hasHeader ? trackMenuFocusIndex - 1 : trackMenuFocusIndex;
+                        selectTrackByMenuIndex(trackIndex);
                     }
-                } else {
-                    // Handle track selection - adjust index if header exists
-                    const hasHeader = trackMenuType === 'subtitles';
-                    const trackIndex = hasHeader ? trackMenuFocusIndex - 1 : trackMenuFocusIndex;
-                    selectTrackByMenuIndex(trackIndex);
                 }
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 return true;
 
             case 10009: // Tizen Back
@@ -1182,6 +1211,8 @@
             case 8:     // Backspace
                 closeTrackMenu();
                 e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation();
                 return true;
         }
 

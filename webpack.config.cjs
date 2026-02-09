@@ -74,9 +74,7 @@ const es6Config = {
     },
 
     module: {
-        rules: [
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
-        ]
+        rules: [{ test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }]
     },
 
     plugins: getPlugins()
@@ -110,11 +108,16 @@ const normalConfig = {
                 use: {
                     loader: 'babel-loader',
                     options: {
-                        presets: [['@babel/preset-env', {
-                            targets: { chrome: '69' },
-                            useBuiltIns: 'usage',
-                            corejs: 3
-                        }]]
+                        presets: [
+                            [
+                                '@babel/preset-env',
+                                {
+                                    targets: { chrome: '69' },
+                                    useBuiltIns: 'usage',
+                                    corejs: 3
+                                }
+                            ]
+                        ]
                     }
                 }
             },
@@ -152,11 +155,16 @@ const legacyConfig = {
                 use: {
                     loader: 'babel-loader',
                     options: {
-                        presets: [['@babel/preset-env', {
-                            targets: { chrome: '47' },
-                            useBuiltIns: 'usage',
-                            corejs: 3
-                        }]]
+                        presets: [
+                            [
+                                '@babel/preset-env',
+                                {
+                                    targets: { chrome: '47' },
+                                    useBuiltIns: 'usage',
+                                    corejs: 3
+                                }
+                            ]
+                        ]
                     }
                 }
             },
@@ -168,4 +176,3 @@ const legacyConfig = {
 };
 
 module.exports = [es6Config, normalConfig, legacyConfig];
-
