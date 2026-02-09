@@ -158,7 +158,14 @@
         }
 
         Object.assign(CONFIG, options);
+        
+        // precise-item-link
+        // Store API and Item for later use
+        if (options.api) CONFIG.api = options.api;
+        if (options.item) CONFIG.item = options.item;
+
         render();
+        updateFavoriteButton(); // Set initial state
         cacheFocusableElements(); // Cache DOM elements for fast focus updates
         bindEvents();
         startUpdates();
@@ -664,7 +671,7 @@
                 break;
 
             case 'favorite':
-                console.log('[OSD] Toggle favorite');
+                toggleFavorite();
                 break;
 
             case 'settings':
@@ -1191,6 +1198,57 @@
         if (trackMenuOverlay) {
             trackMenuOverlay.remove();
             trackMenuOverlay = null;
+        }
+        CONFIG.api = null;
+        CONFIG.item = null;
+    }
+
+    // ========================================================================
+    // Favorite Logic
+    // ========================================================================
+
+    function updateFavoriteButton() {
+        const btn = document.getElementById('osdFavoriteBtn');
+        if (!btn || !CONFIG.item || !CONFIG.item.UserData) return;
+
+        const isFavorite = CONFIG.item.UserData.IsFavorite;
+        
+        // Update icon
+        btn.innerHTML = isFavorite ? ICONS.favoriteFilled : ICONS.favorite;
+        
+        // Optional: Update color/style
+        if (isFavorite) {
+            btn.classList.add('active');
+            btn.style.color = '#e74c3c'; // Red for favorite
+        } else {
+            btn.classList.remove('active');
+            btn.style.color = ''; // Inherit (white)
+        }
+    }
+
+    async function toggleFavorite() {
+        if (!CONFIG.api || !CONFIG.item) return;
+
+        const newItem = { ...CONFIG.item };
+        const wasFavorite = newItem.UserData.IsFavorite;
+        
+        // Optimistic UI update
+        newItem.UserData.IsFavorite = !wasFavorite;
+        CONFIG.item = newItem;
+        updateFavoriteButton();
+
+        try {
+            if (wasFavorite) {
+                await CONFIG.api.unmarkFavorite(newItem.Id);
+            } else {
+                await CONFIG.api.markFavorite(newItem.Id);
+            }
+        } catch (error) {
+            console.error('[OSD] Failed to toggle favorite:', error);
+            // Revert on failure
+            newItem.UserData.IsFavorite = wasFavorite;
+            CONFIG.item = newItem;
+            updateFavoriteButton();
         }
     }
 

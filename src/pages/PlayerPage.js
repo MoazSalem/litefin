@@ -410,7 +410,8 @@ class PlayerPage extends Page {
             this._osd.init({
                 container: this.$('#osd-overlay'),
                 player: this._player,
-                item: this._item
+                item: this._item,
+                api: api
             });
 
             // Pass title manually since OSD looks for it in URL
