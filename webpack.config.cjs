@@ -74,7 +74,16 @@ const es6Config = {
     },
 
     module: {
-        rules: [{ test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }]
+        rules: [
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            }
+        ]
     },
 
     plugins: getPlugins()
@@ -121,7 +130,14 @@ const normalConfig = {
                     }
                 }
             },
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            }
         ]
     },
 
@@ -168,7 +184,14 @@ const legacyConfig = {
                     }
                 }
             },
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] }
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            }
         ]
     },
 

@@ -1,0 +1,100 @@
+/* ============================================================================
+   Font Definitions - Bundled Google Fonts
+   ============================================================================
+   These fonts are bundled locally in src/assets/fonts/ to bypass Tizen's
+   cross-origin restrictions on remote font loading.
+   ============================================================================ */
+
+/* Courier Prime - Typewriter style */
+@font-face {
+    font-family: 'Courier Prime';
+    src: url('../assets/fonts/CourierPrime.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Merriweather - Print/Serif style */
+@font-face {
+    font-family: 'Merriweather';
+    src: url('../assets/fonts/Merriweather.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Inconsolata - Console/Monospace style */
+@font-face {
+    font-family: 'Inconsolata';
+    src: url('../assets/fonts/Inconsolata.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Dancing Script - Cursive style */
+@font-face {
+    font-family: 'Dancing Script';
+    src: url('../assets/fonts/DancingScript.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Patrick Hand - Casual style */
+@font-face {
+    font-family: 'Patrick Hand';
+    src: url('../assets/fonts/PatrickHand.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: block;
+}
+
+/* Cinzel - Small Caps style */
+@font-face {
+    font-family: 'Cinzel';
+    src: url('../assets/fonts/Cinzel.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Poppins - Modern style */
+@font-face {
+    font-family: 'Poppins';
+    src: url('../assets/fonts/Poppins.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Noto Sans Arabic - Arabic style */
+@font-face {
+    font-family: 'Noto Sans Arabic';
+    src: url('../assets/fonts/NotoSansArabic.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* ============================================================================
+   Font Classes - Applied to subtitle elements via SubtitleStyles.js
+   ============================================================================ */
+
+.font-typewriter { font-family: 'Courier Prime', monospace, 'Courier New', Courier !important; }
+.font-merriweather {
+    font-family: 'Merriweather', serif !important;
+}
+
+.font-poppins {
+    font-family: 'Poppins', sans-serif !important;
+}
+
+.font-noto-arabic {
+    font-family: 'Noto Sans Arabic', sans-serif !important;
+}
+.font-console    { font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco !important; }
+.font-cursive    { font-family: 'Dancing Script', cursive !important; }
+.font-casual     { font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print' !important; }
+.font-smallcaps  { font-family: 'Cinzel', 'Copperplate', serif !important; font-variant: small-caps; }
+.font-default    { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif !important; }

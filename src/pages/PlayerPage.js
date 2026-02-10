@@ -20,6 +20,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
+import FontLoader from '../utils/FontLoader.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('Player');
@@ -100,6 +101,12 @@ class PlayerPage extends Page {
             // This makes body/app transparent so hardware video plane is visible
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
+
+            // Preload the selected subtitle font so it's ready before subtitles appear
+            const fontId = SubtitleStyles.getCurrentFontId();
+            if (fontId) {
+                await FontLoader.loadFont(fontId);
+            }
 
             // Load item details
             this._item = await api.getItem(itemId);
@@ -592,6 +599,15 @@ class PlayerPage extends Page {
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
+
+                // Ensure the selected font is loaded, then re-apply if needed
+                const fontId = SubtitleStyles.getCurrentFontId();
+                if (fontId) {
+                    FontLoader.loadFont(fontId).then(() => {
+                        // Re-apply styles after font is loaded to trigger repaint
+                        SubtitleStyles.applyStyles(span, styles);
+                    });
+                }
             }
 
             // Apply container styles (position)

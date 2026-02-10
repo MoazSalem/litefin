@@ -179,10 +179,12 @@
     color: #000;
 }
 
-.error-actions .btn-primary:focus {
+.error-actions .btn-primary:focus,
+.error-actions .btn-primary.focused {
     background: #6B5CE7;
     color: #fff;
     transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(107, 92, 231, 0.4);
 }
 
 .error-actions .btn-secondary {
@@ -190,9 +192,12 @@
     color: #fff;
 }
 
-.error-actions .btn-secondary:focus {
-    background: rgba(255, 255, 255, 0.2);
+.error-actions .btn-secondary:focus,
+.error-actions .btn-secondary.focused {
+    background: rgba(255, 255, 255, 0.25);
+    border: 3px solid #fff;
     transform: scale(1.05);
+    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
 }
 
 /* ==========================================================================
@@ -270,6 +275,7 @@
 }
 
 .progress-bar:focus,
+.progress-bar.focused,
 .progress-bar:hover {
     height: 10px;
     transform: scaleY(1.2);
@@ -299,6 +305,7 @@
 }
 
 .progress-bar:focus .progress-fill::after,
+.progress-bar.focused .progress-fill::after,
 .progress-bar:hover .progress-fill::after {
     opacity: 1;
 }
@@ -336,10 +343,13 @@
 }
 
 .osd-btn:focus,
+.osd-btn.focused,
 .osd-btn:hover {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.3);
+    border: 2px solid #fff;
     transform: scale(1.1);
     outline: none;
+    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
 }
 
 .osd-btn:active {
@@ -360,8 +370,11 @@
 }
 
 .osd-btn-play:focus,
+.osd-btn-play.focused,
 .osd-btn-play:hover {
     background: var(--accent-primary-hover, #7B6CF7);
+    border: 2px solid #fff;
+    box-shadow: 0 0 20px rgba(107, 92, 231, 0.5);
 }
 
 .osd-btn-play svg {
@@ -424,6 +437,7 @@
     }
 }
 
-.player-page .progress-bar:focus {
+.player-page .progress-bar:focus,
+.player-page .progress-bar.focused {
     border-radius: 5px;
 }

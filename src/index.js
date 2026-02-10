@@ -19,6 +19,7 @@ const log = logger.create('Bootstrap');
 
 // Import styles
 import './styles/base.css';
+import './styles/fonts.css';
 import './styles/layout.css';
 import './styles/components.css';
 import './styles/library.css';

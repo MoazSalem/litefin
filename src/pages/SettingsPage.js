@@ -14,6 +14,7 @@ import { layoutManager } from '../ui/LayoutManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import FontLoader from '../utils/FontLoader.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 import { logger } from '../utils/Logger.js';
 
@@ -428,6 +429,48 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Font Family</span>
+                        <span class="setting-description">Subtitle font style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-font-select',
+                            [
+                                { value: '', label: 'Default - Tizen Sans' },
+                                { value: 'poppins', label: 'Modern - Poppins' },
+                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
+                                { value: 'print', label: 'Print - Merriweather' },
+                                { value: 'console', label: 'Console - Inconsolata' },
+                                { value: 'cursive', label: 'Cursive - Dancing Script' },
+                                { value: 'casual', label: 'Casual - Patrick Hand' },
+                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                            ],
+                            PlayerSettings.get('subtitleFont')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Text Shadow</span>
+                        <span class="setting-description">Subtitle shadow style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-shadow-select',
+                            [
+                                { value: 'none', label: 'None' },
+                                { value: 'dropshadow', label: 'Drop Shadow' },
+                                { value: 'raised', label: 'Raised' },
+                                { value: 'depressed', label: 'Depressed' },
+                                { value: 'uniform', label: 'Uniform' }
+                            ],
+                            PlayerSettings.get('subtitleDropShadow')
+                        )}
+                    </div>
                 </div>
 
                 <div class="setting-item">
@@ -1018,6 +1061,7 @@ class SettingsPage extends Page {
             'skip-back-select': { key: 'skipBackLength', type: 'player' },
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+            'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
@@ -1090,6 +1134,17 @@ class SettingsPage extends Page {
                                     // REFRESH FOCUS: The focusable elements changed
                                     focusManager.invalidateCache('settings-content');
                                 }
+                            }
+
+                            // FONT LOADING: Trigger download if needed
+                            if (settingConfig.key === 'subtitleFont' && newValue) {
+                                FontLoader.loadFont(newValue).then((loaded) => {
+                                    if (loaded) {
+                                        console.log(`[SettingsPage] Font loaded: ${newValue}`);
+                                    } else {
+                                        console.warn(`[SettingsPage] Failed to load font: ${newValue}`);
+                                    }
+                                });
                             }
                         } else if (settingConfig.type === 'debug') {
                             localStorage.setItem(settingConfig.key, newValue);

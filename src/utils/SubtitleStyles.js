@@ -147,35 +147,34 @@ export function getTextStyles() {
     // Options: default, typewriter, print, console, cursive, casual, smallcaps
     // ========================================================================
     const font = PlayerSettings.get('subtitleFont') || '';
+
     switch (font) {
         case 'typewriter':
-            styles.push({ name: 'fontFamily', value: '"Courier New", monospace' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-typewriter' });
             break;
         case 'print':
-            styles.push({ name: 'fontFamily', value: 'Georgia, "Times New Roman", serif' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-print' });
             break;
         case 'console':
-            styles.push({ name: 'fontFamily', value: 'Consolas, "Lucida Console", Monaco, monospace' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-console' });
             break;
         case 'cursive':
-            styles.push({ name: 'fontFamily', value: '"Lucida Handwriting", "Brush Script MT", cursive' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-cursive' });
             break;
         case 'casual':
-            styles.push({ name: 'fontFamily', value: '"Comic Sans MS", "Segoe Print", casual, sans-serif' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-casual' });
             break;
         case 'smallcaps':
-            styles.push({ name: 'fontFamily', value: '"Copperplate", sans-serif' });
-            styles.push({ name: 'fontVariant', value: 'small-caps' });
+            styles.push({ className: 'font-smallcaps' });
+            break;
+        case 'poppins':
+            styles.push({ className: 'font-poppins' });
+            break;
+        case 'noto-arabic':
+            styles.push({ className: 'font-noto-arabic' });
             break;
         default:
-            // Default system fonts - good for readability on TVs
-            styles.push({ name: 'fontFamily', value: 'Roboto, "Segoe UI", Helvetica, Arial, sans-serif' });
-            styles.push({ name: 'fontVariant', value: 'none' });
+            styles.push({ className: 'font-default' });
             break;
     }
 
@@ -247,6 +246,19 @@ export function getWindowStyles() {
     return styles;
 }
 
+// List of all possible font classes for cleanup
+const fontClasses = [
+    'font-typewriter',
+    'font-print',
+    'font-console',
+    'font-cursive',
+    'font-casual',
+    'font-smallcaps',
+    'font-poppins',
+    'font-noto-arabic',
+    'font-default'
+];
+
 /**
  * Apply styles to an element
  * @param {HTMLElement} element
@@ -254,15 +266,33 @@ export function getWindowStyles() {
  */
 export function applyStyles(element, styles) {
     if (!element) return;
+
+    // First, clear any existing font classes
+    element.classList.remove(...fontClasses);
+
     for (const style of styles) {
-        if (style.value !== undefined) {
+        if (style.className) {
+            element.classList.add(style.className);
+        } else if (style.value !== undefined) {
             element.style[style.name] = style.value;
         }
     }
 }
 
+/**
+ * Get the current subtitle font ID from settings
+ * Used by PlayerPage to trigger font preloading
+ * @returns {string|null} The font ID (e.g. 'typewriter', 'cursive') or null
+ */
+function getCurrentFontId() {
+    const font = PlayerSettings.get('subtitleFont') || '';
+    // Return null for 'default' or empty (no Google Font needed)
+    return font && font !== 'default' ? font : null;
+}
+
 export default {
     getTextStyles,
     getWindowStyles,
-    applyStyles
+    applyStyles,
+    getCurrentFontId
 };
