@@ -386,6 +386,30 @@ class SettingsPage extends Page {
 
                 <!-- Subtitle Appearance Section -->
                 <h3 class="setting-section-title">Appearance</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Font Family</span>
+                        <span class="setting-description">Subtitle font style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-font-select',
+                            [
+                                { value: '', label: 'Default - Tizen Sans' },
+                                { value: 'poppins', label: 'Modern - Poppins' },
+                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
+                                { value: 'print', label: 'Print - Merriweather' },
+                                { value: 'console', label: 'Console - Inconsolata' },
+                                { value: 'cursive', label: 'Cursive - Dancing Script' },
+                                { value: 'casual', label: 'Casual - Patrick Hand' },
+                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                            ],
+                            PlayerSettings.get('subtitleFont')
+                        )}
+                    </div>
+                </div>
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -403,6 +427,60 @@ class SettingsPage extends Page {
                                 { value: 'extralarge', label: 'Extra Large' }
                             ],
                             PlayerSettings.get('subtitleSize')
+                        )}
+                    </div>
+                </div>
+
+                  <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Vertical Position</span>
+                        <span class="setting-description">Subtitle vertical position</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-position-select',
+                            [
+                                { value: '-1', label: 'Bottom (Low)' },
+                                { value: '-2', label: 'Bottom (Standard)' },
+                                { value: '-5', label: 'Bottom (High)' },
+                                { value: '0', label: 'Top' },
+                                { value: '2', label: 'Top (Low)' },
+                                { value: 'custom', label: 'Custom (Absolute)' }
+                            ],
+                            String(PlayerSettings.get('subtitleVerticalPosition')) // allow 0
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-custom-pos-container">
+                    <div class="setting-label">
+                        <span class="setting-name">Absolute Position %</span>
+                        <span class="setting-description">Distance from bottom (0-100%)</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-custom-pos',
+                            PlayerSettings.get('subtitleVerticalPositionCustom'),
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Font Weight</span>
+                        <span class="setting-description">Subtitle text thickness</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-weight-select',
+                            [
+                                { value: 'normal', label: 'Normal' },
+                                { value: 'bold', label: 'Bold' }
+                            ],
+                            PlayerSettings.get('subtitleWeight') || 'normal'
                         )}
                     </div>
                 </div>
@@ -429,51 +507,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name">Font Family</span>
-                        <span class="setting-description">Subtitle font style</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'subtitle-font-select',
-                            [
-                                { value: '', label: 'Default - Tizen Sans' },
-                                { value: 'poppins', label: 'Modern - Poppins' },
-                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
-                                { value: 'print', label: 'Print - Merriweather' },
-                                { value: 'console', label: 'Console - Inconsolata' },
-                                { value: 'cursive', label: 'Cursive - Dancing Script' },
-                                { value: 'casual', label: 'Casual - Patrick Hand' },
-                                { value: 'smallcaps', label: 'Small Caps - Variant' }
-                            ],
-                            PlayerSettings.get('subtitleFont')
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name">Text Shadow</span>
-                        <span class="setting-description">Subtitle shadow style</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'subtitle-shadow-select',
-                            [
-                                { value: 'none', label: 'None' },
-                                { value: 'dropshadow', label: 'Drop Shadow' },
-                                { value: 'raised', label: 'Raised' },
-                                { value: 'depressed', label: 'Depressed' },
-                                { value: 'uniform', label: 'Uniform' }
-                            ],
-                            PlayerSettings.get('subtitleDropShadow')
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
+                                <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">Text Opacity</span>
                         <span class="setting-description">Subtitle text transparency</span>
@@ -528,47 +562,80 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                </div>
-
-
-
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Vertical Position</span>
-                        <span class="setting-description">Subtitle vertical position</span>
+                        <span class="setting-name">Text Shadow</span>
+                        <span class="setting-description">Subtitle shadow style</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'subtitle-position-select',
+                            'subtitle-shadow-select',
                             [
-                                { value: '-1', label: 'Bottom (Low)' },
-                                { value: '-2', label: 'Bottom (Standard)' },
-                                { value: '-5', label: 'Bottom (High)' },
-                                { value: '0', label: 'Top' },
-                                { value: '2', label: 'Top (Low)' },
-                                { value: 'custom', label: 'Custom (Absolute)' }
+                                { value: 'none', label: 'None' },
+                                { value: 'dropshadow', label: 'Drop Shadow' },
+                                { value: 'uniform', label: 'Uniform Border' },
+                                { value: 'raised', label: 'Raised' },
+                                { value: 'depressed', label: 'Depressed' }
                             ],
-                            String(PlayerSettings.get('subtitleVerticalPosition')) // allow 0
+                            PlayerSettings.get('subtitleDropShadow')
                         )}
                     </div>
                 </div>
 
-                <div class="setting-item" id="subtitle-custom-pos-container">
+                <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Absolute Position %</span>
-                        <span class="setting-description">Distance from bottom (0-100%)</span>
+                        <span class="setting-name">Shadow Color</span>
+                        <span class="setting-description">Color of the drop shadow</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-shadow-color-select',
+                            [
+                                { value: '#000000', label: 'Black' },
+                                { value: '#ffffff', label: 'White' },
+                                { value: '#ff0000', label: 'Red' },
+                                { value: '#00ff00', label: 'Green' },
+                                { value: '#0000ff', label: 'Blue' },
+                                { value: '#ffff00', label: 'Yellow' },
+                                { value: '#00ffff', label: 'Cyan' },
+                                { value: '#ff00ff', label: 'Magenta' },
+                                { value: '#808080', label: 'Grey' }
+                            ],
+                            PlayerSettings.get('subtitleDropShadowColor') || '#000000'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Shadow Opacity</span>
+                        <span class="setting-description">Opacity of the drop shadow</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
-                            'subtitle-custom-pos',
-                            PlayerSettings.get('subtitleVerticalPositionCustom'),
+                            'subtitle-shadow-opacity',
+                            PlayerSettings.get('subtitleDropShadowOpacity') ?? 50,
                             0,
                             100,
                             5
                         )}
                     </div>
                 </div>
-            </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Shadow Blur</span>
+                        <span class="setting-description">Softness of the shadow</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-shadow-blur',
+                            PlayerSettings.get('subtitleDropShadowBlur') ?? 10,
+                            0,
+                            20,
+                            1
+                        )}
+                    </div>
                 </div>
             </div>
         `;
@@ -885,6 +952,8 @@ class SettingsPage extends Page {
         const sliderMap = {
             'subtitle-text-opacity': 'subtitleTextOpacity',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
+            'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
+            'subtitle-shadow-blur': 'subtitleDropShadowBlur',
             'subtitle-custom-pos': 'subtitleVerticalPositionCustom'
         };
 
@@ -1061,9 +1130,11 @@ class SettingsPage extends Page {
             'skip-back-select': { key: 'skipBackLength', type: 'player' },
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+            'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
+            'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },

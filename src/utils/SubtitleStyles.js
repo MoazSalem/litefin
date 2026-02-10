@@ -78,48 +78,55 @@ export function getTextStyles() {
     // Options: dropshadow, raised, depressed, uniform, none
     // ========================================================================
     // ========================================================================
-    // Text Opacity (Get this early for shadows)
+    // Text Opacity
     // ========================================================================
     const textOpacity = PlayerSettings.get('subtitleTextOpacity') ?? 100;
 
     // ========================================================================
     // Text Shadow / Drop Shadow
-    // Options: dropshadow, raised, depressed, uniform, none
+    // Options: dropshadow, heavy, raised, depressed, uniform, none
     // ========================================================================
     const shadow = PlayerSettings.get('subtitleDropShadow') || 'dropshadow';
 
-    // Helper to generate shadow color with opacity
-    const shadowBlack = _hexToRgba('#000000', textOpacity);
-    const shadowWhite = _hexToRgba('#ffffff', textOpacity);
+    // Custom Shadow Settings
+    const shadowOpacity = PlayerSettings.get('subtitleDropShadowOpacity') ?? 50;
+    const shadowColorHex = PlayerSettings.get('subtitleDropShadowColor') || '#000000';
+    const shadowBlur = PlayerSettings.get('subtitleDropShadowBlur') ?? 10;
+    const blurPx = `${shadowBlur}px`;
+
+    // Generate valid RGBA for shadow and highlight (for 3D effects)
+    const shadowColor = _hexToRgba(shadowColorHex, shadowOpacity);
+    const highlightColor = _hexToRgba('#ffffff', shadowOpacity); // Keep highlight white but respect opacity
 
     switch (shadow) {
         case 'heavy':
-            styles.push({ name: 'textShadow', value: `${shadowBlack} 0px 0px 4px` });
+        case 'dropshadow':
+            // "Heavy" and "Drop Shadow" are effectively custom shadows now
+            styles.push({ name: 'textShadow', value: `${shadowColor} 0px 0px ${blurPx}` });
             break;
         case 'raised':
             styles.push({
                 name: 'textShadow',
-                value: `-1px -1px ${shadowWhite}, 0px -1px ${shadowWhite}, -1px 0px ${shadowWhite}, 1px 1px ${shadowBlack}, 0px 1px ${shadowBlack}, 1px 0px ${shadowBlack}`
+                value: `-1px -1px ${blurPx} ${highlightColor}, 0px -1px ${blurPx} ${highlightColor}, -1px 0px ${blurPx} ${highlightColor}, 1px 1px ${blurPx} ${shadowColor}, 0px 1px ${blurPx} ${shadowColor}, 1px 0px ${blurPx} ${shadowColor}`
             });
             break;
         case 'depressed':
             styles.push({
                 name: 'textShadow',
-                value: `1px 1px ${shadowWhite}, 0px 1px ${shadowWhite}, 1px 0px ${shadowWhite}, -1px -1px ${shadowBlack}, 0px -1px ${shadowBlack}, -1px 0px ${shadowBlack}`
+                value: `1px 1px ${blurPx} ${highlightColor}, 0px 1px ${blurPx} ${highlightColor}, 1px 0px ${blurPx} ${highlightColor}, -1px -1px ${blurPx} ${shadowColor}, 0px -1px ${blurPx} ${shadowColor}, -1px 0px ${blurPx} ${shadowColor}`
             });
             break;
         case 'uniform':
             styles.push({
                 name: 'textShadow',
-                value: `${shadowBlack} 0px 1px, ${shadowBlack} 0px -1px, ${shadowBlack} 1px 0px, ${shadowBlack} -1px 0px, ${shadowBlack} 1px 1px, ${shadowBlack} -1px 1px, ${shadowBlack} 1px -1px, ${shadowBlack} -1px -1px`
+                value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
             });
             break;
         case 'none':
             styles.push({ name: 'textShadow', value: 'none' });
             break;
-        case 'dropshadow':
         default:
-            styles.push({ name: 'textShadow', value: `${shadowBlack} 0px 0px 2px` });
+            styles.push({ name: 'textShadow', value: `${shadowColor} 0px 0px ${blurPx}` });
             break;
     }
 

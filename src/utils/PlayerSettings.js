@@ -67,6 +67,15 @@ const DEFAULTS = {
     // Subtitle drop shadow ('none', 'dropshadow', 'raised', 'depressed', 'uniform')
     subtitleDropShadow: 'dropshadow',
 
+    // Drop shadow color
+    subtitleDropShadowColor: '#000000',
+
+    // Drop shadow opacity (0-100)
+    subtitleDropShadowOpacity: 50,
+
+    // Drop shadow blur radius (px)
+    subtitleDropShadowBlur: 10,
+
     // Custom subtitle font (empty = system default)
     subtitleFont: '',
 
