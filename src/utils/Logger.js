@@ -25,12 +25,16 @@ class Logger {
     constructor() {
         this._level = LogLevel.INFO; // Default level
         this._enabled = false;
+        this._isLogging = false; // Flag to prevent infinite loops/duplicates
 
         // Modules that are specifically filtered OUT
         this._disabledModules = new Set();
 
         // Cache enabled state from localStorage
         this._loadSettings();
+
+        // Start capturing console immediately
+        this._captureConsole();
     }
 
     _loadSettings() {
@@ -70,6 +74,40 @@ class Logger {
     }
 
     /**
+     * Intercept native console methods to capture logs from 3rd party libs (like the player)
+     * @private
+     */
+    _captureConsole() {
+        const methods = ['log', 'info', 'warn', 'error', 'debug'];
+        const originalConsole = { ...console };
+
+        methods.forEach((method) => {
+            console[method] = (...args) => {
+                // 1. Call original method (so DevTools still see it)
+                originalConsole[method].apply(console, args);
+
+                // 2. If this log came from us (Logger._log), ignore it to prevent duplicates
+                // The _isLogging flag is set during our own _log calls
+                if (this._isLogging) return;
+
+                // 3. Emit to EventBus for DebugOverlay
+                // Map console methods to LogLevels
+                let level = LogLevel.INFO;
+                if (method === 'error') level = LogLevel.ERROR;
+                else if (method === 'warn') level = LogLevel.WARN;
+                else if (method === 'debug') level = LogLevel.DEBUG;
+
+                eventBus.emit('logger:log', {
+                    level,
+                    module: 'System', // Generic module for external logs
+                    timestamp: Date.now(),
+                    args
+                });
+            };
+        });
+    }
+
+    /**
      * Core logging function
      * @private
      */
@@ -95,21 +133,26 @@ class Logger {
         // 5. Output to native console (if enabled)
         // We format it nicely for the browser console
         if (this._enabled) {
-            const prefix = `[${moduleName}]`;
-            const css = this._getLevelColor(level);
+            this._isLogging = true; // Set flag to warn interceptor to ignore this
+            try {
+                const prefix = `[${moduleName}]`;
+                const css = this._getLevelColor(level);
 
-            switch (level) {
-                case LogLevel.ERROR:
-                    console.error(`%c${prefix}`, css, ...args);
-                    break;
-                case LogLevel.WARN:
-                    console.warn(`%c${prefix}`, css, ...args);
-                    break;
-                case LogLevel.INFO:
-                    console.info(`%c${prefix}`, css, ...args);
-                    break;
-                default:
-                    console.log(`%c${prefix}`, css, ...args);
+                switch (level) {
+                    case LogLevel.ERROR:
+                        console.error(`%c${prefix}`, css, ...args);
+                        break;
+                    case LogLevel.WARN:
+                        console.warn(`%c${prefix}`, css, ...args);
+                        break;
+                    case LogLevel.INFO:
+                        console.info(`%c${prefix}`, css, ...args);
+                        break;
+                    default:
+                        console.log(`%c${prefix}`, css, ...args);
+                }
+            } finally {
+                this._isLogging = false; // Reset flag
             }
         }
     }
