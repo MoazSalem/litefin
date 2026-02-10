@@ -537,7 +537,13 @@ class PlayerPage extends Page {
     }
 
     _onTimeUpdate(positionTicks) {
-        // Report progress periodically (every 10 seconds approx)
+        // 1. Check subtitle sync
+        // Using passed positionTicks is most efficient
+        if (this._subtitleEndTime && positionTicks && positionTicks >= this._subtitleEndTime) {
+            this._clearSubtitle();
+        }
+
+        // 2. Report progress periodically (every 10 seconds approx)
         const now = Date.now();
         if (!this._lastReportTime || now - this._lastReportTime > 10000) {
             this._reportPlaybackProgress();
@@ -573,11 +579,7 @@ class PlayerPage extends Page {
         const overlay = document.getElementById('subtitle-overlay');
         if (!overlay) return;
 
-        // Clear existing timeout
-        if (this._subtitleTimeout) {
-            clearTimeout(this._subtitleTimeout);
-            this._subtitleTimeout = null;
-        }
+        // timeout logic replaced by _onTimeUpdate check
 
         if (data && data.text) {
             // Render subtitle
@@ -596,18 +598,27 @@ class PlayerPage extends Page {
             const windowStyles = SubtitleStyles.getWindowStyles();
             SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Clear after duration
+            // Set end time for sync clearing (Duration is in ms, Ticks are 10000 per ms)
             if (data.duration > 0) {
-                this._subtitleTimeout = setTimeout(() => {
-                    overlay.innerHTML = '';
-                    overlay.classList.add('hidden');
-                }, data.duration);
+                // Get current position safely
+                const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                this._subtitleEndTime = currentTicks + data.duration * 10000;
+            } else {
+                this._subtitleEndTime = null;
             }
         } else {
             // Clear subtitle
+            this._clearSubtitle();
+        }
+    }
+
+    _clearSubtitle() {
+        const overlay = document.getElementById('subtitle-overlay');
+        if (overlay) {
             overlay.innerHTML = '';
             overlay.classList.add('hidden');
         }
+        this._subtitleEndTime = null;
     }
 
     _onMediaStreamsChange(data) {
