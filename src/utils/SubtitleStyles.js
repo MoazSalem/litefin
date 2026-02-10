@@ -137,21 +137,23 @@ export function getTextStyles() {
             break;
     }
 
-    // ========================================================================
     // Vertical Position (affects margin)
     // Negative = from bottom, Positive = from top
     // ========================================================================
-    const pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10) || -3;
-    const lineHeight = 1.35;
+    let pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10);
+    if (isNaN(pos)) pos = -2; // Default to bottom standard
+    const step = 5; // vh logic
 
     if (pos < 0) {
-        const margin = Math.abs(pos + 1) * lineHeight;
-        styles.push({ name: 'marginBottom', value: `${margin}em` });
+        // Bottom: pos is -1, -2, -5...
+        const margin = Math.abs(pos + 1) * step;
+        styles.push({ name: 'marginBottom', value: `${margin}vh` });
         styles.push({ name: 'marginTop', value: '' });
     } else {
-        const margin = pos * lineHeight;
+        // Top: pos is 0, 2...
+        const margin = pos * step;
         styles.push({ name: 'marginBottom', value: '' });
-        styles.push({ name: 'marginTop', value: `${margin}em` });
+        styles.push({ name: 'marginTop', value: `${margin}vh` });
     }
 
     return styles;
@@ -167,15 +169,16 @@ export function getTextStyles() {
  */
 export function getWindowStyles() {
     const styles = [];
-    const pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10) || -3;
+    let pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10);
+    if (isNaN(pos)) pos = -2; // Default to bottom standard
 
     if (pos < 0) {
         // Position at bottom
         styles.push({ name: 'top', value: '' });
-        styles.push({ name: 'bottom', value: '8vh' }); // Dynamic base constraint
+        styles.push({ name: 'bottom', value: '2vh' }); // Lower base constraint
     } else {
         // Position at top
-        styles.push({ name: 'top', value: '8vh' }); // Dynamic base constraint
+        styles.push({ name: 'top', value: '2vh' }); // Lower base constraint
         styles.push({ name: 'bottom', value: '' });
     }
 

@@ -77,7 +77,7 @@ const DEFAULTS = {
     subtitleTextBackground: 'transparent',
 
     // Vertical position offset (-5 to 5, negative = higher)
-    subtitleVerticalPosition: -3,
+    subtitleVerticalPosition: -2,
 
     // Burn-in subtitles mode ('', 'allcomplex', 'all')
     subtitleBurnIn: '',

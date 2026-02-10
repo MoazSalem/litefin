@@ -408,6 +408,28 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name">Text Color</span>
+                        <span class="setting-description">Subtitle text color</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-color-select',
+                            [
+                                { value: '#ffffff', label: 'White' },
+                                { value: '#d3d3d3', label: 'Light Grey' },
+                                { value: '#a9a9a9', label: 'Dark Grey' },
+                                { value: '#000000', label: 'Black' },
+                                { value: '#ffff00', label: 'Yellow' },
+                                { value: '#00ffff', label: 'Cyan' },
+                                { value: '#0000ff', label: 'Blue' }
+                            ],
+                            PlayerSettings.get('subtitleTextColor') || '#ffffff'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name">Text Style</span>
                         <span class="setting-description">Shadow and outline style</span>
                     </div>
@@ -441,6 +463,26 @@ class SettingsPage extends Page {
                                 { value: '#000000', label: 'Solid Black' }
                             ],
                             PlayerSettings.get('subtitleTextBackground')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Vertical Position</span>
+                        <span class="setting-description">Subtitle vertical position</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-position-select',
+                            [
+                                { value: '-1', label: 'Bottom (Low)' },
+                                { value: '-2', label: 'Bottom (Standard)' },
+                                { value: '-5', label: 'Bottom (High)' },
+                                { value: '0', label: 'Top' },
+                                { value: '2', label: 'Top (Low)' }
+                            ],
+                            String(PlayerSettings.get('subtitleVerticalPosition')) // allow 0
                         )}
                     </div>
                 </div>
@@ -858,8 +900,10 @@ class SettingsPage extends Page {
             'skip-back-select': { key: 'skipBackLength', type: 'player' },
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
+            'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
+            'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' }
