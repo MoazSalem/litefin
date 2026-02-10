@@ -19,6 +19,7 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import PlayerOSD from '../player/jellyfin-player-osd.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { logger } from '../utils/Logger.js';
@@ -346,19 +347,8 @@ class PlayerPage extends Page {
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
 
-        // Expose player instance globally for OSD
-        window.playerInstance = this._player;
-
-        // Expose functions for OSD to call proper reporting
-        // These bridge the gap between the standalone OSD and PlayerPage's server reporting
-        window.playerExit = () => this._stopAndExit();
-        window.reportPauseState = (isPaused) => {
-            if (isPaused) {
-                this._reportPlaybackProgress('pause');
-            } else {
-                this._reportPlaybackProgress('unpause');
-            }
-        };
+        // NOTE: No more window.playerInstance / window.playerExit / window.reportPauseState
+        // globals. The OSD Component receives these as constructor options instead.
     }
 
     /**
@@ -413,7 +403,7 @@ class PlayerPage extends Page {
         // but for now we'll rely on the player's internal logic or add reporting here if needed.
 
         // Initialize OSD
-        await this._initOSD();
+        this._initOSD();
     }
 
     /**
@@ -445,38 +435,44 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Initialize the OSD controller
+     * Initialize the OSD controller.
+     * Creates a PlayerOSD Component instance and mounts it into the overlay container.
+     * The OSD subscribes to EventBus key events and manages its own focus.
      */
-    async _initOSD() {
-        // Dynamically import the OSD script if it hasn't been loaded yet
-        // This keeps the OSD code out of the main bundle until needed
-        if (typeof window.PlayerOSD === 'undefined') {
-            try {
-                await import('../player/jellyfin-player-osd.js');
-                log.info('PlayerOSD dynamically loaded');
-            } catch (err) {
-                log.error('Failed to load PlayerOSD script:', err);
-                return;
-            }
+    _initOSD() {
+        const osdContainer = this.$('#osd-overlay');
+        if (!osdContainer) {
+            log.error('OSD container #osd-overlay not found');
+            return;
         }
 
-        if (typeof window.PlayerOSD !== 'undefined') {
-            this._osd = window.PlayerOSD;
-            this._osd.init({
-                container: this.$('#osd-overlay'),
-                player: this._player,
-                item: this._item,
-                api: api
-            });
+        // Create OSD component with all dependencies injected (no globals!)
+        this._osd = new PlayerOSD({
+            container: osdContainer,
+            player: this._player,
+            item: this._item,
+            api: api,
 
-            // Pass title manually since OSD looks for it in URL
-            const titleEl = document.getElementById('osdTitle');
-            if (titleEl && this._item.Name) {
-                titleEl.textContent = this._item.Name;
+            // Callback: stop playback and navigate back
+            onExit: () => this._stopAndExit(),
+
+            // Callback: report pause/unpause state to Jellyfin server
+            onReportPause: (isPaused) => {
+                if (isPaused) {
+                    this._reportPlaybackProgress('pause');
+                } else {
+                    this._reportPlaybackProgress('unpause');
+                }
             }
-        } else {
-            log.warn('PlayerOSD global object NOT found after import attempt');
-        }
+        });
+
+        // Mount OSD — this triggers render + event binding
+        this._osd.mount(osdContainer);
+
+        // Register as child component for automatic cleanup on page destroy
+        this.addChild(this._osd);
+
+        log.info('OSD initialized');
     }
 
     /**
@@ -900,15 +896,14 @@ class PlayerPage extends Page {
     onBack() {
         log.info('onBack() called');
 
-        // If OSD is showing a menu, close it first
-        if (this._osd?.isMenuOpen?.()) {
-            log.info('OSD menu is open, closing menu');
-            this._osd.closeMenu();
+        // Delegate to OSD — it handles menu close → OSD hide → exit chain
+        if (this._osd?.handleBack?.()) {
+            log.info('OSD handled back event');
             return true;
         }
 
-        log.info('No menu open, calling _stopAndExit()');
-        // Stop playback and go back
+        log.info('OSD did not handle back, calling _stopAndExit()');
+        // OSD is hidden and no menu is open — stop playback and go back
         this._stopAndExit();
         return true;
     }
@@ -983,14 +978,11 @@ class PlayerPage extends Page {
         // Clean up focus sections
         focusManager.unregister('player-error');
 
-        // Clean up OSD
+        // Clean up OSD (also handled by Component._children cleanup, but explicit is better)
         if (this._osd?.destroy) {
             log.info('Destroying OSD');
             this._osd.destroy();
         }
-
-        // Remove global reference
-        window.playerInstance = null;
 
         // Disable Tizen AVPlayer transparency mode
         document.body.classList.remove('player-active');

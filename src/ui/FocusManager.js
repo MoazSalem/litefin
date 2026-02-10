@@ -56,6 +56,13 @@ class FocusManager {
         this._verticalScrollAnimationId = null;
         this._horizontalScrollAnimationId = null;
 
+        // Track animation IDs for smooth scroll
+        this._scrollAnimations = {};
+
+        // Suspended flag — when true, all key processing is skipped.
+        // Used by components that manage their own focus (e.g. PlayerOSD)
+        this._suspended = false;
+
         // Bound methods
         // this._onKeyDown = this._onKeyDown.bind(this);
 
@@ -168,23 +175,28 @@ class FocusManager {
         // Listen for key events from TizenAdapter
         // PREVENT DEFAULT on all handled keys to avoid browser/native double-handling
         eventBus.on('key:up', (e) => {
+            if (this._suspended) return;
             e?.preventDefault();
             this._handleKey('up');
         });
         eventBus.on('key:down', (e) => {
+            if (this._suspended) return;
             e?.preventDefault();
             this._handleKey('down');
         });
         eventBus.on('key:left', (e) => {
+            if (this._suspended) return;
             e?.preventDefault();
             this._handleKey('left');
         });
         eventBus.on('key:right', (e) => {
+            if (this._suspended) return;
             e?.preventDefault();
             this._handleKey('right');
         });
 
         eventBus.on('key:enter', (e) => {
+            if (this._suspended) return;
             e?.preventDefault(); // Prevent native button click (we trigger it manually)
             this._activate();
         });
@@ -1009,11 +1021,34 @@ class FocusManager {
     }
 
     _activate() {
+        if (this._suspended) return;
         if (this._focusedElement) {
             // Dispatch click
             this._focusedElement.click();
             eventBus.emit('focus:activated', this._focusedElement);
         }
+    }
+
+    // ========================================================================
+    // Suspend / Resume
+    // ========================================================================
+
+    /**
+     * Suspend all key event processing.
+     * Used by components that manage their own focus (e.g. PlayerOSD)
+     * to prevent FocusManager from double-handling key events.
+     */
+    suspend() {
+        this._suspended = true;
+        log.info('Key processing suspended');
+    }
+
+    /**
+     * Resume key event processing after a prior suspend() call.
+     */
+    resume() {
+        this._suspended = false;
+        log.info('Key processing resumed');
     }
 
     pushTrap(container, options = {}) {
