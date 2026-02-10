@@ -25,23 +25,23 @@ export function getTextStyles() {
     const size = PlayerSettings.get('subtitleSize') || 'medium';
     switch (size) {
         case 'extralarge':
-            styles.push({ name: 'fontSize', value: '48px' });
+            styles.push({ name: 'fontSize', value: '8vh' });
             break;
         case 'larger':
-            styles.push({ name: 'fontSize', value: '42px' });
+            styles.push({ name: 'fontSize', value: '7vh' });
             break;
         case 'large':
-            styles.push({ name: 'fontSize', value: '36px' });
+            styles.push({ name: 'fontSize', value: '6vh' });
             break;
         case 'small':
-            styles.push({ name: 'fontSize', value: '24px' });
+            styles.push({ name: 'fontSize', value: '4vh' });
             break;
         case 'smaller':
-            styles.push({ name: 'fontSize', value: '18px' });
+            styles.push({ name: 'fontSize', value: '3vh' });
             break;
         case 'medium':
         default:
-            styles.push({ name: 'fontSize', value: '32px' });
+            styles.push({ name: 'fontSize', value: '5vh' });
             break;
     }
 
@@ -172,10 +172,10 @@ export function getWindowStyles() {
     if (pos < 0) {
         // Position at bottom
         styles.push({ name: 'top', value: '' });
-        styles.push({ name: 'bottom', value: '10%' }); // Base constraint
+        styles.push({ name: 'bottom', value: '8vh' }); // Dynamic base constraint
     } else {
         // Position at top
-        styles.push({ name: 'top', value: '10%' }); // Base constraint
+        styles.push({ name: 'top', value: '8vh' }); // Dynamic base constraint
         styles.push({ name: 'bottom', value: '' });
     }
 

@@ -396,8 +396,6 @@
 .subtitle-line {
     display: inline-block;
     background: rgba(0, 0, 0, 0.75);
-    color: #fff;
-    font-size: 32px;
     font-weight: 500;
     padding: 8px 16px;
     border-radius: 4px;
@@ -412,7 +410,6 @@
 }
 
 .subtitle-overlay.secondary .subtitle-line {
-    font-size: 28px;
     opacity: 0.9;
 }
 
