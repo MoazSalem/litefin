@@ -502,11 +502,30 @@ class SettingsPage extends Page {
                                 { value: '-2', label: 'Bottom (Standard)' },
                                 { value: '-5', label: 'Bottom (High)' },
                                 { value: '0', label: 'Top' },
-                                { value: '2', label: 'Top (Low)' }
+                                { value: '2', label: 'Top (Low)' },
+                                { value: 'custom', label: 'Custom (Absolute)' }
                             ],
                             String(PlayerSettings.get('subtitleVerticalPosition')) // allow 0
                         )}
                     </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-custom-pos-container">
+                    <div class="setting-label">
+                        <span class="setting-name">Absolute Position %</span>
+                        <span class="setting-description">Distance from bottom (0-100%)</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-custom-pos',
+                            PlayerSettings.get('subtitleVerticalPositionCustom'),
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+            </div>
                 </div>
             </div>
         `;
@@ -822,7 +841,8 @@ class SettingsPage extends Page {
     _bindSliderEvents() {
         const sliderMap = {
             'subtitle-text-opacity': 'subtitleTextOpacity',
-            'subtitle-bg-opacity': 'subtitleBackgroundOpacity'
+            'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
+            'subtitle-custom-pos': 'subtitleVerticalPositionCustom'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -1057,6 +1077,20 @@ class SettingsPage extends Page {
                                     focusManager.invalidateCache('settings-content');
                                 }
                             }
+
+                            // VISIBILITY TOGGLE: Show custom position slider if Position is Custom
+                            if (id === 'subtitle-position-select') {
+                                const customPosContainer = document.getElementById('subtitle-custom-pos-container');
+                                if (customPosContainer) {
+                                    if (newValue === 'custom') {
+                                        customPosContainer.style.display = ''; // Restore to CSS (flex)
+                                    } else {
+                                        customPosContainer.style.display = 'none';
+                                    }
+                                    // REFRESH FOCUS: The focusable elements changed
+                                    focusManager.invalidateCache('settings-content');
+                                }
+                            }
                         } else if (settingConfig.type === 'debug') {
                             localStorage.setItem(settingConfig.key, newValue);
                             if (settingConfig.key === 'debug_width') {
@@ -1082,6 +1116,17 @@ class SettingsPage extends Page {
                 bgContainer.style.display = 'none';
             } else {
                 bgContainer.style.display = ''; // Restore to CSS (flex)
+            }
+        }
+
+        // Initial Visibility Check for Custom Position
+        const customPosContainer = document.getElementById('subtitle-custom-pos-container');
+        if (customPosContainer) {
+            const currentPos = PlayerSettings.get('subtitleVerticalPosition');
+            if (currentPos === 'custom') {
+                customPosContainer.style.display = ''; // Restore to CSS (flex)
+            } else {
+                customPosContainer.style.display = 'none';
             }
         }
 

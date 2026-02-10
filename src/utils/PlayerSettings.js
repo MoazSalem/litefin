@@ -82,8 +82,11 @@ const DEFAULTS = {
     // Subtitle background opacity (0-100)
     subtitleBackgroundOpacity: 100,
 
-    // Vertical position offset (-5 to 5, negative = higher)
-    subtitleVerticalPosition: -2,
+    // Vertical Position (-1 = top, -2 = bottom standard, etc. See SubtitleStyles.js)
+    subtitleVerticalPosition: '-2',
+
+    // Custom Vertical Position (0-100% from bottom, used when subtitleVerticalPosition is 'custom')
+    subtitleVerticalPositionCustom: 10,
 
     // Burn-in subtitles mode ('', 'allcomplex', 'all')
     subtitleBurnIn: '',

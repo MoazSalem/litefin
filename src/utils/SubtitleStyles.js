@@ -182,20 +182,32 @@ export function getTextStyles() {
     // Vertical Position (affects margin)
     // Negative = from bottom, Positive = from top
     // ========================================================================
-    let pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10);
-    if (isNaN(pos)) pos = -2; // Default to bottom standard
-    const step = 5; // vh logic
+    // Vertical Position (affects margin)
+    // Negative = from bottom, Positive = from top
+    // ========================================================================
+    const posSetting = PlayerSettings.get('subtitleVerticalPosition');
 
-    if (pos < 0) {
-        // Bottom: pos is -1, -2, -5...
-        const margin = Math.abs(pos + 1) * step;
-        styles.push({ name: 'marginBottom', value: `${margin}vh` });
+    if (posSetting === 'custom') {
+        // Custom positioning is handled by getWindowStyles (absolute positioning)
+        // so we remove any text margins
+        styles.push({ name: 'marginBottom', value: '' });
         styles.push({ name: 'marginTop', value: '' });
     } else {
-        // Top: pos is 0, 2...
-        const margin = pos * step;
-        styles.push({ name: 'marginBottom', value: '' });
-        styles.push({ name: 'marginTop', value: `${margin}vh` });
+        let pos = parseInt(posSetting, 10);
+        if (isNaN(pos)) pos = -2; // Default to bottom standard
+        const step = 5; // vh logic
+
+        if (pos < 0) {
+            // Bottom: pos is -1, -2, -5...
+            const margin = Math.abs(pos + 1) * step;
+            styles.push({ name: 'marginBottom', value: `${margin}vh` });
+            styles.push({ name: 'marginTop', value: '' });
+        } else {
+            // Top: pos is 0, 2...
+            const margin = pos * step;
+            styles.push({ name: 'marginBottom', value: '' });
+            styles.push({ name: 'marginTop', value: `${margin}vh` });
+        }
     }
 
     return styles;
@@ -211,17 +223,25 @@ export function getTextStyles() {
  */
 export function getWindowStyles() {
     const styles = [];
-    let pos = parseInt(PlayerSettings.get('subtitleVerticalPosition'), 10);
-    if (isNaN(pos)) pos = -2; // Default to bottom standard
+    const posSetting = PlayerSettings.get('subtitleVerticalPosition');
 
-    if (pos < 0) {
-        // Position at bottom
+    if (posSetting === 'custom') {
+        const customPos = PlayerSettings.get('subtitleVerticalPositionCustom') ?? 10;
         styles.push({ name: 'top', value: '' });
-        styles.push({ name: 'bottom', value: '2vh' }); // Lower base constraint
+        styles.push({ name: 'bottom', value: `${customPos}%` });
     } else {
-        // Position at top
-        styles.push({ name: 'top', value: '2vh' }); // Lower base constraint
-        styles.push({ name: 'bottom', value: '' });
+        let pos = parseInt(posSetting, 10);
+        if (isNaN(pos)) pos = -2; // Default to bottom standard
+
+        if (pos < 0) {
+            // Position at bottom
+            styles.push({ name: 'top', value: '' });
+            styles.push({ name: 'bottom', value: '2vh' }); // Lower base constraint
+        } else {
+            // Position at top
+            styles.push({ name: 'top', value: '2vh' }); // Lower base constraint
+            styles.push({ name: 'bottom', value: '' });
+        }
     }
 
     return styles;

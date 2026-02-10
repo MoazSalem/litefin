@@ -581,7 +581,7 @@ class PlayerPage extends Page {
 
         // timeout logic replaced by _onTimeUpdate check
 
-        if (data && data.text) {
+        if (data && data.text && data.text.trim().length > 0) {
             // Render subtitle
             overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
             overlay.classList.remove('hidden');
