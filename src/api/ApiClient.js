@@ -153,9 +153,12 @@ export class ApiClient {
         // Build headers
         const headers = {
             'X-Emby-Authorization': this.getAuthHeader(),
-            'Content-Type': 'application/json',
             ...options.headers
         };
+
+        if (!options.body || !(options.body instanceof FormData)) {
+            headers['Content-Type'] = 'application/json';
+        }
 
         // Build fetch options
         const fetchOptions = {
@@ -165,8 +168,16 @@ export class ApiClient {
         };
 
         // Add body for POST/PUT requests
-        if (options.body && typeof options.body === 'object') {
-            fetchOptions.body = JSON.stringify(options.body);
+        if (options.body) {
+            if (options.body instanceof FormData) {
+                fetchOptions.body = options.body;
+                // Let browser set Content-Type for FormData
+                delete headers['Content-Type'];
+            } else if (typeof options.body === 'object') {
+                fetchOptions.body = JSON.stringify(options.body);
+            } else {
+                fetchOptions.body = options.body;
+            }
         }
 
         log.debug(`${method} ${endpoint}`);
@@ -605,6 +616,20 @@ export class ApiClient {
      */
     async reportCapabilities(capabilities) {
         return this.post('/Sessions/Capabilities/Full', capabilities);
+    }
+
+    /**
+     * Upload client logs to server
+     * Endpoint: POST /ClientLog/Document
+     */
+    async uploadClientLog(name, data) {
+        // Send raw text body, filename in query string
+        const url = `/ClientLog/Document?name=${encodeURIComponent(name)}`;
+        return this.post(url, data, {
+            headers: {
+                'Content-Type': 'text/plain'
+            }
+        });
     }
 
     async reportPlaybackStart(info) {

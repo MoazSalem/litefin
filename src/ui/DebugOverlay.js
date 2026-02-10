@@ -44,6 +44,10 @@ class DebugOverlay {
         // Batching state
         this._logQueue = [];
         this._rafId = null;
+
+        // Background buffer for log upload (always active)
+        this._uploadBuffer = [];
+        this._maxBufferLines = 1000;
     }
 
     /**
@@ -220,6 +224,10 @@ class DebugOverlay {
      * @private
      */
     _queueLog(logEntry) {
+        // 1. Always add to upload buffer
+        this._addToUploadBuffer(logEntry);
+
+        // 2. Only queue for rendering if overlay is enabled
         if (!this._overlayEnabled || !this._content) return;
 
         this._logQueue.push(logEntry);
@@ -227,6 +235,63 @@ class DebugOverlay {
         if (!this._rafId) {
             this._rafId = requestAnimationFrame(() => this._flushLogs());
         }
+    }
+
+    /**
+     * Add log to background buffer
+     * @private
+     */
+    /**
+     * @private
+     */
+    _addToUploadBuffer(entry) {
+        // Format simple string for text file
+        const date = new Date(entry.timestamp);
+        // Using local ISO-like format: YYYY-MM-DD HH:MM:SS.mmm
+        const pad = (n) => String(n).padStart(2, '0');
+        const pad3 = (n) => String(n).padStart(3, '0');
+        const timeStr =
+            `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ` +
+            `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad3(date.getMilliseconds())}`;
+
+        const levelStr = Object.keys(LogLevel).find((key) => LogLevel[key] === entry.level) || 'UNKNOWN';
+
+        const textArgs = entry.args.map((arg) => {
+            if (typeof arg === 'object') {
+                try {
+                    return JSON.stringify(arg);
+                } catch (e) {
+                    return '[Object]';
+                }
+            }
+            return String(arg);
+        });
+
+        const line = `[${timeStr}] [${levelStr}] [${entry.module}] ${textArgs.join(' ')}`;
+
+        this._uploadBuffer.push(line);
+
+        // Trim buffer if needed
+        if (this._uploadBuffer.length > this._maxBufferLines) {
+            this._uploadBuffer.shift(); // Remove oldest
+        }
+    }
+
+    /**
+     * Get all buffered logs as a single string
+     */
+    getLogDump() {
+        const header = [
+            '================================================================================',
+            `Litefin Tizen Client Log`,
+            `Version: ${__APP_VERSION__}`,
+            `User Agent: ${navigator.userAgent}`,
+            `Time: ${new Date().toLocaleString()}`,
+            '================================================================================',
+            ''
+        ].join('\r\n');
+
+        return header + this._uploadBuffer.join('\r\n');
     }
 
     /**

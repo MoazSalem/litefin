@@ -530,6 +530,18 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name">Upload Logs</span>
+                        <span class="setting-description">Send current session logs to the jellyfin server</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-option" id="btn-upload-logs" tabindex="0" style="width: auto; min-width: 120px;">
+                            Upload
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name">Overlay Width</span>
                         <span class="setting-description">Horizontal size of the debug window</span>
                     </div>
@@ -678,6 +690,44 @@ class SettingsPage extends Page {
 
         // Initialize Custom Dropdowns
         this._bindDropdownEvents();
+
+        // Upload Logs Button
+        const uploadLogsBtn = this.$('#btn-upload-logs');
+        if (uploadLogsBtn) {
+            uploadLogsBtn.addEventListener('click', async () => {
+                uploadLogsBtn.disabled = true;
+                uploadLogsBtn.textContent = 'Uploading...';
+
+                try {
+                    const logs = debugOverlay.getLogDump();
+                    if (!logs) {
+                        throw new Error('No logs to upload');
+                    }
+
+                    const filename = `Litefin_Log_${new Date().toISOString().replace(/[:.]/g, '-')}.txt`;
+
+                    // Attempt upload
+                    await api.uploadClientLog(filename, logs);
+
+                    // Success feedback
+                    uploadLogsBtn.textContent = 'Success!';
+                    setTimeout(() => {
+                        uploadLogsBtn.disabled = false;
+                        uploadLogsBtn.textContent = 'Upload';
+                    }, 2000);
+                } catch (error) {
+                    log.error('Failed to upload logs:', error);
+                    uploadLogsBtn.textContent = 'Failed';
+                    // Re-enable after delay
+                    setTimeout(() => {
+                        uploadLogsBtn.disabled = false;
+                        uploadLogsBtn.textContent = 'Upload';
+                    }, 2000);
+
+                    // Show error toast if we had one, but button text update is good for now
+                }
+            });
+        }
     }
 
     _renderDropdown(id, options, currentValue) {
