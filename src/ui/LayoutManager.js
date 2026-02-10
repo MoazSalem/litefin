@@ -13,6 +13,9 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('LayoutManager');
 
 // Layout constants
 const LAYOUT = {
@@ -52,7 +55,7 @@ class LayoutManager {
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);
 
-        console.log(`LayoutManager: Initialized with layout="${this._layout}", theme="${this._theme}"`);
+        log.info(`Initialized with layout="${this._layout}", theme="${this._theme}"`);
     }
 
     /**
@@ -70,7 +73,7 @@ class LayoutManager {
      */
     setLayout(layout, save = true) {
         if (layout !== LAYOUT.CLASSIC && layout !== LAYOUT.MODERN) {
-            console.warn(`LayoutManager: Invalid layout "${layout}"`);
+            log.warn(`Invalid layout "${layout}"`);
             return;
         }
 
@@ -96,7 +99,7 @@ class LayoutManager {
 
         // Emit event for components to update
         if (oldLayout !== layout) {
-            console.log(`LayoutManager: Layout changed from "${oldLayout}" to "${layout}"`);
+            log.info(`Layout changed from "${oldLayout}" to "${layout}"`);
             eventBus.emit('layout:changed', { layout, previousLayout: oldLayout });
         }
     }
@@ -126,7 +129,7 @@ class LayoutManager {
         const availableThemes = this.getAvailableThemes();
 
         if (!availableThemes.includes(theme)) {
-            console.warn(`LayoutManager: Theme "${theme}" not available for layout "${this._layout}"`);
+            log.warn(`Theme "${theme}" not available for layout "${this._layout}"`);
             return;
         }
 
@@ -145,7 +148,7 @@ class LayoutManager {
         }
 
         if (oldTheme !== theme) {
-            console.log(`LayoutManager: Theme changed from "${oldTheme}" to "${theme}"`);
+            log.info(`Theme changed from "${oldTheme}" to "${theme}"`);
             eventBus.emit('theme:changed', { theme, previousTheme: oldTheme });
         }
     }
@@ -174,7 +177,7 @@ class LayoutManager {
             this._components[LAYOUT.MODERN].set(name, ClassicComponent);
         }
 
-        console.log(`LayoutManager: Registered component "${name}"`);
+        log.debug(`Registered component "${name}"`);
     }
 
     /**
@@ -194,7 +197,7 @@ class LayoutManager {
             return this._components[LAYOUT.CLASSIC].get(name);
         }
 
-        console.warn(`LayoutManager: Component "${name}" not found`);
+        log.warn(`Component "${name}" not found`);
         return null;
     }
 

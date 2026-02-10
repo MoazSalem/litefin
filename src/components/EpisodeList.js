@@ -11,6 +11,9 @@ import Component from '../core/Component.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { imageService } from '../utils/ImageService.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('EpisodeList');
 
 class EpisodeList extends Component {
     /**
@@ -173,7 +176,7 @@ class EpisodeList extends Component {
         } catch (e) {
             // Revert on error
             btn.classList.toggle('active');
-            console.error('Failed to toggle seen', e);
+            log.error('Failed to toggle seen', e);
         }
     }
 
@@ -199,7 +202,7 @@ class EpisodeList extends Component {
             // Revert on error
             btn.classList.toggle('active');
             svg.setAttribute('fill', isFav ? 'currentColor' : 'none');
-            console.error('Failed to toggle fav', e);
+            log.error('Failed to toggle fav', e);
         }
     }
 

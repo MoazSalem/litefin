@@ -15,6 +15,9 @@ import MediaGrid from '../components/MediaGrid.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import BackdropManager from '../utils/BackdropManager.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('PersonPage');
 
 class PersonPage extends Page {
     constructor() {
@@ -29,7 +32,7 @@ class PersonPage extends Page {
         this._personId = this.params.id;
 
         if (!this._personId) {
-            console.error('PersonPage: No person ID provided');
+            log.error('No person ID provided');
             router.back();
             return;
         }
@@ -38,7 +41,7 @@ class PersonPage extends Page {
             this._setupFocus();
             this._loadPersonDetails();
         } catch (err) {
-            console.error('PersonPage: onInit critical failure', err);
+            log.error('onInit critical failure', err);
             this.showError('Critical Error: ' + err.message);
         }
     }
@@ -100,7 +103,7 @@ class PersonPage extends Page {
             this._items = result.Items || [];
 
             // Debug log to verify data
-            console.log('PersonPage: Loaded items', {
+            log.debug('Loaded items', {
                 total: this._items.length,
                 movies: this._items.filter((i) => i.Type === 'Movie').length,
                 shows: this._items.filter((i) => i.Type === 'Series').length,
@@ -115,7 +118,7 @@ class PersonPage extends Page {
             // 3. Background: Fetch role names and update UI when ready
             this._loadRolesInBackground();
         } catch (error) {
-            console.error('PersonPage: Failed to load', error);
+            log.error('Failed to load', error);
             this.showError('Failed to load person details');
         } finally {
             this.setLoading(false);
@@ -142,7 +145,7 @@ class PersonPage extends Page {
 
         // Render Favorite Button
         const favContainer = this.$('#person-fav-actions');
-        console.log('PersonPage: Render Favorite Button', {
+        log.debug('Rendering Favorite Button', {
             containerFound: !!favContainer,
             personId: p.Id,
             isFavorite: p.UserData?.IsFavorite
@@ -170,14 +173,11 @@ class PersonPage extends Page {
             // Wait for next frame to ensure DOM is ready
             requestAnimationFrame(() => {
                 focusManager.invalidateCache('person-fav-actions');
-                console.log(
-                    'PersonPage: Favorite cache invalidated. Button offsetParent:',
-                    this._favBtn.el?.offsetParent
-                );
+                log.debug('Favorite cache invalidated. Button offsetParent:', this._favBtn.el?.offsetParent);
             });
-            console.log('PersonPage: Favorite Button mounted');
+            log.debug('Favorite Button mounted');
         } else {
-            console.error('PersonPage: Could not find #person-fav-actions container');
+            log.error('Could not find #person-fav-actions container');
         }
 
         // Name
@@ -265,9 +265,9 @@ class PersonPage extends Page {
             // Apply roles to visible cards
             this._applyRolesToCards();
 
-            console.log(`PersonPage: Added ${this._roleMap.size} character roles`);
+            log.debug(`Added ${this._roleMap.size} character roles`);
         } catch (error) {
-            console.warn('PersonPage: Could not load character roles', error);
+            log.warn('Could not load character roles', error);
         }
     }
 

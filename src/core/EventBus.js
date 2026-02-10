@@ -6,11 +6,15 @@
  * components. Enables loose coupling and makes testing easier.
  *
  * Usage:
- *   EventBus.on('user:login', (user) => console.log('Logged in:', user));
+ *   EventBus.on('user:login', (user) => log.info('Logged in:', user));
  *   EventBus.emit('user:login', { name: 'John' });
  *   EventBus.off('user:login', handler);
  * ============================================================================
  */
+
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('EventBus');
 
 class EventBus {
     constructor() {
@@ -85,7 +89,7 @@ class EventBus {
             try {
                 callback.apply(this, args);
             } catch (error) {
-                console.error(`EventBus: Error in handler for "${event}":`, error);
+                log.error(`Error in handler for "${event}":`, error);
             }
         }
     }

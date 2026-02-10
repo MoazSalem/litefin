@@ -13,6 +13,10 @@
  * ============================================================================
  */
 
+import { logger } from './Logger.js';
+
+const log = logger.create('PlayerSettings');
+
 /**
  * Default values for all player settings
  * These match the patterns from moonfin-tizen's settings.js
@@ -112,7 +116,7 @@ export const PlayerSettings = {
      */
     get(key) {
         if (!(key in DEFAULTS)) {
-            console.warn(`[PlayerSettings] Unknown setting: ${key}`);
+            log.warn(`Unknown setting: ${key}`);
             return undefined;
         }
 
@@ -138,12 +142,12 @@ export const PlayerSettings = {
      */
     set(key, value) {
         if (!(key in DEFAULTS)) {
-            console.warn(`[PlayerSettings] Unknown setting: ${key}`);
+            log.warn(`Unknown setting: ${key}`);
             return;
         }
 
         localStorage.setItem(STORAGE_PREFIX + key, String(value));
-        console.log(`[PlayerSettings] Saved ${key}: ${value}`);
+        log.debug(`Saved ${key}: ${value}`);
     },
 
     /**
@@ -175,7 +179,7 @@ export const PlayerSettings = {
         for (const key of Object.keys(DEFAULTS)) {
             localStorage.removeItem(STORAGE_PREFIX + key);
         }
-        console.log('[PlayerSettings] All settings reset to defaults');
+        log.info('All settings reset to defaults');
     },
 
     /**

@@ -3,9 +3,13 @@
  * Litefin Tizen - Debug Overlay
  * ============================================================================
  * Global debug console overlay for Tizen TVs.
- * Intercepts console logs and displays them in an on-screen window.
+ * Displays logs from the centralized Logger utility.
+ * Optimized for performance with batched updates.
  * ============================================================================
  */
+
+import { eventBus } from '../core/EventBus.js';
+import { logger, LogLevel } from '../utils/Logger.js';
 
 class DebugOverlay {
     constructor() {
@@ -22,16 +26,7 @@ class DebugOverlay {
         this._height = 'small';
         this._position = 'bottom-right';
 
-        // Store original methods
-        this._originalConsole = {
-            log: console.log,
-            error: console.error,
-            warn: console.warn,
-            info: console.info,
-            debug: console.debug
-        };
-
-        // Known modules for filtering
+        // Known modules for filtering (Synced with Logger usage)
         this._knownModules = [
             'Router',
             'FocusManager',
@@ -42,48 +37,51 @@ class DebugOverlay {
             'Player',
             'StateManager',
             'EventBus',
-            'NavigationState'
+            'NavigationState',
+            'App'
         ];
 
-        // Filter state (Map: ModuleName -> Boolean)
-        this._moduleFilters = new Map();
-        this._loadModulePreferences();
+        // Batching state
+        this._logQueue = [];
+        this._rafId = null;
     }
 
     /**
      * Initialize the debug overlay
-     * @param {boolean} [enableLogs=false]
-     * @param {boolean} [enableOverlay=false]
-     * @param {string} [width='small']
-     * @param {string} [height='small']
-     * @param {string} [position='bottom-right']
      */
     init(enableLogs = false, enableOverlay = false, width = 'small', height = 'small', position = 'bottom-right') {
         if (this._initialized) return;
 
-        this._logsEnabled = enableLogs;
-        this._overlayEnabled = enableOverlay;
+        // Load settings from storage if not explicitly provided
+        if (enableLogs === false) {
+            this._logsEnabled = logger._enabled; // Trust Logger's loaded state
+        } else {
+            this._logsEnabled = enableLogs;
+            logger.setEnabled(enableLogs);
+        }
+
+        if (enableOverlay === false) {
+            this._overlayEnabled = localStorage.getItem('debug_overlay_enabled') === 'true';
+        } else {
+            this._overlayEnabled = enableOverlay;
+        }
+
         this._width = width;
         this._height = height;
         this._position = position;
 
-        // Always intercept, but control output via flags
-        this._interceptConsole();
+        // Sync Logger state (if we changed it)
+        if (enableLogs === true) {
+            logger.setEnabled(true);
+        }
+
+        // Subscribe to Logger events
+        eventBus.on('logger:log', (logEntry) => this._queueLog(logEntry));
 
         // Initialize UI if needed
         if (this._overlayEnabled) {
             this._createElements();
             this.show();
-        }
-
-        if (this._logsEnabled) {
-            this._originalConsole.log('DebugOverlay: Initialized', {
-                logs: enableLogs,
-                overlay: enableOverlay,
-                width,
-                height,
-                position
-            });
         }
 
         this._initialized = true;
@@ -114,33 +112,20 @@ class DebugOverlay {
         return this._position;
     }
 
-    /**
-     * Enable or disable console logs
-     * @param {boolean} enabled
-     */
     setLogsEnabled(enabled) {
         this._logsEnabled = enabled;
-        // Log status change using original console to ensure it's seen if enabling
-        if (enabled) {
-            this._originalConsole.log('DebugOverlay: Debug Mode ENABLED');
-        }
+        logger.setEnabled(enabled);
     }
 
-    /**
-     * Enable or disable the visual overlay
-     * @param {boolean} enabled
-     */
     setOverlayEnabled(enabled) {
         this._overlayEnabled = enabled;
+        localStorage.setItem('debug_overlay_enabled', enabled);
 
         if (enabled) {
             if (!this._overlay) {
                 this._createElements();
             }
             this.show();
-            if (this._logsEnabled) {
-                console.log('DebugOverlay: Overlay ENABLED');
-            }
         } else {
             this.hide();
         }
@@ -153,29 +138,23 @@ class DebugOverlay {
         return this._overlayEnabled;
     }
 
-    /**
-     * Create overlay DOM elements and append to body
-     * @private
-     */
     _createElements() {
         if (this._overlay) return;
 
-        // Container
         this._overlay = document.createElement('div');
         this._overlay.id = 'debug-overlay';
 
-        // Base styles
         this._overlay.style.cssText = `
             position: fixed;
             background: rgba(0,0,0,0.85);
-            color: #0f0;
+            color: #ccc;
             font-family: 'Consolas', 'Monaco', monospace;
             font-size: 13px;
             overflow-y: auto;
             z-index: 99999;
             padding: 10px;
             pointer-events: none;
-            border: 1px solid #0f0;
+            border: 1px solid #444;
             display: none;
             text-align: left;
             line-height: 1.4;
@@ -183,80 +162,45 @@ class DebugOverlay {
             border-radius: 4px;
         `;
 
-        // Apply dynamic styles
         this._updateStyles();
 
-        // Header
         const header = document.createElement('div');
         header.style.cssText = `
-            border-bottom: 1px solid #333;
+            border-bottom: 1px solid #444;
             margin-bottom: 5px;
             font-weight: bold;
             display: flex;
             justify-content: space-between;
             align-items: center;
+            color: #fff;
         `;
         header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v${__APP_VERSION__}</span>`;
         this._overlay.appendChild(header);
 
-        // Content area
         this._content = document.createElement('div');
         this._content.id = 'debug-content';
         this._overlay.appendChild(this._content);
 
-        // Append to body (ensure it's on top)
         document.body.appendChild(this._overlay);
     }
 
     _updateStyles() {
         if (!this._overlay) return;
 
-        // Width
-        let widthStr;
-        switch (this._width) {
-            case 'full':
-                widthStr = '100%';
-                break;
-            case 'large':
-                widthStr = '800px';
-                break;
-            case 'medium':
-                widthStr = '600px';
-                break;
-            case 'small':
-            default:
-                widthStr = '450px';
-                break;
-        }
+        let widthStr = '450px';
+        if (this._width === 'full') widthStr = '100%';
+        else if (this._width === 'large') widthStr = '800px';
+        else if (this._width === 'medium') widthStr = '600px';
 
-        // Height
-        let heightStr;
-        switch (this._height) {
-            case 'full':
-                heightStr = '100%';
-                break;
-            case 'large':
-                heightStr = '600px';
-                break;
-            case 'medium':
-                heightStr = '400px';
-                break;
-            case 'small':
-            default:
-                heightStr = '300px';
-                break;
-        }
+        let heightStr = '300px';
+        if (this._height === 'full') heightStr = '100%';
+        else if (this._height === 'large') heightStr = '600px';
+        else if (this._height === 'medium') heightStr = '400px';
 
         this._overlay.style.width = widthStr;
         this._overlay.style.height = heightStr;
 
-        // Font size adjustments based on size?
-        // Keep it simple for now, fixed font size or maybe slightly larger for 'large' config?
-        // Let's stick to standard 13px unless user asks
-        this._overlay.style.fontSize = '13px';
-
-        // Position
-        // Reset all positions first
+        // Reset positions
         this._overlay.style.top = 'auto';
         this._overlay.style.bottom = 'auto';
         this._overlay.style.left = 'auto';
@@ -264,41 +208,50 @@ class DebugOverlay {
 
         const margin = this._width === 'full' || this._height === 'full' ? '0' : '20px';
 
-        switch (this._position) {
-            case 'top-left':
-                this._overlay.style.top = margin;
-                this._overlay.style.left = margin;
-                break;
-            case 'top-right':
-                this._overlay.style.top = margin;
-                this._overlay.style.right = margin;
-                break;
-            case 'bottom-left':
-                this._overlay.style.bottom = margin;
-                this._overlay.style.left = margin;
-                break;
-            case 'bottom-right':
-            default:
-                this._overlay.style.bottom = margin;
-                this._overlay.style.right = margin;
-                break;
+        if (this._position.includes('top')) this._overlay.style.top = margin;
+        else this._overlay.style.bottom = margin;
+
+        if (this._position.includes('left')) this._overlay.style.left = margin;
+        else this._overlay.style.right = margin;
+    }
+
+    /**
+     * Queue a log entry to be rendered
+     * @private
+     */
+    _queueLog(logEntry) {
+        if (!this._overlayEnabled || !this._content) return;
+
+        this._logQueue.push(logEntry);
+
+        if (!this._rafId) {
+            this._rafId = requestAnimationFrame(() => this._flushLogs());
         }
     }
 
     /**
-     * Intercept console.log/error/warn
+     * Flush queued logs to DOM in a single frame
      * @private
      */
-    /**
-     * Intercept console.log/error/warn
-     * @private
-     */
-    _interceptConsole() {
-        const addLog = (type, args) => {
-            if (!this._overlayEnabled || !this._content) return;
+    _flushLogs() {
+        this._rafId = null;
+        if (this._logQueue.length === 0) return;
 
-            // STRINGIFY FIRST to check for module prefixes
-            const textArgs = args.map((arg) => {
+        const fragment = document.createDocumentFragment();
+
+        for (const entry of this._logQueue) {
+            const line = document.createElement('div');
+            line.style.borderBottom = '1px solid #222';
+            line.style.padding = '2px 0';
+            line.style.wordBreak = 'break-all';
+
+            // Color coding
+            if (entry.level === LogLevel.ERROR) line.style.color = '#ff5555';
+            else if (entry.level === LogLevel.WARN) line.style.color = '#ffaa00';
+            else if (entry.level === LogLevel.DEBUG) line.style.color = '#aa55ff';
+
+            // Stringify args carefully
+            const textArgs = entry.args.map((arg) => {
                 if (typeof arg === 'object') {
                     try {
                         return JSON.stringify(arg);
@@ -308,104 +261,26 @@ class DebugOverlay {
                 }
                 return String(arg);
             });
-            const fullText = textArgs.join(' ');
 
-            // FILTERING LOGIC
-            // Check for prefixes like "Router:", "[FocusManager]", "TizenAdapter:"
-            const moduleMatch = fullText.match(/^(?:\[?(\w+)\]?:?)\s/);
-            if (moduleMatch) {
-                const moduleName = moduleMatch[1];
-                // If this module is tracked AND disabled, skip logging
-                if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
-                    return;
-                }
-            }
+            // Format timestamp
+            const time = new Date(entry.timestamp).toLocaleTimeString().split(' ')[0]; // HH:MM:SS
+            line.textContent = `[${time}] [${entry.module}] ${textArgs.join(' ')}`;
 
-            const line = document.createElement('div');
-            line.style.borderBottom = '1px solid #333';
-            line.style.padding = '2px 0';
-            line.style.wordBreak = 'break-all';
+            fragment.appendChild(line);
+        }
 
-            if (type === 'error') line.style.color = '#f55';
-            else if (type === 'warn') line.style.color = '#fa0';
+        this._content.appendChild(fragment);
 
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${fullText}`;
-            this._content.appendChild(line);
+        // Prune old logs
+        while (this._content.children.length > 200) {
+            this._content.removeChild(this._content.firstChild);
+        }
 
-            if (this._content.children.length > 200) {
-                this._content.removeChild(this._content.firstChild);
-            }
-            this._overlay.scrollTop = this._overlay.scrollHeight;
-        };
+        // Scroll to bottom
+        this._overlay.scrollTop = this._overlay.scrollHeight;
 
-        // Wrap methods
-        console.log = (...args) => {
-            if (this._logsEnabled) {
-                // Check filter for console output too?
-                // The user asked "work in both browser console and overlay"
-                // So we should verify filter before calling original console.
-
-                // We need to construct string to check filter
-                const firstArg = args[0];
-                if (typeof firstArg === 'string') {
-                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
-                    if (moduleMatch) {
-                        const moduleName = moduleMatch[1];
-                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
-                            // Suppress completely
-                            return;
-                        }
-                    }
-                }
-
-                this._originalConsole.log.apply(console, args);
-                addLog('log', args);
-            }
-        };
-
-        console.error = (...args) => {
-            if (this._logsEnabled) {
-                const firstArg = args[0];
-                if (typeof firstArg === 'string') {
-                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
-                    if (moduleMatch) {
-                        const moduleName = moduleMatch[1];
-                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
-                            return;
-                        }
-                    }
-                }
-
-                this._originalConsole.error.apply(console, args);
-                addLog('error', args);
-            }
-        };
-
-        console.warn = (...args) => {
-            if (this._logsEnabled) {
-                const firstArg = args[0];
-                if (typeof firstArg === 'string') {
-                    const moduleMatch = firstArg.match(/^(?:\[?(\w+)\]?:?)\s/);
-                    if (moduleMatch) {
-                        const moduleName = moduleMatch[1];
-                        if (this._moduleFilters.has(moduleName) && !this._moduleFilters.get(moduleName)) {
-                            return;
-                        }
-                    }
-                }
-
-                this._originalConsole.warn.apply(console, args);
-                addLog('warn', args);
-            }
-        };
-
-        // Suppress others if logs disabled
-        console.info = (...args) => {
-            if (this._logsEnabled) this._originalConsole.info.apply(console, args);
-        };
-        console.debug = (...args) => {
-            if (this._logsEnabled) this._originalConsole.debug.apply(console, args);
-        };
+        // Clear queue
+        this._logQueue = [];
     }
 
     show() {
@@ -422,50 +297,20 @@ class DebugOverlay {
         }
     }
 
-    toggle() {
-        this._isVisible ? this.hide() : this.show();
-    }
-
-    /**
-     * Load filter preferences from localStorage
-     * @private
-     */
-    _loadModulePreferences() {
-        this._knownModules.forEach((module) => {
-            const key = `debug_filter_${module}`;
-            const stored = localStorage.getItem(key);
-            // Default to TRUE (enabled) if not set
-            const isEnabled = stored === null ? true : stored === 'true';
-            this._moduleFilters.set(module, isEnabled);
-        });
-    }
-
-    /**
-     * Toggle visibility for a specific module
-     * @param {string} moduleName
-     * @param {boolean} enabled
-     */
+    // Toggle module filter
     toggleModule(moduleName, enabled) {
-        if (!this._knownModules.includes(moduleName)) return;
-
-        this._moduleFilters.set(moduleName, enabled);
-        localStorage.setItem(`debug_filter_${moduleName}`, enabled);
-
-        this._originalConsole.log(`DebugOverlay: Module filter '${moduleName}' set to ${enabled}`);
+        logger.setModuleEnabled(moduleName, enabled);
     }
 
-    /**
-     * Check if a module is enabled
-     * @param {string} moduleName
-     */
     isModuleEnabled(moduleName) {
-        if (!this._moduleFilters.has(moduleName)) return true;
-        return this._moduleFilters.get(moduleName);
+        // We rely on Logger for the truth, but since DebugOverlay is tracking
+        // local storage in the Settings page, we can assume true if not explicitly disabled.
+        // For UI purposes, let's peek at localStorage directly or assume true.
+        const key = `debug_filter_${moduleName}`;
+        const val = localStorage.getItem(key);
+        return val !== 'false';
     }
 
-    /**
-     * Get list of known modules
-     */
     getKnownModules() {
         return this._knownModules;
     }

@@ -10,6 +10,10 @@
 import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
 
+import { logger } from './Logger.js';
+
+const log = logger.create('BackdropManager');
+
 class BackdropManager {
     /**
      * Get the backdrop URL for an item.
@@ -91,7 +95,7 @@ class BackdropManager {
             });
         };
         img.onerror = () => {
-            console.warn(`BackdropManager: Failed to load backdrop from ${url}`);
+            log.warn(`Failed to load backdrop from ${url}`);
         };
         img.src = url;
     }

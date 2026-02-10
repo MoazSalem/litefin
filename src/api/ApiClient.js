@@ -12,6 +12,9 @@
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('ApiClient');
 
 // API request timeout (ms)
 const REQUEST_TIMEOUT = 30000;
@@ -45,7 +48,7 @@ export class ApiClient {
         // Normalize URL (remove trailing slash)
         this._serverUrl = serverUrl.replace(/\/+$/, '');
         state.set('server:url', this._serverUrl);
-        console.log(`ApiClient: Server set to ${this._serverUrl}`);
+        log.info(`Server set to ${this._serverUrl}`);
     }
 
     /**
@@ -57,7 +60,7 @@ export class ApiClient {
         this._accessToken = accessToken;
         this._userId = userId;
         state.set('user:authenticated', !!accessToken);
-        console.log(`ApiClient: Authenticated as user ${userId}`);
+        log.info(`Authenticated as user ${userId}`);
     }
 
     /**
@@ -82,7 +85,7 @@ export class ApiClient {
         this._userId = null;
         state.set('user:authenticated', false);
         state.set('user:data', null);
-        console.log('ApiClient: Authentication cleared');
+        log.info('Authentication cleared');
     }
 
     // ========================================================================
@@ -166,7 +169,7 @@ export class ApiClient {
             fetchOptions.body = JSON.stringify(options.body);
         }
 
-        console.log(`ApiClient: ${method} ${endpoint}`);
+        log.debug(`${method} ${endpoint}`);
 
         try {
             // Create abort controller for timeout
@@ -174,7 +177,7 @@ export class ApiClient {
             const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
             fetchOptions.signal = controller.signal;
 
-            console.log(`ApiClient: Fetching ${url}...`);
+            log.debug(`Fetching ${url}...`);
             const response = await fetch(url, fetchOptions);
             clearTimeout(timeoutId);
 
@@ -201,7 +204,7 @@ export class ApiClient {
                 throw new Error('Request timeout');
             }
 
-            console.error(`ApiClient: Request to ${endpoint} failed:`, error.message || error);
+            log.error(`Request to ${endpoint} failed:`, error.message || error);
             eventBus.emit('api:error', { endpoint, error });
             throw error;
         }
@@ -641,7 +644,6 @@ export class ApiClient {
         return this.delete(`/Users/${this._userId}/PlayedItems/${itemId}`);
     }
 
-
     // ========================================================================
     // WebSocket Connection (for online/offline status)
     // ========================================================================
@@ -655,13 +657,13 @@ export class ApiClient {
     openWebSocket() {
         // Must have server URL and access token
         if (!this._serverUrl || !this._accessToken) {
-            console.warn('ApiClient: Cannot open WebSocket - not authenticated');
+            log.warn('Cannot open WebSocket - not authenticated');
             return;
         }
 
         // Already connected
         if (this._webSocket && this._webSocket.readyState === WebSocket.OPEN) {
-            console.log('ApiClient: WebSocket already connected');
+            log.info('WebSocket already connected');
             return;
         }
 
@@ -674,14 +676,14 @@ export class ApiClient {
         // Build WebSocket URL with auth
         const fullUrl = `${wsUrl}/socket?api_key=${encodeURIComponent(this._accessToken)}&deviceId=${encodeURIComponent(this._deviceId)}`;
 
-        console.log('ApiClient: Opening WebSocket connection...');
+        log.info('Opening WebSocket connection...');
 
         try {
             this._webSocket = new WebSocket(fullUrl);
 
             // Connection opened
             this._webSocket.onopen = () => {
-                console.log('ApiClient: WebSocket connected - user is now online');
+                log.info('WebSocket connected - user is now online');
                 eventBus.emit('websocket:connected');
 
                 // Start keepalive ping interval (every 30 seconds)
@@ -701,18 +703,18 @@ export class ApiClient {
 
             // Connection closed
             this._webSocket.onclose = (event) => {
-                console.log('ApiClient: WebSocket disconnected - user appears offline');
+                log.info('WebSocket disconnected - user appears offline');
                 this._stopWebSocketKeepalive();
                 eventBus.emit('websocket:disconnected');
             };
 
             // Connection error
             this._webSocket.onerror = (error) => {
-                console.warn('ApiClient: WebSocket error:', error);
+                log.warn('WebSocket error:', error);
                 this._stopWebSocketKeepalive();
             };
         } catch (e) {
-            console.error('ApiClient: Failed to create WebSocket:', e);
+            log.error('Failed to create WebSocket:', e);
         }
     }
 
@@ -724,7 +726,7 @@ export class ApiClient {
         this._stopWebSocketKeepalive();
 
         if (this._webSocket) {
-            console.log('ApiClient: Closing WebSocket connection');
+            log.info('Closing WebSocket connection');
             this._webSocket.onclose = null; // Prevent event handler from firing
             this._webSocket.close();
             this._webSocket = null;
@@ -836,7 +838,7 @@ let activeDiscoveryController = null;
  */
 export function cancelDiscovery() {
     if (activeDiscoveryController) {
-        console.log('ApiClient: Cancelling discovery scan...');
+        log.info('Cancelling discovery scan...');
         activeDiscoveryController.abort();
         activeDiscoveryController = null;
     }
@@ -849,7 +851,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
     // Cancel any existing scan first
     cancelDiscovery();
 
-    console.log('ApiClient: Starting server discovery...');
+    log.info('Starting server discovery...');
 
     activeDiscoveryController = new AbortController();
     const signal = activeDiscoveryController.signal;
@@ -876,7 +878,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
     const totalIPs = uniqueSubnets.length * 254;
     let globalScannedCount = 0;
 
-    console.log(`ApiClient: Scanning ${uniqueSubnets.length} subnets (${totalIPs} IPs total)`);
+    log.debug(`Scanning ${uniqueSubnets.length} subnets (${totalIPs} IPs total)`);
 
     const scanSubnet = async (prefix) => {
         const batch = [];
@@ -899,7 +901,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
                 .filter((s) => s)
                 .forEach((s) => {
                     if (!foundServers.find((existing) => existing.address === s.address)) {
-                        console.log(`ApiClient: Found server at ${s.address}`);
+                        log.info(`Found server at ${s.address}`);
                         foundServers.push(s);
                         if (onServerFound) onServerFound(s);
                     }
@@ -916,14 +918,14 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
     // Execute scans sequentially to avoid flooding network on weak TV hardware
     for (const subnet of uniqueSubnets) {
         if (signal.aborted) break;
-        console.log(`ApiClient: Scanning subnet ${subnet}x`);
+        log.debug(`Scanning subnet ${subnet}x`);
         await scanSubnet(subnet);
     }
 
     if (signal.aborted) {
-        console.log('ApiClient: Discovery cancelled');
+        log.info('Discovery cancelled');
     } else {
-        console.log(`ApiClient: Discovery complete. Found ${foundServers.length} server(s)`);
+        log.info(`Discovery complete. Found ${foundServers.length} server(s)`);
     }
 
     if (activeDiscoveryController?.signal === signal) {

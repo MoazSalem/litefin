@@ -7,6 +7,10 @@
  * ============================================================================
  */
 
+import { logger } from './Logger.js';
+
+const log = logger.create('LazyLoader');
+
 class LazyLoader {
     constructor() {
         this.observer = null;
@@ -57,7 +61,7 @@ class LazyLoader {
                 }
             );
         } else {
-            console.warn('LazyLoader: IntersectionObserver not supported. Fallback to immediate load.');
+            log.warn('IntersectionObserver not supported. Fallback to immediate load.');
         }
     }
 

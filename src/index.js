@@ -13,6 +13,9 @@ import { eventBus } from './core/EventBus.js';
 import { auth } from './api/index.js';
 import { layoutManager } from './ui/LayoutManager.js';
 import { debugOverlay } from './ui/DebugOverlay.js';
+import { logger } from './utils/Logger.js';
+
+const log = logger.create('Bootstrap');
 
 // Import styles
 import './styles/base.css';
@@ -78,7 +81,7 @@ async function bootstrap() {
 
     debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
 
-    console.log('Litefin: Starting...');
+    log.info('Starting...');
 
     // Initialize Tizen adapter first
     tizenAdapter.init();
@@ -100,7 +103,7 @@ async function bootstrap() {
         container: '#app'
     });
 
-    console.log('Litefin: Bootstrap complete');
+    log.info('Bootstrap complete');
 }
 
 // Wait for DOM ready

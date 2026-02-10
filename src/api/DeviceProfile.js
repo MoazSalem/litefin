@@ -7,6 +7,10 @@
  * ============================================================================
  */
 
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('DeviceProfile');
+
 /**
  * Get device profile based on detected capabilities
  * @param {Object} [options] - Profile options
@@ -256,7 +260,7 @@ export function detectCapabilities() {
     const manualRes = localStorage.getItem('litefin_max_resolution') || '2160p';
 
     if (manualRes !== 'auto') {
-        console.log(`DeviceProfile: Using manual resolution setting: ${manualRes}`);
+        log.info(`Using manual resolution setting: ${manualRes}`);
         switch (manualRes) {
             case '720p':
                 capabilities.enable4K = false;
@@ -290,12 +294,12 @@ export function detectCapabilities() {
             // Check HDR support (only for newer TVs)
             // Note: Most Tizen TVs don't expose this directly
         } catch (e) {
-            console.warn('DeviceProfile: Could not detect capabilities', e);
+            log.warn('Could not detect capabilities', e);
         }
     }
 
     // Final logging of what we are sending
-    console.log('DeviceProfile: Final Capabilities determined:', JSON.stringify(capabilities, null, 2));
+    log.info('Final Capabilities determined:', JSON.stringify(capabilities, null, 2));
 
     return capabilities;
 }

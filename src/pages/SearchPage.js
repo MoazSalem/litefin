@@ -10,6 +10,9 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('SearchPage');
 
 class SearchPage extends Page {
     constructor() {
@@ -199,7 +202,7 @@ class SearchPage extends Page {
                 Limit: 20
             };
 
-            console.log(`SearchPage: Searching for "${this._query}"`);
+            log.info(`Searching for "${this._query}"`);
 
             const [mediaResponse, peopleResponse] = await Promise.all([
                 api.search(this._query, mediaParams),
@@ -212,7 +215,7 @@ class SearchPage extends Page {
             // Combine results
             this._results = [...mediaItems, ...peopleItems];
 
-            console.log(`SearchPage: Found ${mediaItems.length} media items and ${peopleItems.length} people`);
+            log.debug(`Found ${mediaItems.length} media items and ${peopleItems.length} people`);
 
             if (this._results.length > 0) {
                 this._renderResults();
@@ -221,7 +224,7 @@ class SearchPage extends Page {
                 this.$('#no-results')?.classList.remove('hidden');
             }
         } catch (error) {
-            console.error('Search failed', error);
+            log.error('Search failed', error);
         }
 
         this.setLoading(false);

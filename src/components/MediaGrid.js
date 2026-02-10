@@ -13,6 +13,9 @@ import { router } from '../core/Router.js';
 
 import CardRenderer from '../utils/CardRenderer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('MediaGrid');
 
 class MediaGrid extends Component {
     constructor(config = {}) {
@@ -63,7 +66,7 @@ class MediaGrid extends Component {
      * Re-render logic after mount/update
      */
     onMounted() {
-        // console.log(`MediaGrid (${this.title}): Mounted with ${this.items.length} items.`);
+        log.debug(`Mounted with ${this.items.length} items.`);
         const btn = document.getElementById(`${this.id}-btn`);
         if (btn) {
             btn.onclick = () => this.toggleExpand();

@@ -15,6 +15,9 @@
 import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { navigationState } from './NavigationState.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Router');
 
 class Router {
     constructor() {
@@ -49,7 +52,7 @@ class Router {
         // Handle initial route
         this._onHashChange();
 
-        console.log('Router: Initialized');
+        log.info('Initialized');
     }
 
     /**
@@ -80,7 +83,7 @@ class Router {
             PageClass
         });
 
-        console.log(`Router: Registered route "${pattern}"`);
+        log.debug(`Registered route "${pattern}"`);
     }
 
     /**
@@ -175,7 +178,7 @@ class Router {
         // Clear expected navigation tracking (used to detect unexpected hash changes)
         this._lastNavigatePath = null;
 
-        console.log(`Router: Navigating to "${path}"`);
+        log.info(`Navigating to "${path}"`);
 
         // Find matching route
         for (const route of this._routes) {
@@ -247,7 +250,7 @@ class Router {
         }
 
         // No matching route - handle 404
-        console.warn(`Router: No route found for "${path}"`);
+        log.warn(`No route found for "${path}"`);
         eventBus.emit('router:notFound', { path });
     }
 

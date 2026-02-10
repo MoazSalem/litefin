@@ -11,6 +11,9 @@
  */
 
 import { focusManager } from '../ui/FocusManager.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('NavigationState');
 
 class NavigationState {
     constructor() {
@@ -46,7 +49,7 @@ class NavigationState {
         };
 
         if (this._debug) {
-            console.log('[NavigationState] Captured state:', state);
+            log.debug('Captured state:', state);
         }
 
         return state;
@@ -62,7 +65,7 @@ class NavigationState {
         if (!state || !state.pageState) return;
 
         if (this._debug) {
-            console.log('[NavigationState] Restoring page state:', state.pageState);
+            log.debug('Restoring page state:', state.pageState);
         }
 
         // Pages implement setNavigationState() to handle this
@@ -81,7 +84,7 @@ class NavigationState {
         if (!state) return;
 
         if (this._debug) {
-            console.log('[NavigationState] Scheduling scroll/focus restoration:', state);
+            log.debug('Scheduling scroll/focus restoration:', state);
         }
 
         // Use double requestAnimationFrame + setTimeout for robust timing
@@ -107,7 +110,7 @@ class NavigationState {
      */
     _doRestoreScrollFocus(state) {
         if (this._debug) {
-            console.log('[NavigationState] Executing scroll/focus restoration');
+            log.debug('Executing scroll/focus restoration');
         }
 
         // Restore scroll position
@@ -211,7 +214,7 @@ class NavigationState {
             const el = document.querySelector(state.focusElementSelector);
             if (el) {
                 if (this._debug) {
-                    console.log('[NavigationState] Focus restored by selector:', state.focusElementSelector);
+                    log.debug('Focus restored by selector:', state.focusElementSelector);
                 }
                 focusManager.focusElement(el, { skipScroll: true });
                 return;
@@ -232,7 +235,7 @@ class NavigationState {
 
                 if (target) {
                     if (this._debug) {
-                        console.log('[NavigationState] Focus restored by index:', clampedIndex);
+                        log.debug('Focus restored by index:', clampedIndex);
                     }
                     focusManager.focusElement(target, { skipScroll: true });
                     return;
@@ -243,7 +246,7 @@ class NavigationState {
         // Strategy 3: Let FocusManager handle it (will focus first available)
         if (state.focusSectionName) {
             if (this._debug) {
-                console.log('[NavigationState] Focus fallback to section:', state.focusSectionName);
+                log.debug('Focus fallback to section:', state.focusSectionName);
             }
             focusManager.setActiveSection(state.focusSectionName);
         }

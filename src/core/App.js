@@ -22,6 +22,10 @@ import SearchPage from '../pages/SearchPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
 import PlayerPage from '../pages/PlayerPage.js';
+import { logger } from '../utils/Logger.js';
+import { debugOverlay } from '../ui/DebugOverlay.js';
+
+const log = logger.create('App');
 
 class App {
     constructor() {
@@ -39,11 +43,11 @@ class App {
      */
     async init(options = {}) {
         if (this._initialized) {
-            console.warn('App: Already initialized');
+            log.warn('App already initialized');
             return;
         }
 
-        console.log('App: Initializing Litefin...');
+        log.info('Initializing Litefin...');
 
         // Get container element
         if (typeof options.container === 'string') {
@@ -53,7 +57,7 @@ class App {
         }
 
         if (!this.container) {
-            console.error('App: Container element not found');
+            log.error('Container element not found');
             return;
         }
 
@@ -62,6 +66,9 @@ class App {
 
         // Setup global event handlers
         this._setupEventHandlers();
+
+        // Initialize Debug Overlay (loads state from localStorage)
+        debugOverlay.init();
 
         // ================================================================
         // LAYOUT SETUP
@@ -90,7 +97,7 @@ class App {
 
         this._initialized = true;
 
-        console.log('App: Initialized successfully');
+        log.info('App initialized successfully');
         eventBus.emit('app:ready');
     }
 
@@ -120,7 +127,7 @@ class App {
             state.set('server:connected', false);
         }
 
-        console.log('App: State initialized');
+        log.debug('App state initialized');
     }
 
     /**
@@ -136,7 +143,7 @@ class App {
             if (currentPage && typeof currentPage.onBack === 'function') {
                 const handled = currentPage.onBack();
                 if (handled === true) {
-                    console.log('App: Back handled by page');
+                    log.debug('Back event handled by current page');
                     return;
                 }
             }
@@ -152,12 +159,14 @@ class App {
         document.addEventListener('visibilitychange', () => {
             if (document.hidden) {
                 // App going to background - on Tizen this may mean app is closing
+                log.debug('App hidden (background)');
                 eventBus.emit('app:hidden');
                 // Also emit beforeExit so active players can report stopped
                 eventBus.emit('app:beforeExit');
                 // Close WebSocket - user goes offline on server dashboard
                 api.closeWebSocket();
             } else {
+                log.debug('App visible (foreground)');
                 eventBus.emit('app:visible');
                 // Reopen WebSocket when app becomes visible again
                 // This makes user appear online again without re-login
@@ -169,6 +178,7 @@ class App {
 
         // Handle app close (browser mode)
         window.addEventListener('beforeunload', () => {
+            log.debug('App beforeunload event triggered');
             eventBus.emit('app:beforeExit');
             // Close WebSocket - user goes offline
             api.closeWebSocket();
@@ -176,6 +186,7 @@ class App {
 
         // Toggle sidebar visibility based on route
         eventBus.on('router:navigate', ({ path }) => {
+            log.debug(`Router navigated to: ${path}`);
             if (path === '/login' || path.startsWith('/player')) {
                 document.body.classList.add('no-sidebar');
                 if (this.sidebar) this.sidebar.setMode('hidden');
@@ -187,12 +198,12 @@ class App {
 
         // Handle logout / Session Expiry
         eventBus.on('auth:logout', () => {
-            console.log('App: User logged out - resetting to login');
+            log.info('User logged out - resetting to login page');
             router.reset('/login');
         });
 
         eventBus.on('auth:expired', () => {
-            console.log('App: Session expired - resetting to login');
+            log.warn('Session expired - resetting to login page');
             router.reset('/login');
         });
 
@@ -200,18 +211,23 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        // Handle playback requests from any page (DetailsPage, HomePage, etc.)
         eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex }) => {
-            console.log('App: Playback requested for:', item?.Name);
+            log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
             if (!item?.Id) {
-                console.error('App: Cannot play - no item ID provided');
+                log.error('Cannot play - no item ID provided for playback request');
                 return;
             }
 
             // Store track selection in state for PlayerPage to consume
-            if (audioStreamIndex !== undefined) state.set('player:initialAudioIndex', audioStreamIndex);
-            if (subtitleStreamIndex !== undefined) state.set('player:initialSubtitleIndex', subtitleStreamIndex);
+            if (audioStreamIndex !== undefined) {
+                state.set('player:initialAudioIndex', audioStreamIndex);
+                log.debug(`Setting initial audio stream index: ${audioStreamIndex}`);
+            }
+            if (subtitleStreamIndex !== undefined) {
+                state.set('player:initialSubtitleIndex', subtitleStreamIndex);
+                log.debug(`Setting initial subtitle stream index: ${subtitleStreamIndex}`);
+            }
 
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
@@ -223,27 +239,36 @@ class App {
         // ================================================================
         // Initialize handler for remote commands from Jellyfin dashboard
         webSocketHandler.init();
+        log.debug('WebSocketHandler initialized for remote control');
 
         // Handle remote:playnow - start playback of item from server
         eventBus.on('remote:playnow', async ({ itemIds, startPositionTicks }) => {
-            if (!itemIds || itemIds.length === 0) return;
+            log.info('Remote playnow command received for item IDs:', itemIds, 'at position:', startPositionTicks);
+            if (!itemIds || itemIds.length === 0) {
+                log.warn('Remote playnow command received without item IDs');
+                return;
+            }
 
             try {
                 // Get the first item to play
                 const item = await api.getItem(itemIds[0]);
                 if (item) {
+                    log.debug('Remote playnow: emitting player:play event');
                     eventBus.emit('player:play', {
                         item,
                         resume: startPositionTicks > 0
                     });
+                } else {
+                    log.warn('Remote playnow: Item not found for ID:', itemIds[0]);
                 }
             } catch (e) {
-                console.error('App: Failed to handle remote:playnow', e);
+                log.error('Failed to handle remote:playnow command:', e.message || e);
             }
         });
 
         // Navigation commands - handle when not in player
         eventBus.on('remote:home', () => {
+            log.info('Remote home command received');
             router.navigate('/home');
         });
 
@@ -251,7 +276,7 @@ class App {
             router.back();
         });
 
-        console.log('App: Event handlers setup');
+        log.debug('Event handlers setup');
     }
 
     /**
@@ -271,7 +296,7 @@ class App {
         const authHeader = api.getAuthHeader();
         if (!authHeader) return;
 
-        console.log('App: Ending session on server...');
+        log.info('Ending session on server...');
 
         try {
             // Use synchronous XHR - async won't complete before app exits
@@ -280,9 +305,9 @@ class App {
             xhr.setRequestHeader('X-Emby-Authorization', authHeader);
             xhr.setRequestHeader('Content-Type', 'application/json');
             xhr.send();
-            console.log('App: Session ended on server');
+            log.info('Session ended on server');
         } catch (e) {
-            console.warn('App: Failed to end session on server:', e);
+            log.warn('Failed to end session on server:', e);
         }
     }
 
@@ -321,7 +346,7 @@ class App {
             }
         });
 
-        console.log('App: Routes registered');
+        log.debug('Routes registered');
     }
 
     /**

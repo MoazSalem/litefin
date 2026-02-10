@@ -11,6 +11,9 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('TizenAdapter');
 
 // ============================================================================
 // Key code mappings for Samsung TV remotes
@@ -84,12 +87,12 @@ class TizenAdapter {
             // Try to get Tizen version
             try {
                 const appInfo = tizen.application.getCurrentApplication().appInfo;
-                console.log(`Tizen: Running on Tizen (App: ${appInfo.id} v${appInfo.version})`);
+                log.info(`Running on Tizen (App: ${appInfo.id} v${appInfo.version})`);
             } catch (e) {
-                console.log('Tizen: Running on Tizen (app info unavailable)');
+                log.info('Running on Tizen (app info unavailable)');
             }
         } else {
-            console.log('Tizen: Not running on Tizen platform (browser mode)');
+            log.info('Not running on Tizen platform (browser mode)');
         }
     }
 
@@ -98,7 +101,7 @@ class TizenAdapter {
      * Call this after DOM is ready
      */
     init() {
-        console.log('TizenAdapter: Initializing...');
+        log.info('Initializing...');
 
         // Register remote control keys
         this._registerKeys();
@@ -109,7 +112,7 @@ class TizenAdapter {
         // Get device info
         this._getDeviceInfo();
 
-        console.log('TizenAdapter: Initialized');
+        log.info('Initialized');
     }
 
     /**
@@ -144,9 +147,9 @@ class TizenAdapter {
                 }
             });
 
-            console.log('TizenAdapter: Remote keys registered');
+            log.info('Remote keys registered');
         } catch (e) {
-            console.error('TizenAdapter: Failed to register keys:', e);
+            log.error('Failed to register keys:', e);
         }
     }
 
@@ -222,7 +225,7 @@ class TizenAdapter {
             }
         });
 
-        console.log('TizenAdapter: Key handler setup');
+        log.info('Key handler setup');
     }
 
     /**
@@ -267,17 +270,17 @@ class TizenAdapter {
                     }
                 }
 
-                console.log('TizenAdapter: Device info (Physical):', this._deviceInfo);
+                log.info('Device info (Physical):', this._deviceInfo);
 
                 const manualRes = localStorage.getItem('litefin_max_resolution');
                 if (manualRes) {
-                    console.log(`TizenAdapter: ⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: ${manualRes}`);
+                    log.info(`⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: ${manualRes}`);
                 } else {
-                    console.log(`TizenAdapter: ⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: 2160p (Default)`);
+                    log.info(`⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: 2160p (Default)`);
                 }
             });
         } catch (e) {
-            console.error('TizenAdapter: Failed to get device info:', e);
+            log.error('Failed to get device info:', e);
         }
     }
 
@@ -289,10 +292,10 @@ class TizenAdapter {
             try {
                 tizen.application.getCurrentApplication().exit();
             } catch (e) {
-                console.error('TizenAdapter: Failed to exit:', e);
+                log.error('Failed to exit:', e);
             }
         } else {
-            console.log('TizenAdapter: Exit requested (browser mode - no action)');
+            log.info('Exit requested (browser mode - no action)');
         }
     }
 
@@ -360,12 +363,12 @@ class TizenAdapter {
                         resolve(network.ipAddress || null);
                     },
                     (error) => {
-                        console.warn('TizenAdapter: Failed to get network info', error);
+                        log.warn('Failed to get network info', error);
                         resolve(null);
                     }
                 );
             } catch (e) {
-                console.error('TizenAdapter: Error getting IP:', e);
+                log.error('Error getting IP:', e);
                 resolve(null);
             }
         });

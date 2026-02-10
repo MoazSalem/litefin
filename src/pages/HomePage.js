@@ -18,6 +18,9 @@ import { animationManager } from '../ui/AnimationManager.js';
 
 import { focusManager } from '../ui/FocusManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('HomePage');
 
 class HomePage extends Page {
     constructor() {
@@ -50,7 +53,7 @@ class HomePage extends Page {
     onInit() {
         // Safety check: Ensure we are authenticated
         if (!api.isAuthenticated) {
-            console.warn('HomePage: Not authenticated, redirecting to login');
+            log.warn('Not authenticated, redirecting to login');
             router.navigate('/login', { replace: true });
             return;
         }
@@ -85,7 +88,7 @@ class HomePage extends Page {
         };
 
         try {
-            console.log(`HomePage: Loading content for user ${preAuth.uid}`);
+            log.info(`Loading content for user ${preAuth.uid}`);
 
             // Test simple call first
             await api.getCurrentUser();
@@ -103,7 +106,7 @@ class HomePage extends Page {
                 // Map libraries to fetch requests
                 ...this._libraries.map((lib) =>
                     api.getLatestItems(lib.Id, { Limit: 20 }).catch((e) => {
-                        console.warn(`Failed to load latest for ${lib.Name}`, e);
+                        log.warn(`Failed to load latest for ${lib.Name}`, e);
                         return null; // Return null on error, filter later
                     })
                 )
@@ -163,7 +166,7 @@ class HomePage extends Page {
                 this.showError('No libraries found. Please check your Jellyfin user permissions.');
             }
         } catch (error) {
-            console.error('HomePage: Failed to load content', error);
+            log.error('Failed to load content', error);
 
             // Use captured state for debug
             const debug = `UID:${preAuth.uid} Dev:${preAuth.dev} Tok:${preAuth.hasTok ? 'OK' : 'MISS'}`;

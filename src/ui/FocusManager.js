@@ -8,6 +8,9 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('FocusManager');
 
 // Focusable element selector
 // Strictly exclude tabindex="-1" from ALL elements (buttons, inputs, etc.)
@@ -198,7 +201,7 @@ class FocusManager {
                     const trapConfig = this._sections.get('__trap__');
                     if (trapConfig && !trapConfig.container.contains(e.target)) {
                         // Focus escaped the trap! Force it back
-                        console.warn('FocusManager: Focus escaped trap, forcing back');
+                        log.warn('Focus escaped trap, forcing back');
                         const focusables = this._getFocusables('__trap__', true);
                         if (focusables.length > 0) {
                             this.focusElement(focusables[0]);
@@ -215,7 +218,7 @@ class FocusManager {
                     if (sectionName && this._activeSection !== sectionName) {
                         this._activeSection = sectionName;
                         eventBus.emit('focus:sectionChanged', sectionName);
-                        console.log(`FocusManager: Auto-synced active section to "${sectionName}" via focusin`);
+                        log.debug(`Auto-synced active section to "${sectionName}" via focusin`);
                     }
                 }
 
@@ -223,7 +226,7 @@ class FocusManager {
             }
         });
 
-        console.log('FocusManager: Initialized (v3 Single Source Rewrite)');
+        log.info('Initialized (v3 Single Source Rewrite)');
     }
 
     // REMOVED: _onKeyDown (Redundant)
@@ -273,7 +276,7 @@ class FocusManager {
 
         this._sections.set(name, config);
         this.invalidateCache(name);
-        console.log(`FocusManager: Registered section "${name}"`);
+        log.debug(`Registered section "${name}"`);
     }
 
     /**
@@ -305,7 +308,7 @@ class FocusManager {
      */
     setActiveSection(name, restoreFocus = true, fromElement = null) {
         if (!this._sections.has(name)) {
-            console.warn(`FocusManager: Unknown section "${name}"`);
+            log.warn(`Unknown section "${name}"`);
             return;
         }
 
@@ -394,7 +397,7 @@ class FocusManager {
     _move(direction) {
         if (!this._activeSection) return;
 
-        console.log(`[FocusManager] _move(${direction}) Active: ${this._activeSection}`); // DEBUG LOG
+        // log.debug(`_move(${direction}) Active: ${this._activeSection}`); // DEBUG LOG
 
         const config = this._sections.get(this._activeSection);
         if (!config) return;
@@ -432,9 +435,9 @@ class FocusManager {
             }
         } else {
             // 'grid' or default - Use Spatial Navigation
-            console.log(`[FocusManager] Spatial Move: ${direction} from`, this._focusedElement);
+            // log.debug(`Spatial Move: ${direction} from`, this._focusedElement);
             nextElement = this._findSpatialNext(this._focusedElement, focusables, direction);
-            console.log(`[FocusManager] Spatial Result:`, nextElement);
+            // log.debug(`Spatial Result:`, nextElement);
         }
 
         // 2. If we found a target, move to it
@@ -445,7 +448,7 @@ class FocusManager {
             return;
         }
 
-        console.log(`[FocusManager] No valid target in section. Leaving section: ${direction}`);
+        log.debug(`No valid target in section. Leaving section: ${direction}`);
 
         // 3. If no target found inside, try to leave section
         this._leaveSection(direction);
@@ -593,9 +596,7 @@ class FocusManager {
         const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
         let nextSection = config[key];
 
-        console.log(
-            `[FocusManager] _leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}, exists=${this._sections.has(nextSection)}`
-        );
+        log.debug(`_leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}`);
 
         // Keep searching if target section exists but has no focusable elements
         // This handles empty rows in library grids/lists
@@ -608,14 +609,14 @@ class FocusManager {
 
             if (focusables && focusables.length > 0) {
                 // Found a valid section with focusable elements!
-                console.log(
-                    `[FocusManager] _leaveSection: Found valid section ${nextSection} with ${focusables.length} focusables`
-                );
+                // log.debug(
+                //    `_leaveSection: Found valid section ${nextSection} with ${focusables.length} focusables`
+                // );
                 break;
             }
 
             // Section is empty, try to skip to the next one in the same direction
-            console.log(`[FocusManager] _leaveSection: Section ${nextSection} is empty, skipping...`);
+            log.debug(`_leaveSection: Section ${nextSection} is empty, skipping...`);
             const skipToSection = nextConfig ? nextConfig[key] : null;
 
             if (!skipToSection || !this._sections.has(skipToSection)) {
@@ -706,13 +707,11 @@ class FocusManager {
             const isTrapped = this._trapStack.length > 0 && this._activeSection === '__trap__';
 
             if (!isTrapped) {
-                console.log(
-                    `[FocusManager] focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`
-                );
+                log.debug(`focusElement: Switching active section from "${this._activeSection}" to "${sectionName}"`);
                 this.setActiveSection(sectionName, false); // false = Don't trigger restoreFocus (prevent loop)
             } else {
-                console.log(
-                    `[FocusManager] focusElement: Staying in trap "${this._activeSection}" despite element belonging to "${sectionName}"`
+                log.debug(
+                    `focusElement: Staying in trap "${this._activeSection}" despite element belonging to "${sectionName}"`
                 );
             }
         }

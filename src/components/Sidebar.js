@@ -12,6 +12,9 @@ import { api, auth } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Sidebar');
 
 class Sidebar extends Component {
     constructor(options = {}) {
@@ -331,7 +334,7 @@ class Sidebar extends Component {
                 container.appendChild(btn);
             });
         } catch (e) {
-            console.warn('Sidebar: Failed to load libraries', e);
+            log.warn('Failed to load libraries', e);
         }
     }
 

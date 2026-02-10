@@ -19,6 +19,9 @@ import EpisodeList from '../components/EpisodeList.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('DetailsPage');
 
 class DetailsPage extends Page {
     constructor() {
@@ -168,7 +171,7 @@ class DetailsPage extends Page {
             // Trigger deferred scroll/focus restoration
             this.restoreScrollFocusWhenReady();
         } catch (err) {
-            console.error('DetailsPage: onInit failed', err);
+            log.error('onInit failed', err);
         }
     }
 
@@ -254,7 +257,7 @@ class DetailsPage extends Page {
             if (this._item.UserData?.PlaybackPositionTicks > 0) {
                 const resumeBtn = this.$('.resume-btn');
                 if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                    console.log('DetailsPage: Forcing focus to Resume button');
+                    log.info('Forcing focus to Resume button');
 
                     // CRITICAL: Clear pending nav state so it doesn't overwrite our focus
                     // The router tries to restore previous focus (e.g. Play button) after this method
@@ -264,7 +267,7 @@ class DetailsPage extends Page {
                 }
             }
         } catch (error) {
-            console.error('DetailsPage: Failed to load', error);
+            log.error('Failed to load', error);
             this.showError('Failed to load details');
             this.setLoading(false);
         }
@@ -277,7 +280,7 @@ class DetailsPage extends Page {
             // Safety timeout: If image takes > 800ms, show content anyway
             // Reduced from 2s for faster page interaction
             const timeout = setTimeout(() => {
-                console.warn('DetailsPage: Poster load timed out, showing content');
+                log.warn('Poster load timed out, showing content');
                 resolve();
             }, 400);
 
@@ -385,7 +388,7 @@ class DetailsPage extends Page {
             focusManager.register(sectionName, config.container, config);
         }
 
-        console.log('[NAV] Navigation chain rebuilt after DOM ready');
+        log.debug('Navigation chain rebuilt after DOM ready');
     }
 
     async _loadCollectionItems() {
@@ -454,7 +457,7 @@ class DetailsPage extends Page {
                 this._updateLeaveDown(lastSection, nextSection.targetName);
             }
         } catch (e) {
-            console.warn('DetailsPage: Failed to load collection items', e);
+            log.warn('Failed to load collection items', e);
         }
     }
 
@@ -600,7 +603,7 @@ class DetailsPage extends Page {
             // Re-query chips to be sure
             const validChips = container.querySelectorAll('.meta-chip');
             if (validChips.length === 0) {
-                console.error('RichMeta: No chips found after render, reverting');
+                log.error('RichMeta: No chips found after render, reverting');
                 this._deactivateRichMeta();
                 return;
             }
@@ -668,7 +671,7 @@ class DetailsPage extends Page {
 
         // 2. Rich Meta Trap
         if (this._isRichMetaActive) {
-            console.log('RichMeta: Back pressed, exiting trap');
+            log.debug('RichMeta: Back pressed, exiting trap');
             this._deactivateRichMeta();
             return true;
         }
@@ -801,11 +804,12 @@ class DetailsPage extends Page {
         const name = element.dataset.name || element.dataset.value;
         const libraryId = this._item.ParentId || this._item.LibraryId; // Fallback to LibraryId if ParentId missing
 
-        if (!libraryId) {
-            console.warn('MetaNav: Could not determine LibraryId for item', this._item);
+        if (!this.state.libraryId && !this._item.ParentId) {
+            log.warn('Could not determine LibraryId for item', this._item);
+            return;
         }
 
-        console.log(`MetaNav: Navigating to ${type} -> ${name} (${id})`);
+        log.info(`Navigating to ${type} -> ${name} (${id})`);
 
         switch (type) {
             case 'year':
@@ -826,7 +830,8 @@ class DetailsPage extends Page {
                 router.navigate(`/library/${libraryId}/tag/${encodeURIComponent(name)}`);
                 break;
             default:
-                console.warn(`MetaNav: Unhandled metadata type "${type}"`);
+                log.warn(`Unhandled metadata type "${type}"`);
+                return;
         }
     }
 
@@ -912,7 +917,10 @@ class DetailsPage extends Page {
                 this._renderNextUp();
             }
         } catch (error) {
-            console.warn('Failed to load next up', error);
+            log.warn('Failed to load next up', error);
+            if (this.$('#next-up-section')) {
+                this.$('#next-up-section').classList.add('hidden');
+            }
         }
     }
 
@@ -971,7 +979,10 @@ class DetailsPage extends Page {
                 this._renderSeasons();
             }
         } catch (error) {
-            console.warn('Failed to load seasons', error);
+            log.warn('Failed to load seasons', error);
+            if (this.$('#seasons-section')) {
+                this.$('#seasons-section').classList.add('hidden');
+            }
         }
     }
 
@@ -1025,7 +1036,10 @@ class DetailsPage extends Page {
                 this._renderEpisodes();
             }
         } catch (error) {
-            console.warn('Failed to load episodes', error);
+            log.warn('Failed to load episodes', error);
+            if (this.$('#episodes-section')) {
+                this.$('#episodes-section').classList.add('hidden');
+            }
         }
     }
 
@@ -1048,7 +1062,7 @@ class DetailsPage extends Page {
                     if (action === 'info') {
                         router.navigate(`/details/${episodeId}`);
                     }
-                    console.log(`Episode action: ${action} on ${episodeId}`);
+                    log.debug(`Episode action: ${action} on ${episodeId}`);
                 }
             });
             this._episodeList.mount(container);
@@ -1393,7 +1407,10 @@ class DetailsPage extends Page {
                 this._renderSimilar();
             }
         } catch (error) {
-            console.warn('Failed to load similar', error);
+            log.warn('Failed to load similar', error);
+            if (this.$('#similar-section')) {
+                this.$('#similar-section').classList.add('hidden');
+            }
         }
     }
 
@@ -1465,7 +1482,7 @@ class DetailsPage extends Page {
             if (this._selectedAudioIndex === index) return;
 
             this._selectedAudioIndex = index;
-            console.log('Selected Audio Index:', index);
+            log.info('Selected Audio Index:', index);
         });
     }
 
@@ -1487,7 +1504,7 @@ class DetailsPage extends Page {
             if (this._selectedSubtitleIndex === index) return;
 
             this._selectedSubtitleIndex = index;
-            console.log('Selected Subtitle Index:', index);
+            log.info('Selected Subtitle Index:', index);
         });
     }
 
@@ -1647,7 +1664,7 @@ class DetailsPage extends Page {
             this._item.UserData = this._item.UserData || {};
             this._item.UserData.Played = !isPlayed;
         } catch (error) {
-            console.error('Failed to toggle watched', error);
+            log.error('Failed to toggle watched', error);
         }
     }
 
@@ -1677,7 +1694,7 @@ class DetailsPage extends Page {
                 focusManager.focusElement(playBtn);
             }
         } catch (error) {
-            console.error('DetailsPage: Failed to reset progress', error);
+            log.error('Failed to reset progress', error);
         }
     }
 

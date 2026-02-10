@@ -9,82 +9,13 @@
     'use strict';
 
     // ========================================================================
-    // Debug Mode (Enable with ?debug=true in URL)
+    // Logger
     // ========================================================================
-    const DEBUG_ENABLED = new URLSearchParams(window.location.search).get('debug') === 'true';
-
-    const originalConsole = {
-        log: console.log,
-        error: console.error,
-        warn: console.warn,
-        info: console.info
-    };
-
-    // Only set up debug overlay if debug mode is enabled
-    if (DEBUG_ENABLED) {
-        const initDebugOverlay = function() {
-            if (!document.getElementById('debug-overlay')) {
-                const overlay = document.createElement('div');
-                overlay.id = 'debug-overlay';
-                document.body.appendChild(overlay);
-            }
-        };
-
-        const logToOverlay = function(type, args) {
-            initDebugOverlay();
-            const overlay = document.getElementById('debug-overlay');
-            if (overlay) {
-                const msg = args.map(arg =>
-                    typeof arg === 'object' ? JSON.stringify(arg, null, 2) : String(arg)
-                ).join(' ');
-
-                // Only show important logs
-                const isImportant = type === 'error' ||
-                    msg.includes('[DeviceProfile]') ||
-                    msg.includes('[TizenAVPlayer]') ||
-                    msg.includes('[JellyfinPlayer]') ||
-                    msg.includes('[OSD]') ||
-                    msg.includes('Tizen');
-
-                if (!isImportant) return;
-
-                const line = document.createElement('div');
-                line.className = `log-${type}`;
-                line.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
-                overlay.insertBefore(line, overlay.firstChild);
-
-                // Limit lines
-                if (overlay.children.length > 100) {
-                    overlay.removeChild(overlay.lastChild);
-                }
-            }
-        }
-
-        // Override console methods to log to overlay
-        console.log = function (...args) {
-            originalConsole.log.apply(console, args);
-            logToOverlay('info', args);
-        };
-
-        console.error = function (...args) {
-            originalConsole.error.apply(console, args);
-            logToOverlay('error', args);
-        };
-
-        console.warn = function (...args) {
-            originalConsole.warn.apply(console, args);
-            logToOverlay('warn', args);
-        };
-
-        console.info = function (...args) {
-            originalConsole.info.apply(console, args);
-            logToOverlay('info', args);
-        };
-    }
+    const log = (window.logger || { create: () => console }).create('OSD');
 
     // Capture global errors
     window.onerror = function (msg, url, line, col, error) {
-        console.error('Global Error:', msg, url, line, col, error);
+        log.error('Global Error:', msg, url, line, col, error);
         return false;
     };
 
@@ -153,7 +84,7 @@
     function init(options = {}) {
         osdElement = document.getElementById('osd-overlay');
         if (!osdElement) {
-            console.error('[OSD] osd-overlay element not found');
+            log.error('osd-overlay element not found');
             return;
         }
 
@@ -175,7 +106,7 @@
         // setTimeout(() => updateFocus(), 100);
         resetAutoHide();
 
-        console.log('[OSD] Initialized');
+        log.info('Initialized');
 
         // Bind to player events for track updates
         const player = window.playerInstance;
@@ -195,7 +126,7 @@
     }
 
     function onMediaStreamsChange(e) {
-        console.log('[OSD] onMediaStreamsChange:', e);
+        log.info('onMediaStreamsChange:', e);
         if (e.detail) {
             if (e.detail.audioStreamIndex !== undefined) {
                 currentAudioIndex = e.detail.audioStreamIndex;
@@ -598,7 +529,7 @@
         // precise-player-link
         const player = window.playerInstance || CONFIG.player;
         if (!player) {
-            console.warn('[OSD] executeAction: No player instance available');
+            log.warn('executeAction: No player instance available');
             return;
         }
 
@@ -680,7 +611,7 @@
                 break;
 
             case 'settings':
-                console.log('[OSD] Settings menu');
+                log.info('Settings menu');
                 break;
         }
     }
@@ -715,7 +646,7 @@
 
             // Ensure offset is a number
             if (isNaN(offsetTicks)) {
-                console.error('[OSD] Invalid seek offset:', offsetTicks);
+                log.error('Invalid seek offset:', offsetTicks);
                 return;
             }
 
@@ -756,7 +687,7 @@
 
             // Set timer to commit seek and reset state
             seekDebounceTimer = setTimeout(() => {
-                console.log('[OSD] Committing seek to:', seekTargetTicks);
+                log.debug('Committing seek to:', seekTargetTicks);
                 if (player.seek) player.seek(seekTargetTicks);
                 seekTargetTicks = null;
                 seekStartTime = null; // Reset seek session
@@ -766,7 +697,7 @@
                 if (tooltip) tooltip.classList.remove('visible');
             }, 500); // 500ms wait
         } catch (err) {
-            console.error('[OSD] Seek error:', err);
+            log.error('Seek error:', err);
             seekTargetTicks = null;
             seekStartTime = null;
         }
@@ -955,12 +886,12 @@
                 currentIndex = currentAudioIndex;
             }
         } catch (e) {
-            console.error('[OSD] Failed to get tracks:', e);
+            log.error('Failed to get tracks:', e);
             return;
         }
 
         if (tracks.length === 0) {
-            console.log('[OSD] No tracks available for', type);
+            log.info('No tracks available for', type);
             return;
         }
 
@@ -1098,13 +1029,13 @@
                     if (player.setSecondarySubtitleStreamIndex) {
                         player.setSecondarySubtitleStreamIndex(-1);
                     }
-                    console.log('[OSD] Secondary Subtitles Off');
+                    log.info('Secondary Subtitles Off');
                 } else {
                     currentSubtitleIndex = -1;
                     if (player.setSubtitleStreamIndex) {
                         player.setSubtitleStreamIndex(-1);
                     }
-                    console.log('[OSD] Subtitles Off');
+                    log.info('Subtitles Off');
                 }
             } else {
                 // menuIndex 1 corresponds to tracks[0]
@@ -1116,13 +1047,13 @@
                         if (player.setSecondarySubtitleStreamIndex) {
                             player.setSecondarySubtitleStreamIndex(track.Index);
                         }
-                        console.log('[OSD] Secondary subtitle track set to index:', track.Index);
+                        log.info('Secondary subtitle track set to index:', track.Index);
                     } else {
                         currentSubtitleIndex = track.Index;
                         if (player.setSubtitleStreamIndex) {
                             player.setSubtitleStreamIndex(track.Index);
                         }
-                        console.log('[OSD] Subtitle track set to index:', track.Index);
+                        log.info('Subtitle track set to index:', track.Index);
                     }
                 }
             }
@@ -1135,7 +1066,7 @@
                 if (player.setAudioStreamIndex) {
                     player.setAudioStreamIndex(track.Index);
                 }
-                console.log('[OSD] Audio track set to index:', track.Index);
+                log.info('Audio track set to index:', track.Index);
             }
         }
 
@@ -1275,7 +1206,7 @@
                 await CONFIG.api.markFavorite(newItem.Id);
             }
         } catch (error) {
-            console.error('[OSD] Failed to toggle favorite:', error);
+            log.error('Failed to toggle favorite:', error);
             // Revert on failure
             newItem.UserData.IsFavorite = wasFavorite;
             CONFIG.item = newItem;

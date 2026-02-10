@@ -9,6 +9,9 @@
 
 import Component from '../core/Component.js';
 import { api } from '../api/index.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('FavoriteButton');
 
 class FavoriteButton extends Component {
     constructor(config = {}) {
@@ -84,7 +87,7 @@ class FavoriteButton extends Component {
             // Notify parent
             this.onChange(this.isFavorite);
         } catch (error) {
-            console.error('FavoriteButton: Failed to toggle', error);
+            log.error('Failed to toggle', error);
         }
     }
 }

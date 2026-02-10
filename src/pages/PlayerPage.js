@@ -20,6 +20,9 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Player');
 
 class PlayerPage extends Page {
     constructor() {
@@ -121,7 +124,7 @@ class PlayerPage extends Page {
             // IMPORTANT: These must also report state changes to the server!
 
             this._onRemotePause = () => {
-                console.log('[PlayerPage] Remote: Pause');
+                log.info('Remote: Pause');
                 if (this._player?.pause) {
                     this._player.pause();
                     // Report pause state to server
@@ -131,7 +134,7 @@ class PlayerPage extends Page {
             eventBus.on('remote:pause', this._onRemotePause);
 
             this._onRemotePlay = () => {
-                console.log('[PlayerPage] Remote: Play/Resume');
+                log.info('Remote: Play/Resume');
                 // Player library uses unpause() or togglePlay() - not play()
                 if (this._player?.unpause) {
                     this._player.unpause();
@@ -145,7 +148,7 @@ class PlayerPage extends Page {
             eventBus.on('remote:play', this._onRemotePlay);
 
             this._onRemotePlayPause = () => {
-                console.log('[PlayerPage] Remote: PlayPause');
+                log.info('Remote: PlayPause');
                 const wasPaused = this._player?.isPaused?.();
                 if (this._player?.togglePlay) {
                     this._player.togglePlay();
@@ -160,21 +163,21 @@ class PlayerPage extends Page {
             eventBus.on('remote:playpause', this._onRemotePlayPause);
 
             this._onRemoteStop = () => {
-                console.log('[PlayerPage] Remote: Stop');
+                log.info('Remote: Stop');
                 // _stopAndExit already handles reporting stopped to server
                 this._stopAndExit();
             };
             eventBus.on('remote:stop', this._onRemoteStop);
 
             this._onRemoteSeek = (positionTicks) => {
-                console.log('[PlayerPage] Remote: Seek to', positionTicks);
+                log.info('Remote: Seek to', positionTicks);
                 // Player uses seek() not seekTo() - same as OSD
                 if (this._player?.seek) {
                     this._player.seek(positionTicks);
                     // Report new position to server after a brief delay for seek to complete
                     setTimeout(() => this._reportPlaybackProgress('timeupdate'), 200);
                 } else {
-                    console.warn('[PlayerPage] Player has no seek method');
+                    log.warn('Player has no seek method');
                 }
             };
             eventBus.on('remote:seek', this._onRemoteSeek);
@@ -182,25 +185,25 @@ class PlayerPage extends Page {
             // Volume controls - these don't need server reporting (volume is local)
             // Note: On Tizen, volume may be controlled via system API not player API
             this._onRemoteVolume = (volume) => {
-                console.log('[PlayerPage] Remote: SetVolume', volume);
+                log.info('Remote: SetVolume', volume);
                 if (this._player?.setVolume) {
                     this._player.setVolume(volume);
                 } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
                     // Tizen system volume (0-100)
                     try {
                         tizen.tvaudiocontrol.setVolume(Math.round(volume));
-                        console.log('[PlayerPage] Set Tizen system volume to', volume);
+                        log.info('Set Tizen system volume to', volume);
                     } catch (e) {
-                        console.warn('[PlayerPage] Tizen volume control failed:', e);
+                        log.warn('Tizen volume control failed:', e);
                     }
                 } else {
-                    console.warn('[PlayerPage] No volume control available');
+                    log.warn('No volume control available');
                 }
             };
             eventBus.on('remote:volume', this._onRemoteVolume);
 
             this._onRemoteVolumeUp = () => {
-                console.log('[PlayerPage] Remote: VolumeUp');
+                log.info('Remote: VolumeUp');
                 if (this._player?.getVolume && this._player?.setVolume) {
                     const vol = this._player.getVolume();
                     this._player.setVolume(Math.min(100, vol + 10));
@@ -208,14 +211,14 @@ class PlayerPage extends Page {
                     try {
                         tizen.tvaudiocontrol.setVolumeUp();
                     } catch (e) {
-                        console.warn('[PlayerPage] Tizen volume up failed:', e);
+                        log.warn('Tizen volume up failed:', e);
                     }
                 }
             };
             eventBus.on('remote:volumeup', this._onRemoteVolumeUp);
 
             this._onRemoteVolumeDown = () => {
-                console.log('[PlayerPage] Remote: VolumeDown');
+                log.info('Remote: VolumeDown');
                 if (this._player?.getVolume && this._player?.setVolume) {
                     const vol = this._player.getVolume();
                     this._player.setVolume(Math.max(0, vol - 10));
@@ -223,21 +226,21 @@ class PlayerPage extends Page {
                     try {
                         tizen.tvaudiocontrol.setVolumeDown();
                     } catch (e) {
-                        console.warn('[PlayerPage] Tizen volume down failed:', e);
+                        log.warn('Tizen volume down failed:', e);
                     }
                 }
             };
             eventBus.on('remote:volumedown', this._onRemoteVolumeDown);
 
             this._onRemoteMute = (muted) => {
-                console.log('[PlayerPage] Remote: Mute', muted);
+                log.info('Remote: Mute', muted);
                 if (this._player?.setMuted) {
                     this._player.setMuted(muted);
                 } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
                     try {
                         tizen.tvaudiocontrol.setMute(muted);
                     } catch (e) {
-                        console.warn('[PlayerPage] Tizen mute control failed:', e);
+                        log.warn('Tizen mute control failed:', e);
                     }
                 }
                 // Report mute state to server
@@ -246,7 +249,7 @@ class PlayerPage extends Page {
             eventBus.on('remote:mute', this._onRemoteMute);
 
             this._onRemoteToggleMute = () => {
-                console.log('[PlayerPage] Remote: ToggleMute');
+                log.info('Remote: ToggleMute');
                 if (this._player?.isMuted && this._player?.setMuted) {
                     this._player.setMuted(!this._player.isMuted());
                 } else if (typeof tizen !== 'undefined' && tizen.tvaudiocontrol) {
@@ -254,7 +257,7 @@ class PlayerPage extends Page {
                         const isMuted = tizen.tvaudiocontrol.isMute();
                         tizen.tvaudiocontrol.setMute(!isMuted);
                     } catch (e) {
-                        console.warn('[PlayerPage] Tizen toggle mute failed:', e);
+                        log.warn('Tizen toggle mute failed:', e);
                     }
                 }
                 // Report mute state to server
@@ -265,18 +268,18 @@ class PlayerPage extends Page {
             // Next/Previous track handlers
             // Note: Litefin doesn't support playlists yet, so these navigate series episodes
             this._onRemoteNext = async () => {
-                console.log('[PlayerPage] Remote: NextTrack');
+                log.info('Remote: NextTrack');
                 // TODO: If this is a series, could navigate to next episode
                 // For now, log that this feature isn't supported
-                console.warn('[PlayerPage] Next track not supported - no playlist support yet');
+                log.warn('Next track not supported - no playlist support yet');
             };
             eventBus.on('remote:next', this._onRemoteNext);
 
             this._onRemotePrevious = async () => {
-                console.log('[PlayerPage] Remote: PreviousTrack');
+                log.info('Remote: PreviousTrack');
                 // TODO: If this is a series, could navigate to previous episode
                 // For now, log that this feature isn't supported
-                console.warn('[PlayerPage] Previous track not supported - no playlist support yet');
+                log.warn('Previous track not supported - no playlist support yet');
             };
             eventBus.on('remote:previous', this._onRemotePrevious);
 
@@ -286,7 +289,7 @@ class PlayerPage extends Page {
             // Hide loading
             this._showLoading(false);
         } catch (error) {
-            console.error('[PlayerPage] Failed to initialize:', error);
+            log.error('Failed to initialize:', error);
             this._showError(error.message || 'Failed to load video');
         }
     }
@@ -296,13 +299,13 @@ class PlayerPage extends Page {
      */
     async _initPlayer() {
         // Debug: Log the state of window.JellyfinPlayer
-        console.log('[PlayerPage] _initPlayer called');
-        console.log('[PlayerPage] window.JellyfinPlayer exists:', !!window.JellyfinPlayer);
-        console.log('[PlayerPage] window.JellyfinPlayer.default exists:', !!window.JellyfinPlayer?.default);
-        console.log('[PlayerPage] window.JellyfinPlayer type:', typeof window.JellyfinPlayer);
+        log.info('_initPlayer called');
+        log.debug('window.JellyfinPlayer exists:', !!window.JellyfinPlayer);
+        log.debug('window.JellyfinPlayer.default exists:', !!window.JellyfinPlayer?.default);
+        log.debug('window.JellyfinPlayer type:', typeof window.JellyfinPlayer);
         if (window.JellyfinPlayer) {
-            console.log('[PlayerPage] window.JellyfinPlayer.init exists:', typeof window.JellyfinPlayer.init);
-            console.log('[PlayerPage] window.JellyfinPlayer keys:', Object.keys(window.JellyfinPlayer).join(', '));
+            log.debug('window.JellyfinPlayer.init exists:', typeof window.JellyfinPlayer.init);
+            log.debug('window.JellyfinPlayer keys:', Object.keys(window.JellyfinPlayer).join(', '));
         }
 
         // Check if JellyfinPlayer is available (loaded from jellyfin-player.min.js)
@@ -310,21 +313,21 @@ class PlayerPage extends Page {
         const playerLib = window.JellyfinPlayer?.default || window.JellyfinPlayer;
 
         if (!playerLib || typeof playerLib.init !== 'function') {
-            console.error('[PlayerPage] playerLib validation failed:', {
+            log.error('playerLib validation failed:', {
                 playerLib: !!playerLib,
                 initType: typeof playerLib?.init
             });
             throw new Error('JellyfinPlayer library not loaded correctly');
         }
 
-        console.log('[PlayerPage] Calling playerLib.init...');
+        log.info('Calling playerLib.init...');
         this._player = playerLib.init({
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
             useTizenPlayer: this._isTizen()
         });
-        console.log('[PlayerPage] Player initialized:', !!this._player);
+        log.info('Player initialized:', !!this._player);
 
         // Listen for player events
         this._player.on('ready', () => this._onPlayerReady());
@@ -380,7 +383,7 @@ class PlayerPage extends Page {
                 ? preSelectedSubtitle
                 : mediaSource?.DefaultSubtitleStreamIndex;
 
-        console.log('[PlayerPage] Starting playback with resolved preferences:', {
+        log.info('Starting playback with resolved preferences:', {
             audio: savedAudioIndex,
             subtitle: savedSubtitleIndex,
             preSelectedAudio,
@@ -443,9 +446,9 @@ class PlayerPage extends Page {
         if (typeof window.PlayerOSD === 'undefined') {
             try {
                 await import('../player/jellyfin-player-osd.js');
-                console.log('[PlayerPage] PlayerOSD dynamically loaded');
+                log.info('PlayerOSD dynamically loaded');
             } catch (err) {
-                console.error('[PlayerPage] Failed to load PlayerOSD script:', err);
+                log.error('Failed to load PlayerOSD script:', err);
                 return;
             }
         }
@@ -465,7 +468,7 @@ class PlayerPage extends Page {
                 titleEl.textContent = this._item.Name;
             }
         } else {
-            console.warn('[PlayerPage] PlayerOSD global object NOT found after import attempt');
+            log.warn('PlayerOSD global object NOT found after import attempt');
         }
     }
 
@@ -481,12 +484,12 @@ class PlayerPage extends Page {
     // ========================================================================
 
     _onPlayerReady() {
-        console.log('[PlayerPage] Player ready');
+        log.info('Player ready');
         this._showLoading(false);
     }
 
     _onPlaying() {
-        console.log('[PlayerPage] Playing');
+        log.info('Playing');
         eventBus.emit('player:playing', { item: this._item });
 
         // Report progress (Start/Unpause)
@@ -501,7 +504,7 @@ class PlayerPage extends Page {
     }
 
     _onPaused() {
-        console.log('[PlayerPage] Paused');
+        log.info('Paused');
         eventBus.emit('player:paused', { item: this._item });
 
         // Report paused state with explicit 'pause' event
@@ -509,12 +512,12 @@ class PlayerPage extends Page {
     }
 
     _onEnded() {
-        console.log('[PlayerPage] Ended event received');
+        log.info('Ended event received');
 
         // If we're already exiting (e.g., user pressed back which called stop()),
         // don't call router.back() again - _stopAndExit already handles navigation
         if (this._isExiting) {
-            console.log('[PlayerPage] Already exiting, skipping duplicate navigation');
+            log.info('Already exiting, skipping duplicate navigation');
             eventBus.emit('player:ended', { item: this._item });
             return;
         }
@@ -529,7 +532,7 @@ class PlayerPage extends Page {
     }
 
     _onPlayerError(error) {
-        console.error('[PlayerPage] Player error:', error);
+        log.error('Player error:', error);
         this._showError(error.message || 'Playback error');
     }
 
@@ -562,7 +565,7 @@ class PlayerPage extends Page {
 
             await api.reportPlaybackStart(info);
         } catch (error) {
-            console.warn('[PlayerPage] Failed to report playback start:', error);
+            log.warn('Failed to report playback start:', error);
         }
     }
 
@@ -610,7 +613,7 @@ class PlayerPage extends Page {
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
 
-        console.log('[PlayerPage] Media streams changed, reporting progress to persist selection');
+        log.info('Media streams changed, reporting progress to persist selection');
         this._reportPlaybackProgress('timeupdate');
     }
 
@@ -629,7 +632,7 @@ class PlayerPage extends Page {
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
             if (!playSessionId) {
-                console.warn('[PlayerPage] Skipping progress report - no PlaySessionId');
+                log.warn('Skipping progress report - no PlaySessionId');
                 return;
             }
 
@@ -644,12 +647,12 @@ class PlayerPage extends Page {
 
             // Debug: Log progress reports for pause/unpause events
             if (eventName !== 'timeupdate') {
-                console.log(`[PlayerPage] Reporting ${eventName}, IsPaused:`, isPaused);
+                log.info(`Reporting ${eventName}, IsPaused:`, isPaused);
             }
 
             await api.reportPlaybackProgress(info);
         } catch (error) {
-            console.warn('[PlayerPage] Failed to report progress:', error);
+            log.warn('Failed to report progress:', error);
         }
     }
 
@@ -765,7 +768,7 @@ class PlayerPage extends Page {
 
             this._showLoading(false);
         } catch (error) {
-            console.error('[PlayerPage] Retry failed:', error);
+            log.error('Retry failed:', error);
             this._showError(error.message || 'Retry failed. Check your connection.');
         }
     }
@@ -787,15 +790,11 @@ class PlayerPage extends Page {
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
             if (!playSessionId) {
-                console.warn(
-                    '[PlayerPage] Skipping stopped report - no PlaySessionId (mediaSource:',
-                    !!mediaSource,
-                    ')'
-                );
+                log.warn('Skipping stopped report - no PlaySessionId (mediaSource:', !!mediaSource, ')');
                 return;
             }
 
-            console.log('[PlayerPage] Reporting playback stopped, position:', positionTicks);
+            log.info('Reporting playback stopped, position:', positionTicks);
 
             // ================================================================
             // TIZEN FIX: Use synchronous XHR to ensure request completes
@@ -821,18 +820,18 @@ class PlayerPage extends Page {
                 xhr.send(JSON.stringify(data));
 
                 if (xhr.status >= 200 && xhr.status < 300) {
-                    console.log('[PlayerPage] ✓ Playback stopped reported (sync)');
+                    log.info('✓ Playback stopped reported (sync)');
                 } else {
-                    console.warn('[PlayerPage] Stop report failed:', xhr.status, xhr.statusText);
+                    log.warn('Stop report failed:', xhr.status, xhr.statusText);
                 }
             } catch (xhrError) {
-                console.warn('[PlayerPage] Sync XHR failed, falling back to async:', xhrError);
+                log.warn('Sync XHR failed, falling back to async:', xhrError);
                 // Fallback to async (works on web)
                 await api.reportPlaybackStopped(data);
-                console.log('[PlayerPage] ✓ Playback stopped reported (async fallback)');
+                log.info('✓ Playback stopped reported (async fallback)');
             }
         } catch (error) {
-            console.warn('[PlayerPage] Failed to report playback stopped:', error);
+            log.warn('Failed to report playback stopped:', error);
         }
     }
 
@@ -841,7 +840,7 @@ class PlayerPage extends Page {
      * Called when app is about to close or go to background
      */
     _handleAppExit() {
-        console.log('[PlayerPage] App exit detected, reporting playback stopped');
+        log.info('App exit detected, reporting playback stopped');
 
         // Capture info before it's too late
         const mediaSource = this._player?.getCurrentMediaSource?.();
@@ -849,7 +848,7 @@ class PlayerPage extends Page {
         const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
         if (!playSessionId) {
-            console.warn('[PlayerPage] Skipping exit report - no PlaySessionId');
+            log.warn('Skipping exit report - no PlaySessionId');
             return;
         }
 
@@ -862,7 +861,7 @@ class PlayerPage extends Page {
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks
             }).catch((err) => {
-                console.warn('[PlayerPage] Failed to report on exit:', err);
+                log.warn('Failed to report on exit:', err);
             });
         }
     }
@@ -872,16 +871,16 @@ class PlayerPage extends Page {
     // ========================================================================
 
     onBack() {
-        console.log('[PlayerPage] onBack() called');
+        log.info('onBack() called');
 
         // If OSD is showing a menu, close it first
         if (this._osd?.isMenuOpen?.()) {
-            console.log('[PlayerPage] OSD menu is open, closing menu');
+            log.info('OSD menu is open, closing menu');
             this._osd.closeMenu();
             return true;
         }
 
-        console.log('[PlayerPage] No menu open, calling _stopAndExit()');
+        log.info('No menu open, calling _stopAndExit()');
         // Stop playback and go back
         this._stopAndExit();
         return true;
@@ -907,7 +906,7 @@ class PlayerPage extends Page {
             // Report stopped with captured values
             await this._reportPlaybackStopped(mediaSource, positionTicks);
         } catch (error) {
-            console.warn('[PlayerPage] Error during stop:', error);
+            log.warn('Error during stop:', error);
         }
 
         // Navigate back
@@ -919,11 +918,11 @@ class PlayerPage extends Page {
     // ========================================================================
 
     destroy() {
-        console.log('[PlayerPage] destroy() called');
+        log.info('destroy() called');
 
         // Destroy player (this also calls stop internally)
         if (this._player?.destroy) {
-            console.log('[PlayerPage] Destroying player instance');
+            log.info('Destroying player instance');
             this._player.destroy();
         }
         this._player = null;
@@ -959,7 +958,7 @@ class PlayerPage extends Page {
 
         // Clean up OSD
         if (this._osd?.destroy) {
-            console.log('[PlayerPage] Destroying OSD');
+            log.info('Destroying OSD');
             this._osd.destroy();
         }
 
@@ -970,7 +969,7 @@ class PlayerPage extends Page {
         document.body.classList.remove('player-active');
         document.documentElement.classList.remove('player-active');
 
-        console.log('[PlayerPage] destroy() complete');
+        log.info('destroy() complete');
         super.destroy();
     }
 }

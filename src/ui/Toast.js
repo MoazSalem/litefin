@@ -11,6 +11,10 @@
 // Toast Class
 // ============================================================================
 
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Toast');
+
 class Toast {
     constructor() {
         // Container for toast messages
@@ -206,7 +210,7 @@ class Toast {
             }
         `;
         document.head.appendChild(styles);
-        console.log('[Toast] Styles injected');
+        log.debug('Styles injected');
     }
 
     /**

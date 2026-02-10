@@ -12,6 +12,9 @@ import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Library');
 
 class LibraryPage extends Page {
     constructor() {
@@ -236,7 +239,7 @@ class LibraryPage extends Page {
                     this.title = genre.Name;
                 }
             } catch (e) {
-                console.error('Failed to fetch genre info', e);
+                log.error('Failed to fetch genre info', e);
             }
         } else if (this.params.studioId) {
             this.state.viewType = 'Items'; // Force Items view for Studio
@@ -248,7 +251,7 @@ class LibraryPage extends Page {
                     this.title = studio.Name;
                 }
             } catch (e) {
-                console.error('Failed to fetch studio info', e);
+                log.error('Failed to fetch studio info', e);
             }
         } else if (this.params.year) {
             this.state.viewType = 'Items';
@@ -264,7 +267,7 @@ class LibraryPage extends Page {
                     this.title = person.Name;
                 }
             } catch (e) {
-                console.error('Failed to fetch person info', e);
+                log.error('Failed to fetch person info', e);
             }
         } else if (this.params.tagName) {
             this.state.viewType = 'Items';
@@ -351,7 +354,7 @@ class LibraryPage extends Page {
                 const genreId = rowEl.dataset.genreId;
 
                 if (genreId) {
-                    console.log('Navigating to Genre:', genreId);
+                    log.info('Navigating to Genre:', genreId);
                     // Navigate to Genre Filtered Page
                     router.navigate(`/library/${this.state.libraryId}/genre/${genreId}`);
                 }
@@ -365,13 +368,13 @@ class LibraryPage extends Page {
 
                 // Special handling for Networks view: navigate to studio-filtered library
                 if (this.state.viewType === 'Networks') {
-                    console.log('Navigating to Studio:', itemId);
+                    log.info('Navigating to Studio:', itemId);
                     router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
                     return;
                 }
 
                 // Default: navigate to item details
-                console.log('Navigating to item details:', itemId);
+                log.info('Navigating to item details:', itemId);
                 router.navigate(`/details/${itemId}`);
             }
         });
@@ -416,7 +419,7 @@ class LibraryPage extends Page {
             limit: savedState.limit || this.state.limit
         });
 
-        console.log('[LibraryPage] Navigation state restored:', savedState);
+        log.info('Navigation state restored:', savedState);
     }
 
     destroy() {
@@ -436,7 +439,7 @@ class LibraryPage extends Page {
             this.$('#library-title').textContent = item.Name;
             this.title = item.Name; // Update Page title
         } catch (e) {
-            console.error('LibraryPage: Failed to fetch info', e);
+            log.error('Failed to fetch info', e);
         }
     }
 
@@ -631,7 +634,7 @@ class LibraryPage extends Page {
                             rows.push({ title: `Because you watch ${targetName}`, items: similar.Items });
                         }
                     } catch (e) {
-                        console.warn('Failed to load similar suggestions', e);
+                        log.warn('Failed to load similar suggestions', e);
                     }
                 }
 
@@ -657,7 +660,7 @@ class LibraryPage extends Page {
                         }
                     }
                 } catch (e) {
-                    console.warn('Failed to load favorite suggestions', e);
+                    log.warn('Failed to load favorite suggestions', e);
                 }
 
                 this.state.items = []; // Clear grid items
@@ -703,7 +706,7 @@ class LibraryPage extends Page {
                             items: itemsResult.Items || []
                         };
                     } catch (err) {
-                        console.warn(`Failed to load items for genre ${genre.Name}`, err);
+                        log.warn(`Failed to load items for genre ${genre.Name}`, err);
                         return null;
                     }
                 });
@@ -798,7 +801,7 @@ class LibraryPage extends Page {
             this._renderGrid(this.state.items);
             this._updatePaginationUI();
         } catch (e) {
-            console.error('LibraryPage: Failed to load items', e);
+            log.error('Failed to load items', e);
             this.$('#library-grid').innerHTML = `<p class="error-msg">Failed to load content</p>`;
         } finally {
             this.setLoading(false);
@@ -1078,12 +1081,12 @@ class LibraryPage extends Page {
                     // Try to restore focus to the active tab button
                     const activeTabBtn = this.$(`.tab-btn[data-type="${this.state.viewType}"]`);
                     if (activeTabBtn && (isTabsActive || !currentFocus || currentFocus === document.body)) {
-                        console.log('[LibraryPage] Restoring focus to active tab:', this.state.viewType);
+                        log.info('Restoring focus to active tab:', this.state.viewType);
                         focusManager.setActiveSection('library-tabs');
                         activeTabBtn.focus();
                     } else {
                         // Fallback to Sidebar if we really lost context
-                        console.log('[LibraryPage] Lost focus context, defaulting to sidebar');
+                        log.info('Lost focus context, defaulting to sidebar');
                         focusManager.setActiveSection('sidebar');
                     }
                 }
@@ -1408,7 +1411,7 @@ class LibraryPage extends Page {
             const items = result.Items || [];
 
             if (items.length === 0) {
-                console.log(`[LibraryPage] Row "${listId}" is empty, hiding row...`);
+                log.info(`Row "${listId}" is empty, hiding row...`);
 
                 // HIDE the entire row completely
                 const rowSection = listContainer.closest('.media-row');
@@ -1452,7 +1455,7 @@ class LibraryPage extends Page {
             // Invalidate FocusManager cache so it re-queries the new elements
             focusManager.invalidateCache(listId);
         } catch (e) {
-            console.error('Failed to load genre items', e);
+            log.error('Failed to load genre items', e);
             // Hide row on error too
             const rowSection = listContainer?.closest('.media-row');
             if (rowSection) {
@@ -1531,7 +1534,7 @@ class LibraryPage extends Page {
 
         // Special handling for Networks view: navigate to studio-filtered library
         if (this.state.viewType === 'Networks') {
-            console.log('Navigating to Studio:', itemId);
+            log.debug('Navigating to Studio:', itemId);
             // Navigate to library filtered by this studio
             router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
             return;
@@ -1601,10 +1604,10 @@ class LibraryPage extends Page {
                 const randomItem = result.Items[0];
                 router.navigate(`/details/${randomItem.Id}`);
             } else {
-                console.warn('Shuffle: No items found');
+                log.warn('No items found');
             }
         } catch (e) {
-            console.error('Shuffle: Failed to fetch random item', e);
+            log.error('Failed to fetch random item', e);
         }
     }
 
@@ -1627,7 +1630,7 @@ class LibraryPage extends Page {
     }
 
     _handleResetFilters() {
-        console.log('[LibraryPage] Resetting all filters...');
+        log.info('Resetting all filters...');
         this.state.filters = {};
         this.state.nameStartsWith = null;
         this.state.startIndex = 0;
@@ -1858,7 +1861,7 @@ class LibraryPage extends Page {
         try {
             filtersData = await api.getItemFilters(params);
         } catch (e) {
-            console.error('Filter: Failed to fetch filters', e);
+            log.error('Failed to fetch filters', e);
             // We can still show static filters
             filtersData = { Genres: [], OfficialRatings: [], Tags: [], Years: [] };
         }

@@ -15,6 +15,9 @@ import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('SettingsPage');
 
 class SettingsPage extends Page {
     constructor() {
@@ -860,7 +863,7 @@ class SettingsPage extends Page {
                         }
                     }
 
-                    console.log(`Setting ${id} saved: ${newValue}`);
+                    log.debug(`Setting ${id} saved: ${newValue}`);
                 });
             });
         });

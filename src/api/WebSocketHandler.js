@@ -9,6 +9,9 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { toast } from '../ui/Toast.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('WebSocketHandler');
 
 // ============================================================================
 // WebSocketHandler Class
@@ -27,7 +30,7 @@ class WebSocketHandler {
     init() {
         // Listen for WebSocket messages from ApiClient
         eventBus.on('websocket:message', this._onMessage);
-        console.log('WebSocketHandler: Initialized');
+        log.info('Initialized');
     }
 
     /**
@@ -39,7 +42,7 @@ class WebSocketHandler {
     _onMessage(msg) {
         if (!msg || !msg.MessageType) return;
 
-        console.log('[WebSocketHandler] Received:', msg.MessageType, msg.Data);
+        log.debug('Received:', msg.MessageType, msg.Data);
 
         switch (msg.MessageType) {
             // ================================================================
@@ -84,7 +87,7 @@ class WebSocketHandler {
     _handlePlaystate(data) {
         if (!data || !data.Command) return;
 
-        console.log('[WebSocketHandler] Playstate:', data.Command);
+        log.info('Playstate:', data.Command);
 
         switch (data.Command) {
             case 'Pause':
@@ -126,7 +129,7 @@ class WebSocketHandler {
                 break;
 
             default:
-                console.log('[WebSocketHandler] Unknown Playstate command:', data.Command);
+                log.warn('Unknown Playstate command:', data.Command);
         }
     }
 
@@ -142,7 +145,7 @@ class WebSocketHandler {
     _handleGeneralCommand(data) {
         if (!data || !data.Name) return;
 
-        console.log('[WebSocketHandler] GeneralCommand:', data.Name);
+        log.info('GeneralCommand:', data.Name);
 
         switch (data.Name) {
             // ================================================================
@@ -209,7 +212,7 @@ class WebSocketHandler {
                 break;
 
             default:
-                console.log('[WebSocketHandler] Unhandled GeneralCommand:', data.Name);
+                log.warn('Unhandled GeneralCommand:', data.Name);
         }
     }
 
@@ -245,7 +248,7 @@ class WebSocketHandler {
     _handlePlay(data) {
         if (!data || !data.ItemIds || data.ItemIds.length === 0) return;
 
-        console.log('[WebSocketHandler] Play:', data.PlayCommand, data.ItemIds);
+        log.info('Play:', data.PlayCommand, data.ItemIds);
 
         // PlayCommand can be: PlayNow, PlayNext, PlayLast
         const playCommand = data.PlayCommand || 'PlayNow';
@@ -274,7 +277,7 @@ class WebSocketHandler {
                 break;
 
             default:
-                console.log('[WebSocketHandler] Unknown PlayCommand:', playCommand);
+                log.warn('Unknown PlayCommand:', playCommand);
         }
     }
 }

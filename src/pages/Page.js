@@ -15,6 +15,9 @@ import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
 import { navigationState } from '../core/NavigationState.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Page');
 
 class Page extends Component {
     /**
@@ -103,7 +106,7 @@ class Page extends Component {
      */
     restoreScrollFocusWhenReady() {
         if (this._pendingNavState) {
-            console.log('[Page] Restoring scroll/focus (deferred)');
+            log.debug('Restoring scroll/focus (deferred)');
             navigationState.restoreScrollFocus(this._pendingNavState);
             this._pendingNavState = null;
         }

@@ -13,6 +13,9 @@
  */
 
 import { eventBus } from './EventBus.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('StateManager');
 
 class StateManager {
     constructor() {
@@ -129,7 +132,7 @@ class StateManager {
                 try {
                     callback(newValue, oldValue);
                 } catch (error) {
-                    console.error(`StateManager: Error in subscriber for "${key}":`, error);
+                    log.error(`Error in subscriber for "${key}":`, error);
                 }
             }
         }

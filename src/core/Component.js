@@ -16,6 +16,9 @@
  */
 
 import { eventBus } from './EventBus.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Component');
 
 class Component {
     /**
@@ -69,7 +72,7 @@ class Component {
         }
 
         if (!this.container) {
-            console.error('Component: Cannot mount without a container');
+            log.error('Cannot mount without a container');
             return;
         }
 

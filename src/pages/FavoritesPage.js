@@ -2,6 +2,9 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { imageService } from '../utils/ImageService.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('FavoritesPage');
 
 class FavoritesPage extends Page {
     constructor() {
@@ -132,7 +135,7 @@ class FavoritesPage extends Page {
                 this.setActiveSection(sectionsData[0].id);
             }
         } catch (e) {
-            console.error('Failed to load favorites', e);
+            log.error('Failed to load favorites', e);
             this.setLoading(false);
             const container = this.$('#favorites-rows');
             if (container)

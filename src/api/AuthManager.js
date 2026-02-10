@@ -18,6 +18,9 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { api } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('AuthManager');
 
 // ============================================================================
 // Storage Keys
@@ -53,7 +56,7 @@ class AuthManager {
      * @returns {Promise<boolean>} True if session was restored
      */
     async init() {
-        console.log('AuthManager: Initializing...');
+        log.info('Initializing...');
 
         // Ensure we have a device ID
         this._ensureDeviceId();
@@ -62,7 +65,7 @@ class AuthManager {
         const restored = await this._restoreSession();
 
         if (restored) {
-            console.log('AuthManager: Session restored');
+            log.info('Session restored');
             eventBus.emit('auth:restored');
         }
 
@@ -80,7 +83,7 @@ class AuthManager {
             // Generate UUID v4
             deviceId = this._generateUUID();
             localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
-            console.log('AuthManager: Generated new device ID');
+            log.info('Generated new device ID');
         }
 
         // Get device name - Encoded to handle spaces safely in headers
@@ -95,13 +98,13 @@ class AuthManager {
      * @returns {Promise<boolean>} True if session was valid
      */
     async _restoreSession() {
-        console.log('AuthManager: _restoreSession() called');
+        log.info('_restoreSession() called');
 
         const serverUrl = localStorage.getItem(STORAGE_KEYS.SERVER_URL);
         const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
         const userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
 
-        console.log('AuthManager: Stored credentials check:', {
+        log.debug('Stored credentials check:', {
             hasServerUrl: !!serverUrl,
             hasAccessToken: !!accessToken,
             hasUserId: !!userId
@@ -109,20 +112,20 @@ class AuthManager {
 
         // Need all three to restore
         if (!serverUrl || !accessToken || !userId) {
-            console.log('AuthManager: Missing credentials, cannot restore');
+            log.info('Missing credentials, cannot restore');
             return false;
         }
 
         // Configure API with saved values
         api.setServer(serverUrl);
         api.setAuth(accessToken, userId);
-        console.log('AuthManager: API configured with saved credentials');
+        log.info('API configured with saved credentials');
 
         // Validate token by fetching user info
         try {
-            console.log('AuthManager: Validating token by fetching current user...');
+            log.info('Validating token by fetching current user...');
             const user = await api.getCurrentUser();
-            console.log('AuthManager: Token valid, user:', user?.Name);
+            log.info('Token valid, user:', user?.Name);
 
             // Token is valid - restore state
             state.set('user:data', user);
@@ -131,7 +134,7 @@ class AuthManager {
 
             // Report capabilities to establish session (make user appear online)
             // MUST await this on Tizen - fire-and-forget doesn't complete reliably
-            console.log('AuthManager: Reporting capabilities to server...');
+            log.info('Reporting capabilities to server...');
             try {
                 await api.reportCapabilities({
                     PlayableMediaTypes: ['Video', 'Audio'],
@@ -139,9 +142,9 @@ class AuthManager {
                     SupportsMediaControl: true,
                     SupportsPersistentIdentifier: true
                 });
-                console.log('AuthManager: ✓ Session capabilities reported on restore - user should be online');
+                log.info('✓ Session capabilities reported on restore - user should be online');
             } catch (e) {
-                console.error('AuthManager: ✗ Failed to report capabilities on restore:', e);
+                log.error('✗ Failed to report capabilities on restore:', e);
             }
 
             // Open WebSocket for real-time online status tracking
@@ -150,7 +153,7 @@ class AuthManager {
             return true;
         } catch (error) {
             // Token is invalid - clear stored credentials
-            console.warn('AuthManager: Token validation failed:', error);
+            log.warn('Token validation failed:', error);
             this._clearStorage();
             return false;
         }
@@ -166,7 +169,7 @@ class AuthManager {
      * @returns {Promise<Object>} Server info
      */
     async connectToServer(serverUrl) {
-        console.log(`AuthManager: Connecting to ${serverUrl}`);
+        log.info(`Connecting to ${serverUrl}`);
 
         api.setServer(serverUrl);
 
@@ -181,7 +184,7 @@ class AuthManager {
 
             eventBus.emit('auth:serverConnected', info);
 
-            console.log(`AuthManager: Connected to ${info.ServerName} (v${info.Version})`);
+            log.info(`Connected to ${info.ServerName} (v${info.Version})`);
 
             return info;
         } catch (error) {
@@ -219,15 +222,15 @@ class AuthManager {
      * @returns {Promise<Object>} Authentication result
      */
     async login(username, password = '') {
-        console.log(`AuthManager: Logging in as "${username}"`);
-        console.log(`AuthManager: Password length: ${password ? password.length : 0}`);
-        console.log(`AuthManager: Current accessToken before login: ${api._accessToken ? 'SET' : 'NULL'}`);
+        log.info(`Logging in as "${username}"`);
+        log.debug(`Password length: ${password ? password.length : 0}`);
+        log.debug(`Current accessToken before login: ${api._accessToken ? 'SET' : 'NULL'}`);
 
         try {
             // Ensure no stale token is being sent - clear BOTH memory and storage
             this._clearStorage();
             api.clearAuth();
-            console.log(`AuthManager: Cleared any stale auth before login request`);
+            log.info(`Cleared any stale auth before login request`);
 
             // Call Jellyfin authenticate endpoint
             const result = await api.post('/Users/AuthenticateByName', {
@@ -242,7 +245,7 @@ class AuthManager {
 
             // Validate response
             if (!accessToken || !userId) {
-                console.error('AuthManager: Invalid login response', result);
+                log.error('Invalid login response', result);
                 throw new Error('Invalid server response');
             }
 
@@ -263,9 +266,9 @@ class AuthManager {
                     SupportsMediaControl: true,
                     SupportsPersistentIdentifier: true
                 });
-                console.log('AuthManager: Session capabilities reported to server');
+                log.info('Session capabilities reported to server');
             } catch (capError) {
-                console.warn('AuthManager: Failed to report capabilities:', capError);
+                log.warn('Failed to report capabilities:', capError);
                 // Don't fail login if this fails - user can still use the app
             }
 
@@ -278,11 +281,11 @@ class AuthManager {
 
             eventBus.emit('auth:login', user);
 
-            console.log(`AuthManager: Logged in as "${user.Name || user.name}"`);
+            log.info(`Logged in as "${user.Name || user.name}"`);
 
             return result;
         } catch (error) {
-            console.error('AuthManager: Login failed:', error);
+            log.error('Login failed:', error);
             throw error;
         }
     }
@@ -310,7 +313,7 @@ class AuthManager {
      * NOTE: Local cleanup happens regardless of server response
      */
     async logout() {
-        console.log('AuthManager: Logging out...');
+        log.info('Logging out...');
 
         // Close WebSocket first (marks user offline immediately)
         api.closeWebSocket();
@@ -324,7 +327,7 @@ class AuthManager {
             const url = `${serverUrl}/Sessions/Logout`;
             const authHeader = api.getAuthHeader(accessToken);
 
-            console.log('AuthManager: Notifying server of logout...');
+            log.info('Notifying server of logout...');
             try {
                 await fetch(url, {
                     method: 'POST',
@@ -333,21 +336,21 @@ class AuthManager {
                         'Content-Type': 'application/json'
                     }
                 });
-                console.log('AuthManager: Server notified of logout');
+                log.info('Server notified of logout');
             } catch (e) {
-                console.warn('AuthManager: Server logout request failed:', e.message);
+                log.warn('Server logout request failed:', e.message);
             }
         }
 
         // THEN clear local state
-        console.log('AuthManager: Clearing local credentials...');
+        log.info('Clearing local credentials...');
         this._clearStorage();
         api.clearAuth();
         state.set('user:authenticated', false);
         state.set('user:data', null);
 
         eventBus.emit('auth:logout');
-        console.log('AuthManager: Logout complete');
+        log.info('Logout complete');
     }
 
     // ========================================================================
@@ -359,7 +362,7 @@ class AuthManager {
      * @private
      */
     _onUnauthorized() {
-        console.warn('AuthManager: Unauthorized - clearing session');
+        log.warn('Unauthorized - clearing session');
 
         this._clearStorage();
         api.clearAuth();

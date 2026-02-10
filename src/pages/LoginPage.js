@@ -12,6 +12,9 @@ import { auth, api, discoverServers, cancelDiscovery } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { logger } from '../utils/Logger.js';
+
+const log = logger.create('Login');
 
 // Login states
 const STATE = {
@@ -180,7 +183,7 @@ class LoginPage extends Page {
     onMounted() {
         // CRITICAL: Clear any stale authentication data when entering login screen
         // This prevents 401 errors from stale tokens if logout failed
-        console.log('LoginPage: Clearing any stale auth data');
+        log.info('Clearing any stale auth data');
         api.clearAuth();
 
         // Clear any previous errors
@@ -393,7 +396,7 @@ class LoginPage extends Page {
      * @param {string} savedUrl - The saved server URL
      */
     async _autoConnectToSavedServer(savedUrl) {
-        console.log(`LoginPage: Auto-connecting to saved server ${savedUrl}`);
+        log.info(`Auto-connecting to saved server ${savedUrl}`);
         this._showState(STATE.LOADING);
 
         try {
@@ -419,7 +422,7 @@ class LoginPage extends Page {
             }
         } catch (error) {
             // Connection failed - show server selection
-            console.warn('LoginPage: Auto-connect failed, showing server selection');
+            log.warn('Auto-connect failed, showing server selection');
             this._showState(STATE.SERVER);
             this._startDiscovery();
             setTimeout(() => this._serverInput.focus(), 100);
@@ -435,7 +438,7 @@ class LoginPage extends Page {
      * This is the only way users can change their server after initial setup
      */
     _goToServerSelection() {
-        console.log('LoginPage: Going to server selection');
+        log.info('Going to server selection');
 
         // Explicitly clear ONLY server URL for local purposes if not handled by logout
         // But auth.logout() handles the rest and notifies server
@@ -554,12 +557,12 @@ class LoginPage extends Page {
         this._usersGrid.querySelectorAll('.user-card').forEach((card) => {
             card.addEventListener('click', () => {
                 const index = parseInt(card.dataset.userIndex);
-                console.log(`LoginPage: User card clicked, index=${index}`);
+                log.debug(`User card clicked, index=${index}`);
                 if (this._users[index]) {
-                    console.log(`LoginPage: User found: ${this._users[index].Name}`);
+                    log.debug(`User found: ${this._users[index].Name}`);
                     this._selectUser(this._users[index]);
                 } else {
-                    console.error(`LoginPage: No user at index ${index}`);
+                    log.error(`No user at index ${index}`);
                 }
             });
 
@@ -567,7 +570,7 @@ class LoginPage extends Page {
             card.addEventListener('keydown', (e) => {
                 if (e.keyCode === 13) {
                     const index = parseInt(card.dataset.userIndex);
-                    console.log(`LoginPage: User card Enter pressed, index=${index}`);
+                    log.debug(`User card Enter pressed, index=${index}`);
                     if (this._users[index]) {
                         this._selectUser(this._users[index]);
                     }
@@ -583,10 +586,10 @@ class LoginPage extends Page {
      * @param {Object} user - User object from getPublicUsers
      */
     async _selectUser(user) {
-        console.log(`LoginPage: _selectUser called for "${user?.Name}"`);
+        log.info(`LoginPage: _selectUser called for "${user?.Name}"`);
 
         if (!user) {
-            console.error('LoginPage: _selectUser called with null/undefined user');
+            log.error('LoginPage: _selectUser called with null/undefined user');
             return;
         }
 
@@ -596,7 +599,7 @@ class LoginPage extends Page {
             // Check HasPassword field (key jellyfin-web pattern)
             if (user.HasPassword === false) {
                 // No password required - login directly
-                console.log(`LoginPage: User "${user.Name}" has no password, logging in directly`);
+                log.info(`User "${user.Name}" has no password, logging in directly`);
                 this._showState(STATE.LOADING);
 
                 // Stop any running discovery just in case
@@ -606,7 +609,7 @@ class LoginPage extends Page {
                 router.navigate('/home', { replace: true });
             } else {
                 // Password required - show password form
-                console.log(`LoginPage: User "${user.Name}" requires password`);
+                log.info(`LoginPage: User "${user.Name}" requires password`);
 
                 // Update password section with user info
                 const userEl = this.$('#selected-user');
@@ -643,7 +646,7 @@ class LoginPage extends Page {
                 }, 100);
             }
         } catch (error) {
-            console.error('LoginPage: _selectUser error:', error);
+            log.error('_selectUser error:', error);
             this._showState(STATE.USERS);
             this._showError('users-error', error.message || 'Login failed');
         }
@@ -658,10 +661,9 @@ class LoginPage extends Page {
         this._showState(STATE.LOADING);
 
         try {
-            console.log('LoginPage: AuthManager.login calling...');
+            log.info('LoginPage: AuthManager.login calling...');
             await auth.login(username, password);
-            console.log('LoginPage: AuthManager.login success. Navigating to home...');
-
+            log.info('AuthManager.login success. Navigating to home...');
             // Short delay to ensure state propagation
             await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -695,7 +697,7 @@ class LoginPage extends Page {
         const username = this._manualUsername.value.trim();
         const password = this._manualPassword.value;
 
-        console.log(`LoginPage: Manual Login. User="${username}" PassLength=${password ? password.length : 0}`);
+        log.info(`LoginPage: Manual Login. User="${username}" PassLength=${password ? password.length : 0}`);
 
         if (!username) {
             this._showError('manual-error', 'Username is required');
@@ -705,10 +707,9 @@ class LoginPage extends Page {
         this._showState(STATE.LOADING);
 
         try {
-            console.log('LoginPage: AuthManager.login calling...');
+            log.info('LoginPage: AuthManager.login calling...');
             await auth.login(username, password);
-            console.log('LoginPage: AuthManager.login success. Navigating to home...');
-
+            log.info('AuthManager.login success. Navigating to home...');
             // Short delay to ensure state propagation
             await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -740,10 +741,10 @@ class LoginPage extends Page {
                 try {
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
-                    console.error('App exit failed:', e);
+                    log.error('App exit failed:', e);
                 }
             } else {
-                console.log('App exit (simulated)');
+                log.info('App exit (simulated)');
             }
         } else if (this._state === STATE.USERS) {
             this._showState(STATE.SERVER);
@@ -805,7 +806,7 @@ class LoginPage extends Page {
         if (this._isDiscovering) return;
         this._isDiscovering = true;
 
-        console.log('LoginPage: Starting server discovery...');
+        log.info('LoginPage: Starting server discovery...');
 
         // Clear previous results
         this._discoveredServers = [];
@@ -822,11 +823,11 @@ class LoginPage extends Page {
                 (checked, total) => {
                     // Update progress if desired
                     const percent = Math.round((checked / total) * 100);
-                    console.log(`LoginPage: Discovery ${percent}%`);
+                    log.info(`LoginPage: Discovery ${percent}%`);
                 },
                 (server) => {
                     // Server found! Add and render immediately
-                    console.log(`LoginPage: Found server ${server.name} (${server.address})`);
+                    log.info(`LoginPage: Found server ${server.name} (${server.address})`);
                     this._discoveredServers.push(server);
                     this._renderDiscoveredServers();
                 }
@@ -836,7 +837,7 @@ class LoginPage extends Page {
             this._discoveredServers = servers;
             this._renderDiscoveredServers();
         } catch (error) {
-            console.error('LoginPage: Discovery failed', error);
+            log.error('LoginPage: Discovery failed', error);
             if (this._discoveryStatus) {
                 this._discoveryStatus.innerHTML = '<span>Discovery failed</span>';
             }
@@ -911,66 +912,8 @@ class LoginPage extends Page {
                 connectBtn.focus();
             }
 
-            console.log(`LoginPage: Selected server ${server.name} (${server.address})`);
+            log.info(`Selected server ${server.name} (${server.address})`);
         }
-    }
-
-    /**
-     * Initialize debug overlay
-     * Intercepts console logs and shows them on screen
-     */
-    _initDebugOverlay() {
-        const overlay = this.$('#debug-overlay');
-        const content = this.$('#debug-content');
-
-        if (!overlay || !content) return;
-
-        // Make overlay visible
-        overlay.style.display = 'block';
-
-        // Keep original console methods
-        const originalLog = console.log;
-        const originalError = console.error;
-        const originalWarn = console.warn;
-
-        const addLog = (type, args) => {
-            const line = document.createElement('div');
-            line.style.borderBottom = '1px solid #333';
-            line.style.padding = '2px 0';
-
-            if (type === 'error') line.style.color = '#f55';
-            else if (type === 'warn') line.style.color = '#fa0';
-
-            const text = args
-                .map((arg) => {
-                    if (typeof arg === 'object') return JSON.stringify(arg);
-                    return String(arg);
-                })
-                .join(' ');
-
-            line.textContent = `[${new Date().toLocaleTimeString()}] ${text}`;
-            content.appendChild(line);
-
-            // Auto-scroll
-            overlay.scrollTop = overlay.scrollHeight;
-        };
-
-        console.log = (...args) => {
-            originalLog.apply(console, args);
-            addLog('log', args);
-        };
-
-        console.error = (...args) => {
-            originalError.apply(console, args);
-            addLog('error', args);
-        };
-
-        console.warn = (...args) => {
-            originalWarn.apply(console, args);
-            addLog('warn', args);
-        };
-
-        console.log('LoginPage: Debug overlay initialized');
     }
 }
 
