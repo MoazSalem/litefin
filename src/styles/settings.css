@@ -481,4 +481,100 @@
    ========================================================================== */
 /* .modal-overlay moved to components.css */
 
+/* Custom Slider (Modern Seekbar Style) */
+.slider-wrapper {
+    display: flex;
+    align-items: center;
+    width: 320px;
+    gap: 20px;
+    padding: 10px 0;
+}
+
+.slider-track {
+    position: relative;
+    flex: 1;
+    height: 10px; /* Thicker track for better visibility */
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--jf-accent);
+    width: var(--progress, 0%);
+    border-radius: 10px;
+    pointer-events: none;
+    transition: width 0.15s ease-out;
+}
+
+.setting-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 40px; /* Larger hit area for TV */
+    background: transparent;
+    border: none;
+    margin: 0;
+    padding: 0;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 2;
+    cursor: pointer;
+    outline: none !important;
+}
+
+/* Slider Thumb */
+.setting-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 30px; /* Slightly larger for better visibility */
+    height: 30px;
+    background: #ffffff;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    /* Perfect vertical centering: (trackHeight / 2) - (thumbHeight / 2) */
+    /* (10 / 2) - (30 / 2) = -10px */
+    margin-top: -10px; 
+}
+
+/* Tizen/Webkit track styling */
+.setting-slider::-webkit-slider-runnable-track {
+    width: 100%;
+    height: 10px;
+    background: transparent;
+    border: none;
+}
+
+/* Premium Focus State */
+.setting-slider:focus::-webkit-slider-thumb,
+.setting-slider.focused::-webkit-slider-thumb {
+    background: #ffffff;
+    transform: scale(1.1); /* Pop out effect */
+}
+
+.setting-slider:focus + .slider-fill,
+.setting-slider.focused + .slider-fill {
+    background: #ffffff; /* Contrast when focused */
+}
+
+.slider-value {
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    min-width: 60px;
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: 0.5px;
+    opacity: 0.9;
+}
+
 

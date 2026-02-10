@@ -428,44 +428,66 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Style</span>
-                        <span class="setting-description">Shadow and outline style</span>
+                        <span class="setting-name">Text Opacity</span>
+                        <span class="setting-description">Subtitle text transparency</span>
                     </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'subtitle-shadow-select',
-                            [
-                                { value: 'none', label: 'None' },
-                                { value: 'dropshadow', label: 'Drop Shadow' },
-                                { value: 'raised', label: 'Raised' },
-                                { value: 'depressed', label: 'Depressed' },
-                                { value: 'uniform', label: 'Uniform Outline' }
-                            ],
-                            PlayerSettings.get('subtitleDropShadow')
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-text-opacity',
+                            PlayerSettings.get('subtitleTextOpacity'),
+                            0,
+                            100,
+                            5
                         )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Background</span>
-                        <span class="setting-description">Subtitle background style</span>
+                        <span class="setting-name">Background Color</span>
+                        <span class="setting-description">Subtitle background color</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-bg-select',
                             [
-                                { value: 'transparent', label: 'Transparent' },
-                                { value: 'rgba(0,0,0,0.5)', label: 'Semi-transparent' },
-                                { value: 'rgba(0,0,0,0.8)', label: 'Dark' },
-                                { value: '#000000', label: 'Solid Black' }
+                                { value: 'transparent', label: 'None' },
+                                { value: '#000000', label: 'Black' },
+                                { value: '#ffffff', label: 'White' },
+                                { value: '#d3d3d3', label: 'Light Grey' },
+                                { value: '#a9a9a9', label: 'Dark Grey' },
+                                { value: '#ffff00', label: 'Yellow' },
+                                { value: '#00ffff', label: 'Cyan' },
+                                { value: '#0000ff', label: 'Blue' }
                             ],
                             PlayerSettings.get('subtitleTextBackground')
                         )}
                     </div>
                 </div>
+
+                <div class="setting-item" id="subtitle-bg-opacity-container">
+                    <div class="setting-label">
+                        <span class="setting-name">Background Opacity</span>
+                        <span class="setting-description">Subtitle background transparency</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-bg-opacity',
+                            PlayerSettings.get('subtitleBackgroundOpacity'),
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
+                </div>
+
+
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -733,6 +755,9 @@ class SettingsPage extends Page {
         // Initialize Custom Dropdowns
         this._bindDropdownEvents();
 
+        // Initialize Sliders
+        this._bindSliderEvents();
+
         // Upload Logs Button
         const uploadLogsBtn = this.$('#btn-upload-logs');
         if (uploadLogsBtn) {
@@ -770,6 +795,79 @@ class SettingsPage extends Page {
                 }
             });
         }
+    }
+
+    _renderSlider(id, value, min, max, step) {
+        // Calculate percentage for background gradient
+        const percent = ((value - min) / (max - min)) * 100;
+
+        return `
+            <div class="slider-wrapper">
+                <div class="slider-track" style="--progress: ${percent}%">
+                    <input type="range" 
+                        id="${id}" 
+                        class="setting-slider focusable" 
+                        min="${min}" 
+                        max="${max}" 
+                        step="${step}" 
+                        value="${value}"
+                        tabindex="0">
+                    <div class="slider-fill" style="width: ${percent}%"></div>
+                </div>
+                <span class="slider-value" id="${id}-value">${value}%</span>
+            </div>
+        `;
+    }
+
+    _bindSliderEvents() {
+        const sliderMap = {
+            'subtitle-text-opacity': 'subtitleTextOpacity',
+            'subtitle-bg-opacity': 'subtitleBackgroundOpacity'
+        };
+
+        this.$$('.setting-slider').forEach((slider) => {
+            slider.addEventListener('input', (e) => {
+                const id = slider.id;
+                const value = e.target.value;
+                const key = sliderMap[id];
+
+                // Update value display
+                const valueDisplay = this.$(`#${id}-value`);
+                if (valueDisplay) {
+                    valueDisplay.textContent = `${value}%`;
+                }
+
+                // Update slider fill visual
+                const percent = ((value - slider.min) / (slider.max - slider.min)) * 100;
+                const track = slider.closest('.slider-track');
+                if (track) {
+                    track.style.setProperty('--progress', `${percent}%`);
+                    const fill = track.querySelector('.slider-fill');
+                    if (fill) {
+                        fill.style.width = `${percent}%`;
+                    }
+                }
+
+                // Save setting
+                if (key) {
+                    PlayerSettings.set(key, parseInt(value, 10));
+                }
+            });
+
+            // FORCE UPDATE ON INIT:
+            // Tizen sometimes misses the initial inline style paint or needs a layout trigger.
+            // We manually trigger the 'input' event logic (without saving) to ensure visuals are set.
+            const value = slider.value;
+            const percent = ((value - slider.min) / (slider.max - slider.min)) * 100;
+            const track = slider.closest('.slider-track');
+            if (track) {
+                track.style.setProperty('--progress', `${percent}%`);
+                const fill = track.querySelector('.slider-fill');
+                if (fill) {
+                    fill.style.width = `${percent}%`;
+                }
+            }
+        });
     }
 
     _renderDropdown(id, options, currentValue) {
@@ -905,7 +1003,7 @@ class SettingsPage extends Page {
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
-            'debug-height-select': { key: 'debug_height', type: 'debug' },
+
             'debug-position-select': { key: 'debug_position', type: 'debug' }
         };
 
@@ -945,6 +1043,20 @@ class SettingsPage extends Page {
                                     ? parseInt(newValue, 10)
                                     : newValue;
                             PlayerSettings.set(settingConfig.key, val);
+
+                            // VISIBILITY TIGGLE: Hide background opacity if background is None
+                            if (id === 'subtitle-bg-select') {
+                                const opacityContainer = document.getElementById('subtitle-bg-opacity-container');
+                                if (opacityContainer) {
+                                    if (newValue === 'transparent' || newValue === 'none') {
+                                        opacityContainer.style.display = 'none';
+                                    } else {
+                                        opacityContainer.style.display = ''; // Restore to CSS (flex)
+                                    }
+                                    // REFRESH FOCUS: The focusable elements changed
+                                    focusManager.invalidateCache('settings-content');
+                                }
+                            }
                         } else if (settingConfig.type === 'debug') {
                             localStorage.setItem(settingConfig.key, newValue);
                             if (settingConfig.key === 'debug_width') {
@@ -961,6 +1073,17 @@ class SettingsPage extends Page {
                 });
             });
         });
+
+        // Initial Visibility Check for Background Opacity
+        const bgContainer = document.getElementById('subtitle-bg-opacity-container');
+        if (bgContainer) {
+            const currentBg = PlayerSettings.get('subtitleTextBackground');
+            if (currentBg === 'transparent' || currentBg === 'none') {
+                bgContainer.style.display = 'none';
+            } else {
+                bgContainer.style.display = ''; // Restore to CSS (flex)
+            }
+        }
 
         // Debug Toggles
         const toggleLogs = this.$('#toggle-debug-logs');

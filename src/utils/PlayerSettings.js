@@ -73,8 +73,14 @@ const DEFAULTS = {
     // Subtitle text color
     subtitleTextColor: '#ffffff',
 
+    // Subtitle text opacity (0-100)
+    subtitleTextOpacity: 100,
+
     // Subtitle background color
     subtitleTextBackground: 'transparent',
+
+    // Subtitle background opacity (0-100)
+    subtitleBackgroundOpacity: 100,
 
     // Vertical position offset (-5 to 5, negative = higher)
     subtitleVerticalPosition: -2,

@@ -245,6 +245,33 @@ class FocusManager {
         this._prevMoveTime = this._lastMoveTime;
         this._lastMoveTime = now;
 
+        // SLIDER HANDLING: When a range input is focused, Left/Right keys
+        // should adjust the slider value instead of navigating to other elements.
+        // On TV remotes, arrow keys are intercepted by FocusManager before
+        // the native <input type="range"> can process them.
+        if ((direction === 'left' || direction === 'right') && this._focusedElement) {
+            const el = this._focusedElement;
+            if (el.tagName === 'INPUT' && el.type === 'range') {
+                const step = parseFloat(el.step) || 1;
+                const min = parseFloat(el.min) || 0;
+                const max = parseFloat(el.max) || 100;
+                let value = parseFloat(el.value) || 0;
+
+                // Adjust value based on direction
+                if (direction === 'right') {
+                    value = Math.min(max, value + step);
+                } else {
+                    value = Math.max(min, value - step);
+                }
+
+                // Apply the new value and fire the input event
+                // so that any listeners (e.g. SettingsPage._bindSliderEvents) react
+                el.value = value;
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                return; // Don't navigate, we handled it
+            }
+        }
+
         this._move(direction);
     }
 

@@ -7,6 +7,27 @@
 
 import { PlayerSettings } from './PlayerSettings.js';
 
+/**
+ * Convert HEX color to RGBA
+ * @param {string} hex - Hex color code (e.g., #ffffff)
+ * @param {number} opacity - Opacity percentage (0-100)
+ * @returns {string} RGBA color string
+ */
+function _hexToRgba(hex, opacity) {
+    if (!hex || hex === 'transparent') return 'transparent';
+
+    // Remove hash
+    hex = hex.replace('#', '');
+
+    // Parse values
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    const a = (opacity / 100).toFixed(2);
+
+    return `rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
 // ============================================================================
 // Text Styles Generator
 // ============================================================================
@@ -56,27 +77,41 @@ export function getTextStyles() {
     // Text Shadow / Drop Shadow
     // Options: dropshadow, raised, depressed, uniform, none
     // ========================================================================
+    // ========================================================================
+    // Text Opacity (Get this early for shadows)
+    // ========================================================================
+    const textOpacity = PlayerSettings.get('subtitleTextOpacity') ?? 100;
+
+    // ========================================================================
+    // Text Shadow / Drop Shadow
+    // Options: dropshadow, raised, depressed, uniform, none
+    // ========================================================================
     const shadow = PlayerSettings.get('subtitleDropShadow') || 'dropshadow';
+
+    // Helper to generate shadow color with opacity
+    const shadowBlack = _hexToRgba('#000000', textOpacity);
+    const shadowWhite = _hexToRgba('#ffffff', textOpacity);
+
     switch (shadow) {
         case 'heavy':
-            styles.push({ name: 'textShadow', value: '#000000 0px 0px 4px' });
+            styles.push({ name: 'textShadow', value: `${shadowBlack} 0px 0px 4px` });
             break;
         case 'raised':
             styles.push({
                 name: 'textShadow',
-                value: '-1px -1px #fff, 0px -1px #fff, -1px 0px #fff, 1px 1px #000, 0px 1px #000, 1px 0px #000'
+                value: `-1px -1px ${shadowWhite}, 0px -1px ${shadowWhite}, -1px 0px ${shadowWhite}, 1px 1px ${shadowBlack}, 0px 1px ${shadowBlack}, 1px 0px ${shadowBlack}`
             });
             break;
         case 'depressed':
             styles.push({
                 name: 'textShadow',
-                value: '1px 1px #fff, 0px 1px #fff, 1px 0px #fff, -1px -1px #000, 0px -1px #000, -1px 0px #000'
+                value: `1px 1px ${shadowWhite}, 0px 1px ${shadowWhite}, 1px 0px ${shadowWhite}, -1px -1px ${shadowBlack}, 0px -1px ${shadowBlack}, -1px 0px ${shadowBlack}`
             });
             break;
         case 'uniform':
             styles.push({
                 name: 'textShadow',
-                value: '#000 0px 1px, #000 0px -1px, #000 1px 0px, #000 -1px 0px, #000 1px 1px, #000 -1px 1px, #000 1px -1px, #000 -1px -1px'
+                value: `${shadowBlack} 0px 1px, ${shadowBlack} 0px -1px, ${shadowBlack} 1px 0px, ${shadowBlack} -1px 0px, ${shadowBlack} 1px 1px, ${shadowBlack} -1px 1px, ${shadowBlack} 1px -1px, ${shadowBlack} -1px -1px`
             });
             break;
         case 'none':
@@ -84,7 +119,7 @@ export function getTextStyles() {
             break;
         case 'dropshadow':
         default:
-            styles.push({ name: 'textShadow', value: '#000000 0px 0px 2px' });
+            styles.push({ name: 'textShadow', value: `${shadowBlack} 0px 0px 2px` });
             break;
     }
 
@@ -92,13 +127,20 @@ export function getTextStyles() {
     // Text Color
     // ========================================================================
     const textColor = PlayerSettings.get('subtitleTextColor') || '#ffffff';
-    styles.push({ name: 'color', value: textColor });
+    // textOpacity is already defined above for shadows
+    styles.push({ name: 'color', value: _hexToRgba(textColor, textOpacity) });
 
     // ========================================================================
     // Background Color
     // ========================================================================
     const background = PlayerSettings.get('subtitleTextBackground') || 'transparent';
-    styles.push({ name: 'backgroundColor', value: background });
+    const bgOpacity = PlayerSettings.get('subtitleBackgroundOpacity') ?? 100;
+
+    if (background === 'transparent' || background === 'none') {
+        styles.push({ name: 'backgroundColor', value: 'transparent' });
+    } else {
+        styles.push({ name: 'backgroundColor', value: _hexToRgba(background, bgOpacity) });
+    }
 
     // ========================================================================
     // Font Family
