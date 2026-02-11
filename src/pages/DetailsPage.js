@@ -277,16 +277,29 @@ class DetailsPage extends Page {
         return new Promise((resolve) => {
             const item = this._item;
 
-            // Safety timeout: If image takes > 800ms, show content anyway
-            // Reduced from 2s for faster page interaction
+            // Guard: Promise.resolve() is idempotent, but we track this
+            // to avoid logging a spurious "timed out" warning after the
+            // image has already loaded and resolved the promise.
+            let resolved = false;
+
+            // Safety timeout: don't block page interaction forever if the
+            // poster is slow. 1500ms is generous enough for TV network
+            // latency + image decode, but still fast enough that users
+            // won't stare at a blank poster area.
             const timeout = setTimeout(() => {
-                log.warn('Poster load timed out, showing content');
-                resolve();
-            }, 400);
+                if (!resolved) {
+                    log.warn('Poster load timed out, showing content');
+                    resolved = true;
+                    resolve();
+                }
+            }, 1500);
 
             const onPosterReady = () => {
-                clearTimeout(timeout);
-                resolve();
+                if (!resolved) {
+                    resolved = true;
+                    clearTimeout(timeout);
+                    resolve();
+                }
             };
 
             // Poster
