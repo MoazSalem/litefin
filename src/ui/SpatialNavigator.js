@@ -52,28 +52,43 @@ class SpatialNavigator {
      * @returns {HTMLElement|null} Best candidate, or null if none found
      */
     findNext(current, candidates, direction) {
+        // ====================================================================
+        // TIZEN OPTIMIZATION: Batch all DOM reads BEFORE the scoring loop.
+        // getBoundingClientRect() forces synchronous layout calculation.
+        // Calling it inside a loop causes "layout thrashing" — on TV hardware
+        // this means 100ms+ stutters per keypress. Reading everything upfront
+        // into plain objects lets the scoring loop run on pure cached data.
+        // ====================================================================
         const rect1 = current.getBoundingClientRect();
-        const center1 = {
-            x: rect1.left + rect1.width / 2,
-            y: rect1.top + rect1.height / 2
-        };
+        const center1x = rect1.left + rect1.width / 2;
+        const center1y = rect1.top + rect1.height / 2;
 
+        // Batch-read: one getBoundingClientRect() per candidate, all at once
+        const candidateData = [];
+        for (let i = 0; i < candidates.length; i++) {
+            const el = candidates[i];
+            if (el === current) continue;
+            const r = el.getBoundingClientRect();
+            candidateData.push({
+                el,
+                rect: r,
+                cx: r.left + r.width / 2,
+                cy: r.top + r.height / 2
+            });
+        }
+
+        // ====================================================================
+        // Scoring loop — pure math on pre-read data, zero DOM access
+        // ====================================================================
         let bestCandidate = null;
         let minScore = Infinity;
 
-        // Iterate all candidates and score those in the valid direction cone
-        for (const candidate of candidates) {
-            if (candidate === current) continue;
-
-            const rect2 = candidate.getBoundingClientRect();
-            const center2 = {
-                x: rect2.left + rect2.width / 2,
-                y: rect2.top + rect2.height / 2
-            };
+        for (let i = 0; i < candidateData.length; i++) {
+            const { el, rect: rect2, cx: cx2, cy: cy2 } = candidateData[i];
 
             // Vector from current center to candidate center
-            const dx = center2.x - center1.x;
-            const dy = center2.y - center1.y;
+            const dx = cx2 - center1x;
+            const dy = cy2 - center1y;
 
             // ----------------------------------------------------------------
             // Step 1: Direction filtering
@@ -145,7 +160,7 @@ class SpatialNavigator {
 
             if (score < minScore) {
                 minScore = score;
-                bestCandidate = candidate;
+                bestCandidate = el;
             }
         }
 
@@ -165,30 +180,38 @@ class SpatialNavigator {
     findClosest(target, candidates) {
         if (!target || !candidates.length) return null;
 
+        // TIZEN OPTIMIZATION: Batch all DOM reads before the scoring loop
+        // to avoid layout thrashing (see findNext for full explanation)
         const rect1 = target.getBoundingClientRect();
-        const center1 = {
-            x: rect1.left + rect1.width / 2,
-            y: rect1.top + rect1.height / 2
-        };
+        const center1x = rect1.left + rect1.width / 2;
+        const center1y = rect1.top + rect1.height / 2;
 
+        // Batch-read all candidate positions upfront
+        const candidateData = [];
+        for (let i = 0; i < candidates.length; i++) {
+            const r = candidates[i].getBoundingClientRect();
+            candidateData.push({
+                el: candidates[i],
+                cx: r.left + r.width / 2,
+                cy: r.top + r.height / 2
+            });
+        }
+
+        // Pure math loop — zero DOM access
         let best = null;
         let minDist = Infinity;
 
-        for (const c of candidates) {
-            const rect2 = c.getBoundingClientRect();
-            const center2 = {
-                x: rect2.left + rect2.width / 2,
-                y: rect2.top + rect2.height / 2
-            };
+        for (let i = 0; i < candidateData.length; i++) {
+            const { el, cx, cy } = candidateData[i];
 
             // Standard Euclidean distance between centers
-            const dx = center2.x - center1.x;
-            const dy = center2.y - center1.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
+            const dx = cx - center1x;
+            const dy = cy - center1y;
+            const dist = dx * dx + dy * dy; // Skip sqrt — monotonic, same result
 
             if (dist < minDist) {
                 minDist = dist;
-                best = c;
+                best = el;
             }
         }
 

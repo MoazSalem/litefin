@@ -27,6 +27,18 @@ const FOCUSABLE_SELECTOR = `
     .replace(/\s+/g, ' ')
     .trim();
 
+// ============================================================================
+// Constants
+// ============================================================================
+
+// Minimum time (ms) between key events to prevent event flooding.
+// Keypresses faster than this interval are dropped.
+const KEY_DEBOUNCE_MS = 50;
+
+// Maximum number of empty sections to skip through when leaving a section.
+// Prevents infinite loops if section linking is misconfigured.
+const MAX_SECTION_SKIP_DEPTH = 20;
+
 class FocusManager {
     constructor() {
         // Registered sections: name -> config
@@ -149,7 +161,7 @@ class FocusManager {
     _handleKey(direction) {
         // Simple debounce to prevent event flooding
         const now = Date.now();
-        if (now - this._lastMoveTime < 50) return;
+        if (now - this._lastMoveTime < KEY_DEBOUNCE_MS) return;
 
         // Track previous move time BEFORE updating current
         // This allows us to detect rapid key holds (moves < 200ms apart)
@@ -409,7 +421,7 @@ class FocusManager {
 
         // Keep searching if target section exists but has no focusable elements
         // This handles empty rows in library grids/lists
-        const maxSearchDepth = 20; // Prevent infinite loops
+        const maxSearchDepth = MAX_SECTION_SKIP_DEPTH;
         let searchDepth = 0;
 
         while (nextSection && this._sections.has(nextSection) && searchDepth < maxSearchDepth) {

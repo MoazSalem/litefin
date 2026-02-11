@@ -20,6 +20,47 @@
  * ============================================================================
  */
 
+// ============================================================================
+// Constants — all tunable values in one place for easy TV hardware tweaking
+// ============================================================================
+
+// Default animation duration (ms) for vertical smooth scrolling
+const SCROLL_DURATION_VERTICAL = 200;
+
+// Animation duration (ms) for horizontal card-centering scrolls
+const SCROLL_DURATION_HORIZONTAL = 150;
+
+// Minimum pixel difference to consider "not at target" (avoids sub-pixel jitter)
+const SCROLL_SNAP_THRESHOLD = 1;
+
+// Buffer (px) around viewport edges for row visibility cutoff detection.
+// If a row is within this many pixels of being cut off, we scroll it into view.
+const ROW_CUTOFF_BUFFER = 40;
+
+// Default top offset (px) when aligning a row to the top of the viewport.
+// Creates breathing room above the focused row for a premium TV feel.
+const DEFAULT_SCROLL_OFFSET_TOP = 50;
+
+// Safety buffer (px) to prevent the focused element from being clipped
+// at the very top of the viewport after a row scroll.
+const ELEMENT_TOP_SAFETY_BUFFER = 20;
+
+// Buffer (px) around viewport edges for horizontal row visibility detection.
+// Used when scrolling a parent row into view before centering a card.
+const HORIZONTAL_ROW_VISIBILITY_BUFFER = 80;
+
+// Comfort margins (px) for generic "scroll into view" in grids and lists.
+// Ensures the focused element isn't flush against the viewport edge.
+const GENERIC_SCROLL_MARGIN = 100;
+
+// Height multiplier threshold: if a row is taller than viewport * this value,
+// row-based alignment is disabled to prevent jarring jumps.
+const TALL_ROW_MULTIPLIER = 2.0;
+
+// Fraction of viewport height: elements shorter than this are centered,
+// elements taller are bottom-aligned.
+const SMALL_ELEMENT_FRACTION = 1 / 3;
+
 class ScrollController {
     constructor() {
         // ====================================================================
@@ -54,7 +95,7 @@ class ScrollController {
      * @param {number} [duration=200] - Animation duration in ms
      * @param {'vertical'|'horizontal'} [direction='vertical'] - Scroll axis
      */
-    smoothScrollTo(container, targetScroll, duration = 200, direction = 'vertical') {
+    smoothScrollTo(container, targetScroll, duration = SCROLL_DURATION_VERTICAL, direction = 'vertical') {
         const isVertical = direction === 'vertical';
         const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
@@ -62,7 +103,7 @@ class ScrollController {
         const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
 
         // Already at target — snap and bail
-        if (Math.abs(targetScroll - currentScroll) < 1) {
+        if (Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
             if (isVertical) container.scrollTop = targetScroll;
             else container.scrollLeft = targetScroll;
             return;
@@ -222,7 +263,7 @@ class ScrollController {
             }
             // TALL ROW EXCEPTION: If the row is much taller than the viewport,
             // disable row-alignment to prevent jumping when focusing bottom items
-            else if (row.offsetHeight > pageContent.clientHeight * 2.0) {
+            else if (row.offsetHeight > pageContent.clientHeight * TALL_ROW_MULTIPLIER) {
                 useRowScroll = false;
             }
         }
@@ -239,13 +280,13 @@ class ScrollController {
             const currentScroll = pageContent.scrollTop;
             const viewBottom = currentScroll + viewHeight;
 
-            // Check visibility with a 40px buffer for cutoffs
-            const topCutoff = rowTop < currentScroll + 40;
-            const bottomCutoff = rowBottom > viewBottom - 40;
+            // Check visibility with buffer for cutoffs
+            const topCutoff = rowTop < currentScroll + ROW_CUTOFF_BUFFER;
+            const bottomCutoff = rowBottom > viewBottom - ROW_CUTOFF_BUFFER;
 
             if (bottomCutoff) {
                 // Row is cut off at bottom — aim for top-alignment
-                let targetScroll = rowTop - (config.scrollOffsetTop || 50);
+                let targetScroll = rowTop - (config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP);
 
                 // Safety: ensure the specific focused element is visible
                 // at the computed scroll position (tall row edge case)
@@ -254,7 +295,7 @@ class ScrollController {
 
                 if (elBottom > targetScroll + viewHeight) {
                     // Element too far down, align to bottom instead
-                    targetScroll = elBottom - viewHeight + 40;
+                    targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
                 }
 
                 this.smoothScrollTo(pageContent, Math.max(0, targetScroll));
@@ -265,12 +306,12 @@ class ScrollController {
                 if (isHero) {
                     this.smoothScrollTo(pageContent, 0);
                 } else {
-                    const padding = config.scrollOffsetTop || 50;
+                    const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
                     let targetScroll = rowTop - padding;
 
                     // Safety: ensure element isn't cut off at the top
                     const elTop = getCumulativeOffsetTop(element, pageContent);
-                    if (elTop < targetScroll + 20) {
+                    if (elTop < targetScroll + ELEMENT_TOP_SAFETY_BUFFER) {
                         targetScroll = elTop - padding;
                     }
 
@@ -298,8 +339,11 @@ class ScrollController {
                     const currentScroll = pageContent.scrollTop;
                     const viewBottom = currentScroll + viewHeight;
 
-                    // Check if row is outside viewport with 80px buffers
-                    if (rowTop < currentScroll + 80 || rowBottom > viewBottom - 80) {
+                    // Check if row is outside viewport with buffers
+                    if (
+                        rowTop < currentScroll + HORIZONTAL_ROW_VISIBILITY_BUFFER ||
+                        rowBottom > viewBottom - HORIZONTAL_ROW_VISIBILITY_BUFFER
+                    ) {
                         // Center the row vertically
                         const targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
                         this.smoothScrollTo(pageContent, Math.max(0, targetScroll));
@@ -315,7 +359,7 @@ class ScrollController {
                 const finalScrollLeft = Math.max(0, targetScroll);
 
                 // Always use smooth scroll for premium feel
-                this.smoothScrollTo(rowItems, finalScrollLeft, 150, 'horizontal');
+                this.smoothScrollTo(rowItems, finalScrollLeft, SCROLL_DURATION_HORIZONTAL, 'horizontal');
             } else if (activePageContent) {
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
@@ -324,8 +368,8 @@ class ScrollController {
                 const currentScroll = activePageContent.scrollTop;
 
                 // Comfort margins for top and bottom visibility
-                const topMargin = 100;
-                const bottomMargin = 100;
+                const topMargin = GENERIC_SCROLL_MARGIN;
+                const bottomMargin = GENERIC_SCROLL_MARGIN;
 
                 let finalScrollTop = currentScroll;
 
@@ -340,7 +384,7 @@ class ScrollController {
                 // Element cut off at bottom
                 else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
                     // Small elements: center them. Large elements: align to bottom.
-                    if (elementHeight < viewHeight / 3) {
+                    if (elementHeight < viewHeight * SMALL_ELEMENT_FRACTION) {
                         finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
                     } else {
                         finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
