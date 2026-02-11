@@ -154,6 +154,8 @@ class Sidebar extends Component {
         focusManager.register('sidebar', this.el, {
             orientation: 'vertical',
             selector: '.sidebar-item',
+            // Always land on the Home button when entering the sidebar
+            defaultFocusSelector: '#sidebar-home',
             onMove: (direction, focusedEl) => {
                 if (direction === 'right') {
                     const pageContainer = document.getElementById('page-container');

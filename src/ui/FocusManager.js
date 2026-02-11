@@ -220,6 +220,10 @@ class FocusManager {
             onMove: options.onMove || null,
             // Custom Scroll Logic
             scrollOffsetTop: options.scrollOffsetTop || 0,
+            // CSS selector for the default element to focus when entering the section.
+            // If provided, overrides spatial/memory entry logic.
+            // Example: '#sidebar-home' to always land on the Home button.
+            defaultFocusSelector: options.defaultFocusSelector || null,
             // Custom selector
             selector: options.selector || FOCUSABLE_SELECTOR
         };
@@ -256,7 +260,7 @@ class FocusManager {
      * @param {boolean} restoreFocus
      * @param {HTMLElement} [fromElement] - Element user is coming FROM (for spatial entry)
      */
-    setActiveSection(name, restoreFocus = true, fromElement = null) {
+    setActiveSection(name, restoreFocus = true, fromElement = null, options = {}) {
         if (!this._sections.has(name)) {
             log.warn(`Unknown section "${name}"`);
             return;
@@ -270,7 +274,7 @@ class FocusManager {
         eventBus.emit('focus:sectionChanged', name);
 
         if (restoreFocus) {
-            this._restoreFocus(name, fromElement);
+            this._restoreFocus(name, fromElement, options);
         }
     }
 
@@ -310,19 +314,37 @@ class FocusManager {
             return this._focusablesCache.get(sectionName);
         }
 
-        // Query focusables and filter out hidden elements
-        // We check display:none explicitly to prevent focusing hidden controls
+        // Query focusables and filter out hidden elements.
+        // TIZEN OPTIMIZATION: Batch all DOM reads (getComputedStyle, offsetParent)
+        // before the filter pass to avoid layout thrashing. Each offsetParent
+        // access forces a synchronous layout calc — interleaving reads with
+        // other work in a loop causes N layout recalcs on TV hardware.
         const allElements = Array.from(config.container.querySelectorAll(config.selector));
 
-        const focusables = allElements.filter((el) => {
-            // Filter out elements with display: none
+        // Pass 1: Batch-read all layout-triggering properties
+        const elementData = new Array(allElements.length);
+        for (let i = 0; i < allElements.length; i++) {
+            const el = allElements[i];
             const style = window.getComputedStyle(el);
-            if (style.display === 'none') return false;
+            elementData[i] = {
+                el,
+                display: style.display,
+                position: style.position,
+                offsetParent: el.offsetParent
+            };
+        }
 
-            // Also check if element or any parent is hidden
-            // This is more robust than offsetParent check alone
-            return el.offsetParent !== null || style.position === 'fixed';
-        });
+        // Pass 2: Pure filtering on cached data — zero DOM access
+        const focusables = [];
+        for (let i = 0; i < elementData.length; i++) {
+            const { el, display, position, offsetParent } = elementData[i];
+            // Skip display:none elements
+            if (display === 'none') continue;
+            // Visible if has an offsetParent, or is position:fixed (no offsetParent)
+            if (offsetParent !== null || position === 'fixed') {
+                focusables.push(el);
+            }
+        }
 
         this._focusablesCache.set(sectionName, focusables);
         return focusables;
@@ -458,13 +480,12 @@ class FocusManager {
                 this._focusedElement.classList.remove('focused');
             }
 
-            // Set flag for instant scroll when changing rows
-            this._useInstantScroll = direction === 'up' || direction === 'down';
+            // Pass instantScroll as parameter (not a class field) to avoid
+            // fragile state if the call chain ever becomes async
+            const instantScroll = direction === 'up' || direction === 'down';
 
             // Pass originElement to allow selecting closest target in new section
-            this.setActiveSection(nextSection, true, originElement);
-
-            this._useInstantScroll = false;
+            this.setActiveSection(nextSection, true, originElement, { instantScroll });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
@@ -548,49 +569,50 @@ class FocusManager {
         }
     }
 
-    _restoreFocus(sectionName, fromElement = null) {
+    _restoreFocus(sectionName, fromElement = null, options = {}) {
         const config = this._sections.get(sectionName);
         if (!config) return;
 
         const focusables = this._getFocusables(sectionName);
-
         const memory = this._focusMemory.get(sectionName);
         if (!focusables.length) return;
 
-        // Sidebar always starts at Home when entered
-        if (sectionName === 'sidebar') {
-            // Try to find Home button first
-            const homeBtn = focusables.find((el) => el.id === 'sidebar-home');
-            const target = homeBtn || focusables[0];
+        // Whether to skip scroll (passed from _leaveSection for vertical transitions)
+        const skipScroll = !!options.instantScroll;
 
+        // 0. Default Focus Selector (config-driven, replaces hardcoded section checks)
+        // If a section specifies defaultFocusSelector, always focus that element on entry.
+        // Example: sidebar uses '#sidebar-home' to always land on Home.
+        if (config.defaultFocusSelector) {
+            const defaultEl = focusables.find((el) => el.matches(config.defaultFocusSelector));
+            const target = defaultEl || focusables[0];
             this.focusElement(target, { skipScroll: true });
             return;
         }
 
         let target = null;
 
-        // 0. Forced Entry Logic (Highest Priority)
+        // 1. Forced Entry Logic (Highest Priority)
         // Support 'first' or 'active-element' (finds .active or .selected)
         if (config.enterTo === 'first' && focusables.length > 0) {
             target = focusables[0];
-            this.focusElement(target, { skipScroll: this._useInstantScroll });
+            this.focusElement(target, { skipScroll });
             return;
         } else if (config.enterTo === 'active-element' && focusables.length > 0) {
             target =
                 focusables.find((el) => el.classList.contains('active') || el.classList.contains('selected')) ||
                 focusables[0];
-            this.focusElement(target, { skipScroll: this._useInstantScroll });
+            this.focusElement(target, { skipScroll });
             return;
         }
 
-        // 1. Spatial Entry
+        // 2. Spatial Entry
         // If we came from another element (e.g. Button below grid), pick closest grid item
-
         if (fromElement && document.contains(fromElement)) {
             target = this._spatial.findClosest(fromElement, focusables);
         }
 
-        // 2. Memory (Fallback)
+        // 3. Memory (Fallback)
         if (!target && memory) {
             // Try exact element
             if (document.contains(memory.element) && focusables.includes(memory.element)) {
@@ -602,13 +624,13 @@ class FocusManager {
             }
         }
 
-        // 3. Default (First Item)
+        // 4. Default (First Item)
         if (!target) {
             target = focusables[0];
         }
 
         // Use skipScroll when changing sections vertically (much faster)
-        this.focusElement(target, { skipScroll: this._useInstantScroll });
+        this.focusElement(target, { skipScroll });
     }
 
     _activate() {
@@ -683,7 +705,18 @@ class FocusManager {
      */
     getSectionForElement(element) {
         if (!element) return null;
+
+        // Fast path: check active section first (most lookups are for the current section)
+        if (this._activeSection) {
+            const activeConfig = this._sections.get(this._activeSection);
+            if (activeConfig && activeConfig.container.contains(element)) {
+                return this._activeSection;
+            }
+        }
+
+        // Fallback: linear scan through all sections
         for (const [name, config] of this._sections.entries()) {
+            if (name === this._activeSection) continue; // Already checked
             if (config.container.contains(element)) {
                 return name;
             }
