@@ -82,15 +82,19 @@
 .osd-header-left {
     display: flex;
     align-items: center;
-    gap: 1.8em;
-    /* 1.5em * 1.2 */
+}
+
+.player-osd .osd-header-left > * + * {
+    margin-left: 1.8em;
 }
 
 .osd-header-right {
     display: flex;
     align-items: center;
-    gap: 1.8em;
-    /* 1.5em * 1.2 */
+}
+
+.player-osd .osd-header-right > * + * {
+    margin-left: 1.8em;
 }
 
 .osd-title {
@@ -137,8 +141,10 @@
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
     display: flex;
     flex-direction: column;
-    gap: 1.8em;
-    /* 1.5em * 1.2 */
+}
+
+.player-osd .osd-bottom > * + * {
+    margin-top: 1.8em;
 }
 
 /* Controls Row (above slider) */
@@ -154,8 +160,11 @@
 .osd-controls-right {
     display: flex;
     align-items: center;
-    gap: 0.72em;
-    /* 0.6em * 1.2 */
+}
+
+.player-osd .osd-controls-left > * + *,
+.player-osd .osd-controls-right > * + * {
+    margin-left: 0.72em;
 }
 
 .osd-spacer {
@@ -492,8 +501,10 @@
 .track-menu-options {
     display: flex;
     flex-direction: column;
-    gap: 0.6em;
-    /* 0.5em * 1.2 */
+}
+
+.track-menu-options > * + * {
+    margin-top: 0.6em;
 }
 
 .track-option {
@@ -569,4 +580,151 @@
 
 #debug-overlay .log-info {
     color: #fff;
+}
+
+/* ============================================================================
+   Subtitle Offset Overlay
+   ============================================================================ */
+
+/* Main overlay container — hidden by default */
+#osdOffsetOverlay {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    -webkit-transform: translateX(-50%);
+    transform: translateX(-50%);
+    width: 380px;
+    background: rgba(0, 0, 0, 0.45);
+    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px);
+    border-radius: 12px;
+    padding: 12px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    color: #fff;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#osdOffsetOverlay > * + * {
+    margin-top: 8px;
+}
+
+/* Visible state — toggled by JS */
+#osdOffsetOverlay.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* Header row: title group + close button */
+.osd-offset-header {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-justify-content: space-between;
+    justify-content: space-between;
+    -webkit-align-items: center;
+    align-items: center;
+    width: 100%;
+}
+
+/* Title + value group */
+.osd-offset-title-group {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: baseline;
+    align-items: baseline;
+}
+
+.osd-offset-title-group > * + * {
+    margin-left: 8px;
+}
+
+/* "SUBTITLE OFFSET" label */
+.osd-offset-title {
+    font-size: 15px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Offset value display, e.g. "+1.2s" */
+.osd-offset-value {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--osd-accent-color, #00a4dc);
+    font-variant-numeric: tabular-nums;
+}
+
+/* Close button */
+.osd-offset-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    cursor: pointer;
+    -webkit-transition: background 0.2s;
+    transition: background 0.2s;
+}
+
+.osd-offset-close:hover,
+.osd-offset-close:focus {
+    background: rgba(255, 255, 255, 0.3);
+}
+
+/* Slider container row */
+.osd-offset-slider-container {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    position: relative;
+    height: 40px;
+}
+
+/* Range slider base */
+.osd-offset-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 100%;
+    height: 6px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 3px;
+    outline: none;
+}
+
+/* Slider thumb */
+.osd-offset-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: #fff;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+    -webkit-transition: transform 0.1s;
+    transition: transform 0.1s;
+}
+
+/* Focused slider thumb glow */
+.osd-offset-slider:focus::-webkit-slider-thumb {
+    -webkit-transform: scale(1.1);
+    transform: scale(1.1);
+    box-shadow: 0 0 15px var(--osd-accent-color, rgba(0, 164, 220, 0.6));
 }

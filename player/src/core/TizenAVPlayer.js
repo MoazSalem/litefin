@@ -51,6 +51,9 @@ export class TizenAVPlayer {
         this._currentAudioStreamIndex = null;
         this._currentSubtitleStreamIndex = null;
 
+        // Subtitle offset in seconds (applied via AVPlay's native API)
+        this._subtitleOffset = 0;
+
         // Check Tizen availability
         this._avplay = window.tizen?.avplay || window.webapis?.avplay || null;
 
@@ -110,6 +113,9 @@ export class TizenAVPlayer {
         this._currentPlayOptions = options;
         this._currentSrc = options.url;
 
+        // Reset subtitle offset for new playback session
+        this._subtitleOffset = 0;
+
         try {
             // Stop any existing playback
             await this._stopInternal();
@@ -134,11 +140,6 @@ export class TizenAVPlayer {
                 const startMs = options.playerStartPositionTicks / 10000;
                 this._avplay.seekTo(startMs);
             }
-
-            // Start playback
-            this._avplay.play();
-            this._isPlaying = true;
-
             // Start playback
             this._avplay.play();
             this._isPlaying = true;
@@ -596,8 +597,43 @@ export class TizenAVPlayer {
                     this._currentSubtitleStreamIndex = index; // Update state
                 }
             }
+
+            // Reset subtitle offset when switching tracks
+            this._subtitleOffset = 0;
+            this._applySubtitlePosition();
         } catch (e) {
             debug.error('[TizenAVPlayer] Set subtitle track failed:', e);
+        }
+    }
+
+    /**
+     * Set subtitle offset using Tizen's native AVPlay API.
+     * Positive values delay subtitles, negative values advance them.
+     * @param {number} seconds - Offset in seconds
+     */
+    setSubtitleOffset(seconds) {
+        this._subtitleOffset = seconds;
+        this._applySubtitlePosition();
+    }
+
+    /**
+     * Apply the current subtitle offset to AVPlay.
+     * Uses webapis.avplay.setSubtitlePosition(ms) which accepts
+     * positive (delay) and negative (advance) millisecond values.
+     * Only callable in PLAYING or PAUSED states.
+     * @private
+     */
+    _applySubtitlePosition() {
+        if (!this._avplay || !this._isPrepared) return;
+
+        try {
+            // Convert seconds to milliseconds for AVPlay API
+            const offsetMs = Math.round(this._subtitleOffset * 1000);
+            this._avplay.setSubtitlePosition(offsetMs);
+            debug.log(`[TizenAVPlayer] Subtitle offset applied: ${this._subtitleOffset}s (${offsetMs}ms)`);
+        } catch (e) {
+            // setSubtitlePosition may fail if not in PLAYING/PAUSED state
+            debug.warn('[TizenAVPlayer] Failed to apply subtitle offset:', e);
         }
     }
 

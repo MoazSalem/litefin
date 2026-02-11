@@ -50,6 +50,7 @@ export class HtmlVideoPlayer {
         // Subtitle state
         this._currentSubtitleIndex = -1;
         this._subtitleOffset = 0;
+        this._previousOffset = 0; // Tracks the last applied offset for delta calc
 
         // Bound event handlers (for cleanup)
         this._boundHandlers = {};
@@ -144,6 +145,10 @@ export class HtmlVideoPlayer {
         this._currentPlayOptions = options;
         this._started = false;
         this._timeUpdated = false;
+
+        // Reset subtitle offset for new playback session
+        this._subtitleOffset = 0;
+        this._previousOffset = 0;
 
         const video = this._ensureVideoElement();
 
@@ -436,6 +441,10 @@ export class HtmlVideoPlayer {
 
         this._currentSubtitleIndex = index;
 
+        // Reset offset state when switching tracks
+        this._subtitleOffset = 0;
+        this._previousOffset = 0;
+
         // Handle native text tracks
         const textTracks = video.textTracks;
         if (textTracks) {
@@ -445,6 +454,44 @@ export class HtmlVideoPlayer {
         }
 
         // TODO: Handle custom subtitle rendering for ASS/PGS
+    }
+
+    /**
+     * Set subtitle offset by shifting VTT cue timing.
+     * Uses delta-based approach: calculates the difference between the new
+     * offset and the previously applied offset, then shifts all cue times.
+     * Positive offset = subtitles display later, negative = earlier.
+     * @param {number} seconds - Offset in seconds
+     */
+    setSubtitleOffset(seconds) {
+        this._subtitleOffset = seconds;
+
+        const video = this._videoElement;
+        if (!video || !video.textTracks) {
+            debug.log(`[HtmlVideoPlayer] Subtitle offset stored: ${seconds}s (no video/tracks)`);
+            return;
+        }
+
+        // Calculate the relative delta from the last applied offset
+        const delta = seconds - this._previousOffset;
+        if (delta === 0) return; // No change needed
+
+        // Apply the delta to all 'showing' text tracks' cues
+        for (let i = 0; i < video.textTracks.length; i++) {
+            const track = video.textTracks[i];
+            if (track.mode !== 'showing' || !track.cues) continue;
+
+            // Shift every cue's start and end time by the delta
+            for (let j = 0; j < track.cues.length; j++) {
+                const cue = track.cues[j];
+                cue.startTime += delta;
+                cue.endTime += delta;
+            }
+        }
+
+        // Update the tracked offset for next delta calculation
+        this._previousOffset = seconds;
+        debug.log(`[HtmlVideoPlayer] Subtitle offset applied: ${seconds}s (delta: ${delta}s)`);
     }
 
     // ========================================================================

@@ -1,9 +1,9 @@
 /**
  * JellyfinPlayer - Main orchestrating class
- * 
+ *
  * Manages video playback using either HtmlVideoPlayer or TizenAVPlayer backend.
  * Handles media source selection, track switching, and playback state.
- * 
+ *
  * @module core/JellyfinPlayer
  */
 
@@ -102,7 +102,12 @@ export class JellyfinPlayer extends EventEmitter {
         // We prioritize explicit configuration but fallback to detection if set to 'auto'
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
 
-        debug.log('[JellyfinPlayer] Initializing backend. useTizenPlayer:', this.useTizenPlayer, 'detected:', hasAvPlay);
+        debug.log(
+            '[JellyfinPlayer] Initializing backend. useTizenPlayer:',
+            this.useTizenPlayer,
+            'detected:',
+            hasAvPlay
+        );
 
         if (this.useTizenPlayer && hasAvPlay) {
             debug.log('[JellyfinPlayer] Using Tizen AVPlay backend');
@@ -141,7 +146,7 @@ export class JellyfinPlayer extends EventEmitter {
 
     /**
      * Play media item
-     * 
+     *
      * @param {Object} options - Play options
      * @param {string} options.itemId - Jellyfin item ID
      * @param {string} [options.mediaSourceId] - Specific media source ID
@@ -172,7 +177,7 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Select best media source
             const mediaSource = options.mediaSourceId
-                ? playbackInfo.MediaSources.find(ms => ms.Id === options.mediaSourceId)
+                ? playbackInfo.MediaSources.find((ms) => ms.Id === options.mediaSourceId)
                 : playbackInfo.MediaSources[0];
 
             if (!mediaSource) {
@@ -193,13 +198,16 @@ export class JellyfinPlayer extends EventEmitter {
 
             // If not provided, try to find default from MediaSource
             if (this._currentAudioStreamIndex === undefined && mediaSource.MediaStreams) {
-                const audioStream = mediaSource.MediaStreams.find(s => s.Type === 'Audio' && s.IsDefault)
-                    || mediaSource.MediaStreams.find(s => s.Type === 'Audio');
+                const audioStream =
+                    mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.IsDefault) ||
+                    mediaSource.MediaStreams.find((s) => s.Type === 'Audio');
                 if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
             }
             // If not provided, subtitles default to -1 (off) or forced
             if (this._currentSubtitleStreamIndex === undefined && mediaSource.MediaStreams) {
-                const subStream = mediaSource.MediaStreams.find(s => s.Type === 'Subtitle' && (s.IsDefault || s.IsForced));
+                const subStream = mediaSource.MediaStreams.find(
+                    (s) => s.Type === 'Subtitle' && (s.IsDefault || s.IsForced)
+                );
                 if (subStream) this._currentSubtitleStreamIndex = subStream.Index;
                 else this._currentSubtitleStreamIndex = -1;
             }
@@ -236,7 +244,6 @@ export class JellyfinPlayer extends EventEmitter {
                 item: this._currentItem,
                 mediaSource
             });
-
         } catch (error) {
             debug.error('[JellyfinPlayer] Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
@@ -365,7 +372,7 @@ export class JellyfinPlayer extends EventEmitter {
         // HtmlVideoPlayer expects Stream ID
         if (this._backend instanceof TizenAVPlayer) {
             const tracks = this.getAudioTracks();
-            const listIndex = tracks.findIndex(t => t.Index === index);
+            const listIndex = tracks.findIndex((t) => t.Index === index);
             if (listIndex !== -1) {
                 debug.log('[JellyfinPlayer] Converting StreamID', index, 'to Tizen Index', listIndex);
                 this._backend.setAudioStreamIndex(listIndex);
@@ -391,9 +398,9 @@ export class JellyfinPlayer extends EventEmitter {
                 this._backend.setSubtitleStreamIndex(-1);
             } else {
                 const tracks = this.getSubtitleTracks();
-                const listIndex = tracks.findIndex(t => t.Index === index);
+                const listIndex = tracks.findIndex((t) => t.Index === index);
                 if (listIndex !== -1) {
-                    // Tizen Index usually matches filtered list index? 
+                    // Tizen Index usually matches filtered list index?
                     // TizenAVPlayer implementation expects index into "TEXT" tracks.
                     this._backend.setSubtitleStreamIndex(listIndex);
                 } else {
@@ -405,6 +412,14 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+    }
+
+    /**
+     * Set subtitle offset
+     * @param {number} seconds - Offset in seconds
+     */
+    setSubtitleOffset(seconds) {
+        this._backend?.setSubtitleOffset(seconds);
     }
 
     /**
@@ -469,7 +484,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Find the subtitle track
         const tracks = this.getSubtitleTracks();
-        const track = tracks.find(t => t.Index === streamIndex);
+        const track = tracks.find((t) => t.Index === streamIndex);
         if (!track) {
             debug.warn('[JellyfinPlayer] Secondary subtitle track not found:', streamIndex);
             return;
@@ -492,7 +507,6 @@ export class JellyfinPlayer extends EventEmitter {
             const text = await response.text();
             this._secondaryCues = SubtitleParser.parse(text);
             debug.log(`[JellyfinPlayer] Parsed ${this._secondaryCues.length} secondary subtitle cues`);
-
         } catch (err) {
             debug.error('[JellyfinPlayer] Failed to load secondary subtitle:', err);
             this._secondaryCues = [];
@@ -509,7 +523,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Find active cue for current time
         const activeCue = this._secondaryCues.find(
-            cue => currentTimeSeconds >= cue.start && currentTimeSeconds <= cue.end
+            (cue) => currentTimeSeconds >= cue.start && currentTimeSeconds <= cue.end
         );
 
         if (activeCue) {
@@ -535,7 +549,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Array} Audio streams
      */
     getAudioTracks() {
-        return this._currentMediaSource?.MediaStreams?.filter(s => s.Type === 'Audio') || [];
+        return this._currentMediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
     }
 
     /**
@@ -543,7 +557,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Array} Subtitle streams
      */
     getSubtitleTracks() {
-        return this._currentMediaSource?.MediaStreams?.filter(s => s.Type === 'Subtitle') || [];
+        return this._currentMediaSource?.MediaStreams?.filter((s) => s.Type === 'Subtitle') || [];
     }
 
     // ========================================================================
@@ -640,7 +654,7 @@ export class JellyfinPlayer extends EventEmitter {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `MediaBrowser Token="${this.authToken}"`
+                Authorization: `MediaBrowser Token="${this.authToken}"`
             },
             body: JSON.stringify({
                 DeviceProfile: this._deviceProfile.getProfile(),

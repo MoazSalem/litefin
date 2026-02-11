@@ -128,6 +128,12 @@ class PlayerOSD extends Component {
         this._currentSecondarySubtitleIndex = -1;
         this._currentAudioIndex = 0;
         this._trackMenuSubtitleMode = 'primary';
+        
+        // ====================================================================
+        // Subtitle Offset State
+        // ====================================================================
+        this._showSubtitleOffset = false;
+        this._subtitleOffset = 0;
     }
 
     // ========================================================================
@@ -272,6 +278,14 @@ class PlayerOSD extends Component {
         return false;
     }
 
+    /**
+     * Handle back key internally (e.g. closing offset menu)
+     * @returns {boolean} True if handled
+     */
+    _handleInternalBack() {
+        return false;
+    }
+
     // ========================================================================
     // OSD Rendering
     // ========================================================================
@@ -366,7 +380,22 @@ class PlayerOSD extends Component {
                     <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
                 </div>
             </div>
+            </div>
+            
+            ${this._renderSubtitleOffsetOverlay()}
         `;
+    }
+
+    /**
+     * Render the Subtitle Offset Overlay HTML.
+     * All styles are defined in player-osd.css (NOT inline) because Tizen's
+     * WebKit has issues with styles injected via innerHTML. Starts hidden
+     * via CSS (opacity:0); the .visible class is toggled by JS.
+     */
+    _renderSubtitleOffsetOverlay() {
+        const closeIcon = ICONS.close || '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+        return `<div id="osdOffsetOverlay"><div class="osd-offset-header"><div class="osd-offset-title-group"><span class="osd-offset-title">Subtitle Offset</span><span class="osd-offset-value" id="osdOffsetValue">0.0s</span></div><button class="osd-offset-close" data-action="closeSubtitleOffset" tabindex="0">${closeIcon}</button></div><div class="osd-offset-slider-container"><input type="range" class="osd-offset-slider" id="osdOffsetSlider" min="-30" max="30" step="0.1" value="0" tabindex="0" /></div></div>`;
     }
 
     // ========================================================================
@@ -434,6 +463,19 @@ class PlayerOSD extends Component {
                 return;
             }
 
+            // Offset overlay: close button triggers close, slider is no-op
+            if (this._showSubtitleOffset && this._isOffsetFocused()) {
+                this._show();
+                this._resetAutoHide();
+
+                const el = document.activeElement;
+                if (el && el.classList.contains('osd-offset-close')) {
+                    this._toggleSubtitleOffset(false);
+                }
+                // Slider or other offset element — do nothing on enter
+                return;
+            }
+
             // Show OSD and reset auto-hide
             this._show();
             this._resetAutoHide();
@@ -471,9 +513,18 @@ class PlayerOSD extends Component {
                 return;
             }
 
+            // Offset menu: navigate up/down
+            if (this._showSubtitleOffset && this._isOffsetFocused()) {
+                this._show();
+                this._resetAutoHide();
+                // Within offset UI
+                this._handleOffsetMenuNav('up');
+                return;
+            }
+
             this._show();
             this._resetAutoHide();
-
+            
             // Move up a row (header ← controls ← seekbar)
             if (this._currentFocusRow > 0) {
                 this._currentFocusRow--;
@@ -488,6 +539,39 @@ class PlayerOSD extends Component {
             if (this._isTrackMenuOpen) {
                 this._handleTrackMenuNav('down');
                 return;
+            }
+
+            // Offset menu: navigate up/down
+            if (this._showSubtitleOffset) {
+                this._show();
+                this._resetAutoHide();
+                // If focus is in offset UI
+                if (this._isOffsetFocused()) {
+                    const slider = this._osdEl.querySelector('#osdOffsetSlider');
+                    // If on slider, Down goes to Play/Pause (Controls Row)
+                    if (document.activeElement === slider) {
+                        this._currentFocusRow = 1;
+
+                        const { controlsRow } = this._getFocusableElements();
+                        const playBtn = this._osdEl.querySelector('[data-action="togglePlay"]');
+                        const playIndex = controlsRow.indexOf(playBtn);
+                        
+                        if (playIndex !== -1) {
+                            this._currentFocusIndex = playIndex;
+                        } else {
+                            this._currentFocusIndex = Math.floor(controlsRow.length / 2);
+                        }
+
+                        // Force focus to break focus guard
+                        controlsRow[this._currentFocusIndex]?.focus();
+                        this._updateFocus();
+                        return;
+                    }
+                    // If on close button, Down goes to Slider
+                    this._handleOffsetMenuNav('down');
+                    return;
+                }
+                // If in Main OSD, standard Down behavior (but keep menu open)
             }
 
             this._show();
@@ -505,6 +589,29 @@ class PlayerOSD extends Component {
 
             // Track menu: block left/right from leaving menu
             if (this._isTrackMenuOpen) return;
+
+            // Offset menu: decrease offset
+            if (this._showSubtitleOffset) {
+                this._show();
+                this._resetAutoHide();
+                if (this._isOffsetFocused()) {
+                    // If on slider, adjust value
+                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-slider')) {
+                        this._adjustSubtitleOffset(-0.1);
+                        return;
+                    }
+                    // If on close button, Go Left to Back Button (Header)
+                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-close')) {
+                         this._currentFocusRow = 0;
+                         // Force focus to Header Row to break out of overlay guard
+                         const { headerRow } = this._getFocusableElements();
+                         headerRow[0]?.focus();
+                         this._updateFocus();
+                         return;
+                    }
+                }
+                // Fallthrough to standard OSD nav (e.g. controls)
+            }
 
             const wasHidden = !this._isOsdVisible;
             this._show();
@@ -537,6 +644,19 @@ class PlayerOSD extends Component {
             // Track menu: block left/right from leaving menu
             if (this._isTrackMenuOpen) return;
 
+            // Offset menu: increase offset
+            if (this._showSubtitleOffset) {
+                this._show();
+                this._resetAutoHide();
+                if (this._isOffsetFocused()) {
+                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-slider')) {
+                        this._adjustSubtitleOffset(0.1);
+                    }
+                    return;
+                }
+                // Fallthrough
+            }
+
             const wasHidden = !this._isOsdVisible;
             this._show();
             this._resetAutoHide();
@@ -558,8 +678,14 @@ class PlayerOSD extends Component {
                 } else if (this._currentFocusRow === 2) {
                     // Seekbar row — seek forward
                     this._executeAction('fastForward');
+                } else if (this._currentFocusRow === 0) {
+                    // Header row — navigate right to Overlay if open
+                    if (this._showSubtitleOffset) {
+                         const slider = this._osdEl.querySelector('#osdOffsetSlider');
+                         slider?.focus();
+                         this._clearAllOsdFocus();
+                    }
                 }
-                // Row 0 (header) — no left/right nav
             }
         });
 
@@ -652,6 +778,10 @@ class PlayerOSD extends Component {
      * Adds 'focused' class and calls native focus() for screen readers.
      */
     _updateFocus() {
+        // When the offset overlay is active, don't apply OSD focus — the
+        // overlay manages its own focus via native browser focus
+        if (this._showSubtitleOffset && this._isOffsetFocused()) return;
+
         const { headerRow, controlsRow, seekbar } = this._getFocusableElements();
 
         // Clear all focus states
@@ -761,7 +891,11 @@ class PlayerOSD extends Component {
                 break;
 
             case 'settings':
-                log.info('Settings menu');
+                this._toggleSubtitleOffset(!this._showSubtitleOffset);
+                break;
+
+            case 'closeSubtitleOffset':
+                this._toggleSubtitleOffset(false);
                 break;
         }
     }
@@ -1024,6 +1158,9 @@ class PlayerOSD extends Component {
 
     /** Hide the OSD overlay */
     _hide() {
+        // Guard: Don't hide if track menu is open
+        if (this._isTrackMenuOpen) return;
+
         this._osdEl.classList.add('osd-hidden');
         this._isOsdVisible = false;
     }
@@ -1031,6 +1168,8 @@ class PlayerOSD extends Component {
     /** Reset the auto-hide timer (restarts the countdown) */
     _resetAutoHide() {
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+        // Do not auto-hide if track menu is open
+        if (this._isTrackMenuOpen) return;
         this._autoHideTimer = setTimeout(() => this._hide(), this._config.autoHideDelay);
     }
 
@@ -1415,24 +1554,154 @@ class PlayerOSD extends Component {
     // ========================================================================
 
     /**
-     * Format ticks (10,000,000 = 1 second) into a human-readable time string.
-     * @param {number} ticks - Time in ticks
-     * @returns {string} Formatted time (e.g. "1:23:45" or "23:45")
+     * Format time as MM:SS or HH:MM:SS
+     * @param {number} ticks
      */
     _formatTime(ticks) {
-        if (!ticks || ticks < 0) return '00:00';
-
+        if (!ticks) return '00:00';
         const totalSeconds = Math.floor(ticks / 10000000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
 
-        const pad = (n) => String(n).padStart(2, '0');
-
+        const pad = (n) => n.toString().padStart(2, '0');
         if (hours > 0) {
             return `${hours}:${pad(minutes)}:${pad(seconds)}`;
         }
         return `${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    // ========================================================================
+    // Subtitle Offset Logic
+    // ========================================================================
+
+    /**
+     * Toggle the subtitle offset overlay.
+     * Integrates with the OSD's row-based focus model by clearing
+     * the custom .focused class from all OSD elements when the overlay
+     * opens (so we don't get dual focus indicators), and restoring
+     * focus to the controls row when the overlay closes.
+     * @param {boolean} show
+     */
+    _toggleSubtitleOffset(show) {
+        this._showSubtitleOffset = show;
+        const overlay = this._osdEl.querySelector('#osdOffsetOverlay');
+        const slider = this._osdEl.querySelector('#osdOffsetSlider');
+
+        if (show) {
+            // Stop any pending auto-hide timer since the menu is opening
+            this._resetAutoHide();
+
+            // Show the overlay
+            overlay?.classList.add('visible');
+
+            // Clear the OSD's custom focus from all elements to avoid
+            // dual focus indicators (custom .focused + native :focus)
+            this._clearAllOsdFocus();
+
+            // Sync UI to current offset value
+            this._updateSubtitleOffsetUI();
+            
+            // Give native focus to the slider
+            setTimeout(() => slider?.focus(), 50);
+        } else {
+            // Hide the overlay
+            overlay?.classList.remove('visible');
+
+            // Restore OSD focus to settings button (row 1, last item)
+            const { controlsRow } = this._getFocusableElements();
+            this._currentFocusRow = 1;
+            this._currentFocusIndex = controlsRow.length - 1; // Settings is the last button
+            this._updateFocus();
+            
+            // Ensure offset is synced to the player backend
+            if (this._player?.setSubtitleOffset) {
+                this._player.setSubtitleOffset(this._subtitleOffset);
+            }
+        }
+    }
+
+    /**
+     * Clear the custom .focused class from ALL OSD focusable elements.
+     * Used when handing focus to the offset overlay so we don't show
+     * two focus indicators at the same time.
+     */
+    _clearAllOsdFocus() {
+        const { headerRow, controlsRow, seekbar } = this._getFocusableElements();
+        headerRow.forEach(btn => btn.classList.remove('focused'));
+        controlsRow.forEach(btn => btn.classList.remove('focused'));
+        seekbar?.classList.remove('focused');
+    }
+
+    /**
+     * Adjust subtitle offset by delta
+     * @param {number} deltaSeconds
+     */
+    _adjustSubtitleOffset(deltaSeconds) {
+        // Round to 1 decimal place to avoid float errors
+        let newOffset = Math.round((this._subtitleOffset + deltaSeconds) * 10) / 10;
+        
+        // Clamp to -30 to +30
+        if (newOffset < -30) newOffset = -30;
+        if (newOffset > 30) newOffset = 30;
+
+        this._subtitleOffset = newOffset;
+        this._updateSubtitleOffsetUI();
+        
+        // Apply to player
+        if (this._player?.setSubtitleOffset) {
+            this._player.setSubtitleOffset(this._subtitleOffset);
+        }
+    }
+
+    /**
+     * Update the Subtitle Offset UI elements
+     */
+    _updateSubtitleOffsetUI() {
+        const valueEl = this._osdEl.querySelector('#osdOffsetValue');
+        const slider = this._osdEl.querySelector('#osdOffsetSlider');
+        
+        if (valueEl) {
+            const sign = this._subtitleOffset > 0 ? '+' : '';
+            valueEl.textContent = `${sign}${this._subtitleOffset.toFixed(1)}s`;
+        }
+        
+        if (slider) {
+            slider.value = this._subtitleOffset;
+        }
+    }
+
+    /**
+     * Handle navigation within the subtitle offset menu
+     * @param {string} direction 'up' or 'down'
+     */
+    _handleOffsetMenuNav(direction) {
+        const overlay = this._osdEl.querySelector('#osdOffsetOverlay');
+        if (!overlay) return;
+
+        const closeBtn = overlay.querySelector('.osd-offset-close');
+        const slider = overlay.querySelector('.osd-offset-slider');
+
+        if (direction === 'up') {
+            // If on slider, go to close button
+            if (document.activeElement === slider) {
+                closeBtn?.focus();
+            }
+        } else {
+            // If on close button, go to slider
+            if (document.activeElement === closeBtn) {
+                slider?.focus();
+            }
+        }
+    }
+
+    /**
+     * Check if focus is currently within the subtitle offset overlay
+     */
+    _isOffsetFocused() {
+        if (!this._showSubtitleOffset) return false;
+        const el = document.activeElement;
+        return el && (el.classList.contains('osd-offset-slider') || el.classList.contains('osd-offset-close'));
     }
 }
 
