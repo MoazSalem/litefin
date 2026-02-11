@@ -9,6 +9,8 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
+import { spatialNavigator } from './SpatialNavigator.js';
+import { scrollController } from './ScrollController.js';
 
 const log = logger.create('FocusManager');
 
@@ -49,123 +51,20 @@ class FocusManager {
         this._lastMoveTime = 0;
         this._prevMoveTime = 0;
 
-        // SAMSUNG OPTIMIZATION: Cache DOM reference to avoid repeated queries
-        this._pageContent = null;
-
-        // Animation state for smooth scrolling (separate for vertical/horizontal)
-        this._verticalScrollAnimationId = null;
-        this._horizontalScrollAnimationId = null;
-
-        // Track animation IDs for smooth scroll
-        this._scrollAnimations = {};
-
         // Suspended flag — when true, all key processing is skipped.
         // Used by components that manage their own focus (e.g. PlayerOSD)
         this._suspended = false;
 
-        // Bound methods
-        // this._onKeyDown = this._onKeyDown.bind(this);
+        // Delegated utilities (extracted from this God Object)
+        this._spatial = spatialNavigator;
+        this._scroll = scrollController;
 
         // Initialize
         this._init();
     }
 
-    /**
-     * Cancel ongoing scroll animation
-     * @param {string} direction - 'vertical' or 'horizontal'
-     * @private
-     */
-    _cancelScrollAnimation(direction = 'vertical') {
-        if (direction === 'vertical') {
-            if (this._verticalScrollAnimationId) {
-                cancelAnimationFrame(this._verticalScrollAnimationId);
-                this._verticalScrollAnimationId = null;
-            }
-            this._verticalScrollTarget = null;
-        } else {
-            if (this._horizontalScrollAnimationId) {
-                cancelAnimationFrame(this._horizontalScrollAnimationId);
-                this._horizontalScrollAnimationId = null;
-            }
-            this._horizontalScrollTarget = null;
-        }
-    }
-
-    /**
-     * Time-based smooth scroll with easeOutQuad curve
-     * Uses a fixed duration animation with proper easing.
-     * Retargeting updates target and resets timing from current position.
-     * @param {HTMLElement} container - Scroll container element
-     * @param {number} targetScroll - Target scroll value
-     * @param {number} duration - Animation duration in ms. Default 200ms.
-     * @param {string} direction - 'vertical' or 'horizontal'
-     * @private
-     */
-    _smoothScrollTo(container, targetScroll, duration = 200, direction = 'vertical') {
-        const isVertical = direction === 'vertical';
-        const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
-        const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
-
-        const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
-
-        // If already at target, do nothing
-        if (Math.abs(targetScroll - currentScroll) < 1) {
-            if (isVertical) container.scrollTop = targetScroll;
-            else container.scrollLeft = targetScroll;
-            return;
-        }
-
-        // Create/update animation state
-        const now = performance.now();
-        this[stateKey] = {
-            container,
-            startScroll: currentScroll,
-            target: targetScroll,
-            startTime: now,
-            duration
-        };
-
-        // If animation already running, it will pick up new state
-        if (this[animIdKey]) {
-            return;
-        }
-
-        // easeOutQuad: fast start, smooth deceleration
-        const easeOutQuad = (t) => t * (2 - t);
-
-        const animate = () => {
-            const state = this[stateKey];
-            if (!state) return;
-
-            const elapsed = performance.now() - state.startTime;
-            const progress = Math.min(elapsed / state.duration, 1);
-            const eased = easeOutQuad(progress);
-
-            const distance = state.target - state.startScroll;
-            const newScroll = state.startScroll + distance * eased;
-
-            if (isVertical) {
-                state.container.scrollTop = newScroll;
-            } else {
-                state.container.scrollLeft = newScroll;
-            }
-
-            if (progress < 1) {
-                this[animIdKey] = requestAnimationFrame(animate);
-            } else {
-                // Ensure we land exactly on target
-                if (isVertical) {
-                    state.container.scrollTop = state.target;
-                } else {
-                    state.container.scrollLeft = state.target;
-                }
-                this[animIdKey] = null;
-                this[stateKey] = null;
-            }
-        };
-
-        this[animIdKey] = requestAnimationFrame(animate);
-    }
+    // _cancelScrollAnimation → moved to ScrollController
+    // _smoothScrollTo → moved to ScrollController
 
     /**
      * Initialize focus manager
@@ -335,8 +234,8 @@ class FocusManager {
      * Clear cached DOM references
      */
     resetDOMCache() {
-        this._pageContent = null;
         this._focusablesCache.clear();
+        this._scroll.resetCache();
     }
 
     /**
@@ -473,10 +372,8 @@ class FocusManager {
                 if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
         } else {
-            // 'grid' or default - Use Spatial Navigation
-            // log.debug(`Spatial Move: ${direction} from`, this._focusedElement);
-            nextElement = this._findSpatialNext(this._focusedElement, focusables, direction);
-            // log.debug(`Spatial Result:`, nextElement);
+            // 'grid' or default — delegate to SpatialNavigator
+            nextElement = this._spatial.findNext(this._focusedElement, focusables, direction);
         }
 
         // 2. If we found a target, move to it
@@ -493,135 +390,8 @@ class FocusManager {
         this._leaveSection(direction);
     }
 
-    /**
-     * Spatial Navigation: Find best candidate in direction
-     * User for ARROW KEY navigation within a grid.
-     */
-    _findSpatialNext(current, candidates, direction) {
-        const rect1 = current.getBoundingClientRect();
-        const center1 = {
-            x: rect1.left + rect1.width / 2,
-            y: rect1.top + rect1.height / 2
-        };
-
-        let bestCandidate = null;
-        let minScore = Infinity;
-
-        // Filter for candidates in the cone
-        for (const candidate of candidates) {
-            if (candidate === current) continue;
-
-            const rect2 = candidate.getBoundingClientRect();
-            const center2 = {
-                x: rect2.left + rect2.width / 2,
-                y: rect2.top + rect2.height / 2
-            };
-
-            // Calculate vector
-            const dx = center2.x - center1.x;
-            const dy = center2.y - center1.y;
-
-            // 1. Check Direction
-
-            // 1. Check Direction
-            let isValid = false;
-            let distMain = 0; // parallel to direction
-            let distCross = 0; // perpendicular to direction
-
-            // TOLERANCE: Ignore candidates that are "basically on the same line"
-            // This prevents Up/Down from selecting items in the SAME ROW due to subpixel jitter
-            const THRESHOLD = 10;
-
-            if (direction === 'right') {
-                if (dx > THRESHOLD) {
-                    isValid = true;
-                    distMain = dx;
-                    distCross = Math.abs(dy);
-                }
-            } else if (direction === 'left') {
-                if (dx < -THRESHOLD) {
-                    isValid = true;
-                    distMain = Math.abs(dx);
-                    distCross = Math.abs(dy);
-                }
-            } else if (direction === 'down') {
-                if (dy > THRESHOLD) {
-                    isValid = true;
-                    distMain = dy;
-                    distCross = Math.abs(dx);
-                }
-            } else if (direction === 'up') {
-                if (dy < -THRESHOLD) {
-                    isValid = true;
-                    distMain = Math.abs(dy);
-                    distCross = Math.abs(dx);
-                }
-            }
-
-            if (!isValid) continue;
-
-            // 2. Score with Alignment Bonus
-            let overlap = 0;
-            if (direction === 'left' || direction === 'right') {
-                const top = Math.max(rect1.top, rect2.top);
-                const bottom = Math.min(rect1.bottom, rect2.bottom);
-                overlap = Math.max(0, bottom - top);
-            } else {
-                const left = Math.max(rect1.left, rect2.left);
-                const right = Math.min(rect1.right, rect2.right);
-                overlap = Math.max(0, right - left);
-            }
-
-            // If effective overlap, reduce cross penalty
-            if (overlap > 0) {
-                distCross = 0; // It is "aligned"
-            }
-
-            // Calculate final score
-            const score = distMain + distCross * 3.0;
-
-            if (score < minScore) {
-                minScore = score;
-                bestCandidate = candidate;
-            }
-        }
-
-        return bestCandidate;
-    }
-
-    /**
-     * Find best candidate closest to a target element (Euclidean distance).
-     * Used for RESTORING focus when entering a section from a specific point.
-     */
-    _findSpatialClosest(target, candidates) {
-        if (!target || !candidates.length) return null;
-
-        const rect1 = target.getBoundingClientRect();
-        const center1 = {
-            x: rect1.left + rect1.width / 2,
-            y: rect1.top + rect1.height / 2
-        };
-
-        let best = null;
-        let minDist = Infinity;
-
-        for (const c of candidates) {
-            const rect2 = c.getBoundingClientRect();
-            const center2 = {
-                x: rect2.left + rect2.width / 2,
-                y: rect2.top + rect2.height / 2
-            };
-            const dx = center2.x - center1.x;
-            const dy = center2.y - center1.y;
-            const dist = Math.sqrt(dx * dx + dy * dy);
-
-            if (dist < minDist) {
-                minDist = dist;
-                best = c;
-            }
-        }
-        return best;
-    }
+    // _findSpatialNext → moved to SpatialNavigator
+    // _findSpatialClosest → moved to SpatialNavigator
 
     /**
      * Leave current section (OPTIMIZED)
@@ -686,39 +456,18 @@ class FocusManager {
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
-            const scrollContainer = this._getScrollContainer(this._focusedElement);
+            const scrollContainer = this._scroll.getScrollContainer(this._focusedElement);
             if (scrollContainer && scrollContainer.scrollTop > 0) {
-                this._smoothScrollTo(scrollContainer, 0);
+                this._scroll.smoothScrollTo(scrollContainer, 0);
             }
         }
     }
 
-    /**
-     * Identify the nearest parent that should handle scrolling.
-     * Searches for known scroll containers or falls back to .page-content.
-     * @param {HTMLElement} element
-     * @returns {HTMLElement|null}
-     * @private
-     */
-    _getScrollContainer(element) {
-        if (!element) return this._pageContent;
-
-        // Check for specific scrollable containers used in modals/filters
-        const container = element.closest('.modal-options, .filter-main, .page-content');
-
-        // Update cached pageContent if we found the main one
-        if (container && container.classList.contains('page-content')) {
-            this._pageContent = container;
-        }
-
-        return container || this._pageContent;
-    }
+    // _getScrollContainer → moved to ScrollController
 
     /**
      * Focus a specific element (OPTIMIZED per Samsung Tizen Guidelines)
-     * - Cache DOM queries
-     * - Batch reads before writes
-     * - Scroll first, then focus
+     * Coordinates cleanup, section switching, scroll delegation, and focus.
      */
     focusElement(element, options = {}) {
         if (!element) return;
@@ -755,179 +504,9 @@ class FocusManager {
             }
         }
 
-        // SAMSUNG OPTIMIZATION: Cache scroll container DOM reference
-        // RESOLUTION FIX: Identify the CORRECT scrollable container (Page, Modal, or Filter)
-        let pageContent = this._getScrollContainer(element);
-
-        this._pageContent = pageContent; // Cache for other ops if needed
-
-        // SCROLL FIRST - before focus
-
-        // TIZEN OPTIMIZATION: Use getBoundingClientRect for sub-pixel accuracy
-        // and robustness against floating point offset errors on TV browsers.
-        const getCumulativeOffsetTop = (el, relativeTo) => {
-            if (!el || !relativeTo) return 0;
-            const elRect = el.getBoundingClientRect();
-            const relRect = relativeTo.getBoundingClientRect();
-            return elRect.top - relRect.top + relativeTo.scrollTop;
-        };
-
-        // Determine scroll strategy
-        // Row-based scroll should be used if we're in a media row and it's not too tall
-        const row = pageContent ? element.closest('.media-row') : null;
-        let useRowScroll = !!row;
-
-        if (useRowScroll) {
-            // HERO EXCEPTION: Always use row-based scrolling for hero sections
-            // to ensure they snap to the standardized top offset (50px).
-            const isHero = row.classList.contains('details-main-split');
-
-            if (isHero) {
-                // FORCE TOP: For Hero, we want absolute 0, not "aligned to 50px"
-                // And we want it always, if we're not at 0.
-                if (pageContent.scrollTop > 0) {
-                    this._smoothScrollTo(pageContent, 0);
-                }
-                // Disable standard row logic so it doesn't try to realign
-                useRowScroll = false;
-                pageContent = null; // Prevent generic vertical scroll override
-            }
-            // If row is MUCH taller than viewport (e.g. very long list), disable row-alignment
-            // to prevent jumping to top when focusing bottom elements.
-            else if (row.offsetHeight > pageContent.clientHeight * 2.0) {
-                useRowScroll = false;
-            }
-        }
-
-        if (useRowScroll && row) {
-            // For vertical row changes: scroll row section into view
-            // SAMSUNG: Batch all reads first
-            const rowTop = getCumulativeOffsetTop(row, pageContent);
-            const rowHeight = row.offsetHeight;
-            const rowBottom = rowTop + rowHeight;
-
-            const viewHeight = pageContent.clientHeight;
-            const currentScroll = pageContent.scrollTop;
-            const viewBottom = currentScroll + viewHeight;
-
-            // Check visibility with padding/buffer
-            // TIZEN: Use a more conservative 40px buffer for cutoffs
-            const topCutoff = rowTop < currentScroll + 40;
-            const bottomCutoff = rowBottom > viewBottom - 40;
-
-            // If cut off at bottom, scroll down
-            if (bottomCutoff) {
-                // Aim for top-alignment (the premium look)
-                let targetScroll = rowTop - (config.scrollOffsetTop || 50);
-
-                // SAFETY: Ensure the specific focused element is actually visible
-                // at the target scroll position. If the row is very tall,
-                // aligning to top might hide the bottom elements.
-                const elTop = getCumulativeOffsetTop(element, pageContent);
-                const elBottom = elTop + element.offsetHeight;
-
-                if (elBottom > targetScroll + viewHeight) {
-                    // Element is too far down, align element to bottom instead
-                    targetScroll = elBottom - viewHeight + 40;
-                }
-
-                this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
-            }
-            // If cut off at top, scroll up
-            else if (topCutoff) {
-                // SPECIAL CASE: For the Hero section (top of page), ALWAYS scroll to 0
-                // This ensures we don't get stuck with a small offset due to margins/padding
-                const isHero = row.classList.contains('details-main-split');
-
-                if (isHero) {
-                    this._smoothScrollTo(pageContent, 0);
-                } else {
-                    const padding = config.scrollOffsetTop || 50;
-                    let targetScroll = rowTop - padding;
-
-                    // SAFETY: Ensure the element isn't cut off at the top
-                    const elTop = getCumulativeOffsetTop(element, pageContent);
-                    if (elTop < targetScroll + 20) {
-                        targetScroll = elTop - padding;
-                    }
-
-                    this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
-                }
-            }
-        }
-
-        // Horizontal Scroll Handling (Run independent of vertical row alignment)
-        if (options.scroll) {
-            // For horizontal navigation within row
-            const rowItems = element.closest('.row-items');
-            if (rowItems) {
-                // FIRST: Scroll the row into view vertically (if needed)
-                // Only do this if we haven't already handled it via useRowScroll
-                const row = element.closest('.media-row');
-                if (row && pageContent && !useRowScroll) {
-                    const rowTop = getCumulativeOffsetTop(row, pageContent);
-                    const rowHeight = row.offsetHeight;
-                    const rowBottom = rowTop + rowHeight;
-                    const viewHeight = pageContent.clientHeight;
-                    const currentScroll = pageContent.scrollTop;
-                    const viewBottom = currentScroll + viewHeight;
-
-                    // Check if row is outside viewport (with buffers)
-                    if (rowTop < currentScroll + 80 || rowBottom > viewBottom - 80) {
-                        // Scroll to center the row vertically with smooth easing
-                        const targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
-                        // Scroll to center the row vertically with smooth easing
-                        this._smoothScrollTo(pageContent, Math.max(0, targetScroll));
-                    }
-                }
-
-                // THEN: Scroll horizontally to center the card
-                const elementLeft = element.offsetLeft;
-                const elementWidth = element.offsetWidth;
-                const containerWidth = rowItems.clientWidth;
-
-                const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
-                const finalScrollLeft = Math.max(0, targetScroll);
-
-                // RAPID NAVIGATION CHECK:
-                // If user is holding button (machine gun < 100ms), use instant scroll
-                // Otherwise use smooth scroll with easing for premium feel
-                // Always use smooth scroll for premium feel, even during rapid navigation
-                this._smoothScrollTo(rowItems, finalScrollLeft, 150, 'horizontal');
-            } else if (pageContent) {
-                // Generic Vertical Scroll (for Grids/Lists or Tall Rows)
-                const elementTop = getCumulativeOffsetTop(element, pageContent);
-                const elementHeight = element.offsetHeight;
-                const viewHeight = pageContent.clientHeight;
-                const currentScroll = pageContent.scrollTop;
-
-                // Margins for visibility comfort
-                const topMargin = 100; // Increased
-                const bottomMargin = 100; // Increased
-
-                let finalScrollTop = currentScroll;
-
-                // Simple "Scroll Into View" logic
-                const customOffset = config?.scrollOffsetTop || 0;
-                const effectiveTopMargin = Math.max(topMargin, customOffset);
-
-                if (elementTop < currentScroll + effectiveTopMargin) {
-                    finalScrollTop = Math.max(0, elementTop - effectiveTopMargin);
-                } else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    if (elementHeight < viewHeight / 3) {
-                        finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
-                    } else {
-                        finalScrollTop = elementTop + elementHeight - viewHeight + bottomMargin;
-                    }
-                }
-
-                // Apply Vertical Scroll with smooth easing
-                if (finalScrollTop !== currentScroll) {
-                    // Always use Premium "Weighty" Animation
-                    this._smoothScrollTo(pageContent, finalScrollTop);
-                }
-            }
-        }
+        // Delegate scroll positioning to ScrollController
+        // Passes section config for custom offsets (scrollOffsetTop, etc.)
+        this._scroll.scrollIntoView(element, config || {}, options);
 
         // NOW set focus (after scroll is done)
         this._focusedElement = element;
@@ -996,7 +575,7 @@ class FocusManager {
         // If we came from another element (e.g. Button below grid), pick closest grid item
 
         if (fromElement && document.contains(fromElement)) {
-            target = this._findSpatialClosest(fromElement, focusables);
+            target = this._spatial.findClosest(fromElement, focusables);
         }
 
         // 2. Memory (Fallback)
