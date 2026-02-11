@@ -8,108 +8,141 @@
     <title>Litefin</title>
 </head>
 
-<style>
-    body,
-    html {
-        width: 100%;
-        height: 100%;
-        margin: 0;
-        padding: 0;
-        background-color: #101010;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-        font-family: sans-serif;
-        overflow: hidden;
-    }
+    <script>
+        // Immediately restore theme to prevent flash of wrong color
+        (function() {
+            try {
+                const savedTheme = localStorage.getItem('litefin:theme') || 'dark';
+                document.documentElement.setAttribute('data-theme', savedTheme);
 
-    .splash-content {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100vw;
-        height: 100vh;
-        /* Legacy: Block display for absolute child centering */
-        display: block;
-        z-index: 9999;
-        background-color: #101010;
-    }
+                // Accent colors for known themes (must match CSS)
+                const themeColors = {
+                    'dark': '#00a4dc',
+                    'light': '#00a4dc',
+                    'blueradiance': '#00a4dc',
+                    'purplehaze': '#b24bf3',
+                    'wmc': '#52b043',
+                    'appletv': '#0a84ff'
+                };
 
-    .page-loading {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100vw;
-        height: 100vh;
-        display: none;
-        z-index: 9999;
-        background-color: #101010;
-    }
-
-    .page.loading .page-loading {
-        display: block;
-    }
-
-    .page-loading.hidden {
-        display: none !important;
-    }
-
-    .loading-spinner {
-        width: 48px;
-        height: 48px;
-        display: block;
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        margin-top: -24px;
-        margin-left: -24px;
-        color: #FFF;
-        box-sizing: border-box;
-        animation: rotation 1s linear infinite;
-    }
-
-    .loading-spinner::after,
-    .loading-spinner::before {
-        content: '';
-        box-sizing: border-box;
-        position: absolute;
-        width: 24px;
-        height: 24px;
-        top: 50%;
-        left: 50%;
-        transform: scale(0.5) translate(0, 0);
-        background-color: #FFF;
-        border-radius: 50%;
-        animation: animloader 1s infinite ease-in-out;
-    }
-
-    .loading-spinner::before {
-        background-color: #00a4dc;
-        /* Using the same color as the previous JF blue for now */
-        transform: scale(0.5) translate(-48px, -48px);
-    }
-
-    @keyframes rotation {
-        0% {
-            transform: rotate(0deg);
+                const accentColor = themeColors[savedTheme] || '#00a4dc';
+                document.documentElement.style.setProperty('--jf-accent', accentColor);
+            } catch (e) {
+                console.error('Error restoring theme:', e);
+            }
+        })();
+    </script>
+    <style>
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: #101010;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: sans-serif;
+            overflow: hidden;
         }
 
-        100% {
-            transform: rotate(360deg);
+        .splash-content {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 9999;
+            background-color: #101010;
         }
-    }
 
-    @keyframes animloader {
-        50% {
-            transform: scale(1) translate(-50%, -50%);
+        .page-loading {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            display: none;
+            z-index: 9999;
+            background-color: #101010;
         }
-    }
-</style>
+
+        .page.loading .page-loading {
+            display: block;
+        }
+
+        .page-loading.hidden {
+            display: none !important;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -24px;
+            margin-left: -24px;
+            color: #FFF;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            /* TIZEN PERF: Promote to its own compositor layer so the rotation
+               animation runs on the GPU, independent of main-thread JS work. */
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .loading-spinner::after,
+        .loading-spinner::before {
+            content: '';
+            box-sizing: border-box;
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            top: 50%;
+            left: 50%;
+            transform: scale(0.5) translate(0, 0);
+            background-color: #FFF;
+            border-radius: 50%;
+            animation: animloader 1s infinite ease-in-out;
+            will-change: transform;
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .loading-spinner::before {
+            background-color: var(--jf-accent, #00a4dc);
+            /* Use JF Accent color instead of static red */
+            transform: scale(0.5) translate(-48px, -48px);
+        }
+
+        @keyframes rotation {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        @keyframes animloader {
+            50% {
+                transform: scale(1) translate(-50%, -50%);
+            }
+        }
+    </style>
 </head>
 
 <body>

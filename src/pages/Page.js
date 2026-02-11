@@ -182,18 +182,28 @@ class Page extends Component {
     }
 
     setLoading(show) {
+        if (!this.el) return;
+
+        const isCurrentlyLoading = this.el.classList.contains('loading');
+
         if (show) {
-            // Ensure loading element exists
-            let loader = this.el?.querySelector('.page-loading');
-            if (!loader && this.el) {
+            // Reuse existing loader if present — never re-create the
+            // DOM element, because that restarts the CSS animation.
+            let loader = this.el.querySelector('.page-loading');
+            if (!loader) {
                 loader = document.createElement('div');
                 loader.className = 'page-loading';
                 loader.innerHTML = '<div class="loading-spinner"></div>';
                 this.el.appendChild(loader);
             }
-            this.el?.classList.add('loading');
-        } else {
-            this.el?.classList.remove('loading');
+
+            // Only toggle the class if not already loading (prevents
+            // redundant style recalcs from repeated setLoading(true) calls)
+            if (!isCurrentlyLoading) {
+                this.el.classList.add('loading');
+            }
+        } else if (isCurrentlyLoading) {
+            this.el.classList.remove('loading');
         }
     }
 

@@ -146,6 +146,14 @@ body.player-active #sidebar-container {
     color: #FFF;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
+    /* TIZEN PERF: Promote to its own compositor layer so the rotation
+       animation runs on the GPU, independent of main-thread JS work.
+       Without this, heavy data loading causes visible stutter. */
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .loading-spinner::after,
@@ -161,6 +169,10 @@ body.player-active #sidebar-container {
     background-color: #FFF;
     border-radius: 50%;
     animation: animloader 1s infinite ease-in-out;
+    /* GPU compositing for pseudo-element scale animation */
+    will-change: transform;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
 }
 
 .loading-spinner::before {
