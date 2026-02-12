@@ -181,7 +181,10 @@ class DetailsPage extends Page {
             orientation: 'horizontal',
             leaveUp: null, // Top of page
             leaveDown: null, // Will be updated dynamically
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            // PRIORITIZE: Always land on Resume (if visible) or Play when entering this row
+            // This prevents "random" landing on Favorite/Subtitle buttons when coming from below
+            defaultFocusSelector: '.resume-btn:not(.hidden), .play-btn'
         });
 
         // Default to Play button (actions)
@@ -236,10 +239,7 @@ class DetailsPage extends Page {
             // 3. Parallelize loading of ALL major content (Images, Rows, Similar)
             // This ensures we aren't blocked by the 1.5s poster timeout while
             // the episode/season data is ready.
-            const loadTasks = [
-                this._loadImages(),
-                this._loadSecondaryContent()
-            ];
+            const loadTasks = [this._loadImages(), this._loadSecondaryContent()];
 
             if (this._item.Type !== 'Season') {
                 loadTasks.push(this._loadSimilar());
@@ -478,6 +478,14 @@ class DetailsPage extends Page {
         section.classList.remove('hidden');
 
         list.innerHTML = items.map((item) => this._renderMediaCard(item, false, 'poster')).join('');
+
+        // Delegated click handler
+        list.onclick = (e) => {
+            const card = e.target.closest('.media-card');
+            if (card?.dataset?.itemId) {
+                router.navigate(`/details/${card.dataset.itemId}`);
+            }
+        };
 
         // Register Focus with dynamic UP linking
         this.registerFocusSection(sectionId, section, {
@@ -1065,7 +1073,13 @@ class DetailsPage extends Page {
                 episodes: this._episodes,
                 seriesId: this._item.SeriesId,
                 onPlay: (episodeId) => {
-                    router.navigate(`/play/${episodeId}`);
+                    const episode = this._episodes.find((e) => e.Id === episodeId);
+                    if (episode) {
+                        eventBus.emit('player:play', {
+                            item: episode,
+                            resume: false // Or true if we want to prompt? Default false for now
+                        });
+                    }
                 },
                 onAction: (action, episodeId) => {
                     if (action === 'info') {
@@ -1459,11 +1473,61 @@ class DetailsPage extends Page {
         this._updateLeaveDown(upwardLink, 'details-similar');
     }
 
-    _play(resume = false) {
+    async _play(resume = false) {
         let itemToPlay = this._item;
 
-        if (this._item.Type === 'Series' && this._episodes?.length > 0) {
-            itemToPlay = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+        if (this._item.Type === 'BoxSet') {
+            try {
+                // Fetch first item in collection (recursive)
+                const result = await api.getItems({
+                    ParentId: this._item.Id,
+                    Recursive: true,
+                    IncludeItemTypes: 'Movie,Episode',
+                    Limit: 1,
+                    SortBy: 'SortName'
+                });
+
+                if (result && result.Items && result.Items.length > 0) {
+                    itemToPlay = result.Items[0];
+                } else {
+                    return; // Empty collection
+                }
+            } catch (e) {
+                log.error('Failed to play collection', e);
+                return;
+            }
+        } else if (this._item.Type === 'Series') {
+            if (this._episodes?.length > 0) {
+                // If episodes are already loaded (e.g. we are on a Season page but Item is Series? Rare case)
+                itemToPlay = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+            } else {
+                try {
+                    // 1. Try to get "Next Up" for this series
+                    const nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                    if (nextUp && nextUp.Items && nextUp.Items.length > 0) {
+                        itemToPlay = nextUp.Items[0];
+                        // Auto-resume if it has progress
+                        if (itemToPlay.UserData?.PlaybackPositionTicks > 0) {
+                            resume = true;
+                        }
+                    } else {
+                        // 2. Fallback to first episode ever (e.g. S1E1)
+                        const firstEp = await api.getItems({
+                            ParentId: this._item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Episode',
+                            Limit: 1,
+                            SortBy: 'SortName'
+                        });
+                        if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
+                            itemToPlay = firstEp.Items[0];
+                        }
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve series playback', e);
+                    return;
+                }
+            }
         }
 
         eventBus.emit('player:play', {

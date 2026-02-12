@@ -632,7 +632,7 @@
 /* Ensure grid items don't stretch weirdly */
 .person-grid .media-card {
     /* Manual sizing instead of grid */
-    width: calc(20% - 20px) !important;
+    width: calc(20% - 26px) !important;
     /* 5 items per row approx */
     margin-right: 24px !important;
     margin-bottom: 24px !important;
@@ -641,13 +641,26 @@
     min-width: 0 !important;
 }
 
+/* FIX: Aspect Ratio for Lazy Loading (Prevent Scroll Jump) */
+.card-image {
+    width: 100%;
+    aspect-ratio: 2/3; /* Default Portrait */
+    background-color: rgba(255, 255, 255, 0.05); /* Placeholder bg */
+}
+
+/* Landscape grid modifier */
+.landscape .card-image,
+.landscape-grid .card-image {
+    aspect-ratio: 16/9 !important;
+}
+
 .person-grid .media-card:nth-child(5n) {
     margin-right: 0 !important;
 }
 
 /* Landscape Grid (Episodes on Person Page) */
 .person-grid.landscape-grid .media-card {
-    width: calc(25% - 18px) !important;
+    width: calc(25% - 26px) !important;
     /* 4 items per row */
 }
 
