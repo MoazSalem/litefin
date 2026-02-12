@@ -16,7 +16,7 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
-import { api } from './ApiClient.js';
+import { api, ServerUnreachableError } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
 
@@ -131,6 +131,7 @@ class AuthManager {
             state.set('user:data', user);
             state.set('user:authenticated', true);
             state.set('server:connected', true);
+            state.set('server:offline', false);
 
             // Report capabilities to establish session (make user appear online)
             // MUST await this on Tizen - fire-and-forget doesn't complete reliably
@@ -152,9 +153,26 @@ class AuthManager {
 
             return true;
         } catch (error) {
-            // Token is invalid - clear stored credentials
-            log.warn('Token validation failed:', error);
-            this._clearStorage();
+            // Check if it's a network/timeout error
+            if (error instanceof ServerUnreachableError) {
+                log.warn('Server unreachable during restore. Keeping credentials for later retry.');
+                state.set('server:connected', false);
+                state.set('server:offline', true);
+                state.set('user:authenticated', false); // CRITICAL: Not authenticated until server responds
+                return false; 
+            }
+
+            // Only clear storage for explicit "Unauthorized" or "Forbidden"
+            // This prevents generic server errors (500) or parsing issues from nuking the session
+            if (error.status === 401 || error.status === 403) {
+                log.warn('Session expired or unauthorized. Clearing stored credentials.');
+                this._clearStorage();
+                api.clearAuth();
+            } else {
+                log.warn(`Unexpected error during restore (Status: ${error.status || '??'}). Preserving session.`, error);
+                // Still return false to show Offline/Login page, but don't delete token
+            }
+            
             return false;
         }
     }
@@ -180,6 +198,7 @@ class AuthManager {
             localStorage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
 
             state.set('server:connected', true);
+            state.set('server:offline', false);
             state.set('server:info', info);
 
             eventBus.emit('auth:serverConnected', info);
@@ -190,6 +209,23 @@ class AuthManager {
         } catch (error) {
             state.set('server:connected', false);
             throw new Error(`Failed to connect: ${error.message}`);
+        }
+    }
+
+    /**
+     * Lightweight check to see if the server is reachable
+     * @returns {Promise<boolean>} True if reachable
+     */
+    async checkServerStatus() {
+        const url = this.getSavedServerUrl();
+        if (!url) return false;
+
+        try {
+            // Use the public info endpoint which requires no auth
+            await api.getPublicInfo();
+            return true;
+        } catch (e) {
+            return false;
         }
     }
 

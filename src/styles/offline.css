@@ -1,0 +1,141 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Offline Page Styles
+ * ============================================================================
+ * Refined layout and styles for the unreachable server state.
+ * Follows Apple Human Interface Guidelines for clarity and premium feel.
+ * ============================================================================
+ */
+
+.offline-page {
+    background-color: var(--jf-background);
+    /* TIZEN PERF: Radial gradients are expensive on older engines.
+       Using a subtle linear gradient is much faster to render. */
+    background-image: linear-gradient(135deg, rgba(0, 164, 220, 0.05) 0%, transparent 100%);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    width: 100vw;
+    text-align: center;
+    overflow: hidden;
+}
+
+.offline-container {
+    max-width: 900px;
+    padding: 60px;
+    animation: offlineFadeIn 0.8s cubic-bezier(0.23, 1, 0.32, 1);
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 40px;
+}
+
+.offline-icon {
+    color: var(--jf-error, #ff4b4b);
+    margin-bottom: 40px;
+    filter: drop-shadow(0 0 20px rgba(255, 75, 75, 0.2));
+}
+
+.offline-title {
+    font-size: 3.5rem;
+    font-weight: 700;
+    margin-bottom: 24px;
+    letter-spacing: -0.02em;
+    color: var(--jf-text-primary);
+}
+
+.offline-message {
+    font-size: 1.5rem;
+    line-height: 1.5;
+    color: var(--jf-text-secondary);
+    margin-bottom: 60px;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.offline-message strong {
+    color: var(--jf-text-primary);
+    font-weight: 600;
+}
+
+.offline-actions {
+    display: flex;
+    justify-content: center;
+}
+
+/* Base button overrides for Offline Page for extra size and polish */
+.offline-actions .btn {
+    min-width: 280px;
+    height: 80px;
+    font-size: 1.5rem;
+    font-weight: 600;
+    border-radius: 20px;
+    margin: 0 12px; /* Use margins for spacing (Tizen 4 compatibility) */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.offline-actions .btn-primary {
+    background: var(--jf-accent);
+}
+
+.offline-actions .btn-secondary {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+/* Refined focus states matching global components but slightly larger for emphasis */
+.offline-actions .btn:focus,
+.offline-actions .btn.focused {
+    outline: none;
+    z-index: 2;
+}
+
+.offline-actions .btn-primary:focus,
+.offline-actions .btn-primary.focused {
+    background: var(--jf-accent-hover);
+    border-color: white;
+}
+
+.offline-actions .btn-secondary:focus,
+.offline-actions .btn-secondary.focused {
+    background: var(--jf-button-hover);
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+.offline-footer {
+    position: absolute;
+    bottom: 80px;
+}
+
+.exit-btn {
+    background: transparent;
+    border: none;
+    color: var(--jf-text-tertiary);
+    font-size: 1.2rem;
+    font-weight: 500;
+    padding: 12px 32px;
+    border-radius: 12px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.exit-btn:focus,
+.exit-btn.focused {
+    color: var(--jf-text-primary);
+    background: rgba(255, 255, 255, 0.05);
+}
+
+@keyframes offlineFadeIn {
+    from { 
+        opacity: 0; 
+        transform: scale(0.95) translateY(30px); 
+    }
+    to { 
+        opacity: 1; 
+        transform: scale(1) translateY(0); 
+    }
+}

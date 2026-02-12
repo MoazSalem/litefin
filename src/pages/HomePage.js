@@ -168,6 +168,16 @@ class HomePage extends Page {
         } catch (error) {
             log.error('Failed to load content', error);
 
+            // Check if it's a network/timeout error
+            // Import api here if needed, but we check name or property
+            if (error.name === 'ServerUnreachableError' || error.isNetworkError) {
+                log.warn('Server became unreachable during browsing. Redirecting to OfflinePage.');
+                state.set('server:offline', true);
+                state.set('user:authenticated', false); // Pause auth
+                router.navigate('/offline', { replace: true });
+                return;
+            }
+
             // Use captured state for debug
             const debug = `UID:${preAuth.uid} Dev:${preAuth.dev} Tok:${preAuth.hasTok ? 'OK' : 'MISS'}`;
             const status = error.status ? `HTTP ${error.status}` : 'ERR';

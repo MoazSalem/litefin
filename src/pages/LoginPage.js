@@ -8,7 +8,8 @@
  */
 
 import Page from './Page.js';
-import { auth, api, discoverServers, cancelDiscovery } from '../api/index.js';
+import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError } from '../api/index.js';
+import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -181,11 +182,6 @@ class LoginPage extends Page {
     }
 
     onMounted() {
-        // CRITICAL: Clear any stale authentication data when entering login screen
-        // This prevents 401 errors from stale tokens if logout failed
-        log.info('Clearing any stale auth data');
-        api.clearAuth();
-
         // Clear any previous errors
         this._hideError('server-error'); // Clear server errors
         this._hideError('manual-error'); // Clear manual login errors
@@ -209,12 +205,19 @@ class LoginPage extends Page {
 
         // Check if we have a saved server - auto-connect if so
         const savedUrl = auth.getSavedServerUrl();
-        if (savedUrl) {
-            // Server already saved - skip server selection, go straight to users
+        const isKnownOffline = state.get('server:offline') === true;
+
+        if (savedUrl && !isKnownOffline) {
+            // Server already saved and not known to be offline - skip server selection
             this._serverInput.value = savedUrl;
             this._autoConnectToSavedServer(savedUrl);
         } else {
-            // No saved server - show server selection
+            // No saved server or known offline - show server selection immediately
+            if (savedUrl) {
+                this._serverInput.value = savedUrl;
+                this._showError('server-error', 'Server is unreachable. Please enter a different address or try again later.');
+            }
+            
             this._startDiscovery();
             setTimeout(() => {
                 this._serverInput.focus();
@@ -422,10 +425,22 @@ class LoginPage extends Page {
             }
         } catch (error) {
             // Connection failed - show server selection
-            log.warn('Auto-connect failed, showing server selection');
+            log.warn('Auto-connect failed, showing server selection', error);
             this._showState(STATE.SERVER);
+            
+            if (error instanceof ServerUnreachableError) {
+                this._showError('server-error', 'Server is unreachable. Check your network and server status.');
+            } else {
+                this._showError('server-error', error.message || 'Failed to connect');
+            }
+            
             this._startDiscovery();
-            setTimeout(() => this._serverInput.focus(), 100);
+            
+            // Focus the Connect button so user can retry easily
+            setTimeout(() => {
+                const connectBtn = this.$('.connect-btn');
+                if (connectBtn) connectBtn.focus();
+            }, 100);
         }
     }
 
@@ -524,7 +539,11 @@ class LoginPage extends Page {
             }
         } catch (error) {
             this._showState(STATE.SERVER);
-            this._showError('server-error', error.message || 'Failed to connect');
+            if (error instanceof ServerUnreachableError) {
+                this._showError('server-error', 'Cannot reach server. Check the URL and your network connection.');
+            } else {
+                this._showError('server-error', error.message || 'Failed to connect');
+            }
         }
     }
 

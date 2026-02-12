@@ -16,8 +16,19 @@ import { logger } from '../utils/Logger.js';
 
 const log = logger.create('ApiClient');
 
+/**
+ * Custom error for when the server is physically unreachable
+ */
+export class ServerUnreachableError extends Error {
+    constructor(message = 'Server unreachable') {
+        super(message);
+        this.name = 'ServerUnreachableError';
+        this.isNetworkError = true;
+    }
+}
+
 // API request timeout (ms)
-const REQUEST_TIMEOUT = 30000;
+const REQUEST_TIMEOUT = 10000;
 
 // ============================================================================
 // ApiClient Class
@@ -34,6 +45,9 @@ export class ApiClient {
         this._deviceName = tizenAdapter.getDeviceName();
         this._clientName = 'Litefin';
         this._clientVersion = __APP_VERSION__;
+
+        // Track retries to prevent infinite loops on 401
+        this._retryingRequests = new Set();
     }
 
     // ========================================================================
@@ -136,7 +150,7 @@ export class ApiClient {
      * @param {Object} [options] - Fetch options
      * @returns {Promise<any>} Response data
      */
-    async request(endpoint, options = {}) {
+    async request(endpoint, options = {}, isRetry = false) {
         if (!this._serverUrl) {
             throw new Error('Server URL not configured');
         }
@@ -194,6 +208,13 @@ export class ApiClient {
 
             // Handle error responses
             if (!response.ok) {
+                // If 401 Unauthorized and not already a retry, try one more time
+                // This handles transient session blips on some servers after sleep
+                if (response.status === 401 && !isRetry && this._accessToken) {
+                    log.warn(`Unauthorized (401) for ${endpoint}. Attempting one-time silent retry...`);
+                    return this.request(endpoint, options, true);
+                }
+
                 const error = await this._handleError(response);
                 throw error;
             }
@@ -211,8 +232,20 @@ export class ApiClient {
 
             return await response.text();
         } catch (error) {
-            if (error.name === 'AbortError') {
-                throw new Error('Request timeout');
+            // Handle Network Errors (DNS, Connection Refused, Offline) or Timeout
+            const isTimeout = error.name === 'AbortError';
+            const isNetworkError = error instanceof TypeError;
+
+            if (isTimeout || isNetworkError) {
+                const msg = isTimeout 
+                    ? `Connection timed out after ${REQUEST_TIMEOUT/1000}s` 
+                    : `Server unreachable at ${this._serverUrl}`;
+                
+                log.error(`${msg}:`, error.message);
+                
+                const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
+                eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
+                throw networkError;
             }
 
             log.error(`Request to ${endpoint} failed:`, error.message || error);
@@ -839,7 +872,7 @@ export async function testServer(address, timeout = 1000) {
             try {
                 const url = new URL(address);
                 serverName = url.hostname;
-            } catch {
+            } catch (e) {
                 serverName = 'Jellyfin Server';
             }
         }
@@ -852,6 +885,8 @@ export async function testServer(address, timeout = 1000) {
             operatingSystem: info.OperatingSystem
         };
     } catch (err) {
+        // Return null on any error (timeout, network refused, etc)
+        // to allow other concurrent tests in the batch to succeed.
         return null;
     }
 }
@@ -915,7 +950,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             }
         }
 
-        const CHUNK_SIZE = 60;
+        const CHUNK_SIZE = 15;
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
             if (signal.aborted) return;
 

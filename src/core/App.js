@@ -25,6 +25,7 @@ import PersonPage from '../pages/PersonPage.js';
 import SearchPage from '../pages/SearchPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
+import OfflinePage from '../pages/OfflinePage.js';
 import PlayerPage from '../pages/PlayerPage.js';
 import Sidebar from '../components/Sidebar.js';
 
@@ -115,10 +116,34 @@ class App {
         // Initialize router (will navigate to current hash or default)
         router.init();
 
+        // 3. Initial Sidebar visibility check
+        this._updateSidebarVisibility(router.getCurrentPath());
+
         this._initialized = true;
 
         log.info('App initialized successfully');
         eventBus.emit('app:ready');
+    }
+
+    /**
+     * Update sidebar visibility based on current path
+     * @param {string} path 
+     * @private
+     */
+    _updateSidebarVisibility(path) {
+        if (!this.sidebar) return;
+
+        // Routes that should NOT show the sidebar
+        const fullScreenRoutes = ['/login', '/offline'];
+        const isFullScreen = fullScreenRoutes.includes(path) || path.startsWith('/player');
+
+        if (isFullScreen) {
+            document.body.classList.add('no-sidebar');
+            this.sidebar.setMode('hidden');
+        } else {
+            document.body.classList.remove('no-sidebar');
+            this.sidebar.setMode('visible');
+        }
     }
 
     /**
@@ -207,13 +232,7 @@ class App {
         // Toggle sidebar visibility based on route
         eventBus.on('router:navigate', ({ path }) => {
             log.debug(`Router navigated to: ${path}`);
-            if (path === '/login' || path.startsWith('/player')) {
-                document.body.classList.add('no-sidebar');
-                if (this.sidebar) this.sidebar.setMode('hidden');
-            } else {
-                document.body.classList.remove('no-sidebar');
-                if (this.sidebar) this.sidebar.setMode('visible');
-            }
+            this._updateSidebarVisibility(path);
         });
 
         // Handle logout / Session Expiry
@@ -362,6 +381,7 @@ class App {
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
+        router.register('/offline', OfflinePage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
 
         // Season redirect (for backward compatibility or deep links)
@@ -374,9 +394,18 @@ class App {
         // Default route - check auth and redirect appropriately
         router.register('/', {
             init: () => {
-                if (state.get('user:authenticated')) {
+                const isOffline = state.get('server:offline');
+                const isAuthenticated = state.get('user:authenticated');
+
+                if (isOffline) {
+                    // Saved session exists but server is unreachable
+                    log.info('Initial route: Server is offline, navigating to OfflinePage');
+                    router.navigate('/offline', { replace: true });
+                } else if (isAuthenticated) {
+                    log.info('Initial route: Authenticated, navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
+                    log.info('Initial route: No session, navigating to LoginPage');
                     router.navigate('/login', { replace: true });
                 }
             }

@@ -1700,7 +1700,9 @@ class DetailsPage extends Page {
             // Force focus to Play button since Reset/Resume are now hidden
             const playBtn = this.$('.play-btn');
             if (playBtn) {
-                focusManager.focusElement(playBtn);
+                requestAnimationFrame(() => {
+                    focusManager.focusElement(playBtn);
+                });
             }
         } catch (error) {
             log.error('Failed to reset progress', error);
