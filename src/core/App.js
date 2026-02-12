@@ -11,17 +11,23 @@ import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { router } from './Router.js';
 import { api } from '../api/ApiClient.js';
+import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
+import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
 import HomePage from '../pages/HomePage.js';
 import LibraryPage from '../pages/LibraryPage.js';
 import DetailsPage from '../pages/DetailsPage.js';
+import PersonPage from '../pages/PersonPage.js';
 import SearchPage from '../pages/SearchPage.js';
 import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
 import PlayerPage from '../pages/PlayerPage.js';
+import Sidebar from '../components/Sidebar.js';
+
 import { logger } from '../utils/Logger.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 
@@ -47,7 +53,25 @@ class App {
             return;
         }
 
+        // 1. Initialize Tizen adapter (hardware/keys)
+        tizenAdapter.init();
+
+        // 2. Initialize Debug Overlay (loads state from localStorage)
+        const DEBUG_LOGS = localStorage.getItem('debug_logs_enabled') === 'true';
+        const DEBUG_OVERLAY = localStorage.getItem('debug_overlay_enabled') === 'true';
+        const DEBUG_WIDTH = localStorage.getItem('debug_width') || 'small';
+        const DEBUG_HEIGHT = localStorage.getItem('debug_height') || 'small';
+        const DEBUG_POSITION = localStorage.getItem('debug_position') || 'bottom-right';
+
+        debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
+
         log.info('Initializing Litefin...');
+
+        // 3. Initialize layout manager
+        layoutManager.init();
+
+        // 4. Try to restore auth session
+        await auth.init();
 
         // Get container element
         if (typeof options.container === 'string') {
@@ -67,9 +91,6 @@ class App {
         // Setup global event handlers
         this._setupEventHandlers();
 
-        // Initialize Debug Overlay (loads state from localStorage)
-        debugOverlay.init();
-
         // ================================================================
         // LAYOUT SETUP
         // ================================================================
@@ -84,12 +105,11 @@ class App {
             `;
         }
 
-        // 2. Initialize Sidebar
-        const { default: Sidebar } = await import('../components/Sidebar.js');
+        // 2. Initialize Sidebar (Static import used for Tizen 4 compatibility)
         this.sidebar = new Sidebar();
         this.sidebar.mount(document.getElementById('sidebar-container'));
 
-        // Register routes (must await to ensure all pages are loaded)
+        // Register routes
         this._registerRoutes();
 
         // Initialize router (will navigate to current hash or default)
@@ -205,6 +225,14 @@ class App {
         eventBus.on('auth:expired', () => {
             log.warn('Session expired - resetting to login page');
             router.reset('/login');
+        });
+
+        // Handle application exit
+        eventBus.on('app:exitRequested', () => {
+            log.info('Exit requested - closing application');
+            // Ensure session is reported as ended if possible
+            this._endSessionOnServer();
+            tizenAdapter.exit();
         });
 
         // ================================================================
@@ -330,10 +358,18 @@ class App {
         router.register('/library/:id/person/:personId', LibraryPage); // Filtered by Person
         router.register('/library/:id/tag/:tagName', LibraryPage); // Filtered by Tag
         router.register('/details/:id', DetailsPage);
+        router.register('/person/:id', PersonPage);
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
+
+        // Season redirect (for backward compatibility or deep links)
+        router.register('/series/:id/season/:seasonId', {
+            init: (params) => {
+                router.navigate(`/details/${params.seasonId}`, { replace: true });
+            }
+        });
 
         // Default route - check auth and redirect appropriately
         router.register('/', {

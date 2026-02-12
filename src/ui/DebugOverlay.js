@@ -53,29 +53,29 @@ class DebugOverlay {
     /**
      * Initialize the debug overlay
      */
-    init(enableLogs = false, enableOverlay = false, width = 'small', height = 'small', position = 'bottom-right') {
+    init(enableLogs, enableOverlay, width, height, position) {
         if (this._initialized) return;
 
         // Load settings from storage if not explicitly provided
-        if (enableLogs === false) {
-            this._logsEnabled = logger._enabled; // Trust Logger's loaded state
+        if (enableLogs === undefined) {
+            this._logsEnabled = localStorage.getItem('debug_logs_enabled') === 'true';
         } else {
             this._logsEnabled = enableLogs;
-            logger.setEnabled(enableLogs);
         }
+        logger.setEnabled(this._logsEnabled);
 
-        if (enableOverlay === false) {
+        if (enableOverlay === undefined) {
             this._overlayEnabled = localStorage.getItem('debug_overlay_enabled') === 'true';
         } else {
             this._overlayEnabled = enableOverlay;
         }
 
-        this._width = width;
-        this._height = height;
-        this._position = position;
+        this._width = width || localStorage.getItem('debug_width') || 'small';
+        this._height = height || localStorage.getItem('debug_height') || 'small';
+        this._position = position || localStorage.getItem('debug_position') || 'bottom-right';
 
-        // Sync Logger state (if we changed it)
-        if (enableLogs === true) {
+        // Sync Logger state
+        if (this._logsEnabled) {
             logger.setEnabled(true);
         }
 
