@@ -14,6 +14,7 @@
  */
 
 import { logger } from './Logger.js';
+import { storage } from './StorageService.js';
 
 const log = logger.create('PlayerSettings');
 
@@ -138,7 +139,7 @@ export const PlayerSettings = {
             return undefined;
         }
 
-        const stored = localStorage.getItem(STORAGE_PREFIX + key);
+        const stored = storage.getItem(STORAGE_PREFIX + key);
         if (stored === null) {
             return DEFAULTS[key];
         }
@@ -164,7 +165,7 @@ export const PlayerSettings = {
             return;
         }
 
-        localStorage.setItem(STORAGE_PREFIX + key, String(value));
+        storage.setItem(STORAGE_PREFIX + key, String(value));
         log.debug(`Saved ${key}: ${value}`);
     },
 
@@ -186,7 +187,7 @@ export const PlayerSettings = {
      */
     reset(key) {
         if (key in DEFAULTS) {
-            localStorage.removeItem(STORAGE_PREFIX + key);
+            storage.removeItem(STORAGE_PREFIX + key);
         }
     },
 
@@ -195,7 +196,7 @@ export const PlayerSettings = {
      */
     resetAll() {
         for (const key of Object.keys(DEFAULTS)) {
-            localStorage.removeItem(STORAGE_PREFIX + key);
+            storage.removeItem(STORAGE_PREFIX + key);
         }
         log.info('All settings reset to defaults');
     },

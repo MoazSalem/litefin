@@ -13,6 +13,7 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('LayoutManager');
@@ -49,8 +50,8 @@ class LayoutManager {
      */
     init() {
         // Load saved preferences
-        const savedLayout = localStorage.getItem('litefin:layout') || LAYOUT.CLASSIC;
-        const savedTheme = localStorage.getItem('litefin:theme') || 'dark';
+        const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
+        const savedTheme = storage.getItem('litefin:theme') || 'dark';
 
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);
@@ -94,7 +95,7 @@ class LayoutManager {
 
         // Save preference
         if (save) {
-            localStorage.setItem('litefin:layout', layout);
+            storage.setItem('litefin:layout', layout);
         }
 
         // Emit event for components to update
@@ -144,7 +145,7 @@ class LayoutManager {
 
         // Save preference
         if (save) {
-            localStorage.setItem('litefin:theme', theme);
+            storage.setItem('litefin:theme', theme);
         }
 
         if (oldTheme !== theme) {

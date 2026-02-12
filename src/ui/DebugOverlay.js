@@ -10,6 +10,7 @@
 
 import { eventBus } from '../core/EventBus.js';
 import { logger, LogLevel } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 class DebugOverlay {
     constructor() {
@@ -58,21 +59,21 @@ class DebugOverlay {
 
         // Load settings from storage if not explicitly provided
         if (enableLogs === undefined) {
-            this._logsEnabled = localStorage.getItem('debug_logs_enabled') === 'true';
+            this._logsEnabled = storage.getItem('debug_logs_enabled') === 'true';
         } else {
             this._logsEnabled = enableLogs;
         }
         logger.setEnabled(this._logsEnabled);
 
         if (enableOverlay === undefined) {
-            this._overlayEnabled = localStorage.getItem('debug_overlay_enabled') === 'true';
+            this._overlayEnabled = storage.getItem('debug_overlay_enabled') === 'true';
         } else {
             this._overlayEnabled = enableOverlay;
         }
 
-        this._width = width || localStorage.getItem('debug_width') || 'small';
-        this._height = height || localStorage.getItem('debug_height') || 'small';
-        this._position = position || localStorage.getItem('debug_position') || 'bottom-right';
+        this._width = width || storage.getItem('debug_width') || 'small';
+        this._height = height || storage.getItem('debug_height') || 'small';
+        this._position = position || storage.getItem('debug_position') || 'bottom-right';
 
         // Sync Logger state
         if (this._logsEnabled) {
@@ -123,7 +124,7 @@ class DebugOverlay {
 
     setOverlayEnabled(enabled) {
         this._overlayEnabled = enabled;
-        localStorage.setItem('debug_overlay_enabled', enabled);
+        storage.setItem('debug_overlay_enabled', enabled);
 
         if (enabled) {
             if (!this._overlay) {
@@ -370,9 +371,9 @@ class DebugOverlay {
     isModuleEnabled(moduleName) {
         // We rely on Logger for the truth, but since DebugOverlay is tracking
         // local storage in the Settings page, we can assume true if not explicitly disabled.
-        // For UI purposes, let's peek at localStorage directly or assume true.
+        // For UI purposes, let's peek at StorageService directly or assume true.
         const key = `debug_filter_${moduleName}`;
-        const val = localStorage.getItem(key);
+        const val = storage.getItem(key);
         return val !== 'false';
     }
 

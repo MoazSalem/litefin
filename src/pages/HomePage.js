@@ -18,6 +18,7 @@ import { animationManager } from '../ui/AnimationManager.js';
 
 import { focusManager } from '../ui/FocusManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('HomePage');
@@ -118,7 +119,7 @@ class HomePage extends Page {
             // 0. My Media (Libraries)
 
             // Check user preference
-            const hideMyMedia = localStorage.getItem('pref:hideMyMedia') === 'true';
+            const hideMyMedia = storage.getItem('pref:hideMyMedia') === 'true';
 
             if (!hideMyMedia && this._libraries.length > 0) {
                 rowsData.push({

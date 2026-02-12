@@ -16,6 +16,7 @@ import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import FontLoader from '../utils/FontLoader.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('SettingsPage');
@@ -165,7 +166,7 @@ class SettingsPage extends Page {
                         <span class="setting-description">Hide "My Media" row from home screen</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${localStorage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
+                         <button class="toggle-switch ${storage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
                                  id="toggle-my-media" 
                                  tabindex="0"
                                  aria-label="Toggle My Media visibility">
@@ -224,7 +225,7 @@ class SettingsPage extends Page {
                                 { value: '2160p', label: '4K UHD (Default)' },
                                 { value: '4320p', label: '8K UHD' }
                             ],
-                            localStorage.getItem('litefin_max_resolution') || '2160p'
+                            storage.getItem('litefin_max_resolution') || '2160p'
                         )}
                     </div>
                 </div>
@@ -245,7 +246,7 @@ class SettingsPage extends Page {
                                 { value: '10000000', label: '1080p - 10 Mbps' },
                                 { value: '4000000', label: '720p - 4 Mbps' }
                             ],
-                            localStorage.getItem('pref:maxBitrate') || 'auto'
+                            storage.getItem('pref:maxBitrate') || 'auto'
                         )}
                     </div>
                 </div>
@@ -267,7 +268,7 @@ class SettingsPage extends Page {
                                 { value: 'jpn', label: 'Japanese' },
                                 { value: 'kor', label: 'Korean' }
                             ],
-                            localStorage.getItem('pref:audioLang') || 'auto'
+                            storage.getItem('pref:audioLang') || 'auto'
                         )}
                     </div>
                 </div>
@@ -359,7 +360,7 @@ class SettingsPage extends Page {
                                 { value: 'jpn', label: 'Japanese' },
                                 { value: 'kor', label: 'Korean' }
                             ],
-                            localStorage.getItem('pref:subtitleLang') || 'none'
+                            storage.getItem('pref:subtitleLang') || 'none'
                         )}
                     </div>
                 </div>
@@ -857,9 +858,9 @@ class SettingsPage extends Page {
         const myMediaBtn = this.$('#toggle-my-media');
         if (myMediaBtn) {
             myMediaBtn.addEventListener('click', () => {
-                const isHidden = localStorage.getItem('pref:hideMyMedia') === 'true';
+                const isHidden = storage.getItem('pref:hideMyMedia') === 'true';
                 const newValue = !isHidden;
-                localStorage.setItem('pref:hideMyMedia', newValue);
+                storage.setItem('pref:hideMyMedia', newValue);
                 myMediaBtn.classList.toggle('active', newValue);
             });
         }
@@ -1166,7 +1167,7 @@ class SettingsPage extends Page {
                             layoutManager.setTheme(newValue);
                             // No reload needed!
                         } else if (settingConfig.type === 'local') {
-                            localStorage.setItem(settingConfig.key, newValue);
+                            storage.setItem(settingConfig.key, newValue);
                             if (settingConfig.key === 'layout' || settingConfig.key === 'litefin_max_resolution') {
                                 window.location.reload();
                             }
@@ -1218,7 +1219,7 @@ class SettingsPage extends Page {
                                 });
                             }
                         } else if (settingConfig.type === 'debug') {
-                            localStorage.setItem(settingConfig.key, newValue);
+                            storage.setItem(settingConfig.key, newValue);
                             if (settingConfig.key === 'debug_width') {
                                 debugOverlay.setWidth(newValue);
                             } else if (settingConfig.key === 'debug_height') {
@@ -1267,7 +1268,7 @@ class SettingsPage extends Page {
                 debugOverlay.setLogsEnabled(newState);
 
                 // Persist
-                localStorage.setItem('debug_logs_enabled', newState);
+                storage.setItem('debug_logs_enabled', newState);
 
                 // Update overlay toggle state
                 const toggleOverlay = this.$('#toggle-debug-overlay');
@@ -1283,7 +1284,7 @@ class SettingsPage extends Page {
                         if (toggleOverlay.classList.contains('active')) {
                             toggleOverlay.classList.remove('active');
                             debugOverlay.setOverlayEnabled(false);
-                            localStorage.setItem('debug_overlay_enabled', false);
+                            storage.setItem('debug_overlay_enabled', false);
                         }
                     }
                 }
@@ -1300,7 +1301,7 @@ class SettingsPage extends Page {
 
                 // Update DebugOverlay
                 debugOverlay.setOverlayEnabled(newState);
-                localStorage.setItem('debug_overlay_enabled', newState);
+                storage.setItem('debug_overlay_enabled', newState);
             });
         }
 

@@ -1,9 +1,9 @@
 /**
  * DeviceProfile - Browser/Device Capability Detection
- * 
+ *
  * Simplified device profile for capability reporting to Jellyfin server.
  * Determines supported codecs, containers, and transcoding requirements.
- * 
+ *
  * @module core/DeviceProfile
  */
 
@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { debug } from '../utils/debug';
+import { storage } from '../../../src/utils/StorageService.js';
 
 export class DeviceProfile {
     constructor() {
@@ -88,7 +89,7 @@ export class DeviceProfile {
      */
     _canPlayType(mimeType) {
         const video = this._getVideoTestElement();
-        return !!(video.canPlayType(mimeType).replace(/no/, ''));
+        return !!video.canPlayType(mimeType).replace(/no/, '');
     }
 
     /**
@@ -298,11 +299,11 @@ export class DeviceProfile {
      * @returns {string}
      */
     getDeviceId() {
-        let deviceId = localStorage.getItem('jellyfin-player-device-id');
+        let deviceId = storage.getItem('jellyfin-player-device-id');
 
         if (!deviceId) {
             deviceId = this._generateDeviceId();
-            localStorage.setItem('jellyfin-player-device-id', deviceId);
+            storage.setItem('jellyfin-player-device-id', deviceId);
         }
 
         return deviceId;
@@ -313,9 +314,7 @@ export class DeviceProfile {
      * @private
      */
     _generateDeviceId() {
-        return 'jellyfin-player-' +
-            Date.now().toString(36) +
-            Math.random().toString(36).substring(2, 15);
+        return 'jellyfin-player-' + Date.now().toString(36) + Math.random().toString(36).substring(2, 15);
     }
 
     /**

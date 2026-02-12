@@ -8,6 +8,7 @@
  */
 
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('DeviceProfile');
 
@@ -257,7 +258,7 @@ export function detectCapabilities() {
     };
 
     // Check for Manual Resolution Setting (Default to 4K if not set)
-    const manualRes = localStorage.getItem('litefin_max_resolution') || '2160p';
+    const manualRes = storage.getItem('litefin_max_resolution') || '2160p';
 
     if (manualRes !== 'auto') {
         log.info(`Using manual resolution setting: ${manualRes}`);

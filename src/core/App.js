@@ -30,6 +30,7 @@ import PlayerPage from '../pages/PlayerPage.js';
 import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 
 const log = logger.create('App');
@@ -57,12 +58,16 @@ class App {
         // 1. Initialize Tizen adapter (hardware/keys)
         tizenAdapter.init();
 
-        // 2. Initialize Debug Overlay (loads state from localStorage)
-        const DEBUG_LOGS = localStorage.getItem('debug_logs_enabled') === 'true';
-        const DEBUG_OVERLAY = localStorage.getItem('debug_overlay_enabled') === 'true';
-        const DEBUG_WIDTH = localStorage.getItem('debug_width') || 'small';
-        const DEBUG_HEIGHT = localStorage.getItem('debug_height') || 'small';
-        const DEBUG_POSITION = localStorage.getItem('debug_position') || 'bottom-right';
+        // 1.5. Initialize StorageService — loads all localStorage into memory
+        // This MUST happen before any other service reads from storage
+        storage.init();
+
+        // 2. Initialize Debug Overlay (loads state from StorageService cache)
+        const DEBUG_LOGS = storage.getItem('debug_logs_enabled') === 'true';
+        const DEBUG_OVERLAY = storage.getItem('debug_overlay_enabled') === 'true';
+        const DEBUG_WIDTH = storage.getItem('debug_width') || 'small';
+        const DEBUG_HEIGHT = storage.getItem('debug_height') || 'small';
+        const DEBUG_POSITION = storage.getItem('debug_position') || 'bottom-right';
 
         debugOverlay.init(DEBUG_LOGS, DEBUG_OVERLAY, DEBUG_WIDTH, DEBUG_HEIGHT, DEBUG_POSITION);
 
@@ -127,7 +132,7 @@ class App {
 
     /**
      * Update sidebar visibility based on current path
-     * @param {string} path 
+     * @param {string} path
      * @private
      */
     _updateSidebarVisibility(path) {

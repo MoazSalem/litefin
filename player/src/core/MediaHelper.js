@@ -1,11 +1,13 @@
 /**
  * MediaHelper - Utility functions for media handling
- * 
+ *
  * Extracted and simplified from jellyfin-web's htmlMediaHelper.js
  * Provides stream URL building, HLS detection, and media utilities.
- * 
+ *
  * @module core/MediaHelper
  */
+
+import { storage } from '../../../src/utils/StorageService.js';
 
 // ============================================================================
 // Stream URL Building
@@ -14,7 +16,7 @@
 export const MediaHelper = {
     /**
      * Build stream URL for playback
-     * 
+     *
      * @param {Object} options - Build options
      * @param {string} options.serverUrl - Jellyfin server URL
      * @param {string} options.itemId - Item ID
@@ -93,8 +95,7 @@ export const MediaHelper = {
      */
     isHls(mediaSource) {
         const protocol = mediaSource?.TranscodingSubProtocol?.toLowerCase();
-        return protocol === 'hls' ||
-            (mediaSource?.TranscodingUrl && mediaSource.TranscodingUrl.includes('.m3u8'));
+        return protocol === 'hls' || (mediaSource?.TranscodingUrl && mediaSource.TranscodingUrl.includes('.m3u8'));
     },
 
     /**
@@ -124,7 +125,7 @@ export const MediaHelper = {
      * @returns {number} Volume (0-1)
      */
     getSavedVolume() {
-        const stored = localStorage.getItem('jellyfin-player-volume');
+        const stored = storage.getItem('jellyfin-player-volume');
         return stored ? parseFloat(stored) : 1;
     },
 
@@ -134,7 +135,7 @@ export const MediaHelper = {
      */
     saveVolume(value) {
         if (typeof value === 'number') {
-            localStorage.setItem('jellyfin-player-volume', value.toString());
+            storage.setItem('jellyfin-player-volume', value.toString());
         }
     },
 
@@ -148,10 +149,7 @@ export const MediaHelper = {
      * @returns {boolean}
      */
     isValidDuration(duration) {
-        return duration &&
-            !isNaN(duration) &&
-            duration !== Infinity &&
-            duration !== -Infinity;
+        return duration && !isNaN(duration) && duration !== Infinity && duration !== -Infinity;
     },
 
     /**
@@ -187,8 +185,8 @@ export const MediaHelper = {
 
             if (this.isValidDuration(start) && this.isValidDuration(end)) {
                 ranges.push({
-                    start: (start * 10000000) + offsetTicks,
-                    end: (end * 10000000) + offsetTicks
+                    start: start * 10000000 + offsetTicks,
+                    end: end * 10000000 + offsetTicks
                 });
             }
         }

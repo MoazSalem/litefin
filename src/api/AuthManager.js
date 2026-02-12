@@ -18,6 +18,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { api, ServerUnreachableError } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -77,12 +78,12 @@ class AuthManager {
      * @private
      */
     _ensureDeviceId() {
-        let deviceId = localStorage.getItem(STORAGE_KEYS.DEVICE_ID);
+        let deviceId = storage.getItem(STORAGE_KEYS.DEVICE_ID);
 
         if (!deviceId) {
             // Generate UUID v4
             deviceId = this._generateUUID();
-            localStorage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
+            storage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
             log.info('Generated new device ID');
         }
 
@@ -100,9 +101,9 @@ class AuthManager {
     async _restoreSession() {
         log.info('_restoreSession() called');
 
-        const serverUrl = localStorage.getItem(STORAGE_KEYS.SERVER_URL);
-        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-        const userId = localStorage.getItem(STORAGE_KEYS.USER_ID);
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        const accessToken = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        const userId = storage.getItem(STORAGE_KEYS.USER_ID);
 
         log.debug('Stored credentials check:', {
             hasServerUrl: !!serverUrl,
@@ -159,7 +160,7 @@ class AuthManager {
                 state.set('server:connected', false);
                 state.set('server:offline', true);
                 state.set('user:authenticated', false); // CRITICAL: Not authenticated until server responds
-                return false; 
+                return false;
             }
 
             // Only clear storage for explicit "Unauthorized" or "Forbidden"
@@ -169,10 +170,13 @@ class AuthManager {
                 this._clearStorage();
                 api.clearAuth();
             } else {
-                log.warn(`Unexpected error during restore (Status: ${error.status || '??'}). Preserving session.`, error);
+                log.warn(
+                    `Unexpected error during restore (Status: ${error.status || '??'}). Preserving session.`,
+                    error
+                );
                 // Still return false to show Offline/Login page, but don't delete token
             }
-            
+
             return false;
         }
     }
@@ -195,7 +199,7 @@ class AuthManager {
             const info = await api.getPublicInfo();
 
             // Save server URL
-            localStorage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
+            storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
 
             state.set('server:connected', true);
             state.set('server:offline', false);
@@ -234,7 +238,7 @@ class AuthManager {
      * @returns {string|null} Server URL if saved
      */
     getSavedServerUrl() {
-        return localStorage.getItem(STORAGE_KEYS.SERVER_URL);
+        return storage.getItem(STORAGE_KEYS.SERVER_URL);
     }
 
     // ========================================================================
@@ -286,9 +290,9 @@ class AuthManager {
             }
 
             // Store credentials
-            localStorage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-            localStorage.setItem(STORAGE_KEYS.USER_ID, userId);
-            localStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+            storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+            storage.setItem(STORAGE_KEYS.USER_ID, userId);
+            storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
 
             // Configure API with new credentials
             api.setAuth(accessToken, userId);
@@ -355,7 +359,7 @@ class AuthManager {
         api.closeWebSocket();
 
         // Get current credentials BEFORE clearing (needed for server notification)
-        const accessToken = localStorage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        const accessToken = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
         const serverUrl = api._serverUrl;
 
         // Notify server FIRST (while we still have valid credentials)
@@ -418,9 +422,9 @@ class AuthManager {
      * @private
      */
     _clearStorage() {
-        localStorage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-        localStorage.removeItem(STORAGE_KEYS.USER_ID);
-        localStorage.removeItem(STORAGE_KEYS.USER_DATA);
+        storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+        storage.removeItem(STORAGE_KEYS.USER_ID);
+        storage.removeItem(STORAGE_KEYS.USER_DATA);
         // Keep server URL and device ID
     }
 

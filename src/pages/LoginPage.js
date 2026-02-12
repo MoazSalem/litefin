@@ -13,6 +13,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('Login');
@@ -215,9 +216,12 @@ class LoginPage extends Page {
             // No saved server or known offline - show server selection immediately
             if (savedUrl) {
                 this._serverInput.value = savedUrl;
-                this._showError('server-error', 'Server is unreachable. Please enter a different address or try again later.');
+                this._showError(
+                    'server-error',
+                    'Server is unreachable. Please enter a different address or try again later.'
+                );
             }
-            
+
             this._startDiscovery();
             setTimeout(() => {
                 this._serverInput.focus();
@@ -427,15 +431,15 @@ class LoginPage extends Page {
             // Connection failed - show server selection
             log.warn('Auto-connect failed, showing server selection', error);
             this._showState(STATE.SERVER);
-            
+
             if (error instanceof ServerUnreachableError) {
                 this._showError('server-error', 'Server is unreachable. Check your network and server status.');
             } else {
                 this._showError('server-error', error.message || 'Failed to connect');
             }
-            
+
             this._startDiscovery();
-            
+
             // Focus the Connect button so user can retry easily
             setTimeout(() => {
                 const connectBtn = this.$('.connect-btn');
@@ -457,7 +461,7 @@ class LoginPage extends Page {
 
         // Explicitly clear ONLY server URL for local purposes if not handled by logout
         // But auth.logout() handles the rest and notifies server
-        localStorage.removeItem('litefin:serverUrl');
+        storage.removeItem('litefin:serverUrl');
 
         // Call proper logout to notify server
         auth.logout();

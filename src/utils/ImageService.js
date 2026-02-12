@@ -6,9 +6,11 @@
  * ============================================================================
  */
 
+import { storage } from './StorageService.js';
+
 class ImageService {
     constructor() {
-        this._quality = localStorage.getItem('pref:imageQuality') || 'medium';
+        this._quality = storage.getItem('pref:imageQuality') || 'medium';
     }
 
     /**
@@ -26,7 +28,7 @@ class ImageService {
     setPreset(preset) {
         if (['low', 'medium', 'high', 'ultra'].includes(preset)) {
             this._quality = preset;
-            localStorage.setItem('pref:imageQuality', preset);
+            storage.setItem('pref:imageQuality', preset);
             return true;
         }
         return false;

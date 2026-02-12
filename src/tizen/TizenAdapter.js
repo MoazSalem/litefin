@@ -11,6 +11,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('TizenAdapter');
@@ -272,7 +273,7 @@ class TizenAdapter {
 
                 log.info('Device info (Physical):', this._deviceInfo);
 
-                const manualRes = localStorage.getItem('litefin_max_resolution');
+                const manualRes = storage.getItem('litefin_max_resolution');
                 if (manualRes) {
                     log.info(`⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: ${manualRes}`);
                 } else {
