@@ -255,6 +255,36 @@ class LoginPage extends Page {
         // Change Server button - goes back to server selection
         this.$('.change-server-btn')?.addEventListener('click', () => this._goToServerSelection());
 
+        // --- Delegated Handlers ---
+        // User card clicks — delegated on stable #users-grid container,
+        // survives innerHTML rebuilds when user list is re-rendered
+        if (this._usersGrid) {
+            this._usersGrid.addEventListener('click', (e) => {
+                const card = e.target.closest('.user-card');
+                if (card) {
+                    const index = parseInt(card.dataset.userIndex);
+                    log.debug(`User card clicked, index=${index}`);
+                    if (this._users[index]) {
+                        this._selectUser(this._users[index]);
+                    } else {
+                        log.error(`No user at index ${index}`);
+                    }
+                }
+            });
+        }
+
+        // Server list clicks — delegated on stable #server-list container,
+        // survives innerHTML rebuilds when discovered servers are re-rendered
+        if (this._serverList) {
+            this._serverList.addEventListener('click', (e) => {
+                const item = e.target.closest('.server-item:not(.empty)');
+                if (item) {
+                    const index = parseInt(item.dataset.serverIndex);
+                    this._selectDiscoveredServer(index);
+                }
+            });
+        }
+
         // Enter key on inputs - just trigger click
         // On TV, Enter usually triggers click automatically on inputs/buttons
         // But we add specific click handler to unlock
@@ -576,30 +606,8 @@ class LoginPage extends Page {
         // Invalidate focus cache so new items are found
         focusManager.invalidateCache('login-users');
 
-        // Add click and keyboard handlers
-        this._usersGrid.querySelectorAll('.user-card').forEach((card) => {
-            card.addEventListener('click', () => {
-                const index = parseInt(card.dataset.userIndex);
-                log.debug(`User card clicked, index=${index}`);
-                if (this._users[index]) {
-                    log.debug(`User found: ${this._users[index].Name}`);
-                    this._selectUser(this._users[index]);
-                } else {
-                    log.error(`No user at index ${index}`);
-                }
-            });
-
-            // Enter key to select user
-            card.addEventListener('keydown', (e) => {
-                if (e.keyCode === 13) {
-                    const index = parseInt(card.dataset.userIndex);
-                    log.debug(`User card Enter pressed, index=${index}`);
-                    if (this._users[index]) {
-                        this._selectUser(this._users[index]);
-                    }
-                }
-            });
-        });
+        // Click handling is delegated on _usersGrid container in _bindEvents()
+        // No per-card listeners needed — delegation survives innerHTML rebuilds
     }
 
     /**
@@ -906,19 +914,8 @@ class LoginPage extends Page {
         // Invalid focus cache so new items are found
         focusManager.invalidateCache('login-server');
 
-        // Bind click events
-        this._serverList.querySelectorAll('.server-item:not(.empty)').forEach((item) => {
-            item.addEventListener('click', () => {
-                const index = parseInt(item.dataset.serverIndex);
-                this._selectDiscoveredServer(index);
-            });
-            item.addEventListener('keydown', (e) => {
-                if (e.keyCode === 13) {
-                    const index = parseInt(item.dataset.serverIndex);
-                    this._selectDiscoveredServer(index);
-                }
-            });
-        });
+        // Click handling is delegated on _serverList container in _bindEvents()
+        // No per-item listeners needed — delegation survives innerHTML rebuilds
     }
 
     /**

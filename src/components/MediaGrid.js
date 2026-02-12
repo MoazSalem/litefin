@@ -81,11 +81,21 @@ class MediaGrid extends Component {
         }
 
         this._updateButtonVisibility();
-        this._bindItemClicks();
 
-        // Lazy Load Images
+        // Delegated click handler on grid container — survives innerHTML rebuilds
+        // in toggleExpand() without needing per-card re-binding
         const grid = document.getElementById(`${this.id}-items`);
-        if (grid) lazyLoader.observe(grid);
+        if (grid) {
+            grid.addEventListener('click', (e) => {
+                const card = e.target.closest('.media-card');
+                if (card?.dataset?.itemId) {
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            });
+
+            // Lazy Load Images
+            lazyLoader.observe(grid);
+        }
     }
 
     /**
@@ -111,7 +121,7 @@ class MediaGrid extends Component {
         const grid = document.getElementById(`${this.id}-items`);
         if (grid) {
             grid.innerHTML = this._renderItems();
-            this._bindItemClicks();
+            // No need to re-bind click handlers — delegation on container survives rebuild
             lazyLoader.observe(grid);
         }
 
@@ -155,16 +165,9 @@ class MediaGrid extends Component {
         }
     }
 
-    _bindItemClicks() {
-        const grid = document.getElementById(`${this.id}-items`);
-        if (!grid) return;
-
-        grid.querySelectorAll('.media-card').forEach((card) => {
-            card.onclick = () => {
-                router.navigate(`/details/${card.dataset.itemId}`);
-            };
-        });
-    }
+    // NOTE: Card click handling is now done via event delegation in onMounted().
+    // The single listener on the grid container uses e.target.closest('.media-card')
+    // and survives innerHTML rebuilds in toggleExpand() automatically.
 
     /**
      * Helper to render card HTML (Copied/Adapted from Page.js)
