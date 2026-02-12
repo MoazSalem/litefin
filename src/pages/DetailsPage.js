@@ -228,41 +228,46 @@ class DetailsPage extends Page {
             this._item = await api.getItem(this._itemId, { Fields: 'People' });
             this.title = this._item.Name;
 
-            // 2. Render all text content immediately
+            // 2. Render all text content immediately (Metadata, Hero Info)
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
 
-            // 3. Load Images (wait for poster to be ready)
-            await this._loadImages();
+            // 3. Parallelize loading of ALL major content (Images, Rows, Similar)
+            // This ensures we aren't blocked by the 1.5s poster timeout while
+            // the episode/season data is ready.
+            const loadTasks = [
+                this._loadImages(),
+                this._loadSecondaryContent()
+            ];
 
-            // 4. Load ALL secondary content (seasons, episodes, people, etc.)
-            // We wait for this so the navigation chain is fully built
-            await this._loadSecondaryContent();
-
-            // 5. Load similar items (except for seasons)
             if (this._item.Type !== 'Season') {
-                await this._loadSimilar();
+                loadTasks.push(this._loadSimilar());
             }
 
-            // 6. FINALLY dismiss loading - page is now 100% ready and navigable
+            await Promise.all(loadTasks);
+
+            // 4. Rebuild navigation chain after everything is in the DOM
+            // We use requestAnimationFrame to ensure the browser has parsed the new HTML
+            await new Promise((resolve) => {
+                requestAnimationFrame(() => {
+                    this._rebuildNavigationChain();
+                    resolve();
+                });
+            });
+
+            // 5. FINALLY dismiss loading - page is now 100% ready and navigable
             this.setLoading(false);
 
             // FIX: Ensure Focus Manager knows about the Resume button if it appeared
-            // Invalidating cache forces a re-scan of focusable elements
             focusManager.invalidateCache('details-actions');
 
             // If we have resume progress, FORCE focus to the resume button
-            // This fixes the issue where focus is lost or stays on Play when returning from playback
             if (this._item.UserData?.PlaybackPositionTicks > 0) {
                 const resumeBtn = this.$('.resume-btn');
                 if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
                     log.info('Forcing focus to Resume button');
-
-                    // CRITICAL: Clear pending nav state so it doesn't overwrite our focus
-                    // The router tries to restore previous focus (e.g. Play button) after this method
                     this._pendingNavState = null;
-
                     focusManager.focusElement(resumeBtn);
                 }
             }
@@ -355,15 +360,6 @@ class DetailsPage extends Page {
 
         // Load Logo (non-blocking, fire and forget)
         this._loadLogo();
-
-        // CRITICAL: Wait for DOM to render, then rebuild navigation chain
-        // This ensures visibility checks are accurate since DOM is fully updated
-        await new Promise((resolve) => {
-            requestAnimationFrame(() => {
-                this._rebuildNavigationChain();
-                resolve();
-            });
-        });
     }
 
     /**
