@@ -312,10 +312,11 @@ class DetailsPage extends Page {
             posterContainer.innerHTML = '';
 
             if (item.ImageTags && item.ImageTags.Primary) {
-                const params = imageService.getParams('poster');
+                // FORCE HIGH QUALITY for Details Page
+                // const params = imageService.getParams('poster');
                 const posterUrl = api.getImageUrl(item.Id, 'Primary', {
-                    maxWidth: params.maxWidth,
-                    quality: params.quality
+                    maxWidth: 800,
+                    quality: 100
                 });
                 const img = new Image();
                 img.onload = () => {
@@ -335,7 +336,11 @@ class DetailsPage extends Page {
             }
 
             // Backdrop (Fire and forget, via Manager)
-            const backdropUrl = BackdropManager.getBackdropUrl(item);
+            // FORCE HIGH QUALITY for Details Page
+            const backdropUrl = BackdropManager.getBackdropUrl(item, {
+                maxWidth: 3840,
+                quality: 100
+            });
             if (backdropUrl) {
                 BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
             }
@@ -706,7 +711,7 @@ class DetailsPage extends Page {
             // Bump logo quality slightly as it is text
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
                 maxWidth: params.maxWidth * 2,
-                quality: 90,
+                quality: 100,
                 tag: logoTag
             });
             const img = new Image();
@@ -1546,11 +1551,18 @@ class DetailsPage extends Page {
             }
         }
 
+        // FORCE HIGH QUALITY for Player transition (must match _loadImages params)
+        const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
+            maxWidth: 3840,
+            quality: 100
+        });
+
         eventBus.emit('player:play', {
             item: itemToPlay,
             resume,
             audioStreamIndex: this._selectedAudioIndex,
-            subtitleStreamIndex: this._selectedSubtitleIndex
+            subtitleStreamIndex: this._selectedSubtitleIndex,
+            backdropUrl
         });
     }
 

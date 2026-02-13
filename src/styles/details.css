@@ -33,13 +33,14 @@
 }
 
 .details-backdrop {
-    position: absolute;
+    position: fixed;
     top: 0;
-    left: 0;
-    right: 0;
-    height: 90%;
+    /* FIX: Pull back by sidebar width because parent transform makes 'fixed' relative to parent */
+    left: calc(var(--sidebar-width-collapsed, 100px) * -1);
+    width: 100vw;
+    height: 100vh;
     background-size: cover;
-    background-position: center top;
+    background-position: center center;
     opacity: 0;
     transition: opacity 1s ease-in-out;
     /* Soften the bottom edge to blend with page background */

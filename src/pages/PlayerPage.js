@@ -102,6 +102,26 @@ class PlayerPage extends Page {
             // Show loading
             this._showLoading(true);
 
+            // Render cached backdrop if available (for smooth transition)
+            const backdropUrl = state.get('player:backdropUrl');
+            if (backdropUrl) {
+                // Apply directly to the loading overlay to ensure visibility
+                const loader = this.el.querySelector('.page-loading');
+                if (loader) {
+                    loader.style.backgroundSize = 'cover';
+                    loader.style.backgroundPosition = 'center';
+
+                    // IMPORTANT: Override the solid background color from base.css
+                    // We need a gradient over the image for text contrast, but base color must be transparent
+                    loader.style.backgroundColor = 'transparent';
+
+                    // Add a pseudo-element-like gradient overlay via background-image
+                    loader.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
+
+                    this._loadingBackdrop = loader; // Mark for cleanup
+                }
+            }
+
             // Enable Tizen AVPlayer transparency mode
             // This makes body/app transparent so hardware video plane is visible
             document.body.classList.add('player-active');
@@ -509,6 +529,20 @@ class PlayerPage extends Page {
     _onPlayerReady() {
         log.info('Player ready');
         this._showLoading(false);
+
+        // Reset the loading backdrop styles if we modified them
+        if (this._loadingBackdrop) {
+            // this._loadingBackdrop is a reference to the .page-loading element
+            this._loadingBackdrop.style.backgroundImage = '';
+            this._loadingBackdrop.style.backgroundSize = '';
+            this._loadingBackdrop.style.backgroundPosition = '';
+            this._loadingBackdrop.style.backgroundColor = ''; // Reverts to CSS default
+
+            this._loadingBackdrop = null;
+
+            // Clear from state
+            state.set('player:backdropUrl', null);
+        }
     }
 
     _onPlaying() {
@@ -964,7 +998,7 @@ class PlayerPage extends Page {
             // 1. Capture data
             const mediaSource =
                 capturedMediaSource ?? this._player?.getCurrentMediaSource?.() ?? this._cachedMediaSource;
-            
+
             // Ensure position is a rounded integer
             const rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
             const positionTicks = Math.round(rawPosition);
@@ -996,7 +1030,7 @@ class PlayerPage extends Page {
                     xhr.setRequestHeader('Content-Type', 'application/json');
                     xhr.setRequestHeader('X-Emby-Authorization', authHeader);
                     xhr.send(JSON.stringify(data));
-                    
+
                     if (xhr.status >= 400) {
                         log.warn(`Sync stop report failed with status ${xhr.status}`);
                     }

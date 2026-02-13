@@ -263,13 +263,16 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex }) => {
+        eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
             // Store playback context for play queue building (e.g. 'boxset')
             // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
             state.set('player:contextType', item?.contextType || null);
             state.set('player:contextId', item?.contextId || null);
+
+            // Store backdrop URL for loading screen transition
+            state.set('player:backdropUrl', backdropUrl || null);
 
             if (!item?.Id) {
                 log.error('Cannot play - no item ID provided for playback request');

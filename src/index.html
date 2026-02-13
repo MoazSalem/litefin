@@ -15,18 +15,19 @@
                 const savedTheme = localStorage.getItem('litefin:theme') || 'dark';
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
-                // Accent colors for known themes (must match CSS)
-                const themeColors = {
-                    'dark': '#00a4dc',
-                    'light': '#00a4dc',
-                    'blueradiance': '#00a4dc',
-                    'purplehaze': '#b24bf3',
-                    'wmc': '#52b043',
-                    'appletv': '#0a84ff'
+                // Theme variables for early loading (must match CSS)
+                const themes = {
+                    'dark': { accent: '#00a4dc', bg: '#101010' },
+                    'light': { accent: '#00a4dc', bg: '#f5f5f5' },
+                    'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a' },
+                    'purplehaze': { accent: '#b24bf3', bg: '#0f0a14' },
+                    'wmc': { accent: '#52b043', bg: '#0a120a' },
+                    'appletv': { accent: '#0a84ff', bg: '#000000' }
                 };
 
-                const accentColor = themeColors[savedTheme] || '#00a4dc';
-                document.documentElement.style.setProperty('--jf-accent', accentColor);
+                const currentTheme = themes[savedTheme] || themes['dark'];
+                document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
+                document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
             } catch (e) {
                 console.error('Error restoring theme:', e);
             }
@@ -39,7 +40,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: #101010;
+            background-color: var(--jf-background, #101010);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -58,7 +59,7 @@
             height: 100vh;
             display: block;
             z-index: 9999;
-            background-color: #101010;
+            background-color: var(--jf-background, #101010);
         }
 
         .page-loading {
@@ -71,7 +72,7 @@
             height: 100vh;
             display: none;
             z-index: 9999;
-            background-color: #101010;
+            background-color: var(--jf-background, #101010);
         }
 
         .page.loading .page-loading {
