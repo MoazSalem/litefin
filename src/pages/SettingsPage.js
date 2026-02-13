@@ -794,6 +794,26 @@ class SettingsPage extends Page {
                 <!-- Module Filters -->
                 <h3 class="setting-section-title">Module Filters</h3>
                 <div class="module-filters-grid">
+                    <div class="setting-item compact">
+                        <div class="setting-label">
+                            <span class="setting-name">Enable All Filters</span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-option" id="btn-enable-all-filters" tabindex="0" style="width: auto; min-width: 100px;">
+                                Enable
+                            </button>
+                        </div>
+                    </div>
+                    <div class="setting-item compact">
+                        <div class="setting-label">
+                            <span class="setting-name">Disable All Filters</span>
+                        </div>
+                        <div class="setting-control">
+                            <button class="btn btn-option" id="btn-disable-all-filters" tabindex="0" style="width: auto; min-width: 100px;">
+                                Disable
+                            </button>
+                        </div>
+                    </div>
                     ${debugOverlay
                         .getKnownModules()
                         .map(
@@ -1139,7 +1159,7 @@ class SettingsPage extends Page {
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
-
+            'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' }
         };
 
@@ -1302,6 +1322,38 @@ class SettingsPage extends Page {
                 // Update DebugOverlay
                 debugOverlay.setOverlayEnabled(newState);
                 storage.setItem('debug_overlay_enabled', newState);
+            });
+        }
+
+        // Enable All Filters
+        const btnEnableAll = this.$('#btn-enable-all-filters');
+        const btnDisableAll = this.$('#btn-disable-all-filters');
+
+        if (btnEnableAll) {
+            btnEnableAll.addEventListener('click', () => {
+                const modules = debugOverlay.getKnownModules();
+                modules.forEach((module) => {
+                    debugOverlay.toggleModule(module, true);
+                });
+
+                // Update UI toggles
+                this.$$('.module-filter-toggle').forEach((btn) => {
+                    btn.classList.add('active');
+                });
+            });
+        }
+
+        if (btnDisableAll) {
+            btnDisableAll.addEventListener('click', () => {
+                const modules = debugOverlay.getKnownModules();
+                modules.forEach((module) => {
+                    debugOverlay.toggleModule(module, false);
+                });
+
+                // Update UI toggles
+                this.$$('.module-filter-toggle').forEach((btn) => {
+                    btn.classList.remove('active');
+                });
             });
         }
 

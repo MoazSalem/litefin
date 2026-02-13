@@ -87,8 +87,8 @@ class AuthManager {
             log.info('Generated new device ID');
         }
 
-        // Get device name - Encoded to handle spaces safely in headers
-        const deviceName = encodeURIComponent(tizenAdapter.getDeviceName());
+        // Get device name - ApiClient handles quoting and sanitization for headers
+        const deviceName = tizenAdapter.getDeviceName();
 
         api.setDevice(deviceId, deviceName);
     }
@@ -263,33 +263,36 @@ class AuthManager {
      */
     async login(username, password = '') {
         log.info(`Logging in as "${username}"`);
-        log.debug(`Password length: ${password ? password.length : 0}`);
-        log.debug(`Current accessToken before login: ${api._accessToken ? 'SET' : 'NULL'}`);
+        
+        // Capture existing memory state to restore on failure
+        const prevToken = api.accessToken;
+        const prevUserId = api.userId;
 
         try {
-            // Ensure no stale token is being sent - clear BOTH memory and storage
-            this._clearStorage();
-            api.clearAuth();
-            log.info(`Cleared any stale auth before login request`);
+            // 1. Prepare for clean login request
+            // We clear memory token so ApiClient doesn't send a stale one in the header.
+            // We do NOT clear localStorage yet - we only do that on SUCCESS.
+            api.setAuth(null, null);
+            log.info(`Cleared in-memory auth for login request attempt`);
 
-            // Call Jellyfin authenticate endpoint
+            // 2. Call Jellyfin authenticate endpoint
             const result = await api.post('/Users/AuthenticateByName', {
                 Username: username,
                 Pw: password
             });
 
-            // Extract data (handle potential casing differences)
+            // 3. SUCCESS - Now we can safely overwrite the old session
             const accessToken = result.AccessToken || result.accessToken;
             const user = result.User || result.user;
             const userId = user?.Id || user?.id;
 
-            // Validate response
             if (!accessToken || !userId) {
-                log.error('Invalid login response', result);
+                log.error('Invalid login response structure', result);
                 throw new Error('Invalid server response');
             }
 
-            // Store credentials
+            // Clear old and save new to storage
+            this._clearStorage();
             storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
             storage.setItem(STORAGE_KEYS.USER_ID, userId);
             storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
@@ -297,8 +300,7 @@ class AuthManager {
             // Configure API with new credentials
             api.setAuth(accessToken, userId);
 
-            // CRITICAL: Report device capabilities to establish session with server
-            // Without this, the server won't track user as "online" or receive playback updates
+            // Establish session capabilities
             try {
                 await api.reportCapabilities({
                     PlayableMediaTypes: ['Video', 'Audio'],
@@ -306,26 +308,30 @@ class AuthManager {
                     SupportsMediaControl: true,
                     SupportsPersistentIdentifier: true
                 });
-                log.info('Session capabilities reported to server');
             } catch (capError) {
-                log.warn('Failed to report capabilities:', capError);
-                // Don't fail login if this fails - user can still use the app
+                log.warn('Non-fatal: Failed to report capabilities after login:', capError);
             }
 
-            // Open WebSocket for real-time online status tracking
             api.openWebSocket();
 
-            // Update state
             state.set('user:authenticated', true);
             state.set('user:data', user);
 
             eventBus.emit('auth:login', user);
-
-            log.info(`Logged in as "${user.Name || user.name}"`);
+            log.info(`Login successful for "${user.Name || username}"`);
 
             return result;
         } catch (error) {
-            log.error('Login failed:', error);
+            log.error('Login request failed:', error);
+            
+            // 4. FAILURE - Restore previous in-memory credentials 
+            // This prevents the app from being "half-logged out" if the failure 
+            // was just a wrong password or temporary network glitch.
+            if (prevToken && prevUserId) {
+                log.info('Restoring previous in-memory credentials after failed login attempt');
+                api.setAuth(prevToken, prevUserId);
+            }
+            
             throw error;
         }
     }
