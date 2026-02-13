@@ -910,4 +910,13 @@
 .media-card {
     margin: 5px;
     /* Extra robustness */
+
+    /* PERFORMANCE: Aggressive GPU acceleration for TV hardware */
+    will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    
+    /* Layout isolation prevents content changes inside the card from
+       triggering global layout passes on the main thread. */
+    contain: layout style;
 }

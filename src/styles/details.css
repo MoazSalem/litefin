@@ -45,6 +45,10 @@
     /* Soften the bottom edge to blend with page background */
     -webkit-mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
     mask-image: linear-gradient(to bottom, black 60%, transparent 100%);
+
+    /* PERFORMANCE: Promote backdrop to its own layer */
+    transform: translateZ(0);
+    will-change: opacity;
 }
 
 .backdrop-gradient {
@@ -56,6 +60,8 @@
     background: linear-gradient(to bottom,
             rgba(16, 16, 16, 0.6) 0%,
             var(--jf-background) 100%);
+    /* PERFORMANCE: Isolate gradient from main layout */
+    transform: translateZ(0);
 }
 
 /* Details Content Scroller */
@@ -70,6 +76,12 @@
 
     outline: none;
     /* remove focus outline if focused programmatically */
+
+    /* PERFORMANCE: GPU acceleration and layout isolation */
+    -webkit-overflow-scrolling: touch;
+    transform: translateZ(0);
+    will-change: transform;
+    contain: layout paint style;
 }
 
 /* Main Split Layout */
@@ -513,14 +525,17 @@
     transform: translateZ(0);
     will-change: transform;
     justify-self: center;
+
+    /* PERFORMANCE: Layout isolation */
+    contain: layout style;
 }
 
 /* Seasons & Similar */
 .seasons-row,
 .similar-row {
     margin-bottom: 40px;
-    /* REDUNDANT: Container level */
-    /* transform: translateZ(0); */
+    /* PERFORMANCE: Isolate rows from each other */
+    contain: layout style;
 }
 
 /* Episodes */
@@ -529,6 +544,9 @@
     grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
     /* gap: 30px; REMOVED */
     padding-bottom: 40px;
+    
+    /* PERFORMANCE: Isolate the entire list */
+    contain: layout style;
 }
 
 
@@ -546,6 +564,11 @@
     text-align: left;
     overflow: hidden;
     background-clip: padding-box;
+
+    /* PERFORMANCE: Layout isolation and layer promotion */
+    transform: translateZ(0);
+    will-change: transform;
+    contain: layout style;
 }
 
 

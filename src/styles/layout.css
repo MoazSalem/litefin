@@ -95,7 +95,15 @@
     /* GPU acceleration for smoother scrolling on TV devices */
     -webkit-overflow-scrolling: touch;
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
     will-change: scroll-position;
+
+    /* PERFORMANCE: Isolate layout and paint from the rest of the page.
+       This prevents changes inside the scroll container from triggering
+       global layout recalcs on the TV's CPU. */
+    contain: layout paint style;
 }
 
 /* Page loading styles moved to base.css */
@@ -123,6 +131,9 @@
     /* Hide scrollbar but keep functionality */
     -ms-overflow-style: none;
     scrollbar-width: none;
+
+    /* PERFORMANCE: Isolate horizontal rows */
+    contain: layout paint style;
 }
 
 .row-items::-webkit-scrollbar {

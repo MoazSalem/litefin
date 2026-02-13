@@ -110,12 +110,11 @@ class ScrollController {
         }
 
         // Create or update animation state for retargeting
-        const now = performance.now();
         this[stateKey] = {
             container,
             startScroll: currentScroll,
             target: targetScroll,
-            startTime: now,
+            startTime: null, // Initialized in first RAF frame
             duration
         };
 
@@ -128,11 +127,16 @@ class ScrollController {
         const easeOutQuad = (t) => t * (2 - t);
 
         // Animation loop
-        const animate = () => {
+        const animate = (time) => {
             const state = this[stateKey];
             if (!state) return;
 
-            const elapsed = performance.now() - state.startTime;
+            // Initialize startTime on the first actual frame if not set
+            if (!state.startTime) {
+                state.startTime = time;
+            }
+
+            const elapsed = time - state.startTime;
             const progress = Math.min(elapsed / state.duration, 1);
             const eased = easeOutQuad(progress);
 
@@ -140,7 +144,7 @@ class ScrollController {
             const distance = state.target - state.startScroll;
             const newScroll = state.startScroll + distance * eased;
 
-            // Apply scroll position
+            // Apply scroll position (Layout-triggering, but unavoidable without transform scroll)
             if (isVertical) {
                 state.container.scrollTop = newScroll;
             } else {
@@ -162,6 +166,8 @@ class ScrollController {
             }
         };
 
+        // Note: For the very first frame, we don't have a 'time' yet, 
+        // so we let the animate function initialize it.
         this[animIdKey] = requestAnimationFrame(animate);
     }
 
