@@ -569,7 +569,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {number}
      */
     getCurrentPositionTicks() {
-        return (this._backend?.getCurrentTime() ?? 0) * 10000000;
+        return Math.round((this._backend?.getCurrentTime() ?? 0) * 10000000);
     }
 
     /**

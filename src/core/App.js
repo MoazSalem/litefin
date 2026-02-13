@@ -266,6 +266,11 @@ class App {
         eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
+            // Store playback context for play queue building (e.g. 'boxset')
+            // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
+            state.set('player:contextType', item?.contextType || null);
+            state.set('player:contextId', item?.contextId || null);
+
             if (!item?.Id) {
                 log.error('Cannot play - no item ID provided for playback request');
                 return;

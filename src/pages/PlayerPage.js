@@ -18,6 +18,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
+import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
 import PlayerOSD from '../player/jellyfin-player-osd.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
@@ -48,6 +49,9 @@ class PlayerPage extends Page {
         // Cached media source for stop reporting
         // (player clears this internally after stop, so we need a copy)
         this._cachedMediaSource = null;
+
+        // Concurrency lock for item switching
+        this._isSwitching = false;
     }
 
     render() {
@@ -112,6 +116,16 @@ class PlayerPage extends Page {
             // Load item details
             this._item = await api.getItem(itemId);
             this.title = this._item.Name;
+
+            // Initialize Play Queue
+            const contextType = state.get('player:contextType');
+            const contextId = state.get('player:contextId');
+            log.debug('Initializing PlayQueue with context:', { contextType, contextId });
+            await playQueue.init(this._item, contextType, contextId);
+
+            // Clear context state so it doesn't leak to next playback
+            state.set('player:contextType', null);
+            state.set('player:contextId', null);
 
             // Calculate resume position if needed
             if (resume && this._item.UserData?.PlaybackPositionTicks) {
@@ -274,20 +288,16 @@ class PlayerPage extends Page {
             eventBus.on('remote:togglemute', this._onRemoteToggleMute);
 
             // Next/Previous track handlers
-            // Note: Litefin doesn't support playlists yet, so these navigate series episodes
+            // Next/Previous track handlers
             this._onRemoteNext = async () => {
                 log.info('Remote: NextTrack');
-                // TODO: If this is a series, could navigate to next episode
-                // For now, log that this feature isn't supported
-                log.warn('Next track not supported - no playlist support yet');
+                this._playNextItem();
             };
             eventBus.on('remote:next', this._onRemoteNext);
 
             this._onRemotePrevious = async () => {
                 log.info('Remote: PreviousTrack');
-                // TODO: If this is a series, could navigate to previous episode
-                // For now, log that this feature isn't supported
-                log.warn('Previous track not supported - no playlist support yet');
+                this._playPreviousItem();
             };
             eventBus.on('remote:previous', this._onRemotePrevious);
 
@@ -440,6 +450,12 @@ class PlayerPage extends Page {
      * The OSD subscribes to EventBus key events and manages its own focus.
      */
     _initOSD() {
+        // Only initialize once. If we're advancing in a queue, the OSD is already mounted.
+        if (this._osd) {
+            log.info('OSD already exists, skipping re-init');
+            return;
+        }
+
         const osdContainer = this.$('#osd-overlay');
         if (!osdContainer) {
             log.error('OSD container #osd-overlay not found');
@@ -463,7 +479,11 @@ class PlayerPage extends Page {
                 } else {
                     this._reportPlaybackProgress('unpause');
                 }
-            }
+            },
+
+            // Queue navigation callbacks
+            onNext: () => this._playNextItem(),
+            onPrevious: () => this._playPreviousItem()
         });
 
         // Mount OSD — this triggers render + event binding
@@ -495,6 +515,11 @@ class PlayerPage extends Page {
         log.info('Playing');
         eventBus.emit('player:playing', { item: this._item });
 
+        // Sync OSD track state (especially important for queue switches)
+        if (this._osd) {
+            this._osd.syncTracks();
+        }
+
         // Report progress (Start/Unpause)
         // If we haven't reported start yet, do it now
         if (!this._hasReportedStart) {
@@ -525,6 +550,14 @@ class PlayerPage extends Page {
             return;
         }
 
+        // Check if we can play next item
+        if (playQueue.hasNext()) {
+            log.info('Item ended, auto-advancing to next item');
+            this._playNextItem();
+            eventBus.emit('player:ended', { item: this._item });
+            return;
+        }
+
         // Natural end of playback - report and navigate back
         this._isExiting = true;
         this._reportPlaybackStopped().then(() => {
@@ -534,8 +567,122 @@ class PlayerPage extends Page {
         eventBus.emit('player:ended', { item: this._item });
     }
 
+    /**
+     * Play next item in queue if available
+     */
+    async _playNextItem() {
+        if (this._isSwitching || !playQueue.hasNext()) {
+            return;
+        }
+
+        this._isSwitching = true;
+        this._showLoading(true);
+
+        try {
+            const nextItem = playQueue.advance();
+            log.info('Advancing to next item:', nextItem.Name);
+
+            // Capture current info before stopping
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            // Stop current playback cleanly
+            if (this._player?.stop) {
+                await this._player.stop();
+            }
+
+            // Report stopped (async)
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+
+            // Give Tizen/Player a moment to settle
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            // In-place switch
+            this._item = nextItem;
+            this._resumePosition = 0;
+            this._cachedMediaSource = null;
+            this._hasReportedStart = false;
+            this._lastReportTime = 0;
+
+            // Update OSD title
+            if (this._osd) {
+                this._osd.updateItem(nextItem);
+            }
+
+            // Restart playback
+            await this._startPlayback();
+
+            // Hide loading (ready event might not fire on subsequent plays)
+            this._showLoading(false);
+        } catch (error) {
+            log.error('Failed to play next item:', error);
+            this._showError('Failed to load next item');
+        } finally {
+            this._isSwitching = false;
+        }
+    }
+
+    /**
+     * Play previous item in queue if available
+     */
+    async _playPreviousItem() {
+        if (this._isSwitching) return;
+
+        if (playQueue.hasPrevious()) {
+            this._isSwitching = true;
+            this._showLoading(true);
+
+            try {
+                const prevItem = playQueue.goBack();
+                log.info('Going back to previous item:', prevItem.Name);
+
+                // Capture current info before stopping
+                const mediaSource = this._player?.getCurrentMediaSource?.();
+                const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+                // Stop current playback cleanly
+                if (this._player?.stop) {
+                    await this._player.stop();
+                }
+
+                await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+
+                await new Promise((resolve) => setTimeout(resolve, 500));
+
+                this._item = prevItem;
+                this._resumePosition = 0;
+                this._cachedMediaSource = null;
+                this._hasReportedStart = false;
+                this._lastReportTime = 0;
+
+                if (this._osd) {
+                    this._osd.updateItem(prevItem);
+                }
+
+                await this._startPlayback();
+
+                // Hide loading
+                this._showLoading(false);
+            } catch (error) {
+                log.error('Failed to play previous item:', error);
+                this._showError('Failed to load previous item');
+            } finally {
+                this._isSwitching = false;
+            }
+        } else {
+            log.info('No previous item in queue. Restarting current.');
+            this._player.seek(0);
+        }
+    }
+
     _onPlayerError(error) {
+        if (this._isSwitching) {
+            log.warn('Ignoring player error during item switch:', error);
+            return;
+        }
+
         log.error('Player error:', error);
+        this._isSwitching = false; // Reset lock on error
         this._showError(error.message || 'Playback error');
     }
 
@@ -734,6 +881,14 @@ class PlayerPage extends Page {
     _showError(message) {
         this._showLoading(false);
 
+        // Ensure focus manager is resumed so we can interact with error buttons
+        focusManager.resume();
+
+        // Hide OSD if it's visible
+        if (this._osd) {
+            this._osd.hide?.();
+        }
+
         const errorEl = this.$('#player-error');
         const messageEl = errorEl?.querySelector('.error-message');
 
@@ -798,32 +953,30 @@ class PlayerPage extends Page {
 
     /**
      * Report playback stopped to server
-     * @param {Object} [capturedMediaSource] - Pre-captured media source (for when called after stop)
+     * @param {Object} [capturedMediaSource] - Pre-captured media source
      * @param {number} [capturedPosition] - Pre-captured position ticks
+     * @param {boolean} [isSync=true] - Whether to use synchronous XHR
      */
-    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null) {
+    async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = true) {
         if (!this._item) return;
 
         try {
-            // Use captured values, then player methods, then cached values as fallback
+            // 1. Capture data
             const mediaSource =
                 capturedMediaSource ?? this._player?.getCurrentMediaSource?.() ?? this._cachedMediaSource;
-            const positionTicks = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+            
+            // Ensure position is a rounded integer
+            const rawPosition = capturedPosition ?? this._player?.getCurrentPositionTicks?.() ?? 0;
+            const positionTicks = Math.round(rawPosition);
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
 
             if (!playSessionId) {
-                log.warn('Skipping stopped report - no PlaySessionId (mediaSource:', !!mediaSource, ')');
+                log.warn('Skipping stopped report - no PlaySessionId');
                 return;
             }
 
-            log.info('Reporting playback stopped, position:', positionTicks);
-
-            // ================================================================
-            // TIZEN FIX: Use synchronous XHR to ensure request completes
-            // before navigation. Async fetch gets cancelled during page cleanup
-            // on Tizen but not on web browsers.
-            // ================================================================
+            // 2. Build report body - stick to core fields to avoid 400 errors
             const data = {
                 ItemId: this._item.Id,
                 PlaySessionId: playSessionId,
@@ -831,27 +984,29 @@ class PlayerPage extends Page {
                 PositionTicks: positionTicks
             };
 
-            const url = `${api.serverUrl}/Sessions/Playing/Stopped`;
-            const authHeader = api.getAuthHeader();
+            // 3. Send report
+            if (isSync) {
+                log.info('Reporting playback stopped (sync), position:', positionTicks);
+                const url = `${api.serverUrl}/Sessions/Playing/Stopped`;
+                const authHeader = api.getAuthHeader();
 
-            try {
-                // Use synchronous XHR - it blocks but ensures completion
-                const xhr = new XMLHttpRequest();
-                xhr.open('POST', url, false); // false = synchronous
-                xhr.setRequestHeader('Content-Type', 'application/json');
-                xhr.setRequestHeader('X-Emby-Authorization', authHeader);
-                xhr.send(JSON.stringify(data));
-
-                if (xhr.status >= 200 && xhr.status < 300) {
-                    log.info('✓ Playback stopped reported (sync)');
-                } else {
-                    log.warn('Stop report failed:', xhr.status, xhr.statusText);
+                try {
+                    const xhr = new XMLHttpRequest();
+                    xhr.open('POST', url, false);
+                    xhr.setRequestHeader('Content-Type', 'application/json');
+                    xhr.setRequestHeader('X-Emby-Authorization', authHeader);
+                    xhr.send(JSON.stringify(data));
+                    
+                    if (xhr.status >= 400) {
+                        log.warn(`Sync stop report failed with status ${xhr.status}`);
+                    }
+                } catch (xhrErr) {
+                    log.warn('Sync XHR failed, falling back to async');
+                    await api.reportPlaybackStopped(data);
                 }
-            } catch (xhrError) {
-                log.warn('Sync XHR failed, falling back to async:', xhrError);
-                // Fallback to async (works on web)
+            } else {
+                log.info('Reporting playback stopped (async), position:', positionTicks);
                 await api.reportPlaybackStopped(data);
-                log.info('✓ Playback stopped reported (async fallback)');
             }
         } catch (error) {
             log.warn('Failed to report playback stopped:', error);

@@ -1046,7 +1046,7 @@ class DetailsPage extends Page {
 
     async _loadEpisodes(seriesId, seasonId) {
         try {
-            const response = await api.getEpisodes(seriesId, seasonId);
+            const response = await api.getEpisodes(seriesId, { SeasonId: seasonId });
             this._episodes = response.Items || [];
 
             if (this._episodes.length > 0) {
@@ -1479,19 +1479,35 @@ class DetailsPage extends Page {
         if (this._item.Type === 'BoxSet') {
             try {
                 // Fetch first item in collection (recursive)
-                const result = await api.getItems({
-                    ParentId: this._item.Id,
-                    Recursive: true,
-                    IncludeItemTypes: 'Movie,Episode',
-                    Limit: 1,
-                    SortBy: 'SortName'
-                });
+                // We prefer Movies over Episodes to match the visual row priority
+                const [movies, episodes] = await Promise.all([
+                    api.getItems({
+                        ParentId: this._item.Id,
+                        Recursive: true,
+                        IncludeItemTypes: 'Movie',
+                        Limit: 1,
+                        SortBy: 'SortName'
+                    }),
+                    api.getItems({
+                        ParentId: this._item.Id,
+                        Recursive: true,
+                        IncludeItemTypes: 'Episode',
+                        Limit: 1,
+                        SortBy: 'SortName'
+                    })
+                ]);
 
-                if (result && result.Items && result.Items.length > 0) {
-                    itemToPlay = result.Items[0];
+                if (movies.Items && movies.Items.length > 0) {
+                    itemToPlay = movies.Items[0];
+                } else if (episodes.Items && episodes.Items.length > 0) {
+                    itemToPlay = episodes.Items[0];
                 } else {
                     return; // Empty collection
                 }
+
+                // Attach context so PlayQueue knows this is a collection play
+                itemToPlay.contextType = 'boxset';
+                itemToPlay.contextId = this._item.Id;
             } catch (e) {
                 log.error('Failed to play collection', e);
                 return;

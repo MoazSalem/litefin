@@ -66,6 +66,10 @@ export class HtmlVideoPlayer {
      */
     _ensureVideoElement() {
         if (this._videoElement) {
+            // Ensure events are bound if they were unbound in stop()
+            if (Object.keys(this._boundHandlers).length === 0) {
+                this._bindEvents(this._videoElement);
+            }
             return this._videoElement;
         }
 
@@ -336,17 +340,24 @@ export class HtmlVideoPlayer {
      * Stop playback
      */
     async stop() {
+        this._destroyHlsPlayer();
+
         const video = this._videoElement;
 
         if (video) {
+            // Unbind events before clearing src to prevent error events from firing
+            this._unbindEvents(video);
+            
             video.pause();
-            video.src = '';
+            // Use removeAttribute instead of setting src to empty string to be cleaner
+            video.removeAttribute('src');
             video.load();
         }
 
-        this._destroyHlsPlayer();
         this._currentSrc = null;
         this._currentPlayOptions = null;
+        this._started = false;
+        this._timeUpdated = false;
     }
 
     /**
@@ -582,6 +593,14 @@ export class HtmlVideoPlayer {
     /** @private */
     _onError(e) {
         const video = e.target;
+
+        // Ignore errors if we don't have a source and no HLS player is active.
+        // This commonly happens during stop/cleanup when src is removed.
+        if (!video.src && !this._hlsPlayer) {
+            debug.log('[HtmlVideoPlayer] Ignoring error event on empty source during cleanup');
+            return;
+        }
+
         const errorCode = video.error?.code || 0;
         const errorMessage = video.error?.message || 'Unknown error';
 

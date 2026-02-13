@@ -7,8 +7,6 @@
  * @module settings/SettingsManager
  */
 
-import { storage } from '../../../src/utils/StorageService.js';
-
 // ============================================================================
 // Default Settings
 // ============================================================================
@@ -100,7 +98,7 @@ export class SettingsManager {
      * @private
      */
     _get(key) {
-        const stored = storage.getItem(this._prefix + key);
+        const stored = localStorage.getItem(this._prefix + key);
 
         if (stored === null) {
             return DEFAULTS[key];
@@ -128,9 +126,9 @@ export class SettingsManager {
         this._cache[key] = value;
 
         if (value === DEFAULTS[key]) {
-            storage.removeItem(this._prefix + key);
+            localStorage.removeItem(this._prefix + key);
         } else {
-            storage.setItem(this._prefix + key, String(value));
+            localStorage.setItem(this._prefix + key, String(value));
         }
     }
 
@@ -442,7 +440,7 @@ export class SettingsManager {
      */
     resetToDefaults() {
         for (const key of Object.keys(DEFAULTS)) {
-            storage.removeItem(this._prefix + key);
+            localStorage.removeItem(this._prefix + key);
             this._cache[key] = DEFAULTS[key];
         }
     }

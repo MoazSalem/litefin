@@ -237,12 +237,12 @@ export class ApiClient {
             const isNetworkError = error instanceof TypeError;
 
             if (isTimeout || isNetworkError) {
-                const msg = isTimeout 
-                    ? `Connection timed out after ${REQUEST_TIMEOUT/1000}s` 
+                const msg = isTimeout
+                    ? `Connection timed out after ${REQUEST_TIMEOUT / 1000}s`
                     : `Server unreachable at ${this._serverUrl}`;
-                
+
                 log.error(`${msg}:`, error.message);
-                
+
                 const networkError = new ServerUnreachableError(`${msg}. Please check your network and server status.`);
                 eventBus.emit('api:offline', { url: this._serverUrl, isTimeout });
                 throw networkError;
@@ -496,11 +496,15 @@ export class ApiClient {
         });
     }
 
-    async getEpisodes(seriesId, seasonId) {
+    async getEpisodes(seriesId, params = {}) {
+        // Flexible params — pass SeasonId, StartItemId, Limit, etc.
+        // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            SeasonId: seasonId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview'
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview',
+            IsVirtualUnaired: false,
+            IsMissing: false,
+            ...params
         });
     }
 

@@ -7,8 +7,6 @@
  * @module core/MediaHelper
  */
 
-import { storage } from '../../../src/utils/StorageService.js';
-
 // ============================================================================
 // Stream URL Building
 // ============================================================================
@@ -125,7 +123,7 @@ export const MediaHelper = {
      * @returns {number} Volume (0-1)
      */
     getSavedVolume() {
-        const stored = storage.getItem('jellyfin-player-volume');
+        const stored = localStorage.getItem('jellyfin-player-volume');
         return stored ? parseFloat(stored) : 1;
     },
 
@@ -135,7 +133,7 @@ export const MediaHelper = {
      */
     saveVolume(value) {
         if (typeof value === 'number') {
-            storage.setItem('jellyfin-player-volume', value.toString());
+            localStorage.setItem('jellyfin-player-volume', value.toString());
         }
     },
 

@@ -12,7 +12,6 @@
 // ============================================================================
 
 import { debug } from '../utils/debug';
-import { storage } from '../../../src/utils/StorageService.js';
 
 export class DeviceProfile {
     constructor() {
@@ -299,11 +298,11 @@ export class DeviceProfile {
      * @returns {string}
      */
     getDeviceId() {
-        let deviceId = storage.getItem('jellyfin-player-device-id');
+        let deviceId = localStorage.getItem('jellyfin-player-device-id');
 
         if (!deviceId) {
             deviceId = this._generateDeviceId();
-            storage.setItem('jellyfin-player-device-id', deviceId);
+            localStorage.setItem('jellyfin-player-device-id', deviceId);
         }
 
         return deviceId;

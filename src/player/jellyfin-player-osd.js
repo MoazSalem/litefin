@@ -26,6 +26,7 @@
 
 import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { playQueue } from '../core/PlayQueue.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('OSD');
@@ -91,6 +92,8 @@ class PlayerOSD extends Component {
         this._api = options.api || null;
         this._onExit = options.onExit || (() => {});
         this._onReportPause = options.onReportPause || (() => {});
+        this._onPrevious = options.onPrevious || (() => {});
+        this._onNext = options.onNext || (() => {});
 
         // ====================================================================
         // Configuration
@@ -139,6 +142,76 @@ class PlayerOSD extends Component {
     // ========================================================================
     // Component Lifecycle
     // ========================================================================
+
+    /**
+     * Update the displayed item (e.g. when playlist advances)
+     * @param {Object} item - New item metadata
+     */
+    updateItem(item) {
+        this._item = item;
+        const titleEl = this._osdEl.querySelector('#osdTitle');
+        if (titleEl) {
+            titleEl.textContent = item.Name || 'Now Playing';
+        }
+
+        // Update Prev/Next buttons
+        this._updateNavigationButtons();
+
+        // Reset track state for the new item
+        this._currentAudioIndex = 0;
+        this._currentSubtitleIndex = -1;
+        this._currentSecondarySubtitleIndex = -1;
+        this._syncTrackState();
+
+        // Update favorite button for new item
+        this._updateFavoriteButton();
+
+        // Re-cache focusable elements because Prev/Next might have changed tabindex
+        this._cacheFocusableElements();
+    }
+
+    /**
+     * Update the state of Previous and Next buttons based on the queue
+     * @private
+     */
+    _updateNavigationButtons() {
+        const prevBtn = this._osdEl.querySelector('#osdPrevBtn');
+        const nextBtn = this._osdEl.querySelector('#osdNextBtn');
+
+        const hasPrev = playQueue.hasPrevious();
+        const hasNext = playQueue.hasNext();
+
+        if (prevBtn) {
+            prevBtn.classList.toggle('osd-btn-disabled', !hasPrev);
+            prevBtn.setAttribute('tabindex', hasPrev ? '0' : '-1');
+            if (!hasPrev) prevBtn.setAttribute('disabled', '');
+            else prevBtn.removeAttribute('disabled');
+        }
+
+        if (nextBtn) {
+            nextBtn.classList.toggle('osd-btn-disabled', !hasNext);
+            nextBtn.setAttribute('tabindex', hasNext ? '0' : '-1');
+            if (!hasNext) nextBtn.setAttribute('disabled', '');
+            else nextBtn.removeAttribute('disabled');
+        }
+    }
+
+    /**
+     * Public method to hide the OSD and all overlays
+     */
+    hide() {
+        // Close menus
+        if (this._isTrackMenuOpen) {
+            this._closeTrackMenu();
+        }
+        if (this._showSubtitleOffset) {
+            this._toggleSubtitleOffset(false);
+        }
+
+        // Force hide the base element
+        this._osdEl.classList.add('osd-hidden');
+        this._isOsdVisible = false;
+    }
 
     /**
      * Render the OSD HTML into the container.
@@ -298,6 +371,9 @@ class PlayerOSD extends Component {
         // Get display title from the media item
         const title = this._item?.Name || 'Now Playing';
 
+        const hasPrev = playQueue.hasPrevious();
+        const hasNext = playQueue.hasNext();
+
         this._osdEl.innerHTML = `
             <!-- ============================================================ -->
             <!-- TOP HEADER: Back + Title (left), Sync icon + Clock (right)   -->
@@ -323,7 +399,12 @@ class PlayerOSD extends Component {
                 <div class="osd-controls-row">
                     <!-- Left: Playback controls -->
                     <div class="osd-controls-left">
-                        <button class="osd-btn" data-action="previousTrack" tabindex="0" title="Previous">
+                        <button class="osd-btn ${!hasPrev ? 'osd-btn-disabled' : ''}" 
+                                data-action="previousTrack" 
+                                tabindex="${hasPrev ? '0' : '-1'}" 
+                                title="Previous"
+                                ${!hasPrev ? 'disabled' : ''}
+                                id="osdPrevBtn">
                             ${ICONS.skipPrevious}
                         </button>
                         <button class="osd-btn" data-action="rewind" tabindex="0" title="Rewind">
@@ -338,7 +419,12 @@ class PlayerOSD extends Component {
                         <button class="osd-btn" data-action="fastForward" tabindex="0" title="Fast Forward">
                             ${ICONS.fastForward}
                         </button>
-                        <button class="osd-btn" data-action="nextTrack" tabindex="0" title="Next">
+                        <button class="osd-btn ${!hasNext ? 'osd-btn-disabled' : ''}" 
+                                data-action="nextTrack" 
+                                tabindex="${hasNext ? '0' : '-1'}" 
+                                title="Next"
+                                ${!hasNext ? 'disabled' : ''}
+                                id="osdNextBtn">
                             ${ICONS.skipNext}
                         </button>
                         
@@ -753,8 +839,12 @@ class PlayerOSD extends Component {
         this._cachedHeaderRow = headerBackBtn ? [headerBackBtn] : [];
 
         // Controls row — all buttons from left + right groups
-        const controlsLeft = Array.from(this._osdEl.querySelectorAll('.osd-controls-left .osd-btn'));
-        const controlsRight = Array.from(this._osdEl.querySelectorAll('.osd-controls-right .osd-btn'));
+        // FILTER: Only include elements that are actually focusable (tabindex >= 0)
+        const controlsLeft = Array.from(this._osdEl.querySelectorAll('.osd-controls-left .osd-btn'))
+            .filter(btn => btn.getAttribute('tabindex') !== '-1');
+        const controlsRight = Array.from(this._osdEl.querySelectorAll('.osd-controls-right .osd-btn'))
+            .filter(btn => btn.getAttribute('tabindex') !== '-1');
+        
         this._cachedControlsRow = [...controlsLeft, ...controlsRight];
 
         // Seekbar slider
@@ -871,8 +961,11 @@ class PlayerOSD extends Component {
             }
 
             case 'previousTrack':
+                this._onPrevious();
+                break;
+
             case 'nextTrack':
-                // Playlist navigation — not yet implemented
+                this._onNext();
                 break;
 
             // ============================================================
@@ -1177,18 +1270,23 @@ class PlayerOSD extends Component {
     // Track State Sync
     // ========================================================================
 
-    /** Sync initial track indices from the player on startup */
-    _syncTrackState() {
+    /** Sync initial track indices from the player on startup or item switch */
+    syncTracks() {
         if (!this._player) return;
 
         if (this._player.getCurrentAudioStreamIndex) {
             const aIndex = this._player.getCurrentAudioStreamIndex();
-            if (aIndex !== undefined) this._currentAudioIndex = aIndex;
+            if (aIndex !== undefined && aIndex !== null) this._currentAudioIndex = aIndex;
         }
         if (this._player.getCurrentSubtitleStreamIndex) {
             const sIndex = this._player.getCurrentSubtitleStreamIndex();
-            if (sIndex !== undefined) this._currentSubtitleIndex = sIndex;
+            if (sIndex !== undefined && sIndex !== null) this._currentSubtitleIndex = sIndex;
         }
+    }
+
+    /** Sync initial track indices from the player on startup */
+    _syncTrackState() {
+        this.syncTracks();
     }
 
     /** Handle dynamic track changes from the player (e.g. after stream switch) */
