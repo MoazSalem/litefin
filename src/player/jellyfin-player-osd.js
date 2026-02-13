@@ -151,7 +151,7 @@ class PlayerOSD extends Component {
         this._item = item;
         const titleEl = this._osdEl.querySelector('#osdTitle');
         if (titleEl) {
-            titleEl.textContent = item.Name || 'Now Playing';
+            titleEl.textContent = this._getFormattedTitle(item);
         }
 
         // Update Prev/Next buttons
@@ -168,6 +168,58 @@ class PlayerOSD extends Component {
 
         // Re-cache focusable elements because Prev/Next might have changed tabindex
         this._cacheFocusableElements();
+
+        // If OSD is visible, refresh focus to ensure we aren't on a now-disabled button
+        if (this._isOsdVisible) {
+            this._updateFocus();
+        }
+    }
+
+    /**
+     * Get a formatted title string for the OSD
+     * @private
+     * @param {Object} item 
+     * @returns {string}
+     */
+    _getFormattedTitle(item) {
+        if (!item) return 'Now Playing';
+
+        const name = item.Name || '';
+        const year = item.ProductionYear ? ` (${item.ProductionYear})` : '';
+
+        if (item.Type === 'Episode') {
+            const seriesName = item.SeriesName || '';
+            const season = item.ParentIndexNumber !== undefined ? `S${String(item.ParentIndexNumber).padStart(2, '0')}` : '';
+            const episode = item.IndexNumber !== undefined ? `E${String(item.IndexNumber).padStart(2, '0')}` : '';
+            
+            let parts = [];
+            if (seriesName) parts.push(seriesName);
+            
+            let numbering = [];
+            if (season) numbering.push(season);
+            if (episode) numbering.push(episode);
+            
+            if (numbering.length > 0) {
+                parts.push(numbering.join(':'));
+            }
+            
+            if (name) parts.push(name);
+            
+            return parts.join(' - ') + year;
+        }
+
+        return name + year;
+    }
+
+    /**
+     * Find the index of a button by its action in the controls row
+     * @private
+     * @param {string} action 
+     * @returns {number}
+     */
+    _findActionIndex(action) {
+        const { controlsRow } = this._getFocusableElements();
+        return controlsRow.findIndex(btn => btn.dataset.action === action);
     }
 
     /**
@@ -369,7 +421,7 @@ class PlayerOSD extends Component {
      */
     _renderOSD() {
         // Get display title from the media item
-        const title = this._item?.Name || 'Now Playing';
+        const title = this._getFormattedTitle(this._item);
 
         const hasPrev = playQueue.hasPrevious();
         const hasNext = playQueue.hasNext();
@@ -569,7 +621,11 @@ class PlayerOSD extends Component {
             if (wasHidden) {
                 // OSD was hidden — focus play button and toggle play
                 this._currentFocusRow = 1;
-                this._currentFocusIndex = 2;
+                
+                // Dynamically find play button index (handles case where Prev is missing)
+                const playIndex = this._findActionIndex('togglePlay');
+                this._currentFocusIndex = playIndex !== -1 ? playIndex : 2;
+                
                 this._updateFocus();
                 this._executeAction('togglePlay');
             } else {
