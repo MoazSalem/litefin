@@ -166,7 +166,7 @@ class ScrollController {
             }
         };
 
-        // Note: For the very first frame, we don't have a 'time' yet, 
+        // Note: For the very first frame, we don't have a 'time' yet,
         // so we let the animate function initialize it.
         this[animIdKey] = requestAnimationFrame(animate);
     }

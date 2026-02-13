@@ -11,6 +11,8 @@
 // Stream URL Building
 // ============================================================================
 
+import { storage } from '../../utils/StorageService.js';
+
 export const MediaHelper = {
     /**
      * Build stream URL for playback
@@ -52,9 +54,8 @@ export const MediaHelper = {
             url += `&api_key=${encodeURIComponent(authToken)}`;
             url += `&StartTimeTicks=${startPositionTicks || 0}`;
 
-            // Add transcoding parameters
+            // Use pre-built transcoding URL if available from the server
             if (mediaSource.TranscodingUrl) {
-                // Use pre-built transcoding URL if available
                 url = serverUrl + mediaSource.TranscodingUrl;
             }
 
@@ -97,7 +98,7 @@ export const MediaHelper = {
     },
 
     /**
-     * Get subtitle track URL
+     * Get subtitle track URL from the Jellyfin API
      * @param {Object} track - Subtitle track
      * @param {string} serverUrl - Server URL
      * @param {string} itemId - Item ID
@@ -123,7 +124,7 @@ export const MediaHelper = {
      * @returns {number} Volume (0-1)
      */
     getSavedVolume() {
-        const stored = localStorage.getItem('jellyfin-player-volume');
+        const stored = storage.getItem('jellyfin-player-volume');
         return stored ? parseFloat(stored) : 1;
     },
 
@@ -133,7 +134,7 @@ export const MediaHelper = {
      */
     saveVolume(value) {
         if (typeof value === 'number') {
-            localStorage.setItem('jellyfin-player-volume', value.toString());
+            storage.setItem('jellyfin-player-volume', value.toString());
         }
     },
 

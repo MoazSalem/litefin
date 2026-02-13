@@ -8,10 +8,17 @@
  */
 
 // ============================================================================
-// DeviceProfile Class
+// Imports — uses litefin's centralized Logger
 // ============================================================================
 
-import { debug } from '../utils/debug';
+import { logger } from '../../utils/Logger.js';
+import { storage } from '../../utils/StorageService.js';
+
+const log = logger.create('DeviceProfile');
+
+// ============================================================================
+// DeviceProfile Class
+// ============================================================================
 
 export class DeviceProfile {
     constructor() {
@@ -29,8 +36,8 @@ export class DeviceProfile {
         }
 
         this._profile = this._buildProfile();
-        debug.log('[DeviceProfile] Built profile:', JSON.stringify(this._profile, null, 2));
-        debug.log('[DeviceProfile] Is Tizen:', this._isTizen());
+        log.debug('Built profile:', JSON.stringify(this._profile, null, 2));
+        log.debug('Is Tizen:', this._isTizen());
         return this._profile;
     }
 
@@ -50,13 +57,13 @@ export class DeviceProfile {
             SubtitleProfiles: []
         };
 
-        // Add video profiles
+        // Add video profiles based on platform capabilities
         this._addVideoProfiles(profile);
 
-        // Add audio profiles
+        // Add audio profiles based on codec support
         this._addAudioProfiles(profile);
 
-        // Add subtitle profiles
+        // Add subtitle format profiles
         this._addSubtitleProfiles(profile);
 
         return profile;
@@ -72,7 +79,7 @@ export class DeviceProfile {
     }
 
     /**
-     * Get video test element
+     * Get video test element for codec probing
      * @private
      */
     _getVideoTestElement() {
@@ -83,7 +90,7 @@ export class DeviceProfile {
     }
 
     /**
-     * Check if codec is supported
+     * Check if codec is supported via canPlayType
      * @private
      */
     _canPlayType(mimeType) {
@@ -97,7 +104,6 @@ export class DeviceProfile {
      */
     _addVideoProfiles(profile) {
         const isTizen = this._isTizen();
-        const video = this._getVideoTestElement();
 
         // Comprehensive audio codecs for video containers
         // Tizen AVPlay supports many more codecs natively than HTML5 video
@@ -113,6 +119,7 @@ export class DeviceProfile {
         // On Tizen, use native AVPlay capabilities rather than browser detection
         if (isTizen) {
             // Tizen AVPlay supports a wide range of containers and codecs natively
+
             // H.264 in all common containers
             profile.DirectPlayProfiles.push({
                 Container: 'mp4,m4v,mkv,avi,mov,ts,m2ts',
@@ -243,38 +250,18 @@ export class DeviceProfile {
      */
     _addSubtitleProfiles(profile) {
         // External subtitles
-        profile.SubtitleProfiles.push({
-            Format: 'vtt',
-            Method: 'External'
-        });
-
-        profile.SubtitleProfiles.push({
-            Format: 'srt',
-            Method: 'External'
-        });
+        profile.SubtitleProfiles.push({ Format: 'vtt', Method: 'External' });
+        profile.SubtitleProfiles.push({ Format: 'srt', Method: 'External' });
 
         // Embedded subtitles (will be extracted)
-        profile.SubtitleProfiles.push({
-            Format: 'ass',
-            Method: 'External'
-        });
-
-        profile.SubtitleProfiles.push({
-            Format: 'ssa',
-            Method: 'External'
-        });
+        profile.SubtitleProfiles.push({ Format: 'ass', Method: 'External' });
+        profile.SubtitleProfiles.push({ Format: 'ssa', Method: 'External' });
 
         // PGS subtitles (burn-in required on most platforms)
-        profile.SubtitleProfiles.push({
-            Format: 'pgssub',
-            Method: 'Encode'
-        });
+        profile.SubtitleProfiles.push({ Format: 'pgssub', Method: 'Encode' });
 
         // SUP/PGS as external (for custom rendering)
-        profile.SubtitleProfiles.push({
-            Format: 'sub',
-            Method: 'External'
-        });
+        profile.SubtitleProfiles.push({ Format: 'sub', Method: 'External' });
     }
 
     /**
@@ -298,11 +285,11 @@ export class DeviceProfile {
      * @returns {string}
      */
     getDeviceId() {
-        let deviceId = localStorage.getItem('jellyfin-player-device-id');
+        let deviceId = storage.getItem('jellyfin-player-device-id');
 
         if (!deviceId) {
             deviceId = this._generateDeviceId();
-            localStorage.setItem('jellyfin-player-device-id', deviceId);
+            storage.setItem('jellyfin-player-device-id', deviceId);
         }
 
         return deviceId;

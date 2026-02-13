@@ -1,10 +1,10 @@
 /**
  * SubtitleParser - Utilities for parsing text-based subtitles
- * 
+ *
  * Supports WebVTT and SRT formats.
  * Converts raw text into an array of Cue objects: { start, end, text }
  * Start and end times are in seconds.
- * 
+ *
  * @module subtitles/SubtitleParser
  */
 
@@ -19,7 +19,7 @@ export class SubtitleParser {
             return [];
         }
 
-        // Auto-detect format based on content
+        // Auto-detect format based on content header
         const trimmed = content.trim();
         if (trimmed.startsWith('WEBVTT')) {
             return this.parseVTT(content);

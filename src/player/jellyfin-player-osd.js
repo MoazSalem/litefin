@@ -28,6 +28,7 @@ import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { logger } from '../utils/Logger.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('OSD');
 
@@ -200,10 +201,10 @@ class PlayerOSD extends Component {
             const season = item.ParentIndexNumber !== undefined ? `S${String(item.ParentIndexNumber).padStart(2, '0')}` : '';
             const episode = item.IndexNumber !== undefined ? `E${String(item.IndexNumber).padStart(2, '0')}` : '';
             
-            let parts = [];
+            const parts = [];
             if (seriesName) parts.push(seriesName);
             
-            let numbering = [];
+            const numbering = [];
             if (season) numbering.push(season);
             if (episode) numbering.push(episode);
             
@@ -1071,14 +1072,16 @@ class PlayerOSD extends Component {
                 break;
 
             case 'rewind': {
-                const skipBackMs = parseInt(localStorage.getItem('jellyfin-player-skipBackLength')) || this._config.seekStepBack;
+                const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack;
                 this._performDebouncedSeek(-skipBackMs * 10000); // Convert MS to Ticks
+                console.log('rewind');
                 break;
             }
 
             case 'fastForward': {
-                const skipFwdMs = parseInt(localStorage.getItem('jellyfin-player-skipForwardLength')) || this._config.seekStepForward;
+                const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
                 this._performDebouncedSeek(skipFwdMs * 10000); // Convert MS to Ticks
+                console.log('fastForward');
                 break;
             }
 
@@ -2104,7 +2107,7 @@ class PlayerOSD extends Component {
         
         // Find ACTIVE audio stream using loose equality for ID matching
         const audioIndex = this._player.getCurrentAudioStreamIndex();
-        let activeAudioStream = streams.find(s => s.Type?.toLowerCase() === 'audio' && s.Index == audioIndex) 
+        let activeAudioStream = streams.find(s => s.Type?.toLowerCase() === 'audio' && s.Index === audioIndex) 
                              || streams.find(s => s.Type?.toLowerCase() === 'audio');
 
         // FALLBACK: If active stream has no bitrate, try to find any audio stream that DOES have one

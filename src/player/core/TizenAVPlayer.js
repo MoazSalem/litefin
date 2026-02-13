@@ -7,8 +7,10 @@
  * @module core/TizenAVPlayer
  */
 
-import { MediaHelper } from './MediaHelper';
-import { debug } from '../utils/debug';
+import { MediaHelper } from './MediaHelper.js';
+import { logger } from '../../utils/Logger.js';
+
+const log = logger.create('TizenAVPlayer');
 
 // ============================================================================
 // TizenAVPlayer Class
@@ -58,7 +60,7 @@ export class TizenAVPlayer {
         this._avplay = window.tizen?.avplay || window.webapis?.avplay || null;
 
         if (!this._avplay) {
-            debug.warn('[TizenAVPlayer] Tizen AVPlay API not available');
+            log.warn('Tizen AVPlay API not available');
         }
     }
 
@@ -73,9 +75,9 @@ export class TizenAVPlayer {
     _createDisplay() {
         if (!this._avplay) return;
 
-        // Get container dimensions
+        // Get container dimensions for display rect
         const rect = this.container.getBoundingClientRect();
-        debug.log('[TizenAVPlayer] _createDisplay rect:', rect);
+        log.debug('_createDisplay rect:', rect);
 
         try {
             this._avplay.setDisplayRect(
@@ -91,7 +93,7 @@ export class TizenAVPlayer {
             // NOTE: Do NOT call tizen.tvwindow.show() here. That API is for TV tuner/HDMI input,
             // not for AVPlay. Calling it can cause the video plane to render above HTML elements.
         } catch (e) {
-            debug.error('[TizenAVPlayer] Failed to set display:', e);
+            log.error('Failed to set display:', e);
         }
     }
 
@@ -108,7 +110,7 @@ export class TizenAVPlayer {
             throw new Error('Tizen AVPlay not available');
         }
 
-        debug.log('[TizenAVPlayer] Starting playback:', options.url);
+        log.info('Starting playback:', options.url);
 
         this._currentPlayOptions = options;
         this._currentSrc = options.url;
@@ -163,7 +165,7 @@ export class TizenAVPlayer {
 
             this.onEvent({ type: 'playbackstart' });
         } catch (e) {
-            debug.error('[TizenAVPlayer] Playback failed:', e);
+            log.error('Playback failed:', e);
             this.onEvent({ type: 'error', data: { message: e.message } });
             throw e;
         }
@@ -178,13 +180,13 @@ export class TizenAVPlayer {
             try {
                 this._avplay.prepareAsync(
                     () => {
-                        debug.log('[TizenAVPlayer] Media prepared');
+                        log.info('Media prepared');
                         this._isPrepared = true;
                         this._duration = this._avplay.getDuration();
                         resolve();
                     },
                     (error) => {
-                        debug.error('[TizenAVPlayer] Prepare failed:', error);
+                        log.error('Prepare failed:', error);
                         reject(new Error('Failed to prepare media'));
                     }
                 );
@@ -203,14 +205,14 @@ export class TizenAVPlayer {
 
         const listener = {
             onbufferingstart: () => {
-                debug.log('[TizenAVPlayer] Buffering started');
+                log.debug('Buffering started');
                 this.onEvent({ type: 'waiting' });
             },
             onbufferingprogress: (percent) => {
                 // Buffering progress (0-100)
             },
             onbufferingcomplete: () => {
-                debug.log('[TizenAVPlayer] Buffering complete');
+                log.debug('Buffering complete');
                 this.onEvent({ type: 'playing' });
 
                 // Apply pending track selections once buffering is done
@@ -222,15 +224,15 @@ export class TizenAVPlayer {
                 this.onEvent({ type: 'timeupdate', data: { time: time / 1000 } });
             },
             onevent: (eventType, eventData) => {
-                debug.log('[TizenAVPlayer] Event:', eventType, eventData);
+                log.debug('Event:', eventType, eventData);
             },
             onstreamcompleted: () => {
-                debug.log('[TizenAVPlayer] Playback completed');
+                log.info('Playback completed');
                 this._isPlaying = false;
                 this.onEvent({ type: 'ended' });
             },
             onerror: (eventType) => {
-                debug.error('[TizenAVPlayer] Error:', eventType);
+                log.error('Error:', eventType);
                 this.onEvent({ type: 'error', data: { message: eventType } });
             },
             onsubtitlechange: (duration, text, type, attributes) => {
@@ -261,7 +263,7 @@ export class TizenAVPlayer {
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                     this._pendingAudioIndex = null; // Clear pending
                 } catch (e) {
-                    debug.warn('[TizenAVPlayer] Failed to apply audio track:', e);
+                    log.warn('Failed to apply audio track:', e);
                 }
             }
         }
@@ -272,7 +274,7 @@ export class TizenAVPlayer {
                     this._avplay.setSilentSubtitle(true);
                     this._pendingSubtitleIndex = null;
                 } catch (e) {
-                    debug.warn('[TizenAVPlayer] Failed to disable subtitles:', e);
+                    log.warn('Failed to disable subtitles:', e);
                 }
             } else {
                 const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
@@ -283,7 +285,7 @@ export class TizenAVPlayer {
                         this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                         this._pendingSubtitleIndex = null;
                     } catch (e) {
-                        debug.warn('[TizenAVPlayer] Failed to apply subtitle track:', e);
+                        log.warn('Failed to apply subtitle track:', e);
                     }
                 }
             }
@@ -335,33 +337,33 @@ export class TizenAVPlayer {
 
             // We need to map Jellyfin StreamIndex to Tizen's index
             // Strategy: Assume Tizen and Jellyfin see audio tracks in the same order
-            // 1. Find which N-th audio track this is in Jellyfin MediaSource
             if (!this._currentPlayOptions?.mediaSource?.MediaStreams) {
-                debug.warn('[TizenAVPlayer] No MediaStreams info to map audio index');
+                log.warn('No MediaStreams info to map audio index');
                 return null;
             }
 
+            // Find which N-th audio track this is in Jellyfin MediaSource
             const jellyfinAudioStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
                 (s) => s.Type === 'Audio'
             );
             const targetStreamIndexInAudioList = jellyfinAudioStreams.findIndex((s) => s.Index === streamIndex);
 
             if (targetStreamIndexInAudioList === -1) {
-                debug.warn('[TizenAVPlayer] Requested audio stream index not found in MediaSource:', streamIndex);
+                log.warn('Requested audio stream index not found in MediaSource:', streamIndex);
                 return null;
             }
 
-            // 2. Select the N-th available audio track in Tizen
+            // Select the N-th available audio track in Tizen
             if (audioTracks[targetStreamIndexInAudioList]) {
                 const tizenIndex = audioTracks[targetStreamIndexInAudioList].index;
-                debug.log(`[TizenAVPlayer] Mapped Jellyfin Audio ${streamIndex} to Tizen index ${tizenIndex}`);
+                log.debug(`Mapped Jellyfin Audio ${streamIndex} to Tizen index ${tizenIndex}`);
                 return parseInt(tizenIndex, 10);
             }
 
-            debug.warn('[TizenAVPlayer] Could not map audio stream index (out of bounds)');
+            log.warn('Could not map audio stream index (out of bounds)');
             return null;
         } catch (e) {
-            debug.error('[TizenAVPlayer] Error mapping audio index:', e);
+            log.error('Error mapping audio index:', e);
             return null;
         }
     }
@@ -381,31 +383,31 @@ export class TizenAVPlayer {
                 return null;
             }
 
+            // Only internal (embedded) subtitles are managed by Tizen,
+            // external subtitles are handled separately by the player
             const jellyfinSubStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
                 (s) => s.Type === 'Subtitle' && !s.IsExternal
             );
-            // Note: External subtitles are handled separately by player, we only care about internal ones here for Tizen native switch
-            // But verify if Tizen lists external ones too? For now assume internal.
 
             const targetStreamIndexInSubList = jellyfinSubStreams.findIndex((s) => s.Index === streamIndex);
 
             if (targetStreamIndexInSubList === -1) {
                 // Might be external or not found
-                debug.warn('[TizenAVPlayer] Requested subtitle stream not found in internal list:', streamIndex);
+                log.warn('Requested subtitle stream not found in internal list:', streamIndex);
                 return null;
             }
 
             if (textTracks[targetStreamIndexInSubList]) {
                 const tizenIndex = textTracks[targetStreamIndexInSubList].index;
-                debug.log(
-                    `[TizenAVPlayer] Mapped Jellyfin Subtitle ${streamIndex} (Nth: ${targetStreamIndexInSubList}) to Tizen index ${tizenIndex}`
+                log.debug(
+                    `Mapped Jellyfin Subtitle ${streamIndex} (Nth: ${targetStreamIndexInSubList}) to Tizen index ${tizenIndex}`
                 );
                 return parseInt(tizenIndex, 10);
             }
 
             return null;
         } catch (e) {
-            debug.error('[TizenAVPlayer] Error mapping subtitle index:', e);
+            log.error('Error mapping subtitle index:', e);
             return null;
         }
     }
@@ -420,7 +422,7 @@ export class TizenAVPlayer {
                 this._isPlaying = false;
                 this.onEvent({ type: 'pause' });
             } catch (e) {
-                debug.error('[TizenAVPlayer] Pause failed:', e);
+                log.error('Pause failed:', e);
             }
         }
     }
@@ -435,7 +437,7 @@ export class TizenAVPlayer {
                 this._isPlaying = true;
                 this.onEvent({ type: 'play' });
             } catch (e) {
-                debug.error('[TizenAVPlayer] Resume failed:', e);
+                log.error('Resume failed:', e);
             }
         }
     }
@@ -484,7 +486,7 @@ export class TizenAVPlayer {
             const positionMs = positionTicks / 10000;
             this._avplay.seekTo(positionMs);
         } catch (e) {
-            debug.error('[TizenAVPlayer] Seek failed:', e);
+            log.error('Seek failed:', e);
         }
     }
 
@@ -551,11 +553,11 @@ export class TizenAVPlayer {
      */
     setAudioStreamIndex(index) {
         if (!this._avplay) {
-            debug.error('[TizenAVPlayer] No avplay instance');
+            log.error('No avplay instance');
             return;
         }
         if (!this._isPrepared) {
-            debug.error('[TizenAVPlayer] Player not prepared');
+            log.error('Player not prepared');
             return;
         }
 
@@ -568,10 +570,10 @@ export class TizenAVPlayer {
                 this._avplay.setSelectTrack('AUDIO', track.index);
                 this._currentAudioStreamIndex = index; // Update state
             } else {
-                debug.error('[TizenAVPlayer] Invalid audio index:', index, 'max:', audioTracks.length - 1);
+                log.error('Invalid audio index:', index, 'max:', audioTracks.length - 1);
             }
         } catch (e) {
-            debug.error('[TizenAVPlayer] Set audio track failed:', e);
+            log.error('Set audio track failed:', e);
         }
     }
 
@@ -602,7 +604,7 @@ export class TizenAVPlayer {
             this._subtitleOffset = 0;
             this._applySubtitlePosition();
         } catch (e) {
-            debug.error('[TizenAVPlayer] Set subtitle track failed:', e);
+            log.error('Set subtitle track failed:', e);
         }
     }
 
@@ -630,10 +632,10 @@ export class TizenAVPlayer {
             // Convert seconds to milliseconds for AVPlay API
             const offsetMs = Math.round(this._subtitleOffset * 1000);
             this._avplay.setSubtitlePosition(offsetMs);
-            debug.log(`[TizenAVPlayer] Subtitle offset applied: ${this._subtitleOffset}s (${offsetMs}ms)`);
+            log.debug(`Subtitle offset applied: ${this._subtitleOffset}s (${offsetMs}ms)`);
         } catch (e) {
             // setSubtitlePosition may fail if not in PLAYING/PAUSED state
-            debug.warn('[TizenAVPlayer] Failed to apply subtitle offset:', e);
+            log.warn('Failed to apply subtitle offset:', e);
         }
     }
 
@@ -727,6 +729,7 @@ export class TizenAVPlayer {
         this._currentSrc = null;
         this._currentPlayOptions = null;
     }
+
     /**
      * Get current audio stream index
      * @returns {number|null}

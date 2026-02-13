@@ -21,6 +21,7 @@ import { state } from '../core/StateManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
 import PlayerOSD from '../player/jellyfin-player-osd.js';
+import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { logger } from '../utils/Logger.js';
@@ -333,33 +334,15 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Initialize the Jellyfin Player instance
+     * Initialize the Jellyfin Player instance.
+     * Directly imports JellyfinPlayer as an ES module — no UMD bundle or
+     * window global required.
      */
     async _initPlayer() {
-        // Debug: Log the state of window.JellyfinPlayer
         log.info('_initPlayer called');
-        log.debug('window.JellyfinPlayer exists:', !!window.JellyfinPlayer);
-        log.debug('window.JellyfinPlayer.default exists:', !!window.JellyfinPlayer?.default);
-        log.debug('window.JellyfinPlayer type:', typeof window.JellyfinPlayer);
-        if (window.JellyfinPlayer) {
-            log.debug('window.JellyfinPlayer.init exists:', typeof window.JellyfinPlayer.init);
-            log.debug('window.JellyfinPlayer keys:', Object.keys(window.JellyfinPlayer).join(', '));
-        }
 
-        // Check if JellyfinPlayer is available (loaded from jellyfin-player.min.js)
-        // Handle UMD bundle potentially having .default
-        const playerLib = window.JellyfinPlayer?.default || window.JellyfinPlayer;
-
-        if (!playerLib || typeof playerLib.init !== 'function') {
-            log.error('playerLib validation failed:', {
-                playerLib: !!playerLib,
-                initType: typeof playerLib?.init
-            });
-            throw new Error('JellyfinPlayer library not loaded correctly');
-        }
-
-        log.info('Calling playerLib.init...');
-        this._player = playerLib.init({
+        // Construct the player directly — no bridge, no window global
+        this._player = new JellyfinPlayer({
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,

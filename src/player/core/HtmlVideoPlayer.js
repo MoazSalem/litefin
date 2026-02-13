@@ -9,10 +9,10 @@
 
 import Hls from 'hls.js';
 import Screenfull from 'screenfull';
-import DOMPurify from 'dompurify';
+import { MediaHelper } from './MediaHelper.js';
+import { logger } from '../../utils/Logger.js';
 
-import { MediaHelper } from './MediaHelper';
-import { debug } from '../utils/debug';
+const log = logger.create('HtmlVideoPlayer');
 
 // ============================================================================
 // Constants
@@ -144,7 +144,7 @@ export class HtmlVideoPlayer {
      * @param {Object} options - Play options from JellyfinPlayer
      */
     async play(options) {
-        debug.log('[HtmlVideoPlayer] Starting playback:', options.url);
+        log.info('Starting playback:', options.url);
 
         this._currentPlayOptions = options;
         this._started = false;
@@ -216,7 +216,7 @@ export class HtmlVideoPlayer {
      */
     _playWithHlsJs(video, options) {
         return new Promise((resolve, reject) => {
-            debug.log('[HtmlVideoPlayer] Using HLS.js for playback');
+            log.info('Using HLS.js for playback');
 
             const hls = new Hls({
                 startPosition: (options.playerStartPositionTicks || 0) / 10000000,
@@ -229,18 +229,13 @@ export class HtmlVideoPlayer {
 
             // HLS.js events
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
-                debug.log('[HtmlVideoPlayer] HLS manifest parsed');
+                log.info('HLS manifest parsed');
 
                 // Apply saved tracks
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
-                    // HLS.js audio tracks are 0-indexed based on manifest
-                    // Jellyfin's stream index matches these usually
-                    // Note: HLS.js uses 'audioTrack' property
-                    // We might need to map stream index to HLS track index if they differ
-                    // For now, assuming direct mapping or we iterate to find match
                     if (options.audioStreamIndex < hls.audioTracks.length) {
                         hls.audioTrack = options.audioStreamIndex;
-                        debug.log('[HtmlVideoPlayer] Set HLS audio track:', options.audioStreamIndex);
+                        log.debug('Set HLS audio track:', options.audioStreamIndex);
                     }
                 }
 
@@ -250,7 +245,7 @@ export class HtmlVideoPlayer {
                         hls.subtitleTrack = -1; // Disabled
                     } else if (options.subtitleStreamIndex < hls.subtitleTracks.length) {
                         hls.subtitleTrack = options.subtitleStreamIndex;
-                        debug.log('[HtmlVideoPlayer] Set HLS subtitle track:', options.subtitleStreamIndex);
+                        log.debug('Set HLS subtitle track:', options.subtitleStreamIndex);
                     }
                 }
 
@@ -258,20 +253,20 @@ export class HtmlVideoPlayer {
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
-                debug.error('[HtmlVideoPlayer] HLS error:', data);
+                log.error('HLS error:', data);
 
                 if (data.fatal) {
                     switch (data.type) {
                         case Hls.ErrorTypes.NETWORK_ERROR:
-                            debug.log('[HtmlVideoPlayer] Attempting to recover from network error');
+                            log.info('Attempting to recover from network error');
                             hls.startLoad();
                             break;
                         case Hls.ErrorTypes.MEDIA_ERROR:
-                            debug.log('[HtmlVideoPlayer] Attempting to recover from media error');
+                            log.info('Attempting to recover from media error');
                             hls.recoverMediaError();
                             break;
                         default:
-                            debug.error('[HtmlVideoPlayer] Fatal HLS error, cannot recover');
+                            log.error('Fatal HLS error, cannot recover');
                             hls.destroy();
                             reject(new Error('HLS playback failed'));
                             break;
@@ -280,7 +275,7 @@ export class HtmlVideoPlayer {
             });
 
             // Load source
-            debug.log('[HtmlVideoPlayer] HLS Loading source:', options.url);
+            log.debug('HLS Loading source:', options.url);
             hls.loadSource(options.url);
             hls.attachMedia(video);
 
@@ -289,7 +284,7 @@ export class HtmlVideoPlayer {
             // Failsafe timeout
             setTimeout(() => {
                 if (!this._started && !this._videoElement?.paused) {
-                    debug.warn('[HtmlVideoPlayer] No playback start detected after 10s');
+                    log.warn('No playback start detected after 10s');
                 }
             }, 10000);
         });
@@ -300,7 +295,7 @@ export class HtmlVideoPlayer {
      * @private
      */
     async _playNative(video, options) {
-        debug.log('[HtmlVideoPlayer] Using native playback');
+        log.info('Using native playback');
 
         // Set cross-origin if needed
         const crossOrigin = MediaHelper.getCrossOriginValue(options.mediaSource);
@@ -479,7 +474,7 @@ export class HtmlVideoPlayer {
 
         const video = this._videoElement;
         if (!video || !video.textTracks) {
-            debug.log(`[HtmlVideoPlayer] Subtitle offset stored: ${seconds}s (no video/tracks)`);
+            log.debug(`Subtitle offset stored: ${seconds}s (no video/tracks)`);
             return;
         }
 
@@ -502,7 +497,7 @@ export class HtmlVideoPlayer {
 
         // Update the tracked offset for next delta calculation
         this._previousOffset = seconds;
-        debug.log(`[HtmlVideoPlayer] Subtitle offset applied: ${seconds}s (delta: ${delta}s)`);
+        log.debug(`Subtitle offset applied: ${seconds}s (delta: ${delta}s)`);
     }
 
     // ========================================================================
@@ -586,7 +581,7 @@ export class HtmlVideoPlayer {
 
     /** @private */
     _onEnded() {
-        debug.log('[HtmlVideoPlayer] Playback ended');
+        log.info('Playback ended');
         this.onEvent({ type: 'ended' });
     }
 
@@ -597,18 +592,18 @@ export class HtmlVideoPlayer {
         // Ignore errors if we don't have a source and no HLS player is active.
         // This commonly happens during stop/cleanup when src is removed.
         if (!video.src && !this._hlsPlayer) {
-            debug.log('[HtmlVideoPlayer] Ignoring error event on empty source during cleanup');
+            log.debug('Ignoring error event on empty source during cleanup');
             return;
         }
 
         const errorCode = video.error?.code || 0;
         const errorMessage = video.error?.message || 'Unknown error';
 
-        debug.error(`[HtmlVideoPlayer] Error ${errorCode}: ${errorMessage}`);
+        log.error(`Error ${errorCode}: ${errorMessage}`);
 
         // Try HLS.js recovery for decode errors
         if (errorCode === 3 && this._hlsPlayer) {
-            debug.log('[HtmlVideoPlayer] Attempting HLS.js media error recovery');
+            log.info('Attempting HLS.js media error recovery');
             this._hlsPlayer.recoverMediaError();
             return;
         }
@@ -630,7 +625,7 @@ export class HtmlVideoPlayer {
     _onPlaying() {
         if (!this._started) {
             this._started = true;
-            debug.log('[HtmlVideoPlayer] Playback started');
+            log.info('Playback started');
             this.onEvent({ type: 'playbackstart' });
         }
         this.onEvent({ type: 'playing' });
@@ -651,7 +646,7 @@ export class HtmlVideoPlayer {
 
     /** @private */
     _onLoadedMetadata() {
-        debug.log('[HtmlVideoPlayer] Metadata loaded');
+        log.debug('Metadata loaded');
         this.onEvent({ type: 'loadedmetadata', data: { duration: this.getDuration() } });
     }
 
@@ -668,7 +663,7 @@ export class HtmlVideoPlayer {
             try {
                 this._hlsPlayer.destroy();
             } catch (e) {
-                debug.error('[HtmlVideoPlayer] Error destroying HLS player:', e);
+                log.error('Error destroying HLS player:', e);
             }
             this._hlsPlayer = null;
         }

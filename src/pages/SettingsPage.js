@@ -615,7 +615,7 @@ class SettingsPage extends Page {
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
                             'subtitle-shadow-opacity',
-                            PlayerSettings.get('subtitleDropShadowOpacity') ?? 50,
+                            PlayerSettings.get('subtitleDropShadowOpacity') ?? 100,
                             0,
                             100,
                             5
@@ -631,7 +631,7 @@ class SettingsPage extends Page {
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
                             'subtitle-shadow-blur',
-                            PlayerSettings.get('subtitleDropShadowBlur') ?? 10,
+                            PlayerSettings.get('subtitleDropShadowBlur') ?? 4,
                             0,
                             20,
                             1

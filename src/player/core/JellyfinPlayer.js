@@ -4,16 +4,104 @@
  * Manages video playback using either HtmlVideoPlayer or TizenAVPlayer backend.
  * Handles media source selection, track switching, and playback state.
  *
+ * Integrated directly into litefin — no UMD bundle, no bridge, no standalone
+ * settings manager. Uses litefin's Logger and PlayerSettings.
+ *
  * @module core/JellyfinPlayer
  */
 
-import { HtmlVideoPlayer } from './HtmlVideoPlayer';
-import { TizenAVPlayer } from './TizenAVPlayer';
-import { MediaHelper } from './MediaHelper';
-import { DeviceProfile } from './DeviceProfile';
-import { EventEmitter } from '../bridge/EventEmitter';
-import { SubtitleParser } from '../subtitles/SubtitleParser';
-import { debug } from '../utils/debug';
+import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
+import { TizenAVPlayer } from './TizenAVPlayer.js';
+import { MediaHelper } from './MediaHelper.js';
+import { DeviceProfile } from './DeviceProfile.js';
+import { SubtitleParser } from './SubtitleParser.js';
+import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
+
+const log = logger.create('JellyfinPlayer');
+
+// ============================================================================
+// Minimal EventEmitter (inlined from player/src/bridge/EventEmitter.js)
+// Only the on/off/once/emit/removeAllListeners subset — no postMessage stuff.
+// ============================================================================
+
+class EventEmitter {
+    constructor() {
+        this._listeners = {};
+    }
+
+    /**
+     * Register a listener for an event
+     * @param {string} event - Event name
+     * @param {Function} callback - Callback function
+     * @returns {this}
+     */
+    on(event, callback) {
+        if (!this._listeners[event]) {
+            this._listeners[event] = [];
+        }
+        this._listeners[event].push(callback);
+        return this;
+    }
+
+    /**
+     * Register a one-time listener
+     * @param {string} event - Event name
+     * @param {Function} callback - Callback function
+     * @returns {this}
+     */
+    once(event, callback) {
+        const wrapper = (...args) => {
+            this.off(event, wrapper);
+            callback.apply(this, args);
+        };
+        wrapper._original = callback;
+        return this.on(event, wrapper);
+    }
+
+    /**
+     * Remove a listener
+     * @param {string} event - Event name
+     * @param {Function} callback - Callback function
+     * @returns {this}
+     */
+    off(event, callback) {
+        if (!this._listeners[event]) return this;
+        this._listeners[event] = this._listeners[event].filter(
+            (fn) => fn !== callback && fn._original !== callback
+        );
+        return this;
+    }
+
+    /**
+     * Emit an event to all registered listeners
+     * @param {string} event - Event name
+     * @param {...*} args - Arguments to pass to listeners
+     * @returns {this}
+     */
+    emit(event, ...args) {
+        const listeners = this._listeners[event];
+        if (listeners) {
+            // Iterate a copy so listeners can safely remove themselves
+            [...listeners].forEach((fn) => fn.apply(this, args));
+        }
+        return this;
+    }
+
+    /**
+     * Remove all listeners, optionally for a specific event
+     * @param {string} [event] - Event name (omit to clear all)
+     * @returns {this}
+     */
+    removeAllListeners(event) {
+        if (event) {
+            delete this._listeners[event];
+        } else {
+            this._listeners = {};
+        }
+        return this;
+    }
+}
 
 // ============================================================================
 // Player Events
@@ -41,7 +129,6 @@ export class JellyfinPlayer extends EventEmitter {
     /**
      * @param {Object} options - Player options
      * @param {HTMLElement} options.container - Container element for the player
-     * @param {SettingsManager} options.settings - Settings manager instance
      * @param {string} options.serverUrl - Jellyfin server URL
      * @param {string} options.authToken - Authentication token
      * @param {boolean} [options.useTizenPlayer=false] - Use Tizen native player
@@ -54,7 +141,6 @@ export class JellyfinPlayer extends EventEmitter {
         // ====================================================================
 
         this.container = options.container;
-        this.settings = options.settings;
         this.serverUrl = options.serverUrl;
         this.authToken = options.authToken;
         this.useTizenPlayer = options.useTizenPlayer || false;
@@ -93,34 +179,29 @@ export class JellyfinPlayer extends EventEmitter {
      * Initialize the player backend based on platform
      * @private
      */
-    /**
-     * Initialize the player backend based on platform
-     * @private
-     */
     _initBackend() {
         // Check for Tizen AVPlay API (can be on tizen or webapis namespace)
-        // We prioritize explicit configuration but fallback to detection if set to 'auto'
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
 
-        debug.log(
-            '[JellyfinPlayer] Initializing backend. useTizenPlayer:',
+        log.info(
+            'Initializing backend. useTizenPlayer:',
             this.useTizenPlayer,
             'detected:',
             hasAvPlay
         );
 
         if (this.useTizenPlayer && hasAvPlay) {
-            debug.log('[JellyfinPlayer] Using Tizen AVPlay backend');
+            log.info('Using Tizen AVPlay backend');
             this._backend = new TizenAVPlayer({
                 container: this.container,
-                settings: this.settings,
+                settings: PlayerSettings,
                 onEvent: this._handleBackendEvent.bind(this)
             });
         } else {
-            debug.log('[JellyfinPlayer] Using HTML5 Video backend');
+            log.info('Using HTML5 Video backend');
             this._backend = new HtmlVideoPlayer({
                 container: this.container,
-                settings: this.settings,
+                settings: PlayerSettings,
                 onEvent: this._handleBackendEvent.bind(this)
             });
         }
@@ -156,7 +237,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Promise<void>}
      */
     async play(options) {
-        debug.log('[JellyfinPlayer] Play requested:', options);
+        log.info('Play requested:', options);
 
         // Update server URL/Auth if provided in play options
         if (options.serverUrl) this.serverUrl = options.serverUrl;
@@ -165,13 +246,14 @@ export class JellyfinPlayer extends EventEmitter {
         this._currentPlayOptions = options;
 
         try {
-            debug.log(`[JellyfinPlayer] Requesting PlaybackInfo from ${this.serverUrl}...`);
+            log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
+
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options);
-            debug.log('[JellyfinPlayer] PlaybackInfo received:', playbackInfo);
+            log.debug('PlaybackInfo received:', playbackInfo);
 
             if (!playbackInfo || !playbackInfo.MediaSources?.length) {
-                debug.error('[JellyfinPlayer] No media sources in PlaybackInfo');
+                log.error('No media sources in PlaybackInfo');
                 throw new Error('No media sources available');
             }
 
@@ -181,10 +263,11 @@ export class JellyfinPlayer extends EventEmitter {
                 : playbackInfo.MediaSources[0];
 
             if (!mediaSource) {
-                debug.error('[JellyfinPlayer] Media source selection failed');
+                log.error('Media source selection failed');
                 throw new Error('Media source not found');
             }
 
+            // Attach play session ID to media source
             if (playbackInfo.PlaySessionId) {
                 mediaSource.PlaySessionId = playbackInfo.PlaySessionId;
             }
@@ -203,6 +286,7 @@ export class JellyfinPlayer extends EventEmitter {
                     mediaSource.MediaStreams.find((s) => s.Type === 'Audio');
                 if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
             }
+
             // If not provided, subtitles default to -1 (off) or forced
             if (this._currentSubtitleStreamIndex === undefined && mediaSource.MediaStreams) {
                 const subStream = mediaSource.MediaStreams.find(
@@ -223,10 +307,10 @@ export class JellyfinPlayer extends EventEmitter {
                 deviceProfile: this._deviceProfile.getProfile()
             });
 
-            debug.log('[JellyfinPlayer] Stream Info built:', streamInfo);
+            log.debug('Stream Info built:', streamInfo);
 
             // Start playback on backend
-            debug.log('[JellyfinPlayer] Initializing backend playback...');
+            log.info('Initializing backend playback...');
             await this._backend.play({
                 ...streamInfo,
                 item: this._currentItem,
@@ -235,7 +319,7 @@ export class JellyfinPlayer extends EventEmitter {
                 audioStreamIndex: options.audioStreamIndex,
                 subtitleStreamIndex: options.subtitleStreamIndex
             });
-            debug.log('[JellyfinPlayer] Backend play() promise resolved');
+            log.info('Backend play() promise resolved');
 
             this._isPlaying = true;
             this._isPaused = false;
@@ -245,7 +329,7 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSource
             });
         } catch (error) {
-            debug.error('[JellyfinPlayer] Playback error caught:', error);
+            log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
             throw error;
         }
@@ -374,10 +458,10 @@ export class JellyfinPlayer extends EventEmitter {
             const tracks = this.getAudioTracks();
             const listIndex = tracks.findIndex((t) => t.Index === index);
             if (listIndex !== -1) {
-                debug.log('[JellyfinPlayer] Converting StreamID', index, 'to Tizen Index', listIndex);
+                log.debug('Converting StreamID', index, 'to Tizen Index', listIndex);
                 this._backend.setAudioStreamIndex(listIndex);
             } else {
-                debug.warn('[JellyfinPlayer] StreamID', index, 'not found in audio tracks');
+                log.warn('StreamID', index, 'not found in audio tracks');
             }
         } else {
             this._backend?.setAudioStreamIndex(index);
@@ -400,11 +484,9 @@ export class JellyfinPlayer extends EventEmitter {
                 const tracks = this.getSubtitleTracks();
                 const listIndex = tracks.findIndex((t) => t.Index === index);
                 if (listIndex !== -1) {
-                    // Tizen Index usually matches filtered list index?
-                    // TizenAVPlayer implementation expects index into "TEXT" tracks.
                     this._backend.setSubtitleStreamIndex(listIndex);
                 } else {
-                    debug.warn('[JellyfinPlayer] Subtitle StreamID', index, 'not found');
+                    log.warn('Subtitle StreamID', index, 'not found');
                 }
             }
         } else {
@@ -449,7 +531,7 @@ export class JellyfinPlayer extends EventEmitter {
     async setSecondarySubtitleStreamIndex(index) {
         if (this._currentSecondarySubtitleStreamIndex === index) return;
 
-        debug.log('[JellyfinPlayer] Setting secondary subtitle index:', index);
+        log.info('Setting secondary subtitle index:', index);
         this._currentSecondarySubtitleStreamIndex = index;
         this._secondaryCues = [];
         this._lastSecondaryCue = null;
@@ -478,7 +560,7 @@ export class JellyfinPlayer extends EventEmitter {
      */
     async _fetchAndParseSecondarySubtitle(streamIndex) {
         if (!this._currentMediaSource || !this._currentItem) {
-            debug.warn('[JellyfinPlayer] Cannot fetch secondary subtitle - no media source');
+            log.warn('Cannot fetch secondary subtitle - no media source');
             return;
         }
 
@@ -486,7 +568,7 @@ export class JellyfinPlayer extends EventEmitter {
         const tracks = this.getSubtitleTracks();
         const track = tracks.find((t) => t.Index === streamIndex);
         if (!track) {
-            debug.warn('[JellyfinPlayer] Secondary subtitle track not found:', streamIndex);
+            log.warn('Secondary subtitle track not found:', streamIndex);
             return;
         }
 
@@ -500,15 +582,15 @@ export class JellyfinPlayer extends EventEmitter {
                 'vtt'
             );
 
-            debug.log('[JellyfinPlayer] Fetching secondary subtitle:', url);
+            log.debug('Fetching secondary subtitle:', url);
             const response = await fetch(url);
             if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
 
             const text = await response.text();
             this._secondaryCues = SubtitleParser.parse(text);
-            debug.log(`[JellyfinPlayer] Parsed ${this._secondaryCues.length} secondary subtitle cues`);
+            log.info(`Parsed ${this._secondaryCues.length} secondary subtitle cues`);
         } catch (err) {
-            debug.error('[JellyfinPlayer] Failed to load secondary subtitle:', err);
+            log.error('Failed to load secondary subtitle:', err);
             this._secondaryCues = [];
         }
     }
@@ -661,6 +743,9 @@ export class JellyfinPlayer extends EventEmitter {
     async _getPlaybackInfo(options) {
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
 
+        // Read max bitrate from litefin's PlayerSettings
+        const maxBitrate = PlayerSettings.get('maxBitrateInternet') || 120000000;
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
@@ -670,7 +755,7 @@ export class JellyfinPlayer extends EventEmitter {
             body: JSON.stringify({
                 DeviceProfile: this._deviceProfile.getProfile(),
                 UserId: options.userId,
-                MaxStreamingBitrate: this.settings.getMaxBitrate(),
+                MaxStreamingBitrate: maxBitrate,
                 StartTimeTicks: options.startPositionTicks || 0,
                 AudioStreamIndex: options.audioStreamIndex,
                 SubtitleStreamIndex: options.subtitleStreamIndex,

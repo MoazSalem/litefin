@@ -5,8 +5,7 @@
     "main": "src/index.js",
     "type": "module",
     "scripts": {
-        "build:player": "cd player && npm run build",
-        "build": "npm run build:player && webpack --config webpack.config.cjs",
+        "build": "webpack --config webpack.config.cjs",
         "build:es6": "webpack --config webpack.config.cjs --config-name es6",
         "build:normal": "webpack --config webpack.config.cjs --config-name normal",
         "build:legacy": "webpack --config webpack.config.cjs --config-name legacy",
@@ -16,10 +15,10 @@
         "format": "prettier --write src/",
         "format:check": "prettier --check src/",
         "clean": "rimraf dist/ *.wgt",
-        "package": "npm run build:player && gulp buildPackage",
-        "package:es6": "npm run build:player && gulp buildPackageES6",
-        "package:normal": "npm run build:player && gulp buildPackageNormal",
-        "package:legacy": "npm run build:player && gulp buildPackageLegacy"
+        "package": "gulp buildPackage",
+        "package:es6": "gulp buildPackageES6",
+        "package:normal": "gulp buildPackageNormal",
+        "package:legacy": "gulp buildPackageLegacy"
     },
     "keywords": [
         "jellyfin",
@@ -50,5 +49,9 @@
         "rimraf": "^5.0.5",
         "webpack": "^5.88.2",
         "webpack-cli": "^5.1.4"
+    },
+    "dependencies": {
+        "hls.js": "^1.6.15",
+        "screenfull": "^6.0.2"
     }
 }

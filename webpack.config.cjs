@@ -43,8 +43,7 @@ function getPlugins() {
             patterns: [
                 { from: 'config.xml', to: 'config.xml' }, // Copy root config.xml
                 { from: 'icon.png', to: 'icon.png' },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
-                { from: 'src/player', to: 'player', noErrorOnMissing: true }
+                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
             ]
         }),
         new webpack.DefinePlugin({
@@ -113,7 +112,7 @@ const normalConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules/,
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -167,7 +166,7 @@ const legacyConfig = {
         rules: [
             {
                 test: /\.js$/,
-                exclude: /node_modules/,
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {

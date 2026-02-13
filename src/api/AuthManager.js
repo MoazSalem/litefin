@@ -263,7 +263,7 @@ class AuthManager {
      */
     async login(username, password = '') {
         log.info(`Logging in as "${username}"`);
-        
+
         // Capture existing memory state to restore on failure
         const prevToken = api.accessToken;
         const prevUserId = api.userId;
@@ -323,15 +323,15 @@ class AuthManager {
             return result;
         } catch (error) {
             log.error('Login request failed:', error);
-            
-            // 4. FAILURE - Restore previous in-memory credentials 
-            // This prevents the app from being "half-logged out" if the failure 
+
+            // 4. FAILURE - Restore previous in-memory credentials
+            // This prevents the app from being "half-logged out" if the failure
             // was just a wrong password or temporary network glitch.
             if (prevToken && prevUserId) {
                 log.info('Restoring previous in-memory credentials after failed login attempt');
                 api.setAuth(prevToken, prevUserId);
             }
-            
+
             throw error;
         }
     }

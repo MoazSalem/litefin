@@ -41,6 +41,8 @@ class Logger {
 
     _loadSettings() {
         try {
+            // NOTE: We use localStorage directly here because Logger initializes BEFORE StorageService.
+            // Using StorageService here would cause a circular dependency.
             this._enabled = localStorage.getItem('debug_logs_enabled') === 'true';
             this._level = this._enabled ? LogLevel.DEBUG : LogLevel.INFO;
 
