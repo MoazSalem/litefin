@@ -41,7 +41,7 @@
     z-index: 100;
     pointer-events: none;
     opacity: 1;
-    transition: opacity 0.2s ease-out;
+    transition: opacity 0.3s ease;
     color: var(--osd-text-color);
     user-select: none;
     font-weight: bold;
@@ -53,8 +53,41 @@
     -webkit-focus-ring-color: transparent;
 }
 
-.player-osd.osd-hidden {
+/* New: Main OSD wrapper for header/bottom */
+.osd-main {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    opacity: 1;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    pointer-events: none;
+    z-index: 10;
+}
+
+.osd-main.osd-hidden {
     opacity: 0;
+    pointer-events: none;
+}
+
+.osd-main > * {
+    pointer-events: all;
+}
+
+/* Container for persistent widgets (Skip buttons, offsets, etc) */
+.osd-overlays {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    pointer-events: none;
+    z-index: 1000;
+}
+
+.osd-overlays > * {
+    pointer-events: all;
 }
 
 .player-osd>* {
@@ -551,6 +584,16 @@
     opacity: 1;
 }
 
+.track-option-icon {
+    width: 28.8px;
+    /* 24px * 1.2 */
+    margin-right: 0.96em;
+    /* 0.8em * 1.2 */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .track-option-label {
     flex: 1;
 }
@@ -595,7 +638,7 @@
 /* Main overlay container — hidden by default */
 #osdOffsetOverlay {
     position: fixed;
-    top: 20px;
+    top: 100px;
     left: 50%;
     -webkit-transform: translateX(-50%);
     transform: translateX(-50%);

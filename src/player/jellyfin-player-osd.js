@@ -131,6 +131,11 @@ class PlayerOSD extends Component {
         this._currentSecondarySubtitleIndex = -1;
         this._currentAudioIndex = 0;
         this._trackMenuSubtitleMode = 'primary';
+
+        // Settings menu state
+        this._settingsMenuOverlay = null;
+        this._isSettingsMenuOpen = false;
+        this._settingsMenuFocusIndex = 0;
         
         // ====================================================================
         // Subtitle Offset State
@@ -350,6 +355,12 @@ class PlayerOSD extends Component {
             this._trackMenuOverlay = null;
         }
 
+        // Remove settings menu overlay from DOM
+        if (this._settingsMenuOverlay) {
+            this._settingsMenuOverlay.remove();
+            this._settingsMenuOverlay = null;
+        }
+
         // Pop focus trap if still active
         // (Component.destroy will unsubscribe EventBus listeners automatically)
 
@@ -367,18 +378,19 @@ class PlayerOSD extends Component {
     // ========================================================================
 
     /**
-     * Check if the track selection menu is currently open
+     * Check if any modal menu is currently open
      * @returns {boolean}
      */
     isMenuOpen() {
-        return this._isTrackMenuOpen;
+        return this._isTrackMenuOpen || this._isSettingsMenuOpen;
     }
 
     /**
-     * Close the track selection menu
+     * Close any open modal menu
      */
     closeMenu() {
-        this._closeTrackMenu();
+        if (this._isTrackMenuOpen) this._closeTrackMenu();
+        if (this._isSettingsMenuOpen) this._closeSettingsMenu();
     }
 
     /**
@@ -387,13 +399,18 @@ class PlayerOSD extends Component {
      * @returns {boolean}
      */
     handleBack() {
-        // Priority 1: Close track menu if open
+        // Priority 1: Close menus
         if (this._isTrackMenuOpen) {
             this._closeTrackMenu();
             return true;
         }
 
-        // Priority 2: Hide OSD if visible
+        if (this._isSettingsMenuOpen) {
+            this._closeSettingsMenu();
+            return true;
+        }
+
+        // Priority 2: Hide main OSD if visible
         if (this._isOsdVisible) {
             this._hide();
             return true;
@@ -427,100 +444,103 @@ class PlayerOSD extends Component {
         const hasNext = playQueue.hasNext();
 
         this._osdEl.innerHTML = `
-            <!-- ============================================================ -->
-            <!-- TOP HEADER: Back + Title (left), Sync icon + Clock (right)   -->
-            <!-- ============================================================ -->
-            <div class="osd-header">
-                <div class="osd-header-left">
-                    <button class="osd-btn osd-back-btn" data-action="exit" tabindex="0" title="Back">
-                        ${ICONS.arrowBack}
-                    </button>
-                    <span class="osd-title" id="osdTitle">${title}</span>
-                </div>
-                <div class="osd-header-right">
-                    <span class="osd-sync-icon hide" id="osdSyncIcon">${ICONS.sync}</span>
-                    <span class="osd-clock" id="osdClock"></span>
-                </div>
-            </div>
-
-            <!-- ============================================================ -->
-            <!-- BOTTOM OSD: Controls row + Slider row                        -->
-            <!-- ============================================================ -->
-            <div class="osd-bottom">
-                <!-- Controls Row (above slider) -->
-                <div class="osd-controls-row">
-                    <!-- Left: Playback controls -->
-                    <div class="osd-controls-left">
-                        <button class="osd-btn ${!hasPrev ? 'osd-btn-disabled' : ''}" 
-                                data-action="previousTrack" 
-                                tabindex="${hasPrev ? '0' : '-1'}" 
-                                title="Previous"
-                                ${!hasPrev ? 'disabled' : ''}
-                                id="osdPrevBtn">
-                            ${ICONS.skipPrevious}
+            <div class="osd-main">
+                <!-- ============================================================ -->
+                <!-- TOP HEADER: Back + Title (left), Sync icon + Clock (right)   -->
+                <!-- ============================================================ -->
+                <div class="osd-header">
+                    <div class="osd-header-left">
+                        <button class="osd-btn osd-back-btn" data-action="exit" tabindex="0" title="Back">
+                            ${ICONS.arrowBack}
                         </button>
-                        <button class="osd-btn" data-action="rewind" tabindex="0" title="Rewind">
-                            ${ICONS.fastRewind}
-                        </button>
-                        
-                        <!-- Big blue play/pause button -->
-                        <button class="osd-btn osd-btn-play" data-action="togglePlay" tabindex="0" id="osdPlayPauseBtn">
-                            ${ICONS.pause}
-                        </button>
-                        
-                        <button class="osd-btn" data-action="fastForward" tabindex="0" title="Fast Forward">
-                            ${ICONS.fastForward}
-                        </button>
-                        <button class="osd-btn ${!hasNext ? 'osd-btn-disabled' : ''}" 
-                                data-action="nextTrack" 
-                                tabindex="${hasNext ? '0' : '-1'}" 
-                                title="Next"
-                                ${!hasNext ? 'disabled' : ''}
-                                id="osdNextBtn">
-                            ${ICONS.skipNext}
-                        </button>
-                        
-                        <!-- Ends at (next to play buttons) -->
-                        <span class="osd-ends-at" id="osdEndsAt"></span>
+                        <span class="osd-title" id="osdTitle">${title}</span>
                     </div>
-
-                    <!-- Spacer to push right controls to the right -->
-                    <div class="osd-spacer"></div>
-
-                    <!-- Right: Media controls -->
-                    <div class="osd-controls-right">
-                        <button class="osd-btn" data-action="favorite" tabindex="0" title="Favorite" id="osdFavoriteBtn">
-                            ${ICONS.favorite}
-                        </button>
-                        <button class="osd-btn" data-action="subtitles" tabindex="0" title="Subtitles">
-                            ${ICONS.closedCaption}
-                        </button>
-                        <button class="osd-btn" data-action="audio" tabindex="0" title="Audio">
-                            ${ICONS.audiotrack}
-                        </button>
-                        <button class="osd-btn" data-action="settings" tabindex="0" title="Settings">
-                            ${ICONS.settings}
-                        </button>
+                    <div class="osd-header-right">
+                        <span class="osd-sync-icon hide" id="osdSyncIcon">${ICONS.sync}</span>
+                        <span class="osd-clock" id="osdClock"></span>
                     </div>
                 </div>
 
-                <!-- Slider Row (at very bottom) -->
-                <div class="osd-slider-row">
-                    <span class="osd-time osd-time-current" id="osdCurrentTime">00:00</span>
-                    <div class="osd-slider-container">
-                        <div class="osd-seek-tooltip" id="osdSeekTooltip">00:00</div>
-                        <input type="range" 
-                               class="osd-slider" 
-                               id="osdPositionSlider"
-                               min="0" max="100" value="0" step="0.01"
-                               tabindex="0" />
+                <!-- ============================================================ -->
+                <!-- BOTTOM OSD: Controls row + Slider row                        -->
+                <!-- ============================================================ -->
+                <div class="osd-bottom">
+                    <!-- Controls Row (above slider) -->
+                    <div class="osd-controls-row">
+                        <!-- Left: Playback controls -->
+                        <div class="osd-controls-left">
+                            <button class="osd-btn ${!hasPrev ? 'osd-btn-disabled' : ''}" 
+                                    data-action="previousTrack" 
+                                    tabindex="${hasPrev ? '0' : '-1'}" 
+                                    title="Previous"
+                                    ${!hasPrev ? 'disabled' : ''}
+                                    id="osdPrevBtn">
+                                ${ICONS.skipPrevious}
+                            </button>
+                            <button class="osd-btn" data-action="rewind" tabindex="0" title="Rewind">
+                                ${ICONS.fastRewind}
+                            </button>
+                            
+                            <!-- Big blue play/pause button -->
+                            <button class="osd-btn osd-btn-play" data-action="togglePlay" tabindex="0" id="osdPlayPauseBtn">
+                                ${ICONS.pause}
+                            </button>
+                            
+                            <button class="osd-btn" data-action="fastForward" tabindex="0" title="Fast Forward">
+                                ${ICONS.fastForward}
+                            </button>
+                            <button class="osd-btn ${!hasNext ? 'osd-btn-disabled' : ''}" 
+                                    data-action="nextTrack" 
+                                    tabindex="${hasNext ? '0' : '-1'}" 
+                                    title="Next"
+                                    ${!hasNext ? 'disabled' : ''}
+                                    id="osdNextBtn">
+                                ${ICONS.skipNext}
+                            </button>
+                            
+                            <!-- Ends at (next to play buttons) -->
+                            <span class="osd-ends-at" id="osdEndsAt"></span>
+                        </div>
+
+                        <!-- Spacer to push right controls to the right -->
+                        <div class="osd-spacer"></div>
+
+                        <!-- Right: Media controls -->
+                        <div class="osd-controls-right">
+                            <button class="osd-btn" data-action="favorite" tabindex="0" title="Favorite" id="osdFavoriteBtn">
+                                ${ICONS.favorite}
+                            </button>
+                            <button class="osd-btn" data-action="subtitles" tabindex="0" title="Subtitles">
+                                ${ICONS.closedCaption}
+                            </button>
+                            <button class="osd-btn" data-action="audio" tabindex="0" title="Audio">
+                                ${ICONS.audiotrack}
+                            </button>
+                            <button class="osd-btn" data-action="settings" tabindex="0" title="Settings">
+                                ${ICONS.settings}
+                            </button>
+                        </div>
                     </div>
-                    <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
+
+                    <!-- Slider Row (at very bottom) -->
+                    <div class="osd-slider-row">
+                        <span class="osd-time osd-time-current" id="osdCurrentTime">00:00</span>
+                        <div class="osd-slider-container">
+                            <div class="osd-seek-tooltip" id="osdSeekTooltip">00:00</div>
+                            <input type="range" 
+                                class="osd-slider" 
+                                id="osdPositionSlider"
+                                min="0" max="100" value="0" step="0.01"
+                                tabindex="0" />
+                        </div>
+                        <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
+                    </div>
                 </div>
-            </div>
             </div>
             
-            ${this._renderSubtitleOffsetOverlay()}
+            <div class="osd-overlays">
+                ${this._renderSubtitleOffsetOverlay()}
+            </div>
         `;
     }
 
@@ -595,26 +615,34 @@ class PlayerOSD extends Component {
             e?.preventDefault();
             const wasHidden = !this._isOsdVisible;
 
-            // Track menu gets priority
+            // Priority 1: Menus
             if (this._isTrackMenuOpen) {
                 this._handleTrackMenuEnter();
                 return;
             }
 
-            // Offset overlay: close button triggers close, slider is no-op
-            if (this._showSubtitleOffset && this._isOffsetFocused()) {
-                this._show();
-                this._resetAutoHide();
-
-                const el = document.activeElement;
-                if (el && el.classList.contains('osd-offset-close')) {
-                    this._toggleSubtitleOffset(false);
-                }
-                // Slider or other offset element — do nothing on enter
+            if (this._isSettingsMenuOpen) {
+                this._handleSettingsMenuEnter();
                 return;
             }
 
-            // Show OSD and reset auto-hide
+            // Priority 2: Overlay row: handle action (e.g. close)
+            if (this._currentFocusRow === -1) {
+                const { overlayRow } = this._getFocusableElements();
+                const btn = overlayRow[this._currentFocusIndex];
+                if (btn) {
+                    // Execute action if it has data-action
+                    if (btn.dataset.action) {
+                        this._executeAction(btn.dataset.action);
+                    } else if (btn.id === 'osdOffsetSlider') {
+                        // Slider enter -> toggle play? (standard OSD behavior)
+                        this._executeAction('togglePlay');
+                    }
+                }
+                return;
+            }
+
+            // Show OSD and reset auto-hide (for main OSD rows)
             this._show();
             this._resetAutoHide();
 
@@ -655,22 +683,38 @@ class PlayerOSD extends Component {
                 return;
             }
 
-            // Offset menu: navigate up/down
-            if (this._showSubtitleOffset && this._isOffsetFocused()) {
-                this._show();
-                this._resetAutoHide();
-                // Within offset UI
-                this._handleOffsetMenuNav('up');
+            // Settings menu: navigate up
+            if (this._isSettingsMenuOpen) {
+                this._handleSettingsMenuNav('up');
                 return;
             }
 
+            // Overlay row: handle internal nav or block
+            if (this._currentFocusRow === -1) {
+                this._handleOverlayNav('up');
+                return;
+            }
+
+            const wasHidden = !this._isOsdVisible;
             this._show();
             this._resetAutoHide();
             
-            // Move up a row (header ← controls ← seekbar)
-            if (this._currentFocusRow > 0) {
-                this._currentFocusRow--;
+            if (wasHidden) {
+                // If it was hidden, just show it and ensure visual focus is correct
                 this._updateFocus();
+            } else {
+                // Move up a row (overlay ← header ← controls ← seekbar)
+                if (this._currentFocusRow === 0) {
+                    // From header to overlay if open
+                    if (this._showSubtitleOffset) {
+                        this._currentFocusRow = -1;
+                        this._currentFocusIndex = 0; // Default to close button
+                        this._updateFocus();
+                    }
+                } else if (this._currentFocusRow > 0) {
+                    this._currentFocusRow--;
+                    this._updateFocus();
+                }
             }
         });
 
@@ -683,46 +727,39 @@ class PlayerOSD extends Component {
                 return;
             }
 
-            // Offset menu: navigate up/down
-            if (this._showSubtitleOffset) {
-                this._show();
-                this._resetAutoHide();
-                // If focus is in offset UI
-                if (this._isOffsetFocused()) {
-                    const slider = this._osdEl.querySelector('#osdOffsetSlider');
-                    // If on slider, Down goes to Play/Pause (Controls Row)
-                    if (document.activeElement === slider) {
-                        this._currentFocusRow = 1;
-
-                        const { controlsRow } = this._getFocusableElements();
-                        const playBtn = this._osdEl.querySelector('[data-action="togglePlay"]');
-                        const playIndex = controlsRow.indexOf(playBtn);
-                        
-                        if (playIndex !== -1) {
-                            this._currentFocusIndex = playIndex;
-                        } else {
-                            this._currentFocusIndex = Math.floor(controlsRow.length / 2);
-                        }
-
-                        // Force focus to break focus guard
-                        controlsRow[this._currentFocusIndex]?.focus();
-                        this._updateFocus();
-                        return;
-                    }
-                    // If on close button, Down goes to Slider
-                    this._handleOffsetMenuNav('down');
-                    return;
-                }
-                // If in Main OSD, standard Down behavior (but keep menu open)
+            // Settings menu: navigate down
+            if (this._isSettingsMenuOpen) {
+                this._handleSettingsMenuNav('down');
+                return;
             }
 
+            // Overlay row: handle internal nav or move to main OSD
+            if (this._currentFocusRow === -1) {
+                const handled = this._handleOverlayNav('down');
+                if (!handled) {
+                    // Move from overlay to main OSD
+                    this._currentFocusRow = 0;
+                    this._currentFocusIndex = 0;
+                    this._show();
+                    this._resetAutoHide();
+                    this._updateFocus();
+                }
+                return;
+            }
+
+            const wasHidden = !this._isOsdVisible;
             this._show();
             this._resetAutoHide();
 
-            // Move down a row (header → controls → seekbar)
-            if (this._currentFocusRow < 2) {
-                this._currentFocusRow++;
+            if (wasHidden) {
+                // If it was hidden, just show it
                 this._updateFocus();
+            } else {
+                // Move down a row (header → controls → seekbar)
+                if (this._currentFocusRow < 2) {
+                    this._currentFocusRow++;
+                    this._updateFocus();
+                }
             }
         });
 
@@ -732,27 +769,10 @@ class PlayerOSD extends Component {
             // Track menu: block left/right from leaving menu
             if (this._isTrackMenuOpen) return;
 
-            // Offset menu: decrease offset
-            if (this._showSubtitleOffset) {
-                this._show();
-                this._resetAutoHide();
-                if (this._isOffsetFocused()) {
-                    // If on slider, adjust value
-                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-slider')) {
-                        this._adjustSubtitleOffset(-0.1);
-                        return;
-                    }
-                    // If on close button, Go Left to Back Button (Header)
-                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-close')) {
-                         this._currentFocusRow = 0;
-                         // Force focus to Header Row to break out of overlay guard
-                         const { headerRow } = this._getFocusableElements();
-                         headerRow[0]?.focus();
-                         this._updateFocus();
-                         return;
-                    }
-                }
-                // Fallthrough to standard OSD nav (e.g. controls)
+            // Overlay row: internal nav or adjust value
+            if (this._currentFocusRow === -1) {
+                this._handleOverlayNav('left');
+                return;
             }
 
             const wasHidden = !this._isOsdVisible;
@@ -786,17 +806,10 @@ class PlayerOSD extends Component {
             // Track menu: block left/right from leaving menu
             if (this._isTrackMenuOpen) return;
 
-            // Offset menu: increase offset
-            if (this._showSubtitleOffset) {
-                this._show();
-                this._resetAutoHide();
-                if (this._isOffsetFocused()) {
-                    if (document.activeElement && document.activeElement.classList.contains('osd-offset-slider')) {
-                        this._adjustSubtitleOffset(0.1);
-                    }
-                    return;
-                }
-                // Fallthrough
+            // Overlay row: internal nav or adjust value
+            if (this._currentFocusRow === -1) {
+                this._handleOverlayNav('right');
+                return;
             }
 
             const wasHidden = !this._isOsdVisible;
@@ -823,9 +836,9 @@ class PlayerOSD extends Component {
                 } else if (this._currentFocusRow === 0) {
                     // Header row — navigate right to Overlay if open
                     if (this._showSubtitleOffset) {
-                         const slider = this._osdEl.querySelector('#osdOffsetSlider');
-                         slider?.focus();
-                         this._clearAllOsdFocus();
+                        this._currentFocusRow = -1;
+                        this._currentFocusIndex = 0; // Go to Close button
+                        this._updateFocus();
                     }
                 }
             }
@@ -890,12 +903,22 @@ class PlayerOSD extends Component {
      * Called once to avoid repeated DOM queries during fast D-pad navigation.
      */
     _cacheFocusableElements() {
+        // Overlay row (Row -1) — only include if overlay container is visible
+        this._cachedOverlayRow = [];
+        const overlayContainer = this._osdEl.querySelector('#osdOffsetOverlay');
+        if (overlayContainer && overlayContainer.classList.contains('visible')) {
+            const overlayClose = overlayContainer.querySelector('.osd-offset-close');
+            const overlaySlider = overlayContainer.querySelector('#osdOffsetSlider');
+            if (overlayClose) this._cachedOverlayRow.push(overlayClose);
+            if (overlaySlider) this._cachedOverlayRow.push(overlaySlider);
+        }
+
         // Header row — just the back button
         const headerBackBtn = this._osdEl.querySelector('.osd-back-btn');
         this._cachedHeaderRow = headerBackBtn ? [headerBackBtn] : [];
 
         // Controls row — all buttons from left + right groups
-        // FILTER: Only include elements that are actually focusable (tabindex >= 0)
+        // FILTER: Only include elements that are actually focusable
         const controlsLeft = Array.from(this._osdEl.querySelectorAll('.osd-controls-left .osd-btn'))
             .filter(btn => btn.getAttribute('tabindex') !== '-1');
         const controlsRight = Array.from(this._osdEl.querySelectorAll('.osd-controls-right .osd-btn'))
@@ -909,10 +932,11 @@ class PlayerOSD extends Component {
 
     /**
      * Return cached focusable elements grouped by row
-     * @returns {{ headerRow: HTMLElement[], controlsRow: HTMLElement[], seekbar: HTMLElement|null }}
+     * @returns {{ overlayRow: HTMLElement[], headerRow: HTMLElement[], controlsRow: HTMLElement[], seekbar: HTMLElement|null }}
      */
     _getFocusableElements() {
         return {
+            overlayRow: this._cachedOverlayRow,
             headerRow: this._cachedHeaderRow,
             controlsRow: this._cachedControlsRow,
             seekbar: this._cachedSeekbar
@@ -924,19 +948,23 @@ class PlayerOSD extends Component {
      * Adds 'focused' class and calls native focus() for screen readers.
      */
     _updateFocus() {
-        // When the offset overlay is active, don't apply OSD focus — the
-        // overlay manages its own focus via native browser focus
-        if (this._showSubtitleOffset && this._isOffsetFocused()) return;
-
-        const { headerRow, controlsRow, seekbar } = this._getFocusableElements();
+        const { overlayRow, headerRow, controlsRow, seekbar } = this._getFocusableElements();
 
         // Clear all focus states
+        overlayRow.forEach(btn => btn.classList.remove('focused'));
         headerRow.forEach(btn => btn.classList.remove('focused'));
         controlsRow.forEach(btn => btn.classList.remove('focused'));
         seekbar?.classList.remove('focused');
 
         // Apply focus to current element
-        if (this._currentFocusRow === 0) {
+        if (this._currentFocusRow === -1) {
+            // Overlay row
+            const index = Math.min(this._currentFocusIndex, overlayRow.length - 1);
+            if (overlayRow[index]) {
+                overlayRow[index].classList.add('focused');
+                overlayRow[index].focus();
+            }
+        } else if (this._currentFocusRow === 0) {
             // Header row (back button)
             if (headerRow[0]) {
                 headerRow[0].classList.add('focused');
@@ -1040,7 +1068,7 @@ class PlayerOSD extends Component {
                 break;
 
             case 'settings':
-                this._toggleSubtitleOffset(!this._showSubtitleOffset);
+                this._openSettingsMenu();
                 break;
 
             case 'closeSubtitleOffset':
@@ -1300,17 +1328,22 @@ class PlayerOSD extends Component {
 
     /** Show the OSD overlay */
     _show() {
-        if (this._isOsdVisible) return;
-        this._osdEl.classList.remove('osd-hidden');
+        const main = this._osdEl.querySelector('.osd-main');
+        if (main) {
+            main.classList.remove('osd-hidden');
+        }
         this._isOsdVisible = true;
     }
 
     /** Hide the OSD overlay */
     _hide() {
-        // Guard: Don't hide if track menu is open
+        // Don't hide if track menu is open (global overlay)
         if (this._isTrackMenuOpen) return;
 
-        this._osdEl.classList.add('osd-hidden');
+        const main = this._osdEl.querySelector('.osd-main');
+        if (main) {
+            main.classList.add('osd-hidden');
+        }
         this._isOsdVisible = false;
     }
 
@@ -1652,6 +1685,124 @@ class PlayerOSD extends Component {
     }
 
     // ========================================================================
+    // Settings Menu
+    // ========================================================================
+
+    /**
+     * Open the OSD settings menu
+     */
+    _openSettingsMenu() {
+        this._isSettingsMenuOpen = true;
+        this._settingsMenuFocusIndex = 0;
+
+        // Define available settings options
+        const options = [
+            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync }
+            // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }, etc.
+        ];
+
+        this._renderSettingsMenu(options);
+        this._settingsMenuOverlay.classList.add('visible');
+        this._updateSettingsMenuFocus();
+    }
+
+    /**
+     * Close the OSD settings menu
+     */
+    _closeSettingsMenu() {
+        if (this._settingsMenuOverlay) {
+            this._settingsMenuOverlay.classList.remove('visible');
+        }
+        this._isSettingsMenuOpen = false;
+    }
+
+    /**
+     * Render the settings menu overlay
+     * @param {Array} options 
+     */
+    _renderSettingsMenu(options) {
+        if (!this._settingsMenuOverlay) {
+            this._settingsMenuOverlay = document.createElement('div');
+            this._settingsMenuOverlay.className = 'track-menu-overlay'; // Reuse same layout as tracks
+            document.body.appendChild(this._settingsMenuOverlay);
+
+            this._settingsMenuOverlay.addEventListener('click', (e) => {
+                if (e.target === this._settingsMenuOverlay) {
+                    this._closeSettingsMenu();
+                }
+            });
+        }
+
+        const optionsHtml = options.map((opt, i) => `
+            <button class="track-option track-item" data-id="${opt.id}" data-menu-index="${i}">
+                <span class="track-option-icon">${opt.icon || ''}</span>
+                <span class="track-option-label">${opt.label}</span>
+            </button>
+        `).join('');
+
+        this._settingsMenuOverlay.innerHTML = `
+            <div class="track-menu">
+                <div class="track-menu-title">Settings</div>
+                <div class="track-menu-options">
+                    ${optionsHtml}
+                </div>
+            </div>
+        `;
+
+        this._settingsMenuOverlay.querySelectorAll('.track-item').forEach(btn => {
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this._settingsMenuFocusIndex = parseInt(btn.dataset.menuIndex);
+                this._handleSettingsMenuEnter();
+            });
+        });
+    }
+
+    /** Update focus in the settings menu */
+    _updateSettingsMenuFocus() {
+        if (!this._settingsMenuOverlay) return;
+        const options = this._settingsMenuOverlay.querySelectorAll('.track-option');
+        options.forEach((opt, i) => {
+            const isFocused = i === this._settingsMenuFocusIndex;
+            opt.classList.toggle('focused', isFocused);
+            if (isFocused) {
+                opt.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            }
+        });
+    }
+
+    /** Handle nav in settings menu */
+    _handleSettingsMenuNav(direction) {
+        const options = this._settingsMenuOverlay?.querySelectorAll('.track-option') || [];
+        if (direction === 'up' && this._settingsMenuFocusIndex > 0) {
+            this._settingsMenuFocusIndex--;
+            this._updateSettingsMenuFocus();
+        } else if (direction === 'down' && this._settingsMenuFocusIndex < options.length - 1) {
+            this._settingsMenuFocusIndex++;
+            this._updateSettingsMenuFocus();
+        }
+    }
+
+    /** Handle Enter key in settings menu */
+    _handleSettingsMenuEnter() {
+        const options = this._settingsMenuOverlay?.querySelectorAll('.track-option') || [];
+        const focusedOption = options[this._settingsMenuFocusIndex];
+        if (!focusedOption) return;
+
+        const actionId = focusedOption.dataset.id;
+        
+        // Close menu first
+        this._closeSettingsMenu();
+
+        switch (actionId) {
+            case 'subtitleOffset':
+                // Toggle behavior: if already showing, close it.
+                this._toggleSubtitleOffset(!this._showSubtitleOffset);
+                break;
+        }
+    }
+
+    // ========================================================================
     // Favorite Toggle
     // ========================================================================
 
@@ -1740,7 +1891,6 @@ class PlayerOSD extends Component {
     _toggleSubtitleOffset(show) {
         this._showSubtitleOffset = show;
         const overlay = this._osdEl.querySelector('#osdOffsetOverlay');
-        const slider = this._osdEl.querySelector('#osdOffsetSlider');
 
         if (show) {
             // Stop any pending auto-hide timer since the menu is opening
@@ -1749,15 +1899,16 @@ class PlayerOSD extends Component {
             // Show the overlay
             overlay?.classList.add('visible');
 
-            // Clear the OSD's custom focus from all elements to avoid
-            // dual focus indicators (custom .focused + native :focus)
-            this._clearAllOsdFocus();
-
+            // Set focus to the overlay row (Row -1)
+            this._currentFocusRow = -1;
+            this._currentFocusIndex = 1; // Default to slider
+            
             // Sync UI to current offset value
             this._updateSubtitleOffsetUI();
             
-            // Give native focus to the slider
-            setTimeout(() => slider?.focus(), 50);
+            // Refresh focusable cache to include overlay elements
+            this._cacheFocusableElements();
+            this._updateFocus();
         } else {
             // Hide the overlay
             overlay?.classList.remove('visible');
@@ -1766,6 +1917,11 @@ class PlayerOSD extends Component {
             const { controlsRow } = this._getFocusableElements();
             this._currentFocusRow = 1;
             this._currentFocusIndex = controlsRow.length - 1; // Settings is the last button
+            
+            // Clear overlay elements from cache
+            this._cachedOverlayRow = [];
+            
+            this._show(); // Re-open OSD if hidden
             this._updateFocus();
             
             // Ensure offset is synced to the player backend
@@ -1773,18 +1929,6 @@ class PlayerOSD extends Component {
                 this._player.setSubtitleOffset(this._subtitleOffset);
             }
         }
-    }
-
-    /**
-     * Clear the custom .focused class from ALL OSD focusable elements.
-     * Used when handing focus to the offset overlay so we don't show
-     * two focus indicators at the same time.
-     */
-    _clearAllOsdFocus() {
-        const { headerRow, controlsRow, seekbar } = this._getFocusableElements();
-        headerRow.forEach(btn => btn.classList.remove('focused'));
-        controlsRow.forEach(btn => btn.classList.remove('focused'));
-        seekbar?.classList.remove('focused');
     }
 
     /**
@@ -1826,36 +1970,74 @@ class PlayerOSD extends Component {
     }
 
     /**
-     * Handle navigation within the subtitle offset menu
-     * @param {string} direction 'up' or 'down'
+     * Handle navigation within the overlay row (Row -1)
+     * @param {string} direction 'up', 'down', 'left', 'right'
+     * @returns {boolean} True if navigation was handled internally
      */
-    _handleOffsetMenuNav(direction) {
-        const overlay = this._osdEl.querySelector('#osdOffsetOverlay');
-        if (!overlay) return;
+    _handleOverlayNav(direction) {
+        const { overlayRow, controlsRow } = this._getFocusableElements();
+        if (overlayRow.length === 0) return false;
 
-        const closeBtn = overlay.querySelector('.osd-offset-close');
-        const slider = overlay.querySelector('.osd-offset-slider');
+        // SUBTITLE OFFSET WIDGET
+        if (this._showSubtitleOffset) {
+            const currentEl = overlayRow[this._currentFocusIndex];
+            const isSlider = currentEl?.id === 'osdOffsetSlider';
+            const isClose = currentEl?.classList.contains('osd-offset-close');
 
-        if (direction === 'up') {
-            // If on slider, go to close button
-            if (document.activeElement === slider) {
-                closeBtn?.focus();
+            if (direction === 'up') {
+                if (isSlider) {
+                    this._currentFocusIndex = 0; // Go to Close
+                    this._updateFocus();
+                    return true;
+                }
+                return true; // Block Up from Close
             }
-        } else {
-            // If on close button, go to slider
-            if (document.activeElement === closeBtn) {
-                slider?.focus();
+
+            if (direction === 'down') {
+                if (isClose) {
+                    this._currentFocusIndex = 1; // Go to Slider
+                    this._updateFocus();
+                    return true;
+                }
+                
+                // Down from Slider -> Action Buttons (Row 1)
+                this._currentFocusRow = 1;
+                // Try to find play button, else center of row
+                const playIndex = this._findActionIndex('togglePlay');
+                this._currentFocusIndex = playIndex !== -1 ? playIndex : Math.floor(controlsRow.length / 2);
+                
+                this._show();
+                this._resetAutoHide();
+                this._updateFocus();
+                return true;
+            }
+
+            if (direction === 'left') {
+                if (isSlider) {
+                    this._adjustSubtitleOffset(-0.1);
+                    return true;
+                }
+                if (isClose) {
+                    // Left from Close -> Back Button (Row 0)
+                    this._currentFocusRow = 0;
+                    this._currentFocusIndex = 0;
+                    this._show();
+                    this._resetAutoHide();
+                    this._updateFocus();
+                    return true;
+                }
+            }
+
+            if (direction === 'right') {
+                if (isSlider) {
+                    this._adjustSubtitleOffset(0.1);
+                    return true;
+                }
+                return true; // Block Right from Close
             }
         }
-    }
 
-    /**
-     * Check if focus is currently within the subtitle offset overlay
-     */
-    _isOffsetFocused() {
-        if (!this._showSubtitleOffset) return false;
-        const el = document.activeElement;
-        return el && (el.classList.contains('osd-offset-slider') || el.classList.contains('osd-offset-close'));
+        return false;
     }
 }
 
