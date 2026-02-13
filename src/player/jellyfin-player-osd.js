@@ -137,6 +137,9 @@ class PlayerOSD extends Component {
         this._isSettingsMenuOpen = false;
         this._settingsMenuFocusIndex = 0;
         
+        // Playback Info state
+        this._showPlaybackInfo = false;
+        
         // ====================================================================
         // Subtitle Offset State
         // ====================================================================
@@ -256,17 +259,29 @@ class PlayerOSD extends Component {
     /**
      * Public method to hide the OSD and all overlays
      */
+    /**
+     * Public method to hide the OSD and all overlays
+     */
     hide() {
         // Close menus
         if (this._isTrackMenuOpen) {
             this._closeTrackMenu();
         }
+        if (this._isSettingsMenuOpen) {
+            this._closeSettingsMenu();
+        }
         if (this._showSubtitleOffset) {
             this._toggleSubtitleOffset(false);
         }
+        if (this._showPlaybackInfo) {
+            this._togglePlaybackInfo(false);
+        }
 
         // Force hide the base element
-        this._osdEl.classList.add('osd-hidden');
+        const main = this._osdEl.querySelector('.osd-main');
+        if (main) {
+            main.classList.add('osd-hidden');
+        }
         this._isOsdVisible = false;
     }
 
@@ -410,7 +425,13 @@ class PlayerOSD extends Component {
             return true;
         }
 
-        // Priority 2: Hide main OSD if visible
+        // Priority 2: Hide persistent widgets
+        if (this._showPlaybackInfo) {
+            this._togglePlaybackInfo(false);
+            return true;
+        }
+
+        // Priority 3: Hide main OSD if visible
         if (this._isOsdVisible) {
             this._hide();
             return true;
@@ -540,6 +561,7 @@ class PlayerOSD extends Component {
             
             <div class="osd-overlays">
                 ${this._renderSubtitleOffsetOverlay()}
+                ${this._renderPlaybackInfoOverlay()}
             </div>
         `;
     }
@@ -837,7 +859,17 @@ class PlayerOSD extends Component {
                     // Header row — navigate right to Overlay if open
                     if (this._showSubtitleOffset) {
                         this._currentFocusRow = -1;
-                        this._currentFocusIndex = 0; // Go to Close button
+                        // Find index of offset close button
+                        const { overlayRow } = this._getFocusableElements();
+                        this._currentFocusIndex = overlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
+                        if (this._currentFocusIndex === -1) this._currentFocusIndex = 0;
+                        this._updateFocus();
+                    } else if (this._showPlaybackInfo) {
+                        this._currentFocusRow = -1;
+                        // Find index of playback info close button
+                        const { overlayRow } = this._getFocusableElements();
+                        this._currentFocusIndex = overlayRow.findIndex(el => el.classList.contains('playback-info-close'));
+                        if (this._currentFocusIndex === -1) this._currentFocusIndex = 0;
                         this._updateFocus();
                     }
                 }
@@ -905,12 +937,18 @@ class PlayerOSD extends Component {
     _cacheFocusableElements() {
         // Overlay row (Row -1) — only include if overlay container is visible
         this._cachedOverlayRow = [];
-        const overlayContainer = this._osdEl.querySelector('#osdOffsetOverlay');
-        if (overlayContainer && overlayContainer.classList.contains('visible')) {
-            const overlayClose = overlayContainer.querySelector('.osd-offset-close');
-            const overlaySlider = overlayContainer.querySelector('#osdOffsetSlider');
+        const offsetOverlay = this._osdEl.querySelector('#osdOffsetOverlay');
+        if (offsetOverlay && offsetOverlay.classList.contains('visible')) {
+            const overlayClose = offsetOverlay.querySelector('.osd-offset-close');
+            const overlaySlider = offsetOverlay.querySelector('#osdOffsetSlider');
             if (overlayClose) this._cachedOverlayRow.push(overlayClose);
             if (overlaySlider) this._cachedOverlayRow.push(overlaySlider);
+        }
+
+        const playbackOverlay = this._osdEl.querySelector('#osdPlaybackInfoOverlay');
+        if (playbackOverlay && playbackOverlay.classList.contains('visible')) {
+            const overlayClose = playbackOverlay.querySelector('.playback-info-close');
+            if (overlayClose) this._cachedOverlayRow.push(overlayClose);
         }
 
         // Header row — just the back button
@@ -1073,6 +1111,10 @@ class PlayerOSD extends Component {
 
             case 'closeSubtitleOffset':
                 this._toggleSubtitleOffset(false);
+                break;
+
+            case 'closePlaybackInfo':
+                this._togglePlaybackInfo(false);
                 break;
         }
     }
@@ -1248,6 +1290,11 @@ class PlayerOSD extends Component {
             this._updatePositionSlider(this._player);
         }
         this._updatePlayPauseButton();
+
+        // Update playback info if visible
+        if (this._showPlaybackInfo) {
+            this._updatePlaybackInfoUI();
+        }
     }
 
     /** Update the clock display in the OSD header */
@@ -1697,6 +1744,7 @@ class PlayerOSD extends Component {
 
         // Define available settings options
         const options = [
+            { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info || '<svg viewBox="0 0 24 24" width="24" height="24" fill="currentColor"><path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/></svg>' },
             { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync }
             // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }, etc.
         ];
@@ -1795,6 +1843,9 @@ class PlayerOSD extends Component {
         this._closeSettingsMenu();
 
         switch (actionId) {
+            case 'playbackInfo':
+                this._togglePlaybackInfo(!this._showPlaybackInfo);
+                break;
             case 'subtitleOffset':
                 // Toggle behavior: if already showing, close it.
                 this._toggleSubtitleOffset(!this._showSubtitleOffset);
@@ -1893,38 +1944,33 @@ class PlayerOSD extends Component {
         const overlay = this._osdEl.querySelector('#osdOffsetOverlay');
 
         if (show) {
-            // Stop any pending auto-hide timer since the menu is opening
             this._resetAutoHide();
-
-            // Show the overlay
             overlay?.classList.add('visible');
 
-            // Set focus to the overlay row (Row -1)
-            this._currentFocusRow = -1;
-            this._currentFocusIndex = 1; // Default to slider
-            
-            // Sync UI to current offset value
-            this._updateSubtitleOffsetUI();
-            
-            // Refresh focusable cache to include overlay elements
+            // 1. Refresh cache first so we can find elements
             this._cacheFocusableElements();
+
+            // 2. Set focus to the slider specifically
+            const { overlayRow } = this._getFocusableElements();
+            this._currentFocusRow = -1;
+            const sliderIdx = overlayRow.findIndex(el => el.id === 'osdOffsetSlider');
+            this._currentFocusIndex = sliderIdx !== -1 ? sliderIdx : 0;
+            
+            this._updateSubtitleOffsetUI();
             this._updateFocus();
         } else {
-            // Hide the overlay
             overlay?.classList.remove('visible');
 
-            // Restore OSD focus to settings button (row 1, last item)
-            const { controlsRow } = this._getFocusableElements();
+            // Restore OSD focus to settings button
             this._currentFocusRow = 1;
-            this._currentFocusIndex = controlsRow.length - 1; // Settings is the last button
+            this._currentFocusIndex = this._findActionIndex('settings');
             
-            // Clear overlay elements from cache
-            this._cachedOverlayRow = [];
+            // Re-cache to remove these elements but preserve other overlays (like PI)
+            this._cacheFocusableElements();
             
-            this._show(); // Re-open OSD if hidden
+            this._show(); 
             this._updateFocus();
             
-            // Ensure offset is synced to the player backend
             if (this._player?.setSubtitleOffset) {
                 this._player.setSubtitleOffset(this._subtitleOffset);
             }
@@ -1970,71 +2016,287 @@ class PlayerOSD extends Component {
     }
 
     /**
+     * Render the Playback Info Overlay HTML
+     * @returns {string}
+     */
+    _renderPlaybackInfoOverlay() {
+        const closeIcon = ICONS.close || '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>';
+
+        return `
+            <div id="osdPlaybackInfoOverlay" class="playback-info-overlay">
+                <div class="playback-info-header">
+                    <span class="playback-info-title">Playback Info</span>
+                    <button class="playback-info-close" data-action="closePlaybackInfo" tabindex="0">${closeIcon}</button>
+                </div>
+                <div class="playback-info-content" id="playbackInfoContent">
+                    <!-- Sections will be rendered here -->
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Toggle the playback info overlay
+     * @param {boolean} show 
+     */
+    _togglePlaybackInfo(show) {
+        this._showPlaybackInfo = show;
+        const overlay = this._osdEl.querySelector('#osdPlaybackInfoOverlay');
+
+        if (show) {
+            this._resetAutoHide();
+            overlay?.classList.add('visible');
+
+            this._updatePlaybackInfoUI();
+            
+            // Refresh cache so we can find the new close button
+            this._cacheFocusableElements();
+
+            // Find index of PI close button in Row -1
+            const { overlayRow } = this._getFocusableElements();
+            this._currentFocusRow = -1;
+            const closeIdx = overlayRow.findIndex(el => el.classList.contains('playback-info-close'));
+            this._currentFocusIndex = closeIdx !== -1 ? closeIdx : 0;
+            
+            this._updateFocus();
+        } else {
+            overlay?.classList.remove('visible');
+
+            // Restore focus to settings button
+            this._currentFocusRow = 1;
+            this._currentFocusIndex = this._findActionIndex('settings');
+            
+            // Re-cache to remove PI but keep other overlays (like Offset)
+            this._cacheFocusableElements();
+            
+            this._show();
+            this._updateFocus();
+        }
+    }
+
+    /**
+     * Update the Playback Info UI with current player data
+     */
+    _updatePlaybackInfoUI() {
+        const contentEl = this._osdEl.querySelector('#playbackInfoContent');
+        if (!contentEl || !this._player || !this._api) return;
+
+        const mediaSource = this._player.getCurrentMediaSource();
+        const playMethod = mediaSource?.PlayMethod || 'DirectPlay';
+        const playerType = this._player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Video Player';
+        const protocol = this._api.serverUrl.startsWith('https') ? 'https' : 'http';
+        const streamType = this._player.getStreamType();
+
+        // Helper to get bitrate safely (supports multiple variations and casing)
+        const getBitrate = (obj) => obj?.Bitrate || obj?.bitrate || obj?.AverageBitrate || obj?.averageBitrate || obj?.BitRate || 0;
+
+        // Video Info
+        const containerRect = this._player.container?.getBoundingClientRect();
+        const playerDimensions = containerRect ? `${Math.round(containerRect.width)}x${Math.round(containerRect.height)}` : 'N/A';
+        
+        let videoRes = 'N/A';
+        let droppedFrames = 0;
+        let corruptedFrames = 0;
+
+        // Find streams using case-insensitive comparison
+        const streams = mediaSource?.MediaStreams || [];
+        const videoStream = streams.find(s => s.Type?.toLowerCase() === 'video');
+        
+        // Find ACTIVE audio stream using loose equality for ID matching
+        const audioIndex = this._player.getCurrentAudioStreamIndex();
+        let activeAudioStream = streams.find(s => s.Type?.toLowerCase() === 'audio' && s.Index == audioIndex) 
+                             || streams.find(s => s.Type?.toLowerCase() === 'audio');
+
+        // FALLBACK: If active stream has no bitrate, try to find any audio stream that DOES have one
+        if (activeAudioStream && !getBitrate(activeAudioStream)) {
+            const streamWithBitrate = streams.find(s => s.Type?.toLowerCase() === 'audio' && getBitrate(s));
+            if (streamWithBitrate) {
+                activeAudioStream = streamWithBitrate;
+            }
+        }
+
+        if (!this._player.useTizenPlayer) {
+            const video = this._player._backend?._videoElement;
+            if (video) {
+                videoRes = `${video.videoWidth}x${video.videoHeight}`;
+                if (video.getVideoPlaybackQuality) {
+                    const quality = video.getVideoPlaybackQuality();
+                    droppedFrames = quality.droppedVideoFrames;
+                    corruptedFrames = quality.corruptedVideoFrames || 0;
+                }
+            }
+        } else {
+            if (videoStream) {
+                videoRes = `${videoStream.Width || videoStream.width || '?' }x${videoStream.Height || videoStream.height || '?'}`;
+            }
+        }
+
+        // Section Helper
+        const createSection = (title, fields) => `
+            <div class="pi-section">
+                ${title ? `<div class="pi-section-title">${title}</div>` : ''}
+                ${fields.map(f => `
+                    <div class="pi-row">
+                        <span class="pi-label">${f.label}</span>
+                        <span class="pi-value">${f.value}</span>
+                    </div>
+                `).join('')}
+            </div>
+        `;
+
+        // Build HTML
+        let html = '';
+
+        // 1. Playback Info
+        const displayPlayMethod = playMethod === 'DirectStream' ? 'Remuxing' : playMethod;
+        // remove duplicate title
+        html += createSection('', [
+            { label: 'Player', value: playerType },
+            { label: 'Play method', value: displayPlayMethod },
+            { label: 'Protocol', value: protocol },
+            { label: 'Stream type', value: streamType }
+        ]);
+
+        // 2. Video Info
+        html += createSection('Video Info', [
+            { label: 'Player dimensions', value: playerDimensions },
+            { label: 'Video resolution', value: videoRes },
+            { label: 'Dropped frames', value: droppedFrames },
+            { label: 'Corrupted frames', value: corruptedFrames }
+        ]);
+
+        // 3. Remuxing / Transcoding Info
+        if (playMethod !== 'DirectPlay') {
+            const vMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
+            const aMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
+            
+            html += createSection(`${displayPlayMethod} Info`, [
+                { label: 'Video codec', value: `${videoStream?.Codec?.toUpperCase() || 'N/A'} (${vMethod})` },
+                { label: 'Audio codec', value: `${activeAudioStream?.Codec?.toUpperCase() || 'N/A'} (${aMethod})` }
+            ]);
+        }
+
+        // 4. Original Media Info
+        if (mediaSource) {
+            const sizeMb = mediaSource.Size ? (mediaSource.Size / (1024 * 1024)).toFixed(1) + ' MiB' : 'N/A';
+            
+            // Try to find a valid total bitrate
+            const totalBitrateVal = getBitrate(mediaSource);
+            const totalBitrate = totalBitrateVal ? (totalBitrateVal / 1000000).toFixed(1) + ' Mbps' : 'N/A';
+            
+            // Try to find video bitrate, fallback to total if missing
+            const vBitrateVal = getBitrate(videoStream) || totalBitrateVal;
+            const videoBitrate = vBitrateVal ? (vBitrateVal / 1000000).toFixed(1) + ' Mbps' : 'N/A';
+
+            // Audio bitrate from active stream
+            const aBitrateVal = getBitrate(activeAudioStream);
+            const audioBitrate = aBitrateVal ? (aBitrateVal / 1000).toFixed(0) + ' kbps' : 'N/A';
+            
+            html += createSection('Original Media Info', [
+                { label: 'Container', value: mediaSource.Container || 'N/A' },
+                { label: 'Size', value: sizeMb },
+                { label: 'Bitrate', value: totalBitrate },
+                { label: 'Video codec', value: videoStream?.Codec?.toUpperCase() + (videoStream?.Profile ? ' ' + videoStream.Profile : '') },
+                { label: 'Video bitrate', value: videoBitrate },
+                { label: 'Video range type', value: videoStream?.VideoRange || 'SDR' },
+                { label: 'Audio codec', value: activeAudioStream?.Codec?.toUpperCase() + (activeAudioStream?.Profile ? ' ' + activeAudioStream.Profile : '') },
+                { label: 'Audio bitrate', value: audioBitrate },
+                { label: 'Audio channels', value: activeAudioStream?.Channels || 'N/A' },
+                { label: 'Audio sample rate', value: activeAudioStream?.SampleRate ? activeAudioStream.SampleRate + ' Hz' : 'N/A' }
+            ]);
+        }
+
+        contentEl.innerHTML = html;
+    }
+
+    /**
      * Handle navigation within the overlay row (Row -1)
      * @param {string} direction 'up', 'down', 'left', 'right'
      * @returns {boolean} True if navigation was handled internally
      */
     _handleOverlayNav(direction) {
-        const { overlayRow, controlsRow } = this._getFocusableElements();
+        const { overlayRow } = this._getFocusableElements();
         if (overlayRow.length === 0) return false;
 
-        // SUBTITLE OFFSET WIDGET
-        if (this._showSubtitleOffset) {
-            const currentEl = overlayRow[this._currentFocusIndex];
-            const isSlider = currentEl?.id === 'osdOffsetSlider';
-            const isClose = currentEl?.classList.contains('osd-offset-close');
+        const currentEl = overlayRow[this._currentFocusIndex];
+        if (!currentEl) return false;
 
-            if (direction === 'up') {
-                if (isSlider) {
-                    this._currentFocusIndex = 0; // Go to Close
+        // Widget Element Flags
+        const isOffsetClose = currentEl.classList.contains('osd-offset-close');
+        const isOffsetSlider = currentEl.id === 'osdOffsetSlider';
+        const isPiClose = currentEl.classList.contains('playback-info-close');
+
+        if (direction === 'up') {
+            if (isOffsetSlider) {
+                const idx = overlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
+                if (idx !== -1) {
+                    this._currentFocusIndex = idx;
                     this._updateFocus();
                     return true;
                 }
-                return true; // Block Up from Close
             }
+            return true; // Block
+        }
 
-            if (direction === 'down') {
-                if (isClose) {
-                    this._currentFocusIndex = 1; // Go to Slider
+        if (direction === 'down') {
+            if (isOffsetClose) {
+                const idx = overlayRow.findIndex(el => el.id === 'osdOffsetSlider');
+                if (idx !== -1) {
+                    this._currentFocusIndex = idx;
                     this._updateFocus();
                     return true;
                 }
-                
-                // Down from Slider -> Action Buttons (Row 1)
-                this._currentFocusRow = 1;
-                // Try to find play button, else center of row
-                const playIndex = this._findActionIndex('togglePlay');
-                this._currentFocusIndex = playIndex !== -1 ? playIndex : Math.floor(controlsRow.length / 2);
-                
-                this._show();
-                this._resetAutoHide();
-                this._updateFocus();
+            }
+            
+            // Move to Row 1 (Actions)
+            this._currentFocusRow = 1;
+            const playIndex = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIndex !== -1 ? playIndex : 2;
+            this._show();
+            this._resetAutoHide();
+            this._updateFocus();
+            return true;
+        }
+
+        if (direction === 'left') {
+            if (isOffsetSlider) {
+                this._adjustSubtitleOffset(-0.1);
                 return true;
             }
-
-            if (direction === 'left') {
-                if (isSlider) {
-                    this._adjustSubtitleOffset(-0.1);
-                    return true;
-                }
-                if (isClose) {
-                    // Left from Close -> Back Button (Row 0)
-                    this._currentFocusRow = 0;
-                    this._currentFocusIndex = 0;
-                    this._show();
-                    this._resetAutoHide();
+            if (isPiClose) {
+                // Try to go to Offset Close if open
+                const idx = overlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
+                if (idx !== -1) {
+                    this._currentFocusIndex = idx;
                     this._updateFocus();
                     return true;
                 }
             }
+            
+            // Go to Back Button (Row 0)
+            this._currentFocusRow = 0;
+            this._currentFocusIndex = 0;
+            this._show();
+            this._resetAutoHide();
+            this._updateFocus();
+            return true;
+        }
 
-            if (direction === 'right') {
-                if (isSlider) {
-                    this._adjustSubtitleOffset(0.1);
+        if (direction === 'right') {
+            if (isOffsetSlider) {
+                this._adjustSubtitleOffset(0.1);
+                return true;
+            }
+            if (isOffsetClose) {
+                // Try to go to PI Close if open
+                const idx = overlayRow.findIndex(el => el.classList.contains('playback-info-close'));
+                if (idx !== -1) {
+                    this._currentFocusIndex = idx;
+                    this._updateFocus();
                     return true;
                 }
-                return true; // Block Right from Close
             }
+            return true; // Block
         }
 
         return false;

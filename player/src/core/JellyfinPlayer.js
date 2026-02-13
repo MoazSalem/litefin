@@ -545,6 +545,17 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Get current stream type
+     * @returns {string} 'HLS' or 'Video'
+     */
+    getStreamType() {
+        if (this._backend && this._backend._hlsPlayer) {
+            return 'HLS';
+        }
+        return 'Video';
+    }
+
+    /**
      * Get available audio tracks
      * @returns {Array} Audio streams
      */

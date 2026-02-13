@@ -1598,6 +1598,10 @@ class DetailsPage extends Page {
     }
 
     _renderTrackSelectionMenu(title, tracks, currentIndex, onSelect) {
+        // Store focus context for restoration
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
         // Reuse or create overlay
         let overlay = document.getElementById('details-track-menu');
         if (!overlay) {
@@ -1680,8 +1684,15 @@ class DetailsPage extends Page {
                 if (!this._isTrackMenuOpen) overlay.remove();
             }, 300);
 
-            // Restore focus to actions
-            focusManager.setActiveSection('details-actions');
+            // Restore focus to previous element specifically
+            if (this._prevSection) {
+                focusManager.setActiveSection(this._prevSection, false);
+            }
+            if (this._prevFocus) {
+                focusManager.focusElement(this._prevFocus);
+            } else {
+                focusManager.setActiveSection('details-actions');
+            }
         };
 
         // Click outside to close

@@ -146,14 +146,10 @@ body.player-active #sidebar-container {
     color: #FFF;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
-    /* TIZEN PERF: Promote to its own compositor layer so the rotation
-       animation runs on the GPU, independent of main-thread JS work.
-       Without this, heavy data loading causes visible stutter. */
+    /* TIZEN PERF: Promote to its own compositor layer */
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
 }
 
 .loading-spinner::after,
@@ -163,37 +159,38 @@ body.player-active #sidebar-container {
     position: absolute;
     width: 24px;
     height: 24px;
-    top: 50%;
-    left: 50%;
-    transform: scale(0.5) translate(0, 0);
-    background-color: #FFF;
+    top: 0;
+    left: 0;
     border-radius: 50%;
+    background-color: #FFF;
     animation: animloader 1s infinite ease-in-out;
-    /* GPU compositing for pseudo-element scale animation */
     will-change: transform;
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
 }
 
 .loading-spinner::before {
     background-color: var(--jf-accent);
-    /* Use JF Accent color instead of static red */
-    transform: scale(0.5) translate(-48px, -48px);
+    /* Offset the second dot spatially without affecting its center point for scaling */
+    left: auto;
+    right: 0;
+    top: auto;
+    bottom: 0;
 }
 
 @keyframes rotation {
     0% {
-        transform: rotate(0deg);
+        transform: translateZ(0) rotate(0deg);
     }
-
     100% {
-        transform: rotate(360deg);
+        transform: translateZ(0) rotate(360deg);
     }
 }
 
 @keyframes animloader {
+    0%, 100% {
+        transform: scale(0.5);
+    }
     50% {
-        transform: scale(1) translate(-50%, -50%);
+        transform: scale(1);
     }
 }
 

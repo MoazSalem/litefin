@@ -632,10 +632,111 @@
 }
 
 /* ============================================================================
-   Subtitle Offset Overlay
+   Playback Info Overlay
    ============================================================================ */
 
-/* Main overlay container — hidden by default */
+#osdPlaybackInfoOverlay {
+    position: fixed;
+    top: 100px;
+    right: 40px;
+    width: 420px;
+    max-height: calc(100vh - 300px);
+    background: rgba(0, 0, 0, 0.65);
+    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px);
+    border-radius: 16px;
+    padding: 20px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: #fff;
+    display: flex;
+    flex-direction: column;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    overflow-y: auto;
+}
+
+#osdPlaybackInfoOverlay.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.playback-info-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 10px;
+}
+
+.playback-info-title {
+    font-size: 24px;
+    font-weight: 700;
+}
+
+.playback-info-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: #fff;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: background 0.2s;
+}
+
+.playback-info-close:focus,
+.playback-info-close.focused {
+    background: var(--osd-accent-color);
+    outline: none;
+}
+
+/* Sections */
+.pi-section {
+    margin-bottom: 24px;
+}
+
+.pi-section:last-child {
+    margin-bottom: 0;
+}
+
+.pi-section-title {
+    font-size: 18px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.7);
+    margin-bottom: 12px;
+}
+
+/* Rows */
+.pi-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 16px;
+}
+
+.pi-row:last-child {
+    margin-bottom: 0;
+}
+
+.pi-label {
+    color: rgba(255, 255, 255, 0.6);
+    font-weight: 500;
+}
+
+.pi-value {
+    color: #fff;
+    font-weight: 600;
+    text-align: right;
+    max-width: 60%;
+    word-break: break-all;
+}
 #osdOffsetOverlay {
     position: fixed;
     top: 100px;
