@@ -27,19 +27,45 @@ class DebugOverlay {
         this._height = 'small';
         this._position = 'bottom-right';
 
-        // Known modules for filtering (Synced with Logger usage)
+        // Known modules for filtering (Initial list, will be augmented by Logger.create)
         this._knownModules = [
-            'Router',
-            'FocusManager',
-            'TizenAdapter',
-            'AuthManager',
             'ApiClient',
+            'App',
+            'AuthManager',
+            'BackdropManager',
+            'Bootstrap',
+            'Component',
+            'DetailsPage',
             'DeviceProfile',
-            'Player',
-            'StateManager',
+            'EpisodeList',
             'EventBus',
+            'FavoriteButton',
+            'FavoritesPage',
+            'FocusManager',
+            'FontLoader',
+            'HomePage',
+            'LayoutManager',
+            'LazyLoader',
+            'Library',
+            'Login',
+            'MediaGrid',
             'NavigationState',
-            'App'
+            'OfflinePage',
+            'OSD',
+            'Page',
+            'PersonPage',
+            'Player',
+            'PlayerSettings',
+            'PlayQueue',
+            'Router',
+            'SearchPage',
+            'SettingsPage',
+            'Sidebar',
+            'StateManager',
+            'Storage',
+            'TizenAdapter',
+            'Toast',
+            'WebSocketHandler'
         ];
 
         // Batching state
@@ -378,7 +404,9 @@ class DebugOverlay {
     }
 
     getKnownModules() {
-        return this._knownModules;
+        // Combine static known modules with dynamic ones registered at runtime
+        const allModules = new Set([...this._knownModules, ...logger.getRegisteredModules()]);
+        return Array.from(allModules).sort();
     }
 }
 

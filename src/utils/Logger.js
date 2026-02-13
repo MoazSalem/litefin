@@ -29,6 +29,8 @@ class Logger {
 
         // Modules that are specifically filtered OUT
         this._disabledModules = new Set();
+        // Track all registered modules dynamically
+        this._registeredModules = new Set();
 
         // Cache enabled state from localStorage
         this._loadSettings();
@@ -40,6 +42,7 @@ class Logger {
     _loadSettings() {
         try {
             this._enabled = localStorage.getItem('debug_logs_enabled') === 'true';
+            this._level = this._enabled ? LogLevel.DEBUG : LogLevel.INFO;
 
             // Load module filters (we store what is ENABLED, so we inverse for _disabledModules)
             // Ideally DebugOverlay syncs this, but we load here for startup
@@ -64,6 +67,7 @@ class Logger {
      * @param {string} moduleName
      */
     create(moduleName) {
+        this._registeredModules.add(moduleName);
         return {
             error: (...args) => this._log(LogLevel.ERROR, moduleName, args),
             warn: (...args) => this._log(LogLevel.WARN, moduleName, args),
@@ -71,6 +75,14 @@ class Logger {
             debug: (...args) => this._log(LogLevel.DEBUG, moduleName, args),
             verbose: (...args) => this._log(LogLevel.VERBOSE, moduleName, args)
         };
+    }
+
+    /**
+     * Get all registered modules
+     * @returns {string[]}
+     */
+    getRegisteredModules() {
+        return Array.from(this._registeredModules).sort();
     }
 
     /**
@@ -174,6 +186,8 @@ class Logger {
 
     setEnabled(enabled) {
         this._enabled = enabled;
+        // When enabled via UI, we want to see everything including DEBUG
+        this._level = enabled ? LogLevel.DEBUG : LogLevel.INFO;
         localStorage.setItem('debug_logs_enabled', enabled);
     }
 
