@@ -404,6 +404,7 @@
     border-radius: 16px;
     text-align: center;
     margin-top: 20px;
+    margin-bottom: 60px;
     border: 2px solid transparent;
 }
 
@@ -433,6 +434,40 @@
     color: var(--jf-text-tertiary);
     text-transform: uppercase;
     letter-spacing: 2px;
+}
+
+/* Identity Card (TV Info) */
+.identity-card {
+    text-align: left !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.identity-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 30px;
+}
+
+.identity-item {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.identity-label {
+    font-size: 1.2rem;
+    color: var(--jf-text-tertiary);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    font-weight: 600;
+    opacity: 0.7;
+}
+
+.identity-value {
+    font-size: 1.25rem;
+    color: var(--jf-text-primary);
+    font-weight: 500;
 }
 
 /* Toggle Switch */

@@ -9,6 +9,7 @@
 
 import Page from './Page.js';
 import { auth, api } from '../api/index.js';
+import { getDeviceCapabilities, clearCapabilitiesCache } from '../api/DeviceProfile.js';
 import { router } from '../core/Router.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -32,12 +33,12 @@ class SettingsPage extends Page {
         const tabs = [
             {
                 id: 'appearance',
-                label: 'Appearance',
+                label: 'Display',
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
             },
             {
                 id: 'player',
-                label: 'Player',
+                label: 'Playback',
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
             },
             {
@@ -124,7 +125,7 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Appearance</h2>
+                <h2 class="content-title">Display</h2>
 
                 <!-- Theme Section -->
                 <h3 class="setting-section-title">Theme</h3>
@@ -205,7 +206,7 @@ class SettingsPage extends Page {
     _renderPlayerTab() {
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Player</h2>
+                <h2 class="content-title">Playback</h2>
                 
                 <!-- Video Quality Section -->
                 <h3 class="setting-section-title">Video Quality</h3>
@@ -213,19 +214,21 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name">Max Resolution</span>
-                        <span class="setting-description">Manually override max resolution to bypass detection issues</span>
+                        <span class="setting-description">Override panel detection (Auto uses hardware APIs)</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'max-resolution-select',
                             [
                                 { value: 'auto', label: 'Auto (Detect)' },
+                                { value: '360p', label: '360p SD' },
+                                { value: '480p', label: '480p SD' },
                                 { value: '720p', label: '720p HD' },
                                 { value: '1080p', label: '1080p FHD' },
-                                { value: '2160p', label: '4K UHD (Default)' },
+                                { value: '2160p', label: '4K UHD' },
                                 { value: '4320p', label: '8K UHD' }
                             ],
-                            storage.getItem('litefin_max_resolution') || '2160p'
+                            PlayerSettings.get('maxResolution') || 'auto'
                         )}
                     </div>
                 </div>
@@ -239,14 +242,22 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'max-bitrate-select',
                             [
-                                { value: 'auto', label: 'Auto (Recommended)' },
-                                { value: '120000000', label: '4K - 120 Mbps' },
-                                { value: '60000000', label: '4K - 60 Mbps' },
-                                { value: '20000000', label: '1080p - 20 Mbps' },
-                                { value: '10000000', label: '1080p - 10 Mbps' },
-                                { value: '4000000', label: '720p - 4 Mbps' }
+                                { value: '120000000', label: '120 Mbps (4K Max)' },
+                                { value: '80000000', label: '80 Mbps (4K High)' },
+                                { value: '60000000', label: '60 Mbps (4K)' },
+                                { value: '40000000', label: '40 Mbps (1080p Max)' },
+                                { value: '20000000', label: '20 Mbps (1080p)' },
+                                { value: '15000000', label: '15 Mbps' },
+                                { value: '10000000', label: '10 Mbps' },
+                                { value: '8000000', label: '8 Mbps' },
+                                { value: '6000000', label: '6 Mbps' },
+                                { value: '4000000', label: '4 Mbps' },
+                                { value: '3000000', label: '3 Mbps' },
+                                { value: '1500000', label: '1.5 Mbps' },
+                                { value: '720000', label: '720 kbps' },
+                                { value: '420000', label: '420 kbps' }
                             ],
-                            storage.getItem('pref:maxBitrate') || 'auto'
+                            String(PlayerSettings.get('maxBitrateInternet') || 120000000)
                         )}
                     </div>
                 </div>
@@ -325,6 +336,142 @@ class SettingsPage extends Page {
                                  data-setting="enableNextEpisodeAutoPlay"
                                  tabindex="0"
                                  aria-label="Toggle auto-play next">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ============================================================ -->
+                <!-- Playback Compatibility Section -->
+                <!-- ============================================================ -->
+                <h3 class="setting-section-title">Playback Compatibility</h3>
+
+                <!-- HEVC Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">HEVC / H.265</span>
+                        <span class="setting-description">Direct play HEVC content (supported on all Tizen 4+ TVs)</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableHEVC') ? 'active' : ''}" 
+                                 id="toggle-enable-hevc" 
+                                 data-setting="enableHEVC"
+                                 tabindex="0"
+                                 aria-label="Toggle HEVC">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- HDR Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">HDR10 / HLG</span>
+                        <span class="setting-description">Pass HDR content to the display without transcoding</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableHDR') ? 'active' : ''}" 
+                                 id="toggle-enable-hdr" 
+                                 data-setting="enableHDR"
+                                 tabindex="0"
+                                 aria-label="Toggle HDR">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Dolby Vision Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Dolby Vision</span>
+                        <span class="setting-description">Enable DV if your TV supports it (auto-detected)</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableDolbyVision') ? 'active' : ''}" 
+                                 id="toggle-enable-dv" 
+                                 data-setting="enableDolbyVision"
+                                 tabindex="0"
+                                 aria-label="Toggle Dolby Vision">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Advanced Codec Section -->
+                <h3 class="setting-section-title">Advanced Codec Settings</h3>
+
+                <!-- AV1 Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">AV1</span>
+                        <span class="setting-description">Direct play AV1 content (requires Tizen 5.5+ / 2020+ TV)</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableAV1') ? 'active' : ''}" 
+                                 id="toggle-enable-av1" 
+                                 data-setting="enableAV1"
+                                 tabindex="0"
+                                 aria-label="Toggle AV1">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- VP9 Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">VP9</span>
+                        <span class="setting-description">Direct play VP9 content (WebM, YouTube-style files)</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableVP9') ? 'active' : ''}" 
+                                 id="toggle-enable-vp9" 
+                                 data-setting="enableVP9"
+                                 tabindex="0"
+                                 aria-label="Toggle VP9">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- DTS Passthrough Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">DTS Passthrough</span>
+                        <span class="setting-description">⚠ Samsung TVs do NOT decode DTS — only enable with external audio</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableDts') ? 'active' : ''}" 
+                                 id="toggle-enable-dts" 
+                                 data-setting="enableDts"
+                                 tabindex="0"
+                                 aria-label="Toggle DTS">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- TrueHD Passthrough Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">TrueHD Passthrough</span>
+                        <span class="setting-description">⚠ Not in Samsung specs — only enable with external audio</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('enableTrueHd') ? 'active' : ''}" 
+                                 id="toggle-enable-truehd" 
+                                 data-setting="enableTrueHd"
+                                 tabindex="0"
+                                 aria-label="Toggle TrueHD">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Force Transcode Toggle -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Force Transcode</span>
+                        <span class="setting-description">⚠ Emergency fallback — forces ALL content to transcode via HLS</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('forceTranscode') ? 'active' : ''}" 
+                                 id="toggle-force-transcode" 
+                                 data-setting="forceTranscode"
+                                 tabindex="0"
+                                 aria-label="Toggle Force Transcode">
                         </button>
                     </div>
                 </div>
@@ -668,6 +815,8 @@ class SettingsPage extends Page {
     }
 
     _renderAboutTab() {
+        const caps = getDeviceCapabilities();
+
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title">About Litefin</h2>
@@ -678,7 +827,49 @@ class SettingsPage extends Page {
                         A lightweight, community-driven Jellyfin client optimized for Tizen TVs.
                         Built with love for speed and simplicity.
                     </p>
-                    <p class="about-credits">Developed by the MoazSalem</p>
+                    <p class="about-credits">Developed by MoazSalem</p>
+                </div>
+
+                <h3 class="setting-section-title">Device Information</h3>
+                <div class="about-card identity-card" tabindex="0">
+                    <div class="identity-grid">
+                        <div class="identity-item">
+                            <span class="identity-label">Model</span>
+                            <span class="identity-value">${caps.modelName}</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label">Platform</span>
+                            <span class="identity-value">Tizen ${caps.tizenVersion}</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label">Resolution</span>
+                            <span class="identity-value">${caps.screenWidth}x${caps.screenHeight} (${caps.uhd8K ? '8K' : caps.uhd ? '4K' : 'FHD'})</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label">HDR Support</span>
+                            <span class="identity-value">${
+                                [
+                                    caps.hdr10 ? 'HDR10' : null,
+                                    caps.hdr10Plus ? 'HDR10+' : null,
+                                    caps.hlg ? 'HLG' : null,
+                                    caps.dolbyVision ? 'Dolby Vision' : null
+                                ]
+                                    .filter(Boolean)
+                                    .join(', ') || 'SDR Only'
+                            }</span>
+                        </div>
+                        <div class="identity-item">
+                            <span class="identity-label">Video Codecs</span>
+                            <span class="identity-value">${[
+                                'H.264',
+                                caps.hevc ? 'HEVC' : null,
+                                caps.av1 ? 'AV1' : null,
+                                caps.vp9 ? 'VP9' : null
+                            ]
+                                .filter(Boolean)
+                                .join(', ')}</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         `;
@@ -841,11 +1032,15 @@ class SettingsPage extends Page {
         this._bindEvents();
         this._setupFocus();
 
-        // Restore focus to active tab based on last state if needed, or default
-        this._setupFocus();
-
-        // Default focus to sidebar
-        this.setActiveSection('settings-sidebar');
+        // Default focus to the active tab button in the sidebar.
+        // We do this explicitly instead of relying on last-focused behavior,
+        // to ensure we always start at the current selection.
+        const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
+        if (activeBtn) {
+            focusManager.focusElement(activeBtn);
+        } else {
+            this.setActiveSection('settings-sidebar');
+        }
     }
 
     _bindEvents() {
@@ -895,6 +1090,35 @@ class SettingsPage extends Page {
                 autoNextBtn.classList.toggle('active', newValue);
             });
         }
+
+        // === Playback Compatibility Toggles ===
+        // Generic handler for all toggle-switch buttons with data-setting attribute
+        // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
+        const profileToggles = [
+            'toggle-enable-hevc',
+            'toggle-enable-hdr',
+            'toggle-enable-dv',
+            'toggle-enable-av1',
+            'toggle-enable-vp9',
+            'toggle-enable-dts',
+            'toggle-enable-truehd',
+            'toggle-force-transcode'
+        ];
+        profileToggles.forEach((toggleId) => {
+            const btn = this.$(`#${toggleId}`);
+            if (btn && btn.dataset.setting) {
+                btn.addEventListener('click', () => {
+                    const settingKey = btn.dataset.setting;
+                    const currentValue = PlayerSettings.get(settingKey);
+                    const newValue = !currentValue;
+                    PlayerSettings.set(settingKey, newValue);
+                    btn.classList.toggle('active', newValue);
+                    // Invalidate cached device capabilities so next profile build uses new settings
+                    clearCapabilitiesCache();
+                    log.info(`Profile setting changed: ${settingKey} = ${newValue}`);
+                });
+            }
+        });
 
         // Log Out
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
@@ -1143,8 +1367,8 @@ class SettingsPage extends Page {
             layout: { key: 'layout', type: 'local' },
             'theme-select': { key: 'theme', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
-            'max-resolution-select': { key: 'litefin_max_resolution', type: 'local' },
-            'max-bitrate-select': { key: 'pref:maxBitrate', type: 'local' },
+            'max-resolution-select': { key: 'maxResolution', type: 'player' },
+            'max-bitrate-select': { key: 'maxBitrateInternet', type: 'player' },
             'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
             'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
@@ -1188,17 +1412,21 @@ class SettingsPage extends Page {
                             // No reload needed!
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
-                            if (settingConfig.key === 'layout' || settingConfig.key === 'litefin_max_resolution') {
+                            if (settingConfig.key === 'layout') {
                                 window.location.reload();
                             }
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);
                         } else if (settingConfig.type === 'player') {
-                            const val =
-                                settingConfig.key === 'skipForwardLength' || settingConfig.key === 'skipBackLength'
-                                    ? parseInt(newValue, 10)
-                                    : newValue;
+                            // Numeric settings need parseInt conversion
+                            const numericKeys = ['skipForwardLength', 'skipBackLength', 'maxBitrateInternet'];
+                            const val = numericKeys.includes(settingConfig.key) ? parseInt(newValue, 10) : newValue;
                             PlayerSettings.set(settingConfig.key, val);
+
+                            // Invalidate cached device capabilities when profile-affecting settings change
+                            if (settingConfig.key === 'maxResolution' || settingConfig.key === 'maxBitrateInternet') {
+                                clearCapabilitiesCache();
+                            }
 
                             // VISIBILITY TIGGLE: Hide background opacity if background is None
                             if (id === 'subtitle-bg-select') {
@@ -1382,6 +1610,7 @@ class SettingsPage extends Page {
         const panel = this.$('#settings-content-panel');
         if (panel) {
             panel.innerHTML = this._renderActiveTabContent();
+            panel.scrollTop = 0; // Reset scroll position to top on tab change
             this._bindContentEvents(); // Re-bind events for new content
 
             // Invalidate focus cache

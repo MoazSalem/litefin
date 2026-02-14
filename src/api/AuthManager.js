@@ -19,6 +19,7 @@ import { state } from '../core/StateManager.js';
 import { api, ServerUnreachableError } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { storage } from '../utils/StorageService.js';
+import { buildJellyfinProfile } from './DeviceProfile.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('AuthManager');
@@ -139,6 +140,7 @@ class AuthManager {
             log.info('Reporting capabilities to server...');
             try {
                 await api.reportCapabilities({
+                    DeviceProfile: buildJellyfinProfile(),
                     PlayableMediaTypes: ['Video', 'Audio'],
                     SupportedCommands: ['PlayState', 'DisplayMessage', 'SetVolume', 'Mute', 'Unmute'],
                     SupportsMediaControl: true,
@@ -303,6 +305,7 @@ class AuthManager {
             // Establish session capabilities
             try {
                 await api.reportCapabilities({
+                    DeviceProfile: buildJellyfinProfile(),
                     PlayableMediaTypes: ['Video', 'Audio'],
                     SupportedCommands: ['PlayState', 'DisplayMessage', 'SetVolume', 'Mute', 'Unmute'],
                     SupportsMediaControl: true,

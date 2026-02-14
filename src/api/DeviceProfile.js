@@ -1,124 +1,505 @@
 /**
  * ============================================================================
- * Litefin Tizen - Device Profile
+ * Litefin Tizen — Device Profile (Unified)
  * ============================================================================
- * Defines the device capabilities for transcoding negotiation with Jellyfin.
- * Tells the server what formats/codecs the device can play natively.
+ * Single source of truth for all device capability detection and Jellyfin
+ * profile generation. Consolidates hardware detection, codec support, and
+ * transcoding configuration into one module.
+ *
+ * Uses tizen.systeminfo for model name, Tizen version, and device ID.
+ * Panel resolution determined by model name lookup (known 8K/FHD/720p models).
+ * Codec support gated by Tizen version. HDR defaults based on version + resolution.
+ *
+ * @module api/DeviceProfile
  * ============================================================================
  */
 
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('DeviceProfile');
 
+// ============================================================================
+// Tizen Version Detection
+// ============================================================================
+
+// --- Cached hardware queries (only run once) ---
+let _cachedModelName = null;
+
 /**
- * Get device profile based on detected capabilities
- * @param {Object} [options] - Profile options
- * @param {boolean} [options.enableHEVC=true] - Enable HEVC/H.265
- * @param {boolean} [options.enable4K=true] - Enable 4K resolution
- * @param {boolean} [options.enableHDR=false] - Enable HDR
- * @returns {Object} Device profile
+ * Get the TV model name via tizen.systeminfo.
+ * Only caches a successful (non-empty) result so we retry if systeminfo wasn't ready.
+ * @returns {string}
  */
-export function getDeviceProfile(options = {}) {
-    const { enableHEVC = true, enable4K = true, enable8K = false, enableHDR = false } = options;
+function _getModelName() {
+    if (_cachedModelName) return _cachedModelName;
 
-    // Max bitrate based on resolution
-    let maxBitrate = 40000000; // Default 1080p (40 Mbps)
-    if (enable8K) {
-        maxBitrate = 200000000; // 200 Mbps for 8K
-    } else if (enable4K) {
-        maxBitrate = 120000000; // 120 Mbps for 4K
+    if (typeof tizen !== 'undefined' && tizen.systeminfo) {
+        try {
+            _cachedModelName = tizen.systeminfo.getCapability('http://tizen.org/system/model_name') || '';
+        } catch (e) {
+            log.warn('Could not get model name from systeminfo:', e.message);
+        }
+    }
+    return _cachedModelName || '';
+}
+
+/**
+ * Detect the Tizen platform version from tizen.systeminfo.
+ * @returns {number} Tizen version (e.g. 5.5, 6, 8). Defaults to 4 if unavailable.
+ */
+export function detectTizenVersion() {
+    if (typeof tizen !== 'undefined' && tizen.systeminfo) {
+        try {
+            const platformVersion = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version');
+            if (platformVersion) {
+                const ver = parseFloat(platformVersion);
+                if (!isNaN(ver) && ver >= 2) {
+                    log.info(`Tizen version: ${ver}`);
+                    return ver;
+                }
+            }
+        } catch (e) {
+            log.debug('systeminfo API not available');
+        }
     }
 
-    // ========================================================================
-    // Video codecs
-    // ========================================================================
-    const videoCodecs = ['h264'];
-    if (enableHEVC) {
-        videoCodecs.push('hevc', 'h265');
+    // Safe default — Tizen 4 (2018, earliest commonly supported)
+    log.warn('Could not detect Tizen version, defaulting to 4');
+    return 4;
+}
+
+// ============================================================================
+// Panel & HDR Capability Detection
+// ============================================================================
+
+/** Cached capabilities object — built once, reused for lifetime of app */
+let _cachedCapabilities = null;
+
+/**
+ * Detect hardware capabilities using tizen.systeminfo and model-based resolution.
+ * Results are cached after first successful call.
+ *
+ * @returns {Object} Capabilities object with resolution, HDR, codec flags
+ */
+export function getDeviceCapabilities() {
+    if (_cachedCapabilities) return _cachedCapabilities;
+
+    const tizenVersion = detectTizenVersion();
+
+    // --- Model identity via systeminfo (needed for resolution lookup) ---
+    const modelName = _getModelName() || 'Samsung TV';
+
+    // --- Panel Resolution ---
+    // Determined by model name — screen.width and systeminfo both return CSS
+    // viewport (1920) not physical panel. Known models listed explicitly.
+    const MODEL_8K = ['QN990', 'QN900', 'QN800', 'QN700', 'Q950', 'Q900', 'Q800'];
+    const MODEL_FHD = ['T5300', 'N5200', 'Q50A', '32LS03', 'H5000', 'F6000', 'J6200', 'J5200', 'M5500'];
+    const MODEL_HD = ['N5300', 'H5000F', 'N4300', 'T4300', 'N4000', 'T4000', 'J4000'];
+
+    // Check if model name contains any of the known substrings
+    const is8K = MODEL_8K.some((m) => modelName.includes(m));
+    const isFHD = MODEL_FHD.some((m) => modelName.includes(m));
+    const isHD = MODEL_HD.some((m) => modelName.includes(m));
+
+    // Default: 4K (the vast majority of Samsung Tizen TVs)
+    let uhd = true;
+    let uhd8K = false;
+    if (is8K) {
+        uhd8K = true;
+    } else if (isFHD || isHD) {
+        uhd = false;
     }
-    videoCodecs.push('vp8', 'vp9');
+    log.info(`Panel resolution for model "${modelName}": ${uhd8K ? '8K' : uhd ? '4K' : isFHD ? 'FHD' : 'HD'}`);
 
-    // Video profiles for H.264
-    const h264Profiles = 'high|main|baseline|constrained baseline';
-    const h264Levels = enable4K ? '52' : '42'; // 5.2 for 4K, 4.2 for 1080p
+    // --- HDR Capabilities ---
+    // HDR10 on most UHD panels from Tizen 4+ (2018+)
+    // Dolby Vision: rare even on premium models — default off, user can enable
+    const hdr10 = tizenVersion >= 4 && uhd;
+    const dolbyVision = false;
 
-    // ========================================================================
-    // Audio codecs
-    // ========================================================================
-    const audioCodecs = ['aac', 'mp3', 'opus', 'flac', 'vorbis', 'ac3', 'eac3'];
+    let deviceId = '';
 
-    // ========================================================================
-    // Build transcoding profiles
-    // ========================================================================
+    // Get device ID from systeminfo
+    if (typeof tizen !== 'undefined' && tizen.systeminfo) {
+        try {
+            deviceId = tizen.systeminfo.getCapability('http://tizen.org/system/tizenid') || '';
+        } catch (e) {
+            log.warn('Could not get device ID from systeminfo:', e.message);
+        }
+    }
+
+    // Fallback: generate and persist a stable identifier
+    if (!deviceId) {
+        deviceId = storage.getItem('litefin_device_id');
+        if (!deviceId) {
+            deviceId = 'litefin_tizen_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+            storage.setItem('litefin_device_id', deviceId);
+        }
+    }
+
+    // --- Apply manual overrides from PlayerSettings ---
+    const manualRes = PlayerSettings.get('maxResolution');
+    if (manualRes && manualRes !== 'auto') {
+        switch (manualRes) {
+            case '720p':
+                uhd = false;
+                uhd8K = false;
+                break;
+            case '1080p':
+                uhd = false;
+                uhd8K = false;
+                break;
+            case '2160p':
+                uhd = true;
+                uhd8K = false;
+                break;
+            case '4320p':
+                uhd = true;
+                uhd8K = true;
+                break;
+        }
+    }
+
+    // --- Build and cache capabilities ---
+    _cachedCapabilities = {
+        // Identity
+        modelName,
+        deviceId,
+
+        // Platform
+        tizenVersion,
+
+        // Resolution (derived from screen or manual override)
+        screenWidth: uhd8K ? 7680 : uhd ? 3840 : 1920,
+        screenHeight: uhd8K ? 4320 : uhd ? 2160 : 1080,
+        uhd,
+        uhd8K,
+
+        // HDR (version-based defaults — user can toggle in Settings)
+        hdr10,
+        hdr10Plus: hdr10 && tizenVersion >= 5, // HDR10+ on 2019+ premium models
+        hlg: hdr10 && tizenVersion >= 4, // HLG on 2018+ HDR-capable models
+        dolbyVision,
+
+        // Video codec support (gated by Tizen version)
+        hevc: true, // All Tizen 4+ (2018+)
+        av1: tizenVersion >= 5.5, // AV1 from Tizen 5.5 (2020+)
+        vp9: tizenVersion >= 6 || (tizenVersion >= 4 && uhd), // VP9 UHD from Tizen 4, all from 6
+        vp8: true, // VP8 supported on all
+
+        // Audio codec support (per Samsung spec tables)
+        // Samsung explicitly says DTS is NOT supported on any TV (2018–2025)
+        // TrueHD is not documented in Samsung specifications
+        ac3: true,
+        eac3: true,
+        dts: false,
+        truehd: false,
+
+        // Max audio channels — Samsung docs: "DD+: 5.1 channel supported"
+        // 8K models list DD/DD+ (5.1, 7.1)
+        maxAudioChannels: uhd8K ? 8 : 6
+    };
+
+    log.info('Device capabilities detected:', JSON.stringify(_cachedCapabilities, null, 2));
+    return _cachedCapabilities;
+}
+
+/**
+ * Clear the cached capabilities (useful for testing or settings changes).
+ */
+export function clearCapabilitiesCache() {
+    _cachedCapabilities = null;
+}
+
+// ============================================================================
+// Jellyfin Device Profile Builder
+// ============================================================================
+
+/**
+ * Build the complete Jellyfin DeviceProfile object.
+ *
+ * This tells the server exactly what the device can play natively (direct play)
+ * and what it needs transcoded. Every field is derived from the detected
+ * capabilities and current PlayerSettings toggles.
+ *
+ * @returns {Object} A Jellyfin-compatible DeviceProfile
+ */
+export function buildJellyfinProfile() {
+    const caps = getDeviceCapabilities();
+
+    // --- Read user toggle overrides from PlayerSettings ---
+    const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
+    const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
+    const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
+    const enableHDR = PlayerSettings.get('enableHDR') && caps.hdr10;
+    const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
+    const enableDts = PlayerSettings.get('enableDts');
+    const enableTrueHd = PlayerSettings.get('enableTrueHd');
+    const forceTranscode = PlayerSettings.get('forceTranscode');
+
+    // If force transcode is on, return a minimal profile
+    if (forceTranscode) {
+        log.warn('Force transcode enabled — returning minimal profile');
+        return _buildMinimalProfile(caps);
+    }
+
+    // ====================================================================
+    // Bitrate Calculation
+    // ====================================================================
+
+    // Samsung spec table max bitrates:
+    //   8K HEVC: ~80–100 Mbps, UHD: ~60–80 Mbps, FHD: ~40 Mbps
+    const maxBitrate =
+        PlayerSettings.get('maxBitrateInternet') || (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
+
+    const maxAudioChannels = String(caps.maxAudioChannels);
+
+    // ====================================================================
+    // Audio Codec List
+    // ====================================================================
+
+    // Per Samsung video spec tables: AAC, MP3, Vorbis, AC3, EAC3, Opus,
+    // LPCM, ADPCM, WMA, G.711, FLAC (music table), AC4 (2022+)
+    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    if (caps.ac3) audioCodecs.push('ac3');
+    if (caps.eac3) audioCodecs.push('eac3');
+    // AC4 — newer Tizen models (6.5+ / 2022+)
+    if (caps.tizenVersion >= 6.5) audioCodecs.push('ac4');
+    // DTS — Samsung explicitly says not supported, but user may enable for passthrough
+    if (enableDts) audioCodecs.push('dts', 'dca');
+    // TrueHD — not in Samsung specs, but user may enable for passthrough
+    if (enableTrueHd) audioCodecs.push('truehd');
+
+    const audioCodecString = audioCodecs.join(',');
+
+    // ====================================================================
+    // Video Codec Lists (per container type)
+    // ====================================================================
+
+    // General containers (MP4, MKV, TS, etc.) — broadest codec support
+    const generalVideoCodecs = ['h264'];
+    if (enableHEVC) generalVideoCodecs.push('hevc');
+    // Legacy codecs — many DVDs, Blu-rays, and TV recordings use these
+    generalVideoCodecs.push('mpeg2video', 'vc1');
+    if (enableVP9) generalVideoCodecs.push('vp9');
+    if (caps.vp8) generalVideoCodecs.push('vp8');
+    if (enableAV1) generalVideoCodecs.push('av1');
+
+    // MKV gets a few extra legacy codecs
+    const mkvVideoCodecs = [...generalVideoCodecs, 'msmpeg4v2'];
+
+    // WebM container — only VP8/VP9/AV1
+    const webmVideoCodecs = [];
+    if (caps.vp8) webmVideoCodecs.push('vp8');
+    if (enableVP9) webmVideoCodecs.push('vp9');
+    if (enableAV1) webmVideoCodecs.push('av1');
+
+    // TS container — subset (no vc1 quirks, more reliable)
+    const tsVideoCodecs = ['h264'];
+    if (enableHEVC) tsVideoCodecs.push('hevc');
+    tsVideoCodecs.push('vc1', 'mpeg2video');
+    if (enableAV1) tsVideoCodecs.push('av1');
+
+    // M2TS container — typically Blu-ray, limited codec set
+    const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
+
+    // MOV container — primarily H.264 on Samsung
+    const movVideoCodecs = ['h264'];
+
+    // HLS — codecs suitable for adaptive streaming
+    const hlsVideoCodecs = ['h264'];
+    if (enableHEVC) hlsVideoCodecs.push('hevc');
+    if (enableVP9) hlsVideoCodecs.push('vp9');
+    if (enableAV1) hlsVideoCodecs.push('av1');
+
+    // ====================================================================
+    // DirectPlay Profiles
+    // ====================================================================
+
+    const directPlayProfiles = [
+        // MP4 / M4V — most common modern container
+        {
+            Container: 'mp4,m4v',
+            Type: 'Video',
+            VideoCodec: generalVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        },
+        // MKV / Matroska — very common for media libraries
+        {
+            Container: 'mkv',
+            Type: 'Video',
+            VideoCodec: mkvVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        },
+        // TS / MPEGTS — broadcast recordings, some HLS segments
+        {
+            Container: 'ts,mpegts',
+            Type: 'Video',
+            VideoCodec: tsVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        },
+        // M2TS — Blu-ray disc rips
+        {
+            Container: 'm2ts',
+            Type: 'Video',
+            VideoCodec: m2tsVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        },
+        // AVI — legacy but still common in some libraries
+        {
+            Container: 'avi',
+            Type: 'Video',
+            VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+            AudioCodec: audioCodecString
+        },
+        // MOV — Apple QuickTime
+        {
+            Container: 'mov',
+            Type: 'Video',
+            VideoCodec: movVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        },
+        // WMV / ASF — Windows Media (dropped on some 2024+ models, but included by request)
+        {
+            Container: 'wmv,asf',
+            Type: 'Video',
+            AudioCodec: audioCodecString
+        },
+        // Legacy containers — MPG, MPEG, FLV, 3GP, VRO, VOB
+        {
+            Container: 'mpg,mpeg,flv,3gp,vob,vro',
+            Type: 'Video',
+            AudioCodec: audioCodecString
+        }
+    ];
+
+    // WebM container — VP8/VP9/AV1 with web-native audio codecs
+    if (webmVideoCodecs.length > 0) {
+        directPlayProfiles.push({
+            Container: 'webm',
+            Type: 'Video',
+            VideoCodec: webmVideoCodecs.join(','),
+            AudioCodec: 'vorbis,opus'
+        });
+    }
+
+    // HLS — native adaptive streaming support
+    directPlayProfiles.push({
+        Container: 'm3u8',
+        Type: 'Video',
+        VideoCodec: hlsVideoCodecs.join(','),
+        AudioCodec: audioCodecString
+    });
+
+    // Audio-only containers
+    directPlayProfiles.push({
+        Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
+        Type: 'Audio'
+    });
+
+    // ====================================================================
+    // Transcoding Profiles (multiple fallback paths)
+    // ====================================================================
+
+    // Transcoding audio codec list (server-side encoding targets)
+    const transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+    const transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    // Broader set for fMP4/MKV transcoding
+    const broadTransVideo = [transVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : '']
+        .filter(Boolean)
+        .join(',');
+
     const transcodingProfiles = [
-        // Video transcoding - prefer HLS
+        // Primary: HLS in TS container (most compatible streaming fallback)
         {
             Container: 'ts',
             Type: 'Video',
-            AudioCodec: 'aac,mp3,ac3,eac3',
-            VideoCodec: enableHEVC ? 'h264,hevc' : 'h264',
+            AudioCodec: transAudioCodecs,
+            VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
-            MaxAudioChannels: '6',
+            MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
+            SegmentLength: '3',
             BreakOnNonKeyFrames: true
         },
-        // Audio transcoding
+        // Secondary: HLS in fMP4 container (newer, better codec support)
+        {
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: transAudioCodecs + ',opus',
+            VideoCodec: broadTransVideo,
+            Context: 'Streaming',
+            Protocol: 'hls',
+            MaxAudioChannels: maxAudioChannels,
+            MinSegments: '1',
+            SegmentLength: '3',
+            BreakOnNonKeyFrames: false
+        },
+        // Static remux: MKV container (broad codec support, lossless remux)
+        {
+            Container: 'mkv',
+            Type: 'Video',
+            AudioCodec: audioCodecString,
+            VideoCodec: mkvVideoCodecs.join(','),
+            Context: 'Static',
+            CopyTimestamps: true,
+            MaxAudioChannels: maxAudioChannels
+        },
+        // Static fallback: MP4
+        {
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: 'aac,ac3',
+            VideoCodec: 'h264',
+            Context: 'Static'
+        },
+        // Audio transcoding: AAC via HLS
+        {
+            Container: 'aac',
+            Type: 'Audio',
+            AudioCodec: 'aac',
+            Context: 'Streaming',
+            Protocol: 'hls',
+            MaxAudioChannels: maxAudioChannels,
+            MinSegments: '1'
+        },
+        // Audio transcoding: MP3 via HTTP
         {
             Container: 'mp3',
             Type: 'Audio',
             AudioCodec: 'mp3',
             Context: 'Streaming',
-            Protocol: 'http',
-            MaxAudioChannels: '2'
+            Protocol: 'http'
+        },
+        // Audio transcoding: Opus via HTTP
+        {
+            Container: 'opus',
+            Type: 'Audio',
+            AudioCodec: 'opus',
+            Context: 'Streaming',
+            Protocol: 'http'
         }
     ];
 
-    // ========================================================================
-    // Build direct play profiles
-    // ========================================================================
-    const directPlayProfiles = [
-        // Video containers
-        {
-            Container: 'mp4,m4v',
-            Type: 'Video',
-            VideoCodec: videoCodecs.join(','),
-            AudioCodec: audioCodecs.join(',')
-        },
-        {
-            Container: 'mkv',
-            Type: 'Video',
-            VideoCodec: videoCodecs.join(','),
-            AudioCodec: audioCodecs.join(',')
-        },
-        {
-            Container: 'webm',
-            Type: 'Video',
-            VideoCodec: 'vp8,vp9,av1',
-            AudioCodec: 'opus,vorbis'
-        },
-        // Audio containers
-        {
-            Container: 'mp3',
-            Type: 'Audio'
-        },
-        {
-            Container: 'aac',
-            Type: 'Audio'
-        },
-        {
-            Container: 'flac',
-            Type: 'Audio'
-        }
-    ];
+    // ====================================================================
+    // Codec Profiles (level/profile constraints)
+    // ====================================================================
 
-    // ========================================================================
-    // Build codec profiles (capability conditions)
-    // ========================================================================
+    // H.264 Level: UHD → 5.1, FHD on Tizen 5.5+ → 4.2, older FHD → 4.1
+    const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5.5 ? '42' : '41';
+
+    // HEVC Level: 8K → 6.1 (183), UHD → 5.1 (153), FHD → 4.1 (123)
+    // Jellyfin encodes levels as level * 30 (e.g. 5.1 → 153)
+    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
+
+    // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
+    const hevcBitDepth = enableHDR || enableDolbyVision ? '10' : '8';
+
     const codecProfiles = [
-        // H.264 conditions
+        // --- H.264 constraints ---
         {
             Type: 'Video',
             Codec: 'h264',
@@ -132,190 +513,305 @@ export function getDeviceProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: h264Profiles,
+                    Value: 'high|main|baseline|constrained baseline|high 10',
                     IsRequired: false
                 },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoLevel',
-                    Value: h264Levels,
+                    Value: h264Level,
                     IsRequired: false
                 },
                 {
                     Condition: 'LessThanEqual',
-                    Property: 'VideoBitrate',
-                    Value: String(maxBitrate),
+                    Property: 'VideoBitDepth',
+                    Value: '8',
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'RefFrames',
+                    Value: '16',
+                    IsRequired: false
+                }
+            ]
+        },
+        // --- Audio channel limit (global) ---
+        {
+            Type: 'Audio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: maxAudioChannels,
                     IsRequired: false
                 }
             ]
         }
     ];
 
-    // Add HEVC conditions if enabled
+    // HEVC constraints (only if enabled)
     if (enableHEVC) {
-        const hevcConditions = [
-            {
-                Condition: 'LessThanEqual',
-                Property: 'VideoBitrate',
-                Value: String(maxBitrate),
-                IsRequired: false
-            }
-        ];
-
-        // Add HDR conditions if not supported
-        if (!enableHDR) {
-            hevcConditions.push({
-                Condition: 'NotEquals',
-                Property: 'VideoRangeType',
-                Value: 'HDR10',
-                IsRequired: false
-            });
-            hevcConditions.push({
-                Condition: 'NotEquals',
-                Property: 'VideoRangeType',
-                Value: 'HLG',
-                IsRequired: false
-            });
-            hevcConditions.push({
-                Condition: 'NotEquals',
-                Property: 'VideoRangeType',
-                Value: 'DOVIWithHDR10',
-                IsRequired: false
-            });
-        }
-
         codecProfiles.push({
             Type: 'Video',
             Codec: 'hevc',
-            Conditions: hevcConditions
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'main|main 10',
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoLevel',
+                    Value: hevcLevel,
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: hevcBitDepth,
+                    IsRequired: false
+                }
+            ]
         });
     }
 
-    // Audio codec conditions
-    codecProfiles.push({
-        Type: 'VideoAudio',
-        Codec: 'aac',
-        Conditions: [
-            {
-                Condition: 'LessThanEqual',
-                Property: 'AudioChannels',
-                Value: '8',
-                IsRequired: false
-            }
-        ]
-    });
+    // VP9 constraints (profile 0 for SDR, profile 2 for HDR 10-bit)
+    if (enableVP9) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'vp9',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'profile 0|profile 2',
+                    IsRequired: false
+                }
+            ]
+        });
+    }
 
-    // ========================================================================
-    // Build subtitle profiles
-    // ========================================================================
+    // AV1 constraints
+    if (enableAV1) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'av1',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoLevel',
+                    Value: '15', // AV1 Main Level 5.1
+                    IsRequired: false
+                },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: enableHDR ? '10' : '8',
+                    IsRequired: false
+                }
+            ]
+        });
+    }
+
+    // ====================================================================
+    // Subtitle Profiles
+    // ====================================================================
+
     const subtitleProfiles = [
-        // Text-based subtitles (external)
+        // External method — server extracts text tracks and delivers via API
+        // This is the lightest path (no transcoding required)
         { Format: 'srt', Method: 'External' },
+        { Format: 'subrip', Method: 'External' },
+        { Format: 'vtt', Method: 'External' },
         { Format: 'ass', Method: 'External' },
         { Format: 'ssa', Method: 'External' },
-        { Format: 'vtt', Method: 'External' },
-        { Format: 'sub', Method: 'External' },
         { Format: 'smi', Method: 'External' },
+        { Format: 'ttml', Method: 'External' },
+        { Format: 'sub', Method: 'External' },
 
-        // Embedded subtitles via HLS
+        // Embed method — allows direct play of embedded text subs without extraction
+        { Format: 'srt', Method: 'Embed' },
+        { Format: 'subrip', Method: 'Embed' },
+        { Format: 'vtt', Method: 'Embed' },
+
+        // Image-based subtitles — client can't render these natively,
+        // so they must be burned in (triggers video transcoding when selected)
+        { Format: 'pgs', Method: 'Embed' },
+        { Format: 'pgssub', Method: 'Embed' },
+        { Format: 'dvdsub', Method: 'Embed' },
+        { Format: 'dvbsub', Method: 'Embed' },
+
+        // HLS embedded VTT
         { Format: 'vtt', Method: 'Hls' }
     ];
 
-    // ========================================================================
-    // Assemble final profile
-    // ========================================================================
-    return {
-        Name: 'Litefin Tizen',
-        MaxStaticBitrate: maxBitrate,
+    // ====================================================================
+    // Response Profiles (container MIME type overrides)
+    // ====================================================================
+
+    const responseProfiles = [
+        {
+            Type: 'Video',
+            Container: 'm4v',
+            MimeType: 'video/mp4'
+        },
+        {
+            Type: 'Video',
+            Container: 'mkv',
+            MimeType: 'video/x-matroska'
+        }
+    ];
+
+    // ====================================================================
+    // Assemble Final Profile
+    // ====================================================================
+
+    const profile = {
+        Name: `Litefin Tizen ${caps.tizenVersion}`,
         MaxStreamingBitrate: maxBitrate,
-        MusicStreamingTranscodingBitrate: 192000,
+        MaxStaticBitrate: maxBitrate,
+        MaxStaticMusicBitrate: 40000000,
+        MusicStreamingTranscodingBitrate: 384000,
 
         DirectPlayProfiles: directPlayProfiles,
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: subtitleProfiles,
-
-        // Response profiles (for non-supported containers)
-        ResponseProfiles: [
-            {
-                Type: 'Video',
-                Container: 'm4v',
-                MimeType: 'video/mp4'
-            }
-        ]
+        ResponseProfiles: responseProfiles
     };
+
+    log.info('Built Jellyfin profile:', profile.Name);
+    log.debug(
+        'DirectPlay profiles:',
+        directPlayProfiles.length,
+        '| Transcoding profiles:',
+        transcodingProfiles.length,
+        '| Codec profiles:',
+        codecProfiles.length
+    );
+
+    return profile;
 }
 
 /**
- * Detect device capabilities based on Tizen platform
- * @returns {Object} Detected capabilities
+ * Build a minimal profile that forces transcoding for everything.
+ * Used when "Force Transcode" is enabled as an emergency fallback.
+ * @private
  */
-export function detectCapabilities() {
-    const capabilities = {
-        enableHEVC: true,
-        enable4K: true,
-        enableHDR: false
-    };
-
-    // Check for Manual Resolution Setting (Default to 4K if not set)
-    const manualRes = storage.getItem('litefin_max_resolution') || '2160p';
-
-    if (manualRes !== 'auto') {
-        log.info(`Using manual resolution setting: ${manualRes}`);
-        switch (manualRes) {
-            case '720p':
-                capabilities.enable4K = false;
-                capabilities.enableHEVC = false; // Usually safe to disable HEVC for lower end
-                break;
-            case '1080p':
-                capabilities.enable4K = false;
-                capabilities.enableHEVC = true;
-                break;
-            case '2160p': // 4K
-                capabilities.enable4K = true;
-                capabilities.enableHEVC = true;
-                break;
-            case '4320p': // 8K
-                capabilities.enable4K = true;
-                capabilities.enable8K = true;
-                capabilities.enableHEVC = true;
-                break;
-        }
-        return capabilities;
-    }
-
-    // Detect from Tizen APIs if available
-    if (typeof webapis !== 'undefined' && webapis.productinfo) {
-        try {
-            // Check 4K support
-            if (webapis.productinfo.isUdPanelSupported) {
-                capabilities.enable4K = webapis.productinfo.isUdPanelSupported();
+function _buildMinimalProfile(caps) {
+    return {
+        Name: 'Litefin Tizen (Forced Transcode)',
+        MaxStreamingBitrate: PlayerSettings.get('maxBitrateInternet') || 40000000,
+        MaxStaticBitrate: 40000000,
+        MusicStreamingTranscodingBitrate: 384000,
+        DirectPlayProfiles: [],
+        TranscodingProfiles: [
+            {
+                Container: 'ts',
+                Type: 'Video',
+                AudioCodec: 'aac',
+                VideoCodec: 'h264',
+                Context: 'Streaming',
+                Protocol: 'hls',
+                MaxAudioChannels: String(caps.maxAudioChannels),
+                MinSegments: '1',
+                SegmentLength: '3',
+                BreakOnNonKeyFrames: true
+            },
+            {
+                Container: 'mp3',
+                Type: 'Audio',
+                AudioCodec: 'mp3',
+                Context: 'Streaming',
+                Protocol: 'http'
             }
+        ],
+        CodecProfiles: [],
+        SubtitleProfiles: [
+            { Format: 'vtt', Method: 'External' },
+            { Format: 'srt', Method: 'External' },
+            { Format: 'ssa', Method: 'External' },
+            { Format: 'ass', Method: 'External' },
+            { Format: 'smi', Method: 'External' },
+            { Format: 'sami', Method: 'External' },
+            { Format: 'sub', Method: 'External' },
+            { Format: 'mov_text', Method: 'Embed' },
+            { Format: 'tx3g', Method: 'Embed' },
+            { Format: 'ttml', Method: 'External' }
+        ],
+        ResponseProfiles: []
+    };
+}
 
-            // Check HDR support (only for newer TVs)
-            // Note: Most Tizen TVs don't expose this directly
+// ============================================================================
+// Device Identity Helpers
+// ============================================================================
+
+/**
+ * Get a unique device identifier.
+ * Prefers Tizen DUID, falls back to a generated+stored ID.
+ * @returns {string}
+ */
+export function getDeviceId() {
+    // Try tizen.systeminfo for device ID
+    if (typeof tizen !== 'undefined' && tizen.systeminfo) {
+        try {
+            const tizenId = tizen.systeminfo.getCapability('http://tizen.org/system/tizenid');
+            if (tizenId) return tizenId;
         } catch (e) {
-            log.warn('Could not detect capabilities', e);
+            // Fall through to localStorage approach
         }
     }
 
-    // Final logging of what we are sending
-    log.info('Final Capabilities determined:', JSON.stringify(capabilities, null, 2));
-
-    return capabilities;
+    // Generate and persist a stable identifier
+    let deviceId = storage.getItem('litefin_device_id');
+    if (!deviceId) {
+        deviceId = 'litefin_tizen_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+        storage.setItem('litefin_device_id', deviceId);
+    }
+    return deviceId;
 }
 
 /**
- * Get profile with auto-detected capabilities
- * @returns {Object} Device profile
+ * Get a human-readable device name.
+ * @returns {string}
+ */
+export function getDeviceName() {
+    const caps = getDeviceCapabilities();
+    return caps.modelName || `Samsung TV Tizen ${caps.tizenVersion}`;
+}
+
+// ============================================================================
+// Convenience / Backward Compatibility Exports
+// ============================================================================
+
+/**
+ * Get profile with auto-detected capabilities (backward compat).
+ * @returns {Object} Jellyfin DeviceProfile
  */
 export function getAutoProfile() {
-    const capabilities = detectCapabilities();
-    return getDeviceProfile(capabilities);
+    return buildJellyfinProfile();
+}
+
+/**
+ * Legacy alias — wraps buildJellyfinProfile for old callers.
+ * @param {Object} [options] - Ignored (capabilities are auto-detected now)
+ * @returns {Object} Jellyfin DeviceProfile
+ */
+export function getDeviceProfile(options = {}) {
+    return buildJellyfinProfile();
 }
 
 export default {
-    getDeviceProfile,
-    detectCapabilities,
-    getAutoProfile
+    detectTizenVersion,
+    getDeviceCapabilities,
+    clearCapabilitiesCache,
+    buildJellyfinProfile,
+    getDeviceId,
+    getDeviceName,
+    getAutoProfile,
+    getDeviceProfile
 };

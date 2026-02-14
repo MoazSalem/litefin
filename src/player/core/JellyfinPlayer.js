@@ -13,7 +13,7 @@
 import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { MediaHelper } from './MediaHelper.js';
-import { DeviceProfile } from './DeviceProfile.js';
+import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import { SubtitleParser } from './SubtitleParser.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
@@ -165,7 +165,7 @@ export class JellyfinPlayer extends EventEmitter {
         // ====================================================================
 
         this._backend = null;
-        this._deviceProfile = new DeviceProfile();
+        // Device profile now uses unified api/DeviceProfile module
 
         // Initialize the appropriate backend
         this._initBackend();
@@ -304,7 +304,7 @@ export class JellyfinPlayer extends EventEmitter {
                 startPositionTicks: options.startPositionTicks || 0,
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
-                deviceProfile: this._deviceProfile.getProfile()
+                deviceProfile: buildJellyfinProfile()
             });
 
             log.debug('Stream Info built:', streamInfo);
@@ -753,7 +753,7 @@ export class JellyfinPlayer extends EventEmitter {
                 Authorization: `MediaBrowser Token="${this.authToken}"`
             },
             body: JSON.stringify({
-                DeviceProfile: this._deviceProfile.getProfile(),
+                DeviceProfile: buildJellyfinProfile(),
                 UserId: options.userId,
                 MaxStreamingBitrate: maxBitrate,
                 StartTimeTicks: options.startPositionTicks || 0,

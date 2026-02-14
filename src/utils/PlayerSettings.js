@@ -20,7 +20,6 @@ const log = logger.create('PlayerSettings');
 
 /**
  * Default values for all player settings
- * These match the patterns from moonfin-tizen's settings.js
  */
 const DEFAULTS = {
     // =========================================================================
@@ -100,6 +99,34 @@ const DEFAULTS = {
 
     // Burn-in subtitles mode ('', 'allcomplex', 'all')
     subtitleBurnIn: '',
+
+    // =========================================================================
+    // DEVICE PROFILE / COMPATIBILITY SETTINGS
+    // =========================================================================
+
+    // Enable HEVC/H.265 codec for direct play (safe to leave on for all Tizen 4+)
+    enableHEVC: true,
+
+    // Enable AV1 codec (auto-gated by Tizen version ≥ 5.5 in DeviceProfile)
+    enableAV1: true,
+
+    // Enable VP9 codec (auto-gated by Tizen version / panel resolution)
+    enableVP9: true,
+
+    // Enable HDR10/HLG pass-through
+    enableHDR: true,
+
+    // Enable Dolby Vision pass-through (auto-detected via avinfo API)
+    enableDolbyVision: true,
+
+    // Enable DTS and TrueHD — see AUDIO SETTINGS above (enableDts, enableTrueHd)
+
+    // Maximum resolution ('auto', '720p', '1080p', '2160p', '4320p')
+    // 'auto' uses hardware detection via webapis
+    maxResolution: 'auto',
+
+    // Force all content to transcode (emergency/debug fallback)
+    forceTranscode: false,
 
     // =========================================================================
     // PLAYBACK SETTINGS

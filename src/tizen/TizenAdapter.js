@@ -283,11 +283,9 @@ class TizenAdapter {
 
                 log.info('Device info (Physical):', this._deviceInfo);
 
-                const manualRes = storage.getItem('litefin_max_resolution');
-                if (manualRes) {
+                const manualRes = storage.getItem('player:maxResolution');
+                if (manualRes && manualRes !== 'auto') {
                     log.info(`⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: ${manualRes}`);
-                } else {
-                    log.info(`⚠️ MANUAL RESOLUTION OVERRIDE ACTIVE: 2160p (Default)`);
                 }
             });
         } catch (e) {

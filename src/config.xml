@@ -4,7 +4,6 @@
     <tizen:allow-navigation>*</tizen:allow-navigation>
     <tizen:application id="LitefinApp.Litefin" package="LitefinApp" required_version="4.0"/>
     <content src="index.html"/>
-    <feature name="http://tizen.org/feature/screen.size.normal"/>
     <icon src="icon.png"/>
     <name>Litefin</name>
     <tizen:metadata key="http://samsung.com/tv/metadata/use.voiceguide" value="false"/>

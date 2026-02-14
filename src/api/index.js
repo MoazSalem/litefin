@@ -6,4 +6,13 @@
 
 export { api, discoverServers, cancelDiscovery, testServer, ServerUnreachableError } from './ApiClient.js';
 export { auth } from './AuthManager.js';
-export { getDeviceProfile, detectCapabilities, getAutoProfile } from './DeviceProfile.js';
+export {
+    getDeviceProfile,
+    getAutoProfile,
+    buildJellyfinProfile,
+    getDeviceCapabilities,
+    getDeviceId,
+    getDeviceName,
+    detectTizenVersion,
+    clearCapabilitiesCache
+} from './DeviceProfile.js';
