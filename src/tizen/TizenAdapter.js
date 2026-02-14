@@ -58,6 +58,7 @@ const TIZEN_KEYS = {
 
     // Other
     INFO: 457,
+    TOOLS: 433, // Often used as "Options"
     MENU: 18,
     CHANNEL_UP: 427,
     CHANNEL_DOWN: 428,
@@ -137,7 +138,8 @@ class TizenAdapter {
                 'ColorF1Green',
                 'ColorF2Yellow',
                 'ColorF3Blue',
-                'Info'
+                'Info',
+                'Tools'
             ];
 
             keys.forEach((key) => {
@@ -217,6 +219,14 @@ class TizenAdapter {
                     break;
                 case TIZEN_KEYS.BLUE:
                     eventBus.emit('key:blue', e);
+                    break;
+
+                case TIZEN_KEYS.INFO:
+                    eventBus.emit('key:info', e);
+                    break;
+
+                case TIZEN_KEYS.TOOLS:
+                    eventBus.emit('key:options', e);
                     break;
 
                 default:

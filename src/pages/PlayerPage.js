@@ -20,7 +20,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { playQueue } from '../core/PlayQueue.js';
 import { focusManager } from '../ui/FocusManager.js';
-import PlayerOSD from '../player/jellyfin-player-osd.js';
+import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
@@ -352,8 +352,8 @@ class PlayerPage extends Page {
 
         // Listen for player events
         this._player.on('ready', () => this._onPlayerReady());
-        this._player.on('playing', () => this._onPlaying());
-        this._player.on('paused', () => this._onPaused());
+        this._player.on('play', () => this._onPlaying());
+        this._player.on('pause', () => this._onPaused());
         this._player.on('ended', () => this._onEnded());
         this._player.on('error', (err) => this._onPlayerError(err));
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
@@ -466,28 +466,19 @@ class PlayerPage extends Page {
         }
 
         // Create OSD component with all dependencies injected (no globals!)
-        this._osd = new PlayerOSD({
-            container: osdContainer,
-            player: this._player,
+        // Create OSD component with all dependencies injected (no globals!)
+        this._osd = new OSDController(this._player, {
             item: this._item,
-            api: api,
-
-            // Callback: stop playback and navigate back
-            onExit: () => this._stopAndExit(),
-
-            // Callback: report pause/unpause state to Jellyfin server
-            onReportPause: (isPaused) => {
-                if (isPaused) {
-                    this._reportPlaybackProgress('pause');
-                } else {
-                    this._reportPlaybackProgress('unpause');
-                }
-            },
-
-            // Queue navigation callbacks
-            onNext: () => this._playNextItem(),
-            onPrevious: () => this._playPreviousItem()
+            api: api
         });
+
+        // Bind events
+        this._osd.on('exit', () => this._stopAndExit());
+        this._osd.on('next', () => this._playNextItem()); // Ensure OSD emits this
+        this._osd.on('previous', () => this._playPreviousItem()); // Ensure OSD emits this
+
+        // Initial metadata
+        // this._osd.setMetadata(this._item); // passed in options or set here
 
         // Mount OSD — this triggers render + event binding
         this._osd.mount(osdContainer);
@@ -801,7 +792,8 @@ class PlayerPage extends Page {
         if (!this._item || !this._player) return;
 
         log.info('Media streams changed, reporting progress to persist selection');
-        this._reportPlaybackProgress('timeupdate');
+        const isPaused = this._player.isPaused();
+        this._reportPlaybackProgress(isPaused ? 'pause' : 'timeupdate');
     }
 
     /**

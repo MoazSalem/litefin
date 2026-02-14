@@ -27,7 +27,7 @@ export const MediaHelper = {
      * @returns {Object} Stream info with URL and metadata
      */
     buildStreamUrl(options) {
-        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken, deviceProfile } = options;
+        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken } = options;
 
         // Determine play method
         const playMethod = this.getPlayMethod(mediaSource);
