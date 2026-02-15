@@ -513,7 +513,7 @@ export class TizenAVPlayer {
         if (!this._avplay || !this._isPrepared) return;
 
         try {
-            const positionMs = positionTicks / 10000;
+            const positionMs = Math.floor(positionTicks / 10000);
             this._avplay.seekTo(positionMs);
         } catch (e) {
             log.error('Seek failed:', e);

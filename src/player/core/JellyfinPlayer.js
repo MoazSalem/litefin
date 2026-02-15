@@ -5,8 +5,6 @@
  * Handles media source selection, track switching, and playback state.
  *
  * Integrated directly into litefin — no UMD bundle, no bridge, no standalone
- * settings manager. Uses litefin's Logger and PlayerSettings.
- *
  * @module core/JellyfinPlayer
  */
 
@@ -17,8 +15,10 @@ import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import { SubtitleParser } from './SubtitleParser.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { api } from '../../api/index.js';
 
 const log = logger.create('JellyfinPlayer');
+
 
 // ============================================================================
 // Minimal EventEmitter (inlined from player/src/bridge/EventEmitter.js)
@@ -160,6 +160,9 @@ export class JellyfinPlayer extends EventEmitter {
         this._secondaryCues = [];
         this._lastSecondaryCue = null;
 
+        // Chapters
+        this._chapters = [];
+
         // ====================================================================
         // Player Backend
         // ====================================================================
@@ -260,7 +263,48 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options, deviceProfile);
-            log.debug('PlaybackInfo received:', playbackInfo);
+            log.debug('PlaybackInfo keys:', Object.keys(playbackInfo));
+            if (playbackInfo.MediaSources && playbackInfo.MediaSources.length > 0) {
+                 log.debug('MediaSource[0] keys:', Object.keys(playbackInfo.MediaSources[0]));
+            }
+
+            // Chapter Recovery Strategy
+            // 1. Check if passed item has chapters (from options.item passed by PlayerPage)
+            // Note: We use options.item which we ensured is passed from PlayerPage
+            let chapters = options.item?.Chapters || [];
+
+            if (chapters.length > 0) {
+                log.info('Using chapters from item object:', chapters.length);
+            } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
+                // 2. Check PlaybackInfo
+                chapters = playbackInfo.Chapters;
+                log.info('Using chapters from PlaybackInfo:', chapters.length);
+            } else {
+                // 3. Fallback: Fetch item details to get chapters
+                log.info('Chapters missing. Fetching item details...');
+                try {
+                    // Need to request 'Chapters' field explicitly just to be safe, though api.getItem might default to all fields
+                    const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters' });
+                    if (itemDetails && itemDetails.Chapters) {
+                        chapters = itemDetails.Chapters;
+                        log.info('Chapters fetched from API:', chapters.length);
+                    } else {
+                        log.info('No chapters found in API response.');
+                    }
+                } catch (e) {
+                    log.warn('Failed to fetch item details for chapters:', e);
+                }
+            }
+
+            this._chapters = chapters;
+            log.debug('Final Chapters:', this._chapters.length);
+            
+            if (this._chapters.length > 0) {
+                log.info('Chapters loaded:', this._chapters.length);
+                this.emit('chaptersloaded', { chapters: this._chapters });
+            } else {
+                this.emit('chaptersloaded', { chapters: [] });
+            }
 
             if (!playbackInfo || !playbackInfo.MediaSources?.length) {
                 log.error('No media sources in PlaybackInfo');
@@ -401,6 +445,7 @@ export class JellyfinPlayer extends EventEmitter {
      */
     seek(positionTicks) {
         this._backend?.seek(positionTicks);
+        this.emit('seek', { positionTicks });
     }
 
     /**
@@ -577,6 +622,90 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getCurrentSecondarySubtitleStreamIndex() {
         return this._currentSecondarySubtitleStreamIndex;
+    }
+
+    // ========================================================================
+    // Chapter Support
+    // ========================================================================
+
+    getChapters() {
+        return this._chapters || [];
+    }
+
+    getCurrentChapterIndex() {
+        if (!this._chapters || this._chapters.length === 0) return -1;
+        
+        const currentTicks = this.getCurrentPositionTicks();
+        // log.debug('Chapter Debug: Current Ticks', currentTicks);
+
+        // Find the last chapter that started before current time
+        for (let i = this._chapters.length - 1; i >= 0; i--) {
+            const startTicks = this._chapters[i].StartPositionTicks || 0;
+            if (currentTicks >= startTicks) {
+                // log.debug('Chapter Debug: Found index', i, 'StartTicks', startTicks);
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    nextChapter() {
+        const index = this.getCurrentChapterIndex();
+        log.debug('Chapter Debug (Next): Current Index', index, 'Total', this._chapters ? this._chapters.length : 0);
+
+        if (index === -1) {
+             if (this._chapters && this._chapters.length > 0) {
+                 this.seek(this._chapters[0].StartPositionTicks);
+                 return;
+             }
+             return;
+        }
+
+        if (index >= this._chapters.length - 1) {
+            log.debug('Chapter Debug: Already at last chapter');
+            return;
+        }
+
+        const nextChapter = this._chapters[index + 1];
+        if (nextChapter) {
+            let seekTarget = nextChapter.StartPositionTicks;
+            if (this._backend instanceof TizenAVPlayer) {
+                // hack: Tizen AVPlay seek subtract 2.5s (25,000,000 ticks) from next chapter until we find what is wrong
+                seekTarget = Math.max(0, seekTarget - 25000000);
+                log.info('TizenAVPlayer: Applying 2.5s offset to next chapter jump');
+            }
+            log.info('Skipping to next chapter:', nextChapter.Name);
+            this.seek(seekTarget);
+        }
+    }
+
+    previousChapter() {
+        const index = this.getCurrentChapterIndex();
+        log.debug('Chapter Debug (Prev): Current Index', index);
+
+        if (index === -1) return;
+
+        const currentTicks = this.getCurrentPositionTicks();
+        const currentChapter = this._chapters[index];
+        const chapterStart = currentChapter.StartPositionTicks || 0;
+        
+        const diff = currentTicks - chapterStart;
+        log.debug('Chapter Debug: Diff from start', diff);
+
+        // If we are more than 3 seconds into the chapter, restart event
+        // 3 seconds = 30,000,000 ticks
+        if (diff > 30000000) {
+            log.info('Restarting current chapter:', currentChapter.Name);
+            this.seek(chapterStart);
+        } else if (index > 0) {
+            // Go to previous chapter
+            const prevChapter = this._chapters[index - 1];
+            log.info('Skipping to previous chapter:', prevChapter.Name);
+            this.seek(prevChapter.StartPositionTicks);
+        } else {
+             // First chapter, just seek to start
+             this.seek(0);
+        }
     }
 
     /**

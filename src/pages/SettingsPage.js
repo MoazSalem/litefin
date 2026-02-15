@@ -1460,9 +1460,9 @@ class SettingsPage extends Page {
                             if (settingConfig.key === 'subtitleFont' && newValue) {
                                 FontLoader.loadFont(newValue).then((loaded) => {
                                     if (loaded) {
-                                        console.log(`[SettingsPage] Font loaded: ${newValue}`);
+                                        log.debug(`Font loaded: ${newValue}`);
                                     } else {
-                                        console.warn(`[SettingsPage] Failed to load font: ${newValue}`);
+                                        log.warn(`Failed to load font: ${newValue}`);
                                     }
                                 });
                             }

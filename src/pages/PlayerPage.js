@@ -404,6 +404,7 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         await this._player.play({
+            item: item, // Pass full item which might have Chapters
             itemId: item.Id,
             userId: api.userId, // Required for playback info
             startPositionTicks: this._resumePosition,

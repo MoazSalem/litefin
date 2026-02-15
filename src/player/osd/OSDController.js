@@ -107,7 +107,14 @@ export default class OSDController extends Component {
             this._player.on('mediastreamschange', (e) => this._onMediaStreamsChange(e));
             this._player.on('play', () => this._updatePlayPauseButton());
             this._player.on('pause', () => this._updatePlayPauseButton());
+            this._player.on('chaptersloaded', () => this._updateChapterButtons());
+            this._player.on('seek', (e) => this._onPlayerSeek(e));
+            // Also update markers when duration becomes available
+            this._player.on('durationchange', () => this._renderChapterMarkers());
         }
+
+        // Initial render attempt
+        this._renderChapterMarkers();
 
         // Bind keys
         this._bindKeyEvents();
@@ -158,9 +165,11 @@ export default class OSDController extends Component {
                     <div class="osd-controls-row">
                         <div class="osd-controls-left">
                             <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${ICONS.skipPrevious}</button>
+                            <button class="osd-btn osd-hidden" data-action="previousChapter" tabindex="0" id="osdPrevChapterBtn">${ICONS.chapterPrevious}</button>
                             <button class="osd-btn" data-action="rewind" tabindex="0">${ICONS.fastRewind}</button>
                             <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${ICONS.pause}</button>
                             <button class="osd-btn" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
+                            <button class="osd-btn osd-hidden" data-action="nextChapter" tabindex="0" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
                         </div>
                         <div class="osd-controls-right">
@@ -177,6 +186,7 @@ export default class OSDController extends Component {
                         <span class="osd-time osd-time-current" id="osdCurrentTime">00:00</span>
                         <div class="osd-slider-container">
                             <div class="osd-seek-tooltip" id="osdSeekTooltip"></div>
+                            <div class="osd-chapter-markers" id="osdChapterMarkers"></div>
                             <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="0">
                         </div>
                         <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
@@ -260,6 +270,82 @@ export default class OSDController extends Component {
                 nextBtn.setAttribute('tabindex', '-1');
             }
         }
+    }
+
+    _updateChapterButtons() {
+        if (!this._osdEl || !this._player) return;
+
+        const chapters = this._player.getChapters ? this._player.getChapters() : [];
+        const hasChapters = chapters && chapters.length > 0;
+
+        const prevChapterBtn = this._osdEl.querySelector('[data-action="previousChapter"]');
+        const nextChapterBtn = this._osdEl.querySelector('[data-action="nextChapter"]');
+
+        if (hasChapters) {
+             if (prevChapterBtn) {
+                 prevChapterBtn.classList.remove('osd-hidden');
+                 prevChapterBtn.setAttribute('tabindex', '0');
+             }
+             if (nextChapterBtn) {
+                 nextChapterBtn.classList.remove('osd-hidden');
+                 nextChapterBtn.setAttribute('tabindex', '0');
+             }
+             this._renderChapterMarkers();
+        } else {
+             if (prevChapterBtn) {
+                 prevChapterBtn.classList.add('osd-hidden');
+                 prevChapterBtn.setAttribute('tabindex', '-1');
+             }
+             if (nextChapterBtn) {
+                 nextChapterBtn.classList.add('osd-hidden');
+                 nextChapterBtn.setAttribute('tabindex', '-1');
+             }
+             this._renderChapterMarkers();
+        }
+    }
+
+    _renderChapterMarkers() {
+        if (!this._osdEl || !this._player) return;
+
+        const container = this._osdEl.querySelector('#osdChapterMarkers');
+        if (!container) {
+            // Container might not be in DOM yet if this is called early
+            log.debug('#osdChapterMarkers not found, retrying in 500ms');
+            setTimeout(() => this._renderChapterMarkers(), 500);
+            return;
+        }
+
+        const chapters = this._player.getChapters ? this._player.getChapters() : [];
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+
+        log.debug(`Rendering chapter markers. Count: ${chapters.length}, Duration: ${duration}`);
+
+        if (!chapters.length || duration <= 0) {
+            // If we have chapters but duration is 0, we MUST retry once we get duration
+            if (chapters.length > 0 && duration === 0) {
+                 log.debug('Chapters found but duration is 0, will retry when duration changes');
+            }
+            container.innerHTML = '';
+            return;
+        }
+
+        // Clear existing
+        container.innerHTML = '';
+
+        chapters.forEach((chapter, index) => {
+            // First chapter is usually at 0, skipping it for visual clarity as the start is obvious
+            if (index === 0 && (chapter.StartPositionTicks === 0 || !chapter.StartPositionTicks)) return;
+
+            const percent = (chapter.StartPositionTicks / duration) * 100;
+            if (percent > 0 && percent < 100) {
+                const marker = document.createElement('div');
+                marker.className = 'osd-chapter-marker';
+                marker.style.left = `${percent}%`;
+                container.appendChild(marker);
+            }
+        });
+
+        log.debug(`Rendered ${container.children.length} markers`);
     }
 
     hide() {
@@ -765,6 +851,18 @@ export default class OSDController extends Component {
                 break;
             }
             case 'previousTrack': this.emit('previous'); break;
+            case 'previousChapter':
+                log.info('executeAction previousChapter');
+                if (this._player && this._player.previousChapter) {
+                    this._player.previousChapter();
+                }
+                break;
+            case 'nextChapter':
+                log.info('executeAction nextChapter');
+                if (this._player && this._player.nextChapter) {
+                    this._player.nextChapter();
+                }
+                break;
             case 'nextTrack': this.emit('next'); break;
             case 'subtitles': 
                 this.activeMenu = this.trackMenu;
@@ -974,6 +1072,20 @@ export default class OSDController extends Component {
         }
         if (e.secondarySubtitleStreamIndex !== undefined) {
              this._currentSecondarySubtitleIndex = e.secondarySubtitleStreamIndex;
+        }
+    }
+
+    _onPlayerSeek(e) {
+        if (e && e.positionTicks !== undefined) {
+             // Optimistic update for UI responsiveness
+             const tempPlayer = {
+                 getCurrentPositionTicks: () => e.positionTicks,
+                 getDurationTicks: () => this._player.getDurationTicks ? this._player.getDurationTicks() : 0
+             };
+             this._updateTimeDisplay(tempPlayer);
+             if (!this._isDraggingSeekbar) {
+                this._updatePositionSlider(tempPlayer);
+             }
         }
     }
 

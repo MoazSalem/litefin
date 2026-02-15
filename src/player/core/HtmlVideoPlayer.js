@@ -364,6 +364,7 @@ export class HtmlVideoPlayer {
         if (!video) return;
 
         const seconds = positionTicks / 10000000;
+        log.debug('seek to seconds', seconds, 'ticks', positionTicks);
 
         // Account for transcoding offset
         let targetSeconds = seconds;

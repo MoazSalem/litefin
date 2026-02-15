@@ -17,7 +17,7 @@ import { api } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PlayQueue');
-console.log('[BARE] PlayQueue module evaluated');
+// PlayQueue module evaluated
 
 class PlayQueue {
     constructor() {
