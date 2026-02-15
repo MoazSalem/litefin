@@ -463,6 +463,32 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Set aspect ratio mode
+     * @param {string} mode - 'auto', 'zoom', 'stretch'
+     */
+    setAspectRatio(mode) {
+        if (!this._videoElement) return;
+
+        let objectFit = 'contain'; // Default/Auto
+
+        switch (mode) {
+            case 'zoom':
+                objectFit = 'cover';
+                break;
+            case 'stretch':
+                objectFit = 'fill';
+                break;
+            case 'auto':
+            default:
+                objectFit = 'contain';
+                break;
+        }
+
+        log.info('Setting aspect ratio:', mode, '->', objectFit);
+        this._videoElement.style.objectFit = objectFit;
+    }
+
+    /**
      * Set subtitle offset by shifting VTT cue timing.
      * Uses delta-based approach: calculates the difference between the new
      * offset and the previously applied offset, then shifts all cue times.

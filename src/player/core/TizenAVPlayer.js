@@ -97,6 +97,36 @@ export class TizenAVPlayer {
         }
     }
 
+    /**
+     * Set aspect ratio mode
+     * @param {string} mode - 'auto', 'zoom', 'stretch'
+     */
+    setAspectRatio(mode) {
+        if (!this._avplay) return;
+
+        try {
+            let displayMethod = 'PLAYER_DISPLAY_MODE_LETTER_BOX'; // Default/Auto
+
+            switch (mode) {
+                case 'zoom':
+                    displayMethod = 'PLAYER_DISPLAY_MODE_CROPPED_FULL';
+                    break;
+                case 'stretch':
+                    displayMethod = 'PLAYER_DISPLAY_MODE_FULL_SCREEN';
+                    break;
+                case 'auto':
+                default:
+                    displayMethod = 'PLAYER_DISPLAY_MODE_LETTER_BOX';
+                    break;
+            }
+
+            log.info('Setting aspect ratio:', mode, '->', displayMethod);
+            this._avplay.setDisplayMethod(displayMethod);
+        } catch (e) {
+            log.error('Failed to set aspect ratio:', e);
+        }
+    }
+
     // ========================================================================
     // Playback Control
     // ========================================================================

@@ -9,6 +9,7 @@ import SettingsMenu from './SettingsMenu.js';
 import SubtitleOffset from './SubtitleOffset.js';
 import SubtitleQuickSettings from './SubtitleQuickSettings.js';
 import PlaybackInfo from './PlaybackInfo.js';
+import AspectRatioMenu from './AspectRatioMenu.js';
 
 const log = logger.create('OSDController');
 
@@ -66,6 +67,7 @@ export default class OSDController extends Component {
         this.subtitleOffset = new SubtitleOffset(this);
         this.subtitleQuickSettings = new SubtitleQuickSettings(this);
         this.playbackInfo = new PlaybackInfo(this);
+        this.aspectRatioMenu = new AspectRatioMenu(this);
 
         this.activeMenu = null; // Reference to currently open menu
 
@@ -124,6 +126,7 @@ export default class OSDController extends Component {
         this.subtitleOffset.destroy();
         this.subtitleQuickSettings.destroy();
         this.playbackInfo.destroy();
+        this.aspectRatioMenu.destroy();
         
         if (this.container) {
             this.container.removeEventListener('mousemove', this._onMouseMove);
@@ -352,15 +355,37 @@ export default class OSDController extends Component {
         }
     }
 
-    toggleSubtitleQuickSettings(show) {
-        if (show) {
-            this.activeMenu = this.subtitleQuickSettings;
+    toggleSubtitleQuickSettings(force) {
+        if (force === undefined) {
+             force = !this.subtitleQuickSettings.isVisible;
+        }
+
+        if (force) {
             this.subtitleQuickSettings.open();
+            this.activeMenu = this.subtitleQuickSettings;
         } else {
+            this.subtitleQuickSettings.hide();
             if (this.activeMenu === this.subtitleQuickSettings) {
                 this.activeMenu = null;
             }
-            this.subtitleQuickSettings.hide();
+            this.show();
+            this._updateFocus();
+        }
+    }
+
+    toggleAspectRatioMenu(force) {
+        if (force === undefined) {
+             force = !this.aspectRatioMenu.isVisible;
+        }
+
+        if (force) {
+            this.aspectRatioMenu.open();
+            this.activeMenu = this.aspectRatioMenu;
+        } else {
+            this.aspectRatioMenu.hide();
+            if (this.activeMenu === this.aspectRatioMenu) {
+                this.activeMenu = null;
+            }
             this.show();
             this._updateFocus();
         }
@@ -798,10 +823,10 @@ export default class OSDController extends Component {
 
             const seekDuration = (Date.now() - this._seekStartTime) / 1000;
             let speedMultiplier = 1;
-            if (seekDuration >= 11) speedMultiplier = 5;
-            else if (seekDuration >= 8) speedMultiplier = 4;
-            else if (seekDuration >= 5) speedMultiplier = 3;
-            else if (seekDuration >= 3) speedMultiplier = 2;
+            if (seekDuration >= 8) speedMultiplier = 5;
+            else if (seekDuration >= 6) speedMultiplier = 4;
+            else if (seekDuration >= 4) speedMultiplier = 3;
+            else if (seekDuration >= 2) speedMultiplier = 2;
 
             if (isNaN(offsetTicks)) return;
             const adjustedOffset = offsetTicks * speedMultiplier;

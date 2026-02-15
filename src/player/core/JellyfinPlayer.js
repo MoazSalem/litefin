@@ -513,6 +513,23 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Set aspect ratio mode
+     * @param {string} mode - 'auto', 'zoom', 'stretch'
+     */
+    setAspectRatio(mode) {
+        this._currentAspectRatio = mode;
+        this._backend?.setAspectRatio(mode);
+    }
+
+    /**
+     * Get current aspect ratio
+     * @returns {string} 'auto', 'zoom', 'stretch'
+     */
+    getAspectRatio() {
+        return this._currentAspectRatio || 'auto';
+    }
+
+    /**
      * Get current audio stream index
      * @returns {number}
      */

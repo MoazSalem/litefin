@@ -1,31 +1,36 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
+import { logger } from '../../utils/Logger.js';
 
-/**
- * SettingsMenu
- * 
- * Handles player configuration options.
- * Currently supports:
- * - Playback Speed selection.
- * - "Stats for nerds" (toggling the PlaybackInfo overlay).
- * 
- * Uses a modal list layout for option selection.
- */
-export default class SettingsMenu extends BaseMenu {
+const log = logger.create('AspectRatioMenu');
+
+export default class AspectRatioMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
+        this.options = [
+            { id: 'auto', label: 'Auto', icon: ICONS.aspectRatio },
+            { id: 'zoom', label: 'Zoom', icon: ICONS.zoomIn },
+            { id: 'stretch', label: 'Stretch', icon: ICONS.aspectRatio } // Reusing icon for now
+        ];
     }
 
     open() {
         this.focusIndex = 0;
+        // Pre-select current aspect ratio
+        const current = this.osd.player.getAspectRatio();
+        const index = this.options.findIndex(opt => opt.id === current);
+        if (index !== -1) {
+            this.focusIndex = index;
+        }
+
         this.render();
         this.show();
     }
 
     show() {
-        // Capture focus context before opening
-        this._prevFocus = this.osd._getFocused(); // Helper in controller or native
+        // Capture focus context
+        this._prevFocus = this.osd._getFocused(); 
         this._prevRow = this.osd._currentFocusRow;
         this._prevIndex = this.osd._currentFocusIndex;
 
@@ -42,7 +47,9 @@ export default class SettingsMenu extends BaseMenu {
             this.$el.classList.remove('visible');
         }
 
-        // Restore focus to the specific button that opened it
+        // Restore focus to Settings Menu if it's open, otherwise back to OSD
+        // Note: Logic in OSDController usually handles "back" stack, but here we just restore
+        // to where we came from.
         if (this._prevRow !== undefined) {
             this.osd._currentFocusRow = this._prevRow;
             this.osd._currentFocusIndex = this._prevIndex;
@@ -53,7 +60,7 @@ export default class SettingsMenu extends BaseMenu {
     render() {
         if (!this.$el) {
             this.$el = document.createElement('div');
-            this.$el.className = 'track-menu-overlay';
+            this.$el.className = 'track-menu-overlay'; // Reuse track menu styles
             document.body.appendChild(this.$el);
 
             this.$el.addEventListener('click', (e) => {
@@ -63,24 +70,25 @@ export default class SettingsMenu extends BaseMenu {
             });
         }
 
-        const options = [
-            { id: 'aspectRatio', label: 'Aspect Ratio', icon: ICONS.aspectRatio },
-            { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
-            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
-            { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
-            // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }
-        ];
+        const current = this.osd.player.getAspectRatio();
 
-        const optionsHtml = options.map((opt, i) => `
-            <button class="track-option track-item" data-id="${opt.id}" data-menu-index="${i}">
+        const optionsHtml = this.options.map((opt, i) => {
+            const isSelected = opt.id === current;
+            const checkIcon = isSelected ? ICONS.check : '';
+            
+            return `
+            <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
+                    data-id="${opt.id}" data-menu-index="${i}">
                 <span class="track-option-icon">${opt.icon || ''}</span>
                 <span class="track-option-label">${opt.label}</span>
+                <span class="track-option-check">${checkIcon}</span>
             </button>
-        `).join('');
+            `;
+        }).join('');
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">Settings</div>
+                <div class="track-menu-title">Aspect Ratio</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>
@@ -99,8 +107,6 @@ export default class SettingsMenu extends BaseMenu {
     }
 
     handleKey(key) {
-        const options = this.$el?.querySelectorAll('.track-option') || [];
-        
         switch (key) {
             case 'up':
                 if (this.focusIndex > 0) {
@@ -109,14 +115,13 @@ export default class SettingsMenu extends BaseMenu {
                 }
                 return true;
             case 'down':
-                if (this.focusIndex < options.length - 1) {
+                if (this.focusIndex < this.options.length - 1) {
                     this.focusIndex++;
                     this.updateFocus();
                 }
                 return true;
             case 'enter':
-                // Rely on native click event which is triggered by the browser on Enter
-                return true;
+                return true; // Click handled by click listener
             case 'back':
             case 'left':
             case 'right':
@@ -127,28 +132,11 @@ export default class SettingsMenu extends BaseMenu {
     }
 
     handleEnter() {
-        const options = this.$el?.querySelectorAll('.track-option') || [];
-        const focusedOption = options[this.focusIndex];
-        if (!focusedOption) return;
-
-        const actionId = focusedOption.dataset.id;
-        
-        // Use closeMenu to cleanup focus properly
-        this.osd.closeMenu();
-
-        switch (actionId) {
-            case 'aspectRatio':
-                this.osd.toggleAspectRatioMenu(true);
-                break;
-            case 'playbackInfo':
-                this.osd.togglePlaybackInfo(!this.osd.playbackInfo.isVisible);
-                break;
-            case 'subtitleOffset':
-                this.osd.toggleSubtitleOffset(!this.osd.subtitleOffset.isVisible);
-                break;
-            case 'subtitleAppearance':
-                this.osd.toggleSubtitleQuickSettings(!this.osd.subtitleQuickSettings.isVisible);
-                break;
+        const selected = this.options[this.focusIndex];
+        if (selected) {
+            log.info('Selected aspect ratio:', selected.id);
+            this.osd.player.setAspectRatio(selected.id);
+            this.osd.closeMenu();
         }
     }
 
