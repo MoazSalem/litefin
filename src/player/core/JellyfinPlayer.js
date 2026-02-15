@@ -431,7 +431,9 @@ export class JellyfinPlayer extends EventEmitter {
         this._currentMediaSource = null;
         this._currentPlayOptions = null;
         this._isPlaying = false;
+        this._isPlaying = false;
         this._isPaused = false;
+        this._playbackSpeed = 1; // Reset speed on stop
 
         this.emit(PlayerEvent.PLAYBACK_STOP, {
             item,
@@ -614,6 +616,28 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { secondarySubtitleStreamIndex: index });
+    }
+
+    // ========================================================================
+    // Playback Speed
+    // ========================================================================
+
+    /**
+     * Set playback speed
+     * @param {number} speed - Playback speed (0.5 to 4.0)
+     */
+    setPlaybackSpeed(speed) {
+        this._playbackSpeed = speed;
+        this._backend?.setSpeed(speed);
+        this.emit('speedchange', { speed });
+    }
+
+    /**
+     * Get current playback speed
+     * @returns {number}
+     */
+    getPlaybackSpeed() {
+        return this._playbackSpeed || 1;
     }
 
     /**

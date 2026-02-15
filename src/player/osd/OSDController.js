@@ -10,6 +10,7 @@ import SubtitleOffset from './SubtitleOffset.js';
 import SubtitleQuickSettings from './SubtitleQuickSettings.js';
 import PlaybackInfo from './PlaybackInfo.js';
 import AspectRatioMenu from './AspectRatioMenu.js';
+import PlaybackSpeedMenu from './PlaybackSpeedMenu.js';
 
 const log = logger.create('OSDController');
 
@@ -68,6 +69,7 @@ export default class OSDController extends Component {
         this.subtitleQuickSettings = new SubtitleQuickSettings(this);
         this.playbackInfo = new PlaybackInfo(this);
         this.aspectRatioMenu = new AspectRatioMenu(this);
+        this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
 
         this.activeMenu = null; // Reference to currently open menu
 
@@ -1086,6 +1088,17 @@ export default class OSDController extends Component {
              if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(tempPlayer);
              }
+        }
+    }
+
+    togglePlaybackSpeedMenu(show) {
+        if (show) {
+            this.settingsMenu.hide();
+            this.playbackSpeedMenu.open();
+            this.activeMenu = this.playbackSpeedMenu;
+        } else {
+            this.playbackSpeedMenu.hide();
+            this.activeMenu = null;
         }
     }
 

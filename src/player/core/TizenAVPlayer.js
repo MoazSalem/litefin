@@ -281,6 +281,20 @@ export class TizenAVPlayer {
     }
 
     /**
+     * Set playback speed
+     * @param {number} speed
+     */
+    setSpeed(speed) {
+        if (this._avplay && this._isPrepared) {
+             try {
+                 this._avplay.setSpeed(speed);
+             } catch (e) {
+                 log.error('Failed to set speed:', speed, e);
+             }
+        }
+    }
+
+    /**
      * Apply any pending audio/subtitle track selections
      * @private
      */

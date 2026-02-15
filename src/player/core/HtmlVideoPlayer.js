@@ -402,6 +402,16 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Set playback speed
+     * @param {number} speed
+     */
+    setSpeed(speed) {
+        if (this._videoElement) {
+            this._videoElement.playbackRate = speed;
+        }
+    }
+
+    /**
      * Toggle mute
      */
     toggleMute() {
