@@ -584,6 +584,17 @@ export class TizenAVPlayer {
     setSubtitleStreamIndex(index) {
         if (!this._avplay) return;
 
+        // Workaround: Pause/Resume to force subtitle refresh on track change
+        // Tizen AVPlay doesn't always update the current cue immediately when switching tracks
+        const wasPlaying = this._isPlaying;
+        if (wasPlaying) {
+             try {
+                this._avplay.pause();
+             } catch (e) {
+                log.warn('Pause for subtitle switch failed:', e);
+             }
+        }
+
         try {
             if (index < 0) {
                 this._avplay.setSilentSubtitle(true);
@@ -599,13 +610,26 @@ export class TizenAVPlayer {
                     this._currentSubtitleStreamIndex = index; // Update state
                 }
             }
-
-            // Reset subtitle offset when switching tracks
-            this._subtitleOffset = 0;
-            this._applySubtitlePosition();
         } catch (e) {
-            log.error('Set subtitle track failed:', e);
+             log.error('Failed to set subtitle track:', e);
         }
+
+        if (wasPlaying) {
+             try {
+                 this._avplay.play();
+             } catch (e) {
+                 log.warn('Resume after subtitle switch failed:', e);
+             }
+        }
+
+    }
+
+    /**
+     * Signal to the UI that subtitle styles should be refreshed.
+     * Called by settings menu when style preferences change.
+     */
+    refreshSubtitles() {
+        this.onEvent({ type: 'refreshsubtitles' });
     }
 
     /**

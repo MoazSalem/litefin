@@ -721,6 +721,94 @@
 }
 
 /* ============================================================================
+   Subtitle Quick Settings Layout Fixes
+   ============================================================================ */
+
+.subtitle-settings-menu {
+    min-width: 650px !important;
+}
+
+/* Internal layout for settings items within the standard .track-option */
+.subtitle-setting-item {
+    justify-content: flex-start !important; /* Start-aligned so we control the gap via flex/margin */
+    padding: 1.2em 2em !important;
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.sub-setting-label {
+    flex: 0 0 280px !important; /* Fixed width ensures all sliders start at the same column */
+    text-align: left;
+}
+
+.sub-setting-control {
+    flex: 1 !important;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+}
+
+.sub-setting-value {
+    font-weight: bold;
+    min-width: 2.0em;
+    text-align: right; /* Value after slider looks better left-aligned */
+}
+
+/* Slider integration within the menu item */
+.sub-setting-slider-group {
+    display: flex !important;
+    align-items: center !important;
+    width: 100% !important;
+}
+
+.osd-slider-container.menu-slider {
+    flex: 1 !important; /* GROW to fill the space! */
+    height: 30px;
+}
+
+.menu-slider .osd-slider {
+    width: 100% !important;
+}
+
+
+/* Ensure slider track is visible on the dark menu background */
+.menu-slider .osd-slider::-webkit-slider-runnable-track {
+    background: linear-gradient(to right,
+            var(--osd-accent-color) 0%,
+            var(--osd-accent-color) var(--progress, 0%),
+            rgba(255, 255, 255, 0.2) var(--progress, 0%),
+            rgba(255, 255, 255, 0.2) 100%) !important;
+    height: 6px !important;
+    border-radius: 3px !important;
+}
+
+/* When the item is focused, we keep the track but maybe brighten the background part */
+.track-option.focused .menu-slider .osd-slider::-webkit-slider-runnable-track {
+    background: linear-gradient(to right,
+            #fff 0%,
+            #fff var(--progress, 0%),
+            rgba(255, 255, 255, 0.4) var(--progress, 0%),
+            rgba(255, 255, 255, 0.4) 100%) !important;
+}
+
+/* Enlarge thumb when the parent option is focused */
+.track-option.focused .menu-slider .osd-slider::-webkit-slider-thumb {
+    width: 9.6px;
+    height: 28.8px;
+    border-radius: 4.8px;
+    /* Center on 6px track inside 30px container: (30 / 2) - (28.8 / 2) = 15 - 14.4 = 0.6px margin check */
+    /* Standard OSD uses -10.8px for 36px/7.2px. For 30/6, we'll use -11.4px approx */
+    margin-top: -11.4px;
+}
+
+.track-option.focused .menu-slider .osd-slider::-moz-range-thumb {
+    width: 9.6px;
+    height: 28.8px;
+    border-radius: 4.8px;
+}
+
+
+/* ============================================================================
    Playback Info Overlay
    ============================================================================ */
 

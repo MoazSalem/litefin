@@ -599,6 +599,17 @@ export class JellyfinPlayer extends EventEmitter {
      * Update secondary subtitles based on current playback time
      * @private
      */
+    /**
+     * Refresh subtitle styles
+     * delegate to backend if supported
+     */
+    refreshSubtitles() {
+        if (this._backend && this._backend.refreshSubtitles) {
+            this._backend.refreshSubtitles();
+        } else {
+             this.emit('refreshsubtitles');
+        }
+    }
     _updateSecondarySubtitles(currentTimeSeconds) {
         // Skip if no cues loaded
         if (!this._secondaryCues.length) return;

@@ -359,6 +359,7 @@ class PlayerPage extends Page {
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
+        this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
 
         // NOTE: No more window.playerInstance / window.playerExit / window.reportPauseState
         // globals. The OSD Component receives these as constructor options instead.
@@ -794,6 +795,35 @@ class PlayerPage extends Page {
         log.info('Media streams changed, reporting progress to persist selection');
         const isPaused = this._player.isPaused();
         this._reportPlaybackProgress(isPaused ? 'pause' : 'timeupdate');
+    }
+
+    /**
+     * Re-apply styles to the currently displayed subtitle
+     */
+    _refreshSubtitleStyles() {
+        const overlay = document.getElementById('subtitle-overlay');
+        if (!overlay || overlay.classList.contains('hidden')) return;
+
+        const span = overlay.querySelector('.subtitle-line');
+        if (span) {
+            log.debug('Refreshing subtitle styles');
+
+            // Re-apply text styles
+            const styles = SubtitleStyles.getTextStyles();
+            SubtitleStyles.applyStyles(span, styles);
+
+            // Re-apply container styles (position/window)
+            const windowStyles = SubtitleStyles.getWindowStyles();
+            SubtitleStyles.applyStyles(overlay, windowStyles);
+
+            // Handle font loading if changed
+            const fontId = SubtitleStyles.getCurrentFontId();
+            if (fontId) {
+                FontLoader.loadFont(fontId).then(() => {
+                    SubtitleStyles.applyStyles(span, styles);
+                });
+            }
+        }
     }
 
     /**

@@ -611,7 +611,7 @@ class SettingsPage extends Page {
                             PlayerSettings.get('subtitleVerticalPositionCustom'),
                             0,
                             100,
-                            5
+                            1
                         )}
                     </div>
                 </div>
@@ -720,8 +720,8 @@ class SettingsPage extends Page {
                             'subtitle-shadow-select',
                             [
                                 { value: 'none', label: 'None' },
+                                { value: 'uniform', label: 'Uniform' },
                                 { value: 'dropshadow', label: 'Drop Shadow' },
-                                { value: 'uniform', label: 'Uniform Border' },
                                 { value: 'raised', label: 'Raised' },
                                 { value: 'depressed', label: 'Depressed' }
                             ],

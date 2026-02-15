@@ -7,6 +7,7 @@ import { ICONS } from './icons.js';
 import TrackMenu from './TrackMenu.js';
 import SettingsMenu from './SettingsMenu.js';
 import SubtitleOffset from './SubtitleOffset.js';
+import SubtitleQuickSettings from './SubtitleQuickSettings.js';
 import PlaybackInfo from './PlaybackInfo.js';
 
 const log = logger.create('OSDController');
@@ -63,6 +64,7 @@ export default class OSDController extends Component {
         this.trackMenu = new TrackMenu(this);
         this.settingsMenu = new SettingsMenu(this);
         this.subtitleOffset = new SubtitleOffset(this);
+        this.subtitleQuickSettings = new SubtitleQuickSettings(this);
         this.playbackInfo = new PlaybackInfo(this);
 
         this.activeMenu = null; // Reference to currently open menu
@@ -120,6 +122,7 @@ export default class OSDController extends Component {
         this.trackMenu.destroy();
         this.settingsMenu.destroy();
         this.subtitleOffset.destroy();
+        this.subtitleQuickSettings.destroy();
         this.playbackInfo.destroy();
         
         if (this.container) {
@@ -345,6 +348,20 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1; // Controls
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            this._updateFocus();
+        }
+    }
+
+    toggleSubtitleQuickSettings(show) {
+        if (show) {
+            this.activeMenu = this.subtitleQuickSettings;
+            this.subtitleQuickSettings.open();
+        } else {
+            if (this.activeMenu === this.subtitleQuickSettings) {
+                this.activeMenu = null;
+            }
+            this.subtitleQuickSettings.hide();
+            this.show();
             this._updateFocus();
         }
     }
@@ -579,6 +596,10 @@ export default class OSDController extends Component {
                 this.toggleSubtitleOffset(false);
                 return true;
             }
+            if (this.activeMenu === this.subtitleQuickSettings) {
+                this.toggleSubtitleQuickSettings(false);
+                return true;
+            }
             // Fallback for generic modals (SettingsMenu, TrackMenu)
             if (this.activeMenu.isModal) {
                 this.closeMenu();
@@ -738,6 +759,9 @@ export default class OSDController extends Component {
                 break;
             case 'closeSubtitleOffset':
                 this.toggleSubtitleOffset(false);
+                break;
+            case 'subtitleSettings':
+                this.toggleSubtitleQuickSettings(true);
                 break;
             case 'closePlaybackInfo':
                 this.togglePlaybackInfo(false);

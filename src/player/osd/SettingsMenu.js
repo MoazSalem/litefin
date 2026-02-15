@@ -65,7 +65,8 @@ export default class SettingsMenu extends BaseMenu {
 
         const options = [
             { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
-            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync }
+            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
+            { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
             // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }
         ];
 
@@ -140,6 +141,9 @@ export default class SettingsMenu extends BaseMenu {
                 break;
             case 'subtitleOffset':
                 this.osd.toggleSubtitleOffset(!this.osd.subtitleOffset.isVisible);
+                break;
+            case 'subtitleAppearance':
+                this.osd.toggleSubtitleQuickSettings(!this.osd.subtitleQuickSettings.isVisible);
                 break;
         }
     }

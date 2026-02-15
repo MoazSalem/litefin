@@ -75,7 +75,7 @@ export function getTextStyles() {
 
     // ========================================================================
     // Text Shadow / Drop Shadow
-    // Options: dropshadow, raised, depressed, uniform, none
+    // Options: uniform, dropshadow, raised, depressed, none
     // ========================================================================
     // ========================================================================
     // Text Opacity
@@ -86,12 +86,12 @@ export function getTextStyles() {
     // Text Shadow / Drop Shadow
     // Options: dropshadow, heavy, raised, depressed, uniform, none
     // ========================================================================
-    const shadow = PlayerSettings.get('subtitleDropShadow') || 'dropshadow';
+    const shadow = PlayerSettings.get('subtitleDropShadow') || 'uniform';
 
     // Custom Shadow Settings
-    const shadowOpacity = PlayerSettings.get('subtitleDropShadowOpacity') ?? 50;
+    const shadowOpacity = PlayerSettings.get('subtitleDropShadowOpacity') ?? 20;
     const shadowColorHex = PlayerSettings.get('subtitleDropShadowColor') || '#000000';
-    const shadowBlur = PlayerSettings.get('subtitleDropShadowBlur') ?? 10;
+    const shadowBlur = PlayerSettings.get('subtitleDropShadowBlur') ?? 6;
     const blurPx = `${shadowBlur}px`;
 
     // Generate valid RGBA for shadow and highlight (for 3D effects)
@@ -199,7 +199,7 @@ export function getTextStyles() {
         styles.push({ name: 'marginBottom', value: '' });
         styles.push({ name: 'marginTop', value: '' });
     } else {
-        let pos = parseInt(posSetting, 10);
+        let pos = parseFloat(posSetting);
         if (isNaN(pos)) pos = -2; // Default to bottom standard
         const step = 5; // vh logic
 
@@ -236,7 +236,7 @@ export function getWindowStyles() {
         styles.push({ name: 'top', value: '' });
         styles.push({ name: 'bottom', value: `${customPos}%` });
     } else {
-        let pos = parseInt(posSetting, 10);
+        let pos = parseFloat(posSetting);
         if (isNaN(pos)) pos = -2; // Default to bottom standard
 
         if (pos < 0) {

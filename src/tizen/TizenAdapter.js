@@ -188,22 +188,29 @@ class TizenAdapter {
                     break;
 
                 // Media controls
+                // Media controls
                 case TIZEN_KEYS.PLAY:
+                    e.preventDefault();
                     eventBus.emit('key:play', e);
                     break;
                 case TIZEN_KEYS.PAUSE:
+                    e.preventDefault();
                     eventBus.emit('key:pause', e);
                     break;
                 case TIZEN_KEYS.PLAY_PAUSE:
+                    e.preventDefault();
                     eventBus.emit('key:playPause', e);
                     break;
                 case TIZEN_KEYS.STOP:
+                    e.preventDefault();
                     eventBus.emit('key:stop', e);
                     break;
                 case TIZEN_KEYS.REWIND:
+                    e.preventDefault();
                     eventBus.emit('key:rewind', e);
                     break;
                 case TIZEN_KEYS.FAST_FORWARD:
+                    e.preventDefault();
                     eventBus.emit('key:fastForward', e);
                     break;
 
