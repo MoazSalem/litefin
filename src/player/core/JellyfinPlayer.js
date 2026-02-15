@@ -212,6 +212,13 @@ export class JellyfinPlayer extends EventEmitter {
      * @private
      */
     _handleBackendEvent(event) {
+        // Sync internal state
+        if (event.type === PlayerEvent.PAUSE) {
+            this._isPaused = true;
+        } else if (event.type === PlayerEvent.PLAY || event.type === PlayerEvent.PLAYING) {
+            this._isPaused = false;
+        }
+
         // Handle timeupdate for syncing secondary subtitles
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
             this._updateSecondarySubtitles(event.data.time);
@@ -248,8 +255,11 @@ export class JellyfinPlayer extends EventEmitter {
         try {
             log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
 
+            // Build device profile once (avoids duplicate logs/work)
+            const deviceProfile = buildJellyfinProfile();
+
             // Get playback info from server
-            const playbackInfo = await this._getPlaybackInfo(options);
+            const playbackInfo = await this._getPlaybackInfo(options, deviceProfile);
             log.debug('PlaybackInfo received:', playbackInfo);
 
             if (!playbackInfo || !playbackInfo.MediaSources?.length) {
@@ -304,7 +314,7 @@ export class JellyfinPlayer extends EventEmitter {
                 startPositionTicks: options.startPositionTicks || 0,
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
-                deviceProfile: buildJellyfinProfile()
+                deviceProfile: deviceProfile
             });
 
             log.debug('Stream Info built:', streamInfo);
@@ -340,8 +350,7 @@ export class JellyfinPlayer extends EventEmitter {
      */
     pause() {
         this._backend?.pause();
-        this._isPaused = true;
-        this.emit(PlayerEvent.PAUSE);
+        // State update and event emission handled by _handleBackendEvent
     }
 
     /**
@@ -349,8 +358,7 @@ export class JellyfinPlayer extends EventEmitter {
      */
     unpause() {
         this._backend?.unpause();
-        this._isPaused = false;
-        this.emit(PlayerEvent.PLAY);
+        // State update and event emission handled by _handleBackendEvent
     }
 
     /**
@@ -751,7 +759,7 @@ export class JellyfinPlayer extends EventEmitter {
      * Get playback info from Jellyfin server
      * @private
      */
-    async _getPlaybackInfo(options) {
+    async _getPlaybackInfo(options, deviceProfile) {
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
 
         // Read max bitrate from litefin's PlayerSettings
@@ -764,7 +772,7 @@ export class JellyfinPlayer extends EventEmitter {
                 Authorization: `MediaBrowser Token="${this.authToken}"`
             },
             body: JSON.stringify({
-                DeviceProfile: buildJellyfinProfile(),
+                DeviceProfile: deviceProfile || buildJellyfinProfile(),
                 UserId: options.userId,
                 MaxStreamingBitrate: maxBitrate,
                 StartTimeTicks: options.startPositionTicks || 0,
