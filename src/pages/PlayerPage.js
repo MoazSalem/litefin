@@ -96,6 +96,11 @@ class PlayerPage extends Page {
     }
 
     async onInit() {
+        // Reset state for new playback session
+        this._item = null;
+        this._resumePosition = 0;
+        this._hasReportedStart = false;
+
         const itemId = this.params.id;
         const resume = this.params.resume === 'true';
 
@@ -309,7 +314,6 @@ class PlayerPage extends Page {
             eventBus.on('remote:togglemute', this._onRemoteToggleMute);
 
             // Next/Previous track handlers
-            // Next/Previous track handlers
             this._onRemoteNext = async () => {
                 log.info('Remote: NextTrack');
                 this._playNextItem();
@@ -326,7 +330,8 @@ class PlayerPage extends Page {
             await this._startPlayback();
 
             // Hide loading
-            this._showLoading(false);
+            // effective hide happens on 'playing' event to prevent flash
+            // this._showLoading(false);
         } catch (error) {
             log.error('Failed to initialize:', error);
             this._showError(error.message || 'Failed to load video');
@@ -351,10 +356,8 @@ class PlayerPage extends Page {
         log.info('Player initialized:', !!this._player);
 
         // Listen for player events
-        this._player.on('ready', () => this._onPlayerReady());
-        this._player.on('ready', () => this._onPlayerReady());
+        // Note: 'ready' is not emitted by JellyfinPlayer, so we call it manually below
         // this._player.on('play', () => this._onPlaying()); // Handled by 'playing'
-        this._player.on('pause', () => this._onPaused());
         this._player.on('pause', () => this._onPaused());
         this._player.on('ended', () => this._onEnded());
         this._player.on('error', (err) => this._onPlayerError(err));
@@ -364,22 +367,39 @@ class PlayerPage extends Page {
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => this._reportPlaybackProgress('timeupdate', data?.positionTicks));
-        this._player.on('waiting', () => this._showLoading(true));
+        // Waiting listener removed to prevent loading screen during seek/buffer
+        this._player.on('restarting', () => {
+            log.info('Player restarting (quality change), showing loading');
+            this._showLoading(true);
+        });
+
         this._player.on('playing', () => {
             this._showLoading(false);
             this._onPlaying();
         });
 
-        // NOTE: No more window.playerInstance / window.playerExit / window.reportPauseState
-        // globals. The OSD Component receives these as constructor options instead.
+        this._player.on('loadedmetadata', (data) => {
+            log.debug('Loaded metadata', data);
+            // If starting from scratch, hide loading now.
+            // This is safer than the immediate _onPlayerReady as backend is prepared.
+            if (!this._resumePosition) {
+                this._showLoading(false);
+            }
+        });
+
+        // Manually trigger ready state (removed loading logic from here)
+        this._onPlayerReady();
     }
 
+    _onPlayerReady() {
+        log.info('Player ready');
+        // Loading is now handled by 'loadedmetadata' event
+    }
     /**
      * Start playback of the current item
      */
     async _startPlayback() {
         const item = this._item;
-
         // Get saved stream preferences from MediaSource
         const mediaSource = item.MediaSources?.[0];
 
@@ -477,7 +497,6 @@ class PlayerPage extends Page {
         }
 
         // Create OSD component with all dependencies injected (no globals!)
-        // Create OSD component with all dependencies injected (no globals!)
         this._osd = new OSDController(this._player, {
             item: this._item,
             api: api
@@ -511,27 +530,9 @@ class PlayerPage extends Page {
     // Player Event Handlers
     // ========================================================================
 
-    _onPlayerReady() {
-        log.info('Player ready');
-        this._showLoading(false);
-
-        // Reset the loading backdrop styles if we modified them
-        if (this._loadingBackdrop) {
-            // this._loadingBackdrop is a reference to the .page-loading element
-            this._loadingBackdrop.style.backgroundImage = '';
-            this._loadingBackdrop.style.backgroundSize = '';
-            this._loadingBackdrop.style.backgroundPosition = '';
-            this._loadingBackdrop.style.backgroundColor = ''; // Reverts to CSS default
-
-            this._loadingBackdrop = null;
-
-            // Clear from state
-            state.set('player:backdropUrl', null);
-        }
-    }
-
     _onPlaying() {
         log.info('Playing');
+
         eventBus.emit('player:playing', { item: this._item });
 
         // Sync OSD track state (especially important for queue switches)

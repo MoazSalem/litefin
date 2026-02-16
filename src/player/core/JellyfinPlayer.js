@@ -126,7 +126,8 @@ export const PlayerEvent = {
     WAITING: 'waiting',
     PLAYING: 'playing',
     FULLSCREEN_CHANGE: 'fullscreenchange',
-    STATE_CHANGE: 'statechange'
+    STATE_CHANGE: 'statechange',
+    RESTARTING: 'restarting'
 };
 
 // ============================================================================
@@ -169,6 +170,7 @@ export class JellyfinPlayer extends EventEmitter {
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
+        this._isSeeking = false; // Track seeking state to suppress loading screens during seek
 
         // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -245,10 +247,25 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Check if player is currently seeking
+     * @returns {boolean}
+     */
+    get isSeeking() {
+        return this._isSeeking;
+    }
+
+    /**
      * Handle events from the backend player
      * @private
      */
     _handleBackendEvent(event) {
+        // Clear seeking flag on relevant events
+        if (event.type === PlayerEvent.SEEKED || 
+            event.type === PlayerEvent.PLAYING || 
+            (event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)) {
+            this._isSeeking = false;
+        }
+
         // Intercept events if we are waiting for the initial Transcode Seek
         if (this._pendingTranscodeSeekTicks !== null) {
             
@@ -620,6 +637,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {number} positionTicks - Position in ticks (1 tick = 100 nanoseconds)
      */
     seek(positionTicks) {
+        this._isSeeking = true;
         this._backend?.seek(positionTicks);
         this.emit('seek', { positionTicks });
     }
@@ -857,10 +875,10 @@ export class JellyfinPlayer extends EventEmitter {
         return this._chapters || [];
     }
 
-    getCurrentChapterIndex() {
+    getCurrentChapterIndex(timeTicks) {
         if (!this._chapters || this._chapters.length === 0) return -1;
         
-        const currentTicks = this.getCurrentPositionTicks();
+        const currentTicks = timeTicks !== undefined ? timeTicks : this.getCurrentPositionTicks();
         // log.debug('Chapter Debug: Current Ticks', currentTicks);
 
         // Find the last chapter that started before current time
@@ -875,7 +893,18 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     nextChapter() {
-        const index = this.getCurrentChapterIndex();
+        // Tizen Seek Offset Workaround:
+        // On Tizen, we apply a -2.5s offset to chapter seeks (see below).
+        // This causes "Next Chapter" to land slightly before the actual chapter start.
+        // Determining the current chapter index strictly by current time would place us in the PREVIOUS chapter.
+        // To avoid getting stuck in a loop (Next -> Prev Chapter End -> Next -> Prev Chapter End),
+        // we look ahead by 3s (slightly more than the 2.5s hack) to see "where we effectively are".
+        let lookAhead = 0;
+        if (this._backend instanceof TizenAVPlayer) {
+             lookAhead = 30000000; // 3 seconds in ticks
+        }
+        
+        const index = this.getCurrentChapterIndex(this.getCurrentPositionTicks() + lookAhead);
         log.debug('Chapter Debug (Next): Current Index', index, 'Total', this._chapters ? this._chapters.length : 0);
 
         if (index === -1) {
@@ -1129,7 +1158,7 @@ export class JellyfinPlayer extends EventEmitter {
         
         try {
             // Trigger loading state immediately
-            this.emit(PlayerEvent.WAITING);
+            this.emit(PlayerEvent.RESTARTING);
 
             await this.stop();
             // _manualBitrate is preserved because _isRestarting was true
@@ -1194,7 +1223,7 @@ export class JellyfinPlayer extends EventEmitter {
                 this._isRestarting = true;
                 
                 try {
-                    this.emit(PlayerEvent.WAITING);
+                    this.emit(PlayerEvent.RESTARTING);
                     await this.stop();
                     // Give backend time to cleanup
                     await new Promise(resolve => setTimeout(resolve, 500));

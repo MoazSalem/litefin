@@ -250,7 +250,10 @@ export class TizenAVPlayer {
             },
             onbufferingcomplete: () => {
                 log.debug('Buffering complete');
-                this.onEvent({ type: 'playing' });
+                // Only emit playing if we are actually playing (not paused)
+                if (this._isPlaying) {
+                    this.onEvent({ type: 'playing' });
+                }
 
                 // Apply pending track selections once buffering is done
                 // This is the most reliable time to switch tracks on Tizen
