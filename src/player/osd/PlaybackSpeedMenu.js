@@ -123,7 +123,9 @@ export default class PlaybackSpeedMenu extends BaseMenu {
             case 'back':
             case 'left':
             case 'right':
-                this.osd.closeMenu();
+                this.hide();
+                // Return to Settings Menu (Options)
+                this.osd.toggleSettings(true);
                 return true;
         }
         return false;

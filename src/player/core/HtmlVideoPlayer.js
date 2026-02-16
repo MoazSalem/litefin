@@ -253,6 +253,11 @@ export class HtmlVideoPlayer {
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
+                // Filter out benign buffer stall errors
+                if (data.details === 'bufferStalledError' && !data.fatal) {
+                    log.warn('HLS buffer low (non-fatal):', data.buffer);
+                    return;
+                }
                 log.error('HLS error:', data);
 
                 if (data.fatal) {

@@ -66,6 +66,7 @@ export default class SettingsMenu extends BaseMenu {
         const options = [
             { id: 'aspectRatio', label: 'Aspect Ratio', icon: ICONS.aspectRatio },
             { id: 'playbackSpeed', label: 'Playback Speed', icon: ICONS.speed },
+            { id: 'quality', label: 'Quality', icon: ICONS.quality },
             { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
             { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
             { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
@@ -143,6 +144,9 @@ export default class SettingsMenu extends BaseMenu {
                 break;
             case 'playbackSpeed':
                 this.osd.togglePlaybackSpeedMenu(true);
+                break;
+            case 'quality':
+                this.osd.toggleQualityMenu(true);
                 break;
             case 'playbackInfo':
                 this.osd.togglePlaybackInfo(!this.osd.playbackInfo.isVisible);

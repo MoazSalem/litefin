@@ -224,9 +224,10 @@ export function clearCapabilitiesCache() {
  * and what it needs transcoded. Every field is derived from the detected
  * capabilities and current PlayerSettings toggles.
  *
+ * @param {number} [manualBitrateOverride] - Optional overrides for max bitrate
  * @returns {Object} A Jellyfin-compatible DeviceProfile
  */
-export function buildJellyfinProfile() {
+export function buildJellyfinProfile(manualBitrateOverride = null) {
     const caps = getDeviceCapabilities();
 
     // --- Read user toggle overrides from PlayerSettings ---
@@ -251,8 +252,15 @@ export function buildJellyfinProfile() {
 
     // Samsung spec table max bitrates:
     //   8K HEVC: ~80–100 Mbps, UHD: ~60–80 Mbps, FHD: ~40 Mbps
+
+    // Priority:
+    // 1. manualOverride (passed as argument)
+    // 2. PlayerSettings 'maxBitrateInternet'
+    // 3. Hardware capability default
     const maxBitrate =
-        PlayerSettings.get('maxBitrateInternet') || (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
+        manualBitrateOverride ||
+        PlayerSettings.get('maxBitrateInternet') ||
+        (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
 
     const maxAudioChannels = String(caps.maxAudioChannels);
 

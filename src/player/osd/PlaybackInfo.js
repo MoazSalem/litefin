@@ -1,5 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
+import { MediaHelper } from '../core/MediaHelper.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 /**
  * PlaybackInfo
@@ -27,7 +29,10 @@ export default class PlaybackInfo extends BaseMenu {
             }
 
             this.$el.classList.add('visible');
+            
+            // Force update to ensure fresh data
             this.update();
+            
             this.ignoreInputUntil = Date.now() + 300; // Debounce input to prevent immediate close on open
         } else {
             this.isVisible = false;
@@ -36,6 +41,8 @@ export default class PlaybackInfo extends BaseMenu {
             }
         }
     }
+
+
 
     render() {
         const closeIcon = ICONS.close;
@@ -63,6 +70,26 @@ export default class PlaybackInfo extends BaseMenu {
                 this.osd.togglePlaybackInfo(false);
             });
         }
+
+        // Auto-update on relevant player events
+        this._onPlayerUpdate = () => {
+             if (this.isVisible) this.update();
+        };
+
+        if (this.player) {
+            this.player.on('playbackstart', this._onPlayerUpdate);
+            this.player.on('mediastreamschange', this._onPlayerUpdate);
+        }
+    }
+
+    destroy() {
+        if (this.player && this._onPlayerUpdate) {
+            this.player.off('playbackstart', this._onPlayerUpdate);
+            this.player.off('mediastreamschange', this._onPlayerUpdate);
+        }
+        if (this.$el && this.$el.parentNode) {
+            this.$el.parentNode.removeChild(this.$el);
+        }
     }
 
     update() {
@@ -72,7 +99,7 @@ export default class PlaybackInfo extends BaseMenu {
         if (!contentEl) return;
 
         const mediaSource = this.player.getCurrentMediaSource();
-        const playMethod = mediaSource?.PlayMethod || 'DirectPlay';
+        const playMethod = mediaSource ? MediaHelper.getPlayMethod(mediaSource) : 'DirectPlay';
         const playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Video Player';
         const api = this.osd.api;
         const protocol = api?.serverUrl?.startsWith('https') ? 'https' : 'http';
@@ -92,7 +119,7 @@ export default class PlaybackInfo extends BaseMenu {
         const videoStream = streams.find(s => s.Type?.toLowerCase() === 'video');
         
         const audioIndex = this.player.getCurrentAudioStreamIndex ? this.player.getCurrentAudioStreamIndex() : -1;
-        let activeAudioStream = streams.find(s => s.Type?.toLowerCase() === 'audio' && s.Index == audioIndex) 
+        let activeAudioStream = streams.find(s => s.Type?.toLowerCase() === 'audio' && s.Index === audioIndex) 
                              || streams.find(s => s.Type?.toLowerCase() === 'audio');
 
         if (activeAudioStream && !getBitrate(activeAudioStream)) {
@@ -149,9 +176,16 @@ export default class PlaybackInfo extends BaseMenu {
             const vMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
             const aMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
             
+            // Show the limit that triggered transcoding (or the manual override)
+            const manualBitrate = this.player.getMaxBitrate(); 
+            const globalBitrate = PlayerSettings.get('maxBitrateInternet');
+            const effectiveLimit = manualBitrate || globalBitrate;
+            const limitDisplay = effectiveLimit ? (effectiveLimit / 1000000).toFixed(1) + ' Mbps' : 'Unlimited';
+
             html += createSection(`${displayPlayMethod} Info`, [
                 { label: 'Video codec', value: `${videoStream?.Codec?.toUpperCase() || 'N/A'} (${vMethod})` },
-                { label: 'Audio codec', value: `${activeAudioStream?.Codec?.toUpperCase() || 'N/A'} (${aMethod})` }
+                { label: 'Audio codec', value: `${activeAudioStream?.Codec?.toUpperCase() || 'N/A'} (${aMethod})` },
+                { label: 'Bitrate limit', value: limitDisplay }
             ]);
         }
 

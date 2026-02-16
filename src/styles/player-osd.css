@@ -707,6 +707,18 @@
     flex: 1;
 }
 
+.track-option-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+}
+
+.track-option-secondary {
+    font-size: 0.85em;
+    opacity: 0.6;
+    margin-top: 0.2em;
+}
+
 /* ============================================================================
    Debug Overlay
    ============================================================================ */

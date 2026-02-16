@@ -352,7 +352,9 @@ class PlayerPage extends Page {
 
         // Listen for player events
         this._player.on('ready', () => this._onPlayerReady());
-        this._player.on('play', () => this._onPlaying());
+        this._player.on('ready', () => this._onPlayerReady());
+        // this._player.on('play', () => this._onPlaying()); // Handled by 'playing'
+        this._player.on('pause', () => this._onPaused());
         this._player.on('pause', () => this._onPaused());
         this._player.on('ended', () => this._onEnded());
         this._player.on('error', (err) => this._onPlayerError(err));
@@ -362,6 +364,11 @@ class PlayerPage extends Page {
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
         this._player.on('seek', (data) => this._reportPlaybackProgress('timeupdate', data?.positionTicks));
+        this._player.on('waiting', () => this._showLoading(true));
+        this._player.on('playing', () => {
+            this._showLoading(false);
+            this._onPlaying();
+        });
 
         // NOTE: No more window.playerInstance / window.playerExit / window.reportPauseState
         // globals. The OSD Component receives these as constructor options instead.
@@ -880,9 +887,10 @@ class PlayerPage extends Page {
      */
     _getPlayerState(manualPositionTicks = null) {
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = manualPositionTicks !== null && manualPositionTicks !== undefined 
-            ? manualPositionTicks 
-            : (this._player?.getCurrentPositionTicks?.() || 0);
+        const positionTicks =
+            manualPositionTicks !== null && manualPositionTicks !== undefined
+                ? manualPositionTicks
+                : this._player?.getCurrentPositionTicks?.() || 0;
 
         // Build base state
         const state = {

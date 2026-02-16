@@ -123,6 +123,8 @@ export const PlayerEvent = {
     PLAYBACK_STOP: 'playbackstop',
     MEDIA_STREAMS_CHANGE: 'mediastreamschange',
     ERROR: 'error',
+    WAITING: 'waiting',
+    PLAYING: 'playing',
     FULLSCREEN_CHANGE: 'fullscreenchange',
     STATE_CHANGE: 'statechange'
 };
@@ -160,9 +162,13 @@ export class JellyfinPlayer extends EventEmitter {
         this._currentPlayOptions = null;
         this._isPlaying = false;
         this._isPaused = false;
-        this._manualBitrate = null;
+        // Initialize with global limit if set, otherwise null (Auto/Max)
+        // User requested: Global limit acts as default manual override.
+        // "Auto" (null) means Unlimited/Direct Play.
+        this._manualBitrate = PlayerSettings.get('maxBitrateInternet') || null;
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
+        this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
 
         // Secondary Subtitle State
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -224,6 +230,32 @@ export class JellyfinPlayer extends EventEmitter {
      * @private
      */
     _handleBackendEvent(event) {
+        // Intercept events if we are waiting for the initial Transcode Seek
+        if (this._pendingTranscodeSeekTicks !== null) {
+            
+            // If we receive a TIME_UPDATE with a valid time > 0, we know playback has really started
+            // and it's safe to perform our seek.
+            if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time > 0) {
+                 const target = this._pendingTranscodeSeekTicks;
+                 this._pendingTranscodeSeekTicks = null; // Clear flag FIRST to allow subsequent events
+                 
+                 log.info('TranscodeSeek: Initial playback confirmed. Seeking to', target);
+                 this.seek(target);
+                 
+                 // Do NOT emit this particular timeupdate as it's likely near 0
+                 return;
+            }
+            
+            // Suppress PLAYING and TIME_UPDATE events while waiting to seek
+            // This keeps the UI in a "loading" state (spinner) until the seek is triggered
+            if (event.type === PlayerEvent.PLAY || 
+                event.type === PlayerEvent.PLAYING || 
+                event.type === PlayerEvent.TIME_UPDATE) {
+                // log.debug('Suppressing event during TranscodeSeek:', event.type);
+                return;
+            }
+        }
+
         // Sync internal state
         if (event.type === PlayerEvent.PAUSE) {
             this._isPaused = true;
@@ -276,7 +308,7 @@ export class JellyfinPlayer extends EventEmitter {
             log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
 
             // Build device profile once (avoids duplicate logs/work)
-            const deviceProfile = buildJellyfinProfile();
+            const deviceProfile = buildJellyfinProfile(this._manualBitrate);
 
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options, deviceProfile, this._manualBitrate);
@@ -367,12 +399,26 @@ export class JellyfinPlayer extends EventEmitter {
                 else this._currentSubtitleStreamIndex = -1;
             }
 
+            // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)
+            const playMethod = MediaHelper.getPlayMethod(mediaSource);
+            const originalStartPositionTicks = options.startPositionTicks || 0;
+            let effectiveStartPositionTicks = originalStartPositionTicks;
+            let isTranscodeSeek = false;
+
+            // User Request: When transcoding or remuxing, start playback at 0, 
+            // and after it's loaded seek to the resume location if it exists
+            if (playMethod === 'Transcode' && originalStartPositionTicks > 0) {
+                log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
+                effectiveStartPositionTicks = 0;
+                isTranscodeSeek = true;
+            }
+
             // Build stream URL
             const streamInfo = MediaHelper.buildStreamUrl({
                 serverUrl: this.serverUrl,
                 itemId: options.itemId,
                 mediaSource,
-                startPositionTicks: options.startPositionTicks || 0,
+                startPositionTicks: effectiveStartPositionTicks,
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
                 deviceProfile: deviceProfile
@@ -386,6 +432,16 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Start playback on backend
             log.info('Initializing backend playback...');
+
+            // Handle delayed seek for Transcode/Remux
+            // CRITICAL: Set this BEFORE play() to ensure we catch all initial events
+            if (isTranscodeSeek) {
+                log.info('TranscodeSeek: Enabled. Waiting for timeupdate to seek to:', originalStartPositionTicks);
+                this._pendingTranscodeSeekTicks = originalStartPositionTicks;
+                // Explicitly emit WAITING to ensure spinner is shown
+                this.emit(PlayerEvent.WAITING);
+            }
+
             await this._backend.play({
                 ...streamInfo,
                 item: this._currentItem,
@@ -964,8 +1020,9 @@ export class JellyfinPlayer extends EventEmitter {
     async _getPlaybackInfo(options, deviceProfile, manualBitrate = null) {
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
 
-        // Read max bitrate: use manual override if set, otherwise setting
-        const maxBitrate = manualBitrate || PlayerSettings.get('maxBitrateInternet') || 120000000;
+        // Read max bitrate: use manual override if set, otherwise default to Max (Direct Play)
+        // "Auto" (null) = Unlimited (120 Mbps to cover 8K)
+        const maxBitrate = manualBitrate || 120000000;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -974,7 +1031,7 @@ export class JellyfinPlayer extends EventEmitter {
                 Authorization: `MediaBrowser Token="${this.authToken}"`
             },
             body: JSON.stringify({
-                DeviceProfile: deviceProfile || buildJellyfinProfile(),
+                DeviceProfile: deviceProfile || buildJellyfinProfile(maxBitrate),
                 UserId: options.userId,
                 MaxStreamingBitrate: maxBitrate,
                 StartTimeTicks: options.startPositionTicks || 0,
@@ -1026,6 +1083,9 @@ export class JellyfinPlayer extends EventEmitter {
         this._isRestarting = true;
         
         try {
+            // Trigger loading state immediately
+            this.emit(PlayerEvent.WAITING);
+
             await this.stop();
             // _manualBitrate is preserved because _isRestarting was true
             
