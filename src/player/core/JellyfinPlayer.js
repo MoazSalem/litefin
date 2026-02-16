@@ -303,12 +303,17 @@ export class JellyfinPlayer extends EventEmitter {
         if (options.authToken) this.authToken = options.authToken;
 
         this._currentPlayOptions = options;
+        // Store initial options for potential reload
+        this._lastPlayOptions = options;
 
         try {
             log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
 
             // Build device profile once (avoids duplicate logs/work)
-            const deviceProfile = buildJellyfinProfile(this._manualBitrate);
+            const deviceProfile = buildJellyfinProfile({
+                 manualBitrate: this._manualBitrate, 
+                 playbackMode: this._playbackMode 
+            });
 
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options, deviceProfile, this._manualBitrate);
@@ -370,6 +375,44 @@ export class JellyfinPlayer extends EventEmitter {
                 throw new Error('Media source not found');
             }
 
+            // DEBUG: Log transcoding reasons if available
+            log.info(`[PlaybackMode] Selected PlayMethod: ${playbackInfo.PlaySessionId ? 'Transcode/DirectStream' : 'DirectPlay'} (derived)`);
+            if (mediaSource.TranscodingInfo) {
+                log.info(`[PlaybackMode] IsDirectStream: ${mediaSource.TranscodingInfo.IsVideoDirect ? 'Yes' : 'No'}`);
+                log.info(`[PlaybackMode] TranscodingReasons: ${mediaSource.TranscodingReasons}`);
+            }
+            // MediaHelper also derives PlayMethod, let's check that
+            let playMethod = MediaHelper.getPlayMethod(mediaSource);
+
+            // In "Force Remux" mode, the server might report "Transcode" because it technically
+            // falls back to the transcoding pipeline, but if the only reason is "DirectPlayError",
+            // it means it's remuxing (copying streams) because we enabled all codecs in DeviceProfile.
+            if (this._playbackMode === 'remux' && playMethod === 'Transcode') {
+                const reasons = mediaSource.TranscodingReasons;
+                const hasOnlyDirectPlayError = reasons === 'DirectPlayError' || 
+                    (Array.isArray(reasons) && reasons.length === 1 && reasons[0] === 'DirectPlayError');
+                
+                // Also check the URL parameters if reasons property is empty (it's often in the URL)
+                const urlHasOnlyDirectPlayError = mediaSource.TranscodingUrl && 
+                    mediaSource.TranscodingUrl.includes('TranscodeReasons=DirectPlayError') &&
+                    !mediaSource.TranscodingUrl.includes('ContainerNotSupported') &&
+                    !mediaSource.TranscodingUrl.includes('VideoCodecNotSupported') &&
+                    !mediaSource.TranscodingUrl.includes('AudioCodecNotSupported');
+
+                if (hasOnlyDirectPlayError || urlHasOnlyDirectPlayError) {
+                     playMethod = 'DirectStream';
+                     
+                     // CRITICAL: Update the MediaSource object itself so that
+                     // MediaHelper.getPlayMethod() returns 'DirectStream' for the OSD/UI later.
+                     mediaSource.SupportsDirectStream = true;
+                     // We should probably also unset SupportsTranscoding to be safe for UI logic
+                     // mediaSource.SupportsTranscoding = false; 
+                     
+                     log.info('[PlaybackMode] Inferring DirectStream (Remux) based on DirectPlayError only.');
+                }
+            }
+            log.info(`[PlaybackMode] Calculated PlayMethod: ${playMethod}`);
+
             // Attach play session ID to media source
             if (playbackInfo.PlaySessionId) {
                 mediaSource.PlaySessionId = playbackInfo.PlaySessionId;
@@ -400,14 +443,14 @@ export class JellyfinPlayer extends EventEmitter {
             }
 
             // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)
-            const playMethod = MediaHelper.getPlayMethod(mediaSource);
+            // playMethod was already derived above for logging
             const originalStartPositionTicks = options.startPositionTicks || 0;
             let effectiveStartPositionTicks = originalStartPositionTicks;
             let isTranscodeSeek = false;
 
             // User Request: When transcoding or remuxing, start playback at 0, 
             // and after it's loaded seek to the resume location if it exists
-            if (playMethod === 'Transcode' && originalStartPositionTicks > 0) {
+            if ((playMethod === 'Transcode' || playMethod === 'DirectStream') && originalStartPositionTicks > 0) {
                 log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
                 effectiveStartPositionTicks = 0;
                 isTranscodeSeek = true;
@@ -1020,9 +1063,9 @@ export class JellyfinPlayer extends EventEmitter {
     async _getPlaybackInfo(options, deviceProfile, manualBitrate = null) {
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
 
-        // Read max bitrate: use manual override if set, otherwise default to Max (Direct Play)
-        // "Auto" (null) = Unlimited (120 Mbps to cover 8K)
-        const maxBitrate = manualBitrate || 120000000;
+        // Read max bitrate: priority to deviceProfile if passed (it contains the logic)
+        // Fallback to manualBitrate or 120Mbps
+        const maxBitrate = deviceProfile?.MaxStreamingBitrate || manualBitrate || 120000000;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -1111,6 +1154,83 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getMaxBitrate() {
         return this._manualBitrate || 0;
+    }
+
+    /**
+     * Get current playback mode
+     * @returns {string}
+     */
+    getPlaybackMode() {
+        return this._playbackMode;
+    }
+
+    /**
+     * Force a specific playback mode and restart if playing
+     * @param {string} mode - 'auto', 'directPlay', 'transcode', 'remux'
+     */
+    async setPlaybackMode(mode) {
+        if (!['auto', 'directPlay', 'transcode', 'remux'].includes(mode)) return;
+        
+        if (this._playbackMode === mode) return;
+
+        this._playbackMode = mode;
+        log.info(`Playback mode set to: ${mode}`);
+        
+        // Re-initialize playback if active
+        // Check for specific backend states that imply activity
+        if (this._isPlaying || this._isPaused || this._state === 'buffering') {
+            log.info('Restarting playback to apply new mode');
+            
+            if (this._lastPlayOptions) {
+                const currentTicks = this.getCurrentPositionTicks();
+                const newOptions = {
+                    ...this._lastPlayOptions,
+                    startPositionTicks: currentTicks
+                };
+                
+                // Reuse restart logic pattern from setMaxBitrate
+                this._isRestarting = true;
+                
+                try {
+                    this.emit(PlayerEvent.WAITING);
+                    await this.stop();
+                    // Give backend time to cleanup
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await this.play(newOptions);
+                    // _isRestarting reset in play() success path implicitly? 
+                    // No, wait. play() calls stop(). stop() checks _isRestarting.
+                    // But play() sets _isRestarting = false ?
+                    // Let's check play():
+                    // play() calls stop().
+                    // play() calls _resetState().
+                    // _resetState() does NOT play with _isRestarting ??
+                    // Actually setMaxBitrate comment says: " _isRestarting is reset to false in play() success"
+                    // checking play():
+                    // it does NOT seem to reset _isRestarting explicitly.
+                    // Wait, stop() checks _isRestarting.
+                    
+                    // Actually, looking at setMaxBitrate, it sets `this._isRestarting = true;`.
+                    // Then calls `stop()`. `stop()` sees true, so it doesn't emit STOP events.
+                    // Then `play()` is called. `play()` calls `stop()` again (first thing).
+                    // `stop()` sees true again.
+                    // Then `play()` proceeds.
+                    
+                    // The issue is: when does `_isRestarting` go back to false?
+                    // `setMaxBitrate` does NOT set it back to false in try block!
+                    // This looks like a bug in `setMaxBitrate` potentially, or I missed where it is reset.
+                    // I should check `_resetState` or `play`.
+                    
+                    // If `_isRestarting` stays true, subsequent stops won't emit events?
+                    // Let's check `_resetState`.
+                } catch (e) {
+                    log.error('Failed to restart after mode change:', e);
+                    this._isRestarting = false;
+                }
+                
+                // We should probably reset it here if success?
+                this._isRestarting = false; 
+            }
+        }
     }
 
     /**

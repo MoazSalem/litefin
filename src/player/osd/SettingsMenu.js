@@ -67,6 +67,7 @@ export default class SettingsMenu extends BaseMenu {
             { id: 'aspectRatio', label: 'Aspect Ratio', icon: ICONS.aspectRatio },
             { id: 'playbackSpeed', label: 'Playback Speed', icon: ICONS.speed },
             { id: 'quality', label: 'Quality', icon: ICONS.quality },
+            { id: 'playbackMode', label: 'Playback Mode', icon: ICONS.layers },
             { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
             { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
             { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
@@ -147,6 +148,9 @@ export default class SettingsMenu extends BaseMenu {
                 break;
             case 'quality':
                 this.osd.toggleQualityMenu(true);
+                break;
+            case 'playbackMode':
+                this.osd.togglePlaybackModeMenu(true);
                 break;
             case 'playbackInfo':
                 this.osd.togglePlaybackInfo(!this.osd.playbackInfo.isVisible);

@@ -12,6 +12,7 @@ import PlaybackInfo from './PlaybackInfo.js';
 import AspectRatioMenu from './AspectRatioMenu.js';
 import PlaybackSpeedMenu from './PlaybackSpeedMenu.js';
 import QualityMenu from './QualityMenu.js';
+import PlaybackModeMenu from './PlaybackModeMenu.js';
 
 const log = logger.create('OSDController');
 
@@ -72,6 +73,7 @@ export default class OSDController extends Component {
         this.aspectRatioMenu = new AspectRatioMenu(this);
         this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
         this.qualityMenu = new QualityMenu(this);
+        this.playbackModeMenu = new PlaybackModeMenu(this);
 
         this.activeMenu = null; // Reference to currently open menu
 
@@ -141,6 +143,7 @@ export default class OSDController extends Component {
         this.aspectRatioMenu?.destroy();
         this.playbackSpeedMenu?.destroy();
         this.qualityMenu?.destroy();
+        this.playbackModeMenu?.destroy();
 
         if (this._player) {
             this._player.removeAllListeners('mediastreamschange');
@@ -487,6 +490,24 @@ export default class OSDController extends Component {
         } else {
             this.aspectRatioMenu.hide();
             if (this.activeMenu === this.aspectRatioMenu) {
+                this.activeMenu = null;
+            }
+            this.show();
+            this._updateFocus();
+        }
+    }
+
+    togglePlaybackModeMenu(force) {
+        if (force === undefined) {
+             force = !this.playbackModeMenu.isVisible;
+        }
+
+        if (force) {
+            this.playbackModeMenu.open();
+            this.activeMenu = this.playbackModeMenu;
+        } else {
+            this.playbackModeMenu.hide();
+            if (this.activeMenu === this.playbackModeMenu) {
                 this.activeMenu = null;
             }
             this.show();

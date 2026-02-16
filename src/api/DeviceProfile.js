@@ -224,10 +224,23 @@ export function clearCapabilitiesCache() {
  * and what it needs transcoded. Every field is derived from the detected
  * capabilities and current PlayerSettings toggles.
  *
- * @param {number} [manualBitrateOverride] - Optional overrides for max bitrate
+ * @param {Object} [options={}] - Options for profile generation
+ * @param {number} [options.manualBitrate] - Optional overrides for max bitrate
+ * @param {string} [options.playbackMode='auto'] - 'auto', 'directPlay', 'transcode', 'remux'
  * @returns {Object} A Jellyfin-compatible DeviceProfile
  */
-export function buildJellyfinProfile(manualBitrateOverride = null) {
+export function buildJellyfinProfile(options = {}) {
+    // Backwards compatibility for when it was just (manualBitrate)
+    let manualBitrateOverride = null;
+    let playbackMode = 'auto';
+
+    if (typeof options === 'number') {
+        manualBitrateOverride = options;
+    } else {
+        manualBitrateOverride = options.manualBitrate;
+        playbackMode = options.playbackMode || 'auto';
+    }
+
     const caps = getDeviceCapabilities();
 
     // --- Read user toggle overrides from PlayerSettings ---
@@ -238,11 +251,12 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
-    const forceTranscode = PlayerSettings.get('forceTranscode');
+    const forceTranscodeSetting = PlayerSettings.get('forceTranscode');
 
-    // If force transcode is on, return a minimal profile
-    if (forceTranscode) {
-        log.warn('Force transcode enabled — returning minimal profile');
+    // If force transcode is on in settings, OR mode is transcode/remux
+    // But we handle specific logic below.
+    if (forceTranscodeSetting && playbackMode === 'auto') {
+        log.warn('Force transcode enabled via Settings — returning minimal profile');
         return _buildMinimalProfile(caps);
     }
 
@@ -253,14 +267,22 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     // Samsung spec table max bitrates:
     //   8K HEVC: ~80–100 Mbps, UHD: ~60–80 Mbps, FHD: ~40 Mbps
 
-    // Priority:
-    // 1. manualOverride (passed as argument)
-    // 2. PlayerSettings 'maxBitrateInternet'
-    // 3. Hardware capability default
-    const maxBitrate =
-        manualBitrateOverride ||
-        PlayerSettings.get('maxBitrateInternet') ||
-        (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
+    let maxBitrate;
+
+    if (playbackMode === 'directPlay' || playbackMode === 'transcode' || playbackMode === 'remux') {
+        // Force high bitrate to avoid unnecessary transcoding due to bitrate limits
+        maxBitrate = 120000000;
+    } else {
+        // Auto mode
+        // Priority:
+        // 1. manualOverride (passed as argument)
+        // 2. PlayerSettings 'maxBitrateInternet'
+        // 3. Hardware capability default
+        maxBitrate =
+            manualBitrateOverride ||
+            PlayerSettings.get('maxBitrateInternet') ||
+            (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
+    }
 
     const maxAudioChannels = String(caps.maxAudioChannels);
 
@@ -314,7 +336,6 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
 
     // MOV container — primarily H.264 on Samsung
-    const movVideoCodecs = ['h264'];
 
     // HLS — codecs suitable for adaptive streaming
     const hlsVideoCodecs = ['h264'];
@@ -326,98 +347,111 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     // DirectPlay Profiles
     // ====================================================================
 
-    const directPlayProfiles = [
-        // MP4 / M4V — most common modern container
-        {
-            Container: 'mp4,m4v',
-            Type: 'Video',
-            VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        },
-        // MKV / Matroska — very common for media libraries
-        {
-            Container: 'mkv',
-            Type: 'Video',
-            VideoCodec: mkvVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        },
-        // TS / MPEGTS — broadcast recordings, some HLS segments
-        {
-            Container: 'ts,mpegts',
-            Type: 'Video',
-            VideoCodec: tsVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        },
-        // M2TS — Blu-ray disc rips
-        {
-            Container: 'm2ts',
-            Type: 'Video',
-            VideoCodec: m2tsVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        },
-        // AVI — legacy but still common in some libraries
-        {
-            Container: 'avi',
-            Type: 'Video',
-            VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-            AudioCodec: audioCodecString
-        },
-        // MOV — Apple QuickTime
-        {
-            Container: 'mov',
-            Type: 'Video',
-            VideoCodec: movVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        },
-        // WMV / ASF — Windows Media (dropped on some 2024+ models, but included by request)
-        {
-            Container: 'wmv,asf',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        },
-        // Legacy containers — MPG, MPEG, FLV, 3GP, VRO, VOB
-        {
-            Container: 'mpg,mpeg,flv,3gp,vob,vro',
-            Type: 'Video',
-            AudioCodec: audioCodecString
+    let directPlayProfiles = [];
+
+    // Only add DirectPlay profiles if NOT in explicit Transcode or Remux mode
+    // Actually, Remux (Direct Stream) requires DirectPlay profiles to be empty primarily,
+    // but strict Remux usually means "Transcode container, copy codec".
+    // If we want to force remux/direct stream, we should report no direct play support for the container.
+    // If we want to force transcode, we report no direct play support at all.
+
+    if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+        directPlayProfiles = [
+            // MP4 / M4V / MOV
+            {
+                Container: 'mp4,m4v,mov',
+                Type: 'Video',
+                VideoCodec: generalVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            },
+            // MKV
+            {
+                Container: 'mkv',
+                Type: 'Video',
+                VideoCodec: mkvVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            },
+            // TS / MPEGTS
+            {
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            },
+            // M2TS
+            {
+                Container: 'm2ts',
+                Type: 'Video',
+                VideoCodec: m2tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            },
+            // AVI
+            {
+                Container: 'avi',
+                Type: 'Video',
+                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                AudioCodec: audioCodecString
+            },
+            // WMV / ASF
+            {
+                Container: 'wmv,asf',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            },
+            // Legacy containers
+            {
+                Container: 'mpg,mpeg,flv,3gp,vob,vro',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            },
+            // Audio-only
+            {
+                Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
+                Type: 'Audio'
+            }
+        ];
+
+        // WebM
+        if (webmVideoCodecs.length > 0) {
+            directPlayProfiles.push({
+                Container: 'webm',
+                Type: 'Video',
+                VideoCodec: webmVideoCodecs.join(','),
+                AudioCodec: 'vorbis,opus'
+            });
         }
-    ];
-
-    // WebM container — VP8/VP9/AV1 with web-native audio codecs
-    if (webmVideoCodecs.length > 0) {
-        directPlayProfiles.push({
-            Container: 'webm',
-            Type: 'Video',
-            VideoCodec: webmVideoCodecs.join(','),
-            AudioCodec: 'vorbis,opus'
-        });
     }
-
-    // HLS — native adaptive streaming support
-    directPlayProfiles.push({
-        Container: 'm3u8',
-        Type: 'Video',
-        VideoCodec: hlsVideoCodecs.join(','),
-        AudioCodec: audioCodecString
-    });
-
-    // Audio-only containers
-    directPlayProfiles.push({
-        Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
-        Type: 'Audio'
-    });
 
     // ====================================================================
     // Transcoding Profiles (multiple fallback paths)
     // ====================================================================
 
     // Transcoding audio codec list (server-side encoding targets)
-    const transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    const transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+
+    // If forcing Remux (Direct Stream), we need to tell the server that we support
+    // ALL our native codecs in the Transcoding profile, so it knows it can "transcode" (copy)
+    // them into the container.
+    if (playbackMode === 'remux') {
+        transAudioCodecs = audioCodecString; // 'aac,mp3,flac...'
+
+        // Assemble all supported video codecs unique list
+        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
+        transVideoCodecs = Array.from(allVideo).join(',');
+
+        log.info('Remux mode: Expanded transcoding codecs to:', transVideoCodecs);
+    }
+
     // Broader set for fMP4/MKV transcoding
     const broadTransVideo = [transVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : '']
         .filter(Boolean)
         .join(',');
+
+    // If forcing Remux, we MUST NOT break on non-key frames,
+    // because that requires re-encoding (creating new keyframes).
+    // Direct Stream (Remux) can only split at existing keyframes.
+    const breakOnNonKeyFrames = playbackMode === 'remux' ? false : true;
 
     const transcodingProfiles = [
         // Primary: HLS in TS container (most compatible streaming fallback)
@@ -431,7 +465,7 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
             SegmentLength: '3',
-            BreakOnNonKeyFrames: true
+            BreakOnNonKeyFrames: breakOnNonKeyFrames
         },
         // Secondary: HLS in fMP4 container (newer, better codec support)
         {
@@ -445,24 +479,6 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
             MinSegments: '1',
             SegmentLength: '3',
             BreakOnNonKeyFrames: false
-        },
-        // Static remux: MKV container (broad codec support, lossless remux)
-        {
-            Container: 'mkv',
-            Type: 'Video',
-            AudioCodec: audioCodecString,
-            VideoCodec: mkvVideoCodecs.join(','),
-            Context: 'Static',
-            CopyTimestamps: true,
-            MaxAudioChannels: maxAudioChannels
-        },
-        // Static fallback: MP4
-        {
-            Container: 'mp4',
-            Type: 'Video',
-            AudioCodec: 'aac,ac3',
-            VideoCodec: 'h264',
-            Context: 'Static'
         },
         // Audio transcoding: AAC via HLS
         {
@@ -492,6 +508,32 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
         }
     ];
 
+    // Static Remuxing profiles
+    // If mode is 'remux', we need to make sure we support static remuxing or similar
+    // Actually, usually Remux happens via HLS/Stream Copy.
+    // We add static profiles for compatibility.
+
+    transcodingProfiles.push(
+        // Static remux: MKV container (broad codec support, lossless remux)
+        {
+            Container: 'mkv',
+            Type: 'Video',
+            AudioCodec: audioCodecString,
+            VideoCodec: mkvVideoCodecs.join(','),
+            Context: 'Static',
+            CopyTimestamps: true,
+            MaxAudioChannels: maxAudioChannels
+        },
+        // Static fallback: MP4
+        {
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: 'aac,ac3',
+            VideoCodec: 'h264',
+            Context: 'Static'
+        }
+    );
+
     // ====================================================================
     // Codec Profiles (level/profile constraints)
     // ====================================================================
@@ -504,124 +546,151 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
 
     // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
+    // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
     const hevcBitDepth = enableHDR || enableDolbyVision ? '10' : '8';
 
-    const codecProfiles = [
-        // --- H.264 constraints ---
-        {
-            Type: 'Video',
-            Codec: 'h264',
-            Conditions: [
-                {
-                    Condition: 'NotEquals',
-                    Property: 'IsAnamorphic',
-                    Value: 'true',
-                    IsRequired: false
-                },
-                {
-                    Condition: 'EqualsAny',
-                    Property: 'VideoProfile',
-                    Value: 'high|main|baseline|constrained baseline|high 10',
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoLevel',
-                    Value: h264Level,
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoBitDepth',
-                    Value: '8',
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'RefFrames',
-                    Value: '16',
-                    IsRequired: false
-                }
-            ]
-        },
-        // --- Audio channel limit (global) ---
-        {
-            Type: 'Audio',
-            Conditions: [
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'AudioChannels',
-                    Value: maxAudioChannels,
-                    IsRequired: false
-                }
-            ]
+    let codecProfiles = [];
+
+    // If forcing Remux, we disable restrictive codec profiles (levels, bit depth, refs)
+    // to prevent the server from deciding "RefFrames too high -> Transcode".
+    // We assume the user knows what they are doing.
+    if (playbackMode !== 'remux') {
+        codecProfiles = [
+            // --- H.264 constraints ---
+            {
+                Type: 'Video',
+                Codec: 'h264',
+                Conditions: [
+                    {
+                        Condition: 'NotEquals',
+                        Property: 'IsAnamorphic',
+                        Value: 'true',
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoProfile',
+                        Value: 'high|main|baseline|constrained baseline|high 10',
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoLevel',
+                        Value: h264Level,
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoBitDepth',
+                        Value: '8',
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'RefFrames',
+                        Value: '16',
+                        IsRequired: false
+                    }
+                ]
+            },
+            // --- Audio channel limit (global) ---
+            {
+                Type: 'Audio',
+                Conditions: [
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'AudioChannels',
+                        Value: maxAudioChannels,
+                        IsRequired: false
+                    }
+                ]
+            }
+        ];
+
+        // HEVC constraints (only if enabled)
+        if (enableHEVC) {
+            codecProfiles.push({
+                Type: 'Video',
+                Codec: 'hevc',
+                Conditions: [
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoProfile',
+                        Value: 'main|main 10',
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoLevel',
+                        Value: hevcLevel,
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoBitDepth',
+                        Value: hevcBitDepth,
+                        IsRequired: false
+                    }
+                ]
+            });
         }
-    ];
 
-    // HEVC constraints (only if enabled)
-    if (enableHEVC) {
-        codecProfiles.push({
-            Type: 'Video',
-            Codec: 'hevc',
-            Conditions: [
-                {
-                    Condition: 'EqualsAny',
-                    Property: 'VideoProfile',
-                    Value: 'main|main 10',
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoLevel',
-                    Value: hevcLevel,
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoBitDepth',
-                    Value: hevcBitDepth,
-                    IsRequired: false
-                }
-            ]
-        });
-    }
+        // VP9 constraints (profile 0 for SDR, profile 2 for HDR 10-bit)
+        if (enableVP9) {
+            codecProfiles.push({
+                Type: 'Video',
+                Codec: 'vp9',
+                Conditions: [
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoProfile',
+                        Value: 'profile 0|profile 2',
+                        IsRequired: false
+                    }
+                ]
+            });
+        }
 
-    // VP9 constraints (profile 0 for SDR, profile 2 for HDR 10-bit)
-    if (enableVP9) {
-        codecProfiles.push({
-            Type: 'Video',
-            Codec: 'vp9',
-            Conditions: [
-                {
-                    Condition: 'EqualsAny',
-                    Property: 'VideoProfile',
-                    Value: 'profile 0|profile 2',
-                    IsRequired: false
-                }
-            ]
-        });
-    }
-
-    // AV1 constraints
-    if (enableAV1) {
-        codecProfiles.push({
-            Type: 'Video',
-            Codec: 'av1',
-            Conditions: [
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoLevel',
-                    Value: '15', // AV1 Main Level 5.1
-                    IsRequired: false
-                },
-                {
-                    Condition: 'LessThanEqual',
-                    Property: 'VideoBitDepth',
-                    Value: enableHDR ? '10' : '8',
-                    IsRequired: false
-                }
-            ]
-        });
+        // AV1 constraints
+        if (enableAV1) {
+            codecProfiles.push({
+                Type: 'Video',
+                Codec: 'av1',
+                Conditions: [
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoLevel',
+                        Value: '15', // AV1 Main Level 5.1
+                        IsRequired: false
+                    },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoBitDepth',
+                        Value: enableHDR ? '10' : '8',
+                        IsRequired: false
+                    }
+                ]
+            });
+        }
+    } else {
+        log.info('Remux mode: Clearing strict CodecProfiles to favor stream copy.');
+        // We still usually want to enforce AudioChannels though,
+        // as the TV definitely can't output more than it supports via ARC/internal speakers?
+        // Actually, if we are remuxing, we might be transcoding audio anyway if needed.
+        // Let's keep Audio limit just in case.
+        codecProfiles = [
+            {
+                Type: 'Audio',
+                Conditions: [
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'AudioChannels',
+                        Value: maxAudioChannels,
+                        IsRequired: false
+                    }
+                ]
+            }
+        ];
     }
 
     // ====================================================================
@@ -640,21 +709,28 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
         { Format: 'ttml', Method: 'External' },
         { Format: 'sub', Method: 'External' },
 
-        // Embed method — allows direct play of embedded text subs without extraction
-        { Format: 'srt', Method: 'Embed' },
-        { Format: 'subrip', Method: 'Embed' },
-        { Format: 'vtt', Method: 'Embed' },
-
-        // Image-based subtitles — client can't render these natively,
-        // so they must be burned in (triggers video transcoding when selected)
-        { Format: 'pgs', Method: 'Embed' },
-        { Format: 'pgssub', Method: 'Embed' },
-        { Format: 'dvdsub', Method: 'Embed' },
-        { Format: 'dvbsub', Method: 'Embed' },
-
         // HLS embedded VTT
         { Format: 'vtt', Method: 'Hls' }
     ];
+
+    // Only add Embed profiles if NOT in Transcode/Remux mode?
+    // Actually, Remuxing might want to Embed.
+    // If we are forcing transcode, we generally want to burn in subs if they are image based,
+    // or external if text.
+
+    // For simplicity, we keep these unless we are in strict transcode mode which might want to avoid direct play completely.
+    // But direct play profiles are already empty in transcode mode.
+    // So if the server transcodes, it uses TranscodingProfiles.
+
+    subtitleProfiles.push(
+        { Format: 'srt', Method: 'Embed' },
+        { Format: 'subrip', Method: 'Embed' },
+        { Format: 'vtt', Method: 'Embed' },
+        { Format: 'pgs', Method: 'Embed' },
+        { Format: 'pgssub', Method: 'Embed' },
+        { Format: 'dvdsub', Method: 'Embed' },
+        { Format: 'dvbsub', Method: 'Embed' }
+    );
 
     // ====================================================================
     // Response Profiles (container MIME type overrides)
@@ -678,7 +754,7 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     // ====================================================================
 
     const profile = {
-        Name: `Litefin Tizen ${caps.tizenVersion}`,
+        Name: `Litefin Tizen ${caps.tizenVersion}` + (playbackMode !== 'auto' ? ` (${playbackMode})` : ''),
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,
@@ -692,14 +768,6 @@ export function buildJellyfinProfile(manualBitrateOverride = null) {
     };
 
     log.info('Built Jellyfin profile:', profile.Name);
-    log.debug(
-        'DirectPlay profiles:',
-        directPlayProfiles.length,
-        '| Transcoding profiles:',
-        transcodingProfiles.length,
-        '| Codec profiles:',
-        codecProfiles.length
-    );
 
     return profile;
 }
