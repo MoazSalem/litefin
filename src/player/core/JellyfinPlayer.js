@@ -12,7 +12,7 @@ import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
-import { SubtitleParser } from './SubtitleParser.js';
+import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
@@ -170,10 +170,29 @@ export class JellyfinPlayer extends EventEmitter {
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
 
-        // Secondary Subtitle State
+        // Secondary subtitle stream index (kept here for OSD queries)
         this._currentSecondarySubtitleStreamIndex = -1;
-        this._secondaryCues = [];
-        this._lastSecondaryCue = null;
+
+        // ====================================================================
+        // Subtitle Manager — centralized subtitle orchestration
+        // Handles delivery method selection, external subtitle fetching,
+        // cue parsing, and time-based cue ticking for both primary and
+        // secondary subtitles. Embedded subs on Tizen are still routed
+        // through the backend, but the manager coordinates everything.
+        // ====================================================================
+
+        this._subtitleManager = new SubtitleManager({
+            serverUrl: this.serverUrl,
+            authToken: this.authToken,
+            // Primary cue callback — emits to PlayerPage for DOM rendering
+            onPrimaryCue: (data) => this.emit('subtitlechange', data),
+            // Secondary cue callback — emits to PlayerPage for secondary overlay
+            onSecondaryCue: (data) => this.emit('secondarysubtitlechange', data),
+            // Delivery method change — used for logging / debugging
+            onDeliveryChange: (info) => {
+                log.info('[SubtitleManager] Delivery changed:', info);
+            }
+        });
 
         // Chapters
         this._chapters = [];
@@ -263,16 +282,23 @@ export class JellyfinPlayer extends EventEmitter {
             this._isPaused = false;
         }
 
-        // Handle timeupdate for syncing secondary subtitles
+        // Handle timeupdate — tick the SubtitleManager to update cues
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
             try {
-                this._updateSecondarySubtitles(event.data.time);
+                // SubtitleManager handles both primary and secondary subtitle ticking
+                this._subtitleManager.tick(event.data.time);
             } catch (e) {
-                console.error('Error updating secondary subtitles:', e);
+                console.error('Error ticking subtitle manager:', e);
             }
             
             // Re-emit normalized timeupdate with absolute ticks
             this.emit(PlayerEvent.TIME_UPDATE, this.getCurrentPositionTicks());
+            return;
+        }
+
+        // Route embedded subtitle events through SubtitleManager
+        if (event.type === 'subtitlechange') {
+            this._subtitleManager.handleEmbeddedSubtitleEvent(event.data);
             return;
         }
 
@@ -421,6 +447,15 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentMediaSource = mediaSource;
             this._currentItem = options.item || { Id: options.itemId };
 
+            // Set up the SubtitleManager with the current media context
+            // This tells it what item/source we're playing and what backend we're using
+            this._subtitleManager.setMediaContext({
+                itemId: options.itemId,
+                mediaSourceId: mediaSource.Id,
+                mediaStreams: mediaSource.MediaStreams || [],
+                backendType: this._backend instanceof TizenAVPlayer ? 'tizen' : 'html5'
+            });
+
             // Initialize current stream indices
             this._currentAudioStreamIndex = options.audioStreamIndex;
             this._currentSubtitleStreamIndex = options.subtitleStreamIndex;
@@ -502,6 +537,17 @@ export class JellyfinPlayer extends EventEmitter {
                 item: this._currentItem,
                 mediaSource
             });
+
+            // Initialize the SubtitleManager with the selected subtitle track.
+            // For embedded subs on Tizen, the backend already handles them via
+            // the subtitleStreamIndex passed to play(). For external text subs
+            // (HTML5 backend), SubtitleManager will fetch and parse them.
+            if (this._currentSubtitleStreamIndex && this._currentSubtitleStreamIndex !== -1) {
+                // Fire-and-forget — don't block playback on subtitle fetch
+                this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex).catch((err) => {
+                    log.warn('Initial subtitle setup failed:', err);
+                });
+            }
         } catch (error) {
             log.error('Playback error caught:', error);
             this.emit(PlayerEvent.ERROR, { error, type: 'playback' });
@@ -654,37 +700,67 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Set subtitle track
+     * Set subtitle track — delegates to SubtitleManager for delivery routing.
+     * SubtitleManager decides whether to use embedded native rendering
+     * (Tizen AVPlay) or fetch/parse the subtitle externally.
+     *
      * @param {number} index - Subtitle stream index (-1 to disable)
      */
-    setSubtitleStreamIndex(index) {
+    async setSubtitleStreamIndex(index) {
         this._currentSubtitleStreamIndex = index;
 
-        if (this._backend instanceof TizenAVPlayer) {
-            if (index === -1) {
-                this._backend.setSubtitleStreamIndex(-1);
-            } else {
-                const tracks = this.getSubtitleTracks();
-                const listIndex = tracks.findIndex((t) => t.Index === index);
-                if (listIndex !== -1) {
-                    this._backend.setSubtitleStreamIndex(listIndex);
+        // Let SubtitleManager determine the best delivery method
+        const delivery = await this._subtitleManager.setPrimaryTrack(index);
+
+        // If SubtitleManager chose embedded native, we need to tell the backend
+        if (delivery === DeliveryMethod.EMBEDDED_NATIVE) {
+            // Delegate embedded subtitle selection to the backend (TizenAVPlayer)
+            if (this._backend instanceof TizenAVPlayer) {
+                if (index === -1) {
+                    this._backend.setSubtitleStreamIndex(-1);
                 } else {
-                    log.warn('Subtitle StreamID', index, 'not found');
+                    const tracks = this.getSubtitleTracks();
+                    const listIndex = tracks.findIndex((t) => t.Index === index);
+                    if (listIndex !== -1) {
+                        this._backend.setSubtitleStreamIndex(listIndex);
+                    } else {
+                        log.warn('Subtitle StreamID', index, 'not found in backend tracks');
+                    }
                 }
             }
-        } else {
-            this._backend?.setSubtitleStreamIndex(index);
+        } else if (delivery === DeliveryMethod.EXTERNAL_TEXT) {
+            // SubtitleManager is handling rendering via DOM — disable backend subs
+            if (this._backend instanceof TizenAVPlayer) {
+                this._backend.setSubtitleStreamIndex(-1);
+            } else {
+                this._backend?.setSubtitleStreamIndex(-1);
+            }
+        } else if (delivery === DeliveryMethod.NONE) {
+            // If we can't render it (or explicitly disabled), ensure backend subs are off
+            if (this._backend instanceof TizenAVPlayer) {
+                this._backend.setSubtitleStreamIndex(-1);
+            } else {
+                this._backend?.setSubtitleStreamIndex(-1);
+            }
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
     }
 
     /**
-     * Set subtitle offset
+     * Set subtitle offset — routes to SubtitleManager for DOM-rendered subs
+     * or to the backend for embedded native subs.
+     *
      * @param {number} seconds - Offset in seconds
      */
     setSubtitleOffset(seconds) {
-        this._backend?.setSubtitleOffset(seconds);
+        // If SubtitleManager is handling the primary subtitle, apply offset there
+        if (this._subtitleManager.isPrimaryManagedByUs()) {
+            this._subtitleManager.setPrimaryOffset(seconds);
+        } else {
+            // Embedded native subs — delegate to backend (Tizen has native offset API)
+            this._backend?.setSubtitleOffset(seconds);
+        }
     }
 
     /**
@@ -725,7 +801,10 @@ export class JellyfinPlayer extends EventEmitter {
     // ========================================================================
 
     /**
-     * Set secondary subtitle stream index
+     * Set secondary subtitle stream index — delegates to SubtitleManager.
+     * Secondary subtitles are always fetched externally and rendered on DOM,
+     * even if the track is embedded in the container.
+     *
      * @param {number} index - Stream index (-1 to disable)
      */
     async setSecondarySubtitleStreamIndex(index) {
@@ -733,15 +812,9 @@ export class JellyfinPlayer extends EventEmitter {
 
         log.info('Setting secondary subtitle index:', index);
         this._currentSecondarySubtitleStreamIndex = index;
-        this._secondaryCues = [];
-        this._lastSecondaryCue = null;
 
-        // Clear current display
-        this.emit('secondarysubtitlechange', { text: '' });
-
-        if (index !== -1) {
-            await this._fetchAndParseSecondarySubtitle(index);
-        }
+        // Delegate to SubtitleManager — it handles fetch, parse, and cue ticking
+        await this._subtitleManager.setSecondaryTrack(index);
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { secondarySubtitleStreamIndex: index });
     }
@@ -861,85 +934,14 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Fetch and parse secondary subtitle file
-     * @private
-     */
-    async _fetchAndParseSecondarySubtitle(streamIndex) {
-        if (!this._currentMediaSource || !this._currentItem) {
-            log.warn('Cannot fetch secondary subtitle - no media source');
-            return;
-        }
-
-        // Find the subtitle track
-        const tracks = this.getSubtitleTracks();
-        const track = tracks.find((t) => t.Index === streamIndex);
-        if (!track) {
-            log.warn('Secondary subtitle track not found:', streamIndex);
-            return;
-        }
-
-        try {
-            const url = MediaHelper.getSubtitleUrl(
-                track,
-                this.serverUrl,
-                this._currentItem.Id,
-                this._currentMediaSource.Id,
-                this.authToken,
-                'vtt'
-            );
-
-            log.debug('Fetching secondary subtitle:', url);
-            const response = await fetch(url);
-            if (!response.ok) throw new Error(`Fetch failed: ${response.status}`);
-
-            const text = await response.text();
-            this._secondaryCues = SubtitleParser.parse(text);
-            log.info(`Parsed ${this._secondaryCues.length} secondary subtitle cues`);
-        } catch (err) {
-            log.error('Failed to load secondary subtitle:', err);
-            this._secondaryCues = [];
-        }
-    }
-
-    /**
-     * Update secondary subtitles based on current playback time
-     * @private
-     */
-    /**
-     * Refresh subtitle styles
-     * delegate to backend if supported
+     * Refresh subtitle styles — delegate to backend (for embedded subs)
+     * or emit event for DOM-rendered subs.
      */
     refreshSubtitles() {
         if (this._backend && this._backend.refreshSubtitles) {
             this._backend.refreshSubtitles();
         } else {
              this.emit('refreshsubtitles');
-        }
-    }
-    _updateSecondarySubtitles(currentTimeSeconds) {
-        // Skip if no cues loaded
-        if (!this._secondaryCues.length) return;
-
-        // Find active cue for current time
-        const activeCue = this._secondaryCues.find(
-            (cue) => currentTimeSeconds >= cue.start && currentTimeSeconds <= cue.end
-        );
-
-        if (activeCue) {
-            // Only emit if cue changed
-            if (this._lastSecondaryCue !== activeCue) {
-                this._lastSecondaryCue = activeCue;
-                this.emit('secondarysubtitlechange', {
-                    text: activeCue.text,
-                    duration: (activeCue.end - activeCue.start) * 1000
-                });
-            }
-        } else {
-            // Clear display if no active cue
-            if (this._lastSecondaryCue !== null) {
-                this._lastSecondaryCue = null;
-                this.emit('secondarysubtitlechange', { text: '' });
-            }
         }
     }
 

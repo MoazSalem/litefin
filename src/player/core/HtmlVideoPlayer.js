@@ -454,7 +454,12 @@ export class HtmlVideoPlayer {
     }
 
     /**
-     * Set subtitle stream index
+     * Set subtitle stream index.
+     * For HTML5 backend, this manages native text tracks (e.g., HLS-embedded VTT).
+     * External subtitle rendering is now handled by SubtitleManager at the
+     * JellyfinPlayer level, so this method may be called with -1 to disable
+     * native tracks when SubtitleManager takes over.
+     *
      * @param {number} index - Subtitle stream index (-1 to disable)
      */
     setSubtitleStreamIndex(index) {
@@ -467,7 +472,7 @@ export class HtmlVideoPlayer {
         this._subtitleOffset = 0;
         this._previousOffset = 0;
 
-        // Handle native text tracks
+        // Handle native text tracks (HLS-embedded VTT, etc.)
         const textTracks = video.textTracks;
         if (textTracks) {
             for (let i = 0; i < textTracks.length; i++) {
@@ -475,7 +480,7 @@ export class HtmlVideoPlayer {
             }
         }
 
-        // TODO: Handle custom subtitle rendering for ASS/PGS
+        // Note: ASS/PGS rendering is planned for Phase 2/3 via SubtitleManager
     }
 
     /**
