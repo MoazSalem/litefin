@@ -213,6 +213,13 @@ export class TizenAVPlayer {
                         log.info('Media prepared');
                         this._isPrepared = true;
                         this._duration = this._avplay.getDuration();
+                        
+                        // Emit loadedmetadata so OSD can update duration/chapters
+                        this.onEvent({ 
+                            type: 'loadedmetadata', 
+                            data: { duration: this._duration / 1000 } 
+                        });
+                        
                         resolve();
                     },
                     (error) => {
@@ -251,7 +258,7 @@ export class TizenAVPlayer {
             },
             oncurrentplaytime: (time) => {
                 // This is called periodically with current time in ms
-                this.onEvent({ type: 'timeupdate', data: { time: time / 1000 } });
+                this.onEvent({ type: 'timeupdate', data: { time: this.getCurrentTime() } });
             },
             onevent: (eventType, eventData) => {
                 log.debug('Event:', eventType, eventData);
@@ -341,18 +348,7 @@ export class TizenAVPlayer {
      * @private
      */
     _startPositionTracking() {
-        this._stopPositionTracking();
-
-        this._positionTimer = setInterval(() => {
-            if (this._isPlaying && this._avplay) {
-                try {
-                    const time = this._avplay.getCurrentTime();
-                    this.onEvent({ type: 'timeupdate', data: { time: time / 1000 } });
-                } catch (e) {
-                    // Ignore errors during position tracking
-                }
-            }
-        }, 1000); // Update every second
+        // Position tracking handled by native oncurrentplaytime event to avoid jitter
     }
 
     /**
@@ -360,10 +356,7 @@ export class TizenAVPlayer {
      * @private
      */
     _stopPositionTracking() {
-        if (this._positionTimer) {
-            clearInterval(this._positionTimer);
-            this._positionTimer = null;
-        }
+        // No-op (handled by native events)
     }
 
     /**
@@ -527,7 +520,11 @@ export class TizenAVPlayer {
         if (!this._avplay || !this._isPrepared) return;
 
         try {
-            const positionMs = Math.floor(positionTicks / 10000);
+            let targetTicks = positionTicks;
+            if (this._currentPlayOptions?.transcodingOffsetTicks) {
+                targetTicks = Math.max(0, positionTicks - this._currentPlayOptions.transcodingOffsetTicks);
+            }
+            const positionMs = Math.floor(targetTicks / 10000);
             this._avplay.seekTo(positionMs);
         } catch (e) {
             log.error('Seek failed:', e);
@@ -721,11 +718,6 @@ export class TizenAVPlayer {
         try {
             let timeMs = Number(this._avplay.getCurrentTime());
             if (isNaN(timeMs)) return 0;
-
-            // Add transcoding offset safely
-            if (this._currentPlayOptions && typeof this._currentPlayOptions.transcodingOffsetTicks === 'number') {
-                timeMs += this._currentPlayOptions.transcodingOffsetTicks / 10000;
-            }
 
             return timeMs / 1000;
         } catch (e) {

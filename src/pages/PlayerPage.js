@@ -360,6 +360,8 @@ class PlayerPage extends Page {
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
         this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
+        this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
+        this._player.on('seek', (data) => this._reportPlaybackProgress('timeupdate', data?.positionTicks));
 
         // NOTE: No more window.playerInstance / window.playerExit / window.reportPauseState
         // globals. The OSD Component receives these as constructor options instead.
@@ -697,9 +699,12 @@ class PlayerPage extends Page {
     }
 
     _onTimeUpdate(positionTicks) {
+        // Ensure we have a valid number for ticks
+        const ticks = typeof positionTicks === 'number' ? positionTicks : 0;
+
         // 1. Check subtitle sync
         // Using passed positionTicks is most efficient
-        if (this._subtitleEndTime && positionTicks && positionTicks >= this._subtitleEndTime) {
+        if (this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
             this._clearSubtitle();
         }
 
@@ -830,13 +835,14 @@ class PlayerPage extends Page {
     /**
      * Report playback progress to server
      * @param {string} eventName - Event type: 'timeupdate', 'pause', 'unpause'
+     * @param {number} [manualPositionTicks=null] - Optional manual position override
      */
-    async _reportPlaybackProgress(eventName = 'timeupdate') {
+    async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
         try {
             const mediaSource = this._player.getCurrentMediaSource();
-            const playerState = this._getPlayerState();
+            const playerState = this._getPlayerState(manualPositionTicks);
             const isPaused = eventName === 'pause';
 
             const playSessionId = mediaSource?.PlaySessionId || mediaSource?.LiveStreamId;
@@ -869,11 +875,14 @@ class PlayerPage extends Page {
     /**
      * Get comprehensive player state for reporting
      * Aligned with jellyfin-web's PlayState structure
+     * @param {number} [manualPositionTicks=null] - Optional manual position override
      * @returns {Object} Player state object
      */
-    _getPlayerState() {
+    _getPlayerState(manualPositionTicks = null) {
         const mediaSource = this._player?.getCurrentMediaSource?.();
-        const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+        const positionTicks = manualPositionTicks !== null && manualPositionTicks !== undefined 
+            ? manualPositionTicks 
+            : (this._player?.getCurrentPositionTicks?.() || 0);
 
         // Build base state
         const state = {

@@ -546,14 +546,7 @@ export class HtmlVideoPlayer {
      * @returns {number}
      */
     getCurrentTime() {
-        let time = this._videoElement?.currentTime ?? 0;
-
-        // Add transcoding offset
-        if (this._currentPlayOptions?.transcodingOffsetTicks) {
-            time += this._currentPlayOptions.transcodingOffsetTicks / 10000000;
-        }
-
-        return time;
+        return this._videoElement?.currentTime ?? 0;
     }
 
     /**

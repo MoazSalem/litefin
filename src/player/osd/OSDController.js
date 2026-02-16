@@ -11,6 +11,7 @@ import SubtitleQuickSettings from './SubtitleQuickSettings.js';
 import PlaybackInfo from './PlaybackInfo.js';
 import AspectRatioMenu from './AspectRatioMenu.js';
 import PlaybackSpeedMenu from './PlaybackSpeedMenu.js';
+import QualityMenu from './QualityMenu.js';
 
 const log = logger.create('OSDController');
 
@@ -70,6 +71,7 @@ export default class OSDController extends Component {
         this.playbackInfo = new PlaybackInfo(this);
         this.aspectRatioMenu = new AspectRatioMenu(this);
         this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
+        this.qualityMenu = new QualityMenu(this);
 
         this.activeMenu = null; // Reference to currently open menu
 
@@ -113,6 +115,7 @@ export default class OSDController extends Component {
             this._player.on('seek', (e) => this._onPlayerSeek(e));
             // Also update markers when duration becomes available
             this._player.on('durationchange', () => this._renderChapterMarkers());
+            this._player.on('loadedmetadata', () => this._renderChapterMarkers());
         }
 
         // Initial render attempt
@@ -130,12 +133,24 @@ export default class OSDController extends Component {
 
     onBeforeDestroy() {
         this._stopUpdates();
-        this.trackMenu.destroy();
-        this.settingsMenu.destroy();
-        this.subtitleOffset.destroy();
-        this.subtitleQuickSettings.destroy();
-        this.playbackInfo.destroy();
-        this.aspectRatioMenu.destroy();
+        this.trackMenu?.destroy();
+        this.settingsMenu?.destroy();
+        this.subtitleOffset?.destroy();
+        this.subtitleQuickSettings?.destroy();
+        this.playbackInfo?.destroy();
+        this.aspectRatioMenu?.destroy();
+        this.playbackSpeedMenu?.destroy();
+        this.qualityMenu?.destroy();
+
+        if (this._player) {
+            this._player.removeAllListeners('mediastreamschange');
+            this._player.removeAllListeners('play');
+            this._player.removeAllListeners('pause');
+            this._player.removeAllListeners('chaptersloaded');
+            this._player.removeAllListeners('seek');
+            this._player.removeAllListeners('durationchange');
+            this._player.removeAllListeners('loadedmetadata');
+        }
         
         if (this.container) {
             this.container.removeEventListener('mousemove', this._onMouseMove);
@@ -893,7 +908,7 @@ export default class OSDController extends Component {
                 break;
             case 'playbackInfo':
                 // Toggle based on current state
-                this.togglePlaybackInfo(!this._showPlaybackInfo);
+                this.togglePlaybackInfo(!this.playbackInfo.isVisible);
                 break;
         }
     }
@@ -955,11 +970,18 @@ export default class OSDController extends Component {
              }
 
             this._seekDebounceTimer = setTimeout(() => {
-                if (this._player.seek) this._player.seek(this._seekTargetTicks);
-                this._seekTargetTicks = null;
-                this._seekStartTime = null;
-                this._seekDebounceTimer = null;
-                if (tooltip) tooltip.classList.remove('visible');
+                try {
+                    if (this._seekTargetTicks !== null && this._player.seek) {
+                        this._player.seek(this._seekTargetTicks);
+                    }
+                } catch (e) {
+                    log.error('Deferred seek failed:', e);
+                } finally {
+                    this._seekTargetTicks = null;
+                    this._seekStartTime = null;
+                    this._seekDebounceTimer = null;
+                    if (tooltip) tooltip.classList.remove('visible');
+                }
             }, 500);
 
         } catch (err) {
@@ -984,18 +1006,33 @@ export default class OSDController extends Component {
     }
 
     _updateState() {
-        if (this.activeMenu && this.activeMenu === this.playbackInfo) {
-            this.playbackInfo.update();
-        }
-        
-        if (this._seekTargetTicks !== null) return;
+        try {
+            if (this.activeMenu && this.activeMenu === this.playbackInfo) {
+                this.playbackInfo.update();
+            }
+            
+            if (this._seekTargetTicks !== null) {
+                // Safety: If seek target has been active for > 5s, something is stuck.
+                if (this._seekStartTime && (Date.now() - this._seekStartTime > 5000)) {
+                    log.warn('Seek session safety timeout reached. Resetting.');
+                    this._seekTargetTicks = null;
+                    this._seekStartTime = null;
+                    const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
+                    if (tooltip) tooltip.classList.remove('visible');
+                } else {
+                    return;
+                }
+            }
 
-        this._updateTimeDisplay(this._player);
-        this._updateClock();
-        if (!this._isDraggingSeekbar) {
-            this._updatePositionSlider(this._player);
+            this._updateTimeDisplay(this._player);
+            this._updateClock();
+            if (!this._isDraggingSeekbar) {
+                this._updatePositionSlider(this._player);
+            }
+            this._updatePlayPauseButton();
+        } catch (e) {
+            log.error('Error in OSD update loop:', e);
         }
-        this._updatePlayPauseButton();
     }
     
     _updateTimeDisplay(player) {
@@ -1048,6 +1085,7 @@ export default class OSDController extends Component {
 
     _handlePositionSliderInput(e) {
         this._isDraggingSeekbar = true;
+        this.resetAutoHide();
         
         const percentRaw = e.target.value;
         e.target.style.setProperty('--progress', percentRaw);
@@ -1060,9 +1098,21 @@ export default class OSDController extends Component {
 
     _handlePositionSliderChange(e) {
         this._isDraggingSeekbar = false;
-        const duration = this._player.getDurationTicks();
-        const percent = e.target.value / 100;
-        this._player.seek(duration * percent);
+        try {
+            const duration = this._player.getDurationTicks();
+            const percent = e.target.value / 100;
+            const targetTicks = duration * percent;
+            
+            // Optimistic update
+            this._updatePositionSlider({
+                getCurrentPositionTicks: () => targetTicks,
+                getDurationTicks: () => duration
+            });
+
+            this._player.seek(targetTicks);
+        } catch (err) {
+            log.error('Slider seek failed:', err);
+        }
     }
 
     _onMediaStreamsChange(e) {
@@ -1077,7 +1127,23 @@ export default class OSDController extends Component {
         }
     }
 
+    _clearSeekState() {
+        if (this._seekDebounceTimer) {
+            clearTimeout(this._seekDebounceTimer);
+            this._seekDebounceTimer = null;
+        }
+        this._seekTargetTicks = null;
+        this._seekStartTime = null;
+        this._isDraggingSeekbar = false;
+        
+        const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
+        if (tooltip) tooltip.classList.remove('visible');
+    }
+
     _onPlayerSeek(e) {
+        // Clear OSD's internal seek state whenever a seek happens (could be remote or chapter)
+        this._clearSeekState();
+
         if (e && e.positionTicks !== undefined) {
              // Optimistic update for UI responsiveness
              const tempPlayer = {
@@ -1085,9 +1151,7 @@ export default class OSDController extends Component {
                  getDurationTicks: () => this._player.getDurationTicks ? this._player.getDurationTicks() : 0
              };
              this._updateTimeDisplay(tempPlayer);
-             if (!this._isDraggingSeekbar) {
-                this._updatePositionSlider(tempPlayer);
-             }
+             this._updatePositionSlider(tempPlayer);
         }
     }
 
@@ -1098,6 +1162,17 @@ export default class OSDController extends Component {
             this.activeMenu = this.playbackSpeedMenu;
         } else {
             this.playbackSpeedMenu.hide();
+            this.activeMenu = null;
+        }
+    }
+
+    toggleQualityMenu(show) {
+        if (show) {
+            this.settingsMenu.hide();
+            this.qualityMenu.open();
+            this.activeMenu = this.qualityMenu;
+        } else {
+            this.qualityMenu.hide();
             this.activeMenu = null;
         }
     }

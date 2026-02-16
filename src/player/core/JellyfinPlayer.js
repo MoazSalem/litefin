@@ -83,7 +83,13 @@ class EventEmitter {
         const listeners = this._listeners[event];
         if (listeners) {
             // Iterate a copy so listeners can safely remove themselves
-            [...listeners].forEach((fn) => fn.apply(this, args));
+            [...listeners].forEach((fn) => {
+                try {
+                    fn.apply(this, args);
+                } catch (e) {
+                    console.error(`Error in listener for event "${event}":`, e);
+                }
+            });
         }
         return this;
     }
@@ -154,6 +160,9 @@ export class JellyfinPlayer extends EventEmitter {
         this._currentPlayOptions = null;
         this._isPlaying = false;
         this._isPaused = false;
+        this._manualBitrate = null;
+        this._isRestarting = false; // Flag to suppress stop events during manual quality change
+        this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
 
         // Secondary Subtitle State
         this._currentSecondarySubtitleStreamIndex = -1;
@@ -224,7 +233,15 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Handle timeupdate for syncing secondary subtitles
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
-            this._updateSecondarySubtitles(event.data.time);
+            try {
+                this._updateSecondarySubtitles(event.data.time);
+            } catch (e) {
+                console.error('Error updating secondary subtitles:', e);
+            }
+            
+            // Re-emit normalized timeupdate with absolute ticks
+            this.emit(PlayerEvent.TIME_UPDATE, this.getCurrentPositionTicks());
+            return;
         }
 
         // Re-emit events from backend
@@ -262,7 +279,7 @@ export class JellyfinPlayer extends EventEmitter {
             const deviceProfile = buildJellyfinProfile();
 
             // Get playback info from server
-            const playbackInfo = await this._getPlaybackInfo(options, deviceProfile);
+            const playbackInfo = await this._getPlaybackInfo(options, deviceProfile, this._manualBitrate);
             log.debug('PlaybackInfo keys:', Object.keys(playbackInfo));
             if (playbackInfo.MediaSources && playbackInfo.MediaSources.length > 0) {
                  log.debug('MediaSource[0] keys:', Object.keys(playbackInfo.MediaSources[0]));
@@ -363,13 +380,17 @@ export class JellyfinPlayer extends EventEmitter {
 
             log.debug('Stream Info built:', streamInfo);
 
+            // Save transcoding offset
+            this._transcodingOffsetTicks = streamInfo.transcodingOffsetTicks || 0;
+            log.info('Transcoding offset:', this._transcodingOffsetTicks);
+
             // Start playback on backend
             log.info('Initializing backend playback...');
             await this._backend.play({
                 ...streamInfo,
                 item: this._currentItem,
                 mediaSource,
-                startPositionTicks: options.startPositionTicks || 0,
+                startPositionTicks: streamInfo.playerStartPositionTicks, // Use adjusted start position
                 audioStreamIndex: options.audioStreamIndex,
                 subtitleStreamIndex: options.subtitleStreamIndex
             });
@@ -427,18 +448,26 @@ export class JellyfinPlayer extends EventEmitter {
         const item = this._currentItem;
         const positionTicks = this.getCurrentPositionTicks();
 
-        this._currentItem = null;
-        this._currentMediaSource = null;
-        this._currentPlayOptions = null;
-        this._isPlaying = false;
+        // Only clear state if NOT restarting
+        if (!this._isRestarting) {
+            this._currentItem = null;
+            this._currentMediaSource = null;
+            this._currentPlayOptions = null;
+        }
+        
         this._isPlaying = false;
         this._isPaused = false;
-        this._playbackSpeed = 1; // Reset speed on stop
 
-        this.emit(PlayerEvent.PLAYBACK_STOP, {
-            item,
-            positionTicks
-        });
+        // Only emit stop events if we are NOT restarting
+        if (!this._isRestarting) {
+            this._manualBitrate = null;
+            this._transcodingOffsetTicks = 0;
+            this._playbackSpeed = 1; // Reset speed on stop
+            this.emit(PlayerEvent.STOP);
+            this.emit(PlayerEvent.PLAYBACK_STOP, { item, positionTicks });
+        } else {
+            log.info('Suppressing STOP events due to restart');
+        }
     }
 
     /**
@@ -851,7 +880,10 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {number}
      */
     getCurrentPositionTicks() {
-        return Math.round((this._backend?.getCurrentTime() ?? 0) * 10000000);
+        // Add offset if we are playing a transcoded segment that starts at 0
+        const backendTicks = Math.round((this._backend?.getCurrentTime() ?? 0) * 10000000);
+        const total = backendTicks + this._transcodingOffsetTicks;
+        return isNaN(total) ? 0 : total;
     }
 
     /**
@@ -929,11 +961,11 @@ export class JellyfinPlayer extends EventEmitter {
      * Get playback info from Jellyfin server
      * @private
      */
-    async _getPlaybackInfo(options, deviceProfile) {
+    async _getPlaybackInfo(options, deviceProfile, manualBitrate = null) {
         const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
 
-        // Read max bitrate from litefin's PlayerSettings
-        const maxBitrate = PlayerSettings.get('maxBitrateInternet') || 120000000;
+        // Read max bitrate: use manual override if set, otherwise setting
+        const maxBitrate = manualBitrate || PlayerSettings.get('maxBitrateInternet') || 120000000;
 
         const response = await fetch(url, {
             method: 'POST',
@@ -963,6 +995,63 @@ export class JellyfinPlayer extends EventEmitter {
     // ========================================================================
     // Cleanup
     // ========================================================================
+
+    // ========================================================================
+    // Manual Bitrate Control
+    // ========================================================================
+
+    /**
+     * Set max bitrate and restart playback
+     * @param {number} bitrate - Max bitrate in bps (0 = Auto)
+     */
+    async setMaxBitrate(bitrate) {
+        if (!this._currentItem) return;
+        
+        log.info('Setting manual bitrate:', bitrate);
+        
+        // Update state (0 means null/Auto)
+        this._manualBitrate = bitrate > 0 ? bitrate : null;
+
+        // Capture current position to resume
+        const currentTicks = this.getCurrentPositionTicks();
+
+        // Strategy: Standard - Play from current position
+        // This is more robust than seeking from 0 for HLS
+        const playOptions = {
+            ...this._currentPlayOptions,
+            startPositionTicks: currentTicks
+        };
+
+        // Restart playback
+        this._isRestarting = true;
+        
+        try {
+            await this.stop();
+            // _manualBitrate is preserved because _isRestarting was true
+            
+            // Tizen: Give AVPlay time to cleanup
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            await this.play(playOptions);
+            
+            // No manual seek needed - server starts transcode at correct offset
+            // and MediaHelper handles the time reporting offset.
+
+            // _isRestarting is reset to false in play() success
+        } catch (e) {
+            log.error('Failed to restart with new bitrate:', e);
+            this._isRestarting = false; // Ensure reset on error
+        }
+    }
+
+
+    /**
+     * Get current max bitrate setting
+     * @returns {number} Current bitrate limit (0 = Auto)
+     */
+    getMaxBitrate() {
+        return this._manualBitrate || 0;
+    }
 
     /**
      * Destroy the player and clean up resources
