@@ -31,23 +31,25 @@ const CopyWebpackPlugin = require('copy-webpack-plugin');
 // ============================================================================
 function getPlugins() {
     return [
-        new HtmlWebpackPlugin({
-            template: './src/index.html',
-            filename: 'index.html',
-            inject: 'body'
-        }),
         new MiniCssExtractPlugin({
             filename: 'css/[name].css'
         }),
+        new HtmlWebpackPlugin({
+            filename: 'index.html',
+            template: 'src/index.html',
+            inject: 'body',
+            scriptLoading: 'blocking'
+        }),
         new CopyWebpackPlugin({
             patterns: [
-                { from: 'config.xml', to: 'config.xml' }, // Copy root config.xml
+                { from: 'config.xml', to: 'config.xml' },
                 { from: 'icon.png', to: 'icon.png' },
-                { from: 'src/assets', to: 'assets', noErrorOnMissing: true }
+                { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'libpgs.worker.js' }
             ]
         }),
         new webpack.DefinePlugin({
-            __APP_VERSION__: JSON.stringify(APP_VERSION)
+            __APP_VERSION__: JSON.stringify(require('./package.json').version)
         })
     ];
 }

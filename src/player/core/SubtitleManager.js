@@ -14,6 +14,7 @@
 
 import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
+import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 
@@ -93,6 +94,7 @@ export default class SubtitleManager {
         // ====================================================================
 
         this._assRenderer = null;
+        this._pgsRenderer = null;
 
         // ====================================================================
         // Primary Subtitle State
@@ -140,6 +142,10 @@ export default class SubtitleManager {
         if (this._assRenderer) {
             this._assRenderer.destroy();
             this._assRenderer = null;
+        }
+        if (this._pgsRenderer) {
+            this._pgsRenderer.destroy();
+            this._pgsRenderer = null;
         }
 
         this._itemId = context.itemId;
@@ -195,6 +201,8 @@ export default class SubtitleManager {
             await this._fetchAndParseCues(track, 'primary');
         } else if (delivery === DeliveryMethod.ASS_CANVAS) {
             await this._loadASSTrack(track);
+        } else if (delivery === DeliveryMethod.PGS_BITMAP) {
+            await this._loadPGSTrack(track);
         }
 
         // For EMBEDDED_NATIVE, the host (JellyfinPlayer) will delegate to the
@@ -266,6 +274,11 @@ export default class SubtitleManager {
         if (this._primaryDelivery === DeliveryMethod.ASS_CANVAS && this._assRenderer) {
             this._assRenderer.tick(currentTimeSeconds);
         }
+
+        // Tick PGS renderer (needed for Tizen AVPlay / manual timing)
+        if (this._primaryDelivery === DeliveryMethod.PGS_BITMAP && this._pgsRenderer) {
+            this._pgsRenderer.tick(currentTimeSeconds);
+        }
     }
 
     /**
@@ -299,6 +312,9 @@ export default class SubtitleManager {
         log.debug(`Primary subtitle offset set: ${seconds}s`);
         if (this._assRenderer) {
             this._assRenderer.setDelay(seconds);
+        }
+        if (this._pgsRenderer) {
+            this._pgsRenderer.setOffset(seconds);
         }
     }
 
@@ -375,6 +391,10 @@ export default class SubtitleManager {
             this._assRenderer.destroy();
             this._assRenderer = null;
         }
+        if (this._pgsRenderer) {
+            this._pgsRenderer.destroy();
+            this._pgsRenderer = null;
+        }
         log.info('SubtitleManager destroyed');
     }
 
@@ -426,8 +446,11 @@ export default class SubtitleManager {
             return DeliveryMethod.EXTERNAL_TEXT;
         }
 
-        // Priority 4 (Future): PGS → PGS_BITMAP
-        // Phase 3 will add: if (codec === 'pgs' || codec === 'pgssub') return DeliveryMethod.PGS_BITMAP;
+        // Priority 4: PGS → PGS_BITMAP
+        if (codec === 'pgs' || codec === 'pgssub') {
+            log.debug(`Track "${track.DisplayTitle}" is PGS → PGS_BITMAP`);
+            return DeliveryMethod.PGS_BITMAP;
+        }
 
         // Image-based subtitles (PGS, DVDsub) on HTML5 backend cannot be rendered yet
         log.warn(`No delivery method for track "${track.DisplayTitle}" (codec: ${codec}, embedded: ${isEmbedded}, backend: ${this._backendType})`);
@@ -484,7 +507,66 @@ export default class SubtitleManager {
         } catch (err) {
             const errorMsg = err ? (err.name + ': ' + err.message + '\n' + err.stack) : err;
             log.error('Failed to load ASS track:', errorMsg);
-            // Fallback?
+        }
+    }
+
+    /**
+     * Load a PGS track and initialize the PGSRenderer.
+     * @param {Object} track
+     * @private
+     */
+    async _loadPGSTrack(track) {
+        if (!this._itemId || !this._mediaSourceId) return;
+
+        try {
+            // Lazy init renderer
+            if (!this._pgsRenderer) {
+                this._pgsRenderer = new PGSRenderer({
+                    track,
+                    container: this._container,
+                    videoElement: this._videoElement,
+                    // Initial offset
+                    timeOffset: this._primaryOffset
+                });
+            }
+
+            // Build the subtitle URL (PGS/.sup)
+            // We use the 'stream' endpoint with .sup extension
+            // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.sup
+            const url = MediaHelper.getSubtitleUrl(
+                track,
+                this._serverUrl,
+                this._itemId,
+                this._mediaSourceId,
+                this._authToken,
+                'sup'
+            );
+
+            log.info(`Loading PGS subtitle from: ${url}`);
+            
+            // The renderer handles fetching via libpgs
+            // But wait, libpgs takes a URL or buffer.
+            // Our PGSRenderer constructor took the URL but we didn't update it here if reusing renderer?
+            // Actually we destroy/recreate renderers on context switch, but not necessarily on track switch
+            // if we stayed in same context.
+            // But above lazy init logic only creates if generic _pgsRenderer is null.
+            // If we switch from one PGS track to another, we need to update it.
+            
+            // Simpler: Just destroy and recreate if it exists to be safe and clean
+            if (this._pgsRenderer) {
+                this._pgsRenderer.destroy();
+            }
+            
+            this._pgsRenderer = new PGSRenderer({
+                track,
+                container: this._container,
+                videoElement: this._videoElement,
+                subUrl: url,
+                timeOffset: this._primaryOffset
+            });
+
+        } catch (err) {
+            log.error('Failed to load PGS track:', err);
         }
     }
 
@@ -655,6 +737,12 @@ export default class SubtitleManager {
         // Hide ASS if it was active
         if (this._assRenderer) {
             this._assRenderer.hide();
+        }
+        
+        // Destroy PGS renderer to stop worker and clear canvas
+        if (this._pgsRenderer) {
+            this._pgsRenderer.destroy();
+            this._pgsRenderer = null;
         }
     }
 

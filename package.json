@@ -53,6 +53,7 @@
     "dependencies": {
         "hls.js": "^1.6.15",
         "libjass": "^0.11.0",
+        "libpgs": "^0.8.1",
         "screenfull": "^6.0.2"
     }
 }
