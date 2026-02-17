@@ -61,6 +61,14 @@ export class HtmlVideoPlayer {
     // ========================================================================
 
     /**
+     * Get the underlying HTML5 video element.
+     * @returns {HTMLVideoElement|null}
+     */
+    getVideoElement() {
+        return this._ensureVideoElement();
+    }
+
+    /**
      * Create or get video element
      * @private
      */

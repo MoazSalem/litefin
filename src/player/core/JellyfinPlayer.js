@@ -184,6 +184,7 @@ export class JellyfinPlayer extends EventEmitter {
         // ====================================================================
 
         this._subtitleManager = new SubtitleManager({
+            container: this.container,
             serverUrl: this.serverUrl,
             authToken: this.authToken,
             // Primary cue callback — emits to PlayerPage for DOM rendering
@@ -466,11 +467,13 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Set up the SubtitleManager with the current media context
             // This tells it what item/source we're playing and what backend we're using
+            const backend = this._backend || this._videoPlayer;
             this._subtitleManager.setMediaContext({
                 itemId: options.itemId,
                 mediaSourceId: mediaSource.Id,
                 mediaStreams: mediaSource.MediaStreams || [],
-                backendType: this._backend instanceof TizenAVPlayer ? 'tizen' : 'html5'
+                backendType: backend instanceof TizenAVPlayer ? 'tizen' : 'html5',
+                videoElement: (backend && backend.getVideoElement) ? backend.getVideoElement() : null
             });
 
             // Initialize current stream indices

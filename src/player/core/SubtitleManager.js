@@ -13,6 +13,7 @@
  */
 
 import { SubtitleParser } from './SubtitleParser.js';
+import ASSRenderer from './ASSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 
@@ -44,7 +45,6 @@ const TEXT_FORMATS = [
     'vtt', 'webvtt',
     'ttml', 'dfxp',
     'smi', 'sami',
-    'ass', 'ssa',
     'mov_text', 'tx3g',
     'scc',
     'sbv',
@@ -71,6 +71,7 @@ export default class SubtitleManager {
 
         this._serverUrl = options.serverUrl;
         this._authToken = options.authToken;
+        this._container = options.container;
 
         // Callbacks to notify the host (JellyfinPlayer) about cue changes
         this._onPrimaryCue = options.onPrimaryCue || (() => {});
@@ -85,6 +86,13 @@ export default class SubtitleManager {
         this._mediaSourceId = null;
         this._mediaStreams = [];  // All MediaStreams from the current media source
         this._backendType = null; // 'tizen' or 'html5'
+        this._videoElement = null; // Reference to real video element (or null)
+
+        // ====================================================================
+        // Renderers renderers
+        // ====================================================================
+
+        this._assRenderer = null;
 
         // ====================================================================
         // Primary Subtitle State
@@ -128,10 +136,17 @@ export default class SubtitleManager {
         this._clearPrimary();
         this._clearSecondary();
 
+        // Destroy existing renderers as context (video/container) might change
+        if (this._assRenderer) {
+            this._assRenderer.destroy();
+            this._assRenderer = null;
+        }
+
         this._itemId = context.itemId;
         this._mediaSourceId = context.mediaSourceId;
         this._mediaStreams = context.mediaStreams || [];
         this._backendType = context.backendType;
+        this._videoElement = context.videoElement || null;
 
         log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}`);
     }
@@ -178,6 +193,8 @@ export default class SubtitleManager {
         // If we're handling it ourselves (external text), fetch and parse
         if (delivery === DeliveryMethod.EXTERNAL_TEXT) {
             await this._fetchAndParseCues(track, 'primary');
+        } else if (delivery === DeliveryMethod.ASS_CANVAS) {
+            await this._loadASSTrack(track);
         }
 
         // For EMBEDDED_NATIVE, the host (JellyfinPlayer) will delegate to the
@@ -244,6 +261,11 @@ export default class SubtitleManager {
         if (this._secondaryDelivery === DeliveryMethod.EXTERNAL_TEXT && this._secondaryCues.length > 0) {
             this._tickCues(currentTimeSeconds, 'secondary');
         }
+
+        // Tick ASS renderer (needed for virtual video backend on Tizen)
+        if (this._primaryDelivery === DeliveryMethod.ASS_CANVAS && this._assRenderer) {
+            this._assRenderer.tick(currentTimeSeconds);
+        }
     }
 
     /**
@@ -275,6 +297,9 @@ export default class SubtitleManager {
     setPrimaryOffset(seconds) {
         this._primaryOffset = seconds;
         log.debug(`Primary subtitle offset set: ${seconds}s`);
+        if (this._assRenderer) {
+            this._assRenderer.setDelay(seconds);
+        }
     }
 
     /**
@@ -346,6 +371,10 @@ export default class SubtitleManager {
         this._itemId = null;
         this._mediaSourceId = null;
         this._mediaStreams = [];
+        if (this._assRenderer) {
+            this._assRenderer.destroy();
+            this._assRenderer = null;
+        }
         log.info('SubtitleManager destroyed');
     }
 
@@ -383,7 +412,13 @@ export default class SubtitleManager {
             }
         }
 
-        // Priority 2: Text-based format → fetch from server and render on DOM
+        // Priority 2: ASS/SSA → ASS_CANVAS
+        if (codec === 'ass' || codec === 'ssa') {
+            log.debug(`Track "${track.DisplayTitle}" is ASS/SSA → ASS_CANVAS`);
+            return DeliveryMethod.ASS_CANVAS;
+        }
+
+        // Priority 3: Text-based format → fetch from server and render on DOM
         // The Jellyfin API can extract embedded text subs and serve them as VTT/SRT,
         // so this works for both embedded and external text subtitles.
         if (this._isTextFormat(codec)) {
@@ -391,15 +426,66 @@ export default class SubtitleManager {
             return DeliveryMethod.EXTERNAL_TEXT;
         }
 
-        // Priority 3 (Future): ASS/SSA → ASS_CANVAS
-        // Phase 2 will add: if (codec === 'ass' || codec === 'ssa') return DeliveryMethod.ASS_CANVAS;
-
         // Priority 4 (Future): PGS → PGS_BITMAP
         // Phase 3 will add: if (codec === 'pgs' || codec === 'pgssub') return DeliveryMethod.PGS_BITMAP;
 
         // Image-based subtitles (PGS, DVDsub) on HTML5 backend cannot be rendered yet
         log.warn(`No delivery method for track "${track.DisplayTitle}" (codec: ${codec}, embedded: ${isEmbedded}, backend: ${this._backendType})`);
-        return DeliveryMethod.NONE;
+    }
+
+    /**
+     * Load an ASS/SSA track and initialize the ASSRenderer.
+     * @param {Object} track
+     * @private
+     */
+    async _loadASSTrack(track) {
+        if (!this._itemId || !this._mediaSourceId) return;
+
+        try {
+            // Lazy init renderer
+            if (!this._assRenderer) {
+                // Find video dimensions for virtual element if needed
+                let width = 1920;
+                let height = 1080;
+                const videoStream = this._mediaStreams.find(s => s.Type === 'Video');
+                if (videoStream && videoStream.Width && videoStream.Height) {
+                    width = videoStream.Width;
+                    height = videoStream.Height;
+                }
+
+                this._assRenderer = new ASSRenderer({
+                    container: this._container,
+                    video: this._videoElement,
+                    width,
+                    height
+                });
+            }
+
+            // Fetch raw ASS content
+            // We request the original format (no conversion to vtt)
+            const url = MediaHelper.getSubtitleUrl(
+                track,
+                this._serverUrl,
+                this._itemId,
+                this._mediaSourceId,
+                this._authToken,
+                track.Codec // 'ass' or 'ssa'
+            );
+
+            log.debug(`Fetching ASS subtitle: ${url}`);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            
+            const content = await response.text();
+
+            await this._assRenderer.setTrack(content);
+            this._assRenderer.show();
+
+        } catch (err) {
+            const errorMsg = err ? (err.name + ': ' + err.message + '\n' + err.stack) : err;
+            log.error('Failed to load ASS track:', errorMsg);
+            // Fallback?
+        }
     }
 
     /**
@@ -476,7 +562,7 @@ export default class SubtitleManager {
 
             log.info(`Parsed ${cues.length} ${slot} subtitle cues from "${track.DisplayTitle}"`);
         } catch (err) {
-            log.error(`Failed to fetch/parse ${slot} subtitle:`, err);
+            log.error(`Failed to fetch/parse ${slot} subtitle:`, err ? (err.name + ': ' + err.message + '\n' + err.stack) : err);
 
             // Clear cues on failure
             if (slot === 'primary') {
@@ -564,6 +650,11 @@ export default class SubtitleManager {
         // Clear the display if something was showing
         if (wasActive) {
             this._onPrimaryCue({ text: '' });
+        }
+        
+        // Hide ASS if it was active
+        if (this._assRenderer) {
+            this._assRenderer.hide();
         }
     }
 

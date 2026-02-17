@@ -52,6 +52,7 @@
     },
     "dependencies": {
         "hls.js": "^1.6.15",
+        "libjass": "^0.11.0",
         "screenfull": "^6.0.2"
     }
 }
