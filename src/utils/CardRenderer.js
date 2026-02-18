@@ -254,13 +254,11 @@ class CardRenderer {
         let progressHtml = '';
         if (item.UserData?.PlaybackPositionTicks && item.RunTimeTicks) {
             const progress = (item.UserData.PlaybackPositionTicks / item.RunTimeTicks) * 100;
-            // TIZEN FIX: Simple ES5 string concatenation
-            progressHtml =
-                '<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100; border-radius: 0 0 8px 8px; overflow: hidden;">' +
-                '<div style="width: ' +
-                progress +
-                '%; height: 100%; background-color: #00a4dc;"></div>' +
-                '</div>';
+            progressHtml = `
+                <div class="card-progress-container">
+                    <progress class="card-progress" value="${progress}" max="100"></progress>
+                </div>
+            `;
         }
 
         // Unplayed Count Badge
@@ -367,8 +365,8 @@ class CardRenderer {
                         <!-- Space reserved by .card-image padding -->
                     </div>
                     <div class="card-info">
-                        <div class="card-title skeleton-line skeleton-shimmer" style="width: 80%; margin: 0 auto; height: 20px;"></div>
-                        <div class="card-subtitle skeleton-line skeleton-shimmer" style="width: 50%; margin: 8px auto 0 auto; height: 14px;"></div>
+                        <div class="card-title skeleton-line skeleton-shimmer w-80 m-auto"></div>
+                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 m-auto mt-8"></div>
                     </div>
                 </div>
             `;

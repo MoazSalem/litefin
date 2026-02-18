@@ -212,6 +212,54 @@
     }
 }
 
+/* Progress Bar Component (CSP-Safe) */
+.card-progress-container {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0; /* Use right: 0 instead of width: 100% for safer absolute positioning */
+    height: 6px;
+    background: rgba(0, 0, 0, 0.5); /* Slightly more transparent */
+    z-index: 100;
+    /* IMPORTANT: Remove individual radius.
+       The parent (.card-image) already has overflow: hidden and the border-radius.
+       Letting the parent handle the clipping ensures perfect pixel alignment. */
+    overflow: hidden;
+    /* Clean entrance using global animation */
+    opacity: 0;
+    animation: fadeIn 0.4s ease-out forwards;
+    will-change: opacity;
+}
+
+progress.card-progress {
+    appearance: none;
+    -webkit-appearance: none;
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: none;
+    background: transparent;
+    border-radius: 0; /* Reset internal radius to allow parent to clip naturally */
+}
+
+progress.card-progress::-webkit-progress-bar {
+    background: transparent;
+    border-radius: 0;
+}
+
+progress.card-progress::-webkit-progress-value {
+    /* Premium Apple-style gradient */
+    background: linear-gradient(90deg, var(--jf-accent) 0%, var(--jf-accent-hover) 100%);
+    /* Ensure sharp edges for the value bar */
+    border-radius: 0;
+}
+
+/* Skeleton Utility Classes (CSP-Safe) */
+.w-50 { width: 50%; }
+.w-80 { width: 80%; }
+.m-auto { margin-left: auto; margin-right: auto; }
+.mt-8 { margin-top: 8px; }
+
 /* Alerts/Errors */
 .page-error {
     display: none;
@@ -320,7 +368,7 @@
 .skeleton-line {
     background-color: #2a2a2a;
     height: 16px;
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
 }
 
 .pulse {

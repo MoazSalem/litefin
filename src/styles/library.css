@@ -301,17 +301,7 @@
     mask-image: radial-gradient(white, black);
 }
 
-@keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: translateY(10px);
-    }
-
-    to {
-        opacity: 1;
-        transform: translateY(0);
-    }
-}
+/* Redundant @keyframes removed, using global definition from base.css */
 
 .library-grid {
     display: grid;

@@ -230,6 +230,16 @@ body.player-active #sidebar-container {
     }
 }
 
+/* Base Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
 .skeleton-text {
     height: 14px;
     border-radius: 4px;
