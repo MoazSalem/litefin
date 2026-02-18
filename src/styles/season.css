@@ -27,7 +27,7 @@
 .episode-row {
     display: flex;
     align-items: center;
-    height: 180px;
+    height: 220px;
     margin-bottom: 24px;
     /* PERFORMANCE: Isolate layout calculations */
     /* 'strict' might be too aggressive if content changes size, but 'content' is safer */
@@ -93,7 +93,7 @@
 
 /* Thumbnail Section */
 .episode-row-thumb {
-    width: 320px;
+    width: 390px;
     height: 100%;
     flex-shrink: 0;
     position: relative;
@@ -171,8 +171,8 @@
     color: var(--jf-text-secondary);
     line-height: 1.5;
     display: -webkit-box;
-    -webkit-line-clamp: 3;
-    line-clamp: 3;
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
     -webkit-box-orient: vertical;
     overflow: hidden;
     opacity: 0.8;

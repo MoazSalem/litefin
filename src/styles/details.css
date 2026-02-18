@@ -533,7 +533,9 @@
 
 /* Seasons & Similar */
 .seasons-row,
-.similar-row {
+.similar-row,
+.details-season-episodes,
+.details-guest-stars {
     margin-bottom: 40px;
     /* PERFORMANCE: Isolate rows from each other */
     contain: layout style;

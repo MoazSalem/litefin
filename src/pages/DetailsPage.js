@@ -145,10 +145,22 @@ class DetailsPage extends Page {
                         <div class="episodes-list" id="episodes-list"></div>
                     </section>
 
+                    <!-- More from Season (for episodes) -->
+                    <section class="details-season-episodes media-row hidden" id="more-from-season-section">
+                        <h2 class="row-title" id="more-from-season-title">More from Season</h2>
+                        <div class="season-episodes-row row-items" id="more-from-season-row"></div>
+                    </section>
+
                     <!-- Cast & Crew -->
                     <section class="details-people media-row hidden" id="people-section">
                         <h2 class="row-title">Cast & Crew</h2>
                         <div class="people-row row-items" id="people-row"></div>
+                    </section>
+
+                    <!-- Guest Stars (for episodes) -->
+                    <section class="details-guest-stars media-row hidden" id="guest-stars-section">
+                        <h2 class="row-title">Guest Stars</h2>
+                        <div class="guest-stars-row row-items" id="guest-stars-row"></div>
                     </section>
                     
                     <!-- Similar items -->
@@ -366,6 +378,8 @@ class DetailsPage extends Page {
             await Promise.all([this._loadNextUp(), this._loadSeasons()]);
         } else if (this._item.Type === 'Season') {
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
+        } else if (this._item.Type === 'Episode') {
+            await Promise.all([this._loadMoreFromSeason(), this._loadGuestStars()]);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
         }
@@ -395,7 +409,9 @@ class DetailsPage extends Page {
             'details-next-up',
             'details-seasons',
             'details-episodes',
+            'more-from-season-section',
             'details-people',
+            'guest-stars-section',
             'details-similar'
         ];
 
@@ -1359,7 +1375,17 @@ class DetailsPage extends Page {
                 elementId: '#episodes-list',
                 isVisible: () => isNotHidden('#episodes-section')
             },
+            {
+                name: 'more-from-season-section',
+                elementId: '#more-from-season-row',
+                isVisible: () => isNotHidden('#more-from-season-section')
+            },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            {
+                name: 'guest-stars-section',
+                elementId: '#guest-stars-row',
+                isVisible: () => isNotHidden('#guest-stars-section')
+            },
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') }
         ];
 
@@ -1385,7 +1411,17 @@ class DetailsPage extends Page {
 
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            {
+                name: 'guest-stars-section',
+                elementId: '#guest-stars-row',
+                isVisible: () => isNotHidden('#guest-stars-section')
+            },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            {
+                name: 'more-from-season-section',
+                elementId: '#more-from-season-row',
+                isVisible: () => isNotHidden('#more-from-season-section')
+            },
             {
                 name: 'details-episodes',
                 elementId: '#episodes-list',
@@ -1425,6 +1461,107 @@ class DetailsPage extends Page {
             }
         }
         return null;
+    }
+
+    async _loadMoreFromSeason() {
+        if (!this._item.SeasonId || !this._item.SeriesId) return;
+
+        try {
+            const response = await api.getEpisodes(this._item.SeriesId, {
+                SeasonId: this._item.SeasonId
+            });
+            // Filter out current episode and limit to 24 for row
+            const siblings = (response.Items || []).filter((ep) => ep.Id !== this._itemId).slice(0, 24);
+
+            if (siblings.length > 0) {
+                this._renderMoreFromSeason(siblings);
+            }
+        } catch (error) {
+            log.warn('Failed to load season episodes', error);
+        }
+    }
+
+    _renderMoreFromSeason(episodes) {
+        const container = this.$('#more-from-season-row');
+        const section = this.$('#more-from-season-section');
+        const titleEl = this.$('#more-from-season-title');
+
+        if (!container || !section) return;
+
+        section.classList.remove('hidden');
+
+        // Update title if we have the season name
+        if (this._item.SeasonName) {
+            titleEl.textContent = `More from ${this._item.SeasonName}`;
+        }
+
+        container.innerHTML = episodes.map((ep) => this._renderMediaCard(ep, true, 'episode')).join('');
+
+        // Lazy Load
+        lazyLoader.observe(container);
+
+        container.onclick = (e) => {
+            const card = e.target.closest('.media-card');
+            if (card?.dataset?.itemId) {
+                router.navigate(`/details/${card.dataset.itemId}`);
+            }
+        };
+
+        const upwardLink = this._getPreviousVisibleSection('more-from-season-section')?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection('more-from-season-section');
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection('more-from-season-section', container, {
+            orientation: 'horizontal',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar',
+            enterTo: 'last-focused'
+        });
+    }
+
+    async _loadGuestStars() {
+        // Guest stars are usually included in the episode's People array with Type 'GuestStar' or 'Guest'
+        // or just 'Actor' but specific to the episode.
+        // In many setups, if they aren't 'Director' or 'Writer' or 'Producer', they are actors.
+        const guestStars = (this._item.People || []).filter((p) => p.Type === 'GuestStar' || p.Role === 'Guest Star');
+
+        if (guestStars.length > 0) {
+            this._renderGuestStars(guestStars);
+        }
+    }
+
+    _renderGuestStars(people) {
+        const container = this.$('#guest-stars-row');
+        const section = this.$('#guest-stars-section');
+
+        if (!container || !section) return;
+
+        section.classList.remove('hidden');
+
+        container.innerHTML = people.map((p) => this._renderMediaCard(p, false, 'person')).join('');
+
+        // Lazy Load
+        lazyLoader.observe(container);
+
+        container.onclick = (e) => {
+            const card = e.target.closest('.media-card');
+            if (card?.dataset?.itemId) {
+                router.navigate(`/person/${card.dataset.itemId}`);
+            }
+        };
+
+        const upwardLink = this._getPreviousVisibleSection('guest-stars-section')?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection('guest-stars-section');
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection('guest-stars-section', container, {
+            orientation: 'horizontal',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar',
+            enterTo: 'first'
+        });
     }
 
     _updateLeaveDown(sectionName, targetName) {
