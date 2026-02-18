@@ -8,15 +8,11 @@
     width: 100%;
     height: 100vh;
     position: relative;
+    position: relative;
     overflow: hidden;
     background: var(--jf-background);
     display: flex;
     flex-direction: column;
-    /* GLOBAL GPU ACCELERATION */
-    transform: translate3d(0, 0, 0);
-    backface-visibility: hidden;
-    perspective: 1000px;
-    will-change: transform;
 }
 
 .library-actions-row {
@@ -159,7 +155,14 @@
     bottom: 0;
     width: var(--sidebar-width-collapsed, 100px);
     /* Match sidebar.css var */
-    z-index: 1000;
+    z-index: 200;
+    overflow: visible;
+    pointer-events: none; /* Let clicks through the empty container area */
+}
+
+/* Ensure the sidebar itself re-enables pointer events */
+#sidebar-container .sidebar {
+    pointer-events: auto;
 }
 
 /* Page Container (Fills rest of screen) */

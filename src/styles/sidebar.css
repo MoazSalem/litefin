@@ -20,39 +20,73 @@
     top: 0;
     left: 0;
     bottom: 0;
-    /* Performant Animation: Width Transition */
-    width: var(--sidebar-width-collapsed);
-    /* Start collapsed */
+    /* Performant Animation: Use Transform instead of Width to avoid reflows */
+    width: var(--sidebar-width-expanded);
+    /* Start at full width internally */
     background-color: var(--sidebar-bg);
     display: flex;
     flex-direction: column;
-    z-index: 1000;
+    z-index: 200;
 
-    /* Removed expensive clip-path */
-    /* Use width transition - on absolute element it's acceptable cost */
-    transition: width 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    /* GPU-accelerated transition */
+    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
 
     overflow: hidden;
     /* Hide overflow text when collapsed */
     padding: 20px 0;
     border-right: 1px solid rgba(255, 255, 255, 0.05);
     white-space: nowrap;
-    will-change: width;
-    transform: translateZ(0);
-    /* Force GPU layer */
-    contain: layout style;
+    will-change: transform;
+    transform: translate3d(-250px, 0, 0);
+    /* Start collapsed via translate */
+    backface-visibility: hidden;
 }
 
-/* Remove transform logic for hidden, just display toggle if needed, or translate */
+/* Fully hidden state */
 .sidebar.hidden {
-    transform: translateX(-100%);
-    /* Use translate for completely hiding off-screen */
+    transform: translate3d(-100%, 0, 0);
 }
 
 .sidebar.expanded {
-    /* Reveal full width */
-    width: var(--sidebar-width-expanded);
-    /* No shadow animation needed */
+    transform: translate3d(0, 0, 0);
+    /* Shift to reveal full sidebar */
+}
+
+/* Sliding Focus Indicator - Snappy, GPU-accelerated highlight */
+.sidebar-focus-indicator {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 72px; /* Matches .sidebar-item height */
+    background: var(--jf-accent);
+    z-index: 5; /* Above sidebar background, behind icons/text */
+    pointer-events: none;
+    opacity: 0;
+    /* Default: No transform transition while hidden/inactive to prevent "reset" slides */
+    transition: transform 0s, opacity 0.15s ease;
+    will-change: transform, opacity;
+}
+
+.sidebar.expanded .sidebar-focus-indicator {
+    /* Smooth sliding only when expanded and already visible */
+    transition: transform 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0), opacity 0.15s ease;
+}
+
+.sidebar.has-focus .sidebar-focus-indicator {
+    opacity: 1;
+}
+
+/* User profile has a different height, handle it via transform-scale if needed,
+   or just let it be 72px (which matches the profile button height) */
+#sidebar-user .sidebar-focus-indicator {
+    height: 72px;
+}
+
+/* Compensate for translation on ALL content elements to keep them visible at the screen edge */
+.sidebar:not(.expanded) .logo-icon,
+.sidebar:not(.expanded) .item-icon {
+    transform: translate3d(250px, 0, 0);
 }
 
 /* Header / Logo */
@@ -76,6 +110,10 @@
     /* Center in the column */
     flex-shrink: 0;
     color: var(--jf-accent);
+    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    will-change: transform;
+    position: relative;
+    z-index: 10;
 }
 
 .logo-icon svg {
@@ -92,13 +130,20 @@
     font-weight: 700;
     color: var(--jf-text-primary);
     opacity: 0;
-    transition: opacity 0.2s ease;
+    visibility: hidden;
+    /* Instant hidden state to avoid sliding under icons */
+    transition: opacity 0s, visibility 0s;
     margin-left: 0px;
+    position: relative;
+    z-index: 6;
 }
 
 .sidebar.expanded .logo-text {
     opacity: 1;
-    transition-delay: 0.1s;
+    visibility: visible;
+    transition: opacity 0.2s ease-out, visibility 0s;
+    transition-delay: 0.15s;
+    margin-left: 15px;
 }
 
 /* Items */
@@ -120,8 +165,7 @@
 
 .sidebar-item:focus,
 .sidebar-item.focused {
-    background: var(--jf-accent);
-    background: var(--jf-accent);
+    background: transparent;
     color: white;
 }
 
@@ -134,6 +178,12 @@
     color: white;
 }
 
+/* Update icon background to match item state when focused */
+.sidebar-item:focus .item-icon,
+.sidebar-item.focused .item-icon {
+    background: transparent; /* Indicator handles the background */
+}
+
 /* Icon Container - Fixed width for alignment */
 .item-icon {
     width: var(--sidebar-width-collapsed);
@@ -142,6 +192,10 @@
     align-items: center;
     justify-content: center;
     flex-shrink: 0;
+    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    will-change: transform;
+    position: relative;
+    z-index: 10;
 }
 
 .item-icon svg {
@@ -184,16 +238,22 @@
     font-size: 1.4rem;
     font-weight: 600;
     opacity: 0;
-    transition: opacity 0.2s ease;
+    visibility: hidden;
+    /* Instant hidden state to avoid sliding under icons */
+    transition: opacity 0s, visibility 0s;
     padding-right: 20px;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    position: relative;
+    z-index: 6;
 }
 
 .sidebar.expanded .item-text {
     opacity: 1;
-    transition-delay: 0.1s;
+    visibility: visible;
+    transition: opacity 0.2s ease-out, visibility 0s;
+    transition-delay: 0.15s;
 }
 
 /* Navigation & Libraries Container */
@@ -215,7 +275,7 @@
     /* Hide completely when collapsed */
     opacity: 0;
     visibility: hidden;
-    transition: opacity 0.2s ease, visibility 0s linear 0.2s;
+    transition: opacity 0.15s ease-out, visibility 0s linear 0.15s;
 }
 
 .sidebar.expanded .sidebar-libraries-wrapper {

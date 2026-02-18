@@ -90,12 +90,9 @@ class Sidebar extends Component {
 
                     <button class="sidebar-item" id="sidebar-search" tabindex="0" data-path="/search">
                         <div class="item-icon">
-                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                 <circle cx="11" cy="11" r="8"></circle>
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
-                            </svg>
-                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
                             </svg>
                         </div>
                         <span class="item-text">Search</span>
@@ -128,6 +125,9 @@ class Sidebar extends Component {
                         <span class="item-text">Logout</span>
                     </button>
                 </div>
+                
+                <!-- Sliding Focus Indicator -->
+                <div class="sidebar-focus-indicator"></div>
 
                 <!-- Libraries Section (Dynamic) -->
                 <div class="sidebar-libraries-wrapper">
@@ -192,6 +192,9 @@ class Sidebar extends Component {
 
         // Listen for route changes
         eventBus.on('router:navigate', this._onNavigate.bind(this));
+
+        // Initial setup of indicator
+        this._updateIndicator();
     }
 
     onDestroyed() {
@@ -249,8 +252,14 @@ class Sidebar extends Component {
         // and manages the .focused class manually.
         if (window.MutationObserver) {
             this._focusObserver = new MutationObserver(() => {
-                const hasFocus = this.el.querySelector('.focused');
-                // If we have focus, expand. If we lost focus, check hover before collapsing.
+                const focusedItem = this.el.querySelector('.sidebar-item.focused');
+                const hasFocus = !!focusedItem;
+
+                // Update indicator FIRST while transition is still disabled (collapsed state)
+                // to ensure it snaps to the correct position before we expand.
+                this._updateIndicator(focusedItem);
+
+                // Then handle expansion
                 if (hasFocus) {
                     this._expand(true);
                 } else if (!this.el.matches(':hover')) {
@@ -355,7 +364,8 @@ class Sidebar extends Component {
     }
 
     _getUserName() {
-        return auth.getCurrentUser()?.Name || 'User';
+        const user = auth.getCurrentUser();
+        return user && user.Name ? user.Name : 'User';
     }
 
     _onNavigate({ path }) {
@@ -375,6 +385,45 @@ class Sidebar extends Component {
                 item.classList.remove('active');
             }
         });
+    }
+
+    /**
+     * Update the sliding focus indicator position
+     * @param {HTMLElement} [focusedItem] - Optionally pass the focused element
+     */
+    _updateIndicator(focusedItem) {
+        const indicator = this.el.querySelector('.sidebar-focus-indicator');
+        if (!indicator) return;
+
+        const target = focusedItem || this.el.querySelector('.sidebar-item.focused');
+
+        if (target) {
+            // If we are currently NOT expanded, we want to snap instantly
+            const isExpanding = !this.el.classList.contains('expanded');
+
+            const sidebarRect = this.el.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            const y = targetRect.top - sidebarRect.top;
+
+            if (isExpanding) {
+                // Force an instant snap while closed
+                indicator.style.transition = 'none';
+                indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+                // Force reflow to ensure the style is applied before transition is re-enabled
+                indicator.offsetHeight;
+                indicator.style.transition = '';
+            } else {
+                indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+            }
+
+            if (!this.el.classList.contains('has-focus')) {
+                this.el.classList.add('has-focus');
+            }
+        } else {
+            if (this.el.classList.contains('has-focus')) {
+                this.el.classList.remove('has-focus');
+            }
+        }
     }
 }
 
