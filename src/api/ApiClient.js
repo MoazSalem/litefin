@@ -155,14 +155,26 @@ export class ApiClient {
             throw new Error('Server URL not configured');
         }
 
-        const url = this.buildUrl(endpoint);
+        let url = this.buildUrl(endpoint);
+
+        // Append query parameters if provided
+        if (options.params) {
+            const searchParams = new URLSearchParams();
+            for (const [key, value] of Object.entries(options.params)) {
+                if (value !== undefined && value !== null) {
+                    searchParams.append(key, value);
+                }
+            }
+            const queryString = searchParams.toString();
+            if (queryString) {
+                url += (url.includes('?') ? '&' : '?') + queryString;
+            }
+        }
+
         const method = options.method || 'GET';
 
         // DEBUG: Store last requested URL
         this.lastUrl = url;
-        // Note: URL doesn't include params if they were passed within options,
-        // but 'get' helper appends them to 'endpoint' string passed here.
-        // So 'url' here is the FULL URL with query string.
 
         // Build headers
         const headers = {
@@ -295,22 +307,7 @@ export class ApiClient {
      * GET request helper
      */
     async get(endpoint, params = null) {
-        let url = endpoint;
-
-        if (params) {
-            const searchParams = new URLSearchParams();
-            for (const [key, value] of Object.entries(params)) {
-                if (value !== undefined && value !== null) {
-                    searchParams.append(key, value);
-                }
-            }
-            const queryString = searchParams.toString();
-            if (queryString) {
-                url += `?${queryString}`;
-            }
-        }
-
-        return this.request(url, { method: 'GET' });
+        return this.request(endpoint, { method: 'GET', params });
     }
 
     /**
@@ -600,6 +597,26 @@ export class ApiClient {
         };
 
         return this.get('/Persons', { ...defaults, ...params });
+    }
+
+    /**
+     * Refresh metadata for an item
+     * @param {string} itemId - Item ID
+     * @param {Object} [options] - Refresh options
+     * @returns {Promise<any>} Response
+     */
+    async refreshItem(itemId, options = {}) {
+        const defaults = {
+            Recursive: true,
+            MetadataRefreshMode: 'Default',
+            ImageRefreshMode: 'Default',
+            ReplaceAllMetadata: false,
+            ReplaceAllImages: false
+        };
+
+        return this.post(`/Items/${itemId}/Refresh`, null, {
+            params: { ...defaults, ...options }
+        });
     }
 
     // ========================================================================

@@ -20,6 +20,7 @@ import EpisodeList from '../components/EpisodeList.js';
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
+import { toast } from '../ui/Toast.js';
 
 const log = logger.create('DetailsPage');
 
@@ -90,6 +91,13 @@ class DetailsPage extends Page {
                                 </button>
                                 <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="Subtitle Tracks">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
+                                </button>
+                                <button class="btn btn-icon more-btn" tabindex="0" aria-label="More Options">
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                        <circle cx="12" cy="12" r="1"></circle>
+                                        <circle cx="12" cy="5" r="1"></circle>
+                                        <circle cx="12" cy="19" r="1"></circle>
+                                    </svg>
                                 </button>
                             </section>
 
@@ -220,6 +228,11 @@ class DetailsPage extends Page {
         // Audio button
         this.$('.audio-btn')?.addEventListener('click', () => {
             this._showAudioTrackMenu();
+        });
+
+        // More button
+        this.$('.more-btn')?.addEventListener('click', () => {
+            this._showMoreOptionsModal(this._itemId);
         });
     }
 
@@ -1089,6 +1102,8 @@ class DetailsPage extends Page {
                 onAction: (action, episodeId) => {
                     if (action === 'info') {
                         router.navigate(`/details/${episodeId}`);
+                    } else if (action === 'menu') {
+                        this._showMoreOptionsModal(episodeId);
                     }
                     log.debug(`Episode action: ${action} on ${episodeId}`);
                 }
@@ -1734,6 +1749,286 @@ class DetailsPage extends Page {
             e.stopPropagation();
             this._closeTrackMenu();
         };
+    }
+
+    _showMoreOptionsModal(itemId) {
+        const oldOnBack = this.onBack;
+        // Store focus context for restoration (only if not already stored by a previous modal layer)
+        if (!this._prevFocus) {
+            this._prevFocus = focusManager.getFocused();
+            this._prevSection = focusManager.getActiveSection();
+        }
+
+        // Use standard track menu style modal (list of options)
+        let overlay = document.getElementById('details-more-menu');
+        if (overlay) {
+            // If already exists (possibly from a race or sub-modal return), remove it immediately
+            // to cancel any pending exit timeouts.
+            overlay.remove();
+        }
+
+        overlay = document.createElement('div');
+        overlay.id = 'details-more-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        const options = [
+            { id: 'refresh', label: 'Refresh Metadata' },
+            { id: 'edit-subtitles', label: 'Edit Subtitles (not implemented yet)' }
+        ];
+
+        const optionsHtml = options
+            .map((opt, i) => {
+                return `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `;
+            })
+            .join('');
+
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>Options</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        const onSelect = (id) => {
+            if (id === 'refresh') {
+                // Close current modal without restoring focus (since we are opening another)
+                _close(false);
+
+                // Transfer context but flag that we want to return to this menu on back
+                const context = {
+                    prevFocus: this._prevFocus,
+                    prevSection: this._prevSection,
+                    fromMoreOptions: true,
+                    oldOnBack: oldOnBack // Pass the parent handler down
+                };
+                this._showRefreshMetadataModal(itemId, context);
+            } else if (id === 'edit-subtitles') {
+                toast.show('Subtitle editing coming soon!');
+            }
+        };
+
+        const _close = (restoreFocus = true) => {
+            // Restore handler if we are still the active one
+            if (this.onBack === myOnBack) {
+                this.onBack = oldOnBack;
+            }
+
+            overlay.classList.remove('visible');
+            setTimeout(() => overlay.remove(), 300);
+
+            if (restoreFocus) {
+                // Restore focus
+                if (this._prevFocus) {
+                    focusManager.focusElement(this._prevFocus);
+                }
+                if (this._prevSection) {
+                    focusManager.setActiveSection(this._prevSection, false);
+                }
+                // Clear context for next session
+                this._prevFocus = null;
+                this._prevSection = null;
+            }
+        };
+
+        // Trap focus
+        focusManager.register('details-more-actions', overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            circular: true,
+            leaveLeft: null,
+            leaveRight: null
+        });
+
+        // Register cancel button area
+        focusManager.register('details-more-footer', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveLeft: null,
+            leaveRight: null,
+            leaveUp: 'details-more-actions',
+            leaveDown: null
+        });
+
+        // Link actions up to footer
+        const actionsConfig = focusManager.getSectionConfig('details-more-actions');
+        if (actionsConfig) {
+            actionsConfig.leaveDown = 'details-more-footer';
+            focusManager.register('details-more-actions', actionsConfig.container, actionsConfig);
+        }
+
+        focusManager.setActiveSection('details-more-actions');
+
+        // Bind clicks
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                onSelect(btn.dataset.id);
+                // Don't call _close() here, onSelect handles it
+            };
+        });
+
+        overlay.querySelector('#btn-modal-cancel').onclick = (e) => {
+            e.stopPropagation();
+            _close();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) _close();
+        };
+
+        // Back button
+        const myOnBack = () => {
+            _close();
+            return true;
+        };
+        this.onBack = myOnBack;
+    }
+
+    _showRefreshMetadataModal(itemId, transitionContext = null) {
+        const oldOnBack = transitionContext?.oldOnBack || this.onBack;
+
+        // Store focus context for restoration
+        const prevFocus = transitionContext?.prevFocus || focusManager.getFocused();
+        const prevSection = transitionContext?.prevSection || focusManager.getActiveSection();
+
+        let overlay = document.getElementById('details-refresh-menu');
+        if (overlay) {
+            overlay.remove();
+        }
+        overlay = document.createElement('div');
+        overlay.id = 'details-refresh-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        const options = [
+            { id: 'scan', label: 'Scan for new and updated files', mode: 'Default', replace: false },
+            { id: 'missing', label: 'Search for missing metadata', mode: 'FullRefresh', replace: false },
+            { id: 'all', label: 'Replace all metadata', mode: 'FullRefresh', replace: true }
+        ];
+
+        const optionsHtml = options
+            .map((opt) => {
+                return `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `;
+            })
+            .join('');
+
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>Refresh Metadata</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-refresh-cancel" tabindex="0">Cancel</button>
+                </div>
+            </div>
+        `;
+
+        const _close = (restoreFocus = true) => {
+            // Restore handler if we are still active
+            if (this.onBack === myOnBack) {
+                this.onBack = oldOnBack;
+            }
+
+            overlay.classList.remove('visible');
+            setTimeout(() => overlay.remove(), 300);
+
+            if (restoreFocus) {
+                if (prevFocus) {
+                    focusManager.focusElement(prevFocus);
+                }
+                if (prevSection) {
+                    focusManager.setActiveSection(prevSection, false);
+                }
+
+                // Clear instance context if this was the last modal in the chain
+                this._prevFocus = null;
+                this._prevSection = null;
+            }
+        };
+
+        const onSelect = async (optId) => {
+            const opt = options.find((o) => o.id === optId);
+            if (!opt) return;
+
+            try {
+                await api.refreshItem(itemId, {
+                    MetadataRefreshMode: opt.mode,
+                    ImageRefreshMode: opt.mode,
+                    ReplaceAllMetadata: opt.replace,
+                    ReplaceAllImages: opt.replace
+                });
+                toast.show('Refresh Queued');
+            } catch (e) {
+                log.error('Failed to queue metadata refresh', e);
+                toast.show('Failed to queue refresh');
+            }
+        };
+
+        // Trap focus
+        const actionsId = 'refresh-modal-actions';
+        const footerId = 'refresh-modal-footer';
+
+        focusManager.register(actionsId, overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            circular: true,
+            leaveDown: footerId
+        });
+
+        focusManager.register(footerId, overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: actionsId
+        });
+
+        focusManager.setActiveSection(actionsId);
+
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = (e) => {
+                e.stopPropagation();
+                onSelect(btn.dataset.id);
+                _close();
+            };
+        });
+
+        overlay.querySelector('#btn-refresh-cancel').onclick = (e) => {
+            e.stopPropagation();
+            _close();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) _close();
+        };
+
+        // Back button handler
+        const myOnBack = () => {
+            // Check if we need to go back to More Options
+            if (transitionContext?.fromMoreOptions) {
+                // Before closing, ensure onBack is restored so More Options captures the correct parent again
+                this.onBack = oldOnBack;
+                _close(false);
+                this._showMoreOptionsModal(itemId);
+            } else {
+                _close();
+            }
+            return true;
+        };
+        this.onBack = myOnBack;
     }
 
     _setupFavoriteButton() {

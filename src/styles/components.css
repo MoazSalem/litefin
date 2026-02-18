@@ -443,6 +443,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .settings-modal .modal-header h2 {
+    padding: 16px;
     margin: 0;
     font-size: 1.5rem;
     font-weight: 600;
