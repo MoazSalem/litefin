@@ -83,6 +83,15 @@ const DEFAULTS = {
     // Separate setting for Anime/ASS content
     subtitleFontAss: '',
 
+    // Global font scale multiplier for ASS subtitles
+    subtitleFontScale: 1.0,
+
+    // Outline thickness for ASS (baseline is 0.4)
+    subtitleOutlineThickness: 0.4,
+
+    // Shadow thickness for ASS (baseline is 0.3)
+    subtitleShadowThickness: 0.3,
+
     // Subtitle text color
     subtitleTextColor: '#ffffff',
 

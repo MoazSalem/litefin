@@ -18,6 +18,7 @@ import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('SubtitleManager');
 
@@ -359,12 +360,16 @@ export default class SubtitleManager {
     /**
      * Refresh subtitle styles (e.g. font override)
      */
-    refreshStyles() {
+    async refreshStyles() {
         // Update ASS renderer if active
         if (this._assRenderer) {
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
-            if (fontClass) {
-                this._assRenderer.setFontClass(fontClass);
+            const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
+            const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
+            const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            if (fontClass && fontFamily) {
+                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness);
             }
         }
     }
@@ -527,8 +532,12 @@ export default class SubtitleManager {
             
             // Apply current subtitle font override
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
-            if (fontClass) {
-                this._assRenderer.setFontClass(fontClass);
+            const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+            const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
+            const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
+            const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            if (fontClass && fontFamily) {
+                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness);
             }
 
             this._assRenderer.show();

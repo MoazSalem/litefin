@@ -324,5 +324,41 @@ export default {
             default:
                 return 'font-default';
         }
+    },
+    getFontFamily: (settingKey = 'subtitleFont') => {
+        const font = PlayerSettings.get(settingKey) || '';
+        switch (font) {
+            case 'typewriter':
+                return 'Courier Prime';
+            case 'print':
+                return 'Merriweather';
+            case 'console':
+                return 'Inconsolata';
+            case 'cursive':
+                return 'Dancing Script';
+            case 'casual':
+                return 'Patrick Hand';
+            case 'smallcaps':
+                return 'Cinzel';
+            case 'poppins':
+                return 'Poppins';
+            case 'noto-arabic':
+                return 'Noto Sans Arabic';
+            default:
+                return 'TizenSans';
+        }
+    },
+    getFontScale: (settingKey = 'subtitleFont') => {
+        const font = PlayerSettings.get(settingKey) || '';
+        const userScale = PlayerSettings.get('subtitleFontScale') ?? 1.0;
+
+        let baseScale = 1.0;
+        switch (font) {
+            case 'noto-arabic':
+                baseScale = 2.0; // Noto Arabic is visually much smaller/thinner
+                break;
+        }
+
+        return baseScale * userScale;
     }
 };

@@ -149,6 +149,30 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 ]
             },
             {
+                id: 'fontScaleAss',
+                type: 'slider',
+                label: 'Font Scale (ASS)',
+                key: 'subtitleFontScale',
+                min: 0.5, max: 3.0, step: 0.1, unit: 'x',
+                visible: isASS
+            },
+            {
+                id: 'outlineThicknessAss',
+                type: 'slider',
+                label: 'Outline Thickness (ASS)',
+                key: 'subtitleOutlineThickness',
+                min: 0.0, max: 5.0, step: 0.1, unit: '',
+                visible: isASS
+            },
+            {
+                id: 'shadowThicknessAss',
+                type: 'slider',
+                label: 'Shadow Thickness (ASS)',
+                key: 'subtitleShadowThickness',
+                min: 0.0, max: 5.0, step: 0.1, unit: '',
+                visible: isASS
+            },
+            {
                 id: 'weight',
                 type: 'select',
                 label: 'Font Weight',

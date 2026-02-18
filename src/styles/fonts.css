@@ -81,28 +81,34 @@
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
 
+.font-typewriter { font-family: 'Courier Prime', monospace, 'Courier New', Courier; }
+
+.font-merriweather {
+    font-family: 'Merriweather', serif;
+}
+
+.font-poppins {
+    font-family: 'Poppins', sans-serif;
+}
+
+.font-noto-arabic {
+    font-family: 'Noto Sans Arabic', sans-serif;
+}
+
+.font-console { font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }
+.font-cursive { font-family: 'Dancing Script', cursive; }
+.font-casual { font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
+.font-smallcaps { font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
+
+.font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif; }
+
 /* 
-   Force override of libjass inline styles by targeting all descendants (*) 
-   when the class is applied to the libjass-wrapper.
+   Nuclear font override: 
+   Force all libjass rendered elements (spans, SVG text) to inherit the 
+   font-family from our wrapper's class, overriding libjass's inline styles.
 */
-.font-typewriter, .libjass-wrapper.font-typewriter * { font-family: 'Courier Prime', monospace, 'Courier New', Courier !important; }
-
-.font-merriweather, .libjass-wrapper.font-merriweather * {
-    font-family: 'Merriweather', serif !important;
+.libjass-wrapper[class*="font-"] span,
+.libjass-wrapper[class*="font-"] text {
+    font-family: inherit !important;
 }
 
-.font-poppins, .libjass-wrapper.font-poppins * {
-    font-family: 'Poppins', sans-serif !important;
-}
-
-.font-noto-arabic, .libjass-wrapper.font-noto-arabic * {
-    font-family: 'Noto Sans Arabic', sans-serif !important;
-}
-
-.font-console, .libjass-wrapper.font-console * { font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco !important; }
-.font-cursive, .libjass-wrapper.font-cursive * { font-family: 'Dancing Script', cursive !important; }
-.font-casual, .libjass-wrapper.font-casual * { font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print' !important; }
-.font-smallcaps, .libjass-wrapper.font-smallcaps * { font-family: 'Cinzel', 'Copperplate', serif !important; font-variant: small-caps; }
-
-/* Default font needs to override generic sans-serif too */
-.font-default, .libjass-wrapper.font-default * { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif !important; }

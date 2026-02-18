@@ -50,10 +50,14 @@ export default class ASSRenderer {
         this._clock = null;
         // The wrapper div that libjass manages
         this._wrapper = null;
-        // Parsed ASS object
-        this._ass = null;
-        // Subtitle delay offset (seconds)
-        this._delaySeconds = 0;
+        // Current font family override (e.g. 'Poppins')
+        this._fontFamily = null;
+        // Current font class override (e.g. 'font-poppins')
+        this._fontClass = null;
+        // Store the original raw content for re-parsing on style changes
+        this._rawContent = null;
+        // Last known playback time for nudging on style change
+        this._lastTime = null;
 
         log.info('ASSRenderer initialized' +
             (this._isVirtual ? ' (AVPlay/ManualClock mode)' : ' (HTML5/VideoClock mode)'));
@@ -70,7 +74,8 @@ export default class ASSRenderer {
      * @param {number} timeSeconds - Current time in seconds
      */
     tick(timeSeconds) {
-        if (this._clock && this._isVirtual) {
+        this._lastTime = timeSeconds;
+        if (this._clock) {
             this._clock.tick(timeSeconds);
         }
     }
@@ -106,9 +111,14 @@ export default class ASSRenderer {
         this.destroy();
 
         try {
+            // Store the original content for later style changes
+            this._rawContent = content;
+
             // Parse the raw ASS content into a structured ASS object
-            log.info('Parsing ASS content...');
-            this._ass = await libjass.ASS.fromString(content);
+            log.info('Pre-processing ASS content for style enforcement...');
+            const processedContent = this._preProcessAssContent(content, this._fontFamily);
+            
+            this._ass = await libjass.ASS.fromString(processedContent);
             log.info(`ASS parsed: ${this._ass.dialogues.length} dialogue lines, ` +
                      `script res: ${this._ass.properties.resolutionX}x${this._ass.properties.resolutionY}`);
 
@@ -138,18 +148,108 @@ export default class ASSRenderer {
     }
 
     /**
-     * Set a custom font class on the subtitle wrapper.
+     * Set a custom font styles on the subtitle wrapper and the ASS object.
      * This allows overriding the embedded ASS fonts with a user-selected font.
      * @param {string} className - CSS class name (e.g. 'font-poppins')
+     * @param {string} fontFamily - Raw font family name (e.g. 'Poppins')
      */
-    setFontClass(className) {
-        if (!this._wrapper) return;
-        
-        // Remove known font classes first (naive approach, but works if we control the classes)
-        // Ideally we'd import the list from somewhere, but for now we remove all classes
-        // and re-add the base one + the new one.
-        this._wrapper.className = 'libjass-wrapper ' + (className || '');
-        log.debug(`Set ASS font class: ${className}`);
+    async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3) {
+        log.info(`ASSRenderer.setFontStyles: class="${className}", family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
+        this._fontClass = className;
+        this._fontFamily = fontFamily;
+        this._fontScale = fontScale;
+        this._outlineThickness = outlineThickness;
+        this._shadowThickness = shadowThickness;
+
+        if (this._wrapper) {
+            this._wrapper.className = 'libjass-wrapper ' + (className || '');
+            log.debug(`Wrapper className set to: ${this._wrapper.className}`);
+        }
+
+        if (this._rawContent && fontFamily) {
+            log.info(`Re-parsing ASS with new font choice: ${fontFamily} (Scale: ${fontScale}, Out: ${outlineThickness}, Shad: ${shadowThickness})`);
+            
+            // Re-preprocess and re-parse the entire string.
+            // This is the most "Nuclear" and definitive way to ensure the new font
+            // and border styles are applied throughout the entire track.
+            const processedContent = this._preProcessAssContent(this._rawContent, fontFamily, fontScale, outlineThickness, shadowThickness);
+            this._ass = await libjass.ASS.fromString(processedContent);
+
+            // Re-creating the renderer is the only way to apply ASS object changes
+            // The renderer will now handle its own "nudge" once ready.
+            this._createRenderer();
+        }
+    }
+
+    _preProcessAssContent(content, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3) {
+        if (!content) return content;
+
+        log.info(`Preprocessing ASS content with font="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
+
+        const lines = content.split(/\r?\n/);
+        let styleFormat = null;
+        let stylesOverridden = 0;
+
+        const processedLines = lines.map(line => {
+            const trimmed = line.trim();
+            
+            // 1. Capture the Styles format line
+            if (trimmed.startsWith('Format:') && (trimmed.includes('Outline') || trimmed.includes('Fontname'))) {
+                // Ensure we handle both "Format:" and "[V4 Styles]" headers correctly if needed
+                // For now we just parse the format line in the Styles section.
+                styleFormat = trimmed.substring(trimmed.indexOf(':') + 1).split(',').map(s => s.trim());
+                log.debug(`Found Styles Format: ${styleFormat.join(', ')}`);
+                return line;
+            }
+            
+            // 2. Override Style definitions
+            if (trimmed.startsWith('Style:') && styleFormat) {
+                const parts = line.substring(line.indexOf(':') + 1).split(',');
+                
+                // Override Fontname
+                const fontIdx = styleFormat.indexOf('Fontname');
+                if (fontIdx !== -1 && fontFamily) {
+                    parts[fontIdx] = fontFamily;
+                }
+                
+                // Override Fontsize - Scaling up if a specific boost is requested (e.g. for Noto Arabic)
+                const sizeIdx = styleFormat.indexOf('Fontsize');
+                if (sizeIdx !== -1 && fontFamily && fontScale !== 1.0) {
+                    const originalSize = parseFloat(parts[sizeIdx]);
+                    if (!isNaN(originalSize)) {
+                        parts[sizeIdx] = (originalSize * fontScale).toFixed(2);
+                    }
+                }
+                
+                // Override Outline
+                const outlineIdx = styleFormat.indexOf('Outline');
+                if (outlineIdx !== -1) {
+                    parts[outlineIdx] = String(outlineThickness);
+                }
+                
+                // Override Shadow
+                const shadowIdx = styleFormat.indexOf('Shadow');
+                if (shadowIdx !== -1) {
+                    parts[shadowIdx] = String(shadowThickness);
+                }
+                
+                stylesOverridden++;
+                // Adding a space after "Style: " for standard ASS compatibility
+                return 'Style: ' + parts.join(',');
+            }
+
+            // 3. Strip problematic inline overrides from Dialogues (\fn, \bord, \shad, etc.)
+            if (trimmed.startsWith('Dialogue:')) {
+                // This regex strips \fn..., \bord..., \shad..., \out..., etc.
+                // It targets the tag name and everything until the next \ or }
+                return line.replace(/\\(fn|bord|shad|s?out|s?shad)[^\\}]+(?=[\\}])/g, '');
+            }
+
+            return line;
+        });
+
+        log.info(`ASS Pre-processor: Overrode ${stylesOverridden} style(s) with font "${fontFamily}"`);
+        return processedLines.join('\n');
     }
 
     /**
@@ -180,6 +280,14 @@ export default class ASSRenderer {
             this._videoElement.removeEventListener('loadedmetadata', this._onMetadata);
             this._onMetadata = null;
         }
+
+        if (this._videoElement) {
+            this._videoElement.removeEventListener('timeupdate', this._onTimeUpdate);
+            this._videoElement.removeEventListener('seeking', this._onSeeking);
+            this._videoElement.removeEventListener('play', this._onPlay);
+            this._videoElement.removeEventListener('pause', this._onPause);
+        }
+
         if (this._onWindowResize) {
             window.removeEventListener('resize', this._onWindowResize);
             this._onWindowResize = null;
@@ -228,6 +336,28 @@ export default class ASSRenderer {
      * @private
      */
     _createRenderer() {
+        // IMPORTANT: Thoroughly clean up any previous renderer/clock/DOM
+        // This prevents "stacking" where multiple clocks/wrappers fight for resources.
+        if (this._clock) {
+            try {
+                this._clock.disable();
+                log.info('Disabled old ASS clock');
+            } catch (err) {
+                log.warn('Error disabling old clock:', err);
+            }
+            this._clock = null;
+        }
+
+        if (this._renderer) {
+            this._renderer = null;
+        }
+
+        if (this._wrapper && this._wrapper.parentNode) {
+            log.info('Removing old subtitle wrapper');
+            this._wrapper.parentNode.removeChild(this._wrapper);
+            this._wrapper = null;
+        }
+
         // Create the wrapper div for subtitle rendering
         this._wrapper = document.createElement('div');
         this._wrapper.className = 'libjass-wrapper';
@@ -242,30 +372,47 @@ export default class ASSRenderer {
         // Append to the player container (overlays the video)
         this._container.appendChild(this._wrapper);
 
-        // Create the clock based on what mode we're in
-        if (this._videoElement) {
-            // VideoClock auto-syncs with the <video> element's play/pause/seek
-            this._clock = new libjass.renderers.VideoClock(this._videoElement);
-            log.info('Created VideoClock for HTML5 video');
+        // Re-apply class if it was set
+        if (this._fontClass) {
+            this._wrapper.className = 'libjass-wrapper ' + this._fontClass;
+        }
 
-            // IMPORTANT: VideoClock listens for the video's 'playing' event
-            // to start its internal AutoClock. If the video is already playing
-            // when we create the clock, that event was missed. Dispatch a
-            // synthetic 'playing' event to kick-start the clock immediately.
+        // Create the clock based on what mode we're in
+        // Create the clock - We now UNIFY on ManualClock for both HTML5 and AVPlay.
+        // This avoids the lack of seeking() in VideoClock and gives us perfect control.
+        this._clock = new libjass.renderers.ManualClock();
+        log.info('Created ManualClock (Unified Strategy)');
+
+        if (this._videoElement) {
+            // Drive the ManualClock via HTML5 Video events
+            this._onTimeUpdate = () => this.tick(this._videoElement.currentTime);
+            this._onSeeking = () => {
+                // ManualClock uses tick() for both progression and seeking
+                if (this._clock) this._clock.tick(this._videoElement.currentTime);
+            };
+            this._onPlay = () => {
+                if (this._clock) this._clock.play();
+            };
+            this._onPause = () => {
+                if (this._clock) this._clock.pause();
+            };
+
+            this._videoElement.addEventListener('timeupdate', this._onTimeUpdate);
+            this._videoElement.addEventListener('seeking', this._onSeeking);
+            this._videoElement.addEventListener('play', this._onPlay);
+            this._videoElement.addEventListener('pause', this._onPause);
+
+            // Sync initial state
             if (!this._videoElement.paused) {
-                log.info('Video already playing, triggering VideoClock start');
-                this._videoElement.dispatchEvent(new Event('playing'));
+                this._clock.play();
             }
-        } else {
-            // ManualClock — we drive timing via tick() from SubtitleManager
-            this._clock = new libjass.renderers.ManualClock();
-            log.info('Created ManualClock for AVPlay');
+            this._clock.tick(this._videoElement.currentTime);
         }
 
         // Renderer settings — disable SVG filters for Tizen compatibility
         // (uses CSS text-shadow instead, which works on Chrome 56+)
         const settings = new libjass.renderers.RendererSettings();
-        settings.enableSvg = false;
+        settings.enableSvg = true;
 
         // Create WebRenderer: (ass, clock, wrapperDiv, settings)
         this._renderer = new libjass.renderers.WebRenderer(
@@ -285,6 +432,15 @@ export default class ASSRenderer {
             // For ManualClock, start playing (it's paused by default)
             if (this._isVirtual && this._clock) {
                 this._clock.play();
+            }
+
+            // Nudge the renderer to show subs immediately, especially if paused.
+            // Priority: Last tracked tick > Actual video currentTime > 0
+            const nudgeTime = this._lastTime ?? (this._videoElement ? this._videoElement.currentTime : 0);
+            log.info(`ASSRenderer: Nudging renderer on ready at ${nudgeTime}s`);
+            if (this._clock) {
+                // ManualClock uses tick() to sync to a specific point in time
+                this._clock.tick(nudgeTime);
             }
         });
 
