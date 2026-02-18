@@ -68,6 +68,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
         const bgColor = PlayerSettings.get('subtitleTextBackground');
         const shadowType = PlayerSettings.get('subtitleDropShadow');
 
+        // Check if we are currently rendering ASS subtitles
+        const isASS = this.osd && this.osd.player && this.osd.player._subtitleManager && this.osd.player._subtitleManager.isASSActive();
+
         this.items = [
             // Position
             { 
@@ -75,6 +78,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select', 
                 label: 'Vertical Position', 
                 key: 'subtitleVerticalPosition',
+                visible: !isASS,
                 options: [
                     { value: '-1', label: 'Bottom (Low)' },
                     { value: '-2', label: 'Bottom (Standard)' },
@@ -90,7 +94,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: 'Absolute Position', 
                 key: 'subtitleVerticalPositionCustom', 
                 min: 0, max: 100, step: 1, unit: '%',
-                visible: verticalPos === 'custom'
+                visible: !isASS && verticalPos === 'custom'
             },
 
             // Appearance
@@ -99,6 +103,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select', 
                 label: 'Text Size', 
                 key: 'subtitleSize',
+                visible: !isASS,
                 options: [
                     { value: 'small', label: 'Small' },
                     { value: 'medium', label: 'Medium' },
@@ -112,6 +117,25 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select',
                 label: 'Font Family',
                 key: 'subtitleFont',
+                visible: !isASS,
+                options: [
+                    { value: '', label: 'Default - Tizen Sans' },
+                    { value: 'poppins', label: 'Modern - Poppins' },
+                    { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                    { value: 'typewriter', label: 'Typewriter' },
+                    { value: 'print', label: 'Print' },
+                    { value: 'console', label: 'Console' },
+                    { value: 'cursive', label: 'Cursive' },
+                    { value: 'casual', label: 'Casual' },
+                    { value: 'smallcaps', label: 'Small Caps' }
+                ]
+            },
+            {
+                id: 'fontAss',
+                type: 'select',
+                label: 'ASS Format Font Family',
+                key: 'subtitleFontAss',
+                visible: isASS,
                 options: [
                     { value: '', label: 'Default - Tizen Sans' },
                     { value: 'poppins', label: 'Modern - Poppins' },
@@ -129,6 +153,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select',
                 label: 'Font Weight',
                 key: 'subtitleWeight',
+                visible: !isASS,
                 options: [
                     { value: 'normal', label: 'Normal' },
                     { value: 'bold', label: 'Bold' }
@@ -141,6 +166,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select',
                 label: 'Text Color',
                 key: 'subtitleTextColor',
+                visible: !isASS,
                 options: [
                     { value: '#ffffff', label: 'White' },
                     { value: '#d3d3d3', label: 'Light Grey' },
@@ -151,7 +177,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#0000ff', label: 'Blue' }
                 ]
             },
-            { id: 'textOpacity', type: 'slider', label: 'Text Opacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%' },
+            { id: 'textOpacity', type: 'slider', label: 'Text Opacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
             
             // Background
             {
@@ -159,6 +185,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select',
                 label: 'Background',
                 key: 'subtitleTextBackground',
+                visible: !isASS,
                 options: [
                     { value: 'transparent', label: 'None' },
                     { value: '#000000', label: 'Black' },
@@ -176,7 +203,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: 'Background Opacity', 
                 key: 'subtitleBackgroundOpacity', 
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: bgColor !== 'transparent'
+                visible: !isASS && bgColor !== 'transparent'
             },
 
             // Shadow
@@ -185,6 +212,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 type: 'select',
                 label: 'Text Shadow',
                 key: 'subtitleDropShadow',
+                visible: !isASS,
                 options: [
                     { value: 'none', label: 'None' },
                     { value: 'uniform', label: 'Uniform' },
@@ -209,7 +237,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#ff00ff', label: 'Magenta' },
                     { value: '#808080', label: 'Grey' }
                 ],
-                visible: shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none'
             },
             { 
                 id: 'shadowOpacity', 
@@ -217,7 +245,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: 'Shadow Opacity', 
                 key: 'subtitleDropShadowOpacity', 
                 min: 0, max: 100, step: 5, unit: '%',
-                visible: shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none'
             },
             { 
                 id: 'shadowBlur', 
@@ -225,7 +253,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: 'Shadow Blur', 
                 key: 'subtitleDropShadowBlur', 
                 min: 0, max: 20, step: 1, unit: 'px',
-                visible: shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none'
             }
         ];
 

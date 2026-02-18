@@ -16,6 +16,7 @@ import { SubtitleParser } from './SubtitleParser.js';
 import ASSRenderer from './ASSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
+import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { logger } from '../../utils/Logger.js';
 
 const log = logger.create('SubtitleManager');
@@ -356,6 +357,19 @@ export default class SubtitleManager {
     }
 
     /**
+     * Refresh subtitle styles (e.g. font override)
+     */
+    refreshStyles() {
+        // Update ASS renderer if active
+        if (this._assRenderer) {
+            const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
+            if (fontClass) {
+                this._assRenderer.setFontClass(fontClass);
+            }
+        }
+    }
+
+    /**
      * Get the current secondary subtitle track.
      * @returns {Object|null}
      */
@@ -372,6 +386,14 @@ export default class SubtitleManager {
         return this._primaryDelivery === DeliveryMethod.EXTERNAL_TEXT ||
                this._primaryDelivery === DeliveryMethod.ASS_CANVAS ||
                this._primaryDelivery === DeliveryMethod.PGS_BITMAP;
+    }
+
+    /**
+     * Check if the current primary subtitle is an ASS/SSA track.
+     * @returns {boolean}
+     */
+    isASSActive() {
+        return this._primaryDelivery === DeliveryMethod.ASS_CANVAS;
     }
 
     // ========================================================================
@@ -502,6 +524,13 @@ export default class SubtitleManager {
             const content = await response.text();
 
             await this._assRenderer.setTrack(content);
+            
+            // Apply current subtitle font override
+            const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
+            if (fontClass) {
+                this._assRenderer.setFontClass(fontClass);
+            }
+
             this._assRenderer.show();
 
         } catch (err) {

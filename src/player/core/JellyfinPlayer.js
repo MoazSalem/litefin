@@ -970,6 +970,11 @@ export class JellyfinPlayer extends EventEmitter {
      * or emit event for DOM-rendered subs.
      */
     refreshSubtitles() {
+        // Always try to refresh managed subtitles (ASS/Text)
+        if (this._subtitleManager) {
+            this._subtitleManager.refreshStyles();
+        }
+
         if (this._backend && this._backend.refreshSubtitles) {
             this._backend.refreshSubtitles();
         } else {

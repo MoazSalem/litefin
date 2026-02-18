@@ -301,5 +301,28 @@ export default {
     getTextStyles,
     getWindowStyles,
     applyStyles,
-    getCurrentFontId
+    getCurrentFontId,
+    getFontClassName: (settingKey = 'subtitleFont') => {
+        const font = PlayerSettings.get(settingKey) || '';
+        switch (font) {
+            case 'typewriter':
+                return 'font-typewriter';
+            case 'print':
+                return 'font-print';
+            case 'console':
+                return 'font-console';
+            case 'cursive':
+                return 'font-cursive';
+            case 'casual':
+                return 'font-casual';
+            case 'smallcaps':
+                return 'font-smallcaps';
+            case 'poppins':
+                return 'font-poppins';
+            case 'noto-arabic':
+                return 'font-noto-arabic';
+            default:
+                return 'font-default';
+        }
+    }
 };

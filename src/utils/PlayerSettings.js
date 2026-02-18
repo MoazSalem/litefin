@@ -79,6 +79,10 @@ const DEFAULTS = {
     // Custom subtitle font (empty = system default)
     subtitleFont: '',
 
+    // Custom ASS subtitle font (empty = system default)
+    // Separate setting for Anime/ASS content
+    subtitleFontAss: '',
+
     // Subtitle text color
     subtitleTextColor: '#ffffff',
 

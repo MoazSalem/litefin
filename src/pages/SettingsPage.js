@@ -558,6 +558,30 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">ASS Format Font Family</span>
+                        <span class="setting-description">Specific font for ASS/SSA subtitles</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-font-ass-select',
+                            [
+                                { value: '', label: 'Default - Tizen Sans' },
+                                { value: 'poppins', label: 'Modern - Poppins' },
+                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
+                                { value: 'print', label: 'Print - Merriweather' },
+                                { value: 'console', label: 'Console - Inconsolata' },
+                                { value: 'cursive', label: 'Cursive - Dancing Script' },
+                                { value: 'casual', label: 'Casual - Patrick Hand' },
+                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                            ],
+                            PlayerSettings.get('subtitleFontAss')
+                        )}
+                    </div>
+                </div>
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1384,6 +1408,7 @@ class SettingsPage extends Page {
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
             'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
+            'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
@@ -1464,7 +1489,10 @@ class SettingsPage extends Page {
                             }
 
                             // FONT LOADING: Trigger download if needed
-                            if (settingConfig.key === 'subtitleFont' && newValue) {
+                            if (
+                                (settingConfig.key === 'subtitleFont' || settingConfig.key === 'subtitleFontAss') &&
+                                newValue
+                            ) {
                                 FontLoader.loadFont(newValue).then((loaded) => {
                                     if (loaded) {
                                         log.debug(`Font loaded: ${newValue}`);

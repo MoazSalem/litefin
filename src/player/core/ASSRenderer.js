@@ -138,6 +138,21 @@ export default class ASSRenderer {
     }
 
     /**
+     * Set a custom font class on the subtitle wrapper.
+     * This allows overriding the embedded ASS fonts with a user-selected font.
+     * @param {string} className - CSS class name (e.g. 'font-poppins')
+     */
+    setFontClass(className) {
+        if (!this._wrapper) return;
+        
+        // Remove known font classes first (naive approach, but works if we control the classes)
+        // Ideally we'd import the list from somewhere, but for now we remove all classes
+        // and re-add the base one + the new one.
+        this._wrapper.className = 'libjass-wrapper ' + (className || '');
+        log.debug(`Set ASS font class: ${className}`);
+    }
+
+    /**
      * Show subtitles (if hidden).
      */
     show() {
