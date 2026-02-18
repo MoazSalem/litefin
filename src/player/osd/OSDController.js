@@ -192,8 +192,9 @@ export default class OSDController extends Component {
                             <button class="osd-btn osd-hidden" data-action="nextChapter" tabindex="0" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
                         </div>
+                        <div class="osd-ends-at" id="osdEndsAt"></div>
+                        <div class="osd-spacer"></div>
                         <div class="osd-controls-right">
-                            <div class="osd-ends-at" id="osdEndsAt"></div>
                             <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
@@ -497,6 +498,24 @@ export default class OSDController extends Component {
         }
     }
 
+    toggleSettings(force) {
+        if (force === undefined) {
+             force = !this.settingsMenu.isVisible;
+        }
+
+        if (force) {
+            this.settingsMenu.open();
+            this.activeMenu = this.settingsMenu;
+        } else {
+            this.settingsMenu.hide();
+            if (this.activeMenu === this.settingsMenu) {
+                this.activeMenu = null;
+            }
+            this.show();
+            this._updateFocus();
+        }
+    }
+
     togglePlaybackModeMenu(force) {
         if (force === undefined) {
              force = !this.playbackModeMenu.isVisible;
@@ -737,6 +756,13 @@ export default class OSDController extends Component {
 
     _handleBack() {
         if (this.activeMenu && this.activeMenu.isVisible) {
+            // Priority: Try to let the active menu handle the 'back' key itself.
+            // This allows sub-menus to return to their parent menus (e.g. Sub-menu -> Settings).
+            if (this.activeMenu.handleKey('back')) {
+                return true;
+            }
+
+            // Fallback: Manually handle specific built-in widgets that might not handle 'back'
             if (this.activeMenu === this.playbackInfo) {
                 this.togglePlaybackInfo(false);
                 return true;
@@ -745,11 +771,6 @@ export default class OSDController extends Component {
                 this.toggleSubtitleOffset(false);
                 return true;
             }
-            if (this.activeMenu === this.subtitleQuickSettings) {
-                this.toggleSubtitleQuickSettings(false);
-                return true;
-            }
-            // Fallback for generic modals (SettingsMenu, TrackMenu)
             if (this.activeMenu.isModal) {
                 this.closeMenu();
                 return true;

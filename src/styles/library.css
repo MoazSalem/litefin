@@ -100,10 +100,6 @@
 .control-btn.focused,
 .pagination-btn:not(:disabled):focus,
 .pagination-btn.focused,
-.modal-option-btn:focus,
-.modal-option-btn.focused,
-.modal-close-btn:focus,
-.modal-close-btn.focused,
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     outline: none !important;
@@ -121,8 +117,6 @@
 .control-btn.focused,
 .pagination-btn:focus,
 .pagination-btn.focused,
-.modal-close-btn:focus,
-.modal-close-btn.focused,
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     border-radius: 40px !important;
@@ -396,7 +390,6 @@
     color: var(--text-primary) !important;
     background-color: var(--jf-accent) !important;
     transform: scale(1.1);
-    text-shadow: 0 0 10px rgba(255, 255, 255, 0.5);
     border-radius: 50% !important;
 }
 
@@ -485,9 +478,6 @@
     font-size: 24px;
     font-weight: 500;
     color: var(--text-primary);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    /* Separator */
-    padding-bottom: 15px;
 }
 
 .modal-options {
@@ -593,7 +583,6 @@
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--jf-text-primary);
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     background: rgba(255, 255, 255, 0.02);
 }
 
@@ -649,7 +638,6 @@
     border-left-color: white;
     padding-left: 45px;
     outline: none;
-    box-shadow: none;
 }
 
 .filter-category-btn.active {
@@ -690,7 +678,6 @@
 
 .modal-option-btn.selected {
     color: var(--jf-text-primary);
-    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.1);
 }
 
 /* Selection Indicators (Glow/Accent) */
@@ -759,7 +746,6 @@
 /* Actions Footer */
 .modal-actions {
     padding: 30px 40px;
-    border-top: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     background: rgba(0, 0, 0, 0.2);
     display: flex;
     justify-content: flex-end;
@@ -855,7 +841,6 @@
 .sort-column .modal-title {
     padding: 20px 30px;
     font-size: 1.4rem;
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
     background: rgba(0, 0, 0, 0.2);
     /* Darker header background */
 }

@@ -1325,7 +1325,14 @@ class SettingsPage extends Page {
 
         focusManager.register('modal-actions', overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
-            leaveUp: 'modal-options'
+            leaveUp: 'modal-options',
+            onMove: (direction) => {
+                if (direction === 'down') {
+                    focusManager.setActiveSection('modal-options', true, null, { enterTo: 'first' });
+                    return true;
+                }
+                return false;
+            }
         });
 
         // Set Focus

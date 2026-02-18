@@ -20,6 +20,7 @@
        Accent Colors - Bright cyan/blue
        ======================================================================== */
     --jf-accent: #00b4d8;
+    --jf-accent-rgb: 0, 180, 216;
     --jf-accent-hover: #0096c7;
     --jf-accent-light: rgba(0, 180, 216, 0.18);
 

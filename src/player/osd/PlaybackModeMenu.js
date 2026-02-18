@@ -104,16 +104,20 @@ export default class PlaybackModeMenu extends BaseMenu {
     handleKey( key ) {
         switch ( key ) {
             case 'up':
-                if ( this.focusIndex > 0 ) {
+                if (this.focusIndex > 0) {
                     this.focusIndex--;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = this.options.length - 1;
                 }
+                this.updateFocus();
                 return true;
             case 'down':
-                if ( this.focusIndex < this.options.length - 1 ) {
+                if (this.focusIndex < this.options.length - 1) {
                     this.focusIndex++;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = 0;
                 }
+                this.updateFocus();
                 return true;
             case 'enter':
                 return true;

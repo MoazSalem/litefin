@@ -594,11 +594,13 @@ class FocusManager {
 
         // 1. Forced Entry Logic (Highest Priority)
         // Support 'first' or 'active-element' (finds .active or .selected)
-        if (config.enterTo === 'first' && focusables.length > 0) {
+        const enterTo = options.enterTo || config.enterTo;
+
+        if (enterTo === 'first' && focusables.length > 0) {
             target = focusables[0];
             this.focusElement(target, { skipScroll });
             return;
-        } else if (config.enterTo === 'active-element' && focusables.length > 0) {
+        } else if (enterTo === 'active-element' && focusables.length > 0) {
             target =
                 focusables.find((el) => el.classList.contains('active') || el.classList.contains('selected')) ||
                 focusables[0];

@@ -21,7 +21,7 @@
 /* Sidebar */
 .settings-sidebar {
     width: 350px;
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--jf-background-alt, rgba(0, 0, 0, 0.3));
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     padding: 40px 0;
     display: flex;
@@ -115,7 +115,7 @@
     margin-top: 20px;
     margin-bottom: 20px;
     padding-bottom: 10px;
-    border-bottom: 2px solid rgba(255, 255, 255, 0.05);
+    border-bottom: 2px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
 }
 
 /* Setting Items */
@@ -167,8 +167,8 @@
 .btn-option {
     padding: 12px 24px;
     font-size: 1.1rem;
-    background: rgba(40, 40, 40, 0.8);
-    border: 3px solid transparent;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
+    border: 3px solid var(--jf-action-btn-border, transparent);
     border-radius: 40px;
     -webkit-border-radius: 40px;
     overflow: hidden;
@@ -176,7 +176,7 @@
     min-width: 100px;
     text-align: center;
     /* Force light text color (approx white) because the background is always dark glass */
-    color: rgb(229, 231, 235);
+    color: var(--jf-text-primary, rgb(229, 231, 235));
 }
 
 .btn-option:disabled {
@@ -208,15 +208,15 @@
 .select-btn {
     padding: 12px 24px;
     font-size: 1.1rem;
-    background: rgba(40, 40, 40, 0.8);
-    border: 3px solid transparent;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
+    border: 3px solid var(--jf-action-btn-border, transparent);
     border-radius: 40px;
     -webkit-border-radius: 40px;
     overflow: hidden;
     background-clip: padding-box;
     min-width: 200px;
     text-align: center;
-    color: rgb(229, 231, 235);
+    color: var(--jf-text-primary, rgb(229, 231, 235));
     cursor: pointer;
     outline: none;
 }
@@ -260,8 +260,8 @@
     top: 110%;
     left: 0;
     right: 0;
-    background: rgba(20, 20, 20, 0.95);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: var(--jf-background-alt, rgba(20, 20, 20, 0.95));
+    border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     border-radius: 12px;
     padding: 8px;
     display: none;
@@ -371,7 +371,7 @@
 .server-url-display {
     font-size: 1.2rem;
     color: var(--jf-text-secondary);
-    background: rgba(0, 0, 0, 0.3);
+    background: var(--jf-background-alt, rgba(0, 0, 0, 0.3));
     padding: 8px 16px;
     border-radius: 20px;
 }
@@ -392,8 +392,8 @@
 
 .switch-user-btn:focus,
 .switch-user-btn.focused {
-    background: #ff3b30;
-    /* Apple Red */
+    background: var(--jf-error, #ff3b30);
+    /* Apple Red / Theme Error */
     border-color: var(--jf-button-border-focus);
 }
 
@@ -493,7 +493,6 @@
     width: 24px;
     height: 24px;
     background-color: var(--jf-switch-handle);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
     border-radius: 50%;
 }
 
@@ -571,7 +570,7 @@
     appearance: none;
     width: 30px; /* Slightly larger for better visibility */
     height: 30px;
-    background: #ffffff;
+    background: var(--jf-switch-handle, #ffffff);
     border-radius: 50%;
     cursor: pointer;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -592,13 +591,13 @@
 /* Premium Focus State */
 .setting-slider:focus::-webkit-slider-thumb,
 .setting-slider.focused::-webkit-slider-thumb {
-    background: #ffffff;
+    background: var(--jf-switch-handle, #ffffff);
     transform: scale(1.1); /* Pop out effect */
 }
 
 .setting-slider:focus + .slider-fill,
 .setting-slider.focused + .slider-fill {
-    background: #ffffff; /* Contrast when focused */
+    background: var(--jf-switch-handle, #ffffff); /* Contrast when focused */
 }
 
 .slider-value {

@@ -45,7 +45,7 @@
     flex: 1;
     display: flex;
     height: 100%;
-    background: rgba(255, 255, 255, 0.05);
+    background: var(--jf-card-bg, rgba(255, 255, 255, 0.05));
     border-radius: var(--jf-border-radius);
     overflow: hidden;
     cursor: pointer;
@@ -193,8 +193,8 @@
     width: 64px;
     height: 64px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.1);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.1));
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     display: flex;
     align-items: center;
     justify-content: center;

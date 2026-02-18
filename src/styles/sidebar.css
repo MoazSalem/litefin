@@ -116,7 +116,6 @@
     outline: none;
     text-align: left;
     position: relative;
-    box-shadow: none;
 }
 
 .sidebar-item:focus,
@@ -124,8 +123,6 @@
     background: var(--jf-accent);
     background: var(--jf-accent);
     color: white;
-    box-shadow: none;
-    box-shadow: none;
 }
 
 .sidebar-item.active {
@@ -135,7 +132,6 @@
 .sidebar-item.active:focus,
 .sidebar-item.active.focused {
     color: white;
-    box-shadow: none;
 }
 
 /* Icon Container - Fixed width for alignment */

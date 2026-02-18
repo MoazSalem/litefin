@@ -20,6 +20,7 @@
        Accent Colors
        ======================================================================== */
    --jf-accent: #00a4dc;
+   --jf-accent-rgb: 0, 164, 220;
    --jf-accent-hover: #0091c8;
    --jf-accent-light: rgba(0, 164, 220, 0.15);
 

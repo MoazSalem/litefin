@@ -297,6 +297,7 @@
 .resume-btn {
     background: var(--jf-primary-btn-bg);
     color: var(--jf-primary-btn-color);
+    border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .play-btn:focus,

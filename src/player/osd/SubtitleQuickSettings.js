@@ -278,14 +278,18 @@ export default class SubtitleQuickSettings extends BaseMenu {
             case 'up':
                 if (this.focusIndex > 0) {
                     this.focusIndex--;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = maxIndex;
                 }
+                this.updateFocus();
                 return true;
             case 'down':
                 if (this.focusIndex < maxIndex) {
                     this.focusIndex++;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = 0;
                 }
+                this.updateFocus();
                 return true;
             case 'left':
                 this._handleAdjust(-1);
@@ -297,7 +301,8 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 this._handleAdjust(1); // Cycling for select items
                 return true;
             case 'back':
-                this.osd.closeMenu();
+                this.hide();
+                this.osd.toggleSettings(true);
                 return true;
         }
         return false;

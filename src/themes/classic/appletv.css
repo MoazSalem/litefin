@@ -20,6 +20,7 @@
        Accent Colors - iOS Blue
        ======================================================================== */
     --jf-accent: #0a84ff;
+    --jf-accent-rgb: 10, 132, 255;
     --jf-accent-hover: #409cff;
     --jf-accent-light: rgba(10, 132, 255, 0.2);
 

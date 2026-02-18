@@ -30,6 +30,7 @@
        Accent Colors (Jellyfin Blue)
        ======================================================================== */
    --jf-accent: #00a4dc;
+   --jf-accent-rgb: 0, 164, 220;
    --jf-accent-hover: #00b4ec;
    --jf-accent-active: #0094cc;
    --jf-accent-light: rgba(0, 164, 220, 0.2);

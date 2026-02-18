@@ -1800,15 +1800,17 @@ class LibraryPage extends Page {
         // Register Sections
         focusManager.register('sort-by-col', overlay.querySelector('#sort-by-col'), {
             orientation: 'vertical',
-            leaveLeft: 'sort-actions', // Shortcut to actions
+            leaveUp: 'sort-actions',
+            leaveLeft: 'sort-actions',
             leaveRight: 'sort-order-col',
             leaveDown: 'sort-actions'
         });
 
         focusManager.register('sort-order-col', overlay.querySelector('#sort-order-col'), {
             orientation: 'vertical',
+            leaveUp: 'sort-actions',
             leaveLeft: 'sort-by-col',
-            leaveRight: 'sort-actions', // Shortcut to actions
+            leaveRight: 'sort-actions',
             leaveDown: 'sort-actions'
         });
 
@@ -1822,6 +1824,10 @@ class LibraryPage extends Page {
                         focusManager.setActiveSection(prev, true); // No fromElement = use memory
                         return true;
                     }
+                } else if (direction === 'down') {
+                    // Wrap to the top of the sort-by column
+                    focusManager.setActiveSection('sort-by-col', true, null, { enterTo: 'first' });
+                    return true;
                 }
                 return false;
             }
@@ -2095,7 +2101,7 @@ class LibraryPage extends Page {
                 focusManager.register('filter-items', container, {
                     orientation: 'grid',
                     leaveLeft: 'filter-sidebar',
-                    leaveRight: 'filter-actions',
+                    leaveRight: 'filter-actions', // Note: Spatial logic will handle this mostly
                     leaveDown: 'filter-actions',
                     selector: '.modal-option-btn'
                 });
@@ -2119,6 +2125,15 @@ class LibraryPage extends Page {
 
             // Render Initial Batch
             appendItems(0, initialCount);
+
+            // Register filter-items section (Dynamic)
+            focusManager.register('filter-items', container, {
+                orientation: 'grid', // Switch to grid for side-by-side items
+                leaveLeft: 'filter-sidebar',
+                leaveUp: 'filter-actions',
+                leaveDown: 'filter-actions',
+                selector: '.modal-option-btn'
+            });
 
             // --- Focus Restoration ---
             if (options.restoreFocus) {
@@ -2219,8 +2234,9 @@ class LibraryPage extends Page {
         // Focus Management Registration
         focusManager.register('filter-sidebar', overlay.querySelector('.filter-sidebar'), {
             orientation: 'vertical',
+            leaveUp: 'filter-actions',
             leaveRight: 'filter-items',
-            leaveLeft: 'filter-actions', // Shortcut to actions
+            leaveLeft: 'filter-actions',
             leaveDown: 'filter-actions',
             selector: '.filter-category-btn'
         });
@@ -2235,6 +2251,10 @@ class LibraryPage extends Page {
                         focusManager.setActiveSection(prev, true); // No fromElement = use memory
                         return true;
                     }
+                } else if (direction === 'down') {
+                    // Wrap to the top category in the sidebar
+                    focusManager.setActiveSection('filter-sidebar', true, null, { enterTo: 'first' });
+                    return true;
                 }
                 return false;
             },

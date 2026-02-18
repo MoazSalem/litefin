@@ -1674,7 +1674,14 @@ class DetailsPage extends Page {
         // Register the actions section (Cancel button)
         focusManager.register(actionsSection, actionsContainer, {
             orientation: 'horizontal',
-            leaveUp: optionsSection
+            leaveUp: optionsSection,
+            onMove: (direction) => {
+                if (direction === 'down') {
+                    focusManager.setActiveSection(optionsSection, true, null, { enterTo: 'first' });
+                    return true;
+                }
+                return false;
+            }
         });
 
         // Set active immediately

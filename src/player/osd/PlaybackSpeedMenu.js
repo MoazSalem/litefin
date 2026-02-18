@@ -109,14 +109,18 @@ export default class PlaybackSpeedMenu extends BaseMenu {
             case 'up':
                 if (this.focusIndex > 0) {
                     this.focusIndex--;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = this.options.length - 1;
                 }
+                this.updateFocus();
                 return true;
             case 'down':
                 if (this.focusIndex < this.options.length - 1) {
                     this.focusIndex++;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = 0;
                 }
+                this.updateFocus();
                 return true;
             case 'enter':
                 return true; // Click handled by click listener

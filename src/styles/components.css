@@ -73,7 +73,6 @@
     background: var(--jf-accent);
     outline: none;
     border-color: var(--jf-button-border-focus);
-    box-shadow: none;
 }
 
 .nav-btn.icon-only {
@@ -113,7 +112,6 @@
     background: var(--jf-accent-light);
     outline: none;
     border-color: var(--jf-button-border-focus);
-    box-shadow: none;
 }
 
 .btn-icon-small {
@@ -441,7 +439,6 @@ progress.card-progress::-webkit-progress-value {
 
 .settings-modal .modal-header {
     padding: 20px 30px;
-    border-bottom: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     background: rgba(255, 255, 255, 0.02);
 }
 
@@ -489,24 +486,23 @@ progress.card-progress::-webkit-progress-value {
 
 
 
+.modal-option-btn.selected {
+    background: rgba(var(--jf-accent-rgb), 0.1);
+    border-color: var(--jf-accent);
+    color: var(--jf-text-primary);
+}
+
 .modal-option-btn:hover,
 .modal-option-btn:focus,
 .modal-option-btn.focused {
-    background: var(--jf-accent);
-    color: white;
-    border-color: rgba(255, 255, 255, 0.5);
+    background: var(--jf-accent) !important; /* Force priority over .selected */
+    color: white !important;
+    border-color: rgba(255, 255, 255, 0.5) !important;
     /* Subtle white inner border */
     outline: none;
-    box-shadow: none;
-    transform: none;
-    /* Removed scale to prevent squeezing/distortion */
+    transform: scale(1.01);
 }
 
-
-.modal-option-btn.selected {
-    background: rgba(255, 255, 255, 0.1);
-    border-color: var(--jf-text-secondary);
-}
 
 .modal-option-btn .check-icon {
     display: none;
@@ -528,7 +524,6 @@ progress.card-progress::-webkit-progress-value {
     padding: 20px;
     display: flex;
     justify-content: flex-end;
-    border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .modal-action-btn {
@@ -543,7 +538,19 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-action-btn:focus,
-.modal-action-btn:hover {
+.modal-action-btn:hover,
+.modal-action-btn.focused {
     background: var(--jf-accent);
     outline: none;
+    transform: scale(1.01);
+}
+
+/* Modal Close Button Focus (Individualized) */
+.modal-close-btn:focus,
+.modal-close-btn.focused {
+    background: var(--jf-accent) !important;
+    color: white !important;
+    border-color: white !important;
+    transform: scale(1.01) !important;
+    outline: none !important;
 }

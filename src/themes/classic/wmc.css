@@ -20,6 +20,7 @@
        Accent Colors - WMC Green
        ======================================================================== */
    --jf-accent: #52b043;
+   --jf-accent-rgb: 82, 176, 67;
    --jf-accent-hover: #45963a;
    --jf-accent-light: rgba(82, 176, 67, 0.18);
 

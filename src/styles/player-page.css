@@ -43,7 +43,7 @@
     width: 100%;
     height: 100%;
     object-fit: contain;
-    background: #000;
+    background: var(--jf-background, #000);
 }
 
 /* ==========================================================================
@@ -65,7 +65,7 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    background: rgba(0, 0, 0, 0.9);
+    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.9));
     z-index: 2100;
     /* Above player container */
     opacity: 0;
@@ -80,10 +80,10 @@
 
 /* Glassmorphism Utility */
 .glass-panel {
-    background: rgba(40, 40, 40, 0.5) !important;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.5)) !important;
     backdrop-filter: blur(30px) !important;
     -webkit-backdrop-filter: blur(30px) !important;
-    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.1)) !important;
 }
 
 /* Glass Panel for Error */
@@ -91,15 +91,15 @@
     width: 600px;
     padding: 60px;
     border-radius: 40px;
-    background: rgba(40, 40, 40, 0.5);
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.5));
     backdrop-filter: blur(30px);
     -webkit-backdrop-filter: blur(30px);
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.1));
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
+    box-shadow: var(--jf-shadow-lg);
     transform: translateY(20px);
     transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
@@ -122,8 +122,8 @@
     min-height: 100px;
     flex: 0 0 100px;
     margin: 0 auto 32px auto;
-    background: rgba(255, 59, 48, 0.15);
-    color: #ff3b30;
+    background: var(--jf-accent-light, rgba(0, 164, 220, 0.2));
+    color: var(--jf-error, #f44336);
     border-radius: 50%;
     display: flex;
     justify-content: center;
@@ -141,13 +141,13 @@
 .error-title {
     font-size: 42px;
     font-weight: 700;
-    color: #fff;
+    color: var(--jf-text-primary, #fff);
     margin-bottom: 16px;
     letter-spacing: -0.5px;
 }
 
 .error-message {
-    color: rgba(255, 255, 255, 0.6);
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
     font-size: 22px;
     line-height: 1.5;
     margin-bottom: 48px;
@@ -175,16 +175,16 @@
 }
 
 .error-actions .btn-primary {
-    background: #fff;
-    color: #000;
+    background: var(--jf-primary-btn-bg, #fff);
+    color: var(--jf-primary-btn-color, #000);
 }
 
 .error-actions .btn-primary:focus,
 .error-actions .btn-primary.focused {
-    background: #6B5CE7;
+    background: var(--jf-accent, #00a4dc);
     color: #fff;
     transform: scale(1.05);
-    box-shadow: 0 0 20px rgba(107, 92, 231, 0.4);
+    box-shadow: var(--jf-shadow-md);
 }
 
 .error-actions .btn-secondary {
@@ -195,9 +195,9 @@
 .error-actions .btn-secondary:focus,
 .error-actions .btn-secondary.focused {
     background: rgba(255, 255, 255, 0.25);
-    border: 3px solid #fff;
+    border: 3px solid var(--jf-button-border-focus, #fff);
     transform: scale(1.05);
-    box-shadow: 0 0 20px rgba(255, 255, 255, 0.2);
+    box-shadow: var(--jf-shadow-md);
 }
 
 /* ==========================================================================
@@ -229,21 +229,21 @@
     right: 0;
     padding: 40px 60px;
     background: linear-gradient(to bottom,
-            rgba(0, 0, 0, 0.8) 0%,
+            var(--osd-gradient-dark, rgba(0, 0, 0, 0.8)) 0%,
             rgba(0, 0, 0, 0) 100%);
 }
 
 .osd-title {
     font-size: 32px;
     font-weight: 600;
-    color: #fff;
+    color: var(--osd-text-color, #fff);
     text-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
     margin: 0 0 8px 0;
 }
 
 .osd-subtitle {
     font-size: 18px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
     text-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
 }
 
@@ -255,7 +255,7 @@
     right: 0;
     padding: 60px;
     background: linear-gradient(to top,
-            rgba(0, 0, 0, 0.9) 0%,
+            var(--osd-gradient-dark, rgba(0, 0, 0, 0.9)) 0%,
             rgba(0, 0, 0, 0.7) 50%,
             rgba(0, 0, 0, 0) 100%);
 }
@@ -267,7 +267,7 @@
 
 .progress-bar {
     height: 6px;
-    background: rgba(255, 255, 255, 0.2);
+    background: var(--osd-slider-bg, rgba(255, 255, 255, 0.2));
     border-radius: 3px;
     overflow: hidden;
     cursor: pointer;
@@ -283,7 +283,7 @@
 
 .progress-fill {
     height: 100%;
-    background: var(--accent-primary, #6B5CE7);
+    background: var(--jf-accent, #00a4dc);
     border-radius: 3px;
     transition: width 0.1s linear;
     position: relative;
@@ -299,7 +299,7 @@
     height: 16px;
     background: #fff;
     border-radius: 50%;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    box-shadow: var(--jf-shadow-sm);
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -315,7 +315,7 @@
     display: flex;
     justify-content: space-between;
     font-size: 14px;
-    color: rgba(255, 255, 255, 0.7);
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
     margin-top: 8px;
 }
 
@@ -331,10 +331,10 @@
     width: 56px;
     height: 56px;
     border: none;
-    background: rgba(255, 255, 255, 0.1);
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.1));
     backdrop-filter: blur(10px);
     border-radius: 50%;
-    color: #fff;
+    color: var(--osd-text-color, #fff);
     cursor: pointer;
     transition: all 0.2s ease;
     display: flex;
@@ -345,11 +345,11 @@
 .osd-btn:focus,
 .osd-btn.focused,
 .osd-btn:hover {
-    background: rgba(255, 255, 255, 0.3);
-    border: 2px solid #fff;
+    background: var(--jf-button-hover, rgba(255, 255, 255, 0.3));
+    border: 2px solid var(--jf-button-border-focus, #fff);
     transform: scale(1.1);
     outline: none;
-    box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+    box-shadow: var(--jf-shadow-sm);
 }
 
 .osd-btn:active {
@@ -366,15 +366,15 @@
 .osd-btn-play {
     width: 72px;
     height: 72px;
-    background: var(--accent-primary, #6B5CE7);
+    background: var(--jf-accent, #00a4dc);
 }
 
 .osd-btn-play:focus,
 .osd-btn-play.focused,
 .osd-btn-play:hover {
-    background: var(--accent-primary-hover, #7B6CF7);
-    border: 2px solid #fff;
-    box-shadow: 0 0 20px rgba(107, 92, 231, 0.5);
+    background: var(--jf-accent-hover, #00b4ec);
+    border: 2px solid var(--jf-button-border-focus, #fff);
+    box-shadow: var(--jf-shadow-md);
 }
 
 .osd-btn-play svg {
@@ -408,7 +408,7 @@
 
 .subtitle-line {
     display: inline-block;
-    background: rgba(0, 0, 0, 0.75);
+    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.75));
     font-weight: 500;
     padding: 8px 16px;
     border-radius: 4px;

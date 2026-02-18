@@ -146,14 +146,18 @@ export default class TrackMenu extends BaseMenu {
             case 'up':
                 if (this.focusIndex > 0) {
                     this.focusIndex--;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = options.length - 1;
                 }
+                this.updateFocus();
                 return true;
             case 'down':
                 if (this.focusIndex < options.length - 1) {
                     this.focusIndex++;
-                    this.updateFocus();
+                } else {
+                    this.focusIndex = 0;
                 }
+                this.updateFocus();
                 return true;
             case 'enter':
                 // Rely on native click event which is triggered by the browser on Enter

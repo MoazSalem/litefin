@@ -30,9 +30,9 @@
     align-items: center;
     font-size: 1.4rem;
     /* Slightly larger text */
-    background: rgba(40, 40, 40, 0.8);
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
     /* Match nav button bg */
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     /* Match nav button border */
     border-radius: 36px;
     /* Half of 72px */
