@@ -104,10 +104,28 @@ export default class TrackMenu extends BaseMenu {
 
         const optionsHtml = tracks.map((track, i) => {
             const isSelected = track.Index === currentIndex;
+            
+            const label = track.DisplayTitle || track.Title || track.Language || `Track ${track.Index}`;
+            let metadataHtml = '';
+
+            // For subtitles, add Type and Location metadata
+            if (this.type === 'subtitles' && track.Index !== -1) {
+                const type = (track.Codec || '').toUpperCase();
+                const location = track.IsExternal ? 'EXT' : 'INT';
+                
+                metadataHtml = `
+                    <span class="track-badge">${type}</span>
+                    <span class="track-badge">${location}</span>
+                `;
+            }
+
             return `
                 <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-index="${track.Index}" data-menu-index="${i}">
                     <span class="track-option-check"><svg viewBox="0 0 24 24" width="24" height="24"><path fill="currentColor" d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg></span>
-                    <span class="track-option-label">${track.DisplayTitle || track.Title || `Track ${track.Index}`}</span>
+                    <span class="track-option-label">
+                        <span class="track-label-text">${label}</span>
+                        ${metadataHtml}
+                    </span>
                 </button>
             `;
         }).join('');

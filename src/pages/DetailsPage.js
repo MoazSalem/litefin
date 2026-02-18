@@ -1782,9 +1782,24 @@ class DetailsPage extends Page {
             .map((track, i) => {
                 const isSelected = track.Index === currentIndex;
                 const label = track.DisplayTitle || track.Title || track.Language || `Track ${track.Index}`;
+                let metadataHtml = '';
+
+                // For subtitles, add Type and Location metadata
+                if (title.toLowerCase().includes('subtitle') && track.Index !== -1) {
+                    const type = (track.Codec || '').toUpperCase();
+                    const location = track.IsExternal ? 'EXT' : 'INT';
+                    metadataHtml = `
+                        <span class="track-badge">${type}</span>
+                        <span class="track-badge">${location}</span>
+                    `;
+                }
+
                 return `
                 <button class="modal-option-btn ${isSelected ? 'selected' : ''}" data-index="${track.Index}" tabindex="0">
-                    <span>${label}</span>
+                    <span class="track-option-label">
+                        <span class="track-label-text">${label}</span>
+                        ${metadataHtml}
+                    </span>
                     <div class="check-icon"></div>
                 </button>
             `;

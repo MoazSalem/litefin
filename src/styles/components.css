@@ -555,3 +555,42 @@ progress.card-progress::-webkit-progress-value {
     transform: scale(1.01) !important;
     outline: none !important;
 }
+
+/* Track Option Badges (Subtitle Metadata) */
+.track-option-label {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    flex: 1;
+}
+
+.track-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.85rem;
+    font-weight: 700;
+    margin-left: 10px;
+    color: var(--jf-text-primary);
+    text-transform: uppercase;
+    flex-shrink: 0;
+    line-height: 1;
+}
+
+.track-label-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Modal variant compatibility */
+.modal-option-btn span {
+    display: flex;
+    align-items: center;
+}
