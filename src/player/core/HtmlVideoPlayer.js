@@ -200,10 +200,15 @@ export class HtmlVideoPlayer {
         const hasNativeHls = this._checkNativeHlsSupport();
 
         // Prefer HLS.js on most platforms for better control
-        // But use native on iOS where HLS.js doesn't work well
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        // But use native on Tizen where HLS.js might face strict CORS/CSP issues with Blob URLs
+        const isTizen = /Tizen/.test(navigator.userAgent);
+        
+        if (isTizen && hasNativeHls) {
+            log.info('Preferring native HLS playback (Tizen detected)');
+            return false;
+        }
 
-        return !isIOS || !hasNativeHls;
+        return true;
     }
 
     /**
@@ -597,9 +602,6 @@ export class HtmlVideoPlayer {
             } else {
                 Screenfull.request(this.container || this._videoElement);
             }
-        } else if (this._videoElement?.webkitEnterFullscreen) {
-            // iOS fallback
-            this._videoElement.webkitEnterFullscreen();
         }
     }
 

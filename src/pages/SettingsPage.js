@@ -345,6 +345,25 @@ class SettingsPage extends Page {
                 <!-- ============================================================ -->
                 <h3 class="setting-section-title">Playback Compatibility</h3>
 
+                <!-- Player Backend Selection -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Player Backend</span>
+                        <span class="setting-description">Manually select playback engine (Restart required)</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'player-backend-select',
+                            [
+                                { value: 'auto', label: 'Auto (Recommended)' },
+                                { value: 'avplay', label: 'Tizen AVPlay (Native)' },
+                                { value: 'html5', label: 'HTML5 Video (Web Standard)' }
+                            ],
+                            PlayerSettings.get('playerBackend') || 'auto'
+                        )}
+                    </div>
+                </div>
+
                 <!-- HEVC Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1514,6 +1533,7 @@ class SettingsPage extends Page {
             'theme-select': { key: 'theme', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
+            'player-backend-select': { key: 'playerBackend', type: 'player' },
             'max-bitrate-select': { key: 'maxBitrateInternet', type: 'player' },
             'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },

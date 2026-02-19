@@ -24,6 +24,7 @@ import OSDController from '../player/osd/OSDController.js';
 import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('Player');
@@ -346,12 +347,24 @@ class PlayerPage extends Page {
     async _initPlayer() {
         log.info('_initPlayer called');
 
+        // Resolve backend choice
+        const playerBackend = PlayerSettings.get('playerBackend') || 'auto';
+        let useTizenPlayer = this._isTizen();
+
+        if (playerBackend === 'avplay') {
+            useTizenPlayer = true;
+        } else if (playerBackend === 'html5') {
+            useTizenPlayer = false;
+        }
+
+        log.info(`Resolved player backend: ${playerBackend} (useTizenPlayer: ${useTizenPlayer})`);
+
         // Construct the player directly — no bridge, no window global
         this._player = new JellyfinPlayer({
             container: this.$('#player-container'),
             serverUrl: api.serverUrl,
             authToken: api.accessToken,
-            useTizenPlayer: this._isTizen()
+            useTizenPlayer: useTizenPlayer
         });
         log.info('Player initialized:', !!this._player);
 

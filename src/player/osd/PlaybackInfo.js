@@ -100,7 +100,17 @@ export default class PlaybackInfo extends BaseMenu {
 
         const mediaSource = this.player.getCurrentMediaSource();
         const playMethod = mediaSource ? MediaHelper.getPlayMethod(mediaSource) : 'DirectPlay';
-        const playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Video Player';
+        
+        // Use actual backend type if available, otherwise fall back to config
+        let playerType = 'Unknown Player';
+        if (this.player.backendType === 'tizen') {
+            playerType = 'Tizen AVPlayer';
+        } else if (this.player.backendType === 'html5') {
+            playerType = 'Html Video Player';
+        } else {
+            playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Video Player';
+        }
+
         const api = this.osd.api;
         const protocol = api?.serverUrl?.startsWith('https') ? 'https' : 'http';
         const streamType = this.player.getStreamType ? this.player.getStreamType() : 'Video';

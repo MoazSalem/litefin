@@ -203,10 +203,7 @@ export const MediaHelper = {
      * @returns {string|null}
      */
     getCrossOriginValue(mediaSource) {
-        if (mediaSource?.IsRemote) {
-            return null;
-        }
-        return 'anonymous';
+        return null; // Disable CORS checks for video element to avoid "Failed to initialize" on local networks
     }
 };
 

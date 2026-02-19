@@ -222,16 +222,32 @@ export class JellyfinPlayer extends EventEmitter {
     _initBackend() {
         // Check for Tizen AVPlay API (can be on tizen or webapis namespace)
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
+        const backendSetting = PlayerSettings.get('playerBackend') || 'auto';
 
         log.info(
-            'Initializing backend. useTizenPlayer:',
-            this.useTizenPlayer,
-            'detected:',
-            hasAvPlay
+            'Initializing backend. useTizenPlayer:', this.useTizenPlayer,
+            'detected:', hasAvPlay,
+            'setting:', backendSetting
         );
 
-        if (this.useTizenPlayer && hasAvPlay) {
+        // Determine which backend to use
+        let useTizen = false;
+
+        if (backendSetting === 'avplay') {
+            useTizen = true;
+            if (!hasAvPlay) {
+                log.warn('Forced Tizen AVPlay, but API not found! Attempting anyway...');
+            }
+        } else if (backendSetting === 'html5') {
+            useTizen = false;
+        } else {
+            // Auto: Use Tizen if requested by config AND available
+            useTizen = this.useTizenPlayer && hasAvPlay; 
+        }
+
+        if (useTizen) {
             log.info('Using Tizen AVPlay backend');
+            this._backendType = 'tizen';
             this._backend = new TizenAVPlayer({
                 container: this.container,
                 settings: PlayerSettings,
@@ -239,6 +255,7 @@ export class JellyfinPlayer extends EventEmitter {
             });
         } else {
             log.info('Using HTML5 Video backend');
+            this._backendType = 'html5';
             this._backend = new HtmlVideoPlayer({
                 container: this.container,
                 settings: PlayerSettings,
@@ -253,6 +270,14 @@ export class JellyfinPlayer extends EventEmitter {
      */
     get isSeeking() {
         return this._isSeeking;
+    }
+
+    /**
+     * Get the current backend type ('tizen' or 'html5')
+     * @returns {string}
+     */
+    get backendType() {
+        return this._backendType;
     }
 
     /**
@@ -341,7 +366,9 @@ export class JellyfinPlayer extends EventEmitter {
      */
     async play(options) {
         log.info('Play requested:', options);
-
+        log.info('Backend Type:', this._backendType);
+        log.info('Use Tizen Player:', this.useTizenPlayer);
+        
         // Update server URL/Auth if provided in play options
         if (options.serverUrl) this.serverUrl = options.serverUrl;
         if (options.authToken) this.authToken = options.authToken;
@@ -356,7 +383,8 @@ export class JellyfinPlayer extends EventEmitter {
             // Build device profile once (avoids duplicate logs/work)
             const deviceProfile = buildJellyfinProfile({
                  manualBitrate: this._manualBitrate, 
-                 playbackMode: this._playbackMode 
+                 playbackMode: this._playbackMode,
+                 backend: this._backendType
             });
 
             // Get playback info from server
@@ -419,11 +447,8 @@ export class JellyfinPlayer extends EventEmitter {
                 throw new Error('Media source not found');
             }
 
-            // DEBUG: Log transcoding reasons if available
-            log.info(`[PlaybackMode] Selected PlayMethod: ${playbackInfo.PlaySessionId ? 'Transcode/DirectStream' : 'DirectPlay'} (derived)`);
             if (mediaSource.TranscodingInfo) {
                 log.info(`[PlaybackMode] IsDirectStream: ${mediaSource.TranscodingInfo.IsVideoDirect ? 'Yes' : 'No'}`);
-                log.info(`[PlaybackMode] TranscodingReasons: ${mediaSource.TranscodingReasons}`);
             }
             // MediaHelper also derives PlayMethod, let's check that
             let playMethod = MediaHelper.getPlayMethod(mediaSource);

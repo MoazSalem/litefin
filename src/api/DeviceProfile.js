@@ -241,6 +241,11 @@ export function buildJellyfinProfile(options = {}) {
         playbackMode = options.playbackMode || 'auto';
     }
 
+    const isHtml5 = options.backend === 'html5';
+    if (isHtml5) {
+        log.info('Building profile for HTML5 backend (Tizen Browser)');
+    }
+
     const caps = getDeviceCapabilities();
 
     // --- Read user toggle overrides from PlayerSettings ---
@@ -356,62 +361,23 @@ export function buildJellyfinProfile(options = {}) {
     // If we want to force transcode, we report no direct play support at all.
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
-        directPlayProfiles = [
-            // MP4 / M4V / MOV
-            {
-                Container: 'mp4,m4v,mov',
-                Type: 'Video',
-                VideoCodec: generalVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            },
-            // MKV
-            {
-                Container: 'mkv',
-                Type: 'Video',
-                VideoCodec: mkvVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            },
-            // TS / MPEGTS
-            {
-                Container: 'ts,mpegts',
-                Type: 'Video',
-                VideoCodec: tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            },
-            // M2TS
-            {
-                Container: 'm2ts',
-                Type: 'Video',
-                VideoCodec: m2tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
-            },
-            // AVI
-            {
-                Container: 'avi',
-                Type: 'Video',
-                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-                AudioCodec: audioCodecString
-            },
-            // WMV / ASF
-            {
-                Container: 'wmv,asf',
-                Type: 'Video',
-                AudioCodec: audioCodecString
-            },
-            // Legacy containers
-            {
-                Container: 'mpg,mpeg,flv,3gp,vob,vro',
-                Type: 'Video',
-                AudioCodec: audioCodecString
-            },
-            // Audio-only
-            {
-                Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
-                Type: 'Audio'
-            }
-        ];
+        // MP4 / M4V / MOV (Supported by both AVPlay and Browser)
+        directPlayProfiles.push({
+            Container: 'mp4,m4v,mov',
+            Type: 'Video',
+            VideoCodec: generalVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        });
 
-        // WebM
+        // MKV (Supported by both AVPlay and Browser)
+        directPlayProfiles.push({
+            Container: 'mkv',
+            Type: 'Video',
+            VideoCodec: mkvVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        });
+
+        // WebM (Supported by both AVPlay and Browser)
         if (webmVideoCodecs.length > 0) {
             directPlayProfiles.push({
                 Container: 'webm',
@@ -420,6 +386,53 @@ export function buildJellyfinProfile(options = {}) {
                 AudioCodec: 'vorbis,opus'
             });
         }
+
+        // --- AVPlayer-Specific Containers (Excluded from HTML5) ---
+        if (!isHtml5) {
+            // TS / MPEGTS
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+
+            // M2TS
+            directPlayProfiles.push({
+                Container: 'm2ts',
+                Type: 'Video',
+                VideoCodec: m2tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+
+            // AVI
+            directPlayProfiles.push({
+                Container: 'avi',
+                Type: 'Video',
+                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                AudioCodec: audioCodecString
+            });
+
+            // WMV / ASF
+            directPlayProfiles.push({
+                Container: 'wmv,asf',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+
+            // Legacy containers
+            directPlayProfiles.push({
+                Container: 'mpg,mpeg,flv,3gp,vob,vro',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+        }
+
+        // Audio-only (Supported by both)
+        directPlayProfiles.push({
+            Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
+            Type: 'Audio'
+        });
     }
 
     // ====================================================================
@@ -539,11 +552,12 @@ export function buildJellyfinProfile(options = {}) {
     // ====================================================================
 
     // H.264 Level: UHD → 5.1, FHD on Tizen 5.5+ → 4.2, older FHD → 4.1
-    const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5.5 ? '42' : '41';
+    // For HTML5, we use 6.2 (120) for 4K/8K compatibility in browser engine
+    const h264Level = isHtml5 ? '120' : caps.uhd ? '51' : caps.tizenVersion >= 5.5 ? '42' : '41';
 
     // HEVC Level: 8K → 6.1 (183), UHD → 5.1 (153), FHD → 4.1 (123)
-    // Jellyfin encodes levels as level * 30 (e.g. 5.1 → 153)
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
+    // For HTML5, we use 6.1 (183) for 4K/8K compatibility
+    const hevcLevel = isHtml5 ? '183' : caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
 
     // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
     // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
@@ -754,17 +768,24 @@ export function buildJellyfinProfile(options = {}) {
     // ====================================================================
 
     const profile = {
-        Name: `Litefin Tizen ${caps.tizenVersion}` + (playbackMode !== 'auto' ? ` (${playbackMode})` : ''),
+        Name:
+            (isHtml5 ? 'Litefin Web (HTML5)' : `Litefin Tizen ${caps.tizenVersion}`) +
+            (playbackMode !== 'auto' ? ` (${playbackMode})` : ''),
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,
-        MusicStreamingTranscodingBitrate: 384000,
+        MusicStreamingTranscodingBitrate: isHtml5 ? 192000 : 384000,
 
         DirectPlayProfiles: directPlayProfiles,
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
-        SubtitleProfiles: subtitleProfiles,
-        ResponseProfiles: responseProfiles
+        SubtitleProfiles: isHtml5
+            ? [
+                  { Format: 'vtt', Method: 'External' },
+                  { Format: 'vtt', Method: 'Hls' }
+              ]
+            : subtitleProfiles,
+        ResponseProfiles: isHtml5 ? [] : responseProfiles
     };
 
     log.info('Built Jellyfin profile:', profile.Name);
