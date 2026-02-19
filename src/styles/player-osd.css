@@ -349,10 +349,15 @@
 }
 
 .osd-slider-container {
-    flex: 1;
-    margin: 0 1.2em;
-    /* 1em * 1.2 */
     position: relative;
+    height: 36px;
+    /* Removed display:flex to ensure absolute children strictly follow top:0 */
+}
+
+/* Specific spacing for main OSD seekbar */
+.osd-slider-row .osd-slider-container {
+    flex: 1;
+    margin: 0 1.25em;
 }
 
 /* Seek Tooltip - Shows target time above seekbar during seeking */
@@ -385,111 +390,78 @@
     visibility: visible;
 }
 
-/* Seekbar */
-.osd-slider {
-    width: 100%;
-    height: 7.2px;
-    /* 6px * 1.2 */
-    -webkit-appearance: none;
-    appearance: none;
-    background: var(--osd-slider-bg, rgba(255, 255, 255, 0.3));
-    border-radius: 3.6px;
-    /* 3px * 1.2 */
-    outline: none;
-    cursor: pointer;
-}
-
-/* Thumb - rounded rectangle, same height as track when unfocused */
-.osd-slider::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 7.2px;
-    /* 6px * 1.2 */
-    height: 7.2px;
-    background: var(--jf-text-primary, #fff);
-    border-radius: 2.4px;
-    /* 2px * 1.2 */
-    cursor: pointer;
-    transition: height 0.15s, width 0.15s, margin-top 0.15s;
-}
-
-.osd-slider::-moz-range-thumb {
-    width: 7.2px;
-    /* 6px * 1.2 */
-    height: 7.2px;
-    background: var(--jf-text-primary, #fff);
-    border: none;
-    border-radius: 2.4px;
-    /* 2px * 1.2 */
-    cursor: pointer;
-}
-
-/* Progress track (before thumb) - Accent Color */
-.osd-slider::-webkit-slider-runnable-track {
-    background: linear-gradient(to right,
-            var(--osd-accent-color) 0%,
-            var(--osd-accent-color) var(--progress, 0%),
-            var(--osd-slider-bg, rgba(255, 255, 255, 0.3)) var(--progress, 0%),
-            var(--osd-slider-bg, rgba(255, 255, 255, 0.3)) 100%);
-    height: 7.2px;
-    /* 6px * 1.2 */
-    border-radius: 3.6px;
-    /* 3px * 1.2 */
-    /* Use a negative margin to help with alignment if needed, 
-       but the current height match is usually fine.
-       The "uncolored" part is often due to the thumb overlaying the track. */
-}
-
-/* Main OSD Position Seekbar */
-/* Main OSD Position Seekbar */
-.osd-slider {
-    width: 100%;
-    height: 36px; /* Larger hit area and container for thumb */
-    -webkit-appearance: none;
-    appearance: none;
-    background: transparent; /* Move gradient to track */
-    outline: none;
-    cursor: pointer;
-    margin: 0;
-}
-
-/* Subtitle Offset Seekbar - Center Weighted Fill */
+/* Standardize Interaction Layer - Thin and self-centering */
+.osd-slider, 
 .osd-offset-slider {
-    width: 100%;
-    height: 36px;
+    position: absolute;
+    top: 50% !important;
+    left: 0 !important;
+    transform: translateY(-50%) !important;
+    width: 100% !important;
+    height: 8px !important; /* Matches visual track height */
     -webkit-appearance: none;
     appearance: none;
-    background: transparent;
+    background: transparent !important;
     outline: none;
     cursor: pointer;
-    margin: 0;
+    margin: 0 !important;
+    z-index: 10;
 }
 
-/* Track styling - Centered vertically in the 36px input */
-.osd-slider::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 7.2px;
-    border-radius: 3.6px;
-    /* (36 - 7.2) / 2 = 14.4px */
-    margin: 14.4px 0;
-    /* Resolution of thumb width (7.2px) alignment:
-       Formula: (percent * (width - thumbWidth)) + (thumbWidth / 2) */
-    background: linear-gradient(to right,
-            var(--osd-accent-color) 0%,
-            var(--osd-accent-color) calc((var(--progress, 0) / 100) * (100% - 7.2px) + 3.6px),
-            var(--osd-slider-bg, rgba(255, 255, 255, 0.3)) calc((var(--progress, 0) / 100) * (100% - 7.2px) + 3.6px),
-            var(--osd-slider-bg, rgba(255, 255, 255, 0.3)) 100%);
+/* Reset runnable track to match input height */
+.osd-slider::-webkit-slider-runnable-track,
+.osd-offset-slider::-webkit-slider-runnable-track {
+    background: transparent !important;
+    border: none !important;
+    height: 8px !important; 
+    margin: 0 !important;
 }
+
+/* Remove legacy/duplicated definitions */
+
+/* Main OSD Position Seekbar */
+/* Remove legacy/duplicated definitions */
+
+/* Standardize Slider Track (Visual) - Centered in 36px container */
+.osd-slider-track {
+    position: absolute;
+    left: 0;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    width: 100%;
+    height: 8px !important;
+    background: var(--osd-slider-bg, rgba(255, 255, 255, 0.3));
+    border-radius: 4px;
+    pointer-events: none;
+    z-index: 1;
+    overflow: hidden; /* Mask the fill's corners at 0/100% */
+}
+
+.osd-slider-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    height: 100%;
+    background: var(--osd-accent-color);
+    width: 0%;
+    /* border-radius removed to ensure it touches the thumb seamlessly */
+    pointer-events: none;
+    transition: width 0.1s ease-out;
+}
+
+/* Standardize track margins to ensure thumb is centered in 36px */
+/* Chapter Markers */
 
 /* Chapter Markers */
 .osd-chapter-markers {
     position: absolute;
-    top: 11.5px; /* Center on the 36px slider container height, same as track */
-    left: 1px; /* Offset to start where the track actually starts (half of thumb width) */
+    top: 50%;
+    transform: translateY(-50%);
+    left: 2px; /* Offset to start where the track actually starts (half of thumb width) */
     right: 3.6px;
     height: 13px;
     pointer-events: none;
-    z-index: 1; /* Above track, below thumb */
+    z-index: 2; /* Above track */
 }
 
 .osd-chapter-marker {
@@ -501,78 +473,68 @@
     pointer-events: none;
 }
 
-.osd-offset-slider::-webkit-slider-runnable-track {
-    width: 100%;
-    height: 7.2px;
-    border-radius: 3.6px;
-    /* (36 - 7.2) / 2 = 14.4px */
-    margin: 14.4px 0;
-    background: linear-gradient(to right,
-        rgba(255, 255, 255, 0.25) 0%,
-        rgba(255, 255, 255, 0.25) var(--offset-start, 50%),
-        var(--osd-accent-color) var(--offset-start, 50%),
-        var(--osd-accent-color) var(--offset-end, 50%),
-        rgba(255, 255, 255, 0.25) var(--offset-end, 50%),
-        rgba(255, 255, 255, 0.25) 100%);
-}
-
-/* Universal thumb styles for both slider types */
+/* UNIVERSAL THUMB STYLES - Thin Input Model */
 .osd-slider::-webkit-slider-thumb,
-.osd-offset-slider::-webkit-slider-thumb {
+.osd-offset-slider::-webkit-slider-thumb,
+.menu-slider .osd-slider::-webkit-slider-thumb {
     -webkit-appearance: none;
     appearance: none;
-    width: 7.2px;
-    height: 7.2px;
     background: var(--jf-text-primary, #fff);
-    border-radius: 2.4px;
     cursor: pointer;
-    /* Center on 7.2px track: (7.2 / 2) - (7.2 / 2) = 0 */
-    margin-top: 0;
-    transition: height 0.15s, width 0.15s, margin-top 0.15s;
+    margin-top: 0 !important; /* Center on thin track when heights match */
+    transition: height 0.1s, width 0.1s, margin-top 0.1s;
+    border: none !important;
 }
 
-.osd-slider::-moz-range-thumb,
-.osd-offset-slider::-moz-range-thumb {
-    width: 7.2px;
-    height: 7.2px;
-    background: var(--jf-text-primary, #fff);
-    border: none;
-    border-radius: 2.4px;
-    cursor: pointer;
+/* Player/Offset Thumbs (8px Track) */
+.osd-slider::-webkit-slider-thumb,
+.osd-offset-slider::-webkit-slider-thumb {
+    width: 8px !important;
+    height: 8px !important;
+    border-radius: 3px !important;
 }
 
+/* Settings Thumbs (6px Track) */
+.menu-slider .osd-slider::-webkit-slider-thumb {
+    width: 6px !important;
+    height: 6px !important;
+    border-radius: 3px !important;
+}
+
+/* FOCUSED STATES - Expand symmetrically using negative margins */
+
+/* Player/Offset Focus (28px Thumb on 8px Track) */
+/* Formula: (TrackHeight - ThumbHeight) / 2 = (8 - 28) / 2 = -10px */
 .osd-slider.focused::-webkit-slider-thumb,
 .osd-slider:focus::-webkit-slider-thumb,
 .osd-offset-slider.focused::-webkit-slider-thumb,
 .osd-offset-slider:focus::-webkit-slider-thumb {
-    width: 9.6px;
-    height: 28.8px;
-    border-radius: 4.8px;
-    /* Center on 7.2px track: (7.2 / 2) - (28.8 / 2) = 3.6 - 14.4 = -10.8px */
-    margin-top: -10.8px;
+    width: 10px !important;
+    height: 28px !important;
+    border-radius: 5px !important;
+    margin-top: -10px !important;
+    background: #fff !important;
 }
+
+/* Settings Focus (24px Thumb on 6px Track) */
+/* Formula: (TrackHeight - ThumbHeight) / 2 = (6 - 24) / 2 = -9px */
+.track-option.focused .menu-slider .osd-slider::-webkit-slider-thumb {
+    width: 10px !important;
+    height: 24px !important;
+    border-radius: 5px !important;
+    margin-top: -9px !important;
+    background: #fff !important;
+}
+
 
 .osd-slider.focused::-moz-range-thumb,
 .osd-slider:focus::-moz-range-thumb,
 .osd-offset-slider.focused::-moz-range-thumb,
 .osd-offset-slider:focus::-moz-range-thumb {
-    width: 9.6px;
-    height: 28.8px;
-    border-radius: 4.8px;
-}
-
-
-
-.osd-slider.focused::-moz-range-thumb,
-.osd-slider:focus::-moz-range-thumb,
-.osd-offset-slider.focused::-moz-range-thumb,
-.osd-offset-slider:focus::-moz-range-thumb {
-    width: 9.6px;
-    /* 8px * 1.2 */
-    height: 28.8px;
-    /* 24px * 1.2 */
-    border-radius: 4.8px;
-    /* 4px * 1.2 */
+    width: 10px;
+    height: 28px;
+    border-radius: 5px;
+    border: none;
 }
 
 /* ============================================================================
@@ -778,6 +740,7 @@
     font-weight: bold;
     min-width: 2.0em;
     text-align: right; /* Value after slider looks better left-aligned */
+    margin-left: 20px;
 }
 
 /* Slider integration within the menu item */
@@ -788,51 +751,53 @@
 }
 
 .osd-slider-container.menu-slider {
-    flex: 1 !important; /* GROW to fill the space! */
+    flex: 1 !important;
     height: 30px;
+    position: relative;
+    margin: 0; /* Menus handle their own spacing */
+}
+
+/* Ensure slider track is visible on the dark menu background */
+.osd-slider-container.menu-slider .osd-slider-track {
+    background: rgba(255, 255, 255, 0.2);
+    height: 6px !important;
+    border-radius: 3px;
+    top: 50% !important;
+    transform: translateY(-50%) !important;
+    overflow: hidden;
+    margin-top: 0 !important;
+}
+
+.osd-slider-container.menu-slider .osd-slider-fill {
+    background: var(--osd-accent-color);
+    /* border-radius removed */
+}
+
+/* When the item is focused, the fill becomes white */
+.track-option.focused .menu-slider .osd-slider-fill {
+    background: #fff;
+}
+
+/* When the item is focused, the track becomes brighter */
+.track-option.focused .menu-slider .osd-slider-track {
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .menu-slider .osd-slider {
+    position: absolute;
+    top: 50% !important;
+    left: 0;
+    transform: translateY(-50%) !important;
     width: 100% !important;
+    height: 6px !important; /* Matches settings track height */
 }
 
-
-/* Ensure slider track is visible on the dark menu background */
 .menu-slider .osd-slider::-webkit-slider-runnable-track {
-    background: linear-gradient(to right,
-            var(--osd-accent-color) 0%,
-            var(--osd-accent-color) var(--progress, 0%),
-            rgba(255, 255, 255, 0.2) var(--progress, 0%),
-            rgba(255, 255, 255, 0.2) 100%) !important;
+    background: transparent !important;
     height: 6px !important;
-    border-radius: 3px !important;
+    border: none !important;
+    margin: 0 !important;
 }
-
-/* When the item is focused, we keep the track but maybe brighten the background part */
-.track-option.focused .menu-slider .osd-slider::-webkit-slider-runnable-track {
-    background: linear-gradient(to right,
-            #fff 0%,
-            #fff var(--progress, 0%),
-            rgba(255, 255, 255, 0.4) var(--progress, 0%),
-            rgba(255, 255, 255, 0.4) 100%) !important;
-}
-
-/* Enlarge thumb when the parent option is focused */
-.track-option.focused .menu-slider .osd-slider::-webkit-slider-thumb {
-    width: 9.6px;
-    height: 28.8px;
-    border-radius: 4.8px;
-    /* Center on 6px track inside 30px container: (30 / 2) - (28.8 / 2) = 15 - 14.4 = 0.6px margin check */
-    /* Standard OSD uses -10.8px for 36px/7.2px. For 30/6, we'll use -11.4px approx */
-    margin-top: -11.4px;
-}
-
-.track-option.focused .menu-slider .osd-slider::-moz-range-thumb {
-    width: 9.6px;
-    height: 28.8px;
-    border-radius: 4.8px;
-}
-
 
 /* ============================================================================
    Playback Info Overlay
@@ -944,24 +909,21 @@
     left: 50%;
     -webkit-transform: translateX(-50%);
     transform: translateX(-50%);
-    width: 380px;
-    background: rgba(0, 0, 0, 0.65);
-    border-radius: 12px;
-    padding: 12px 16px;
+    width: 700px; /* Wider for horizontal row */
+    background: rgba(0, 0, 0, 0.75);
+    border-radius: 16px;
+    padding: 14px 24px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
     display: flex;
-    -webkit-flex-direction: column;
-    flex-direction: column;
+    flex-direction: row; /* Horizontal row */
+    align-items: center;
+    gap: 20px;
     z-index: 2000;
     opacity: 0;
     pointer-events: none;
-    -webkit-transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-    transition: opacity 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-}
-
-#osdOffsetOverlay > * + * {
-    margin-top: 8px;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
 }
 
 /* Visible state — toggled by JS */
@@ -970,27 +932,15 @@
     pointer-events: all;
 }
 
-/* Header row: title group + close button */
-.osd-offset-header {
-    display: -webkit-flex;
-    display: flex;
-    -webkit-justify-content: space-between;
-    justify-content: space-between;
-    -webkit-align-items: center;
-    align-items: center;
-    width: 100%;
-}
-
-/* Title + value group */
-.osd-offset-title-group {
-    display: -webkit-flex;
-    display: flex;
-    -webkit-align-items: baseline;
-    align-items: baseline;
-}
-
-.osd-offset-title-group > * + * {
-    margin-left: 8px;
+/* "SUBTITLE OFFSET" label */
+.osd-offset-title {
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(255, 255, 255, 0.5);
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    flex: 0 0 auto;
+    white-space: nowrap;
 }
 
 /* "SUBTITLE OFFSET" label */
@@ -1004,11 +954,13 @@
 
 /* Offset value display, e.g. "+1.2s" */
 .osd-offset-value {
-    font-size: 20px;
-    font-weight: 700; /* Bolder */
-    color: #fff; /* White base */
-    padding: 2px 10px;
+    font-size: 22px;
+    font-weight: 700;
+    color: #fff;
+    min-width: 70px;
+    text-align: right;
     font-variant-numeric: tabular-nums;
+    flex: 0 0 auto;
 }
 
 /* Close button */
@@ -1038,7 +990,4 @@
     outline: none !important;
 }
 
-/* Slider container row - override height for offset menu */
-.osd-offset-slider-container {
-    height: 40px;
-}
+/* Removed redundant/conflicting container height */

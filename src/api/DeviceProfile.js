@@ -352,7 +352,7 @@ export function buildJellyfinProfile(options = {}) {
     // DirectPlay Profiles
     // ====================================================================
 
-    let directPlayProfiles = [];
+    const directPlayProfiles = [];
 
     // Only add DirectPlay profiles if NOT in explicit Transcode or Remux mode
     // Actually, Remux (Direct Stream) requires DirectPlay profiles to be empty primarily,

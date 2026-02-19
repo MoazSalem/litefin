@@ -40,19 +40,19 @@ export default class SubtitleOffset extends BaseMenu {
 
     render() {
         const html = `
-            <div id="osdOffsetOverlay">
-                <div class="osd-offset-header">
-                    <div class="osd-offset-title-group">
-                        <span class="osd-offset-title">SUBTITLE OFFSET</span>
-                        <span class="osd-offset-value" id="osdOffsetValue">0s</span>
+            <div id="osdOffsetOverlay" class="osd-offset-popup-row">
+                <span class="osd-offset-title">OFFSET</span>
+                <div class="osd-slider-container menu-slider">
+                    <div class="osd-slider-track">
+                        <div class="osd-slider-fill" id="osdOffsetFill"></div>
                     </div>
-                    <button class="osd-offset-close" data-action="closeSubtitleOffset" tabindex="0">
-                         ${ICONS.close}
-                    </button>
+                    <input type="range" class="osd-offset-slider focusable" id="osdOffsetSlider" 
+                           min="-30" max="30" step="0.1" value="0" tabindex="0">
                 </div>
-                <div class="osd-slider-container">
-                    <input type="range" class="osd-offset-slider" id="osdOffsetSlider" min="-30" max="30" step="0.1" value="0" tabindex="0">
-                </div>
+                <span class="osd-offset-value" id="osdOffsetValue">0.0s</span>
+                <button class="osd-offset-close focusable" data-action="closeSubtitleOffset" tabindex="0">
+                     ${ICONS.close}
+                </button>
             </div>
         `;
         
@@ -113,9 +113,11 @@ export default class SubtitleOffset extends BaseMenu {
             const start = Math.min(50, percent);
             const end = Math.max(50, percent);
             
-            slider.style.setProperty('--offset-start', `${start}%`);
-            slider.style.setProperty('--offset-end', `${end}%`);
-            slider.style.setProperty('--progress', percent); // Still keep for thumb center matching
+            const fill = this.$el.querySelector('#osdOffsetFill');
+            if (fill) {
+                fill.style.left = start + '%';
+                fill.style.width = (end - start) + '%';
+            }
         }
     }
 

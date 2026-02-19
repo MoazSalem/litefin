@@ -1322,12 +1322,14 @@ class SettingsPage extends Page {
     }
 
     _renderSlider(id, value, min, max, step, unit = '%') {
-        // Calculate percentage for background gradient
         const percent = ((value - min) / (max - min)) * 100;
 
         return `
             <div class="slider-wrapper">
-                <div class="slider-track" style="--progress: ${percent}%">
+                <div class="slider-container">
+                    <div class="slider-track">
+                        <div class="slider-fill" style="width: ${percent}%"></div>
+                    </div>
                     <input type="range" 
                         id="${id}" 
                         class="setting-slider focusable" 
@@ -1337,7 +1339,6 @@ class SettingsPage extends Page {
                         value="${value}"
                         data-unit="${unit}"
                         tabindex="0">
-                    <div class="slider-fill" style="width: ${percent}%"></div>
                 </div>
                 <span class="slider-value" id="${id}-value">${value}${unit}</span>
             </div>
@@ -1374,13 +1375,12 @@ class SettingsPage extends Page {
 
                 // Update slider fill visual
                 const percent = ((value - slider.min) / (slider.max - slider.min)) * 100;
-                const track = slider.closest('.slider-track');
-                if (track) {
-                    track.style.setProperty('--progress', `${percent}%`);
-                    const fill = track.querySelector('.slider-fill');
-                    if (fill) {
-                        fill.style.width = `${percent}%`;
-                    }
+                const container = slider.closest('.slider-container');
+                if (container) {
+                    const track = container.querySelector('.slider-track');
+                    const fill = container.querySelector('.slider-fill');
+                    if (track) track.style.setProperty('--progress', `${percent}%`);
+                    if (fill) fill.style.width = `${percent}%`;
                 }
 
                 // Save setting
@@ -1394,13 +1394,12 @@ class SettingsPage extends Page {
             // We manually trigger the 'input' event logic (without saving) to ensure visuals are set.
             const value = slider.value;
             const percent = ((value - slider.min) / (slider.max - slider.min)) * 100;
-            const track = slider.closest('.slider-track');
-            if (track) {
-                track.style.setProperty('--progress', `${percent}%`);
-                const fill = track.querySelector('.slider-fill');
-                if (fill) {
-                    fill.style.width = `${percent}%`;
-                }
+            const container = slider.closest('.slider-container');
+            if (container) {
+                const track = container.querySelector('.slider-track');
+                const fill = container.querySelector('.slider-fill');
+                if (track) track.style.setProperty('--progress', `${percent}%`);
+                if (fill) fill.style.width = `${percent}%`;
             }
         });
     }

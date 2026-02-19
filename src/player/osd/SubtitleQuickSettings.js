@@ -59,6 +59,8 @@ export default class SubtitleQuickSettings extends BaseMenu {
             </div>
         `;
 
+        this._updateSliderFills();
+
         this._bindEvents();
         this.updateFocus();
     }
@@ -323,7 +325,10 @@ export default class SubtitleQuickSettings extends BaseMenu {
             controlHtml = `
                 <div class="sub-setting-slider-group">
                     <div class="osd-slider-container menu-slider">
-                        <input type="range" class="osd-slider" min="${item.min}" max="${item.max}" step="${item.step}" value="${value}" disabled style="--progress: ${percent}%">
+                        <div class="osd-slider-track">
+                            <div class="osd-slider-fill" data-percent="${percent}"></div>
+                        </div>
+                        <input type="range" class="osd-slider" min="${item.min}" max="${item.max}" step="${item.step}" value="${value}">
                     </div>
                     <span class="sub-setting-value">${sign}${value}${item.unit || ''}</span>
                 </div>
@@ -431,6 +436,21 @@ export default class SubtitleQuickSettings extends BaseMenu {
             if ( isFocused ) {
                 opt.focus();
                 opt.scrollIntoView( { block: 'nearest', behavior: 'smooth' } );
+            }
+        } );
+    }
+
+    /**
+     * Update all slider fill widths based on their data-percent attributes.
+     * This is the CSP-Safe way to handle progress bar fills on Tizen.
+     */
+    _updateSliderFills() {
+        if ( !this.$el ) return;
+        const fills = this.$el.querySelectorAll( '.osd-slider-fill' );
+        fills.forEach( ( fill ) => {
+            const percent = fill.getAttribute( 'data-percent' );
+            if ( percent !== null ) {
+                fill.style.width = percent + '%';
             }
         } );
     }

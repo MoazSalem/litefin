@@ -208,6 +208,9 @@ export default class OSDController extends Component {
                         <div class="osd-slider-container">
                             <div class="osd-seek-tooltip" id="osdSeekTooltip"></div>
                             <div class="osd-chapter-markers" id="osdChapterMarkers"></div>
+                            <div class="osd-slider-track">
+                                <div class="osd-slider-fill" id="osdPositionFill"></div>
+                            </div>
                             <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="0">
                         </div>
                         <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
@@ -1096,15 +1099,17 @@ export default class OSDController extends Component {
     }
 
     _updatePositionSlider(player) {
-         const slider = this._osdEl.querySelector('#osdPositionSlider');
-         if (!slider) return;
-         
-         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
-         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
-         
-         const percent = duration > 0 ? (current / duration) * 100 : 0;
-         slider.value = percent;
-         slider.style.setProperty('--progress', percent);
+        const slider = this._osdEl.querySelector('#osdPositionSlider');
+        if (!slider) return;
+
+        const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
+        const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
+
+        const percent = duration > 0 ? (current / duration) * 100 : 0;
+        slider.value = percent;
+
+        const fill = this._osdEl.querySelector('#osdPositionFill');
+        if (fill) fill.style.width = percent + '%';
     }
     
     _updateClock() {
@@ -1124,13 +1129,12 @@ export default class OSDController extends Component {
         if (hours > 0) return `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
         return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
     }
-
     _handlePositionSliderInput(e) {
         this._isDraggingSeekbar = true;
         this.resetAutoHide();
-        
         const percentRaw = e.target.value;
-        e.target.style.setProperty('--progress', percentRaw);
+        const fill = this._osdEl.querySelector('#osdPositionFill');
+        if (fill) fill.style.width = percentRaw + '%';
 
         const duration = this._player.getDurationTicks();
         const percent = percentRaw / 100;
