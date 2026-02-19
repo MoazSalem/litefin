@@ -112,3 +112,32 @@
     font-family: inherit !important;
 }
 
+/* 
+   Dynamic spacing overrides for ASS tracks.
+   - Vertical Spacing: Pixel-based margin offset between lines/characters.
+   - Horizontal Spacing: Pixel-based character offset.
+   - Vertical Position: Pixel-based bottom offset for alignment.
+*/
+
+.libjass-wrapper.override-bottom-offset .libjass-subs .an1,
+.libjass-wrapper.override-bottom-offset .libjass-subs .an2,
+.libjass-wrapper.override-bottom-offset .libjass-subs .an3 {
+    bottom: var(--ass-bottom-offset, 0px) !important;
+}
+
+/* 
+   User Discovery: 
+   Applying margin-bottom to the direct span child of the dialogue 
+   is the most reliable way to collapse gaps without layout shifts.
+*/
+.libjass-subs div[data-dialogue-id] > span {
+    display: inline-block !important;
+    margin-bottom: var(--ass-vertical-spacing, 0px) !important;
+    line-height: normal !important;
+    vertical-align: top !important;
+}
+
+.libjass-wrapper.override-letter-spacing span {
+    /* Horizontal character alignment (Letter Spacing) */
+    letter-spacing: var(--ass-letter-spacing) !important;
+}

@@ -368,8 +368,11 @@ export default class SubtitleManager {
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
             const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
             const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            const lineHeight = PlayerSettings.get('subtitleLineHeight');
+            const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
+            const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
             if (fontClass && fontFamily) {
-                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness);
+                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
             }
         }
     }
@@ -536,8 +539,11 @@ export default class SubtitleManager {
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
             const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
             const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            const lineHeight = PlayerSettings.get('subtitleLineHeight');
+            const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
+            const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
             if (fontClass && fontFamily) {
-                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness);
+                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
             }
 
             this._assRenderer.show();

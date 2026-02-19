@@ -116,7 +116,13 @@ export default class ASSRenderer {
 
             // Parse the raw ASS content into a structured ASS object
             log.info('Pre-processing ASS content for style enforcement...');
-            const processedContent = this._preProcessAssContent(content, this._fontFamily);
+            const processedContent = this._preProcessAssContent(
+                content, 
+                this._fontFamily, 
+                this._fontScale || 1.0, 
+                this._outlineThickness || 0.4, 
+                this._shadowThickness || 0.3
+            );
             
             this._ass = await libjass.ASS.fromString(processedContent);
             log.info(`ASS parsed: ${this._ass.dialogues.length} dialogue lines, ` +
@@ -153,18 +159,60 @@ export default class ASSRenderer {
      * @param {string} className - CSS class name (e.g. 'font-poppins')
      * @param {string} fontFamily - Raw font family name (e.g. 'Poppins')
      */
-    async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3) {
-        log.info(`ASSRenderer.setFontStyles: class="${className}", family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
+    /**
+     * Internal helper to apply all current font class, etc.
+     * to the wrapper element.
+     * @private
+     */
+    _updateWrapperStyles() {
+        if (!this._wrapper) return;
+
+        // Base class
+        const classNames = ['libjass-wrapper'];
+        if (this._fontClass) classNames.push(this._fontClass);
+
+        // Spacing overrides
+        const hasLineHeight = this._lineHeight !== undefined && this._lineHeight !== 0;
+        const hasLetterSpacing = this._letterSpacing !== undefined && this._letterSpacing !== 0;
+        const hasBottomOffset = this._bottomOffset !== undefined && this._bottomOffset !== 0;
+
+        if (hasLineHeight) {
+            this._wrapper.style.setProperty('--ass-vertical-spacing', this._lineHeight + 'px');
+            classNames.push('override-line-height');
+        } else {
+            this._wrapper.style.removeProperty('--ass-vertical-spacing');
+        }
+
+        if (hasBottomOffset) {
+            this._wrapper.style.setProperty('--ass-bottom-offset', this._bottomOffset + 'px');
+            classNames.push('override-bottom-offset');
+        } else {
+            this._wrapper.style.removeProperty('--ass-bottom-offset');
+        }
+
+        if (hasLetterSpacing) {
+            this._wrapper.style.setProperty('--ass-letter-spacing', this._letterSpacing + 'px');
+            classNames.push('override-letter-spacing');
+        } else {
+            this._wrapper.style.removeProperty('--ass-letter-spacing');
+        }
+
+        this._wrapper.className = classNames.join(' ');
+        log.debug(`Wrapper updated: className="${this._wrapper.className}", lineH=${this._lineHeight}, bottom=${this._bottomOffset}, letterS=${this._letterSpacing}`);
+    }
+
+    async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
+        log.info(`ASSRenderer.setFontStyles: class="${className}", family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}, lineH=${lineHeight}, letterS=${letterSpacing}, bottom=${bottomOffset}`);
         this._fontClass = className;
         this._fontFamily = fontFamily;
         this._fontScale = fontScale;
         this._outlineThickness = outlineThickness;
         this._shadowThickness = shadowThickness;
+        this._lineHeight = lineHeight;
+        this._letterSpacing = letterSpacing;
+        this._bottomOffset = bottomOffset;
 
-        if (this._wrapper) {
-            this._wrapper.className = 'libjass-wrapper ' + (className || '');
-            log.debug(`Wrapper className set to: ${this._wrapper.className}`);
-        }
+        this._updateWrapperStyles();
 
         if (this._rawContent && fontFamily) {
             log.info(`Re-parsing ASS with new font choice: ${fontFamily} (Scale: ${fontScale}, Out: ${outlineThickness}, Shad: ${shadowThickness})`);
@@ -372,10 +420,8 @@ export default class ASSRenderer {
         // Append to the player container (overlays the video)
         this._container.appendChild(this._wrapper);
 
-        // Re-apply class if it was set
-        if (this._fontClass) {
-            this._wrapper.className = 'libjass-wrapper ' + this._fontClass;
-        }
+        // Re-apply all current settings to the wrapper
+        this._updateWrapperStyles();
 
         // Create the clock based on what mode we're in
         // Create the clock - We now UNIFY on ManualClock for both HTML5 and AVPlay.

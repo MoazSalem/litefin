@@ -558,30 +558,6 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name">ASS Format Font Family</span>
-                        <span class="setting-description">Specific font for ASS/SSA subtitles</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'subtitle-font-ass-select',
-                            [
-                                { value: '', label: 'Default - Tizen Sans' },
-                                { value: 'poppins', label: 'Modern - Poppins' },
-                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
-                                { value: 'print', label: 'Print - Merriweather' },
-                                { value: 'console', label: 'Console - Inconsolata' },
-                                { value: 'cursive', label: 'Cursive - Dancing Script' },
-                                { value: 'casual', label: 'Casual - Patrick Hand' },
-                                { value: 'smallcaps', label: 'Small Caps - Variant' }
-                            ],
-                            PlayerSettings.get('subtitleFontAss')
-                        )}
-                    </div>
-                </div>
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -794,18 +770,134 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                    </div>
+                </div>
+
+                <!-- Advanced ASS Settings -->
+                <h3 class="setting-section-title">ASS Apperance Settings</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Shadow Blur</span>
-                        <span class="setting-description">Softness of the shadow</span>
+                        <span class="setting-name">Font Family (ASS)</span>
+                        <span class="setting-description">Force overrides font for ASS/SSA subs</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-font-ass-select',
+                            [
+                                { value: '', label: 'Default - Tizen Sans' },
+                                { value: 'poppins', label: 'Modern - Poppins' },
+                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
+                                { value: 'print', label: 'Print - Merriweather' },
+                                { value: 'console', label: 'Console - Inconsolata' },
+                                { value: 'cursive', label: 'Cursive - Dancing Script' },
+                                { value: 'casual', label: 'Casual - Patrick Hand' },
+                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                            ],
+                            PlayerSettings.get('subtitleFontAss')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Font Scale (ASS)</span>
+                        <span class="setting-description">Vertical/Horizontal scaling booster</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
-                            'subtitle-shadow-blur',
-                            PlayerSettings.get('subtitleDropShadowBlur') ?? 4,
+                            'subtitle-font-scale',
+                            PlayerSettings.get('subtitleFontScale') ?? 1,
+                            0.5,
+                            3,
+                            0.1,
+                            'x'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Vertical Position (ASS)</span>
+                        <span class="setting-description">Main track bottom offset</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-bottom-offset',
+                            PlayerSettings.get('subtitleBottomOffset') ?? 0,
+                            -100,
+                            750,
+                            5,
+                            'px'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Outline Thickness (ASS)</span>
+                        <span class="setting-description">Text border stroke width</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-outline-thickness',
+                            PlayerSettings.get('subtitleOutlineThickness') ?? 0.4,
                             0,
-                            20,
-                            1
+                            5,
+                            0.1,
+                            ''
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Shadow Thickness (ASS)</span>
+                        <span class="setting-description">Text shadow depth</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-shadow-thickness',
+                            PlayerSettings.get('subtitleShadowThickness') ?? 0.3,
+                            0,
+                            5,
+                            0.1,
+                            ''
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Vertical Spacing (ASS)</span>
+                        <span class="setting-description">Adjust gap between lines</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-line-height',
+                            PlayerSettings.get('subtitleLineHeight') ?? 0,
+                            -50,
+                            50,
+                            1,
+                            'px'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Horizontal Spacing (ASS)</span>
+                        <span class="setting-description">Adjust gap between characters</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-letter-spacing',
+                            PlayerSettings.get('subtitleLetterSpacing') ?? 0,
+                            -20,
+                            40,
+                            0.5,
+                            'px'
                         )}
                     </div>
                 </div>
@@ -1195,7 +1287,7 @@ class SettingsPage extends Page {
         }
     }
 
-    _renderSlider(id, value, min, max, step) {
+    _renderSlider(id, value, min, max, step, unit = '%') {
         // Calculate percentage for background gradient
         const percent = ((value - min) / (max - min)) * 100;
 
@@ -1209,10 +1301,11 @@ class SettingsPage extends Page {
                         max="${max}" 
                         step="${step}" 
                         value="${value}"
+                        data-unit="${unit}"
                         tabindex="0">
                     <div class="slider-fill" style="width: ${percent}%"></div>
                 </div>
-                <span class="slider-value" id="${id}-value">${value}%</span>
+                <span class="slider-value" id="${id}-value">${value}${unit}</span>
             </div>
         `;
     }
@@ -1223,7 +1316,13 @@ class SettingsPage extends Page {
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',
-            'subtitle-custom-pos': 'subtitleVerticalPositionCustom'
+            'subtitle-custom-pos': 'subtitleVerticalPositionCustom',
+            'subtitle-font-scale': 'subtitleFontScale',
+            'subtitle-outline-thickness': 'subtitleOutlineThickness',
+            'subtitle-shadow-thickness': 'subtitleShadowThickness',
+            'subtitle-line-height': 'subtitleLineHeight',
+            'subtitle-letter-spacing': 'subtitleLetterSpacing',
+            'subtitle-bottom-offset': 'subtitleBottomOffset'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -1231,11 +1330,12 @@ class SettingsPage extends Page {
                 const id = slider.id;
                 const value = e.target.value;
                 const key = sliderMap[id];
+                const unit = slider.dataset.unit || '%';
 
                 // Update value display
                 const valueDisplay = this.$(`#${id}-value`);
                 if (valueDisplay) {
-                    valueDisplay.textContent = `${value}%`;
+                    valueDisplay.textContent = `${value}${unit}`;
                 }
 
                 // Update slider fill visual
@@ -1414,6 +1514,12 @@ class SettingsPage extends Page {
             'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
+            'subtitle-font-scale': { key: 'subtitleFontScale', type: 'player' },
+            'subtitle-outline-thickness': { key: 'subtitleOutlineThickness', type: 'player' },
+            'subtitle-shadow-thickness': { key: 'subtitleShadowThickness', type: 'player' },
+            'subtitle-line-height': { key: 'subtitleLineHeight', type: 'player' },
+            'subtitle-letter-spacing': { key: 'subtitleLetterSpacing', type: 'player' },
+            'subtitle-bottom-offset': { key: 'subtitleBottomOffset', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' }
