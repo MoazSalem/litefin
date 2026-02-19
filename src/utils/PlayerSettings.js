@@ -101,6 +101,9 @@ const DEFAULTS = {
     // Vertical position offset for ASS (baseline is 0px)
     subtitleBottomOffset: 0,
 
+    // Force text-only rendering for ASS/SSA (disables libjass)
+    disableAssStyling: false,
+
     // Subtitle text color
     subtitleTextColor: '#ffffff',
 

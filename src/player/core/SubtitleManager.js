@@ -464,8 +464,19 @@ export default class SubtitleManager {
 
         // Priority 2: ASS/SSA → ASS_CANVAS
         if (codec === 'ass' || codec === 'ssa') {
-            log.debug(`Track "${track.DisplayTitle}" is ASS/SSA → ASS_CANVAS`);
-            return DeliveryMethod.ASS_CANVAS;
+            // CHECK: Force Text Mode
+            // If the user wants to disable ASS styling, we treat it as text.
+            // This will cause us to fall through to Priority 3 (EXTERNAL_TEXT),
+            // which fetches VTT from the server (server-side transcoding).
+            const forceText = PlayerSettings.get('disableAssStyling');
+            
+            if (!forceText) {
+                log.debug(`Track "${track.DisplayTitle}" is ASS/SSA → ASS_CANVAS`);
+                return DeliveryMethod.ASS_CANVAS;
+            } else {
+                log.info(`Track "${track.DisplayTitle}" is ASS/SSA but Force Text is ON → falling back to EXTERNAL_TEXT`);
+                return DeliveryMethod.EXTERNAL_TEXT;
+            }
         }
 
         // Priority 3: Text-based format → fetch from server and render on DOM

@@ -532,6 +532,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">Disable ASS/SSA Rendering</span>
+                        <span class="setting-description">Disable ASS/SSA styling (converts to text)</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('disableAssStyling') ? 'active' : ''}" 
+                                 id="subtitle-force-text-toggle" 
+                                 data-setting="disableAssStyling"
+                                 tabindex="0"
+                                 aria-label="Toggle force text only">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Subtitle Appearance Section -->
                 <h3 class="setting-section-title">Appearance</h3>
 
@@ -1520,6 +1535,7 @@ class SettingsPage extends Page {
             'subtitle-line-height': { key: 'subtitleLineHeight', type: 'player' },
             'subtitle-letter-spacing': { key: 'subtitleLetterSpacing', type: 'player' },
             'subtitle-bottom-offset': { key: 'subtitleBottomOffset', type: 'player' },
+            'subtitle-force-text-toggle': { key: 'disableAssStyling', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' }
@@ -1623,6 +1639,18 @@ class SettingsPage extends Page {
                 });
             });
         });
+
+        // Toggle Switch for Force Text
+        const forceTextToggle = this.$('#subtitle-force-text-toggle');
+        if (forceTextToggle) {
+            forceTextToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('disableAssStyling');
+                const newValue = !currentValue;
+                PlayerSettings.set('disableAssStyling', newValue);
+                forceTextToggle.classList.toggle('active', newValue);
+                log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
 
         // Initial Visibility Check for Background Opacity
         const bgContainer = document.getElementById('subtitle-bg-opacity-container');
