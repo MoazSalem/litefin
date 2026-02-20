@@ -553,6 +553,36 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name">Subtitle Delivery</span>
+                        <span class="setting-description">How subtitles are delivered during video playback</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-burn-in-select',
+                            [
+                                /*
+                                 * '' = Off: server sends subtitle files externally,
+                                 *           our ASSRenderer draws them in the browser.
+                                 *           Best quality + no forced transcode.
+                                 *
+                                 * 'allcomplex' = Auto: server burns complex/bitmap formats
+                                 *                      (PGS, VOBSUB, styled ASS) into video.
+                                 *                      Same as stock Jellyfin behaviour.
+                                 *
+                                 * 'all' = Always Burn: server bakes ALL subs into the video.
+                                 *                      Most compatible, but forces a transcode.
+                                 */
+                                { value: '', label: 'Client Renders (Recommended)' },
+                                { value: 'allcomplex', label: 'Auto (Complex formats only)' },
+                                { value: 'all', label: 'Always Burn In' }
+                            ],
+                            PlayerSettings.get('subtitleBurnIn') || ''
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name">Disable ASS/SSA Rendering</span>
                         <span class="setting-description">Disable ASS/SSA styling (converts to text)</span>
                     </div>
@@ -1539,6 +1569,8 @@ class SettingsPage extends Page {
             'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
             'skip-back-select': { key: 'skipBackLength', type: 'player' },
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
+            // Subtitle delivery mode — drives SubtitleProfiles in DeviceProfile
+            'subtitle-burn-in-select': { key: 'subtitleBurnIn', type: 'player' },
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
             'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },

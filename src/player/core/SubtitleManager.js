@@ -19,6 +19,7 @@ import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { toast } from '../../ui/Toast.js';
 
 const log = logger.create('SubtitleManager');
 
@@ -173,6 +174,23 @@ export default class SubtitleManager {
     async setPrimaryTrack(streamIndex) {
         // Clear any existing primary subtitle
         this._clearPrimary();
+
+        // =====================================================================
+        // Burn-in guard: only suppress client rendering when the user has chosen
+        // "Always Burn In" (mode: 'all'). In that mode the server bakes EVERY
+        // subtitle format into the video frame, so there is nothing left for us
+        // to render and we must stay silent to avoid a ghost overlay.
+        //
+        // "Auto" (mode: 'allcomplex') only burns bitmap/complex formats (PGS,
+        // VOBSUB). Text tracks (ASS, SRT, VTT) are still served as External
+        // files, so our ASSRenderer must still handle them — do NOT suppress.
+        // =====================================================================
+        const burnIn = PlayerSettings.get('subtitleBurnIn');
+        if (burnIn === 'all') {
+            log.info(`Primary subtitle suppressed — server burn-in is active (mode: ${burnIn})`);
+            this._onDeliveryChange({ primary: DeliveryMethod.NONE });
+            return DeliveryMethod.NONE;
+        }
 
         // Disable subtitles entirely
         if (streamIndex === -1) {
@@ -507,8 +525,22 @@ export default class SubtitleManager {
             return DeliveryMethod.PGS_BITMAP;
         }
 
-        // Image-based subtitles (PGS, DVDsub) on HTML5 backend cannot be rendered yet
+        // Image-based subtitles (DVDsub etc.) on HTML5 or unknown codecs cannot be rendered.
+        // Only notify the user if they haven't already opted into server-side rendering —
+        // if burn-in is active, the server handles this format and the toast is just noise.
         log.warn(`No delivery method for track "${track.DisplayTitle}" (codec: ${codec}, embedded: ${isEmbedded}, backend: ${this._backendType})`);
+
+        const burnIn = PlayerSettings.get('subtitleBurnIn');
+        if (!burnIn) {
+            // Client Renders mode — user doesn't know the server could handle this, tell them
+            toast.show(
+                `Subtitle format "${codec || 'unknown'}" can't be rendered by this client. ` +
+                `Force Transcode playback mode or change the subtitle render mode in settings.`,
+                8000  // 8 s — enough time to actually read and remember
+            );
+        }
+
+        return DeliveryMethod.NONE;
     }
 
     /**

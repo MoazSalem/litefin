@@ -716,9 +716,25 @@ export function buildJellyfinProfile(options = {}) {
     // Subtitle Profiles
     // ====================================================================
 
-    const subtitleProfiles = [
-        // External method — server extracts text tracks and delivers via API
-        // This is the lightest path (no transcoding required)
+    /*
+     * subtitleBurnIn controls what the server does with subtitles during transcoding:
+     *
+     *   ''            (Off / Client Renders) — Server extracts all text tracks as External
+     *                  files; our ASSRenderer handles them in the client. Bitmap formats
+     *                  (PGS, VOBSUB) are embedded via muxing when possible.
+     *
+     *   'allcomplex'  (Auto / Jellyfin Default) — Server burns in complex/bitmap formats
+     *                  (PGS, VOBSUB, ASS with heavy styling) and extracts plain text tracks.
+     *                  This is what stock Jellyfin clients use.
+     *
+     *   'all'         (Always Burn) — Server burns ALL subtitle tracks into the video frame,
+     *                  regardless of format. Simplest compatibility, but forces a video
+     *                  transcode even for direct-playable content.
+     */
+    const subtitleBurnIn = PlayerSettings.get('subtitleBurnIn') || '';
+
+    // Text-based subtitle formats we can handle natively via our ASSRenderer / track API
+    const textSubtitleProfiles = [
         { Format: 'srt', Method: 'External' },
         { Format: 'subrip', Method: 'External' },
         { Format: 'vtt', Method: 'External' },
@@ -727,29 +743,49 @@ export function buildJellyfinProfile(options = {}) {
         { Format: 'smi', Method: 'External' },
         { Format: 'ttml', Method: 'External' },
         { Format: 'sub', Method: 'External' },
-
-        // HLS embedded VTT
+        // HLS embedded VTT (delivered in a TS stream alongside video)
         { Format: 'vtt', Method: 'Hls' }
     ];
 
-    // Only add Embed profiles if NOT in Transcode/Remux mode?
-    // Actually, Remuxing might want to Embed.
-    // If we are forcing transcode, we generally want to burn in subs if they are image based,
-    // or external if text.
+    // Bitmap/complex formats that we cannot render in the client —
+    // Jellyfin must either embed them (mux into container) or encode (burn) them in.
+    // When burn-in is off, we ask for Embed so the muxer handles them.
+    // When burn-in is on, we use 'Encode' — the correct Jellyfin API value for burn-in.
+    const bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'Embed';
 
-    // For simplicity, we keep these unless we are in strict transcode mode which might want to avoid direct play completely.
-    // But direct play profiles are already empty in transcode mode.
-    // So if the server transcodes, it uses TranscodingProfiles.
+    const bitmapSubtitleProfiles = [
+        { Format: 'pgs', Method: bitmapSubtitleMethod },
+        { Format: 'pgssub', Method: bitmapSubtitleMethod },
+        { Format: 'dvdsub', Method: bitmapSubtitleMethod },
+        { Format: 'dvbsub', Method: bitmapSubtitleMethod }
+    ];
 
-    subtitleProfiles.push(
-        { Format: 'srt', Method: 'Embed' },
-        { Format: 'subrip', Method: 'Embed' },
-        { Format: 'vtt', Method: 'Embed' },
-        { Format: 'pgs', Method: 'Embed' },
-        { Format: 'pgssub', Method: 'Embed' },
-        { Format: 'dvdsub', Method: 'Embed' },
-        { Format: 'dvbsub', Method: 'Embed' }
-    );
+    // When 'all' burn-in is requested, ALSO burn text-based formats.
+    // That way captions are baked into the frame even for plain SRT files.
+    const subtitleProfiles =
+        subtitleBurnIn === 'all'
+            ? [
+                  // Force-encode (burn) every format — server renders all subs into video.
+                  // 'Encode' is the correct Jellyfin SubtitleDeliveryMethod for burn-in.
+                  { Format: 'srt', Method: 'Encode' },
+                  { Format: 'subrip', Method: 'Encode' },
+                  { Format: 'vtt', Method: 'Encode' },
+                  { Format: 'ass', Method: 'Encode' },
+                  { Format: 'ssa', Method: 'Encode' },
+                  { Format: 'smi', Method: 'Encode' },
+                  { Format: 'ttml', Method: 'Encode' },
+                  { Format: 'sub', Method: 'Encode' },
+                  ...bitmapSubtitleProfiles
+              ]
+            : [
+                  // Client handles text tracks; server muxes or burns bitmaps
+                  ...textSubtitleProfiles,
+                  ...bitmapSubtitleProfiles,
+                  // Embed path for use inside direct-stream containers
+                  { Format: 'srt', Method: 'Embed' },
+                  { Format: 'subrip', Method: 'Embed' },
+                  { Format: 'vtt', Method: 'Embed' }
+              ];
 
     // ====================================================================
     // Response Profiles (container MIME type overrides)
@@ -784,16 +820,12 @@ export function buildJellyfinProfile(options = {}) {
         DirectPlayProfiles: directPlayProfiles,
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
-        SubtitleProfiles: isHtml5
-            ? [
-                  { Format: 'vtt', Method: 'External' },
-                  { Format: 'vtt', Method: 'Hls' },
-                  { Format: 'ass', Method: 'External' },
-                  { Format: 'ssa', Method: 'External' },
-                  { Format: 'srt', Method: 'External' },
-                  { Format: 'subrip', Method: 'External' }
-              ]
-            : subtitleProfiles,
+        /*
+         * Both HTML5 and AVPlay backends share the same subtitle delivery logic.
+         * The subtitleProfiles array is built above based on the subtitleBurnIn
+         * player setting, so no per-backend branching is needed here.
+         */
+        SubtitleProfiles: subtitleProfiles,
         ResponseProfiles: responseProfiles
     };
 
