@@ -253,7 +253,7 @@ export function buildJellyfinProfile(options = {}) {
     const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
     const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
     const enableHDR = PlayerSettings.get('enableHDR') && caps.hdr10;
-    const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
+    const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision; // eslint-disable-line no-unused-vars
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
     const forceTranscodeSetting = PlayerSettings.get('forceTranscode');
@@ -339,8 +339,6 @@ export function buildJellyfinProfile(options = {}) {
 
     // M2TS container — typically Blu-ray, limited codec set
     const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
-
-    // MOV container — primarily H.264 on Samsung
 
     // HLS — codecs suitable for adaptive streaming
     const hlsVideoCodecs = ['h264'];
@@ -441,6 +439,10 @@ export function buildJellyfinProfile(options = {}) {
 
     // Transcoding audio codec list (server-side encoding targets)
     let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+
+    // Transcode video codec list — h264 always, hevc added if user has enabled it.
+    // NOTE: Both AVPlay and the Tizen browser support hardware HEVC decoding,
+    // so it is valid to transcode to HEVC for either backend.
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     // If forcing Remux (Direct Stream), we need to tell the server that we support
@@ -559,9 +561,12 @@ export function buildJellyfinProfile(options = {}) {
     // For HTML5, we use 6.1 (183) for 4K/8K compatibility
     const hevcLevel = isHtml5 ? '183' : caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
 
-    // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
-    // HEVC bit depth — 10-bit if HDR is enabled, 8-bit otherwise
-    const hevcBitDepth = enableHDR || enableDolbyVision ? '10' : '8';
+    // HEVC bit depth — always allow 10-bit.
+    // Samsung hardware decodes 10-bit HEVC regardless of whether HDR tone-mapping
+    // is active. Locking this to '8' when HDR is disabled was causing virtually all
+    // modern HEVC content (which is almost universally encoded at 10-bit even for
+    // SDR) to fail the codec profile check and trigger an unnecessary transcode.
+    const hevcBitDepth = '10';
 
     let codecProfiles = [];
 
@@ -782,10 +787,14 @@ export function buildJellyfinProfile(options = {}) {
         SubtitleProfiles: isHtml5
             ? [
                   { Format: 'vtt', Method: 'External' },
-                  { Format: 'vtt', Method: 'Hls' }
+                  { Format: 'vtt', Method: 'Hls' },
+                  { Format: 'ass', Method: 'External' },
+                  { Format: 'ssa', Method: 'External' },
+                  { Format: 'srt', Method: 'External' },
+                  { Format: 'subrip', Method: 'External' }
               ]
             : subtitleProfiles,
-        ResponseProfiles: isHtml5 ? [] : responseProfiles
+        ResponseProfiles: responseProfiles
     };
 
     log.info('Built Jellyfin profile:', profile.Name);
