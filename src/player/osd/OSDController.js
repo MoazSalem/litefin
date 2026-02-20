@@ -1030,8 +1030,9 @@ export default class OSDController extends Component {
             }, 500);
 
         } catch (err) {
-            log.error('Seek error:', err);
-            this._seekTargetTicks = null;
+            // Log the error but do NOT wipe _seekTargetTicks — an error in
+            // show()/resetAutoHide() must not destroy the accumulated seek position.
+            log.error('Seek error (non-critical):', err);
         }
     }
     
@@ -1057,9 +1058,12 @@ export default class OSDController extends Component {
             }
             
             if (this._seekTargetTicks !== null) {
-                // Safety: If seek target has been active for > 5s, something is stuck.
-                if (this._seekStartTime && (Date.now() - this._seekStartTime > 5000)) {
-                    log.warn('Seek session safety timeout reached. Resetting.');
+                // Safety net: if seek state somehow gets stuck (debounce never fired),
+                // reset after an extended timeout. Normal usage is already handled by
+                // the debounce timer's finally block, so this only fires in edge cases.
+                // 5s was too short — users legitimately hold fast-forward for many seconds.
+                if (this._seekStartTime && (Date.now() - this._seekStartTime > 30000)) {
+                    log.warn('Seek session safety timeout reached (30s). Resetting stuck state.');
                     this._seekTargetTicks = null;
                     this._seekStartTime = null;
                     const tooltip = this._osdEl.querySelector('#osdSeekTooltip');

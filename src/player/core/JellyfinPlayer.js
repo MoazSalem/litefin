@@ -482,6 +482,11 @@ export class JellyfinPlayer extends EventEmitter {
             }
             log.info(`[PlaybackMode] Calculated PlayMethod: ${playMethod}`);
 
+            // Store the resolved play method so track-switching logic can
+            // reliably detect transcoding without re-deriving from media source
+            // flags (which may have been mutated, e.g. by the remux case above).
+            this._currentPlayMethod = playMethod;
+
             // Attach play session ID to media source
             if (playbackInfo.PlaySessionId) {
                 mediaSource.PlaySessionId = playbackInfo.PlaySessionId;
@@ -571,7 +576,11 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSource,
                 startPositionTicks: streamInfo.playerStartPositionTicks, // Use adjusted start position
                 audioStreamIndex: options.audioStreamIndex,
-                subtitleStreamIndex: options.subtitleStreamIndex
+                subtitleStreamIndex: options.subtitleStreamIndex,
+                // Tell the backend what play method was negotiated — critical so
+                // TizenAVPlayer knows NOT to apply native track selection when
+                // the server is transcoding (audio is baked into the HLS stream).
+                playMethod: playMethod
             });
             log.info('Backend play() promise resolved');
 
@@ -584,14 +593,17 @@ export class JellyfinPlayer extends EventEmitter {
             });
 
             // Initialize the SubtitleManager with the selected subtitle track.
-            // For embedded subs on Tizen, the backend already handles them via
-            // the subtitleStreamIndex passed to play(). For external text subs
-            // (HTML5 backend), SubtitleManager will fetch and parse them.
+            // The subtitle index is already included in the server request, so
+            // this call only needs to set up CLIENT-SIDE rendering (fetch external
+            // text, parse ASS, etc.). Setting _playSetupInProgress=true tells
+            // setSubtitleStreamIndex to skip any restart-triggering logic — the
+            // server already has the correct subtitle in its transcode session.
             if (this._currentSubtitleStreamIndex && this._currentSubtitleStreamIndex !== -1) {
+                this._playSetupInProgress = true;
                 // Fire-and-forget — don't block playback on subtitle fetch
-                this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex).catch((err) => {
-                    log.warn('Initial subtitle setup failed:', err);
-                });
+                this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex)
+                    .catch((err) => log.warn('Initial subtitle setup failed:', err))
+                    .finally(() => { this._playSetupInProgress = false; });
             }
         } catch (error) {
             log.error('Playback error caught:', error);
@@ -721,14 +733,87 @@ export class JellyfinPlayer extends EventEmitter {
     // ========================================================================
 
     /**
-     * Set audio track
+     * Set audio track.
+     *
+     * During DirectPlay, the backend can switch tracks natively.
+     * During Transcode/DirectStream (server re-encodes the video), the audio
+     * channel is baked into the server's output stream. Changing it requires
+     * a full retranscode restart with the new AudioStreamIndex, exactly like
+     * switching subtitle tracks in burn-in mode.
+     *
      * @param {number} index - Audio stream index (Jellyfin ID)
      */
-    setAudioStreamIndex(index) {
+    async setAudioStreamIndex(index) {
         this._currentAudioStreamIndex = index;
 
-        // Tizen AVPlay expects 0-based index of available tracks
-        // HtmlVideoPlayer expects Stream ID
+        // =====================================================================
+        // Detect the current play method. If the server is transcoding we must
+        // restart with the new AudioStreamIndex rather than issuing a live
+        // backend call (which has no effect on the transcode stream).
+        //
+        // _currentPlayMethod is stored by play() after all the special-case
+        // mutations (e.g. remux mode) so it reliably reflects the actual
+        // decision — including auto mode where the server decides to transcode.
+        //
+        // Guard: play() re-calls setAudioStreamIndex internally after startup.
+        // _audioRestartInProgress prevents that from triggering another restart.
+        // =====================================================================
+        const isTranscoding = this._currentPlayMethod === 'Transcode' ||
+                              this._currentPlayMethod === 'DirectStream';
+
+        if (isTranscoding && this._currentPlayOptions && !this._audioRestartInProgress) {
+            log.info(`Transcoding active (${this._currentPlayMethod}) — restarting for audio track: ${index}`);
+
+            const currentTicks = this.getCurrentPositionTicks();
+
+            // Build new play options carrying the updated audio stream index
+            const restartOptions = {
+                ...this._currentPlayOptions,
+                audioStreamIndex: index,
+                startPositionTicks: currentTicks
+            };
+
+            // Persist so future restarts (bitrate change, etc.) carry the right track
+            this._currentPlayOptions = restartOptions;
+            this._lastPlayOptions = restartOptions;
+
+            // Set guard BEFORE play() to block re-entrant restarts
+            this._audioRestartInProgress = true;
+            this._isRestarting = true;
+            try {
+                this.emit(PlayerEvent.RESTARTING);
+                await this.stop();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await this.play(restartOptions);
+                // Reset the restarting flag on success so subsequent stop() calls
+                // emit proper STOP events and clear state normally.
+                this._isRestarting = false;
+            } catch (e) {
+                log.error('Failed to restart playback for audio track switch:', e);
+                this._isRestarting = false;
+            } finally {
+                // Always clear the guard when done, success or failure
+                this._audioRestartInProgress = false;
+            }
+
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: index });
+            return;
+        }
+
+        // In transcoding mode but called from play()'s internal audio setup —
+        // there's nothing to do; the server already has the correct index.
+        if (isTranscoding) {
+            log.info(`[${this._currentPlayMethod}] Skipping native audio switch — server already has the correct track`);
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: index });
+            return;
+        }
+
+        // =====================================================================
+        // DirectPlay: native backend audio switching (no restart needed)
+        // =====================================================================
+
+        // Tizen AVPlay expects 0-based index of available tracks;
+        // HtmlVideoPlayer expects the raw Stream ID.
         if (this._backend instanceof TizenAVPlayer) {
             const tracks = this.getAudioTracks();
             const listIndex = tracks.findIndex((t) => t.Index === index);
@@ -750,17 +835,160 @@ export class JellyfinPlayer extends EventEmitter {
      * SubtitleManager decides whether to use embedded native rendering
      * (Tizen AVPlay) or fetch/parse the subtitle externally.
      *
+     * Special case: in "Always Burn In" mode, every subtitle track is burned
+     * into the video server-side during transcoding. Changing the track in this
+     * mode means re-sending a new transcoding request with the updated
+     * SubtitleStreamIndex — we must restart playback from the current position.
+     *
      * @param {number} index - Subtitle stream index (-1 to disable)
      */
     async setSubtitleStreamIndex(index) {
         this._currentSubtitleStreamIndex = index;
 
+        // =====================================================================
+        // Burn-in restart: if the server is baking the subtitle into the video,
+        // switching tracks requires a full retranscode. Two applicable modes:
+        //
+        //   'all'        → server burns EVERY subtitle format. Always restart.
+        //
+        //   'allcomplex' → server burns ONLY complex/bitmap formats (PGS,
+        //                   VOBSUB). Text formats (SRT, ASS, VTT) are delivered
+        //                   externally — no restart needed for those.
+        //
+        // Guards: _playSetupInProgress     → called from play()'s own setup;
+        //                                    subtitle index already in server req.
+        //         _burnInRestartInProgress → already inside a restart; prevents
+        //                                    re-entrant second restart from play().
+        // =====================================================================
+        const burnIn = PlayerSettings.get('subtitleBurnIn');
+        const isTranscodingSession = this._currentPlayMethod === 'Transcode' ||
+                                     this._currentPlayMethod === 'DirectStream';
+
+        // In 'allcomplex' mode:
+        //
+        //   Bitmap formats (PGS, VOBSUB): the server burns them in when it
+        //   transcodes. Selecting a PGS subtitle while DIRECT-PLAYING must also
+        //   trigger a restart — the server needs to start transcoding with the
+        //   PGS burned in. So bitmap = ALWAYS restart in allcomplex mode.
+        //
+        //   Text formats (SRT, ASS, VTT): served externally by the server API,
+        //   so the client can render them without a restart UNLESS we're already
+        //   transcoding — in that case the server has a specific SubtitleStreamIndex
+        //   locked into the current HLS session and we must restart to change it.
+        const _isAllComplex = burnIn === 'allcomplex';
+        const isBitmapCodec = (() => {
+            if (!_isAllComplex || index === -1) return false;
+            const track = this.getSubtitleTracks().find(t => t.Index === index);
+            const codec = (track?.Codec || '').toLowerCase();
+            return codec === 'pgs' || codec === 'pgssub' ||
+                   codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle';
+        })();
+
+        // Bitmap in allcomplex: always restart (even from direct play)
+        // Text in allcomplex + transcoding: restart (subtitle locked in stream URL)
+        const isBitmapBurnIn = (_isAllComplex && isBitmapCodec) ||
+                               (_isAllComplex && isTranscodingSession);
+
+        const needsBurnInRestart = burnIn === 'all' || isBitmapBurnIn;
+
+        if (needsBurnInRestart && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
+            log.info(`Burn-in restart (mode: ${burnIn}, track: ${index}) — retranscoding`);
+
+            // Capture current position so we can resume from the same spot
+            const currentTicks = this.getCurrentPositionTicks();
+
+            // Build new play options with the updated subtitle stream index
+            const restartOptions = {
+                ...this._currentPlayOptions,
+                subtitleStreamIndex: index,
+                startPositionTicks: currentTicks
+            };
+
+            // Persist the new index so that subsequent restarts (e.g. bitrate
+            // changes) also carry the correct subtitle stream index
+            this._currentPlayOptions = restartOptions;
+            this._lastPlayOptions = restartOptions;
+
+            // Set the guard BEFORE calling play() so that the internal
+            // setSubtitleStreamIndex call from play() skips this path
+            this._burnInRestartInProgress = true;
+            this._isRestarting = true;
+            try {
+                this.emit(PlayerEvent.RESTARTING);
+                await this.stop();
+                await new Promise(resolve => setTimeout(resolve, 500));
+                await this.play(restartOptions);
+                // Reset on success so subsequent stop() calls behave normally
+                this._isRestarting = false;
+            } finally {
+                // Always clear the guard when done
+                this._burnInRestartInProgress = false;
+            }
+
+            // Notify OSD of the track change
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+            return;
+        }
+
+        // Called from play()'s internal setup during a burn-in session —
+        // the server already has the correct subtitle index, nothing to do client-side.
+        if (needsBurnInRestart) {
+            log.info(`Burn-in mode (${burnIn}) — skipping client-side setup (server already has correct track)`);
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+            return;
+        }
+
         // Let SubtitleManager determine the best delivery method
         const delivery = await this._subtitleManager.setPrimaryTrack(index);
 
-        // If SubtitleManager chose embedded native, we need to tell the backend
+        // If SubtitleManager chose embedded native, we need to tell the backend.
+        //
+        // IMPORTANT: In a transcoding session (Transcode or DirectStream play method)
+        // the HLS/transcode output from the server carries NO embedded subtitle tracks.
+        // Calling AVPlay's setSubtitleStreamIndex() would silently do nothing.
+        // The only way to switch the subtitle is to restart the transcode with the
+        // new SubtitleStreamIndex so the server re-encodes / remuxes the correct track.
         if (delivery === DeliveryMethod.EMBEDDED_NATIVE) {
-            // Delegate embedded subtitle selection to the backend (TizenAVPlayer)
+            const isTranscoding = this._currentPlayMethod === 'Transcode' ||
+                                  this._currentPlayMethod === 'DirectStream';
+
+            if (isTranscoding && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
+                // Same restart pattern as burn-in — we reuse the burn-in guard flag
+                // because the two paths are mutually exclusive (burn-in was already
+                // checked earlier and would have returned by now).
+                log.info(`EMBEDDED_NATIVE + ${this._currentPlayMethod} — restarting transcode for subtitle: ${index}`);
+
+                const currentTicks = this.getCurrentPositionTicks();
+                const restartOptions = {
+                    ...this._currentPlayOptions,
+                    subtitleStreamIndex: index,
+                    startPositionTicks: currentTicks
+                };
+
+                this._currentPlayOptions = restartOptions;
+                this._lastPlayOptions = restartOptions;
+
+                this._burnInRestartInProgress = true;
+                this._isRestarting = true;
+                try {
+                    this.emit(PlayerEvent.RESTARTING);
+                    await this.stop();
+                    await new Promise(resolve => setTimeout(resolve, 500));
+                    await this.play(restartOptions);
+                    // Reset on success so subsequent stop() calls behave normally
+                    this._isRestarting = false;
+                } catch (e) {
+                    log.error('Failed to restart for embedded subtitle switch during transcode:', e);
+                    this._isRestarting = false;
+                } finally {
+                    this._burnInRestartInProgress = false;
+                }
+
+                this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
+                return;
+            }
+
+            // DirectPlay: AVPlay can read embedded subtitle tracks natively
             if (this._backend instanceof TizenAVPlayer) {
                 if (index === -1) {
                     this._backend.setSubtitleStreamIndex(-1);

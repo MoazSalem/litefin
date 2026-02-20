@@ -176,14 +176,24 @@ export class TizenAVPlayer {
             this._avplay.play();
             this._isPlaying = true;
 
-            // Store selected tracks to be applied after buffering completes
-            // This is more reliable on Tizen TVs
-            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+            // Only queue native track selection for DirectPlay.
+            // During Transcode/DirectStream, audio is baked into the HLS output,
+            // so AVPlay only has one muxed audio track — calling setSelectTrack
+            // would either silently fail or cause spurious errors, and it retried
+            // on every onbufferingcomplete invocation (seeking, re-buffers, etc.).
+            const isDirectPlay = options.playMethod === 'DirectPlay';
+
+            if (isDirectPlay && options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
                 this._pendingAudioIndex = options.audioStreamIndex;
+            } else {
+                // Explicitly clear any leftover pending index from a previous session
+                this._pendingAudioIndex = null;
             }
 
-            if (options.subtitleStreamIndex !== undefined) {
+            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
                 this._pendingSubtitleIndex = options.subtitleStreamIndex;
+            } else {
+                this._pendingSubtitleIndex = null;
             }
 
             // Initialize current indices
@@ -311,11 +321,14 @@ export class TizenAVPlayer {
     _applyPendingTracks() {
         if (this._pendingAudioIndex !== null) {
             const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
+            // Always clear the pending index, whether or not we found a valid Tizen track.
+            // Without this, a failed lookup (null return) would leave the index dirty
+            // and retry on every subsequent onbufferingcomplete event.
+            this._pendingAudioIndex = null;
             if (tizenAudioIndex !== null) {
                 try {
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
-                    this._pendingAudioIndex = null; // Clear pending
                 } catch (e) {
                     log.warn('Failed to apply audio track:', e);
                 }
