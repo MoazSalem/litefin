@@ -686,7 +686,7 @@
     height: 100vh;
     background: rgba(0, 0, 0, 0.8);
     color: #0f0;
-    font-family: monospace;
+    font-family: var(--jf-font-family, monospace);
     font-size: 14px;
     padding: 10px;
     z-index: 9999;

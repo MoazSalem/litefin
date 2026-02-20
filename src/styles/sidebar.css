@@ -236,7 +236,7 @@
 /* Text - Hidden when collapsed */
 .item-text {
     font-size: 1.4rem;
-    font-weight: 600;
+    font-weight: 500;
     opacity: 0;
     visibility: hidden;
     /* Instant hidden state to avoid sliding under icons */
@@ -290,7 +290,7 @@
     text-transform: uppercase;
     letter-spacing: 1.5px;
     color: var(--jf-text-tertiary);
-    font-weight: 800;
+    font-weight: 600;
     opacity: 0.7;
 }
 
@@ -300,13 +300,13 @@
 }
 
 .library-item {
-    height: 60px;
+    height: 72px;
     width: 100%;
 }
 
 .library-item .item-text {
     font-size: 1.2rem;
-    font-weight: 600;
+    font-weight: 500;
     padding-left: 32px;
     opacity: 1;
     white-space: nowrap;

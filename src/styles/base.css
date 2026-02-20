@@ -17,9 +17,29 @@
     box-sizing: border-box;
     margin: 0;
     padding: 0;
+    font-family: inherit;
 }
 
+:root {
+    /* Define base font variable - Poppins is now the default */
+    --jf-font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+/* Custom UI Font Overrides */
+html[data-ui-font="system"] { --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
+html[data-ui-font="poppins"] { --jf-font-family: 'Poppins', sans-serif; }
+html[data-ui-font="noto-arabic"] { --jf-font-family: 'Noto Sans Arabic', sans-serif; }
+html[data-ui-font="typewriter"] { --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier; }
+html[data-ui-font="print"] { --jf-font-family: 'Merriweather', serif; }
+html[data-ui-font="console"] { --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }
+html[data-ui-font="cursive"] { --jf-font-family: 'Dancing Script', cursive; }
+html[data-ui-font="casual"] { --jf-font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
+html[data-ui-font="smallcaps"] { --jf-font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
+
 html {
+    /* Apply global font-family here so it inherits downwards to * */
+    font-family: var(--jf-font-family);
+
     /* Base font size for rem calculations */
     font-size: 16px;
 
@@ -37,8 +57,6 @@ html {
 }
 
 body {
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
-        'Helvetica Neue', Arial, sans-serif;
     line-height: 1.5;
     overflow-x: hidden;
 

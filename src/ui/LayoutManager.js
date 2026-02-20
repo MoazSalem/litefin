@@ -41,8 +41,8 @@ class LayoutManager {
         // Current layout
         this._layout = LAYOUT.CLASSIC;
 
-        // Current theme
-        this._theme = 'purplehaze';
+        // Current font
+        this._uiFont = 'default';
     }
 
     /**
@@ -52,11 +52,13 @@ class LayoutManager {
         // Load saved preferences
         const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
         const savedTheme = storage.getItem('litefin:theme') || 'purplehaze';
+        const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
 
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);
+        this.setUiFont(savedUiFont, false);
 
-        log.info(`Initialized with layout="${this._layout}", theme="${this._theme}"`);
+        log.info(`Initialized with layout="${this._layout}", theme="${this._theme}", uiFont="${this._uiFont}"`);
     }
 
     /**
@@ -152,6 +154,37 @@ class LayoutManager {
             log.info(`Theme changed from "${oldTheme}" to "${theme}"`);
             eventBus.emit('theme:changed', { theme, previousTheme: oldTheme });
         }
+    }
+
+    /**
+     * Get current UI font
+     * @returns {string} Font name
+     */
+    getUiFont() {
+        return this._uiFont;
+    }
+
+    /**
+     * Set the current UI font
+     * @param {string} font - Font name
+     * @param {boolean} [save=true] - Save to localStorage
+     */
+    setUiFont(font, save = true) {
+        this._uiFont = font;
+
+        // Update HTML attribute for CSS
+        if (font && font !== 'default') {
+            document.documentElement.setAttribute('data-ui-font', font);
+        } else {
+            document.documentElement.removeAttribute('data-ui-font');
+        }
+
+        // Save preference
+        if (save) {
+            storage.setItem('litefin:uiFont', font);
+        }
+
+        log.info(`UI Font set to "${font}"`);
     }
 
     /**

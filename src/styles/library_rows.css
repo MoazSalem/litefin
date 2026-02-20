@@ -129,7 +129,7 @@
     grid-template-columns: repeat(auto-fill, 240px);
     grid-gap: 32px;
     gap: 32px;
-    padding: 24px 20px 0px 20px;
+    padding: 24px 10px 0px 10px;
     width: 100%;
 }
 

@@ -35,7 +35,7 @@
 /* --- Header Section --- */
 .library-header {
     /* No longer grid item, normal flow */
-    padding: 40px 60px 0 60px;
+    padding: 40px 50px 0 50px;
     display: flex;
     flex-direction: column;
     gap: 30px;
@@ -206,8 +206,8 @@
 .library-content {
     /* Normal flow inside scroll container */
     position: relative;
-    padding: 20px 60px 40px 60px;
-    /* Standard padding */
+    padding: 20px 50px 40px 50px;
+    /* Reduced from 60px to gain space for 6-card grid */
     flex: 1;
     /* Pushes footer down */
     display: flex;
@@ -855,8 +855,8 @@
 /* --- Rows Layout --- */
 .library-row {
     margin-bottom: 30px;
-    padding: 0 40px;
-    /* Align with header */
+    padding: 0 30px;
+    /* Reduced from 40px to gain width for 6 items per row */
     scroll-margin-top: 150px;
     /* Visibility buffer */
 }

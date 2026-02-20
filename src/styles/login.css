@@ -485,7 +485,7 @@
      */
     font-size: 6rem; /* Fixed size for Tizen 4 compatibility */
     font-weight: 700;
-    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-family: var(--jf-font-family, 'SF Mono', 'Fira Code', 'Courier New', monospace);
     color: var(--jf-accent);
     letter-spacing: 0.18em;
     line-height: 1;

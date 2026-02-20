@@ -11,6 +11,7 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
+import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 
@@ -845,17 +846,13 @@ class DetailsPage extends Page {
         this._updateButtons();
     }
 
-    /**
-     * Handle navigation when a metadata item (Year, Genre, Studio, Person, etc.) is clicked
-     * @param {HTMLElement} element - The clicked button or chip
-     */
     _handleMetaClick(element) {
         const type = element.dataset.type;
         const id = element.dataset.id;
         const name = element.dataset.name || element.dataset.value;
-        const libraryId = this._item.ParentId || this._item.LibraryId; // Fallback to LibraryId if ParentId missing
+        const libraryId = this._item.ParentId || this._item.LibraryId || state.get('activeLibraryId');
 
-        if (!this.state.libraryId && !this._item.ParentId) {
+        if (!libraryId) {
             log.warn('Could not determine LibraryId for item', this._item);
             return;
         }

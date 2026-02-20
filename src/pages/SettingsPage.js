@@ -158,6 +158,30 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">App Font</span>
+                        <span class="setting-description">Select global font style</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'ui-font-select',
+                            [
+                                { value: 'poppins', label: 'Default - Poppins' },
+                                { value: 'system', label: 'Tizen Sans (System)' },
+                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
+                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
+                                { value: 'print', label: 'Print - Merriweather' },
+                                { value: 'console', label: 'Console - Inconsolata' },
+                                { value: 'cursive', label: 'Cursive - Dancing Script' },
+                                { value: 'casual', label: 'Casual - Patrick Hand' },
+                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                            ],
+                            layoutManager.getUiFont()
+                        )}
+                    </div>
+                </div>
+
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title">Home Screen</h3>
 
@@ -1594,6 +1618,7 @@ class SettingsPage extends Page {
         const settingsMap = {
             layout: { key: 'layout', type: 'local' },
             'theme-select': { key: 'theme', type: 'local' },
+            'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
             'player-backend-select': { key: 'playerBackend', type: 'player' },
@@ -1651,6 +1676,9 @@ class SettingsPage extends Page {
                             // It handles persistence (litefin:theme) and DOM updates
                             layoutManager.setTheme(newValue);
                             // No reload needed!
+                        } else if (id === 'ui-font-select') {
+                            // SPECIAL CASE: Font changes handled by LayoutManager
+                            layoutManager.setUiFont(newValue);
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
                             if (settingConfig.key === 'layout') {
