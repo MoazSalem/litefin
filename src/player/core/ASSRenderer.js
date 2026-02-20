@@ -326,6 +326,44 @@ export default class ASSRenderer {
     }
 
     /**
+     * Clear the current track's internal state (clock, renderer, parsed ASS object)
+     * without tearing down the DOM wrapper or unregistering video event listeners.
+     *
+     * This is the "soft reset" for track switching during the same playback session.
+     * Use destroy() for a full cleanup (e.g. on media context change).
+     *
+     * After clearTrack(), the instance is dormant but reusable — call setTrack()
+     * to load a new ASS file into the same wrapper.
+     */
+    clearTrack() {
+        // Stop the clock so libjass stops driving subtitle rendering
+        if (this._clock) {
+            try {
+                this._clock.disable();
+            } catch (err) {
+                log.warn('clearTrack: error disabling clock:', err);
+            }
+            this._clock = null;
+        }
+
+        // Drop the renderer reference (it holds the libjass WebRenderer)
+        if (this._renderer) {
+            this._renderer = null;
+        }
+
+        // Drop the parsed ASS object and raw content
+        this._ass = null;
+        this._rawContent = null;
+
+        // Hide the wrapper — clearTrack() means no subtitle is showing
+        if (this._wrapper) {
+            this._wrapper.style.display = 'none';
+        }
+
+        log.info('ASSRenderer track cleared (wrapper and video listeners retained for reuse)');
+    }
+
+    /**
      * Destroy the renderer and clean up all resources.
      * Safe to call multiple times.
      */

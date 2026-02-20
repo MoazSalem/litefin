@@ -393,8 +393,14 @@ export default class SubtitleManager {
      * Refresh subtitle styles (e.g. font override)
      */
     async refreshStyles() {
-        // Update ASS renderer if active
-        if (this._assRenderer) {
+        // =================================================================
+        // Only push ASS style overrides when the primary track is actually
+        // being rendered by the ASS canvas.  Checking for the _assRenderer
+        // instance alone is not enough — that object persists across track
+        // switches and would incorrectly call into ASS while a plain
+        // SRT/VTT track is active, triggering an unwanted overlay.
+        // =================================================================
+        if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
             const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
@@ -852,9 +858,12 @@ export default class SubtitleManager {
             this._onPrimaryCue({ text: '' });
         }
         
-        // Hide ASS if it was active
+        // Soft-reset ASS if it was active — this stops the clock and drops the
+        // track's ASS object/renderer so the instance is fully dormant. The DOM
+        // wrapper and video event listeners are kept so setTrack() can cheaply
+        // reuse the same instance next time an ASS subtitle is loaded.
         if (this._assRenderer) {
-            this._assRenderer.hide();
+            this._assRenderer.clearTrack();
         }
         
         // Destroy PGS renderer to stop worker and clear canvas
