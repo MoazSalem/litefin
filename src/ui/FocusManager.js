@@ -133,7 +133,18 @@ class FocusManager {
                     }
                 }
 
+                // Explicitly remove .focused class from the previous element
+                if (this._focusedElement) {
+                    this._focusedElement.classList.remove('focused');
+                }
+
                 this._focusedElement = e.target;
+
+                // Add .focused to the new element so focus styling applies correctly
+                // when an element is natively focused bypassing focusManager.focusElement
+                if (this._focusedElement) {
+                    this._focusedElement.classList.add('focused');
+                }
 
                 // Auto-sync active section if the element belongs to one (but not during trap)
                 if (this._trapStack.length === 0) {
@@ -238,12 +249,33 @@ class FocusManager {
      * @param {string} name
      */
     unregister(name) {
+        // If the focused element is in this section, clear it before removing the config
+        if (this._focusedElement) {
+            const section = this.getSectionForElement(this._focusedElement);
+            if (section === name) {
+                this.clearFocus();
+            }
+        }
+
         this._sections.delete(name);
         this._focusMemory.delete(name);
         // CRITICAL: Clear cache to prevent returning detached elements if section name is reused
         this.invalidateCache(name);
 
         if (this._activeSection === name) this._activeSection = null;
+    }
+
+    /**
+     * Explicitly remove focus from the current element.
+     * Use this when a page is being destroyed or a section is removed.
+     */
+    clearFocus() {
+        if (this._focusedElement) {
+            this._focusedElement.classList.remove('focused');
+            this._focusedElement.blur();
+            this._focusedElement = null;
+            log.debug('Focus cleared');
+        }
     }
 
     /**

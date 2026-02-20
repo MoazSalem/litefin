@@ -20,6 +20,23 @@
     margin-bottom: 80px;
 }
 
+.login-logo-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 8px;
+}
+
+.login-logo-svg {
+    width: 80px;
+    height: 80px;
+    margin-right: 20px;
+}
+
+.login-logo-svg path {
+    fill: var(--jf-accent);
+}
+
 .login-logo {
     font-size: 5rem;
     font-weight: 300;
@@ -68,7 +85,6 @@
 .server-url-input.focused {
     border-color: var(--jf-accent);
     background-color: var(--jf-input-bg, #2a2a2a);
-    transform: scale(1.02);
     outline: none;
 }
 
@@ -90,20 +106,51 @@
 .connect-btn.focused {
     background: var(--jf-accent-hover);
     border-color: rgba(255, 255, 255, 0.7);
-    transform: scale(1.05);
     outline: none;
 }
 
 .login-actions {
     display: flex;
-    flex-direction: column;
-    margin-top: 24px;
+    flex-direction: row;
+    justify-content: center;
+    margin-top: 32px;
     align-items: center;
 }
 
-.login-actions>*:not(:last-child) {
-    margin-bottom: 12px;
+/* 
+ * Smaller, sleeker button style for the main login actions 
+ * Unifies the look and fits better in a row layout
+ */
+.login-actions .btn {
+    padding: 16px 32px; /* Standardize padding */
+    font-size: 1.3rem;   /* Unified font size */
+    min-width: 250px;   /* Stronger min-width for TV readability */
+    height: 70px;       /* FORCE exact same height */
+    margin: 0 12px;     /* Unified spacing */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 12px;
+    box-sizing: border-box;
+    /* Apple-style subtle shadows and glassmorphism */
+    background: rgba(255, 255, 255, 0.08);
+    backdrop-filter: blur(10px);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    color: var(--jf-text-primary);
 }
+
+/* Reset .back-btn specific overrides when inside login-actions */
+.login-actions .btn.back-btn {
+    padding: 16px 32px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.login-actions .btn:focus,
+.login-actions .btn.focused {
+    background: var(--jf-accent);
+    border-color: rgba(255, 255, 255, 0.5);
+}
+
 
 .loading-section {
     display: flex;
@@ -228,94 +275,140 @@
 }
 
 /* Users grid */
-/* Users grid - Centered and flexible */
 .users-grid {
     display: flex;
     flex-wrap: wrap;
     justify-content: center;
-    /* Center items horizontally */
-    gap: 24px;
     max-width: 1600px;
-    /* Allow enough space for 6 items */
-    margin: 0 auto 40px auto;
+    margin: 40px auto;
+    padding-bottom: 40px;
 }
 
-.user-card {
-    background: var(--jf-card-bg);
-    border: none;
-    border-radius: var(--jf-border-radius-lg);
-    padding: 30px;
-    cursor: pointer;
-    text-align: center;
-    width: 200px;
-    /* Slightly reduced to fit 6 comfortably */
-    margin: 12px;
-    transition: transform var(--jf-transition-fast), background var(--jf-transition-fast);
-    /* Ensure content doesn't break layout */
+.user-item {
     display: flex;
     flex-direction: column;
     align-items: center;
+    width: 170px;
+    margin: 20px; /* Traditional margin instead of gap */
+}
+
+.user-card {
+    position: relative;
+    width: 170px;
+    height: 170px;
+    background: var(--jf-surface);
+    border: none;
+    border-radius: 12px; /* Slightly smaller radius for smaller card */
+    cursor: pointer;
+    overflow: hidden; /* Image fills the card */
+    padding: 0;
+    margin: 0;
+    
+    /* No visible border by default to avoid Tizen image artifacts */
+    border: none;
+    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    will-change: transform;
+}
+
+/* Focus indicator as overlay to prevent layout shift and image clipping bugs */
+.user-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 4px solid var(--jf-accent);
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+    z-index: 2;
 }
 
 .user-card:focus,
 .user-card.focused {
-    background: var(--jf-card-bg-hover);
-    transform: scale(1.05);
-}
-
-.user-avatar-wrapper {
-    width: 150px;
-    height: 150px;
-    border-radius: 50%;
-    overflow: hidden;
-    margin: 0 auto 16px;
-    background: var(--jf-accent-light);
-    position: relative;
-}
-
-.user-avatar {
-    position: relative;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    transform: scale(1.04);
+    outline: none;
     z-index: 10;
 }
 
+.user-card:focus::after,
+.user-card.focused::after {
+    opacity: 1;
+}
+
+.user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    border-radius: 0 !important; /* Force square to fill the card */
+}
+
 .user-avatar-placeholder {
-    position: absolute;
-    top: 0;
-    left: 0;
     width: 100%;
     height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 4rem;
+    font-size: 5rem;
+    font-weight: 600;
     color: var(--jf-accent);
-    z-index: 1;
+    background: var(--jf-surface);
 }
 
 .user-name {
+    margin-top: 16px;
+    font-size: 1.3rem;
+    font-weight: 500;
     color: var(--jf-text-primary);
-    font-size: 1.4rem;
-    padding: 16px 0px;
+    text-align: center;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.8;
+    transition: opacity 0.3s ease;
 }
 
+.user-card:focus + .user-name,
+.user-card.focused + .user-name {
+    margin-top: 16px;
+    opacity: 1;
+    color: var(--jf-accent);
+}
+
+/* Conflict cleanup: removed duplicate .user-card selectors */
+
+/* Container for selected user on password screen */
 .selected-user {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    margin-bottom: 24px;
+    margin-bottom: 40px;
+    width: auto; /* Reset manual fixed width to allow name to breathe */
+    height: auto;
 }
 
-.selected-user>*:not(:last-child) {
-    margin-right: 16px;
+/* Square Card for the avatar part */
+.selected-user .user-avatar,
+.selected-user .user-avatar-placeholder {
+    width: 140px;
+    height: 140px;
+    border: 4px solid var(--jf-accent); /* Solid border instead of shadow */
+    border-radius: 16px;
+    object-fit: cover;
+    background: var(--jf-surface);
 }
 
-.selected-user .user-avatar {
-    width: 100px;
-    height: 100px;
-    border-radius: 50%;
+.selected-user .user-name {
+    margin-top: 16px;
+    font-size: 2rem;
+    opacity: 1;
+    color: var(--jf-accent);
 }
 
 /* Generic Input Focus */
@@ -328,7 +421,6 @@
 .login-page .text-input.focused {
     border-color: var(--jf-accent);
     background-color: var(--jf-input-bg, #2a2a2a);
-    transform: scale(1.02);
     outline: none;
 }
 
@@ -341,21 +433,74 @@
 .login-page .btn:focus,
 .login-page .btn.focused {
     border-color: rgba(255, 255, 255, 0.7);
-    transform: scale(1.03);
     outline: none;
     box-shadow: var(--jf-shadow-md);
 }
 
-/* User Card Focus */
-.user-card:focus,
-.user-card.focused {
-    transform: translateY(-5px);
-    background: rgba(255, 255, 255, 0.1);
-    border: 1px solid rgba(255, 255, 255, 0.3);
-    /* Subtle border for users */
+/* User Card Focus handled above in .user-card:focus */
+
+/* ============================================================================
+   Quick Connect Panel
+   ============================================================================
+   Designed for easy reading at TV distance — the code is the star of the show.
+   Everything else is subordinate: small instructions, a muted status line,
+   and a single Cancel button that gets focus automatically.
+   ============================================================================ */
+
+.quick-connect-section {
+    /* Vertically centred like the loading panel — nothing else to compete with */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    min-height: 300px;
+    max-width: 700px;
+    margin: 0 auto;
 }
 
-.user-card:focus .user-avatar,
-.user-card.focused .user-avatar {
-    border-color: var(--jf-accent);
+.quick-connect-instructions {
+    /*
+     * Secondary, not primary — readable but not a distraction.
+     * Uses tertiary text so the user's eye goes straight to the code below.
+     */
+    color: var(--jf-text-tertiary, #888);
+    font-size: 1.3rem;
+    line-height: 1.6;
+    margin-bottom: 48px;
+    max-width: 560px;
+}
+
+.quick-connect-instructions strong {
+    /* Highlight the navigation path so it's skimmable */
+    color: var(--jf-text-secondary, #ccc);
+}
+
+.quick-connect-code {
+    /*
+     * The number is the whole point of this screen.
+     * Big, bold, monospaced so digits stay perfectly aligned.
+     * Accent colour ties it to the brand and makes it pop on a dark background.
+     * Letter-spacing helps distinguish digits at couch-viewing distance.
+     */
+    font-size: 6rem; /* Fixed size for Tizen 4 compatibility */
+    font-weight: 700;
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    color: var(--jf-accent);
+    letter-spacing: 0.18em;
+    line-height: 1;
+    margin-bottom: 32px;
+}
+
+.quick-connect-status {
+    /* Pulse animation lets the user know we're actively waiting — feels alive */
+    color: var(--jf-text-tertiary, #666);
+    font-size: 1.1rem;
+    margin-bottom: 40px;
+    animation: qc-pulse 2.5s ease-in-out infinite;
+}
+
+@keyframes qc-pulse {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1;   }
 }

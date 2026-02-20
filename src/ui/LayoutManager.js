@@ -42,7 +42,7 @@ class LayoutManager {
         this._layout = LAYOUT.CLASSIC;
 
         // Current theme
-        this._theme = 'dark';
+        this._theme = 'purplehaze';
     }
 
     /**
@@ -51,7 +51,7 @@ class LayoutManager {
     init() {
         // Load saved preferences
         const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
-        const savedTheme = storage.getItem('litefin:theme') || 'dark';
+        const savedTheme = storage.getItem('litefin:theme') || 'purplehaze';
 
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);

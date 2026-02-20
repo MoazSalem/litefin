@@ -354,6 +354,53 @@ export class ApiClient {
         return this.get('Users/Public');
     }
 
+    // ========================================================================
+    // Quick Connect Endpoints
+    // ========================================================================
+
+    /**
+     * Check if Quick Connect is enabled on the server.
+     * Returns true/false — no auth required.
+     * Call this before initiating to avoid showing QC option on servers that have it off.
+     */
+    async isQuickConnectEnabled() {
+        return this.get('/QuickConnect/Enabled');
+    }
+
+    /**
+     * Initiate a new Quick Connect session.
+     * Returns { Secret, Code, Authenticated: false }.
+     * Display `Code` (6 digits) to the user on screen.
+     * Hold onto `Secret` for polling.
+     *
+     * No user credentials needed — only the device authorization header.
+     */
+    async initiateQuickConnect() {
+        return this.post('/QuickConnect/Initiate');
+    }
+
+    /**
+     * Poll for Quick Connect authorization status.
+     * Returns the updated QuickConnectResult: { Secret, Code, Authenticated }.
+     * When Authenticated === true, use the Secret to authenticate.
+     *
+     * @param {string} secret - The Secret returned from initiateQuickConnect
+     */
+    async checkQuickConnectStatus(secret) {
+        return this.get('/QuickConnect/Connect', { secret });
+    }
+
+    /**
+     * Exchange an authorized Quick Connect secret for a full auth token.
+     * This is called after checkQuickConnectStatus returns Authenticated: true.
+     * Returns the same shape as /Users/AuthenticateByName (AccessToken, User, etc.)
+     *
+     * @param {string} secret - The authorized Secret from the Quick Connect flow
+     */
+    async authenticateWithQuickConnect(secret) {
+        return this.post('/Users/AuthenticateWithQuickConnect', { Secret: secret });
+    }
+
     /**
      * Get current user info
      */

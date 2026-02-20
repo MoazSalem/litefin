@@ -159,7 +159,7 @@ class App {
     _initializeState() {
         // App settings
         state.set('app:layout', 'classic'); // 'classic' or 'modern'
-        state.set('app:theme', 'dark');
+        state.set('app:theme', 'purplehaze');
 
         // User state - only set defaults if not already set by auth.init()
         if (!state.has('user:authenticated')) {
@@ -452,7 +452,7 @@ class App {
      * @returns {string} Theme name
      */
     getTheme() {
-        return state.get('app:theme', 'dark');
+        return state.get('app:theme', 'purplehaze');
     }
 
     /**

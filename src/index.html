@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en" data-theme="dark" data-layout="classic">
+<html lang="en" data-theme="purplehaze" data-layout="classic">
 
 <head>
     <meta charset="UTF-8">
@@ -12,7 +12,7 @@
         // Immediately restore theme to prevent flash of wrong color
         (function() {
             try {
-                const savedTheme = localStorage.getItem('litefin:theme') || 'dark';
+                const savedTheme = localStorage.getItem('litefin:theme') || 'purplehaze';
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
                 // Theme variables for early loading (must match CSS)

@@ -352,6 +352,72 @@ class AuthManager {
         return this.login(user.Name, pw);
     }
 
+    /**
+     * Complete login using an authorized Quick Connect secret.
+     * Called after the polling loop detects Authenticated === true.
+     *
+     * Follows the exact same finalization path as login() — saves credentials
+     * to storage, configures API, reports capabilities, and opens the WebSocket.
+     *
+     * @param {string} secret - The Secret from the authorized Quick Connect result
+     * @returns {Promise<Object>} Authentication result (same shape as login())
+     */
+    async loginWithQuickConnect(secret) {
+        log.info('Completing login via Quick Connect...');
+
+        try {
+            // Exchange the authorized secret for a real access token.
+            // No username/password needed — the user authorized us on another device.
+            const result = await api.authenticateWithQuickConnect(secret);
+
+            // Unpack the token and user from the server response
+            const accessToken = result.AccessToken || result.accessToken;
+            const user = result.User || result.user;
+            const userId = user?.Id || user?.id;
+
+            if (!accessToken || !userId) {
+                log.error('Invalid Quick Connect auth response structure', result);
+                throw new Error('Invalid server response from Quick Connect');
+            }
+
+            // Persist new credentials (same as standard login flow)
+            this._clearStorage();
+            storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
+            storage.setItem(STORAGE_KEYS.USER_ID, userId);
+            storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+
+            // Arm the API client with the fresh token
+            api.setAuth(accessToken, userId);
+
+            // Report capabilities so our session becomes visible on the server dashboard
+            try {
+                await api.reportCapabilities({
+                    DeviceProfile: buildJellyfinProfile(),
+                    PlayableMediaTypes: ['Video', 'Audio'],
+                    SupportedCommands: ['PlayState', 'DisplayMessage', 'SetVolume', 'Mute', 'Unmute'],
+                    SupportsMediaControl: true,
+                    SupportsPersistentIdentifier: true
+                });
+            } catch (capError) {
+                log.warn('Non-fatal: Failed to report capabilities after Quick Connect login:', capError);
+            }
+
+            // Establish WebSocket for real-time status
+            api.openWebSocket();
+
+            // Broadcast authenticated state
+            state.set('user:authenticated', true);
+            state.set('user:data', user);
+            eventBus.emit('auth:login', user);
+
+            log.info(`Quick Connect login successful for "${user.Name}"`);
+            return result;
+        } catch (error) {
+            log.error('Quick Connect login failed:', error);
+            throw error;
+        }
+    }
+
     // ========================================================================
     // Logout
     // ========================================================================

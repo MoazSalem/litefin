@@ -18,14 +18,21 @@ import { logger } from '../utils/Logger.js';
 
 const log = logger.create('Login');
 
-// Login states
+// Login states — each maps to a data-section attribute on its panel
 const STATE = {
     SERVER: 'server',
     USERS: 'users',
     PASSWORD: 'password',
     MANUAL: 'manual',
+    QUICK_CONNECT: 'quick-connect',
     LOADING: 'loading'
 };
+
+// How often (ms) to poll the Quick Connect status endpoint after initiating
+const QUICK_CONNECT_POLL_INTERVAL = 5000;
+
+// How many polls before giving up (5s × 36 = 3 minutes)
+const QUICK_CONNECT_MAX_POLLS = 36;
 
 class LoginPage extends Page {
     constructor() {
@@ -39,11 +46,18 @@ class LoginPage extends Page {
         this._discoveredServers = []; // Servers found via LAN discovery
         this._isDiscovering = false;
         this._isLoggingIn = false;
+
+        // Quick Connect polling state
+        this._quickConnectSecret = null; // Secret returned by /QuickConnect/Initiate
+        this._quickConnectPollTimer = null; // setInterval handle for status polling
+        this._quickConnectPollCount = 0; // How many polls have been made so far
     }
 
     destroy() {
         // Stop any active discovery when leaving page
         cancelDiscovery();
+        // Always cancel any in-flight Quick Connect poll on teardown
+        this._cancelQuickConnect();
         super.destroy();
     }
 
@@ -53,7 +67,27 @@ class LoginPage extends Page {
                 <div class="login-container">
                     <!-- Header -->
                     <div class="login-header">
-                        <h1 class="login-logo">Litefin</h1>
+                        <div class="login-logo-container">
+                            <svg viewBox="0 0 100 100" class="login-logo-svg" preserveAspectRatio="xMidYMid meet">
+                                <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
+				c-0.51-4.01,1.81-7.59,3.24-9.37c4.82-5.97,9.41-12.5,10.36-19.76c0.8-6.13-1-12.33-2.9-18.9c-0.59-2.04-1.21-4.16-1.73-6.27
+				c-0.8-3.17-1.42-6.59-0.53-10.08c1.8-7.06,9.11-10.26,21.74-9.53c10.63,0.62,21.35,5.21,30.19,12.91
+				C82.12,33.08,93.56,53.11,90.5,72.93c-0.23,1.54-0.58,2.97-1.04,4.26c-1.28,3.66-3.47,6.32-6.34,7.68
+				c-3.63,1.71-7.38,1.01-10.39,0.44c-2.45-0.46-5.35-0.99-8.34-1.37c-6.72-0.86-12.12-0.79-17.02,0.21
+				c-3.5,0.71-6.9,1.8-10.49,2.95c-4.51,1.44-9.17,2.94-14.09,3.64C21.84,90.88,20.74,91,19.57,91z M35.69,16
+				c-5.23,0-10.52,0.9-11.4,4.36c-0.5,1.98-0.04,4.37,0.53,6.65c0.5,1.99,1.09,4.04,1.67,6.02c2.02,6.97,4.11,14.17,3.12,21.75
+				c-1.17,8.98-6.38,16.48-11.85,23.25c-1.19,1.47-1.87,3.08-1.75,4.08c0.04,0.31,0.17,0.73,0.85,1.23
+				c0.89,0.66,2.51,0.81,4.95,0.46c4.34-0.62,8.53-1.96,12.95-3.38c3.61-1.16,7.35-2.35,11.22-3.14c5.67-1.16,11.81-1.26,19.31-0.3
+				c3.17,0.41,6.2,0.95,8.74,1.43c2.32,0.44,4.52,0.85,6.1,0.11c1.15-0.54,2.07-1.78,2.72-3.66l0-0.01c0.31-0.87,0.55-1.88,0.72-3
+				c2.65-17.2-7.5-34.78-18.74-44.57c-7.68-6.69-16.92-10.67-26-11.2C37.81,16.04,36.75,16,35.69,16z" />
+                                <path class="logo-path-inner" d="M69.3,63.51c0.19-0.64,0.32-1.3,0.41-1.95
+				c1.26-9.44-3.2-19.55-9.22-25.63c-3.64-3.67-8.19-6.14-13.02-6.47c-2.7-0.18-7.56-0.15-8.41,3.7c-0.32,1.47-0.07,3.03,0.25,4.49
+				c1.01,4.7,2.72,9.41,2.18,14.21C41,56.22,38.72,60,36.34,63.41c-1.14,1.63-1.9,4.02-0.12,5.54c0.97,0.83,2.3,0.8,3.49,0.6
+				c3.88-0.64,7.47-2.62,11.3-3.52c2.77-0.66,5.63-0.55,8.42-0.14c1.33,0.2,2.64,0.47,3.96,0.75c1.25,0.27,2.62,0.57,3.82-0.09
+				C68.26,65.98,68.91,64.81,69.3,63.51z" />
+                            </svg>
+                            <h1 class="login-logo">Litefin</h1>
+                        </div>
                         <p class="login-tagline">Jellyfin Client for Tizen OS</p>
                     </div>
                     
@@ -104,6 +138,9 @@ class LoginPage extends Page {
                         </div>
                         <p class="login-error" id="users-error"></p>
                         <div class="login-actions">
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
+                                Quick Connect
+                            </button>
                             <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0">
                                 Manual Login
                             </button>
@@ -136,12 +173,14 @@ class LoginPage extends Page {
                                 tabindex="0"
                             >
                         </div>
-                        <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
-                            Sign In
-                        </button>
-                        <button type="button" class="btn btn-secondary back-btn" tabindex="0">
-                            Back
-                        </button>
+                        <div class="login-actions">
+                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
+                                Sign In
+                            </button>
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                Back
+                            </button>
+                        </div>
                         <p class="login-error" id="manual-error"></p>
                     </div>
                     
@@ -163,15 +202,35 @@ class LoginPage extends Page {
                                 tabindex="0"
                             >
                         </div>
-                        <button type="button" class="btn btn-primary login-btn" tabindex="0">
-                            Sign In
-                        </button>
-                        <button type="button" class="btn btn-secondary back-btn" tabindex="0">
-                            Back
-                        </button>
+                        <div class="login-actions">
+                            <button type="button" class="btn btn-primary login-btn" tabindex="0">
+                                Sign In
+                            </button>
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                Back
+                            </button>
+                        </div>
                         <p class="login-error" id="password-error"></p>
                     </div>
                     
+                    <!-- Quick Connect -->
+                    <div class="login-section quick-connect-section hidden" data-section="quick-connect">
+                        <h2>Quick Connect</h2>
+                        <p class="quick-connect-instructions">
+                            Open your Jellyfin app or web UI on another device, go to
+                            <strong>Dashboard → Quick Connect</strong>, and enter this code:
+                        </p>
+                        <!-- The big, beautiful code the user reads off the screen -->
+                        <div class="quick-connect-code" id="quick-connect-code">------</div>
+                        <p class="quick-connect-status" id="quick-connect-status">Waiting for authorization…</p>
+                        <p class="login-error" id="quick-connect-error"></p>
+                        <div class="login-actions">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                Cancel
+                            </button>
+                        </div>
+                    </div>
+
                     <!-- Loading -->
                     <div class="login-section loading-section hidden" data-section="loading">
                         <div class="loading-spinner"></div>
@@ -242,6 +301,9 @@ class LoginPage extends Page {
 
         // Login button
         this.$('.login-btn')?.addEventListener('click', () => this._login());
+
+        // Quick Connect button (on the users screen)
+        this.$('.quick-connect-btn')?.addEventListener('click', () => this._startQuickConnect());
 
         // Manual Login buttons
         this.$('.manual-login-btn')?.addEventListener('click', () => this._goToManualLogin());
@@ -424,6 +486,11 @@ class LoginPage extends Page {
             orientation: 'grid'
         });
 
+        // Register quick connect section — just a code display + Cancel button
+        this.registerFocusSection('login-quick-connect', this.$('[data-section="quick-connect"]'), {
+            orientation: 'grid'
+        });
+
         this.setActiveSection('login-server');
     }
 
@@ -451,7 +518,7 @@ class LoginPage extends Page {
                 // Focus first user card
                 setTimeout(() => {
                     const firstCard = this._usersGrid.querySelector('.user-card');
-                    if (firstCard) firstCard.focus();
+                    if (firstCard) focusManager.focusElement(firstCard);
                 }, 100);
             } else {
                 // No public users - show manual login
@@ -480,34 +547,37 @@ class LoginPage extends Page {
 
     /**
      * Go to server selection screen (when Change Server button is clicked)
-     * This is the only way users can change their server after initial setup
-     */
-    /**
-     * Go to server selection screen (when Change Server button is clicked)
-     * This is the only way users can change their server after initial setup
+     * This is the only way users can change their server after initial setup.
      */
     _goToServerSelection() {
         log.info('Going to server selection');
+
+        // PREVENT GHOST FOCUS: The logout button receives native browser focus on click.
+        // Even though FocusManager tracks its own .focused class, Tizen's native :focus
+        // pseudo-class will persist on the element unless we explicitly call blur() on
+        // document.activeElement before the section is hidden.
+        if (document.activeElement && document.activeElement !== document.body) {
+            document.activeElement.blur();
+        }
+        focusManager.clearFocus();
 
         // Explicitly clear ONLY server URL for local purposes if not handled by logout
         // But auth.logout() handles the rest and notifies server
         storage.removeItem('litefin:serverUrl');
 
-        // Call proper logout to notify server
+        // Call proper logout to notify server.
+        // NOTE: AuthManager.logout() calls router.reset('/login') internally.
         auth.logout();
 
         // Reset state
         this._showState(STATE.SERVER);
         this.setActiveSection('login-server');
 
-        // Clear visible errors (since onMounted might not run)
+        // Clear visible errors
         this._hideError('server-error');
         this._hideError('manual-error');
         this._hideError('password-error');
         this._hideError('users-error');
-
-        // Reset navigator history
-        router.reset('/login');
 
         // Ensure input is editable
         if (this._serverInput) {
@@ -555,7 +625,7 @@ class LoginPage extends Page {
                 // Focus first user card
                 setTimeout(() => {
                     const firstCard = this._usersGrid.querySelector('.user-card');
-                    if (firstCard) firstCard.focus();
+                    if (firstCard) focusManager.focusElement(firstCard);
                 }, 100);
             } else {
                 // No public users - go straight to manual entry
@@ -585,18 +655,18 @@ class LoginPage extends Page {
         const html = this._users
             .map(
                 (user, index) => `
-            <button class="user-card" data-user-index="${index}" tabindex="0">
-                <div class="user-avatar-wrapper">
-                    <img 
-                        class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                        src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
-                        alt="${user.Name}"
-                        onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
-                    >
-                    <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
-                </div>
-                <span class="user-name">${user.Name}</span>
-            </button>
+            <div class="user-item">
+                <button class="user-card" data-user-index="${index}" tabindex="0">
+                        <img 
+                            class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
+                            src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
+                            alt="${user.Name}"
+                            onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
+                        >
+                        <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
+                </button>
+                <div class="user-name">${user.Name}</div>
+            </div>
         `
             )
             .join('');
@@ -753,7 +823,11 @@ class LoginPage extends Page {
     }
 
     _goBack() {
-        if (this._state === STATE.PASSWORD) {
+        if (this._state === STATE.QUICK_CONNECT) {
+            // Cancel the polling loop and return to the user list
+            this._cancelQuickConnect();
+            return;
+        } else if (this._state === STATE.PASSWORD) {
             if (this._users.length > 0) {
                 this._showState(STATE.USERS);
                 this.setActiveSection('login-users');
@@ -883,6 +957,18 @@ class LoginPage extends Page {
     _renderDiscoveredServers() {
         if (!this._serverList) return;
 
+        // Remember current focus before destroying DOM
+        const activeElement = document.activeElement;
+        const isFocusInList = this._serverList.contains(activeElement);
+        let focusedIndex = -1;
+        let isFocusPreserved = false;
+
+        if (isFocusInList && activeElement && activeElement.classList.contains('server-item')) {
+            focusedIndex = parseInt(activeElement.getAttribute('data-server-index'), 10);
+        } else if (activeElement && document.body.contains(activeElement)) {
+            isFocusPreserved = true;
+        }
+
         // Hide scanning status
         if (this._discoveryStatus) {
             this._discoveryStatus.style.display = 'none';
@@ -914,6 +1000,21 @@ class LoginPage extends Page {
         // Invalid focus cache so new items are found
         focusManager.invalidateCache('login-server');
 
+        // Restore focus
+        if (isFocusInList && focusedIndex >= 0) {
+            const items = this._serverList.querySelectorAll('.server-item:not(.empty)');
+            if (items.length > 0) {
+                // Try to focus the same index, or the last available item if it was removed
+                const indexToFocus = Math.min(focusedIndex, items.length - 1);
+                focusManager.focusElement(items[indexToFocus]);
+            }
+        } else if (isFocusPreserved) {
+            // Restore focus if Tizen dropped it from an unaffected element (e.g. server URL input)
+            if (document.activeElement !== activeElement && document.body.contains(activeElement)) {
+                focusManager.focusElement(activeElement);
+            }
+        }
+
         // Click handling is delegated on _serverList container in _bindEvents()
         // No per-item listeners needed — delegation survives innerHTML rebuilds
     }
@@ -933,6 +1034,138 @@ class LoginPage extends Page {
             }
 
             log.info(`Selected server ${server.name} (${server.address})`);
+        }
+    }
+
+    // ========================================================================
+    // Quick Connect Flow
+    // ========================================================================
+
+    /**
+     * Begin the Quick Connect login flow.
+     *
+     * 1. Checks the server has Quick Connect enabled.
+     * 2. Calls /QuickConnect/Initiate to get a secret + a 6-digit code.
+     * 3. Displays the code prominently on screen.
+     * 4. Starts polling /QuickConnect/Connect every 5s.
+     * 5. When Authenticated === true, exchanges the secret for a real token.
+     * 6. Navigates to home on success, shows error on failure/timeout.
+     */
+    async _startQuickConnect() {
+        log.info('LoginPage: Starting Quick Connect flow...');
+
+        this._hideError('quick-connect-error');
+        this._showState(STATE.LOADING);
+
+        try {
+            // Step 1 — Check the server has QC enabled before going further.
+            // Some self-hosted servers have it disabled in admin settings.
+            const isEnabled = await api.isQuickConnectEnabled();
+            if (!isEnabled) {
+                this._showState(STATE.USERS);
+                this._showError('users-error', 'Quick Connect is not enabled on this server.');
+                return;
+            }
+
+            // Step 2 — Initiate: get { Secret, Code }
+            const result = await api.initiateQuickConnect();
+            if (!result || !result.Secret || !result.Code) {
+                throw new Error('Server returned an invalid Quick Connect response');
+            }
+
+            // Save secret for polling and (eventually) for authentication
+            this._quickConnectSecret = result.Secret;
+            this._quickConnectPollCount = 0;
+
+            // Format the raw 6-character code as XXX-XXX for legibility on a TV
+            const rawCode = String(result.Code);
+            const displayCode = rawCode.length >= 6 ? `${rawCode.slice(0, 3)}-${rawCode.slice(3)}` : rawCode;
+
+            // Step 3 — Show Quick Connect screen with the formatted code
+            this._showState(STATE.QUICK_CONNECT);
+            this.setActiveSection('login-quick-connect');
+
+            const codeEl = this.$('#quick-connect-code');
+            const statusEl = this.$('#quick-connect-status');
+            if (codeEl) codeEl.textContent = displayCode;
+            if (statusEl) statusEl.textContent = 'Waiting for authorization…';
+
+            // Focus the Cancel button so the TV remote has somewhere to go
+            setTimeout(() => {
+                const cancelBtn = this.$('[data-section="quick-connect"] .back-btn');
+                if (cancelBtn) cancelBtn.focus();
+            }, 100);
+
+            // Step 4 — Start polling for authorization
+            this._quickConnectPollTimer = setInterval(async () => {
+                this._quickConnectPollCount++;
+
+                // Bail out after max polls — 3 minute hard limit
+                if (this._quickConnectPollCount > QUICK_CONNECT_MAX_POLLS) {
+                    this._cancelQuickConnect();
+                    this._showState(STATE.USERS);
+                    this._showError('users-error', 'Quick Connect timed out. Try again.');
+                    return;
+                }
+
+                try {
+                    const status = await api.checkQuickConnectStatus(this._quickConnectSecret);
+
+                    if (status && status.Authenticated) {
+                        // Authorization confirmed — clear polling before async work
+                        const authorizedSecret = this._quickConnectSecret;
+                        this._cancelQuickConnect();
+
+                        this._showState(STATE.LOADING);
+
+                        // Step 5 — Exchange the secret for an actual session token
+                        await auth.loginWithQuickConnect(authorizedSecret);
+
+                        log.info('Quick Connect login complete, navigating to home');
+                        router.navigate('/home', { replace: true });
+                    }
+                    // If not yet authorized, keep polling silently
+                } catch (pollError) {
+                    // A single failed poll is not fatal — network blip, etc.
+                    // Log and keep going until max polls.
+                    log.warn('Quick Connect poll error (will retry):', pollError);
+                }
+            }, QUICK_CONNECT_POLL_INTERVAL);
+        } catch (error) {
+            log.error('Quick Connect initiation failed:', error);
+            this._cancelQuickConnect();
+            this._showState(STATE.USERS);
+            this._showError('users-error', error.message || 'Quick Connect failed. Try again.');
+        }
+    }
+
+    /**
+     * Cancel an active Quick Connect session.
+     * Clears the polling interval and resets UI to the user selection screen.
+     * Called by the Cancel button, _goBack(), and destroy().
+     */
+    _cancelQuickConnect() {
+        // Clear the poll interval if active
+        if (this._quickConnectPollTimer !== null) {
+            clearInterval(this._quickConnectPollTimer);
+            this._quickConnectPollTimer = null;
+            log.info('Quick Connect polling cancelled');
+        }
+
+        // Reset tracking state
+        this._quickConnectSecret = null;
+        this._quickConnectPollCount = 0;
+
+        // Return to user selection if we're still on the Quick Connect screen
+        if (this._state === STATE.QUICK_CONNECT) {
+            this._showState(STATE.USERS);
+            this.setActiveSection('login-users');
+
+            // Refocus the Quick Connect button so the user can try again
+            setTimeout(() => {
+                const qcBtn = this.$('.quick-connect-btn');
+                if (qcBtn) qcBtn.focus();
+            }, 100);
         }
     }
 }
