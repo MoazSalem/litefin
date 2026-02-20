@@ -122,6 +122,21 @@ const DEFAULTS = {
     // Custom Vertical Position (0-100% from bottom, used when subtitleVerticalPosition is 'custom')
     subtitleVerticalPositionCustom: 10,
 
+    // =========================================================================
+    // SECONDARY SUBTITLE SETTINGS
+    // These override only position and size — all other styles (color, shadow, font)
+    // are inherited from the primary subtitle settings above.
+    // =========================================================================
+
+    // Secondary subtitle text size (independent from primary)
+    secondarySubtitleSize: 'medium',
+
+    // Secondary subtitle vertical position (defaults to 'custom' for absolute slider)
+    secondarySubtitleVerticalPosition: 'custom',
+
+    // Secondary subtitle absolute position (% from top)
+    secondarySubtitleVerticalPositionCustom: 10,
+
     // Burn-in subtitles mode ('', 'allcomplex', 'all')
     subtitleBurnIn: '',
 

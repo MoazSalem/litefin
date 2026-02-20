@@ -54,6 +54,13 @@ class PlayerPage extends Page {
 
         // Concurrency lock for item switching
         this._isSwitching = false;
+
+        // End-time tracker for primary subtitle cue clearing
+        // (set during _onSubtitleChange, checked on _onTimeUpdate)
+        this._subtitleEndTime = null;
+
+        // End-time tracker for secondary subtitle cue clearing
+        this._secondarySubtitleEndTime = null;
     }
 
     render() {
@@ -90,8 +97,13 @@ class PlayerPage extends Page {
                 <!-- OSD Overlay (controlled by jellyfin-player-osd.js) -->
                 <div id="osd-overlay" class="player-osd"></div>
 
-                <!-- Subtitle Overlay -->
+                <!-- Primary Subtitle Overlay (Bottom) -->
                 <div id="subtitle-overlay" class="subtitle-overlay"></div>
+
+                <!-- Secondary Subtitle Overlay (Top) -->
+                <!-- Positioned via CSS .subtitle-overlay.secondary (top: 10%) -->
+                <!-- Styles are inherited from primary, only size/position are independent -->
+                <div id="secondary-subtitle-overlay" class="subtitle-overlay secondary hidden"></div>
             </div>
         `;
     }
@@ -376,6 +388,7 @@ class PlayerPage extends Page {
         this._player.on('error', (err) => this._onPlayerError(err));
         this._player.on('timeupdate', (time) => this._onTimeUpdate(time));
         this._player.on('subtitlechange', (data) => this._onSubtitleChange(data));
+        this._player.on('secondarysubtitlechange', (data) => this._onSecondarySubtitleChange(data));
         this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
@@ -723,13 +736,17 @@ class PlayerPage extends Page {
         // Ensure we have a valid number for ticks
         const ticks = typeof positionTicks === 'number' ? positionTicks : 0;
 
-        // 1. Check subtitle sync
-        // Using passed positionTicks is most efficient
+        // 1. Check primary subtitle sync — clear if cue end time has passed
         if (this._subtitleEndTime !== null && ticks >= this._subtitleEndTime) {
             this._clearSubtitle();
         }
 
-        // 2. Report progress periodically (every 10 seconds approx)
+        // 2. Check secondary subtitle sync — clear if cue end time has passed
+        if (this._secondarySubtitleEndTime !== null && ticks >= this._secondarySubtitleEndTime) {
+            this._clearSecondarySubtitle();
+        }
+
+        // 3. Report progress periodically (every 10 seconds approx)
         const now = Date.now();
         if (!this._lastReportTime || now - this._lastReportTime > 10000) {
             this._reportPlaybackProgress();
@@ -816,6 +833,69 @@ class PlayerPage extends Page {
         this._subtitleEndTime = null;
     }
 
+    /**
+     * Handle secondary subtitle cue events (fired by SubtitleManager via JellyfinPlayer).
+     *
+     * Secondary subtitles inherit ALL visual styles from the primary (color, shadow,
+     * font, weight, opacity, background) but use independent size + position settings.
+     * They render into #secondary-subtitle-overlay which is positioned at the top.
+     *
+     * @param {Object} data - Cue data: { text, duration }
+     */
+    _onSecondarySubtitleChange(data) {
+        const overlay = document.getElementById('secondary-subtitle-overlay');
+        if (!overlay) return;
+
+        if (data && data.text && data.text.trim().length > 0) {
+            // Render the secondary subtitle text
+            overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
+            overlay.classList.remove('hidden');
+
+            // Apply secondary text styles — inherits primary appearance, overrides size
+            const styles = SubtitleStyles.getSecondaryTextStyles();
+            const span = overlay.querySelector('.subtitle-line');
+            if (span) {
+                SubtitleStyles.applyStyles(span, styles);
+
+                // Ensure font is loaded (same font as primary — likely already cached)
+                const fontId = SubtitleStyles.getCurrentFontId();
+                if (fontId) {
+                    FontLoader.loadFont(fontId).then(() => {
+                        // Re-apply after font loads to trigger repaint
+                        SubtitleStyles.applyStyles(span, styles);
+                    });
+                }
+            }
+
+            // Apply secondary window/position styles (independent from primary position)
+            const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
+            SubtitleStyles.applyStyles(overlay, windowStyles);
+
+            // Track when this cue ends so _onTimeUpdate can clear it
+            if (data.duration > 0) {
+                const currentTicks = this._player?.getCurrentPositionTicks?.() || 0;
+                this._secondarySubtitleEndTime = currentTicks + data.duration * 10000;
+            } else {
+                this._secondarySubtitleEndTime = null;
+            }
+        } else {
+            // Empty cue — clear the overlay
+            this._clearSecondarySubtitle();
+        }
+    }
+
+    /**
+     * Clear the secondary subtitle overlay.
+     */
+    _clearSecondarySubtitle() {
+        const overlay = document.getElementById('secondary-subtitle-overlay');
+        if (overlay) {
+            overlay.innerHTML = '';
+            overlay.classList.add('hidden');
+        }
+        this._secondarySubtitleEndTime = null;
+    }
+
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
 
@@ -825,30 +905,56 @@ class PlayerPage extends Page {
     }
 
     /**
-     * Re-apply styles to the currently displayed subtitle
+     * Re-apply styles to the currently displayed subtitle(s).
+     * Called when user changes subtitle appearance settings (e.g. from SubtitleQuickSettings).
+     * Both primary and secondary overlays are refreshed here.
      */
     _refreshSubtitleStyles() {
+        // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
-        if (!overlay || overlay.classList.contains('hidden')) return;
+        if (overlay && !overlay.classList.contains('hidden')) {
+            const span = overlay.querySelector('.subtitle-line');
+            if (span) {
+                log.debug('Refreshing primary subtitle styles');
 
-        const span = overlay.querySelector('.subtitle-line');
-        if (span) {
-            log.debug('Refreshing subtitle styles');
+                // Re-apply text styles
+                const styles = SubtitleStyles.getTextStyles();
+                SubtitleStyles.applyStyles(span, styles);
 
-            // Re-apply text styles
-            const styles = SubtitleStyles.getTextStyles();
-            SubtitleStyles.applyStyles(span, styles);
+                // Re-apply container styles (position/window)
+                const windowStyles = SubtitleStyles.getWindowStyles();
+                SubtitleStyles.applyStyles(overlay, windowStyles);
 
-            // Re-apply container styles (position/window)
-            const windowStyles = SubtitleStyles.getWindowStyles();
-            SubtitleStyles.applyStyles(overlay, windowStyles);
+                // Handle font loading if changed
+                const fontId = SubtitleStyles.getCurrentFontId();
+                if (fontId) {
+                    FontLoader.loadFont(fontId).then(() => {
+                        SubtitleStyles.applyStyles(span, styles);
+                    });
+                }
+            }
+        }
 
-            // Handle font loading if changed
-            const fontId = SubtitleStyles.getCurrentFontId();
-            if (fontId) {
-                FontLoader.loadFont(fontId).then(() => {
-                    SubtitleStyles.applyStyles(span, styles);
-                });
+        // Refresh secondary overlay (inherits primary appearance — always re-apply on any change)
+        const secondaryOverlay = document.getElementById('secondary-subtitle-overlay');
+        if (secondaryOverlay && !secondaryOverlay.classList.contains('hidden')) {
+            const span = secondaryOverlay.querySelector('.subtitle-line');
+            if (span) {
+                log.debug('Refreshing secondary subtitle styles');
+
+                // Secondary uses inherited styles with its own size override
+                const styles = SubtitleStyles.getSecondaryTextStyles();
+                SubtitleStyles.applyStyles(span, styles);
+
+                const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
+                SubtitleStyles.applyStyles(secondaryOverlay, windowStyles);
+
+                const fontId = SubtitleStyles.getCurrentFontId();
+                if (fontId) {
+                    FontLoader.loadFont(fontId).then(() => {
+                        SubtitleStyles.applyStyles(span, styles);
+                    });
+                }
             }
         }
     }

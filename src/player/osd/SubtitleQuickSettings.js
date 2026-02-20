@@ -73,6 +73,12 @@ export default class SubtitleQuickSettings extends BaseMenu {
         // Check if we are currently rendering ASS subtitles
         const isASS = this.osd && this.osd.player && this.osd.player._subtitleManager && this.osd.player._subtitleManager.isASSActive();
 
+        // Check if a secondary subtitle track is active
+        // osd.currentSecondarySubtitleIndex is -1 when no secondary track is selected
+        const hasSecondary = this.osd && this.osd.currentSecondarySubtitleIndex !== undefined &&
+                             this.osd.currentSecondarySubtitleIndex !== -1 &&
+                             this.osd.currentSecondarySubtitleIndex !== null;
+
         this.items = [
             // Position
             {
@@ -304,6 +310,36 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleLetterSpacing',
                 min: -20, max: 40, step: 0.5, unit: 'px',
                 visible: isASS
+            },
+
+            // ================================================================
+            // SECONDARY SUBTITLE SETTINGS
+            // Shown only when a secondary subtitle track is active and primary
+            // is not ASS. Secondary inherits all appearance from primary \u2014
+            // only position and size are independently configurable here.
+            // ================================================================
+            {
+                id: 'secondaryPosition',
+                type: 'slider',
+                label: 'Secondary subtitle position',
+                key: 'secondarySubtitleVerticalPositionCustom',
+                min: 0, max: 100, step: 1, unit: '%',
+                visible: hasSecondary
+            },
+            {
+                id: 'secondarySize',
+                type: 'select',
+                label: 'Secondary Size',
+                key: 'secondarySubtitleSize',
+                visible: hasSecondary,
+                options: [
+                    { value: 'smaller',    label: 'Smaller' },
+                    { value: 'small',      label: 'Small' },
+                    { value: 'medium',     label: 'Medium' },
+                    { value: 'large',      label: 'Large' },
+                    { value: 'larger',     label: 'Larger' },
+                    { value: 'extralarge', label: 'Extra Large' }
+                ]
             }
         ];
 

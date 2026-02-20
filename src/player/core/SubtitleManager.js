@@ -217,6 +217,10 @@ export default class SubtitleManager {
      * Set the secondary subtitle track. Always fetched as external text
      * regardless of whether the track is embedded or not.
      *
+     * Only text-renderable codecs are accepted — PGS, image-based, and
+     * other non-text formats are rejected here to prevent useless fetches
+     * and broken rendering.
+     *
      * @param {number} streamIndex - Jellyfin subtitle stream index (-1 to disable)
      * @returns {Promise<string>} The delivery method chosen
      */
@@ -233,6 +237,16 @@ export default class SubtitleManager {
         const track = this._findSubtitleTrack(streamIndex);
         if (!track) {
             log.warn('Secondary subtitle track not found for index:', streamIndex);
+            return DeliveryMethod.NONE;
+        }
+
+        // ====================================================================
+        // Codec guard — secondary slot ONLY supports text-renderable formats.
+        // PGS/image-based/unknown codecs cannot be DOM-text-rendered, so we
+        // reject them cleanly here rather than fetching and failing silently.
+        // ====================================================================
+        if (!this._isSecondaryRenderable(track)) {
+            log.warn(`Secondary subtitle rejected: "${track.DisplayTitle}" (${track.Codec}) is not a text-renderable format`);
             return DeliveryMethod.NONE;
         }
 
@@ -633,6 +647,23 @@ export default class SubtitleManager {
      */
     _isTextFormat(codec) {
         return TEXT_FORMATS.includes(codec);
+    }
+
+    /**
+     * Check if a subtitle track can be rendered in the secondary slot.
+     *
+     * Secondary subtitles are always DOM-text-rendered, so we only accept
+     * pure text codecs plus ASS/SSA (which the server can transcode to VTT).
+     * PGS and image-based formats are not supported and must be rejected.
+     *
+     * @param {Object} track - Subtitle stream object with a Codec property
+     * @returns {boolean} True if the track can be shown in the secondary slot
+     * @private
+     */
+    _isSecondaryRenderable(track) {
+        const codec = (track.Codec || '').toLowerCase();
+        // Text formats can be fetched directly; ASS/SSA are transcoded to VTT by the server
+        return this._isTextFormat(codec) || codec === 'ass' || codec === 'ssa';
     }
 
     // ========================================================================

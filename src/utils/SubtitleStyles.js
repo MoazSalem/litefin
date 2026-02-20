@@ -253,6 +253,92 @@ export function getWindowStyles() {
     return styles;
 }
 
+// ============================================================================
+// Secondary Subtitle Style Generators
+// Secondary subtitles inherit ALL primary appearance settings (color, shadow,
+// font family, weight, opacity, background) but have their own independent
+// size and position controls.
+// ============================================================================
+
+/**
+ * Generate text styles for the secondary subtitle overlay.
+ * Inherits all primary text styles, then overrides fontSize with the
+ * secondary-specific size setting.
+ *
+ * @returns {Object[]} Array of {name, value} CSS properties
+ */
+export function getSecondaryTextStyles() {
+    // Start with the full primary text style set as a base
+    // (font family, color, shadow, weight, opacity, background all inherited)
+    const styles = getTextStyles();
+
+    // Override just the font size with the secondary-specific size preference
+    const size = PlayerSettings.get('secondarySubtitleSize') || 'medium';
+    const fontSizeMap = {
+        extralarge: '8vh',
+        larger: '7vh',
+        large: '6vh',
+        medium: '5vh',
+        small: '4vh',
+        smaller: '3vh'
+    };
+    const resolvedSize = fontSizeMap[size] || '5vh';
+
+    // Patch the existing fontSize entry in-place (getTextStyles always adds one)
+    const fontSizeIdx = styles.findIndex((s) => s.name === 'fontSize');
+    if (fontSizeIdx !== -1) {
+        styles[fontSizeIdx].value = resolvedSize;
+    } else {
+        // Safety fallback — should never happen, but just in case
+        styles.unshift({ name: 'fontSize', value: resolvedSize });
+    }
+
+    // Also override the margin values — secondary position is fully managed
+    // by getSecondaryWindowStyles() instead, so we clear any margin offsets
+    // that the primary getTextStyles() may have injected based on primary position.
+    const marginBottomIdx = styles.findIndex((s) => s.name === 'marginBottom');
+    const marginTopIdx = styles.findIndex((s) => s.name === 'marginTop');
+    if (marginBottomIdx !== -1) styles[marginBottomIdx].value = '';
+    if (marginTopIdx !== -1) styles[marginTopIdx].value = '';
+
+    return styles;
+}
+
+/**
+ * Generate container/window CSS styles for the secondary subtitle overlay.
+ * Uses secondary-specific position settings; logic mirrors getWindowStyles()
+ * but reads secondarySubtitleVerticalPosition instead.
+ *
+ * @returns {Object[]} Array of {name, value} CSS properties
+ */
+export function getSecondaryWindowStyles() {
+    const styles = [];
+    const posSetting = PlayerSettings.get('secondarySubtitleVerticalPosition') || 'custom';
+
+    if (posSetting === 'custom') {
+        // Custom: absolute % from top of screen (Standard for secondary)
+        const customPos = PlayerSettings.get('secondarySubtitleVerticalPositionCustom') ?? 10;
+        styles.push({ name: 'top', value: `${customPos}%` });
+        styles.push({ name: 'bottom', value: '' });
+    } else {
+        let pos = parseFloat(posSetting);
+        // Fallback or legacy preset handling
+        if (isNaN(pos)) pos = 1;
+
+        if (pos >= 0) {
+            // Top-anchored position
+            styles.push({ name: 'top', value: '2vh' });
+            styles.push({ name: 'bottom', value: '' });
+        } else {
+            // Bottom-anchored position
+            styles.push({ name: 'top', value: '' });
+            styles.push({ name: 'bottom', value: '2vh' });
+        }
+    }
+
+    return styles;
+}
+
 // List of all possible font classes for cleanup
 const fontClasses = [
     'font-typewriter',
@@ -300,6 +386,8 @@ function getCurrentFontId() {
 export default {
     getTextStyles,
     getWindowStyles,
+    getSecondaryTextStyles,
+    getSecondaryWindowStyles,
     applyStyles,
     getCurrentFontId,
     getFontClassName: (settingKey = 'subtitleFont') => {

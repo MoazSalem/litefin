@@ -71,7 +71,29 @@ export default class TrackMenu extends BaseMenu {
         if (this.type === 'subtitles') {
             const tracksRaw = player.getSubtitleTracks ? player.getSubtitleTracks() : [];
             tracks = (tracksRaw.then) ? await tracksRaw : tracksRaw;
-            title = (this.mode === 'secondary') ? 'Secondary Subtitle' : 'Subtitles';
+
+            if (this.mode === 'secondary') {
+                // ============================================================
+                // Secondary subtitle restriction: only text-renderable codecs.
+                // PGS, image-based, and unknown formats cannot be DOM-rendered,
+                // so we filter them out entirely. This set must stay in sync
+                // with SubtitleManager._isSecondaryRenderable().
+                // ============================================================
+                const TEXT_CODECS = new Set([
+                    'srt', 'subrip',
+                    'vtt', 'webvtt',
+                    'ttml', 'dfxp',
+                    'smi', 'sami',
+                    'mov_text', 'tx3g',
+                    'scc', 'sbv', 'ttxt',
+                    'ass', 'ssa'  // server transcodes these to VTT
+                ]);
+                tracks = tracks.filter(t => TEXT_CODECS.has((t.Codec || '').toLowerCase()));
+                title = 'Secondary (Text Only)';
+            } else {
+                title = 'Subtitles';
+            }
+
             currentIndex = (this.mode === 'secondary') ? this.osd.currentSecondarySubtitleIndex : this.osd.currentSubtitleIndex;
             tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
         } else {
