@@ -69,14 +69,21 @@ export default class ASSRenderer {
 
     /**
      * Update the current playback time (only used for AVPlay/ManualClock mode).
-     * In HTML5 video mode, VideoClock auto-syncs with the video element.
+     * In HTML5 video mode, this is driven by the timeupdate event in _createRenderer().
+     *
+     * The stored _delaySeconds offset is applied here for both modes.
+     * A positive delay means subtitles display later — we subtract from the clock
+     * time so libjass "thinks" it's earlier and fires cues later.
      *
      * @param {number} timeSeconds - Current time in seconds
      */
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (this._clock) {
-            this._clock.tick(timeSeconds);
+            // Apply the user-set subtitle delay offset.
+            // Positive delay → subtract from time → clock runs slower → cues fire later.
+            const offsetTime = timeSeconds - (this._delaySeconds || 0);
+            this._clock.tick(offsetTime);
         }
     }
 
@@ -430,11 +437,12 @@ export default class ASSRenderer {
         log.info('Created ManualClock (Unified Strategy)');
 
         if (this._videoElement) {
-            // Drive the ManualClock via HTML5 Video events
+            // Drive the ManualClock via HTML5 Video events.
+            // NOTE: All time updates go through this.tick() so the offset is applied.
             this._onTimeUpdate = () => this.tick(this._videoElement.currentTime);
             this._onSeeking = () => {
-                // ManualClock uses tick() for both progression and seeking
-                if (this._clock) this._clock.tick(this._videoElement.currentTime);
+                // On seek, also go through tick() so the offset is applied
+                if (this._clock) this.tick(this._videoElement.currentTime);
             };
             this._onPlay = () => {
                 if (this._clock) this._clock.play();
@@ -482,11 +490,12 @@ export default class ASSRenderer {
 
             // Nudge the renderer to show subs immediately, especially if paused.
             // Priority: Last tracked tick > Actual video currentTime > 0
+            // Route through tick() so the delay offset is applied correctly.
             const nudgeTime = this._lastTime ?? (this._videoElement ? this._videoElement.currentTime : 0);
-            log.info(`ASSRenderer: Nudging renderer on ready at ${nudgeTime}s`);
+            log.info(`ASSRenderer: Nudging renderer on ready at ${nudgeTime}s (offset: ${this._delaySeconds || 0}s)`);
             if (this._clock) {
-                // ManualClock uses tick() to sync to a specific point in time
-                this._clock.tick(nudgeTime);
+                // Use tick() to ensure the delay offset is applied from the start
+                this.tick(nudgeTime);
             }
         });
 

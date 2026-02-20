@@ -811,7 +811,7 @@
     max-height: calc(100vh - 300px);
     background: rgba(0, 0, 0, 0.65);
     border-radius: 16px;
-    padding: 20px;
+    padding: 15px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
     display: flex;
@@ -832,13 +832,13 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 10px;
+    margin-bottom: 5px;
+    padding-bottom: 5px;
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-    padding-bottom: 10px;
 }
 
 .playback-info-title {
-    font-size: 24px;
+    font-size: 16px;
     font-weight: 700;
 }
 
@@ -846,8 +846,8 @@
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: #fff;
-    width: 36px;
-    height: 36px;
+    width: 28px;
+    height: 28px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -864,7 +864,7 @@
 
 /* Sections */
 .pi-section {
-    margin-bottom: 24px;
+    margin-bottom: 5px;
 }
 
 .pi-section:last-child {
@@ -872,10 +872,12 @@
 }
 
 .pi-section-title {
-    font-size: 18px;
+    font-size: 16px;
     font-weight: 700;
     color: rgba(255, 255, 255, 0.7);
-    margin-bottom: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 2px;
+    margin-bottom: 4px;
 }
 
 /* Rows */
@@ -883,8 +885,7 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    margin-bottom: 8px;
-    font-size: 16px;
+    font-size: 14px;
 }
 
 .pi-row:last-child {
@@ -902,6 +903,7 @@
     text-align: right;
     max-width: 60%;
     word-break: break-all;
+    line-height: 0.8;
 }
 #osdOffsetOverlay {
     position: fixed;
@@ -909,21 +911,39 @@
     left: 50%;
     -webkit-transform: translateX(-50%);
     transform: translateX(-50%);
-    width: 700px; /* Wider for horizontal row */
-    background: rgba(0, 0, 0, 0.75);
-    border-radius: 16px;
-    padding: 14px 24px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
+    width: 480px; /* Reduced width for compact layout */
+    background: rgba(0, 0, 0, .65);
+    border: 1px solid hsla(0, 0%, 100%, .1);
+    border-radius: 20px;
+    padding: 20px 24px;
     color: #fff;
     display: flex;
-    flex-direction: row; /* Horizontal row */
-    align-items: center;
-    gap: 20px;
+    flex-direction: column;
+    gap: 12px;
     z-index: 2000;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+}
+
+.osd-offset-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    width: 100%;
+}
+
+.osd-offset-title-group {
+    display: flex;
+    align-items: baseline;
+    gap: 12px;
+}
+
+.osd-offset-content {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    /* No horizontal gap needed now that slider is full width */
 }
 
 /* Visible state — toggled by JS */
@@ -939,28 +959,14 @@
     color: rgba(255, 255, 255, 0.5);
     text-transform: uppercase;
     letter-spacing: 1.5px;
-    flex: 0 0 auto;
-    white-space: nowrap;
-}
-
-/* "SUBTITLE OFFSET" label */
-.osd-offset-title {
-    font-size: 15px;
-    font-weight: 500;
-    color: rgba(255, 255, 255, 0.7);
-    text-transform: uppercase;
-    letter-spacing: 0.5px;
 }
 
 /* Offset value display, e.g. "+1.2s" */
 .osd-offset-value {
-    font-size: 22px;
+    font-size: 20px;
     font-weight: 700;
-    color: #fff;
-    min-width: 70px;
-    text-align: right;
+    color: var(--jf-text-primary); 
     font-variant-numeric: tabular-nums;
-    flex: 0 0 auto;
 }
 
 /* Close button */
@@ -968,18 +974,19 @@
     background: rgba(255, 255, 255, 0.1);
     border: none;
     color: #fff;
-    width: 36px; /* Slightly larger */
-    height: 36px;
+    width: 40px;
+    height: 40px;
     border-radius: 50%;
-    display: -webkit-flex;
     display: flex;
-    -webkit-align-items: center;
     align-items: center;
-    -webkit-justify-content: center;
     justify-content: center;
     cursor: pointer;
-    -webkit-transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.osd-offset-close .osd-icon {
+    width: 22px;
+    height: 22px;
 }
 
 .osd-offset-close:hover,

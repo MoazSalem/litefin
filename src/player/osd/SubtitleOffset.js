@@ -40,19 +40,25 @@ export default class SubtitleOffset extends BaseMenu {
 
     render() {
         const html = `
-            <div id="osdOffsetOverlay" class="osd-offset-popup-row">
-                <span class="osd-offset-title">OFFSET</span>
-                <div class="osd-slider-container menu-slider">
-                    <div class="osd-slider-track">
-                        <div class="osd-slider-fill" id="osdOffsetFill"></div>
+            <div id="osdOffsetOverlay" class="osd-offset-popup">
+                <div class="osd-offset-header">
+                    <div class="osd-offset-title-group">
+                        <span class="osd-offset-title">SUBTITLE OFFSET</span>
+                        <span class="osd-offset-value" id="osdOffsetValue">0.0s</span>
                     </div>
-                    <input type="range" class="osd-offset-slider focusable" id="osdOffsetSlider" 
-                           min="-30" max="30" step="0.1" value="0" tabindex="0">
+                    <button class="osd-offset-close focusable" data-action="closeSubtitleOffset" tabindex="0">
+                        ${ICONS.close}
+                    </button>
                 </div>
-                <span class="osd-offset-value" id="osdOffsetValue">0.0s</span>
-                <button class="osd-offset-close focusable" data-action="closeSubtitleOffset" tabindex="0">
-                     ${ICONS.close}
-                </button>
+                <div class="osd-offset-content">
+                    <div class="osd-slider-container menu-slider">
+                        <div class="osd-slider-track">
+                            <div class="osd-slider-fill" id="osdOffsetFill"></div>
+                        </div>
+                        <input type="range" class="osd-offset-slider focusable" id="osdOffsetSlider" 
+                               min="-30" max="30" step="0.1" value="0" tabindex="0">
+                    </div>
+                </div>
             </div>
         `;
         
