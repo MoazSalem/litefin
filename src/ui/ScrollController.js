@@ -34,16 +34,18 @@ const SCROLL_DURATION_HORIZONTAL = 150;
 const SCROLL_SNAP_THRESHOLD = 1;
 
 // Buffer (px) around viewport edges for row visibility cutoff detection.
-// If a row is within this many pixels of being cut off, we scroll it into view.
+// Used as a safety margin when bottom-aligning elements in tall rows.
 const ROW_CUTOFF_BUFFER = 40;
 
 // Default top offset (px) when aligning a row to the top of the viewport.
 // Creates breathing room above the focused row for a premium TV feel.
 const DEFAULT_SCROLL_OFFSET_TOP = 50;
 
-// Safety buffer (px) to prevent the focused element from being clipped
-// at the very top of the viewport after a row scroll.
-const ELEMENT_TOP_SAFETY_BUFFER = 20;
+// Threshold (px) — if the row's top is already within this distance of
+// the ideal scroll position, skip scrolling. Prevents micro-jitter when
+// navigating horizontally within the same row or between tightly packed items
+// (e.g. genre header → genre grid within the same .media-row).
+const SCROLL_ALIGN_THRESHOLD = 30;
 
 // Buffer (px) around viewport edges for horizontal row visibility detection.
 // Used when scrolling a parent row into view before centering a card.
@@ -217,9 +219,9 @@ class ScrollController {
      * Scroll an element into view with intelligent positioning.
      *
      * Handles multiple scroll strategies:
-     *   - Row-based vertical: Aligns the parent .media-row to the top
-     *     with a configurable offset (default 50px). Ensures the specific
-     *     focused element is visible even in tall rows.
+     *   - Row-based vertical: ALWAYS aligns the parent .media-row to the
+     *     top with a configurable offset (default 50px), guarded by a
+     *     threshold to prevent jitter on horizontal nav within the same row.
      *   - Hero section: Always scrolls to absolute 0.
      *   - Horizontal: Centers the element within its .row-items container.
      *   - Generic vertical: Simple scroll-into-view with margins for
@@ -268,61 +270,51 @@ class ScrollController {
                 activePageContent = null;
             }
             // TALL ROW EXCEPTION: If the row is much taller than the viewport,
-            // disable row-alignment to prevent jumping when focusing bottom items
+            // disable row-alignment to prevent jarring jumps.
             else if (row.offsetHeight > pageContent.clientHeight * TALL_ROW_MULTIPLIER) {
                 useRowScroll = false;
             }
         }
 
         // ----------------------------------------------------------------
-        // Row-based vertical scrolling
+        // Row-based vertical scrolling — ALWAYS ALIGN TO TOP
+        // On every focus change, we target the ideal top-aligned position
+        // for the parent .media-row. This produces many small, smooth
+        // scrolls instead of rare, jarring large jumps — critical for
+        // performance on slow Tizen hardware.
+        //
+        // A threshold (SCROLL_ALIGN_THRESHOLD) prevents micro-jitter when
+        // navigating horizontally within the same row or between tightly
+        // packed items (e.g. genre header → genre grid in the same row).
         // ----------------------------------------------------------------
         if (useRowScroll && row) {
             // Batch all DOM reads first (Samsung Tizen optimization)
             const rowTop = getCumulativeOffsetTop(row, pageContent);
-            const rowHeight = row.offsetHeight;
-            const rowBottom = rowTop + rowHeight;
+            const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
             const viewHeight = pageContent.clientHeight;
             const currentScroll = pageContent.scrollTop;
-            const viewBottom = currentScroll + viewHeight;
 
-            // Check visibility with buffer for cutoffs
-            const topCutoff = rowTop < currentScroll + ROW_CUTOFF_BUFFER;
-            const bottomCutoff = rowBottom > viewBottom - ROW_CUTOFF_BUFFER;
+            // Ideal target: row top sits at the configured offset from viewport top
+            let targetScroll = rowTop - padding;
 
-            if (bottomCutoff) {
-                // Row is cut off at bottom — aim for top-alignment
-                let targetScroll = rowTop - (config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP);
+            // Safety: ensure the specific focused element is visible
+            // at the computed scroll position (tall row edge case)
+            const elTop = getCumulativeOffsetTop(element, pageContent);
+            const elBottom = elTop + element.offsetHeight;
 
-                // Safety: ensure the specific focused element is visible
-                // at the computed scroll position (tall row edge case)
-                const elTop = getCumulativeOffsetTop(element, pageContent);
-                const elBottom = elTop + element.offsetHeight;
+            if (elBottom > targetScroll + viewHeight) {
+                // Element too far down — bottom-align instead
+                targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
+            }
 
-                if (elBottom > targetScroll + viewHeight) {
-                    // Element too far down, align to bottom instead
-                    targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
-                }
+            targetScroll = Math.max(0, targetScroll);
 
-                this.smoothScrollTo(pageContent, Math.max(0, targetScroll));
-            } else if (topCutoff) {
-                // Row is cut off at top
-                const isHero = row.classList.contains('details-main-split');
-
-                if (isHero) {
-                    this.smoothScrollTo(pageContent, 0);
-                } else {
-                    const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
-                    let targetScroll = rowTop - padding;
-
-                    // Safety: ensure element isn't cut off at the top
-                    const elTop = getCumulativeOffsetTop(element, pageContent);
-                    if (elTop < targetScroll + ELEMENT_TOP_SAFETY_BUFFER) {
-                        targetScroll = elTop - padding;
-                    }
-
-                    this.smoothScrollTo(pageContent, Math.max(0, targetScroll));
-                }
+            // Only scroll if the delta exceeds the alignment threshold.
+            // This prevents micro-jitter on horizontal nav within the same row,
+            // and avoids unnecessary scrolls between tightly packed items
+            // (e.g. genre header → genre grid within the same .media-row).
+            if (Math.abs(targetScroll - currentScroll) > SCROLL_ALIGN_THRESHOLD) {
+                this.smoothScrollTo(pageContent, targetScroll);
             }
         }
 
