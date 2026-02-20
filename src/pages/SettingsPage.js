@@ -636,9 +636,26 @@ class SettingsPage extends Page {
                                 { value: 'medium', label: 'Medium' },
                                 { value: 'large', label: 'Large' },
                                 { value: 'larger', label: 'Larger' },
-                                { value: 'extralarge', label: 'Extra Large' }
+                                { value: 'extralarge', label: 'Extra Large' },
+                                { value: 'custom', label: 'Custom' }
                             ],
                             PlayerSettings.get('subtitleSize')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-custom-size-container" style="display: ${PlayerSettings.get('subtitleSize') === 'custom' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name">Custom Size (vh)</span>
+                        <span class="setting-description">Manually adjust subtitle size</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-custom-size',
+                            PlayerSettings.get('subtitleSizeCustomValue'),
+                            1,
+                            20,
+                            1
                         )}
                     </div>
                 </div>
@@ -776,8 +793,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Shadow</span>
-                        <span class="setting-description">Subtitle shadow style</span>
+                        <span class="setting-name">Text Shadow Style</span>
+                        <span class="setting-description">Subtitle shadow type</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -785,11 +802,28 @@ class SettingsPage extends Page {
                             [
                                 { value: 'none', label: 'None' },
                                 { value: 'uniform', label: 'Uniform' },
+                                { value: 'border', label: 'Border' },
                                 { value: 'dropshadow', label: 'Drop Shadow' },
                                 { value: 'raised', label: 'Raised' },
                                 { value: 'depressed', label: 'Depressed' }
                             ],
                             PlayerSettings.get('subtitleDropShadow')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name">Border Width</span>
+                        <span class="setting-description">Width of the sharp text border</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-border-width',
+                            PlayerSettings.get('subtitleBorderWidth'),
+                            1,
+                            20,
+                            1
                         )}
                     </div>
                 </div>
@@ -818,7 +852,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item" id="subtitle-shadow-opacity-container" style="display: ${!PlayerSettings.get('subtitleDropShadow') || PlayerSettings.get('subtitleDropShadow') === 'none' || PlayerSettings.get('subtitleDropShadow') === 'border' ? 'none' : ''}">
                     <div class="setting-label">
                         <span class="setting-name">Shadow Opacity</span>
                         <span class="setting-description">Opacity of the drop shadow</span>
@@ -1580,6 +1614,8 @@ class SettingsPage extends Page {
             'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
             'subtitle-position-select': { key: 'subtitleVerticalPosition', type: 'player' },
+            'subtitle-custom-size': { key: 'subtitleSizeCustomValue', type: 'player' },
+            'subtitle-border-width': { key: 'subtitleBorderWidth', type: 'player' },
             'subtitle-font-scale': { key: 'subtitleFontScale', type: 'player' },
             'subtitle-outline-thickness': { key: 'subtitleOutlineThickness', type: 'player' },
             'subtitle-shadow-thickness': { key: 'subtitleShadowThickness', type: 'player' },
@@ -1651,14 +1687,37 @@ class SettingsPage extends Page {
                             if (id === 'subtitle-position-select') {
                                 const customPosContainer = document.getElementById('subtitle-custom-pos-container');
                                 if (customPosContainer) {
-                                    if (newValue === 'custom') {
-                                        customPosContainer.style.display = ''; // Restore to CSS (flex)
-                                    } else {
-                                        customPosContainer.style.display = 'none';
-                                    }
-                                    // REFRESH FOCUS: The focusable elements changed
+                                    customPosContainer.style.display = newValue === 'custom' ? '' : 'none';
                                     focusManager.invalidateCache('settings-content');
                                 }
+                            }
+
+                            if (id === 'subtitle-size-select') {
+                                const customSizeContainer = document.getElementById('subtitle-custom-size-container');
+                                if (customSizeContainer) {
+                                    customSizeContainer.style.display = newValue === 'custom' ? '' : 'none';
+                                    focusManager.invalidateCache('settings-content');
+                                }
+                            }
+
+                            if (id === 'subtitle-shadow-select') {
+                                const borderWidthContainer = document.getElementById('subtitle-border-width-container');
+                                if (borderWidthContainer) {
+                                    borderWidthContainer.style.display = newValue === 'border' ? '' : 'none';
+                                }
+
+                                const opacityContainer = document.getElementById('subtitle-shadow-opacity-container');
+                                if (opacityContainer) {
+                                    opacityContainer.style.display =
+                                        newValue === 'none' || newValue === 'border' ? 'none' : '';
+                                }
+
+                                const blurContainer = document.getElementById('subtitle-shadow-blur-container');
+                                if (blurContainer) {
+                                    blurContainer.style.display =
+                                        newValue === 'none' || newValue === 'border' ? 'none' : '';
+                                }
+                                focusManager.invalidateCache('settings-content');
                             }
 
                             // FONT LOADING: Trigger download if needed

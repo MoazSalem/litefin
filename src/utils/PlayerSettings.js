@@ -58,13 +58,16 @@ const DEFAULTS = {
     // Subtitle mode ('Default', 'Smart', 'OnlyForced', 'Always', 'None')
     subtitleMode: 'Default',
 
-    // Subtitle text size ('small', 'medium', 'large', 'larger', 'extralarge')
+    // Subtitle text size ('small', 'medium', 'large', 'larger', 'extralarge', 'custom')
     subtitleSize: 'medium',
+
+    // Custom subtitle size value (used when subtitleSize is 'custom')
+    subtitleSizeCustomValue: 5,
 
     // Subtitle font weight ('normal', 'bold', 'bolder')
     subtitleWeight: 'normal',
 
-    // Subtitle drop shadow ('none', 'uniform', 'dropshadow', 'raised', 'depressed')
+    // Subtitle drop shadow ('none', 'uniform', 'dropshadow', 'raised', 'depressed', 'border')
     subtitleDropShadow: 'uniform',
 
     // Drop shadow color
@@ -75,6 +78,9 @@ const DEFAULTS = {
 
     // Drop shadow blur radius (px)
     subtitleDropShadowBlur: 6,
+
+    // Subtitle border width (px, used when subtitleDropShadow is 'border')
+    subtitleBorderWidth: 3,
 
     // Custom subtitle font (empty = system default)
     subtitleFont: '',

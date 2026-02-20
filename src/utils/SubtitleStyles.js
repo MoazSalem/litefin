@@ -39,6 +39,10 @@ function _hexToRgba(hex, opacity) {
 export function getTextStyles() {
     const styles = [];
 
+    // Reset properties that might have been set by other modes (like 'border')
+    styles.push({ name: 'webkitTextStroke', value: '' });
+    styles.push({ name: 'paintOrder', value: '' });
+
     // ========================================================================
     // Font Size
     // Options: small, medium, large, larger, extralarge
@@ -60,6 +64,11 @@ export function getTextStyles() {
         case 'smaller':
             styles.push({ name: 'fontSize', value: '3vh' });
             break;
+        case 'custom': {
+            const customSizeV = PlayerSettings.get('subtitleSizeCustomValue') ?? 5;
+            styles.push({ name: 'fontSize', value: `${customSizeV}vh` });
+            break;
+        }
         case 'medium':
         default:
             styles.push({ name: 'fontSize', value: '5vh' });
@@ -94,9 +103,16 @@ export function getTextStyles() {
     const shadowBlur = PlayerSettings.get('subtitleDropShadowBlur') ?? 6;
     const blurPx = `${shadowBlur}px`;
 
-    // Generate valid RGBA for shadow and highlight (for 3D effects)
-    const shadowColor = _hexToRgba(shadowColorHex, shadowOpacity);
-    const highlightColor = _hexToRgba('#ffffff', shadowOpacity); // Keep highlight white but respect opacity
+    const borderWidth = PlayerSettings.get('subtitleBorderWidth') ?? 3;
+    const borderPx = `${borderWidth}px`;
+
+    // Generate valid RGBA for shadow and highlight (for 3D effects).
+    // Special case: 'border' mode forces 100% opacity for the outline,
+    // but we don't want to overwrite the user's stored 'subtitleDropShadowOpacity'
+    // for when they switch back to other shadow modes.
+    const effectiveOpacity = shadow === 'border' ? 100 : shadowOpacity;
+    const shadowColor = _hexToRgba(shadowColorHex, effectiveOpacity);
+    const highlightColor = _hexToRgba('#ffffff', effectiveOpacity); // Keep highlight white but respect opacity
 
     switch (shadow) {
         case 'heavy':
@@ -121,6 +137,14 @@ export function getTextStyles() {
                 name: 'textShadow',
                 value: `${shadowColor} 0px 1px ${blurPx}, ${shadowColor} 0px -1px ${blurPx}, ${shadowColor} 1px 0px ${blurPx}, ${shadowColor} -1px 0px ${blurPx}, ${shadowColor} 1px 1px ${blurPx}, ${shadowColor} -1px 1px ${blurPx}, ${shadowColor} 1px -1px ${blurPx}, ${shadowColor} -1px -1px ${blurPx}`
             });
+            break;
+        case 'border':
+            // Solid border logic using -webkit-text-stroke.
+            // Using 'paint-order: stroke fill' ensures the border stays behind the text
+            // so it doesn't thin out the glyphs even at high widths.
+            styles.push({ name: 'webkitTextStroke', value: `${borderPx} ${shadowColor}` });
+            styles.push({ name: 'paintOrder', value: 'stroke fill' });
+            styles.push({ name: 'textShadow', value: 'none' });
             break;
         case 'none':
             styles.push({ name: 'textShadow', value: 'none' });

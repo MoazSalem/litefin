@@ -117,8 +117,17 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'medium', label: 'Medium' },
                     { value: 'large', label: 'Large' },
                     { value: 'larger', label: 'Larger' },
-                    { value: 'extralarge', label: 'Extra Large' }
+                    { value: 'extralarge', label: 'Extra Large' },
+                    { value: 'custom', label: 'Custom' }
                 ]
+            },
+            {
+                id: 'customSize',
+                type: 'slider',
+                label: 'Custom Size',
+                key: 'subtitleSizeCustomValue',
+                min: 1, max: 20, step: 1, unit: 'vh',
+                visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
             },
             {
                 id: 'font',
@@ -208,8 +217,17 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'uniform', label: 'Uniform' },
                     { value: 'dropshadow', label: 'Drop Shadow' },
                     { value: 'raised', label: 'Raised' },
-                    { value: 'depressed', label: 'Depressed' }
+                    { value: 'depressed', label: 'Depressed' },
+                    { value: 'border', label: 'Border' }
                 ]
+            },
+            {
+                id: 'borderWidth',
+                type: 'slider',
+                label: 'Border Width',
+                key: 'subtitleBorderWidth',
+                min: 1, max: 20, step: 1, unit: 'px',
+                visible: !isASS && shadowType === 'border'
             },
             {
                 id: 'shadowColor',
@@ -243,7 +261,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: 'Shadow Blur',
                 key: 'subtitleDropShadowBlur',
                 min: 0, max: 20, step: 1, unit: 'px',
-                visible: !isASS && shadowType !== 'none'
+                visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             }, 
             {
                 id: 'fontAss',
