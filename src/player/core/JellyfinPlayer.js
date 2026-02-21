@@ -721,6 +721,24 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Set mute state explicitly.
+     * Called by PlayerPage when a remote Mute / Unmute command arrives via WebSocket.
+     * Delegates to the backend player (HtmlVideoPlayer.setMuted or TizenAVPlayer).
+     * @param {boolean} muted
+     */
+    setMuted(muted) {
+        if (this._backend?.setMuted) {
+            this._backend.setMuted(muted);
+        } else {
+            // Fallback: backend may only expose toggleMute — use isMuted to decide
+            if (Boolean(muted) !== this.isMuted()) {
+                this._backend?.toggleMute?.();
+            }
+        }
+        this.emit(PlayerEvent.VOLUME_CHANGE, { volume: this.getVolume() });
+    }
+
+    /**
      * Check if muted
      * @returns {boolean}
      */

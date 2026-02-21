@@ -302,24 +302,62 @@ class App {
         log.debug('WebSocketHandler initialized for remote control');
 
         // Handle remote:playnow - start playback of item from server
-        eventBus.on('remote:playnow', async ({ itemIds, startPositionTicks }) => {
-            log.info('Remote playnow command received for item IDs:', itemIds, 'at position:', startPositionTicks);
+        //
+        // The Jellyfin server sends this for two distinct scenarios:
+        //   1. Plain "start playing this item" — typical remote control play
+        //   2. Queue manipulation (reorder / remove / jump-to-item) sent while
+        //      we are already playing.  In that case the server sends the FULL
+        //      new ordered item list plus StartIndex indicating the active slot.
+        //
+        // We route case (2) directly to PlayerPage via remote:queueupdate so it
+        // can rebuild PlayQueue in-place without a full page navigation.
+        eventBus.on('remote:playnow', async ({ itemIds, startIndex, startPositionTicks }) => {
+            log.info(
+                'Remote playnow:',
+                itemIds?.length,
+                'items, startIndex:',
+                startIndex,
+                'position:',
+                startPositionTicks
+            );
+
             if (!itemIds || itemIds.length === 0) {
-                log.warn('Remote playnow command received without item IDs');
+                log.warn('Remote playnow received without item IDs — ignoring');
                 return;
             }
 
+            // ----------------------------------------------------------------
+            // Case A: Player is already active → in-place queue update.
+            // We can detect this by checking if the current route is /player/*.
+            // PlayerPage will handle fetching items and rebuilding the queue.
+            // ----------------------------------------------------------------
+            const currentPath = router.getCurrentPath?.() || '';
+            if (currentPath.startsWith('/player')) {
+                log.info('Remote playnow: player active — emitting remote:queueupdate');
+                eventBus.emit('remote:queueupdate', {
+                    itemIds,
+                    startIndex: startIndex || 0,
+                    startPositionTicks: startPositionTicks || 0
+                });
+                return;
+            }
+
+            // ----------------------------------------------------------------
+            // Case B: No player running — fetch the target item and navigate.
+            // Use startIndex (default 0) to pick the correct starting item.
+            // ----------------------------------------------------------------
+            const targetId = itemIds[startIndex || 0] || itemIds[0];
+
             try {
-                // Get the first item to play
-                const item = await api.getItem(itemIds[0]);
+                const item = await api.getItem(targetId);
                 if (item) {
-                    log.debug('Remote playnow: emitting player:play event');
+                    log.debug('Remote playnow: navigating to player for item', item.Name);
                     eventBus.emit('player:play', {
                         item,
                         resume: startPositionTicks > 0
                     });
                 } else {
-                    log.warn('Remote playnow: Item not found for ID:', itemIds[0]);
+                    log.warn('Remote playnow: Item not found for ID:', targetId);
                 }
             } catch (e) {
                 log.error('Failed to handle remote:playnow command:', e.message || e);

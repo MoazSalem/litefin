@@ -339,6 +339,43 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:previous', this._onRemotePrevious);
 
+            // ---------------------------------------------------------------
+            // Remote queue manipulation
+            //
+            // Emitted by App.js when a remote:playnow arrives while the player
+            // is active.  This covers: remove item, reorder, jump-to-item —
+            // all of which Jellyfin sends as a fresh Play(PlayNow) command
+            // with the complete new ordered item list and a StartIndex.
+            // ---------------------------------------------------------------
+            this._onRemoteQueueUpdate = ({ itemIds, startIndex, startPositionTicks }) => {
+                log.info('Remote queue update received:', itemIds?.length, 'items, startIndex:', startIndex);
+                this._handleRemoteQueueUpdate(itemIds, startIndex || 0, startPositionTicks || 0);
+            };
+            eventBus.on('remote:queueupdate', this._onRemoteQueueUpdate);
+
+            // ---------------------------------------------------------------
+            // UserDataChanged — another client toggled favourite / watched state.
+            // The server pushes a UserDataList array; we find the entry matching
+            // the currently-playing item and patch the OSD favourite button.
+            // ---------------------------------------------------------------
+            this._onRemoteUserDataChanged = (userDataList) => {
+                if (!this._item || !this._osd || !Array.isArray(userDataList)) return;
+
+                // Find the entry that matches the currently-playing item
+                const entry = userDataList.find((u) => u.ItemId === this._item.Id);
+                if (!entry) return;
+
+                log.info('Remote UserDataChanged for current item — IsFavorite:', entry.IsFavorite);
+
+                // Patch the in-memory item so local toggle logic stays in sync
+                if (!this._item.UserData) this._item.UserData = {};
+                this._item.UserData.IsFavorite = entry.IsFavorite;
+
+                // Reflect the new state on the OSD heart button immediately
+                this._osd._updateFavoriteButton(this._item);
+            };
+            eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
+
             // Start playback
             await this._startPlayback();
 
@@ -458,15 +495,33 @@ class PlayerPage extends Page {
 
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
-        await this._player.play({
-            item: item, // Pass full item which might have Chapters
-            itemId: item.Id,
-            userId: api.userId, // Required for playback info
-            startPositionTicks: this._resumePosition,
-            mediaSourceId: mediaSource?.Id,
-            audioStreamIndex: savedAudioIndex,
-            subtitleStreamIndex: savedSubtitleIndex
-        });
+        try {
+            await this._player.play({
+                item: item, // Pass full item which might have Chapters
+                itemId: item.Id,
+                userId: api.userId, // Required for playback info
+                startPositionTicks: this._resumePosition,
+                mediaSourceId: mediaSource?.Id,
+                audioStreamIndex: savedAudioIndex,
+                subtitleStreamIndex: savedSubtitleIndex
+            });
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                log.warn('_startPlayback: Autoplay blocked. Forcing mute and retrying.');
+                this._player.setMuted(true);
+                await this._player.play({
+                    item: item,
+                    itemId: item.Id,
+                    userId: api.userId,
+                    startPositionTicks: this._resumePosition,
+                    mediaSourceId: mediaSource?.Id,
+                    audioStreamIndex: savedAudioIndex,
+                    subtitleStreamIndex: savedSubtitleIndex
+                });
+            } else {
+                throw err;
+            }
+        }
 
         // Report playback start to server
         // Note: The player emits PLAYBACK_START event which could be used,
@@ -669,6 +724,124 @@ class PlayerPage extends Page {
     }
 
     /**
+     * Handle an incoming queue update from a remote controller.
+     *
+     * The server sends the COMPLETE new ordered item list whenever the remote
+     * user removes, reorders, or jumps to an item.  We need to:
+     *   1. Fetch the full item details for each ID (to match PlayQueue format)
+     *   2. Replace PlayQueue in-place via setQueue()
+     *   3. If the active slot has changed, switch playback to the new item.
+     *
+     * @param {string[]} itemIds         - New ordered list of item IDs
+     * @param {number}   startIndex      - Index that should be active now
+     * @param {number}   startPositionTicks - Position to seek to (usually 0 for queue ops)
+     */
+    async _handleRemoteQueueUpdate(itemIds, startIndex, startPositionTicks) {
+        if (this._isSwitching) {
+            log.warn('Ignoring remote queue update — already switching tracks');
+            return;
+        }
+
+        try {
+            // ----------------------------------------------------------------
+            // Fetch all items in parallel while preserving order.
+            // We need the full item objects (not just IDs) to build a proper
+            // PlayQueue that _buildNowPlayingQueue() and the OSD can use.
+            // ----------------------------------------------------------------
+            log.info('Fetching', itemIds.length, 'items for remote queue update...');
+            const itemPromises = itemIds.map((id) => api.getItem(id).catch(() => null));
+            const fetchedItems = (await Promise.all(itemPromises)).filter(Boolean);
+
+            if (fetchedItems.length === 0) {
+                log.warn('Remote queue update: no items fetched — ignoring');
+                return;
+            }
+
+            // Clamp startIndex to the fetched list length
+            const safeIndex = Math.min(startIndex, fetchedItems.length - 1);
+            const targetItem = fetchedItems[safeIndex];
+            const currentItemId = this._item?.Id;
+
+            // ----------------------------------------------------------------
+            // Rebuild the queue.
+            // If the remote queue strictly consists of episodes from the same
+            // series, we delegate to PlayQueue.init() to fetch the FULL series.
+            // This ensures "Previous" episodes are preserved (Jellyfin Web
+            // PlayNow typically only sends upcoming episodes).
+            // For mixed or custom playlists, we respect the exact remote list.
+            // ----------------------------------------------------------------
+            const isSingleSeriesContent =
+                fetchedItems.length > 0 &&
+                fetchedItems.every((i) => i.Type === 'Episode' && i.SeriesId === targetItem.SeriesId);
+
+            if (isSingleSeriesContent) {
+                log.info('Remote queue update: Restoring full series queue for episode:', targetItem.Name);
+                await playQueue.init(targetItem);
+            } else {
+                playQueue.setQueue(fetchedItems, safeIndex);
+                log.info('Queue rebuilt via remote update:', fetchedItems.length, 'items, active:', targetItem?.Name);
+            }
+
+            if (targetItem.Id === currentItemId) {
+                // ----------------------------------------------------------
+                // Same item remains active — this was a remove-other or
+                // reorder that didn't change the playing track.  Just report
+                // the new queue to the server so the dashboard reflects it.
+                // ----------------------------------------------------------
+                log.info('Remote queue update: active item unchanged, reporting updated queue');
+                this._reportPlaybackProgress();
+            } else {
+                // ----------------------------------------------------------
+                // A different item is now at startIndex — this is a
+                // jump-to-item or reorder that changed what should play.
+                // Perform an in-place track switch exactly like _playNextItem.
+                // ----------------------------------------------------------
+                log.info('Remote queue update: switching to new active item:', targetItem.Name);
+
+                this._isSwitching = true;
+                this._showLoading(true);
+
+                try {
+                    // Capture position before stopping
+                    const mediaSource = this._player?.getCurrentMediaSource?.();
+                    const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+                    if (this._player?.stop) {
+                        await this._player.stop();
+                    }
+
+                    await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+
+                    // Brief settle delay (same as _playNextItem)
+                    await new Promise((resolve) => setTimeout(resolve, 500));
+
+                    // Switch to target item
+                    this._item = targetItem;
+                    this._resumePosition = startPositionTicks || 0;
+                    this._cachedMediaSource = null;
+                    this._hasReportedStart = false;
+                    this._lastReportTime = 0;
+
+                    if (this._osd) {
+                        this._osd.updateItem(targetItem);
+                    }
+
+                    await this._startPlayback();
+
+                    this._showLoading(false);
+                } catch (switchError) {
+                    log.error('Remote queue update: track switch failed:', switchError);
+                    this._showError('Failed to switch to requested item');
+                } finally {
+                    this._isSwitching = false;
+                }
+            }
+        } catch (error) {
+            log.error('Remote queue update failed:', error);
+        }
+    }
+
+    /**
      * Play previous item in queue if available
      */
     async _playPreviousItem() {
@@ -769,7 +942,11 @@ class PlayerPage extends Page {
                 ItemId: this._item.Id,
                 PlaySessionId: mediaSource?.PlaySessionId || mediaSource?.LiveStreamId,
                 MediaSourceId: mediaSource?.Id,
-                ...playerState
+                ...playerState,
+
+                // Include the full queue so the server can display "up next" in the
+                // session inspector and respond to remote skip commands correctly.
+                NowPlayingQueue: this._buildNowPlayingQueue()
             };
 
             await api.reportPlaybackStart(info);
@@ -985,7 +1162,11 @@ class PlayerPage extends Page {
                 MediaSourceId: mediaSource?.Id,
                 ...playerState,
                 IsPaused: isPaused,
-                EventName: eventName
+                EventName: eventName,
+
+                // Report the current queue state so the dashboard can reflect what's
+                // up next and remote control queue operations work correctly.
+                NowPlayingQueue: this._buildNowPlayingQueue()
             };
 
             // Debug: Log progress reports for pause/unpause events
@@ -1045,6 +1226,28 @@ class PlayerPage extends Page {
         }
 
         return state;
+    }
+
+    /**
+     * Build the NowPlayingQueue array for playback reports.
+     *
+     * The server expects an array of minimal queue entry objects so it can display
+     * "up next" in the session inspector and handle remote queue-skip commands.
+     * Each entry carries:
+     *   - Id:             the Jellyfin item Id (media item)
+     *   - PlaylistItemId: a session-unique token assigned by PlayQueue, used by the
+     *                     server to reference specific queue slots independently of
+     *                     item identity (e.g., when the same movie appears twice).
+     *
+     * @returns {Array<{Id: string, PlaylistItemId: string}>}
+     */
+    _buildNowPlayingQueue() {
+        // getQueue() returns a shallow copy of the current queue array,
+        // with PlaylistItemId already stamped on every item by PlayQueue.
+        return playQueue.getQueue().map((item) => ({
+            Id: item.Id,
+            PlaylistItemId: item.PlaylistItemId
+        }));
     }
 
     // ========================================================================
@@ -1306,6 +1509,8 @@ class PlayerPage extends Page {
         if (this._onRemoteToggleMute) eventBus.off('remote:togglemute', this._onRemoteToggleMute);
         if (this._onRemoteNext) eventBus.off('remote:next', this._onRemoteNext);
         if (this._onRemotePrevious) eventBus.off('remote:previous', this._onRemotePrevious);
+        if (this._onRemoteQueueUpdate) eventBus.off('remote:queueupdate', this._onRemoteQueueUpdate);
+        if (this._onRemoteUserDataChanged) eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
 
         // Clean up focus sections
         focusManager.unregister('player-error');

@@ -121,6 +121,7 @@ export default class OSDController extends Component {
         }
 
         // Initial render attempt
+        this._updateChapterButtons();
         this._renderChapterMarkers();
 
         // Bind keys
@@ -185,11 +186,11 @@ export default class OSDController extends Component {
                     <div class="osd-controls-row">
                         <div class="osd-controls-left">
                             <button class="osd-btn" data-action="previousTrack" tabindex="0" id="osdPrevBtn">${ICONS.skipPrevious}</button>
-                            <button class="osd-btn osd-hidden" data-action="previousChapter" tabindex="0" id="osdPrevChapterBtn">${ICONS.chapterPrevious}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="previousChapter" tabindex="-1" id="osdPrevChapterBtn">${ICONS.chapterPrevious}</button>
                             <button class="osd-btn" data-action="rewind" tabindex="0">${ICONS.fastRewind}</button>
                             <button class="osd-btn osd-btn-play" id="osdPlayPauseBtn" data-action="togglePlay" tabindex="0">${ICONS.pause}</button>
                             <button class="osd-btn" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
-                            <button class="osd-btn osd-hidden" data-action="nextChapter" tabindex="0" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
+                            <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
@@ -307,21 +308,21 @@ export default class OSDController extends Component {
 
         if (hasChapters) {
              if (prevChapterBtn) {
-                 prevChapterBtn.classList.remove('osd-hidden');
+                 prevChapterBtn.classList.remove('osd-btn-disabled');
                  prevChapterBtn.setAttribute('tabindex', '0');
              }
              if (nextChapterBtn) {
-                 nextChapterBtn.classList.remove('osd-hidden');
+                 nextChapterBtn.classList.remove('osd-btn-disabled');
                  nextChapterBtn.setAttribute('tabindex', '0');
              }
              this._renderChapterMarkers();
         } else {
              if (prevChapterBtn) {
-                 prevChapterBtn.classList.add('osd-hidden');
+                 prevChapterBtn.classList.add('osd-btn-disabled');
                  prevChapterBtn.setAttribute('tabindex', '-1');
              }
              if (nextChapterBtn) {
-                 nextChapterBtn.classList.add('osd-hidden');
+                 nextChapterBtn.classList.add('osd-btn-disabled');
                  nextChapterBtn.setAttribute('tabindex', '-1');
              }
              this._renderChapterMarkers();

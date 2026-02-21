@@ -17,7 +17,29 @@ import { api } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('PlayQueue');
-// PlayQueue module evaluated
+
+// ============================================================================
+// PlaylistItemId Stamping
+// ============================================================================
+//
+// Each item that enters the queue is given a session-unique PlaylistItemId
+// (e.g. "playlistItem0", "playlistItem1", ...). This mirrors jellyfin-web's
+// addUniquePlaylistItemId() pattern and is required for the NowPlayingQueue
+// field in playback reports — the server uses it to identify queue slots
+// independently of the item's actual Jellyfin Id.
+//
+let _playlistItemCounter = 0;
+
+/**
+ * Stamp a PlaylistItemId onto an item if it doesn't already have one.
+ * Safe to call multiple times on the same item.
+ * @param {Object} item - Queue item to stamp
+ */
+function _stampPlaylistItemId(item) {
+    if (!item.PlaylistItemId) {
+        item.PlaylistItemId = `playlistItem${_playlistItemCounter++}`;
+    }
+}
 
 class PlayQueue {
     constructor() {
@@ -49,7 +71,8 @@ class PlayQueue {
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 await this._initEpisodeQueue(item);
             } else {
-                // Standalone item (Movie, etc.)
+                // Standalone item (Movie, etc.) — stamp and queue
+                _stampPlaylistItemId(item);
                 this._queue = [item];
                 this._currentIndex = 0;
             }
@@ -64,7 +87,10 @@ class PlayQueue {
     }
 
     /**
-     * Clear and reset the queue
+     * Clear and reset the queue.
+     * Note: we do NOT reset _playlistItemCounter since it's module-level
+     * and intentionally survives queue resets to keep IDs globally unique
+     * within the app session.
      */
     clear() {
         this._queue = [];
@@ -72,6 +98,42 @@ class PlayQueue {
         this._isInitialized = false;
         this._contextType = null;
         this._contextId = null;
+    }
+
+    /**
+     * Get a shallow copy of the full queue.
+     * Used by PlayerPage to build the NowPlayingQueue payload for playback reports.
+     * Each item will have a PlaylistItemId stamped on it.
+     * @returns {Object[]}
+     */
+    getQueue() {
+        return this._queue.slice(0);
+    }
+
+    /**
+     * Explicitly replace the queue with a new ordered list.
+     *
+     * Called when a remote controller sends a queue-manipulation Play command
+     * (e.g. remove item, reorder, jump-to-item). This bypasses the normal
+     * async init() path so it can be applied mid-playback without re-fetching
+     * anything from the server.
+     *
+     * Any items that already have a PlaylistItemId (carried over from the
+     * server's NowPlayingQueue) are kept as-is; new ones are stamped fresh.
+     *
+     * @param {Object[]} items        - Full ordered array of media items
+     * @param {number}   currentIndex - Index of the item that should be current
+     */
+    setQueue(items, currentIndex) {
+        // Stamp any item that isn't already tagged — preserves IDs the server
+        // sent back (via NowPlayingQueue) so PlaylistItemIds stay consistent.
+        items.forEach(_stampPlaylistItemId);
+
+        this._queue = items;
+        this._currentIndex = Math.max(0, Math.min(currentIndex, items.length - 1));
+        this._isInitialized = true;
+
+        log.info(`Queue replaced via setQueue(): ${items.length} items, current index: ${this._currentIndex}`);
     }
 
     /**
@@ -140,88 +202,35 @@ class PlayQueue {
     async _initEpisodeQueue(currentItem) {
         log.debug('Building episode queue for series:', currentItem.SeriesId);
 
-        // Fetch episodes starting from the current one, across all seasons
-        // Jellyfin API supports this if we omit SeasonId and provide StartItemId
+        // Fetch the ENTIRE series episode list (all seasons, all episodes).
+        // We do NOT pass StartItemId so we get every episode, including those
+        // before the one the user clicked — that way the Previous button works
+        // correctly across season boundaries.
         const response = await api.getEpisodes(currentItem.SeriesId, {
-            StartItemId: currentItem.Id,
-            Limit: 100, // Reasonable batch size for TV session
+            Limit: 500, // large enough for any series
             Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
-            // Added MediaSources/Chapters so we don't strictly need to re-fetch full item details
-            // (though PlayerPage might do it anyway)
         });
 
-        // DEBUG LOGGING
         log.info(
             `[PlayQueue] getEpisodes response: Total=${response.TotalRecordCount}, Count=${response.Items?.length}`
         );
-        if (response.Items && response.Items.length > 0) {
-            log.info(`[PlayQueue] First item: ${response.Items[0].Name} (${response.Items[0].Id})`);
-            if (response.Items.length > 1) {
-                log.info(`[PlayQueue] Second item: ${response.Items[1].Name}`);
-            }
-        } else {
-            log.warn('[PlayQueue] getEpisodes returned NO items!');
-        }
 
-        const nextEpisodes = response.Items || [];
+        const allEpisodes = response.Items || [];
 
-        // If current item is valid, it should be the first in this list (or close to it if StartItemId matched)
-        // However, sometimes we might want previous episodes too.
-        // For simplicity V1: We get 100 episodes FORWARD.
-        // To support PREVIOUS, we simply insert the current item at index 0 if it wasn't returned,
-        // OR if the API returns the current item as first, we're good.
+        // Stamp a PlaylistItemId onto every episode in the queue
+        allEpisodes.forEach(_stampPlaylistItemId);
 
-        // Wait! If I only fetch forward, I can't go back to previous episodes if I started mid-season.
-        // User wants global "Previous" support.
-        // BETTER STRATEGY: Fetch a window around the item, or just fetch the season?
-        // Cross-season is tricky.
-        // Let's stick to the "Forward" strategy for auto-play, but for "Previous"
-        // we might simply rely on what we have.
-        // IF the user specifically wants to go back to an episode that ISN'T in our queue,
-        // we might need to handle that.
-        // But standard behavior: if I click "Play" on S01E05, it queues S01E05 -> End.
-        // S01E04 is NOT in the queue usually in simple implementations.
-        // JELLYFIN-WEB: `getEpisodes` with `StartItemId` gets items >= StartItemId.
-        // So previous track is effectively disabled unless we fetch 'backward' too.
+        this._queue = allEpisodes;
 
-        // Let's see if we can get a few previous ones too.
-        // The API doesn't support "StartItemId with negative offset".
-        // We'd have to fetch the whole season or series.
-        // LIMITATION: For now, we only support going "Back" to items that were already traversed
-        // OR we load the *entire* season if it's small?
-
-        // Let's refine: The user asked for "Previous" button support.
-        // If I start at E05, usually I expect Previous to go to E04.
-        // If I define the queue as "All episodes from E05", E04 is missing.
-
-        // ALTERNATIVE: Fetch the entire season (up to some limit)?
-        // But we want cross-season.
-
-        // HYBRID APPROACH:
-        // 1. Fetch current item + 99 next items (using StartItemId) -> "Forward Queue"
-        // 2. Fetch 10 items BEFORE current item? No easy API for "EndingBeforeId".
-
-        // COMPROMISE: for V1, the queue is "From this point forward".
-        // Previous button will only work if you have advanced.
-        // If you start at E05, Previous is unavailable/disabled.
-        // This is standard behavior for "Play from here".
-        // IF the user wants full context, they should "Play All" or we load more.
-        // Let's stick to "Play from here" (next-only) for initial fetch,
-        // BUT we make sure the current item is in the list.
-
-        this._queue = nextEpisodes;
-
-        // Find our exact object instance or ID to set index
+        // Locate the starting episode — this is our current _currentIndex
         this._currentIndex = this._queue.findIndex((e) => e.Id === currentItem.Id);
 
-        // If not found (API weirdness), prepend it
+        // Fallback: if not found (API weirdness), prepend the current item
         if (this._currentIndex === -1) {
+            _stampPlaylistItemId(currentItem);
             this._queue.unshift(currentItem);
             this._currentIndex = 0;
         }
-
-        // Potential TODO: Fetch previous season items if requested?
-        // For now, we start "fresh" play session from selected item.
     }
 
     async _initBoxSetQueue(currentItem, parentId) {
@@ -251,14 +260,16 @@ class PlayQueue {
         const movies = moviesResponse.Items || [];
         const episodes = episodesResponse.Items || [];
 
-        // Combine: Movies first, then Episodes
+        // Combine: Movies first, then Episodes, and stamp each with a PlaylistItemId
         this._queue = [...movies, ...episodes];
+        this._queue.forEach(_stampPlaylistItemId);
 
         // Find our starting index
         this._currentIndex = this._queue.findIndex((item) => item.Id === currentItem.Id);
 
         if (this._currentIndex === -1) {
-            // Fallback: prepend current item if not found in the collection results
+            // Fallback: stamp and prepend current item if not found in the collection results
+            _stampPlaylistItemId(currentItem);
             this._queue.unshift(currentItem);
             this._currentIndex = 0;
         }

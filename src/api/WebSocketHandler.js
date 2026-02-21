@@ -65,13 +65,37 @@ class WebSocketHandler {
             case 'Play':
                 this._handlePlay(msg.Data);
                 break;
+            // ================================================================
+            // UserDataChanged — another client toggled favourite, watched, etc.
+            // Re-emit so PlayerPage can sync the OSD favourite button.
+            // ================================================================
+            case 'UserDataChanged':
+                if (msg.Data?.UserDataList?.length) {
+                    eventBus.emit('remote:userdatachanged', msg.Data.UserDataList);
+                }
+                break;
 
             // ================================================================
-            // Other message types (ignored for now)
+            // Unhandled message types - log for debugging
             // ================================================================
-            default:
-                // UserDataChanged, SyncPlay, etc. - not handled yet
+            default: {
+                // These are routine server-push updates — no action required.
+                const SILENT_TYPES = new Set([
+                    'Sessions', // Session list refresh (polled by dashboard)
+                    'KeepAlive', // Server keepalive echo
+                    'ForceKeepAlive', // Server asks us to send a keepalive
+                    'LibraryChanged', // Library scan completed
+                    'RefreshProgress', // Library metadata refresh progress
+                    'ScheduledTaskEnded',
+                    'PackageInstallationCompleted'
+                ]);
+
+                if (!SILENT_TYPES.has(msg.MessageType)) {
+                    // Genuinely unexpected — log so we can diagnose new command types
+                    log.warn('Unhandled WebSocket message type:', msg.MessageType, JSON.stringify(msg.Data));
+                }
                 break;
+            }
         }
     }
 

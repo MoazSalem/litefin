@@ -262,7 +262,19 @@ export class HtmlVideoPlayer {
                     }
                 }
 
-                video.play().then(resolve).catch(reject);
+                video.play().then(resolve).catch((err) => {
+                    if (err.name === 'NotAllowedError') {
+                        // Browser blocked unmuted autoplay (no prior user gesture).
+                        // Mute and retry — muted media is always allowed to autoplay.
+                        // We stay muted; the user must interact with the OSD to unmute
+                        // (clicking the mute button in the OSD is a qualifying gesture).
+                        log.warn('Autoplay blocked — retrying muted (remote launch).');
+                        video.muted = true;
+                        video.play().then(resolve).catch(reject);
+                    } else {
+                        reject(err);
+                    }
+                });
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
@@ -332,7 +344,21 @@ export class HtmlVideoPlayer {
             }
         }
 
-        return video.play();
+        // Attempt unmuted playback.  If the browser autoplay policy blocks it
+        // (no prior user gesture — e.g. remote-launched), retry muted.
+        // The video stays muted until the user explicitly clicks the OSD mute
+        // button, which qualifies as a user gesture and setMuted(false) works.
+        try {
+            await video.play();
+        } catch (err) {
+            if (err.name === 'NotAllowedError') {
+                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                video.muted = true;
+                await video.play();
+            } else {
+                throw err;
+            }
+        }
     }
 
     /**
@@ -346,7 +372,17 @@ export class HtmlVideoPlayer {
      * Resume playback
      */
     unpause() {
-        this._videoElement?.play();
+        if (!this._videoElement) return;
+        
+        this._videoElement.play().catch((err) => {
+            if (err.name === 'NotAllowedError') {
+                log.warn('unpause: Autoplay blocked — retrying muted.');
+                this._videoElement.muted = true;
+                this._videoElement.play().catch(e => log.error('unpause: Muted retry failed', e));
+            } else {
+                log.error('unpause: Play failed', err);
+            }
+        });
     }
 
     /**
@@ -436,6 +472,65 @@ export class HtmlVideoPlayer {
         if (this._videoElement) {
             this._videoElement.muted = !this._videoElement.muted;
         }
+    }
+
+    /**
+     * Set mute state explicitly.
+     * Called by JellyfinPlayer when a remote Mute/Unmute command arrives.
+     *
+     * In browser mode, Chrome blocks setting muted=false if the video was
+     * started without a user gesture — it pauses the video as a side-effect.
+     * We catch that case and resume playback muted so at least it keeps playing.
+     * On Tizen this path is irrelevant (system audio control is used instead).
+     *
+     * @param {boolean} muted
+     */
+    setMuted(muted) {
+        if (!this._videoElement) return;
+
+        try {
+            this._videoElement.muted = muted;
+        } catch (e) {
+            // Swallow any synchronous errors (shouldn't happen but guard anyway)
+            log.warn('setMuted threw:', e);
+        }
+
+        // If Chrome blocked the unmute and paused the video as a side effect,
+        // resume playback muted so the user isn't left with a frozen screen.
+        if (!muted && this._videoElement.paused && this._videoElement.muted) {
+            log.warn('Unmute blocked by browser — resuming muted to keep playback going.');
+            this._videoElement.play().catch(() => {});
+        }
+    }
+
+    /**
+     * Schedule an unmute once the user physically interacts with the document.
+     *
+     * Chrome's autoplay policy blocks setting muted=false mid-playback if the
+     * video was started without a user gesture.  The policy is lifted the moment
+     * any real interaction occurs.  We listen for the first keydown or click and
+     * unmute at that point — completely transparent to the user.
+     *
+     * @param {HTMLVideoElement} video
+     * @private
+     */
+    _scheduleUnmuteOnInteraction(video) {
+        const unmute = () => {
+            // Only unmute if the video is still the one we started (not already
+            // replaced by a new play() call) and is still muted programmatically.
+            if (video.muted) {
+                log.info('User interaction detected — unmuting video.');
+                video.muted = false;
+            }
+            document.removeEventListener('keydown', unmute, true);
+            document.removeEventListener('click', unmute, true);
+        };
+
+        // Use capture phase so we intercept before any other handler consumes the event
+        document.addEventListener('keydown', unmute, { capture: true, once: true });
+        document.addEventListener('click', unmute, { capture: true, once: true });
+
+        log.info('Scheduled unmute on next user interaction (keydown/click).');
     }
 
     /**
