@@ -353,6 +353,47 @@ class PlayerPage extends Page {
             eventBus.on('remote:shufflemode', this._onRemoteShuffleMode);
 
             // ---------------------------------------------------------------
+            // Remote D-Pad navigation inside the player.
+            //
+            // When the player is active, FocusManager is suspended and the OSD
+            // manages its own focus.  We therefore forward remote:navigate and
+            // remote:select directly to OSDController.handleInput(), which is
+            // the same codepath used by physical TV-remote key events.
+            // ---------------------------------------------------------------
+            this._onRemoteNavigate = (direction) => {
+                log.info('Remote: Navigate', direction);
+                if (this._osd) {
+                    this._osd.handleInput(direction);
+                }
+            };
+            eventBus.on('remote:navigate', this._onRemoteNavigate);
+
+            this._onRemoteSelect = () => {
+                log.info('Remote: Select');
+                if (this._osd) {
+                    this._osd.handleInput('enter');
+                }
+            };
+            eventBus.on('remote:select', this._onRemoteSelect);
+
+            this._onRemoteAudioTrack = (index) => {
+                log.info('Remote: SetAudioStreamIndex', index);
+                if (this._player && typeof this._player.setAudioStreamIndex === 'function') {
+                    this._player.setAudioStreamIndex(index);
+                    this._refreshSubtitleStyles(); // In case track change affects OSD state
+                }
+            };
+            eventBus.on('remote:audiotrack', this._onRemoteAudioTrack);
+
+            this._onRemoteSubtitle = (index) => {
+                log.info('Remote: SetSubtitleStreamIndex', index);
+                if (this._player && typeof this._player.setSubtitleStreamIndex === 'function') {
+                    this._player.setSubtitleStreamIndex(index);
+                }
+            };
+            eventBus.on('remote:subtitle', this._onRemoteSubtitle);
+
+            // ---------------------------------------------------------------
             // Remote queue manipulation
             //
             // Emitted by App.js when a remote:playnow arrives while the player
@@ -1562,6 +1603,10 @@ class PlayerPage extends Page {
         if (this._onRemotePrevious) eventBus.off('remote:previous', this._onRemotePrevious);
         if (this._onRemoteRepeatMode) eventBus.off('remote:repeatmode', this._onRemoteRepeatMode);
         if (this._onRemoteShuffleMode) eventBus.off('remote:shufflemode', this._onRemoteShuffleMode);
+        if (this._onRemoteNavigate) eventBus.off('remote:navigate', this._onRemoteNavigate);
+        if (this._onRemoteSelect) eventBus.off('remote:select', this._onRemoteSelect);
+        if (this._onRemoteAudioTrack) eventBus.off('remote:audiotrack', this._onRemoteAudioTrack);
+        if (this._onRemoteSubtitle) eventBus.off('remote:subtitle', this._onRemoteSubtitle);
         if (this._onRemoteQueueUpdate) eventBus.off('remote:queueupdate', this._onRemoteQueueUpdate);
         if (this._onRemoteUserDataChanged) eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
 

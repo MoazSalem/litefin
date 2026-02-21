@@ -265,12 +265,15 @@ export class HtmlVideoPlayer {
                 video.play().then(resolve).catch((err) => {
                     if (err.name === 'NotAllowedError') {
                         // Browser blocked unmuted autoplay (no prior user gesture).
-                        // Mute and retry — muted media is always allowed to autoplay.
-                        // We stay muted; the user must interact with the OSD to unmute
-                        // (clicking the mute button in the OSD is a qualifying gesture).
+                        // Mute, retry, and queue an unmute on the next user interaction.
+                        // Any keypress or click qualifies as a gesture — this is transparent to the user.
                         log.warn('Autoplay blocked — retrying muted (remote launch).');
                         video.muted = true;
-                        video.play().then(resolve).catch(reject);
+                        video.play().then(() => {
+                            // Schedule unmute as soon as the user presses any key or clicks
+                            this._scheduleUnmuteOnInteraction(video);
+                            resolve();
+                        }).catch(reject);
                     } else {
                         reject(err);
                     }
@@ -345,9 +348,8 @@ export class HtmlVideoPlayer {
         }
 
         // Attempt unmuted playback.  If the browser autoplay policy blocks it
-        // (no prior user gesture — e.g. remote-launched), retry muted.
-        // The video stays muted until the user explicitly clicks the OSD mute
-        // button, which qualifies as a user gesture and setMuted(false) works.
+        // (no prior user gesture — e.g. remote-launched), retry muted and
+        // schedule an unmute on the next user interaction (keypress or click).
         try {
             await video.play();
         } catch (err) {
@@ -355,6 +357,8 @@ export class HtmlVideoPlayer {
                 log.warn('Autoplay blocked — retrying muted (remote launch).');
                 video.muted = true;
                 await video.play();
+                // Queue unmute — fires automatically on first keydown or click
+                this._scheduleUnmuteOnInteraction(video);
             } else {
                 throw err;
             }
@@ -546,10 +550,30 @@ export class HtmlVideoPlayer {
     // ========================================================================
 
     /**
-     * Set audio stream index
-     * @param {number} index - Audio stream index
+     * Set audio stream index.
+     *
+     * Receives a 0-based list index (already converted from Jellyfin stream ID
+     * by JellyfinPlayer.setAudioStreamIndex before calling the backend).
+     *
+     * For HLS streams, we switch via hls.js's audioTrack property.
+     * For native multi-audio (e.g. MP4 DirectPlay), we toggle video.audioTracks.
+     *
+     * @param {number} listIndex - 0-based index into the available audio tracks
      */
-    setAudioStreamIndex(index) {
+    setAudioStreamIndex(listIndex) {
+        // ── HLS path: delegate to hls.js which owns the audio track selection ──
+        if (this._hlsPlayer) {
+            const tracks = this._hlsPlayer.audioTracks;
+            if (tracks && listIndex >= 0 && listIndex < tracks.length) {
+                log.info('HLS: switching audio track to list index', listIndex, '→', tracks[listIndex]?.name);
+                this._hlsPlayer.audioTrack = listIndex;
+            } else {
+                log.warn('HLS: audio track index', listIndex, 'out of range (', tracks?.length, 'tracks)');
+            }
+            return;
+        }
+
+        // ── Native path: toggle HTML5 AudioTrack objects (MP4 DirectPlay) ──
         const video = this._videoElement;
         if (!video) return;
 
@@ -557,8 +581,10 @@ export class HtmlVideoPlayer {
         if (!audioTracks || audioTracks.length < 2) return;
 
         for (let i = 0; i < audioTracks.length; i++) {
-            audioTracks[i].enabled = i === index;
+            // Enable only the track at the requested list index
+            audioTracks[i].enabled = (i === listIndex);
         }
+        log.info('Native: switched audio track to list index', listIndex);
     }
 
     /**

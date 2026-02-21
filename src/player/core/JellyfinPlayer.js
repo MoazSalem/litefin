@@ -387,6 +387,26 @@ export class JellyfinPlayer extends EventEmitter {
                  backend: this._backendType
             });
 
+            // When a specific audio track is requested on the HTML5 backend, we must
+            // prevent the server from responding with DirectPlay.  A static DirectPlay
+            // URL ignores AudioStreamIndex entirely — the server just streams the raw
+            // file and plays whatever track comes first.
+            //
+            // Clearing DirectPlayProfiles in the device profile forces the server to
+            // pick DirectStream or Transcode instead.  Both paths return a TranscodingUrl
+            // that already has AudioStreamIndex baked in, so the correct track plays.
+            //
+            // This applies both to the initial play() call (options.audioStreamIndex
+            // explicitly set) AND to audio-switch restarts (_forceDirectStream flag).
+            const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
+            const needsDirectStreamForAudio = options._forceDirectStream ||
+                (isHtml5Backend && options.audioStreamIndex !== undefined);
+
+            if (needsDirectStreamForAudio) {
+                log.info('HTML5 audio track selection: clearing DirectPlayProfiles to force DirectStream/Transcode');
+                deviceProfile.DirectPlayProfiles = [];
+            }
+
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options, deviceProfile, this._manualBitrate);
             log.debug('PlaybackInfo keys:', Object.keys(playbackInfo));
@@ -549,7 +569,11 @@ export class JellyfinPlayer extends EventEmitter {
                 startPositionTicks: effectiveStartPositionTicks,
                 playSessionId: playbackInfo.PlaySessionId,
                 authToken: this.authToken,
-                deviceProfile: deviceProfile
+                deviceProfile: deviceProfile,
+                // Pass audioStreamIndex so it's included in manually-built fallback URLs.
+                // When TranscodingUrl is present (the normal case), the server already
+                // has this baked in and this param is unused.
+                audioStreamIndex: this._currentAudioStreamIndex
             });
 
             log.debug('Stream Info built:', streamInfo);
@@ -765,30 +789,40 @@ export class JellyfinPlayer extends EventEmitter {
         this._currentAudioStreamIndex = index;
 
         // =====================================================================
-        // Detect the current play method. If the server is transcoding we must
-        // restart with the new AudioStreamIndex rather than issuing a live
-        // backend call (which has no effect on the transcode stream).
+        // Determine whether we need to restart playback to apply the audio change.
         //
-        // _currentPlayMethod is stored by play() after all the special-case
-        // mutations (e.g. remux mode) so it reliably reflects the actual
-        // decision — including auto mode where the server decides to transcode.
-        //
-        // Guard: play() re-calls setAudioStreamIndex internally after startup.
-        // _audioRestartInProgress prevents that from triggering another restart.
+        // Two cases ALWAYS require a restart:
+        //   1. Transcode / DirectStream — the audio track is baked into the
+        //      server's HLS output, so a live backend call has no effect.
+        //   2. HtmlVideoPlayer (Chrome / browser) — Chrome does NOT implement
+        //      the HTMLMediaElement.audioTracks API (it's undefined), so there
+        //      is no way to switch tracks live.  Only TizenAVPlayer supports
+        //      native live audio switching via AVPlay's track APIs.
         // =====================================================================
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream';
 
-        if (isTranscoding && this._currentPlayOptions && !this._audioRestartInProgress) {
-            log.info(`Transcoding active (${this._currentPlayMethod}) — restarting for audio track: ${index}`);
+        // True whenever this backend cannot live-switch audio tracks
+        const requiresRestart = isTranscoding || !(this._backend instanceof TizenAVPlayer);
+
+        log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart}`);
+
+        if (requiresRestart && this._currentPlayOptions && !this._audioRestartInProgress) {
+            log.info(`Restarting playback for audio track: ${index} (method: ${this._currentPlayMethod ?? 'DirectPlay/HTML5'})`);
 
             const currentTicks = this.getCurrentPositionTicks();
 
-            // Build new play options carrying the updated audio stream index
+            // Build new play options carrying the updated audio stream index.
+            // _forceDirectStream tells play() to clear DirectPlayProfiles so the
+            // server is forced into DirectStream/Transcode, producing a
+            // TranscodingUrl with AudioStreamIndex already embedded — the only
+            // way to switch audio tracks on the HTML5 backend (Chrome has no
+            // native audioTracks API and static DirectPlay URLs ignore AudioStreamIndex).
             const restartOptions = {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
-                startPositionTicks: currentTicks
+                startPositionTicks: currentTicks,
+                _forceDirectStream: !(this._backend instanceof TizenAVPlayer)
             };
 
             // Persist so future restarts (bitrate change, etc.) carry the right track
@@ -830,20 +864,20 @@ export class JellyfinPlayer extends EventEmitter {
         // DirectPlay: native backend audio switching (no restart needed)
         // =====================================================================
 
-        // Tizen AVPlay expects 0-based index of available tracks;
-        // HtmlVideoPlayer expects the raw Stream ID.
-        if (this._backend instanceof TizenAVPlayer) {
-            const tracks = this.getAudioTracks();
-            const listIndex = tracks.findIndex((t) => t.Index === index);
-            if (listIndex !== -1) {
-                log.debug('Converting StreamID', index, 'to Tizen Index', listIndex);
-                this._backend.setAudioStreamIndex(listIndex);
-            } else {
-                log.warn('StreamID', index, 'not found in audio tracks');
-            }
-        } else {
-            this._backend?.setAudioStreamIndex(index);
+        // Both Tizen (AVPlay) and HtmlVideoPlayer work with 0-based list
+        // indices of available audio tracks, NOT the raw Jellyfin stream ID.
+        // Convert here so both backends share the same simple interface.
+        const tracks = this.getAudioTracks();
+        const listIndex = tracks.findIndex((t) => t.Index === index);
+
+        if (listIndex === -1) {
+            log.warn('StreamID', index, 'not found in audio tracks:', tracks.map(t => t.Index));
+            this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: index });
+            return;
         }
+
+        log.debug('Converting StreamID', index, 'to list index', listIndex);
+        this._backend?.setAudioStreamIndex(listIndex);
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { audioStreamIndex: index });
     }

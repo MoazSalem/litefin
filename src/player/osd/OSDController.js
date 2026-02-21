@@ -960,12 +960,12 @@ export default class OSDController extends Component {
                 break;
             case 'nextTrack': this.emit('next'); break;
             case 'subtitles': 
-                this.activeMenu = this.trackMenu;
-                this.trackMenu.open('subtitles'); 
+                this.activeMenu = this.subtitleMenu;
+                this.subtitleMenu.open('subtitles'); 
                 break;
             case 'audio': 
-                this.activeMenu = this.trackMenu;
-                this.trackMenu.open('audio'); 
+                this.activeMenu = this.audioMenu;
+                this.audioMenu.open('audio'); 
                 break;
             case 'settings': 
                 this.activeMenu = this.settingsMenu;

@@ -10,6 +10,8 @@
 import { eventBus } from '../core/EventBus.js';
 import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
+import { focusManager } from '../ui/FocusManager.js';
+import { router } from '../core/Router.js';
 
 const log = logger.create('WebSocketHandler');
 
@@ -225,10 +227,65 @@ class WebSocketHandler {
                 break;
 
             // ================================================================
-            // Navigation (optional, nice to have)
+            // D-Pad Navigation — mirrors TV remote arrow keys.
+            //
+            // Two-tier approach:
+            //   1. Emit remote:navigate so PlayerPage can forward to OSD when
+            //      the player is active (FocusManager is suspended in that state).
+            //   2. Also call focusManager._handleKey() for regular app navigation
+            //      when the player is NOT active.
+            // ================================================================
+            case 'MoveUp':
+                eventBus.emit('remote:navigate', 'up');
+                focusManager._handleKey('up');
+                break;
+
+            case 'MoveDown':
+                eventBus.emit('remote:navigate', 'down');
+                focusManager._handleKey('down');
+                break;
+
+            case 'MoveLeft':
+                eventBus.emit('remote:navigate', 'left');
+                focusManager._handleKey('left');
+                break;
+
+            case 'MoveRight':
+                eventBus.emit('remote:navigate', 'right');
+                focusManager._handleKey('right');
+                break;
+
+            case 'Select':
+                // Emit remote:select so OSD can handle it as 'enter' when
+                // the player is active and FocusManager is suspended.
+                eventBus.emit('remote:select');
+                // Fallback for non-player screens: click the focused element.
+                if (!focusManager._isSuspended) {
+                    const focused = focusManager.getFocused();
+                    if (focused) {
+                        focused.click();
+                    } else {
+                        document.activeElement?.click();
+                    }
+                }
+                break;
+
+            // ================================================================
+            // App Navigation
             // ================================================================
             case 'GoHome':
                 eventBus.emit('remote:home');
+                break;
+
+            case 'GoToSettings':
+                // Navigate directly to the Settings page.
+                // If the player is active this will exit it first (router destroys current page).
+                router.navigate('/settings');
+                break;
+
+            case 'GoToSearch':
+                // Navigate directly to the Search page.
+                router.navigate('/search');
                 break;
 
             case 'Back':
@@ -244,9 +301,14 @@ class WebSocketHandler {
                 }
                 break;
 
-            case 'SetShuffleMode':
-                // The web client usually sends "ShuffleMode" string, sometimes just a boolean cast to string.
-                if (data.Arguments?.ShuffleMode !== undefined) {
+            case 'SetShuffleQueue':
+                // The web client sends "SetShuffleQueue" command.
+                // Arguments usually contain { ItemId: '...', Mode: 'Shuffle' } or { Mode: 'Sorted' }
+                if (data.Arguments?.Mode !== undefined) {
+                    const isShuffled = String(data.Arguments.Mode).toLowerCase() === 'shuffle';
+                    eventBus.emit('remote:shufflemode', isShuffled);
+                } else if (data.Arguments?.ShuffleMode !== undefined) {
+                    // Fallback just in case
                     const isShuffled = String(data.Arguments.ShuffleMode).toLowerCase() === 'true';
                     eventBus.emit('remote:shufflemode', isShuffled);
                 }

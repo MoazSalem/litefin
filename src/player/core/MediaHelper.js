@@ -27,7 +27,7 @@ export const MediaHelper = {
      * @returns {Object} Stream info with URL and metadata
      */
     buildStreamUrl(options) {
-        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken } = options;
+        const { serverUrl, itemId, mediaSource, startPositionTicks, playSessionId, authToken, audioStreamIndex } = options;
 
         // Determine play method
         const playMethod = this.getPlayMethod(mediaSource);
@@ -35,28 +35,43 @@ export const MediaHelper = {
         let url;
         let isHls = false;
 
-        if (playMethod === 'DirectStream' || playMethod === 'DirectPlay') {
-            // Direct stream/play URL
-            if (mediaSource.SupportsDirectStream) {
+        if (playMethod === 'DirectPlay' || playMethod === 'DirectStream') {
+            // For DirectStream, always prefer the server-provided TranscodingUrl —
+            // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
+            // baked in.  For DirectPlay, build the static URL directly (TranscodingUrl
+            // may be an HLS manifest the native player can't handle).
+            if (playMethod === 'DirectStream' && mediaSource.TranscodingUrl) {
+                url = serverUrl + mediaSource.TranscodingUrl;
+                isHls = url.includes('.m3u8');
+            } else if (mediaSource.SupportsDirectStream) {
+                // Static-serve the container file as-is
                 url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
                 url += `?Static=true`;
                 url += `&mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
                 url += `&api_key=${encodeURIComponent(authToken)}`;
+                if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
+                    url += `&AudioStreamIndex=${audioStreamIndex}`;
+                }
             } else if (mediaSource.SupportsDirectPlay && mediaSource.Path) {
-                // Local file path (for native apps)
+                // Local/SMB file path (native-app only, not used in browser)
                 url = mediaSource.Path;
             }
         } else {
-            // Transcode URL (HLS)
-            url = `${serverUrl}/Videos/${itemId}/master.m3u8`;
-            url += `?mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
-            url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
-            url += `&api_key=${encodeURIComponent(authToken)}`;
-            url += `&StartTimeTicks=${startPositionTicks || 0}`;
-
-            // Use pre-built transcoding URL if available from the server
+            // Transcode: HLS from server.
+            // Prefer the pre-built TranscodingUrl — it has AudioStreamIndex,
+            // SubtitleStreamIndex, codec params, etc. already embedded.
             if (mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
+            } else {
+                // Manual HLS URL fallback
+                url = `${serverUrl}/Videos/${itemId}/master.m3u8`;
+                url += `?mediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                url += `&api_key=${encodeURIComponent(authToken)}`;
+                url += `&StartTimeTicks=${startPositionTicks || 0}`;
+                if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
+                    url += `&AudioStreamIndex=${audioStreamIndex}`;
+                }
             }
 
             isHls = true;
