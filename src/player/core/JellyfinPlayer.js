@@ -1042,7 +1042,12 @@ export class JellyfinPlayer extends EventEmitter {
 
             // DirectPlay: AVPlay can read embedded subtitle tracks natively
             if (this._backend instanceof TizenAVPlayer) {
-                if (index === -1) {
+                // Skip explicit backend call during initial playback setup.
+                // TizenAVPlayer natively handles initial track selection via _pendingSubtitleIndex
+                // deferred until the 'onbufferingcomplete' event safely transitions the player.
+                if (this._playSetupInProgress) {
+                    log.info('Skipping backend subtitle assignment during initial play (Tizen handles natively via pending index)');
+                } else if (index === -1) {
                     this._backend.setSubtitleStreamIndex(-1);
                 } else {
                     const tracks = this.getSubtitleTracks();

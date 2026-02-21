@@ -1287,33 +1287,33 @@ class PlayerPage extends Page {
 
         // Build base state
         const state = {
-            // Core position and volume
-            PositionTicks: positionTicks,
-            VolumeLevel: this._player?.getVolume?.() ?? 100,
-            IsMuted: this._player?.isMuted?.() ?? false,
+            // Core position and volume - cast strictly to integers to avoid server 400s
+            PositionTicks: Math.max(0, Math.round(Number(positionTicks)) || 0),
+            VolumeLevel: Math.min(100, Math.max(0, Math.round(Number(this._player?.getVolume?.())) || 100)),
+            IsMuted: Boolean(this._player?.isMuted?.()),
 
             // Playback method (DirectPlay, DirectStream, Transcode)
             PlayMethod: mediaSource?.PlayMethod || 'DirectPlay',
 
             // Seeking capability
-            CanSeek: (mediaSource?.RunTimeTicks || 0) > 0,
+            CanSeek: Boolean(mediaSource?.RunTimeTicks > 0),
 
             // Playback rate (1.0 = normal speed)
-            PlaybackRate: this._player?.getPlaybackRate?.() ?? 1.0,
+            PlaybackRate: Number(this._player?.getPlaybackRate?.()) || 1.0,
 
             // Queue modes (litefin doesn't support playlists yet)
             RepeatMode: 'RepeatNone',
             ShuffleMode: 'Sorted'
         };
 
-        // Only include stream indices if they are defined (undefined causes 400 errors)
-        const audioIndex = this._player?.getCurrentAudioStreamIndex?.();
-        if (audioIndex !== undefined && audioIndex !== null) {
+        // Only include stream indices if they are valid numbers (strings or undefined cause 400 errors)
+        const audioIndex = Number(this._player?.getCurrentAudioStreamIndex?.());
+        if (!isNaN(audioIndex) && audioIndex !== null) {
             state.AudioStreamIndex = audioIndex;
         }
 
-        const subtitleIndex = this._player?.getCurrentSubtitleStreamIndex?.();
-        if (subtitleIndex !== undefined && subtitleIndex !== null) {
+        const subtitleIndex = Number(this._player?.getCurrentSubtitleStreamIndex?.());
+        if (!isNaN(subtitleIndex) && subtitleIndex !== null) {
             state.SubtitleStreamIndex = subtitleIndex;
         }
 

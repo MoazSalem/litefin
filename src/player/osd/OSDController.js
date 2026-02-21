@@ -1041,7 +1041,8 @@ export default class OSDController extends Component {
              const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
              if (tooltip) {
                  const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
-                 tooltip.textContent = this._formatTime(this._seekTargetTicks) + speedIndicator;
+                 const forceHours = duration >= 3600 * 10000000;
+                 tooltip.textContent = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
                  tooltip.classList.add('visible');
                  const percent = duration > 0 ? (this._seekTargetTicks / duration) * 100 : 0;
                  tooltip.style.left = percent + '%';
@@ -1121,11 +1122,14 @@ export default class OSDController extends Component {
         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
+        // If duration is > 1 hour, force hours format to keep display stable
+        const forceHours = duration >= 3600 * 10000000;
+
         const currentEl = this._osdEl.querySelector('#osdCurrentTime');
         const totalEl = this._osdEl.querySelector('#osdTotalTime');
 
-        if (currentEl) currentEl.textContent = this._formatTime(current);
-        if (totalEl) totalEl.textContent = this._formatTime(duration);
+        if (currentEl) currentEl.textContent = this._formatTime(current, forceHours);
+        if (totalEl) totalEl.textContent = this._formatTime(duration, forceHours);
         
         const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
         if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
@@ -1157,13 +1161,13 @@ export default class OSDController extends Component {
         }
     }
 
-    _formatTime(ticks) {
-        if (!ticks) return '00:00';
+    _formatTime(ticks, forceHours = false) {
+        if (!ticks) return forceHours ? '0:00:00' : '00:00';
         const totalSeconds = Math.floor(ticks / 10000000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
         const seconds = totalSeconds % 60;
-        if (hours > 0) return `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
+        if (hours > 0 || forceHours) return `${hours}:${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
         return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
     }
     _handlePositionSliderInput(e) {
@@ -1175,8 +1179,9 @@ export default class OSDController extends Component {
 
         const duration = this._player.getDurationTicks();
         const percent = percentRaw / 100;
+        const forceHours = duration >= 3600 * 10000000;
         const currentEl = this._osdEl.querySelector('#osdCurrentTime');
-        if (currentEl) currentEl.textContent = this._formatTime(duration * percent);
+        if (currentEl) currentEl.textContent = this._formatTime(duration * percent, forceHours);
     }
 
     _handlePositionSliderChange(e) {

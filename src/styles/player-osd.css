@@ -338,6 +338,9 @@
     font-variant-numeric: tabular-nums;
     padding: 0 0.6em;
     /* 0.5em * 1.2 */
+    min-width: 5em;
+    /* Enough for 00:00:00 with tabular-nums */
+    flex-shrink: 0;
 }
 
 .osd-time-current {

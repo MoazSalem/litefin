@@ -167,14 +167,24 @@ export class TizenAVPlayer {
             // Prepare asynchronously
             await this._prepareAsync();
 
-            // Seek to start position if specified
-            if (options.playerStartPositionTicks) {
-                const startMs = options.playerStartPositionTicks / 10000;
-                this._avplay.seekTo(startMs);
-            }
             // Start playback
             this._avplay.play();
             this._isPlaying = true;
+
+            // Seek to start position if specified (must be called after play() on HLS to prevent Invalid Operation)
+            if (options.playerStartPositionTicks) {
+                const startMs = options.playerStartPositionTicks / 10000;
+                try {
+                    this._avplay.seekTo(startMs);
+                } catch (e) {
+                    log.warn('Seek immediately after play failed, will defer:', e);
+                    setTimeout(() => {
+                        if (this._isPlaying) {
+                            try { this._avplay.seekTo(startMs); } catch (e2) { log.error('Deferred seek failed:', e2); }
+                        }
+                    }, 500);
+                }
+            }
 
             // Only queue native track selection for DirectPlay.
             // During Transcode/DirectStream, audio is baked into the HLS output,
@@ -643,13 +653,18 @@ export class TizenAVPlayer {
 
         // Workaround: Pause/Resume to force subtitle refresh on track change
         // Tizen AVPlay doesn't always update the current cue immediately when switching tracks
-        const wasPlaying = this._isPlaying;
-        if (wasPlaying) {
-             try {
-                this._avplay.pause();
-             } catch (e) {
-                log.warn('Pause for subtitle switch failed:', e);
-             }
+        let wasPlaying = false;
+        try {
+            wasPlaying = this._isPlaying && this._avplay.getState() === 'PLAYING';
+            if (wasPlaying) {
+                 try {
+                    this._avplay.pause();
+                 } catch (e) {
+                    log.warn('Pause for subtitle switch failed:', e);
+                 }
+            }
+        } catch (stateErr) {
+             log.warn('Could not verify playing state for subtitle switch:', stateErr);
         }
 
         try {
