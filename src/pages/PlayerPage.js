@@ -339,6 +339,19 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:previous', this._onRemotePrevious);
 
+            // Repeat and Shuffle
+            this._onRemoteRepeatMode = (mode) => {
+                log.info('Remote: SetRepeatMode', mode);
+                playQueue.setRepeatMode(mode);
+            };
+            eventBus.on('remote:repeatmode', this._onRemoteRepeatMode);
+
+            this._onRemoteShuffleMode = (isShuffled) => {
+                log.info('Remote: SetShuffleMode', isShuffled);
+                playQueue.setShuffleMode(isShuffled);
+            };
+            eventBus.on('remote:shufflemode', this._onRemoteShuffleMode);
+
             // ---------------------------------------------------------------
             // Remote queue manipulation
             //
@@ -651,7 +664,45 @@ class PlayerPage extends Page {
             return;
         }
 
-        // Check if we can play next item
+        const repeatMode = playQueue.getRepeatMode();
+
+        // 1. Handle RepeatOne: simply loop the current item
+        if (repeatMode === 'RepeatOne') {
+            log.info('Item ended, RepeatOne is active. Restarting current item.');
+            this._isSwitching = true;
+            this._showLoading(true);
+
+            // Report the stop of the current play session
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            if (this._player?.stop) this._player.stop();
+
+            this._reportPlaybackStopped(mediaSource, positionTicks, false).then(() => {
+                // Settle and restart
+                setTimeout(async () => {
+                    this._resumePosition = 0;
+                    this._cachedMediaSource = null;
+                    this._hasReportedStart = false;
+                    this._lastReportTime = 0;
+
+                    try {
+                        await this._startPlayback();
+                    } catch (err) {
+                        log.error('Failed to restart for RepeatOne:', err);
+                        this._showError('Failed to restart item');
+                    } finally {
+                        this._isSwitching = false;
+                        this._showLoading(false);
+                    }
+                }, 500);
+            });
+
+            eventBus.emit('player:ended', { item: this._item });
+            return;
+        }
+
+        // 2. Main Flow: Check if we can play next item (RepeatAll is handled inside hasNext())
         if (playQueue.hasNext()) {
             log.info('Item ended, auto-advancing to next item');
             this._playNextItem();
@@ -1509,6 +1560,8 @@ class PlayerPage extends Page {
         if (this._onRemoteToggleMute) eventBus.off('remote:togglemute', this._onRemoteToggleMute);
         if (this._onRemoteNext) eventBus.off('remote:next', this._onRemoteNext);
         if (this._onRemotePrevious) eventBus.off('remote:previous', this._onRemotePrevious);
+        if (this._onRemoteRepeatMode) eventBus.off('remote:repeatmode', this._onRemoteRepeatMode);
+        if (this._onRemoteShuffleMode) eventBus.off('remote:shufflemode', this._onRemoteShuffleMode);
         if (this._onRemoteQueueUpdate) eventBus.off('remote:queueupdate', this._onRemoteQueueUpdate);
         if (this._onRemoteUserDataChanged) eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
 

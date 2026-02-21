@@ -41,13 +41,123 @@ function _stampPlaylistItemId(item) {
     }
 }
 
+import { eventBus } from './EventBus.js';
+
 class PlayQueue {
     constructor() {
         this._queue = [];
+        this._unshuffledQueue = []; // Holds the original order when shuffling
         this._currentIndex = -1;
         this._isInitialized = false;
         this._contextType = null; // 'boxset' | 'playlist' | null
         this._contextId = null;
+
+        // Shuffle / Repeat state
+        this._repeatMode = 'RepeatNone'; // 'RepeatNone' | 'RepeatAll' | 'RepeatOne'
+        this._shuffleMode = false;
+    }
+
+    /**
+     * Get current repeat mode
+     * @returns {string}
+     */
+    getRepeatMode() {
+        return this._repeatMode;
+    }
+
+    /**
+     * Set the repeat mode
+     * @param {string} mode - 'RepeatNone', 'RepeatAll', 'RepeatOne'
+     */
+    setRepeatMode(mode) {
+        if (['RepeatNone', 'RepeatAll', 'RepeatOne'].includes(mode)) {
+            this._repeatMode = mode;
+            log.info(`RepeatMode set to: ${mode}`);
+            eventBus.emit('playqueue:updated', {
+                repeatMode: this._repeatMode,
+                shuffleMode: this._shuffleMode
+            });
+        }
+    }
+
+    /**
+     * Get current shuffle mode
+     * @returns {boolean}
+     */
+    getShuffleMode() {
+        return this._shuffleMode;
+    }
+
+    /**
+     * Toggle shuffle mode on the current queue
+     * @param {boolean} isShuffled
+     */
+    setShuffleMode(isShuffled) {
+        if (this._shuffleMode === isShuffled) return;
+
+        this._shuffleMode = isShuffled;
+        log.info(`ShuffleMode set to: ${isShuffled}`);
+
+        if (!this._isInitialized || this._queue.length === 0) {
+            // State is saved but queue is empty, so no sorting needed yet
+            return;
+        }
+
+        this._applyShuffle();
+    }
+
+    /**
+     * Internal helper to apply shuffle/unshuffle based on _shuffleMode.
+     * Ensures consistent behavior across setShuffleMode and init.
+     */
+    _applyShuffle() {
+        if (!this._isInitialized || this._queue.length === 0) return;
+
+        const currentItem = this.getCurrentItem();
+        if (!currentItem) return;
+
+        if (this._shuffleMode) {
+            // Already shuffled? Avoid re-shuffling if un-shuffled queue exists
+            // This prevents "shuffling the shuffle" and losing the origin
+            if (this._unshuffledQueue.length > 0) return;
+
+            // 1. Save original queue
+            this._unshuffledQueue = [...this._queue];
+
+            // 2. Remove the currently playing item from the pool to be shuffled
+            const remainingItems = this._queue.filter((item) => item.PlaylistItemId !== currentItem.PlaylistItemId);
+
+            // 3. Shuffle remaining items (Fisher-Yates)
+            for (let i = remainingItems.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [remainingItems[i], remainingItems[j]] = [remainingItems[j], remainingItems[i]];
+            }
+
+            // 4. Rebuild queue: current item stays at front, shuffled items follow
+            this._queue = [currentItem, ...remainingItems];
+            this._currentIndex = 0;
+
+            log.debug(`Shuffle applied to ${this._queue.length} items`);
+        } else {
+            // Restore original sort order
+            if (this._unshuffledQueue.length > 0) {
+                this._queue = [...this._unshuffledQueue];
+                this._unshuffledQueue = []; // clear memory
+
+                // Recalculate index of currently playing item
+                this._currentIndex = this._queue.findIndex(
+                    (item) => item.PlaylistItemId === currentItem.PlaylistItemId
+                );
+
+                if (this._currentIndex === -1) this._currentIndex = 0;
+                log.debug('Shuffle restored to original order');
+            }
+        }
+
+        eventBus.emit('playqueue:updated', {
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
     }
 
     /**
@@ -68,6 +178,9 @@ class PlayQueue {
             if (contextType === 'boxset' && (contextId || item.ParentId)) {
                 // Prioritize collection context if explicitly provided
                 await this._initBoxSetQueue(item, contextId || item.ParentId);
+            } else if (contextType === 'season' && contextId) {
+                // Season-specific shuffle: fetch only episodes for this season
+                await this._initSeasonQueue(item, contextId);
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 await this._initEpisodeQueue(item);
             } else {
@@ -75,6 +188,12 @@ class PlayQueue {
                 _stampPlaylistItemId(item);
                 this._queue = [item];
                 this._currentIndex = 0;
+            }
+
+            // If shuffle mode was flipped on BEFORE the queue was initialized
+            // (e.g. user pressed a Play Shuffled button on the library UI)
+            if (this._shuffleMode) {
+                this._applyShuffle();
             }
 
             log.info(`Queue initialized with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
@@ -94,10 +213,12 @@ class PlayQueue {
      */
     clear() {
         this._queue = [];
+        this._unshuffledQueue = [];
         this._currentIndex = -1;
         this._isInitialized = false;
         this._contextType = null;
         this._contextId = null;
+        // Should NOT clear RepeatMode and ShuffleMode - they are user preferences
     }
 
     /**
@@ -107,7 +228,7 @@ class PlayQueue {
      * @returns {Object[]}
      */
     getQueue() {
-        return this._queue.slice(0);
+        return this._queue;
     }
 
     /**
@@ -124,16 +245,35 @@ class PlayQueue {
      * @param {Object[]} items        - Full ordered array of media items
      * @param {number}   currentIndex - Index of the item that should be current
      */
-    setQueue(items, currentIndex) {
-        // Stamp any item that isn't already tagged — preserves IDs the server
-        // sent back (via NowPlayingQueue) so PlaylistItemIds stay consistent.
+    setQueue(items, activeIndex = 0) {
+        log.info('PlayQueue.setQueue called', { itemCount: items?.length, activeIndex });
+        this.clear();
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
+            log.warn('Attempted to set an empty or invalid queue.');
+            return;
+        }
+
+        // Stamp PlaylistItemIds to ensure uniqueness
         items.forEach(_stampPlaylistItemId);
 
         this._queue = items;
-        this._currentIndex = Math.max(0, Math.min(currentIndex, items.length - 1));
+        this._currentIndex = Math.max(0, Math.min(activeIndex, this._queue.length - 1));
         this._isInitialized = true;
 
-        log.info(`Queue replaced via setQueue(): ${items.length} items, current index: ${this._currentIndex}`);
+        if (this._shuffleMode) {
+            this._shuffleMode = false;
+            this.setShuffleMode(true);
+        }
+
+        log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+    }
+
+    /**
+     * Get the current active index within the queue
+     */
+    getCurrentIndex() {
+        return this._currentIndex;
     }
 
     /**
@@ -141,6 +281,8 @@ class PlayQueue {
      * @returns {boolean}
      */
     hasNext() {
+        if (this._queue.length <= 1) return false;
+        if (this._repeatMode === 'RepeatAll') return true;
         return this._currentIndex < this._queue.length - 1;
     }
 
@@ -149,6 +291,8 @@ class PlayQueue {
      * @returns {boolean}
      */
     hasPrevious() {
+        if (this._queue.length <= 1) return false;
+        if (this._repeatMode === 'RepeatAll') return true;
         return this._currentIndex > 0;
     }
 
@@ -158,7 +302,12 @@ class PlayQueue {
      */
     peekNext() {
         if (!this.hasNext()) return null;
-        return this._queue[this._currentIndex + 1];
+
+        let nextIndex = this._currentIndex + 1;
+        if (nextIndex >= this._queue.length && this._repeatMode === 'RepeatAll') {
+            nextIndex = 0; // Wrap around
+        }
+        return this._queue[nextIndex];
     }
 
     /**
@@ -167,7 +316,12 @@ class PlayQueue {
      */
     peekPrevious() {
         if (!this.hasPrevious()) return null;
-        return this._queue[this._currentIndex - 1];
+
+        let prevIndex = this._currentIndex - 1;
+        if (prevIndex < 0 && this._repeatMode === 'RepeatAll') {
+            prevIndex = this._queue.length - 1; // Wrap around
+        }
+        return this._queue[prevIndex];
     }
 
     /**
@@ -176,7 +330,12 @@ class PlayQueue {
      */
     advance() {
         if (!this.hasNext()) return null;
+
         this._currentIndex++;
+        if (this._currentIndex >= this._queue.length && this._repeatMode === 'RepeatAll') {
+            this._currentIndex = 0; // Wrap around
+        }
+
         return this._queue[this._currentIndex];
     }
 
@@ -186,7 +345,12 @@ class PlayQueue {
      */
     goBack() {
         if (!this.hasPrevious()) return null;
+
         this._currentIndex--;
+        if (this._currentIndex < 0 && this._repeatMode === 'RepeatAll') {
+            this._currentIndex = this._queue.length - 1; // Wrap around
+        }
+
         return this._queue[this._currentIndex];
     }
 
@@ -269,6 +433,28 @@ class PlayQueue {
 
         if (this._currentIndex === -1) {
             // Fallback: stamp and prepend current item if not found in the collection results
+            _stampPlaylistItemId(currentItem);
+            this._queue.unshift(currentItem);
+            this._currentIndex = 0;
+        }
+    }
+
+    async _initSeasonQueue(currentItem, seasonId) {
+        log.debug('Building Season queue for:', seasonId);
+
+        // Fetch only episodes for this specific season
+        const response = await api.getEpisodes(currentItem.SeriesId, {
+            SeasonId: seasonId,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
+        });
+
+        const episodes = response.Items || [];
+        episodes.forEach(_stampPlaylistItemId);
+
+        this._queue = episodes;
+        this._currentIndex = this._queue.findIndex((e) => e.Id === currentItem.Id);
+
+        if (this._currentIndex === -1) {
             _stampPlaylistItemId(currentItem);
             this._queue.unshift(currentItem);
             this._currentIndex = 0;

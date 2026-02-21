@@ -235,6 +235,23 @@ class WebSocketHandler {
                 eventBus.emit('remote:back');
                 break;
 
+            // ================================================================
+            // Queue state (Shuffle / Repeat)
+            // ================================================================
+            case 'SetRepeatMode':
+                if (data.Arguments?.RepeatMode !== undefined) {
+                    eventBus.emit('remote:repeatmode', data.Arguments.RepeatMode);
+                }
+                break;
+
+            case 'SetShuffleMode':
+                // The web client usually sends "ShuffleMode" string, sometimes just a boolean cast to string.
+                if (data.Arguments?.ShuffleMode !== undefined) {
+                    const isShuffled = String(data.Arguments.ShuffleMode).toLowerCase() === 'true';
+                    eventBus.emit('remote:shufflemode', isShuffled);
+                }
+                break;
+
             default:
                 log.warn('Unhandled GeneralCommand:', data.Name);
         }

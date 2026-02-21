@@ -13,6 +13,7 @@ import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
@@ -81,6 +82,11 @@ class DetailsPage extends Page {
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                                         <path d="M3 3v5h5"/>
+                                    </svg>
+                                </button>
+                                <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="Shuffle">
+                                    <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
                                     </svg>
                                 </button>
                                 <button class="btn btn-icon watched-btn" tabindex="0" aria-label="Mark as watched">
@@ -220,7 +226,7 @@ class DetailsPage extends Page {
 
         // Resume button
         this.$('.resume-btn')?.addEventListener('click', () => {
-            this._play(true);
+            this._play({ resume: true });
         });
 
         // Watched button
@@ -231,6 +237,11 @@ class DetailsPage extends Page {
         // Reset button
         this.$('.reset-btn')?.addEventListener('click', () => {
             this._resetProgress();
+        });
+
+        // Shuffle button
+        this.$('.shuffle-btn')?.addEventListener('click', () => {
+            this._shufflePlay();
         });
 
         // Subtitle button
@@ -954,6 +965,19 @@ class DetailsPage extends Page {
         if (userData.Played) {
             if (watchedBtn) watchedBtn.classList.add('active');
         }
+
+        // Shuffle Button Visibility
+        const shuffleBtn = this.$('.shuffle-btn');
+        if (shuffleBtn) {
+            const isShuffleable = ['Series', 'Season', 'BoxSet'].includes(item.Type);
+            if (isShuffleable) {
+                shuffleBtn.classList.remove('hidden');
+                shuffleBtn.setAttribute('tabindex', '0');
+            } else {
+                shuffleBtn.classList.add('hidden');
+                shuffleBtn.setAttribute('tabindex', '-1');
+            }
+        }
     }
 
     async _loadNextUp() {
@@ -1107,7 +1131,11 @@ class DetailsPage extends Page {
                     const episode = this._episodes.find((e) => e.Id === episodeId);
                     if (episode) {
                         eventBus.emit('player:play', {
-                            item: episode,
+                            item: {
+                                ...episode,
+                                contextType: 'season',
+                                contextId: this._item.Id
+                            },
                             resume: false // Or true if we want to prompt? Default false for now
                         });
                     }
@@ -1627,36 +1655,46 @@ class DetailsPage extends Page {
         this._updateLeaveDown(upwardLink, 'details-similar');
     }
 
-    async _play(resume = false) {
+    async _play({ resume = false, isShufflePlay = false } = {}) {
         let itemToPlay = this._item;
 
         if (this._item.Type === 'BoxSet') {
             try {
                 // Fetch first item in collection (recursive)
                 // We prefer Movies over Episodes to match the visual row priority
+                const sortParams = isShufflePlay ? { SortBy: 'Random' } : { SortBy: 'SortName' };
                 const [movies, episodes] = await Promise.all([
                     api.getItems({
                         ParentId: this._item.Id,
                         Recursive: true,
                         IncludeItemTypes: 'Movie',
                         Limit: 1,
-                        SortBy: 'SortName'
+                        ...sortParams
                     }),
                     api.getItems({
                         ParentId: this._item.Id,
                         Recursive: true,
                         IncludeItemTypes: 'Episode',
                         Limit: 1,
-                        SortBy: 'SortName'
+                        ...sortParams
                     })
                 ]);
 
-                if (movies.Items && movies.Items.length > 0) {
-                    itemToPlay = movies.Items[0];
-                } else if (episodes.Items && episodes.Items.length > 0) {
-                    itemToPlay = episodes.Items[0];
+                if (isShufflePlay) {
+                    const allItems = [...(movies.Items || []), ...(episodes.Items || [])];
+                    if (allItems.length > 0) {
+                        itemToPlay = allItems[Math.floor(Math.random() * allItems.length)];
+                    } else {
+                        return; // Empty collection
+                    }
                 } else {
-                    return; // Empty collection
+                    if (movies.Items && movies.Items.length > 0) {
+                        itemToPlay = movies.Items[0];
+                    } else if (episodes.Items && episodes.Items.length > 0) {
+                        itemToPlay = episodes.Items[0];
+                    } else {
+                        return; // Empty collection
+                    }
                 }
 
                 // Attach context so PlayQueue knows this is a collection play
@@ -1666,31 +1704,62 @@ class DetailsPage extends Page {
                 log.error('Failed to play collection', e);
                 return;
             }
+        } else if (this._item.Type === 'Season') {
+            if (this._episodes?.length > 0) {
+                let target;
+                if (isShufflePlay) {
+                    target = this._episodes[Math.floor(Math.random() * this._episodes.length)];
+                } else {
+                    target = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                }
+                itemToPlay = { ...target };
+            }
+            // Attach context so PlayQueue knows this is a season play
+            itemToPlay.contextType = 'season';
+            itemToPlay.contextId = this._item.Id;
         } else if (this._item.Type === 'Series') {
             if (this._episodes?.length > 0) {
-                // If episodes are already loaded (e.g. we are on a Season page but Item is Series? Rare case)
-                itemToPlay = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                if (isShufflePlay) {
+                    itemToPlay = this._episodes[Math.floor(Math.random() * this._episodes.length)];
+                } else {
+                    itemToPlay = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
+                }
             } else {
                 try {
-                    // 1. Try to get "Next Up" for this series
-                    const nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
-                    if (nextUp && nextUp.Items && nextUp.Items.length > 0) {
-                        itemToPlay = nextUp.Items[0];
-                        // Auto-resume if it has progress
-                        if (itemToPlay.UserData?.PlaybackPositionTicks > 0) {
-                            resume = true;
-                        }
-                    } else {
-                        // 2. Fallback to first episode ever (e.g. S1E1)
-                        const firstEp = await api.getItems({
+                    if (isShufflePlay) {
+                        const randomEp = await api.getItems({
                             ParentId: this._item.Id,
                             Recursive: true,
                             IncludeItemTypes: 'Episode',
                             Limit: 1,
-                            SortBy: 'SortName'
+                            SortBy: 'Random'
                         });
-                        if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
-                            itemToPlay = firstEp.Items[0];
+                        if (randomEp && randomEp.Items && randomEp.Items.length > 0) {
+                            itemToPlay = randomEp.Items[0];
+                        } else {
+                            return;
+                        }
+                    } else {
+                        // 1. Try to get "Next Up" for this series
+                        const nextUp = await api.getNextUp({ SeriesId: this._item.Id, Limit: 1 });
+                        if (nextUp && nextUp.Items && nextUp.Items.length > 0) {
+                            itemToPlay = nextUp.Items[0];
+                            // Auto-resume if it has progress
+                            if (itemToPlay.UserData?.PlaybackPositionTicks > 0) {
+                                resume = true;
+                            }
+                        } else {
+                            // 2. Fallback to first episode ever (e.g. S1E1)
+                            const firstEp = await api.getItems({
+                                ParentId: this._item.Id,
+                                Recursive: true,
+                                IncludeItemTypes: 'Episode',
+                                Limit: 1,
+                                SortBy: 'SortName'
+                            });
+                            if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
+                                itemToPlay = firstEp.Items[0];
+                            }
                         }
                     }
                 } catch (e) {
@@ -1713,6 +1782,11 @@ class DetailsPage extends Page {
             subtitleStreamIndex: this._selectedSubtitleIndex,
             backdropUrl
         });
+    }
+
+    _shufflePlay() {
+        playQueue.setShuffleMode(true);
+        this._play({ isShufflePlay: true });
     }
 
     _showAudioTrackMenu() {

@@ -1,33 +1,25 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
+import { playQueue } from '../../core/PlayQueue.js';
 
 /**
- * SettingsMenu
+ * RepeatModeMenu
  * 
- * Handles player configuration options.
- * Currently supports:
- * - Playback Speed selection.
- * - "Stats for nerds" (toggling the PlaybackInfo overlay).
- * 
- * Uses a modal list layout for option selection.
+ * Sub-menu for selecting the repeat mode (Repeat None, Repeat All, Repeat One).
  */
-export default class SettingsMenu extends BaseMenu {
+export default class RepeatModeMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
     }
 
-    open(startIndex) {
-        if (startIndex !== undefined) {
-            this.focusIndex = startIndex;
-        }
+    open() {
         this.render();
         this.show();
     }
 
     show() {
-        // Capture focus context before opening
-        this._prevFocus = this.osd._getFocused(); // Helper in controller or native
+        this._prevFocus = this.osd._getFocused();
         this._prevRow = this.osd._currentFocusRow;
         this._prevIndex = this.osd._currentFocusIndex;
 
@@ -44,7 +36,6 @@ export default class SettingsMenu extends BaseMenu {
             this.$el.classList.remove('visible');
         }
 
-        // Restore focus to the specific button that opened it
         if (this._prevRow !== undefined) {
             this.osd._currentFocusRow = this._prevRow;
             this.osd._currentFocusIndex = this._prevIndex;
@@ -65,28 +56,31 @@ export default class SettingsMenu extends BaseMenu {
             });
         }
 
-        const options = [
-            { id: 'aspectRatio', label: 'Aspect Ratio', icon: ICONS.aspectRatio },
-            { id: 'playbackSpeed', label: 'Playback Speed', icon: ICONS.speed },
-            { id: 'quality', label: 'Quality', icon: ICONS.quality },
-            { id: 'playbackMode', label: 'Playback Mode', icon: ICONS.layers },
-            { id: 'repeatMode', label: 'Repeat Mode', icon: ICONS.repeat },
-            { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
-            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
-            { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
-            // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }
+        const currentMode = playQueue.getRepeatMode() || 'RepeatNone';
+
+        const modes = [
+            { id: 'RepeatNone', label: 'Off', icon: ICONS.repeat },
+            { id: 'RepeatAll', label: 'Repeat All', icon: ICONS.repeat },
+            { id: 'RepeatOne', label: 'Repeat One', icon: ICONS.repeatOne }
         ];
 
-        const optionsHtml = options.map((opt, i) => `
-            <button class="track-option track-item" data-id="${opt.id}" data-menu-index="${i}">
-                <span class="track-option-icon">${opt.icon || ''}</span>
-                <span class="track-option-label">${opt.label}</span>
+        let selectedIndex = modes.findIndex(m => m.id === currentMode);
+        if (selectedIndex === -1) selectedIndex = 0;
+        this.focusIndex = selectedIndex;
+
+        const optionsHtml = modes.map((mode, i) => {
+            const isSelected = mode.id === currentMode;
+            return `
+            <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-id="${mode.id}" data-menu-index="${i}">
+                <span class="track-option-icon">${mode.icon}</span>
+                <span class="track-option-label">${mode.label}</span>
+                ${isSelected ? `<span class="track-option-check">${ICONS.check}</span>` : ''}
             </button>
-        `).join('');
+        `}).join('');
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">Settings</div>
+                <div class="track-menu-title">Repeat Mode</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>
@@ -106,7 +100,6 @@ export default class SettingsMenu extends BaseMenu {
 
     handleKey(key) {
         const options = this.$el?.querySelectorAll('.track-option') || [];
-        
         switch (key) {
             case 'up':
                 if (this.focusIndex > 0) {
@@ -125,7 +118,6 @@ export default class SettingsMenu extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'enter':
-                // Rely on native click event which is triggered by the browser on Enter
                 return true;
             case 'back':
             case 'left':
@@ -141,37 +133,10 @@ export default class SettingsMenu extends BaseMenu {
         const focusedOption = options[this.focusIndex];
         if (!focusedOption) return;
 
-        const actionId = focusedOption.dataset.id;
-        
-        // Use closeMenu to cleanup focus properly
-        this.osd.closeMenu();
+        const modeId = focusedOption.dataset.id;
+        playQueue.setRepeatMode(modeId);
 
-        switch (actionId) {
-            case 'aspectRatio':
-                this.osd.toggleAspectRatioMenu(true);
-                break;
-            case 'playbackSpeed':
-                this.osd.togglePlaybackSpeedMenu(true);
-                break;
-            case 'quality':
-                this.osd.toggleQualityMenu(true);
-                break;
-            case 'playbackMode':
-                this.osd.togglePlaybackModeMenu(true);
-                break;
-            case 'repeatMode':
-                this.osd.toggleRepeatModeMenu(true);
-                break;
-            case 'playbackInfo':
-                this.osd.togglePlaybackInfo(!this.osd.playbackInfo.isVisible);
-                break;
-            case 'subtitleOffset':
-                this.osd.toggleSubtitleOffset(!this.osd.subtitleOffset.isVisible);
-                break;
-            case 'subtitleAppearance':
-                this.osd.toggleSubtitleQuickSettings(!this.osd.subtitleQuickSettings.isVisible);
-                break;
-        }
+        this.osd.closeMenu();
     }
 
     updateFocus() {

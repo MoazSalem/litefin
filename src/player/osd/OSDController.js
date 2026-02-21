@@ -13,6 +13,7 @@ import AspectRatioMenu from './AspectRatioMenu.js';
 import PlaybackSpeedMenu from './PlaybackSpeedMenu.js';
 import QualityMenu from './QualityMenu.js';
 import PlaybackModeMenu from './PlaybackModeMenu.js';
+import RepeatModeMenu from './RepeatModeMenu.js';
 
 const log = logger.create('OSDController');
 
@@ -64,18 +65,13 @@ export default class OSDController extends Component {
         this._cachedControlsRow = [];
         this._cachedSeekbar = null;
 
-        // Components
-        this.trackMenu = new TrackMenu(this);
-        this.settingsMenu = new SettingsMenu(this);
-        this.subtitleOffset = new SubtitleOffset(this);
-        this.subtitleQuickSettings = new SubtitleQuickSettings(this);
-        this.playbackInfo = new PlaybackInfo(this);
-        this.aspectRatioMenu = new AspectRatioMenu(this);
-        this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
-        this.qualityMenu = new QualityMenu(this);
-        this.playbackModeMenu = new PlaybackModeMenu(this);
+        // Ensure playQueue updates visually
+        this._boundHandleQueueUpdate = this._handleQueueUpdate.bind(this);
+        import('../../core/EventBus.js').then(({ eventBus }) => {
+            eventBus.on('playqueue:updated', this._boundHandleQueueUpdate);
+        });
 
-        this.activeMenu = null; // Reference to currently open menu
+        this._initMenus();
 
         if (options.item) {
             this._currentItem = options.item;
@@ -83,6 +79,43 @@ export default class OSDController extends Component {
 
         // Bindings
         this._onMouseMove = this._onMouseMove.bind(this);
+    }
+
+    _handleQueueUpdate() {
+        // Redraw active menu if open to show checks
+        if (this.repeatModeMenu && this.repeatModeMenu.isVisible) {
+            this.repeatModeMenu.render();
+        }
+    }
+
+    _initMenus() {
+        this.audioMenu = new TrackMenu(this, 'audio');
+        this.subtitleMenu = new TrackMenu(this, 'subtitle');
+        this.settingsMenu = new SettingsMenu(this);
+        this.subtitleOffset = new SubtitleOffset(this);
+        this.subtitleQuickSettings = new SubtitleQuickSettings(this);
+        this.playbackInfo = new PlaybackInfo(this);
+        
+        // Player Settings Sub-menus
+        this.aspectRatioMenu = new AspectRatioMenu(this);
+        this.playbackSpeedMenu = new PlaybackSpeedMenu(this);
+        this.qualityMenu = new QualityMenu(this);
+        this.playbackModeMenu = new PlaybackModeMenu(this);
+        this.repeatModeMenu = new RepeatModeMenu(this);
+
+        this.menus = [
+            this.audioMenu,
+            this.subtitleMenu,
+            this.settingsMenu,
+            this.subtitleOffset,
+            this.subtitleQuickSettings,
+            this.playbackInfo,
+            this.aspectRatioMenu,
+            this.playbackSpeedMenu,
+            this.qualityMenu,
+            this.playbackModeMenu,
+            this.repeatModeMenu
+        ];
     }
 
     // Public API for components
@@ -136,15 +169,14 @@ export default class OSDController extends Component {
 
     onBeforeDestroy() {
         this._stopUpdates();
-        this.trackMenu?.destroy();
-        this.settingsMenu?.destroy();
-        this.subtitleOffset?.destroy();
-        this.subtitleQuickSettings?.destroy();
-        this.playbackInfo?.destroy();
-        this.aspectRatioMenu?.destroy();
-        this.playbackSpeedMenu?.destroy();
-        this.qualityMenu?.destroy();
-        this.playbackModeMenu?.destroy();
+        if (this._updateTimer) clearInterval(this._updateTimer);
+        if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+        
+        import('../../core/EventBus.js').then(({ eventBus }) => {
+            eventBus.off('playqueue:updated', this._boundHandleQueueUpdate);
+        });
+
+        this.menus.forEach(menu => menu.hide?.());
 
         if (this._player) {
             this._player.removeAllListeners('mediastreamschange');
@@ -1225,6 +1257,19 @@ export default class OSDController extends Component {
         } else {
             this.qualityMenu.hide();
             this.activeMenu = null;
+        }
+    }
+
+    toggleRepeatModeMenu(show) {
+        if (show) {
+            this.closeMenu();
+            this.repeatModeMenu.open();
+            this.activeMenu = this.repeatModeMenu;
+        } else {
+            this.repeatModeMenu.hide();
+            if (this.activeMenu === this.repeatModeMenu) {
+                this.activeMenu = null;
+            }
         }
     }
 
