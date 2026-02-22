@@ -159,6 +159,12 @@ class NavigationState {
     _getFocusIndex(element, sectionName) {
         if (!element || !sectionName) return -1;
 
+        // VIRTUALIZED SUPPORT: Always prefer absolute virtual index
+        // over positional array index which fluctuates continuously
+        if (element.dataset && element.dataset.virtualIndex !== undefined) {
+            return parseInt(element.dataset.virtualIndex, 10);
+        }
+
         // Use FocusManager's internal method to get focusables
         const focusables = focusManager._getFocusables(sectionName);
         return focusables.indexOf(element);
@@ -209,6 +215,22 @@ class NavigationState {
      * @private
      */
     _restoreFocus(state) {
+        // First check if the section config defines an explicit index restorer
+        // Essential for virtualized lists where querySelector fails since off-screen
+        // nodes aren't generated in the DOM yet
+        if (state.focusSectionName && state.focusElementIndex >= 0) {
+            const config = focusManager._sections.get(state.focusSectionName);
+            if (config && typeof config.onRestoreIndex === 'function') {
+                if (this._debug) log.debug('Focus restored via onRestoreIndex hook:', state.focusElementIndex);
+                focusManager.setActiveSection(state.focusSectionName, false);
+                const target = config.onRestoreIndex(state.focusElementIndex);
+                if (target) {
+                    focusManager.focusElement(target, { skipScroll: true });
+                    return;
+                }
+            }
+        }
+
         // Strategy 1: Try to find element by selector (most reliable)
         if (state.focusElementSelector) {
             const el = document.querySelector(state.focusElementSelector);

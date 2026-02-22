@@ -349,15 +349,34 @@ class ScrollController {
                 }
 
                 // Then: center the card horizontally within the row
-                const elementLeft = element.offsetLeft;
-                const elementWidth = element.offsetWidth;
-                const containerWidth = rowItems.clientWidth;
+                const track = rowItems.querySelector('.row-items-track');
 
-                const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
-                const finalScrollLeft = Math.max(0, targetScroll);
+                if (track) {
+                    const elementLeft = element.offsetLeft;
+                    const elementWidth = element.offsetWidth;
+                    const containerWidth = rowItems.clientWidth;
+                    const trackWidth = track.scrollWidth;
 
-                // Always use smooth scroll for premium feel
-                this.smoothScrollTo(rowItems, finalScrollLeft, SCROLL_DURATION_HORIZONTAL, 'horizontal');
+                    // Ideal scroll to center the card
+                    const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
+
+                    // Clamp to the start and end bounds
+                    const maxScroll = Math.max(0, trackWidth - containerWidth);
+                    const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
+
+                    // Use completely hardware-accelerated CSS transform!
+                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                } else {
+                    // Fallback for native horizontal scrolls
+                    const elementLeft = element.offsetLeft;
+                    const elementWidth = element.offsetWidth;
+                    const containerWidth = rowItems.clientWidth;
+
+                    const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
+                    const finalScrollLeft = Math.max(0, targetScroll);
+
+                    this.smoothScrollTo(rowItems, finalScrollLeft, SCROLL_DURATION_HORIZONTAL, 'horizontal');
+                }
             } else if (activePageContent) {
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);

@@ -11,6 +11,7 @@
 
 import Page from './Page.js';
 import { api } from '../api/index.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
@@ -199,43 +200,72 @@ class HomePage extends Page {
         const container = this.$('.home-rows');
         if (!container) return;
 
-        // ========================================================
-        // OPTIMIZATION: Build HTML using array push (faster than map().join())
-        // ========================================================
-        const htmlParts = [];
+        // Clear existing rows
+        container.innerHTML = '';
 
+        // Track virtual row instances for index synchronization
+        this._virtualRows = [];
+
+        // Build HTML sections and instantiate VirtualCardRows
         for (let i = 0; i < rowsData.length; i++) {
             const row = rowsData[i];
-            // Determine card style based on row type
             const isLandscape = row.type === 'resume' || row.type === 'episode' || row.type === 'library';
 
-            htmlParts.push(`<section class="media-row" data-row-index="${i}" data-lazy-row="true">`);
-            htmlParts.push(`<h2 class="row-title">${row.title}</h2>`);
-            htmlParts.push(`<div class="row-items" id="row-items-${i}">`);
+            // Create section wrapper
+            const sectionDoc = document.createElement('div');
+            sectionDoc.innerHTML = `
+                <section class="media-row" data-row-index="${i}" data-lazy-row="true">
+                    <h2 class="row-title">${row.title}</h2>
+                    <div class="row-items" id="row-items-${i}">
+                        <div class="row-items-track"></div>
+                    </div>
+                </section>
+            `;
+            const sectionEl = sectionDoc.firstElementChild;
+            container.appendChild(sectionEl);
 
-            // Inline card rendering to avoid function call overhead per item
-            for (const item of row.items) {
-                htmlParts.push(this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type));
-            }
+            // Initialize VirtualCardRow
+            const trackContainer = sectionEl.querySelector('.row-items-track');
+            const virtualRow = new VirtualCardRow(trackContainer, row.items, {
+                isLandscape: isLandscape,
+                visibleCount: isLandscape ? 8 : 12, // Load slightly more standard poster cards
+                renderCard: (item) => this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type)
+            });
+            this._virtualRows.push(virtualRow);
 
-            htmlParts.push('</div></section>');
-        }
-
-        container.innerHTML = htmlParts.join('');
-
-        // Start lazy loading
-        lazyLoader.observe(container);
-
-        // Register focus sections for each row
-        for (let i = 0; i < rowsData.length; i++) {
-            const rowEl = container.querySelector(`[data-row-index="${i}"]`);
-            this.registerFocusSection(`home-row-${i}`, rowEl, {
+            // Register Focus section with VirtualCardRow hook interception
+            this.registerFocusSection(`home-row-${i}`, sectionEl, {
                 orientation: 'horizontal',
-                leaveUp: i === 0 ? null : `home-row-${i - 1}`, // Top row doesn't leave up (sidebar is left)
+                leaveUp: i === 0 ? null : `home-row-${i - 1}`, // Top row leaves up to nothing (or header)
                 leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null,
-                leaveLeft: 'sidebar' // Navigate to Sidebar on left
+                leaveLeft: 'sidebar', // Navigate to Sidebar on left
+                onMove: (direction) => {
+                    const nextNode = virtualRow.handleMove(direction);
+                    if (nextNode) {
+                        focusManager.focusElement(nextNode);
+                        return true; // VirtualCardRow handled it
+                    }
+                    return false; // Reached bounds, let spatial exit section
+                },
+                onEnter: (fromElement, options) => {
+                    // Only intercept for vertical entry.
+                    // Instead of spatial X alignment, we restore the row's last focused index.
+                    // This prevents rows from shifting and acting like grids.
+                    if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                        // Ensure window is updated for current index before accessing DOM node
+                        virtualRow._updateWindow(virtualRow.currentIndex);
+                        return virtualRow.domNodes.get(virtualRow.currentIndex);
+                    }
+                    return null;
+                },
+                onRestoreIndex: (index) => {
+                    return virtualRow.focusByIndex(index);
+                }
             });
         }
+
+        // Start lazy loading to catch any immediately visible cover art
+        lazyLoader.observe(container);
 
         // ========================================================
         // OPTIMIZATION: Event Delegation instead of per-card listeners
@@ -258,6 +288,14 @@ class HomePage extends Page {
         // Focus/Blur delegation (these bubble)
         container.addEventListener('focusin', (e) => {
             if (e.target.classList.contains('media-card')) {
+                // Sync VirtualCardRow internal index when focus jumps via Spatial Navigator
+                const row = e.target.closest('.media-row');
+                if (row && row.dataset.rowIndex !== undefined) {
+                    const rowIndex = parseInt(row.dataset.rowIndex, 10);
+                    if (this._virtualRows[rowIndex]) {
+                        this._virtualRows[rowIndex].syncIndexFromNode(e.target);
+                    }
+                }
                 animationManager.focusScale(e.target, true);
             }
         });

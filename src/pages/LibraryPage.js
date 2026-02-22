@@ -11,6 +11,7 @@ import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 
@@ -1277,16 +1278,50 @@ class LibraryPage extends Page {
 
             // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
             const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
-            const containerClass = isHorizontalRow ? 'row-items' : 'genre-grid-items';
 
-            section.innerHTML = `
-                ${headerHtml}
-                <div class="${containerClass}" id="${listId}">
-                    ${contentHtml}
-                </div>
-            `;
+            let virtualRow = null;
+
+            if (isHorizontalRow) {
+                section.innerHTML = `
+                    ${headerHtml}
+                    <div class="row-items" id="${listId}">
+                        <div class="row-items-track"></div>
+                    </div>
+                `;
+            } else {
+                section.innerHTML = `
+                    ${headerHtml}
+                    <div class="genre-grid-items" id="${listId}">
+                        ${contentHtml}
+                    </div>
+                `;
+            }
 
             container.appendChild(section);
+
+            if (isHorizontalRow) {
+                const trackContainer = section.querySelector('.row-items-track');
+                virtualRow = new VirtualCardRow(trackContainer, displayItems, {
+                    isLandscape: row.isLandscape || false,
+                    visibleCount: row.isLandscape || false ? 8 : 12,
+                    renderCard: (item) =>
+                        CardRenderer.createCardHtml(item, {
+                            isLandscape: row.isLandscape || false,
+                            type: row.cardType || 'poster',
+                            contextType: row.contextType || null
+                        })
+                });
+
+                if (!this._virtualRows) this._virtualRows = [];
+                this._virtualRows[rowIndex] = virtualRow;
+
+                // Track focus sync for the instance
+                section.addEventListener('focusin', (e) => {
+                    if (e.target.classList.contains('media-card') && virtualRow) {
+                        virtualRow.syncIndexFromNode(e.target);
+                    }
+                });
+            }
 
             // Lazy Load Images
             lazyLoader.observe(section);
@@ -1299,32 +1334,40 @@ class LibraryPage extends Page {
             // Use horizontal orientation for Upcoming/Suggestions, grid for Genres
             const orientation = isHorizontalRow ? 'horizontal' : 'grid';
 
-            // Custom onMove handler for grid rows to ensure UP navigates to header
-            const onMoveHandler = !isHorizontalRow
-                ? (direction, currentElement) => {
-                      if (direction === 'up' && currentElement?.classList.contains('media-card')) {
-                          // Check if there's ANY card above this one (spatially)
-                          const currentRect = currentElement.getBoundingClientRect();
-                          const cards = Array.from(section.querySelectorAll('.media-card'));
-                          const hasCardAbove = cards.some((card) => {
-                              if (card === currentElement) return false;
-                              const cardRect = card.getBoundingClientRect();
-                              // Card is above if its center Y is at least 10px higher
-                              return cardRect.top + cardRect.height / 2 < currentRect.top + currentRect.height / 2 - 10;
-                          });
+            // Custom onMove handler for grid rows to ensure UP navigates to header, and VirtualCardRow delegates Left/Right
+            const onMoveHandler = (direction, currentElement) => {
+                if (isHorizontalRow && virtualRow) {
+                    const nextNode = virtualRow.handleMove(direction);
+                    if (nextNode) {
+                        focusManager.focusElement(nextNode);
+                        return true;
+                    }
+                    // For Up/Down we fallback to FocusManager defaults to allow leaveUp/leaveDown to trigger
+                    if (direction === 'left' || direction === 'right') return false;
+                } else if (!isHorizontalRow) {
+                    if (direction === 'up' && currentElement?.classList.contains('media-card')) {
+                        // Check if there's ANY card above this one (spatially)
+                        const currentRect = currentElement.getBoundingClientRect();
+                        const cards = Array.from(section.querySelectorAll('.media-card'));
+                        const hasCardAbove = cards.some((card) => {
+                            if (card === currentElement) return false;
+                            const cardRect = card.getBoundingClientRect();
+                            // Card is above if its center Y is at least 10px higher
+                            return cardRect.top + cardRect.height / 2 < currentRect.top + currentRect.height / 2 - 10;
+                        });
 
-                          // If no card above, navigate to header
-                          if (!hasCardAbove) {
-                              const headerBtn = section.querySelector('.header-focusable');
-                              if (headerBtn) {
-                                  focusManager.focusElement(headerBtn);
-                                  return true; // Handled
-                              }
-                          }
-                      }
-                      return false; // Let default handling proceed
-                  }
-                : null;
+                        // If no card above, navigate to header
+                        if (!hasCardAbove) {
+                            const headerBtn = section.querySelector('.header-focusable');
+                            if (headerBtn) {
+                                focusManager.focusElement(headerBtn);
+                                return true; // Handled
+                            }
+                        }
+                    }
+                }
+                return false; // Let default handling proceed
+            };
 
             focusManager.register(rowId, section, {
                 orientation: orientation,
@@ -1337,7 +1380,27 @@ class LibraryPage extends Page {
                 selector: selector,
                 scrollOffsetTop: 50, // Ultra-tight top alignment
                 enterTo: null, // Allow spatial entry (don't force header)
-                onMove: onMoveHandler
+                onMove: onMoveHandler,
+                onEnter:
+                    isHorizontalRow && virtualRow
+                        ? (fromElement, options) => {
+                              if (
+                                  fromElement &&
+                                  options &&
+                                  (options.direction === 'up' || options.direction === 'down')
+                              ) {
+                                  virtualRow._updateWindow(virtualRow.currentIndex);
+                                  return virtualRow.domNodes.get(virtualRow.currentIndex);
+                              }
+                              return null;
+                          }
+                        : null,
+                onRestoreIndex:
+                    isHorizontalRow && virtualRow
+                        ? (index) => {
+                              return virtualRow.focusByIndex(index);
+                          }
+                        : null
             });
         });
 

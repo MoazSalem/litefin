@@ -21,6 +21,7 @@ import EpisodeList from '../components/EpisodeList.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 
@@ -516,32 +517,108 @@ class DetailsPage extends Page {
         }
     }
 
-    _renderCollectionRow(sectionId, listId, items, leaveUpTarget) {
+    _renderVirtualRow(options) {
+        const {
+            sectionId,
+            listId,
+            items,
+            isLandscape,
+            renderCard,
+            leaveUpTarget,
+            focusSectionName,
+            titleElText,
+            onClick
+        } = options;
+
         const section = this.$(`#${sectionId}`);
         const list = this.$(`#${listId}`);
-        if (!section || !list) return;
+        if (!section || !list || !items || items.length === 0) return;
 
         section.classList.remove('hidden');
+        list.classList.add('row-items');
 
-        list.innerHTML = items.map((item) => this._renderMediaCard(item, false, 'poster')).join('');
+        if (titleElText) {
+            const titleEl = section.querySelector('.row-title');
+            if (titleEl) titleEl.textContent = titleElText;
+        }
 
-        // Delegated click handler
+        list.innerHTML = `<div class="row-items-track"></div>`;
+        const trackContainer = list.querySelector('.row-items-track');
+
+        const virtualRow = new VirtualCardRow(trackContainer, items, {
+            isLandscape: isLandscape,
+            visibleCount: isLandscape ? 8 : 12,
+            renderCard: renderCard
+        });
+
+        if (!this._virtualRows) this._virtualRows = {};
+        this._virtualRows[focusSectionName] = virtualRow;
+
+        lazyLoader.observe(list);
+
+        list.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('media-card')) {
+                virtualRow.syncIndexFromNode(e.target);
+            }
+        });
+
         list.onclick = (e) => {
             const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                router.navigate(`/details/${card.dataset.itemId}`);
+            if (card) {
+                if (onClick) {
+                    onClick(card);
+                } else if (card.dataset.itemId) {
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
             }
         };
 
-        // Register Focus with dynamic UP linking
-        this.registerFocusSection(sectionId, section, {
+        const upwardLink =
+            leaveUpTarget || this._getPreviousVisibleSection(focusSectionName)?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection(focusSectionName);
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection(focusSectionName, list, {
             orientation: 'horizontal',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
             leaveLeft: 'sidebar',
-            leaveUp: leaveUpTarget || 'details-rich-meta',
-            enterTo: 'last-focused'
+            onMove: (direction) => {
+                const nextNode = virtualRow.handleMove(direction);
+                if (nextNode) {
+                    focusManager.focusElement(nextNode);
+                    return true;
+                }
+                return false;
+            },
+            onEnter: (fromElement, options) => {
+                // Only intercept for vertical entry.
+                // Instead of spatial X alignment, we restore the row's last focused index.
+                // This prevents rows from shifting and acting like grids.
+                if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                    virtualRow._updateWindow(virtualRow.currentIndex);
+                    return virtualRow.domNodes.get(virtualRow.currentIndex);
+                }
+                return null;
+            },
+            onRestoreIndex: (index) => {
+                return virtualRow.focusByIndex(index);
+            }
         });
 
-        lazyLoader.observe(list);
+        this._updateLeaveDown(upwardLink, focusSectionName);
+    }
+
+    _renderCollectionRow(sectionId, listId, items, leaveUpTarget) {
+        this._renderVirtualRow({
+            sectionId: sectionId,
+            listId: listId,
+            items: items,
+            isLandscape: false,
+            renderCard: (item) => this._renderMediaCard(item, false, 'poster'),
+            focusSectionName: sectionId,
+            leaveUpTarget: leaveUpTarget || 'details-rich-meta'
+        });
     }
 
     _renderRichMetadata() {
@@ -997,49 +1074,14 @@ class DetailsPage extends Page {
     }
 
     _renderNextUp() {
-        const container = this.$('#next-up-row');
-        const section = this.$('#next-up-section');
-
-        section.classList.remove('hidden');
-        container.classList.add('row-items');
-
-        const htmlParts = [];
-        for (const item of this._nextUp) {
-            // Force landscape for Next Up (Episode)
-            htmlParts.push(this._renderMediaCard(item, true, 'episode'));
-        }
-        container.innerHTML = htmlParts.join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        // Delegated click handler
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                // Navigate to episode details?? Or play?
-                // Usually Next Up on details page -> Play or go to episode?
-                // Jellyfin web goes to Episode Details.
-                router.navigate(`/details/${card.dataset.itemId}`);
-            }
-        };
-
-        // Determine upward link using helper
-        const upwardLink = this._getPreviousVisibleSection('details-next-up')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('details-next-up');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        // Register focus section
-        this.registerFocusSection('details-next-up', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget, // Ensure down navigation works
-            leaveLeft: 'sidebar',
-            enterTo: 'first'
+        this._renderVirtualRow({
+            sectionId: 'next-up-section',
+            listId: 'next-up-row',
+            items: this._nextUp,
+            isLandscape: true,
+            renderCard: (item) => this._renderMediaCard(item, true, 'episode'),
+            focusSectionName: 'details-next-up'
         });
-
-        // Update upward link
-        this._updateLeaveDown(upwardLink, 'details-next-up');
     }
 
     async _loadSeasons() {
@@ -1059,44 +1101,14 @@ class DetailsPage extends Page {
     }
 
     _renderSeasons() {
-        const container = this.$('#seasons-row');
-        const section = this.$('#seasons-section');
-
-        section.classList.remove('hidden');
-        container.classList.add('row-items'); // Standard class
-
-        const htmlParts = [];
-        for (const season of this._seasons) {
-            htmlParts.push(this._renderMediaCard(season, false, 'season'));
-        }
-        container.innerHTML = htmlParts.join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        // Delegated click handler
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                // Navigate directly to DetailsPage with Season ID
-                router.navigate(`/details/${card.dataset.itemId}`);
-            }
-        };
-
-        const upwardLink = this._getPreviousVisibleSection('details-seasons')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('details-seasons');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        this.registerFocusSection('details-seasons', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar',
-            enterTo: 'first'
+        this._renderVirtualRow({
+            sectionId: 'seasons-section',
+            listId: 'seasons-row',
+            items: this._seasons,
+            isLandscape: false,
+            renderCard: (season) => this._renderMediaCard(season, false, 'season'),
+            focusSectionName: 'details-seasons'
         });
-
-        // Update upward link
-        this._updateLeaveDown(upwardLink, 'details-seasons');
     }
 
     async _loadEpisodes(seriesId, seasonId) {
@@ -1153,174 +1165,63 @@ class DetailsPage extends Page {
 
             // Lazy Load Episode Images (if list renders them)
             lazyLoader.observe(container);
+
+            // Register focus section for vertical EpisodeList
+            const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
+            const nextSection = this._getNextVisibleSection('details-episodes');
+            const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+            this.registerFocusSection('details-episodes', container, {
+                orientation: 'grid', // Allows both vertical nav between rows and horizontal nav to action buttons
+                leaveUp: upwardLink,
+                leaveDown: leaveDownTarget,
+                leaveLeft: 'sidebar'
+            });
+
+            this._updateLeaveDown(upwardLink, 'details-episodes');
         } else {
             // Horizontal episode cards (for Series NextUp, etc.)
-            const htmlParts = [];
-            for (const ep of this._episodes) {
-                const progress =
-                    ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
-                        ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
-                        : 0;
-
-                htmlParts.push(`
-                    <button class="episode-card" data-episode-id="${ep.Id}" tabindex="0">
-                        <div class="episode-thumb">
-                            <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="">
-                            ${
-                                progress > 0
-                                    ? '<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;">' +
-                                      '<div style="width: ' +
-                                      progress +
-                                      '%; height: 100%; background-color: #00a4dc;"></div></div>'
-                                    : ''
-                            }
-                        </div>
-                        <div class="episode-info">
-                            <span class="episode-number">E${ep.IndexNumber}</span>
-                            <span class="episode-title">${ep.Name}</span>
-                            <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
-                        </div>
-                    </button>
-                `);
-            }
-            container.innerHTML = htmlParts.join('');
-
-            // Click handlers
-            container.querySelectorAll('.episode-card').forEach((card) => {
-                card.addEventListener('click', () => {
-                    router.navigate(`/details/${card.dataset.episodeId}`);
-                });
+            this._renderVirtualRow({
+                sectionId: 'episodes-section',
+                listId: 'episodes-list',
+                items: this._episodes,
+                isLandscape: true,
+                focusSectionName: 'details-episodes',
+                renderCard: (ep) => {
+                    const progress =
+                        ep.UserData?.PlaybackPositionTicks && ep.RunTimeTicks
+                            ? (ep.UserData.PlaybackPositionTicks / ep.RunTimeTicks) * 100
+                            : 0;
+                    return `
+                        <button class="episode-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
+                            <div class="episode-thumb">
+                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
+                                ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: #00a4dc;"></div></div>` : ''}
+                            </div>
+                            <div class="episode-info">
+                                <span class="episode-number">E${ep.IndexNumber}</span>
+                                <span class="episode-title">${ep.Name}</span>
+                                <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
+                            </div>
+                        </button>
+                    `;
+                }
             });
         }
-
-        // Focus section registration
-        const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('details-episodes');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        // Register focus section - use appropriate selector
-        const selector = this._item.Type === 'Season' ? '.episode-row-card, .episode-action-btn' : '.episode-card';
-
-        // Helper for custom navigation
-        const onSeasonMove = (direction, focusedEl) => {
-            const currentRow = focusedEl.closest('.episode-row');
-            if (!currentRow) return false;
-
-            // Get all rows to determine index
-            const allRows = Array.from(container.querySelectorAll('.episode-row'));
-            const rowIndex = allRows.indexOf(currentRow);
-
-            if (direction === 'up') {
-                if (rowIndex > 0) {
-                    // Move to previous row's CARD (always reset to card for stability)
-                    const prevRow = allRows[rowIndex - 1];
-                    const target = prevRow.querySelector('.episode-row-card');
-                    focusManager.focusElement(target);
-                    return true;
-                }
-                // At top row - let it bubble to leaveUp
-                return false;
-            }
-
-            if (direction === 'down') {
-                if (rowIndex < allRows.length - 1) {
-                    // Move to next row's CARD
-                    const nextRow = allRows[rowIndex + 1];
-                    const target = nextRow.querySelector('.episode-row-card');
-                    focusManager.focusElement(target);
-                    return true;
-                }
-                // At bottom row - let it bubble to leaveDown
-                return false;
-            }
-
-            // Left/Right handled by 'horizontal' orientation (linear in DOM)
-            // But we might want to ensure it doesn't wrap to next row?
-            // Standard 'horizontal' in FocusManager checks index +/- 1.
-            // Since our DOM order is Card -> Btn1 -> Btn2 -> NextCard...
-            // "Right" from last Btn would go to NextCard. We probably DON'T want that?
-            // Ideally Right on last button should do nothing (or leaveRight?)
-            if (direction === 'right') {
-                const rowItems = Array.from(currentRow.querySelectorAll(selector.split(', ').join(',')));
-                const itemIndex = rowItems.indexOf(focusedEl);
-
-                // If we are at the end of the row, BLOCK movement to next row
-                if (itemIndex >= rowItems.length - 1) {
-                    return true; // Handled (blocked)
-                }
-            }
-
-            if (direction === 'left') {
-                const rowItems = Array.from(currentRow.querySelectorAll(selector.split(', ').join(',')));
-                const itemIndex = rowItems.indexOf(focusedEl);
-
-                // If at start of row (Card), let it bubble to leaveLeft (if any) or Sidebar?
-                // Standard horizontal will try index-1.
-                // If index-1 is prev row's last button, that's bad.
-                // So we must BLOCK if itemIndex is 0.
-                if (itemIndex === 0) {
-                    return false; // Allow bubble to leave section
-                }
-            }
-
-            return false; // Fallback to standard local move
-        };
-
-        this.registerFocusSection('details-episodes', container, {
-            orientation: 'horizontal', // Use horizontal to handle Left/Right linear
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar',
-            selector: selector,
-            onMove: this._item.Type === 'Season' ? onSeasonMove : null
-        });
-
-        // Update upward link's leaveDown
-        this._updateLeaveDown(upwardLink, 'details-episodes');
     }
 
     _renderPeople() {
-        const container = this.$('#people-row');
-        const section = this.$('#people-section');
-
-        section.classList.remove('hidden');
-
-        const htmlParts = [];
-        for (const person of this._people) {
-            htmlParts.push(this._renderMediaCard(person, false, 'person'));
-        }
-        container.innerHTML = htmlParts.join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        // Delegated click handler - navigate to Person Details (if we had a page)
-        // For now, maybe just focus? Or do nothing?
-        // User didn't specify behavior, but usually it goes to person items.
-        // Person Click Handler
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card && card.dataset.itemId) {
-                const personId = card.dataset.itemId;
-                router.navigate(`/person/${personId}`);
+        this._renderVirtualRow({
+            sectionId: 'people-section',
+            listId: 'people-row',
+            items: this._people,
+            isLandscape: false,
+            renderCard: (person) => this._renderMediaCard(person, false, 'person'),
+            focusSectionName: 'details-people',
+            onClick: (card) => {
+                if (card.dataset.itemId) router.navigate(`/person/${card.dataset.itemId}`);
             }
-        };
-
-        const upwardLink = this._getPreviousVisibleSection('details-people')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('details-people');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        // Register focus section
-        this.registerFocusSection('details-people', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar',
-            enterTo: 'first'
         });
-
-        // Update upward link's leaveDown
-        this._updateLeaveDown(upwardLink, 'details-people');
     }
 
     _checkOverviewTruncation() {
@@ -1507,41 +1408,14 @@ class DetailsPage extends Page {
     }
 
     _renderMoreFromSeason(episodes) {
-        const container = this.$('#more-from-season-row');
-        const section = this.$('#more-from-season-section');
-        const titleEl = this.$('#more-from-season-title');
-
-        if (!container || !section) return;
-
-        section.classList.remove('hidden');
-
-        // Update title if we have the season name
-        if (this._item.SeasonName) {
-            titleEl.textContent = `More from ${this._item.SeasonName}`;
-        }
-
-        container.innerHTML = episodes.map((ep) => this._renderMediaCard(ep, true, 'episode')).join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                router.navigate(`/details/${card.dataset.itemId}`);
-            }
-        };
-
-        const upwardLink = this._getPreviousVisibleSection('more-from-season-section')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('more-from-season-section');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        this.registerFocusSection('more-from-season-section', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar',
-            enterTo: 'last-focused'
+        this._renderVirtualRow({
+            sectionId: 'more-from-season-section',
+            listId: 'more-from-season-row',
+            items: episodes,
+            isLandscape: true,
+            titleElText: this._item.SeasonName ? `More from ${this._item.SeasonName}` : null,
+            renderCard: (ep) => this._renderMediaCard(ep, true, 'episode'),
+            focusSectionName: 'more-from-season-section'
         });
     }
 
@@ -1557,35 +1431,16 @@ class DetailsPage extends Page {
     }
 
     _renderGuestStars(people) {
-        const container = this.$('#guest-stars-row');
-        const section = this.$('#guest-stars-section');
-
-        if (!container || !section) return;
-
-        section.classList.remove('hidden');
-
-        container.innerHTML = people.map((p) => this._renderMediaCard(p, false, 'person')).join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                router.navigate(`/person/${card.dataset.itemId}`);
+        this._renderVirtualRow({
+            sectionId: 'guest-stars-section',
+            listId: 'guest-stars-row',
+            items: people,
+            isLandscape: false,
+            renderCard: (p) => this._renderMediaCard(p, false, 'person'),
+            focusSectionName: 'guest-stars-section',
+            onClick: (card) => {
+                if (card.dataset.itemId) router.navigate(`/person/${card.dataset.itemId}`);
             }
-        };
-
-        const upwardLink = this._getPreviousVisibleSection('guest-stars-section')?.targetName || 'details-actions';
-        const nextSection = this._getNextVisibleSection('guest-stars-section');
-        const leaveDownTarget = nextSection ? nextSection.targetName : null;
-
-        this.registerFocusSection('guest-stars-section', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveDown: leaveDownTarget,
-            leaveLeft: 'sidebar',
-            enterTo: 'first'
         });
     }
 
@@ -1620,39 +1475,14 @@ class DetailsPage extends Page {
     }
 
     _renderSimilar() {
-        const container = this.$('#similar-row');
-        const section = this.$('#similar-section');
-
-        section.classList.remove('hidden');
-        container.classList.add('row-items');
-
-        const htmlParts = [];
-        for (const item of this._similar) {
-            htmlParts.push(this._renderMediaCard(item, false, 'poster'));
-        }
-        container.innerHTML = htmlParts.join('');
-
-        // Lazy Load
-        lazyLoader.observe(container);
-
-        container.onclick = (e) => {
-            const card = e.target.closest('.media-card');
-            if (card?.dataset?.itemId) {
-                router.navigate(`/details/${card.dataset.itemId}`);
-            }
-        };
-
-        // Use dynamic helper to find the previous visible section (includes collection rows)
-        const upwardLink = this._getPreviousVisibleSection('details-similar')?.targetName || 'details-actions';
-
-        this.registerFocusSection('details-similar', container, {
-            orientation: 'horizontal',
-            leaveUp: upwardLink,
-            leaveLeft: 'sidebar',
-            enterTo: 'first'
+        this._renderVirtualRow({
+            sectionId: 'similar-section',
+            listId: 'similar-row',
+            items: this._similar,
+            isLandscape: false,
+            renderCard: (item) => this._renderMediaCard(item, false, 'poster'),
+            focusSectionName: 'details-similar'
         });
-
-        this._updateLeaveDown(upwardLink, 'details-similar');
     }
 
     async _play({ resume = false, isShufflePlay = false } = {}) {

@@ -229,6 +229,8 @@ class FocusManager {
             enterTo: options.enterTo || null, // 'first' or null (spatial/memory)
             // Custom Override
             onMove: options.onMove || null,
+            onEnter: options.onEnter || null,
+            onRestoreIndex: options.onRestoreIndex || null,
             // Custom Scroll Logic
             scrollOffsetTop: options.scrollOffsetTop || 0,
             // CSS selector for the default element to focus when entering the section.
@@ -517,7 +519,7 @@ class FocusManager {
             const instantScroll = direction === 'up' || direction === 'down';
 
             // Pass originElement to allow selecting closest target in new section
-            this.setActiveSection(nextSection, true, originElement, { instantScroll });
+            this.setActiveSection(nextSection, true, originElement, { instantScroll, direction });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
@@ -596,7 +598,11 @@ class FocusManager {
             const index = focusables.indexOf(this._focusedElement);
             this._focusMemory.set(this._activeSection, {
                 element: this._focusedElement,
-                index
+                index,
+                virtualIndex:
+                    this._focusedElement.dataset.virtualIndex !== undefined
+                        ? parseInt(this._focusedElement.dataset.virtualIndex, 10)
+                        : undefined
             });
         }
     }
@@ -628,6 +634,16 @@ class FocusManager {
         // Support 'first' or 'active-element' (finds .active or .selected)
         const enterTo = options.enterTo || config.enterTo;
 
+        // VIRTUALIZED SUPPORT: Let sections intercept spatial entry directly
+        // Because DOM nodes are recycled, we cannot rely on scraping raw DOM
+        if (typeof config.onEnter === 'function') {
+            const hookTarget = config.onEnter(fromElement, options);
+            if (hookTarget) {
+                this.focusElement(hookTarget, { skipScroll });
+                return;
+            }
+        }
+
         if (enterTo === 'first' && focusables.length > 0) {
             target = focusables[0];
             this.focusElement(target, { skipScroll });
@@ -642,14 +658,19 @@ class FocusManager {
 
         // 2. Spatial Entry
         // If we came from another element (e.g. Button below grid), pick closest grid item
-        if (fromElement && document.contains(fromElement)) {
+        // Note: Handled above via onEnter hook for virtual rows
+        if (fromElement && document.contains(fromElement) && typeof config.onEnter !== 'function') {
             target = this._spatial.findClosest(fromElement, focusables);
         }
 
         // 3. Memory (Fallback)
         if (!target && memory) {
+            // Virtualized memory
+            if (memory.virtualIndex !== undefined && typeof config.onRestoreIndex === 'function') {
+                target = config.onRestoreIndex(memory.virtualIndex);
+            }
             // Try exact element
-            if (document.contains(memory.element) && focusables.includes(memory.element)) {
+            else if (document.contains(memory.element) && focusables.includes(memory.element)) {
                 target = memory.element;
             }
             // Try index

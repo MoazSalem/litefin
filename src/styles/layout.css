@@ -109,38 +109,26 @@
 
 /* Global Horizontal Scroll Row (Moved from home.css) */
 .row-items {
-    display: flex;
-    overflow-x: auto;
-    overflow-y: visible;
-    /* CRITICAL: Allow focused cards to scale out of bounds */
-    padding: 16px 0 16px 60px;
-    -webkit-overflow-scrolling: touch;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    backface-visibility: hidden;
-    -webkit-backface-visibility: hidden;
-    will-change: scroll-position;
-
-    /* Ensure no native smooth scroll interfering with our adaptive JS logic */
-    scroll-behavior: auto;
-
-    /* Hide scrollbar but keep functionality */
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-
+    display: block; 
+    overflow: hidden; /* Hide scrollbars, disable native scrolling */
+    
+    /* CRITICAL: Vertical padding prevents scaled focus cards from clipping */
+    padding: 24px 0; 
+    
     /* PERFORMANCE: Isolate horizontal rows */
     contain: layout paint style;
 }
 
-.row-items::-webkit-scrollbar {
-    display: none;
-}
-
-.row-items::after {
-    content: '';
-    flex-shrink: 0;
-    width: 60px;
-    height: 1px;
+/* GPU Accelerated slide track wrapper */
+.row-items-track {
+    position: relative; /* GUARANTEE offsetParent for JS calculation */
+    display: inline-flex;
+    padding-left: 60px;
+    padding-right: 60px; /* Spacer to allow last item to clear screen edge */
+    
+    transform: translateZ(0); /* Hardware accelerate */
+    will-change: transform;
+    transition: transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
 /* ============================================================================

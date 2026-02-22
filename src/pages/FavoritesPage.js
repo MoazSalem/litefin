@@ -1,7 +1,9 @@
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
+import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
+import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('FavoritesPage');
@@ -146,16 +148,11 @@ class FavoritesPage extends Page {
     _renderSection(title, items, type, sectionId, prevId, nextId) {
         const container = this.$('#favorites-rows');
 
-        const itemsHtml = [];
-        for (let i = 0; i < items.length; i++) {
-            itemsHtml.push(this._renderCard(items[i], type));
-        }
-
         const sectionHtml = `
              <div class="media-row" id="${sectionId}-row">
                  <h2 class="row-title">${title}</h2>
                  <div class="row-items" id="${sectionId}-items">
-                     ${itemsHtml.join('')}
+                     <div class="row-items-track"></div>
                  </div>
              </div>
          `;
@@ -166,8 +163,20 @@ class FavoritesPage extends Page {
         const rowEl = temp.firstElementChild;
         container.appendChild(rowEl);
 
-        // Register Focus
         const itemsContainer = rowEl.querySelector('.row-items');
+        const trackContainer = rowEl.querySelector('.row-items-track');
+
+        let virtualRow = null;
+
+        // Initialize VirtualCardRow
+        virtualRow = new VirtualCardRow(trackContainer, items, {
+            isLandscape: type === 'episode',
+            visibleCount: type === 'episode' ? 8 : 12,
+            renderCard: (item) => this._renderCard(item, type)
+        });
+
+        if (!this._virtualRows) this._virtualRows = {};
+        this._virtualRows[sectionId] = virtualRow;
 
         // Click handling
         itemsContainer.onclick = (e) => {
@@ -181,11 +190,37 @@ class FavoritesPage extends Page {
             }
         };
 
+        // Focus index synchronization
+        itemsContainer.addEventListener('focusin', (e) => {
+            if (e.target.classList.contains('media-card') && virtualRow) {
+                virtualRow.syncIndexFromNode(e.target);
+            }
+        });
+
         this.registerFocusSection(sectionId, itemsContainer, {
             orientation: 'horizontal',
             leaveUp: prevId, // Remove header ref
             leaveDown: nextId,
-            leaveLeft: 'sidebar'
+            leaveLeft: 'sidebar',
+            onMove: (direction) => {
+                const nextNode = virtualRow.handleMove(direction);
+                if (nextNode) {
+                    focusManager.focusElement(nextNode);
+                    return true;
+                }
+                return false;
+            },
+            onEnter: (fromElement, options) => {
+                // Only intercept for vertical entry. Horizontal entry (e.g. from sidebar) should use memory.
+                if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                    virtualRow._updateWindow(virtualRow.currentIndex);
+                    return virtualRow.domNodes.get(virtualRow.currentIndex);
+                }
+                return null;
+            },
+            onRestoreIndex: (index) => {
+                return virtualRow.focusByIndex(index);
+            }
         });
     }
 
