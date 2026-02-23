@@ -1,4 +1,5 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
+import { focusManager } from '../ui/FocusManager.js';
 
 export class VirtualCardRow {
     /**
@@ -15,6 +16,7 @@ export class VirtualCardRow {
 
         this.visibleCount = options.visibleCount || 10;
         this.isLandscape = options.isLandscape || false;
+        this.focusSectionId = options.focusSectionId;
         this.renderCard = options.renderCard;
 
         // Static CSS measurements from home.css
@@ -97,10 +99,13 @@ export class VirtualCardRow {
         }
 
         // 1. Remove nodes that are no longer in the window
+        let domChanged = false;
+
         for (const [index, node] of this.domNodes.entries()) {
             if (!requiredIndices.has(index)) {
                 if (node.parentNode === this.track) {
                     this.track.removeChild(node);
+                    domChanged = true;
                 }
                 this.domNodes.delete(index);
             }
@@ -114,26 +119,57 @@ export class VirtualCardRow {
                 // Create a temporary container to extract the HTML string into a node
                 const tempDiv = document.createElement('div');
                 tempDiv.innerHTML = this.renderCard(itemData).trim();
-                const cardNode = tempDiv.firstChild;
+                const cardNode = tempDiv.firstElementChild;
 
-                // Position the card absolutely within the relative track
-                // Include 60px padding-left from layout.css
-                const leftPos = 60 + i * this.totalItemWidth;
-                cardNode.style.position = 'absolute';
-                cardNode.style.left = `${leftPos}px`;
-                cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
+                if (cardNode) {
+                    // Position the card absolutely within the relative track
+                    // Include 60px padding-left from layout.css
+                    const leftPos = 60 + i * this.totalItemWidth;
+                    cardNode.style.position = 'absolute';
+                    cardNode.style.left = `${leftPos}px`;
+                    cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
 
-                // Add index for identifying the card in focus handlers
-                cardNode.dataset.virtualIndex = i;
+                    // Add index for identifying the card in focus handlers
+                    // Set natively to ensure parser handles it on old webkit
+                    cardNode.dataset.virtualIndex = i;
+                    cardNode.setAttribute('data-virtual-index', i);
 
-                this.track.appendChild(cardNode);
-                this.domNodes.set(i, cardNode);
+                    this.track.appendChild(cardNode);
+                    this.domNodes.set(i, cardNode);
+                    domChanged = true;
 
-                // Trigger lazy loader for new images
-                const img = cardNode.querySelector('img.lazy');
-                if (img) {
-                    lazyLoader.observeElement(img);
+                    // Trigger lazy loader for new images
+                    const img = cardNode.querySelector('img.lazy');
+                    if (img) {
+                        lazyLoader.observeElement(img);
+                    }
                 }
+            }
+        }
+
+        // 3. Ensure DOM order exactly matches dataset indexing to prevent FocusManager spatial routing from reversing directions
+        // We use a safe differential alignment loop to exclusively move out-of-order elements
+        // This prevents Tizen native `blur` events from dumping focus to the document root
+        if (domChanged) {
+            const expectedChildren = Array.from(this.track.children);
+            expectedChildren.sort((a, b) => {
+                const idxA = parseInt(a.getAttribute('data-virtual-index') || a.dataset.virtualIndex, 10);
+                const idxB = parseInt(b.getAttribute('data-virtual-index') || b.dataset.virtualIndex, 10);
+                // Keep the structural dummy div at the beginning
+                if (isNaN(idxA)) return -1;
+                if (isNaN(idxB)) return 1;
+                return idxA - idxB;
+            });
+
+            // Perform minimal DOM mutations
+            for (let c = 0; c < expectedChildren.length; c++) {
+                if (this.track.children[c] !== expectedChildren[c]) {
+                    this.track.insertBefore(expectedChildren[c], this.track.children[c]);
+                }
+            }
+
+            if (this.focusSectionId) {
+                focusManager.invalidateCache(this.focusSectionId);
             }
         }
     }

@@ -172,6 +172,7 @@ class FavoritesPage extends Page {
         virtualRow = new VirtualCardRow(trackContainer, items, {
             isLandscape: type === 'episode',
             visibleCount: type === 'episode' ? 8 : 12,
+            focusSectionId: sectionId,
             renderCard: (item) => this._renderCard(item, type)
         });
 

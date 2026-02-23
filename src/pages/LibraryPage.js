@@ -1304,6 +1304,7 @@ class LibraryPage extends Page {
                 virtualRow = new VirtualCardRow(trackContainer, displayItems, {
                     isLandscape: row.isLandscape || false,
                     visibleCount: row.isLandscape || false ? 8 : 12,
+                    focusSectionId: `library-row-${rowIndex}`,
                     renderCard: (item) =>
                         CardRenderer.createCardHtml(item, {
                             isLandscape: row.isLandscape || false,

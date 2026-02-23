@@ -164,6 +164,22 @@ class TizenAdapter {
         document.addEventListener('keydown', (e) => {
             const keyCode = e.keyCode;
 
+            // Block Tizen's default spatial navigation unless user is typing in an input field.
+            // Failing to prevent default allows the TV to natively jump its internal hardware focus
+            // instantly before JS calculates the virtual row, triggering ghost focusin loops.
+            const activeElem = document.activeElement;
+            const isInput = activeElem && (activeElem.tagName === 'INPUT' || activeElem.tagName === 'TEXTAREA');
+
+            if (!isInput) {
+                if (
+                    [TIZEN_KEYS.LEFT, TIZEN_KEYS.RIGHT, TIZEN_KEYS.UP, TIZEN_KEYS.DOWN, TIZEN_KEYS.ENTER].includes(
+                        keyCode
+                    )
+                ) {
+                    e.preventDefault();
+                }
+            }
+
             // Map key codes to events
             switch (keyCode) {
                 // Navigation

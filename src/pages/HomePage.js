@@ -229,6 +229,7 @@ class HomePage extends Page {
             const virtualRow = new VirtualCardRow(trackContainer, row.items, {
                 isLandscape: isLandscape,
                 visibleCount: isLandscape ? 8 : 12, // Load slightly more standard poster cards
+                focusSectionId: `home-row-${i}`,
                 renderCard: (item) => this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type)
             });
             this._virtualRows.push(virtualRow);

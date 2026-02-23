@@ -548,6 +548,7 @@ class DetailsPage extends Page {
         const virtualRow = new VirtualCardRow(trackContainer, items, {
             isLandscape: isLandscape,
             visibleCount: isLandscape ? 8 : 12,
+            focusSectionId: focusSectionName,
             renderCard: renderCard
         });
 
