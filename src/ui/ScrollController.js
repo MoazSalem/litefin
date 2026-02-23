@@ -60,8 +60,8 @@ const GENERIC_SCROLL_MARGIN = 100;
 const TALL_ROW_MULTIPLIER = 2.0;
 
 // Fraction of viewport height: elements shorter than this are centered,
-// elements taller are bottom-aligned.
-const SMALL_ELEMENT_FRACTION = 1 / 3;
+// elements taller are bottom-aligned. (Increased to 0.9 so large grid cards center properly)
+const SMALL_ELEMENT_FRACTION = 0.9;
 
 class ScrollController {
     constructor() {
@@ -274,6 +274,11 @@ class ScrollController {
             else if (row.offsetHeight > pageContent.clientHeight * TALL_ROW_MULTIPLIER) {
                 useRowScroll = false;
             }
+            // GRID EXCEPTION: If the row contains a wrap-grid (like Season episodes),
+            // row-based snapping will fail spectacularly on deep navigation.
+            else if (row.querySelector('.person-grid')) {
+                useRowScroll = false;
+            }
         }
 
         // ----------------------------------------------------------------
@@ -386,13 +391,23 @@ class ScrollController {
 
                 // Comfort margins for top and bottom visibility
                 const topMargin = GENERIC_SCROLL_MARGIN;
-                const bottomMargin = GENERIC_SCROLL_MARGIN;
+                let bottomMargin = GENERIC_SCROLL_MARGIN;
 
                 let finalScrollTop = currentScroll;
 
                 // Apply custom scroll offset from section config
                 const customOffset = config?.scrollOffsetTop || 0;
-                const effectiveTopMargin = Math.max(topMargin, customOffset);
+                let effectiveTopMargin = Math.max(topMargin, customOffset);
+
+                // PREVENT JITTER: If the element and its margins don't completely fit in the viewport
+                // together, the top and bottom edge guards will fight each other on every horizontal move.
+                // We shrink the margins proportionally to fit.
+                if (elementHeight + effectiveTopMargin + bottomMargin > viewHeight) {
+                    const availableSpace = Math.max(0, viewHeight - elementHeight);
+                    // Distribute available space evenly as maximum allowable margins
+                    effectiveTopMargin = Math.min(effectiveTopMargin, availableSpace / 2);
+                    bottomMargin = Math.min(bottomMargin, availableSpace / 2);
+                }
 
                 // Element cut off at top
                 if (elementTop < currentScroll + effectiveTopMargin) {
@@ -400,7 +415,7 @@ class ScrollController {
                 }
                 // Element cut off at bottom
                 else if (elementTop + elementHeight > currentScroll + viewHeight - bottomMargin) {
-                    // Small elements: center them. Large elements: align to bottom.
+                    // Small elements: center them nicely. Extremely huge elements: align to bottom edge.
                     if (elementHeight < viewHeight * SMALL_ELEMENT_FRACTION) {
                         finalScrollTop = elementTop - viewHeight / 2 + elementHeight / 2;
                     } else {
@@ -409,7 +424,7 @@ class ScrollController {
                 }
 
                 // Apply vertical scroll with smooth easing
-                if (finalScrollTop !== currentScroll) {
+                if (Math.abs(finalScrollTop - currentScroll) > SCROLL_SNAP_THRESHOLD) {
                     this.smoothScrollTo(activePageContent, finalScrollTop);
                 }
             }

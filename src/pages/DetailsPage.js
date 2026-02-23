@@ -1139,6 +1139,8 @@ class DetailsPage extends Page {
         section.classList.remove('hidden');
 
         if (this._item.Type === 'Season') {
+            // Remove 'media-row' to prevent ScrollController from aggressively top-snapping this entire deep grid
+            section.classList.remove('media-row');
             // Use MediaGrid for a clean, generic 2D landscape episode layout
             this._episodeGrid = new MediaGrid({
                 id: 'season-episodes-grid',
@@ -1175,7 +1177,8 @@ class DetailsPage extends Page {
 
             this._updateLeaveDown(upwardLink, 'details-episodes');
         } else {
-            // Horizontal episode cards (for Series NextUp, etc.)
+            // Horizontal episode cards (for Series NextUp, etc.) require 'media-row' for correct horizontal snap scrolling
+            section.classList.add('media-row');
             this._renderVirtualRow({
                 sectionId: 'episodes-section',
                 listId: 'episodes-list',
