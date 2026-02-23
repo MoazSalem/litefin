@@ -32,8 +32,9 @@ class FavoritesPage extends Page {
         this._bindNavigation();
         await this._loadFavorites();
 
-        // Trigger deferred scroll/focus restoration
-        this.restoreScrollFocusWhenReady();
+        // Mark the page as rendered, fulfilling the Promise for NavigationState
+        // to restore scroll/focus
+        this.markReady();
     }
 
     onDestroyed() {

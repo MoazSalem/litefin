@@ -196,8 +196,9 @@ class DetailsPage extends Page {
             // Load item details
             await this._loadDetails();
 
-            // Trigger deferred scroll/focus restoration
-            this.restoreScrollFocusWhenReady();
+            // Mark the page as rendered, fulfilling the Promise for NavigationState
+            // to restore scroll/focus natively
+            this.markReady();
         } catch (err) {
             log.error('onInit failed', err);
         }

@@ -349,35 +349,23 @@ class FocusManager {
         }
 
         // Query focusables and filter out hidden elements.
-        // TIZEN OPTIMIZATION: Batch all DOM reads (getComputedStyle, offsetParent)
-        // before the filter pass to avoid layout thrashing. Each offsetParent
-        // access forces a synchronous layout calc — interleaving reads with
-        // other work in a loop causes N layout recalcs on TV hardware.
+        // TIZEN OPTIMIZATION: We ONLY check non-reflowing style properties
+        // to avoid synchronous layout thrashing loops which freeze TV hardware.
+        // Previously we checked offsetParent and getComputedStyle, which force recalcs.
         const allElements = Array.from(config.container.querySelectorAll(config.selector));
 
-        // Pass 1: Batch-read all layout-triggering properties
-        const elementData = new Array(allElements.length);
+        const focusables = [];
         for (let i = 0; i < allElements.length; i++) {
             const el = allElements[i];
-            const style = window.getComputedStyle(el);
-            elementData[i] = {
-                el,
-                display: style.display,
-                position: style.position,
-                offsetParent: el.offsetParent
-            };
-        }
 
-        // Pass 2: Pure filtering on cached data — zero DOM access
-        const focusables = [];
-        for (let i = 0; i < elementData.length; i++) {
-            const { el, display, position, offsetParent } = elementData[i];
-            // Skip display:none elements
-            if (display === 'none') continue;
-            // Visible if has an offsetParent, or is position:fixed (no offsetParent)
-            if (offsetParent !== null || position === 'fixed') {
-                focusables.push(el);
-            }
+            // Fast, non-reflowing checks to determine visibility.
+            // NOTE: We assume elements are visible rather than invisible natively,
+            // as virtualized elements manage visibility via their mount lifecycle.
+            if (el.style.display === 'none') continue;
+            if (el.classList.contains('hidden')) continue;
+            if (el.hasAttribute('hidden')) continue;
+
+            focusables.push(el);
         }
 
         this._focusablesCache.set(sectionName, focusables);

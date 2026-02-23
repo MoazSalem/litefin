@@ -77,44 +77,48 @@ class NavigationState {
     /**
      * Restore scroll position and focus.
      * Called AFTER onInit() so DOM is ready.
-     * Uses a delay to ensure focus sections are fully registered.
+     * Waits for the page's `ready` Promise to ensure async content is loaded natively.
+     * @param {Page} pageInstance - The new page instance
      * @param {Object} state - Previously captured state
      */
-    restoreScrollFocus(state) {
+    restoreScrollFocus(pageInstance, state) {
         if (!state) return;
 
         if (this._debug) {
             log.debug('Scheduling scroll/focus restoration:', state);
         }
 
-        // Use double requestAnimationFrame + setTimeout for robust timing
-        // This ensures:
-        // 1. Current execution stack completes
-        // 2. Two paint cycles pass (for layout)
-        // 3. Additional delay for async focus registration to complete
-        requestAnimationFrame(() => {
+        const executeRestore = () => {
+            // Still use requestAnimationFrame to ensure layout updates are flushed
             requestAnimationFrame(() => {
-                // Add a small delay to ensure focus sections are registered
-                // (they get registered during render, which may still be async)
-                setTimeout(() => {
-                    this._doRestoreScrollFocus(state);
-                }, 50);
+                requestAnimationFrame(() => {
+                    this._doRestoreScrollFocus(pageInstance, state);
+                });
             });
-        });
+        };
+
+        // Await the page's ready signal natively to avoid arbitrary setTimeout
+        if (pageInstance && pageInstance.ready) {
+            pageInstance.ready.then(executeRestore);
+        } else {
+            // Fallback for missing promises
+            setTimeout(executeRestore, 50);
+        }
     }
 
     /**
      * Internal method that actually performs the restoration.
+     * @param {Page} pageInstance - The current page instance
      * @param {Object} state - Previously captured state
      * @private
      */
-    _doRestoreScrollFocus(state) {
+    _doRestoreScrollFocus(pageInstance, state) {
         if (this._debug) {
             log.debug('Executing scroll/focus restoration');
         }
 
         // Restore scroll position
-        const scrollContainer = document.querySelector('.page-content');
+        const scrollContainer = this._getScrollContainer(pageInstance);
         if (scrollContainer && state.scrollTop > 0) {
             scrollContainer.scrollTop = state.scrollTop;
         }
@@ -142,9 +146,9 @@ class NavigationState {
         // Step 1: Restore page-specific state
         this.restorePageState(pageInstance, state);
 
-        // Step 2: Restore scroll and focus after DOM is ready
-        requestAnimationFrame(() => {
-            this.restoreScrollFocus(state);
+        // Step 2: Restore scroll and focus waiting on the page Promise natively
+        pageInstance.ready.then(() => {
+            this.restoreScrollFocus(pageInstance, state);
             if (callback) callback();
         });
     }
@@ -281,10 +285,10 @@ class NavigationState {
      * @private
      */
     _getScrollContainer(pageInstance) {
-        // Try page's own container first
-        if (pageInstance.el) {
-            const pageContent = pageInstance.el.querySelector('.page-content');
-            if (pageContent) return pageContent;
+        // First priority: Ask the page natively (eliminates generic querySelector misses)
+        if (pageInstance && typeof pageInstance.getScrollContainer === 'function') {
+            const container = pageInstance.getScrollContainer();
+            if (container) return container;
         }
 
         // Fall back to global page-content

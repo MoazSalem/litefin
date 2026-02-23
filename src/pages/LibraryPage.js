@@ -279,8 +279,9 @@ class LibraryPage extends Page {
 
         await this._loadItems();
 
-        // Trigger deferred scroll/focus restoration now that content is loaded
-        this.restoreScrollFocusWhenReady();
+        // Mark the page as rendered, fulfilling the Promise for NavigationState
+        // to restore scroll/focus
+        this.markReady();
     }
 
     /**

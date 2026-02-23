@@ -36,9 +36,25 @@ class Page extends Component {
         // Registered focus sections for this page
         this._focusSections = [];
 
+        // Promise to track when the page is fully rendered and ready for interaction
+        this._readyResolve = null;
+        this.ready = new Promise((resolve) => {
+            this._readyResolve = resolve;
+        });
+
         // Back handler
         // REMOVED: App.js handles this directly
         // this._onBack = this._onBack.bind(this);
+    }
+
+    /**
+     * Mark the page as fully loaded and rendered.
+     */
+    markReady() {
+        if (this._readyResolve) {
+            this._readyResolve();
+            this._readyResolve = null;
+        }
     }
 
     /**
@@ -51,9 +67,6 @@ class Page extends Component {
 
         // Get main container
         this.container = document.getElementById('page-container') || document.getElementById('app');
-
-        // IMPORTANT: Clear the container (removes loading screen)
-        this.container.innerHTML = '';
 
         // Mount the page
         this.mount();
@@ -93,7 +106,7 @@ class Page extends Component {
         if (this._pendingNavState && !this._isAsyncPage) {
             requestAnimationFrame(() => {
                 if (this._pendingNavState) {
-                    navigationState.restoreScrollFocus(this._pendingNavState);
+                    navigationState.restoreScrollFocus(this, this._pendingNavState);
                     this._pendingNavState = null;
                 }
             });
@@ -107,7 +120,7 @@ class Page extends Component {
     restoreScrollFocusWhenReady() {
         if (this._pendingNavState) {
             log.debug('Restoring scroll/focus (deferred)');
-            navigationState.restoreScrollFocus(this._pendingNavState);
+            navigationState.restoreScrollFocus(this, this._pendingNavState);
             this._pendingNavState = null;
         }
     }
@@ -176,6 +189,11 @@ class Page extends Component {
 
         // Remove back handler
         eventBus.off('key:back', this._onBack);
+
+        // Remove the page's DOM element gracefully
+        if (this.el && this.el.parentNode) {
+            this.el.parentNode.removeChild(this.el);
+        }
 
         // Call parent destroy
         super.destroy();

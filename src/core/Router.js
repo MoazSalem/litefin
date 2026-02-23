@@ -126,6 +126,9 @@ class Router {
             // PEEK the previous entry (it stays in history)
             const previousEntry = this._history[this._history.length - 1];
 
+            // Flag this as a back navigation so Page.js knows to restore state
+            this._isBackNavigation = true;
+
             // Store pending state for restoration
             this._pendingRestoreState = previousEntry ? previousEntry.state : null;
 
@@ -210,16 +213,17 @@ class Router {
 
                 // Add to history as an object with path and state
                 // Skip if: back navigation via replace (path already at top)
-                const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
-
                 if (this._isBackNavigation) {
                     // Clear the flag and skip the push
                     this._isBackNavigation = false;
-                } else if (path !== topPath) {
-                    // Only push if path is different from top of history
-                    this._history.push({ path: path, state: null });
-                    if (this._history.length > this._maxHistory) {
-                        this._history.shift();
+                } else {
+                    const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
+                    if (path !== topPath) {
+                        // Only push if path is different from top of history
+                        this._history.push({ path: path, state: null });
+                        if (this._history.length > this._maxHistory) {
+                            this._history.shift();
+                        }
                     }
                 }
 
