@@ -86,6 +86,10 @@ body.player-active .page {
     background: transparent !important;
 }
 
+body.player-active .page::before {
+    display: none !important;
+}
+
 body.player-active #page-container {
     background: transparent !important;
 }
