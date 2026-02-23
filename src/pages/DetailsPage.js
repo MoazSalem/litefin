@@ -17,7 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
-import EpisodeList from '../components/EpisodeList.js';
+import MediaGrid from '../components/MediaGrid.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -215,7 +215,7 @@ class DetailsPage extends Page {
             defaultFocusSelector: '.resume-btn:not(.hidden), .play-btn'
         });
 
-        // Default to Play button (actions)
+        // Default to actions row (will be overridden in _loadDetails for Season items)
         this.setActiveSection('details-actions');
     }
 
@@ -263,6 +263,7 @@ class DetailsPage extends Page {
 
     async _loadDetails() {
         this.setLoading(true);
+        this._hasEnteredEpisodesGrid = false;
 
         try {
             // 1. Fetch Item (with People data)
@@ -300,13 +301,16 @@ class DetailsPage extends Page {
             // FIX: Ensure Focus Manager knows about the Resume button if it appeared
             focusManager.invalidateCache('details-actions');
 
-            // If we have resume progress, FORCE focus to the resume button
-            if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                const resumeBtn = this.$('.resume-btn');
-                if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                    log.info('Forcing focus to Resume button');
-                    this._pendingNavState = null;
-                    focusManager.focusElement(resumeBtn);
+            // If we have a pending navigation state, it will be handled by restoreScrollFocusWhenReady()
+            // which was called in onInit. If not, we handle initial landing here.
+            if (!this._pendingNavState) {
+                if (this._item.UserData?.PlaybackPositionTicks > 0) {
+                    // If we have resume progress (Movie/Episode), FORCE focus to the resume button
+                    const resumeBtn = this.$('.resume-btn');
+                    if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
+                        log.info('Forcing focus to Resume button');
+                        focusManager.focusElement(resumeBtn);
+                    }
                 }
             }
         } catch (error) {
@@ -891,7 +895,7 @@ class DetailsPage extends Page {
             <div id="details-logo" class="details-logo"></div>
             <h1 class="details-title">${displayTitle}</h1>
             ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info">S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.SeriesName}</p>` : ''}
+            ${item.Type === 'Episode' ? `<p class="details-episode-info">S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}</p>` : ''}
             
             <div class="details-meta-row">
                 ${metaHtml}
@@ -1135,48 +1139,38 @@ class DetailsPage extends Page {
         section.classList.remove('hidden');
 
         if (this._item.Type === 'Season') {
-            container.classList.add('vertical-list');
-            // Use vertical EpisodeList component
-            this._episodeList = new EpisodeList({
-                episodes: this._episodes,
-                seriesId: this._item.SeriesId,
-                onPlay: (episodeId) => {
-                    const episode = this._episodes.find((e) => e.Id === episodeId);
-                    if (episode) {
-                        eventBus.emit('player:play', {
-                            item: {
-                                ...episode,
-                                contextType: 'season',
-                                contextId: this._item.Id
-                            },
-                            resume: false // Or true if we want to prompt? Default false for now
-                        });
-                    }
-                },
-                onAction: (action, episodeId) => {
-                    if (action === 'info') {
-                        router.navigate(`/details/${episodeId}`);
-                    } else if (action === 'menu') {
-                        this._showMoreOptionsModal(episodeId);
-                    }
-                    log.debug(`Episode action: ${action} on ${episodeId}`);
-                }
+            // Use MediaGrid for a clean, generic 2D landscape episode layout
+            this._episodeGrid = new MediaGrid({
+                id: 'season-episodes-grid',
+                items: this._episodes,
+                type: 'episode',
+                contextType: 'season-grid',
+                limit: 1000,
+                isLandscape: true
             });
-            this._episodeList.mount(container);
 
-            // Lazy Load Episode Images (if list renders them)
-            lazyLoader.observe(container);
+            container.innerHTML = this._episodeGrid.render();
+            this._episodeGrid.onMounted(); // Wire up generic grid router links
 
-            // Register focus section for vertical EpisodeList
+            // Register focus section for grid
             const upwardLink = this._getPreviousVisibleSection('details-episodes')?.targetName || 'details-actions';
             const nextSection = this._getNextVisibleSection('details-episodes');
             const leaveDownTarget = nextSection ? nextSection.targetName : null;
 
             this.registerFocusSection('details-episodes', container, {
-                orientation: 'grid', // Allows both vertical nav between rows and horizontal nav to action buttons
+                orientation: 'grid',
                 leaveUp: upwardLink,
                 leaveDown: leaveDownTarget,
-                leaveLeft: 'sidebar'
+                leaveLeft: 'sidebar',
+                onEnter: (fromElement, options) => {
+                    // Only assert focus on the first item for the very first entry.
+                    // Afterwards, let FocusManager use standard spatial/memory routing.
+                    if (!this._hasEnteredEpisodesGrid) {
+                        this._hasEnteredEpisodesGrid = true;
+                        return container.querySelector('.media-card');
+                    }
+                    return null;
+                }
             });
 
             this._updateLeaveDown(upwardLink, 'details-episodes');
@@ -1200,7 +1194,7 @@ class DetailsPage extends Page {
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: #00a4dc;"></div></div>` : ''}
                             </div>
                             <div class="episode-info">
-                                <span class="episode-number">E${ep.IndexNumber}</span>
+                                <span class="episode-number">S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}</span>
                                 <span class="episode-title">${ep.Name}</span>
                                 <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
                             </div>

@@ -543,11 +543,7 @@
 
 /* Episodes */
 .episodes-list {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
-    /* gap: 30px; REMOVED */
-    padding-bottom: 40px;
-    
+    display: block; /* Removed grid to prevent double-nesting with MediaGrid */
     /* PERFORMANCE: Isolate the entire list */
     contain: layout style;
 }
@@ -647,7 +643,7 @@
     display: flex;
     /* Changed from Grid to Flex Wrap for max compatibility */
     flex-wrap: wrap;
-    padding: 16px 60px 60px 60px;
+    padding: 16px 60px 0px 60px;
     width: 100%;
     margin: 0;
     box-sizing: border-box;
@@ -684,18 +680,18 @@
     margin-right: 0 !important;
 }
 
-/* Landscape Grid (Episodes on Person Page) */
+/* Landscape Grid (Episodes on Season/Details Page) */
 .person-grid.landscape-grid .media-card {
-    width: calc(25% - 26px) !important;
-    /* 4 items per row */
+    width: calc(33.33% - 26px) !important;
+    /* 3 items per row for better visibility/detail */
 }
 
+/* Reset the 5n clearing from the base grid */
 .person-grid.landscape-grid .media-card:nth-child(5n) {
     margin-right: 24px !important;
-    /* Reset 5n rule */
 }
 
-.person-grid.landscape-grid .media-card:nth-child(4n) {
+.person-grid.landscape-grid .media-card:nth-child(3n) {
     margin-right: 0 !important;
 }
 

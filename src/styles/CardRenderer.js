@@ -277,13 +277,22 @@ class CardRenderer {
         if (type === 'person') {
             subtitleText = item.Role || item.Type;
         } else if (item.Type === 'Episode') {
+            const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
+            const e = (item.IndexNumber || 0).toString().padStart(2, '0');
+            const episodeCode = `S${s}E${e}`;
+
             if (isLandscape) {
-                // Next Up Style
-                titleText = item.SeriesName || item.Name;
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} - ${item.Name} `;
+                if (contextType === 'season-grid') {
+                    titleText = `${e} - ${item.Name}`;
+                    subtitleText = '';
+                } else {
+                    // Next Up Style (Keep Series Name)
+                    titleText = item.SeriesName || item.Name;
+                    subtitleText = `${episodeCode} - ${item.Name} `;
+                }
             } else {
                 // Poster Style
-                subtitleText = `S${item.ParentIndexNumber}:E${item.IndexNumber} `;
+                subtitleText = `${episodeCode} `;
             }
         } else if (type === 'season') {
             // For seasons, item.Name is "Season 1", usually fine.

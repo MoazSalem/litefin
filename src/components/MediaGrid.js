@@ -26,6 +26,7 @@ class MediaGrid extends Component {
         this.items = config.items || [];
         this.limit = config.limit || 12;
         this.type = config.type || 'poster'; // 'poster', 'episode', 'episode-primary'
+        this.contextType = config.contextType || null;
         this.isLandscape = config.isLandscape || false;
 
         // State
@@ -185,7 +186,8 @@ class MediaGrid extends Component {
     _createCardHtml(item) {
         return CardRenderer.createCardHtml(item, {
             isLandscape: this.isLandscape,
-            type: this.type
+            type: this.type,
+            contextType: this.contextType
         });
     }
 }
