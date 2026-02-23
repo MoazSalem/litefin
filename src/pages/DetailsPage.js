@@ -589,9 +589,19 @@ class DetailsPage extends Page {
             leaveUp: upwardLink,
             leaveDown: leaveDownTarget,
             leaveLeft: 'sidebar',
-            onMove: (direction) => {
-                const nextNode = virtualRow.handleMove(direction);
+            onMove: (direction, currentElement) => {
+                if (!currentElement || currentElement.dataset.virtualIndex === undefined) {
+                    return false;
+                }
+
+                const currentIndex = parseInt(currentElement.dataset.virtualIndex, 10);
+                const nextNode = virtualRow.handleMove(direction, currentIndex);
+
                 if (nextNode) {
+                    // Manually sync the index immediately to prevent race conditions on rapid key presses.
+                    // This ensures the next 'handleMove' call uses the correct 'currentIndex' before focusin bubbles.
+                    virtualRow.syncIndexFromNode(nextNode);
+
                     focusManager.focusElement(nextNode);
                     return true;
                 }

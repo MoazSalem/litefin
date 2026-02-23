@@ -398,6 +398,7 @@ class FocusManager {
 
         // Custom Override Handler
         if (config.onMove) {
+            // Pass the currently focused element as the second argument.
             const handled = config.onMove(direction, this._focusedElement);
             if (handled) return; // Handler took care of it (returned true or truthy)
         }

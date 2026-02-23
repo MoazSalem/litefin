@@ -123,6 +123,16 @@ class LazyLoader {
     }
 
     /**
+     * Forcibly load an image immediately, bypassing IntersectionObserver bounding box checks.
+     * Required for GPU hardware-accelerated containers (`translate3d`) where old webkits
+     * fail to intersect bounding rects correctly.
+     * @param {HTMLElement} img
+     */
+    forceLoad(img) {
+        this._loadImage(img);
+    }
+
+    /**
      * Helper to batch preload subsequent images in a grid
      * Finds next 20 images in the DOM sequence from the current image
      * @param {HTMLElement} startImg

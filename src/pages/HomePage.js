@@ -240,9 +240,20 @@ class HomePage extends Page {
                 leaveUp: i === 0 ? null : `home-row-${i - 1}`, // Top row leaves up to nothing (or header)
                 leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null,
                 leaveLeft: 'sidebar', // Navigate to Sidebar on left
-                onMove: (direction) => {
-                    const nextNode = virtualRow.handleMove(direction);
+                onMove: (direction, currentElement) => {
+                    // Failsafe: if we don't have a valid element, let spatial nav take over.
+                    if (!currentElement || currentElement.dataset.virtualIndex === undefined) {
+                        return false;
+                    }
+
+                    const currentIndex = parseInt(currentElement.dataset.virtualIndex, 10);
+                    const nextNode = virtualRow.handleMove(direction, currentIndex);
+
                     if (nextNode) {
+                        // Manually sync the index immediately to prevent race conditions on rapid key presses.
+                        // This ensures the next 'handleMove' call uses the correct 'currentIndex' before focusin bubbles.
+                        virtualRow.syncIndexFromNode(nextNode);
+
                         focusManager.focusElement(nextNode);
                         return true; // VirtualCardRow handled it
                     }
@@ -310,9 +321,6 @@ class HomePage extends Page {
         if (rowsData.length > 0) {
             // Use requestAnimationFrame to ensure DOM is painted and offsetParent is valid
             requestAnimationFrame(() => {
-                // Invalidate cache for strict safety
-                rowsData.forEach((_, i) => focusManager.invalidateCache(`home-row-${i}`));
-
                 // Check for saved focus to restore (from back navigation)
                 const lastFocusedId = state.get('home:lastFocusedItemId');
                 let restoredFocus = false;

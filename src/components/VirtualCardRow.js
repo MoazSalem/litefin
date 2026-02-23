@@ -84,12 +84,19 @@ export class VirtualCardRow {
         let start = Math.max(0, centerIndex - this.bufferZone);
         let end = Math.min(this.totalItems - 1, centerIndex + this.bufferZone);
 
-        // Ensure we always render exactly visibleCount items if possible
-        if (end - start + 1 < this.visibleCount) {
+        // Ensure we always render exactly visibleCount items if possible.
+        // The previous bug was caused by nested boundary conditionals failing to shift the window.
+        // We simply check the current window size, and if it's too small, we symmetrically expand it
+        // to the right (if we hit the left bound) or to the left (if we hit the right bound).
+        const currentSize = end - start + 1;
+        if (currentSize < this.visibleCount && this.totalItems >= this.visibleCount) {
+            const deficit = this.visibleCount - currentSize;
             if (start === 0) {
-                end = Math.min(this.totalItems - 1, start + this.visibleCount - 1);
+                // Expanding to the right
+                end = Math.min(this.totalItems - 1, end + deficit);
             } else if (end === this.totalItems - 1) {
-                start = Math.max(0, end - this.visibleCount + 1);
+                // Expanding to the left
+                start = Math.max(0, start - deficit);
             }
         }
 
@@ -130,18 +137,22 @@ export class VirtualCardRow {
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
 
                     // Add index for identifying the card in focus handlers
-                    // Set natively to ensure parser handles it on old webkit
                     cardNode.dataset.virtualIndex = i;
+                    // CRITICAL FOR TIZEN: Older webkits fail to persist JS dataset object graphs through DOM detach.
+                    // We must forcefully inject the physical DOM attribute so syncIndex queries can read it perfectly.
                     cardNode.setAttribute('data-virtual-index', i);
 
                     this.track.appendChild(cardNode);
                     this.domNodes.set(i, cardNode);
                     domChanged = true;
 
-                    // Trigger lazy loader for new images
+                    // EAGER LOAD: The row natively culls bounds (windowing), so appended nodes are guaranteed
+                    // to be within the user's immediate physical view window or pre-buffer.
+                    // We forcibly load them to bypass IntersectionObserver, which permanently fails
+                    // to track horizontal hardware-composited `translate3d` bounds on old Tizen.
                     const img = cardNode.querySelector('img.lazy');
                     if (img) {
-                        lazyLoader.observeElement(img);
+                        lazyLoader.forceLoad(img);
                     }
                 }
             }
@@ -213,10 +224,12 @@ export class VirtualCardRow {
      * FocusManager interaction hook
      * Handles horizontal movement events triggered by the controller.
      * @param {string} direction 'left' or 'right'
+     * @param {number} currentIndex The currently focused item's absolute physical index (single source of truth)
      * @returns {HTMLElement|null} The next dom node to focus, or null if bound is hit
      */
-    handleMove(direction) {
-        let nextIndex = this.currentIndex;
+    handleMove(direction, currentIndex) {
+        // The current index is now passed in directly from the physically active DOM node.
+        let nextIndex = currentIndex !== undefined ? currentIndex : this.currentIndex;
 
         if (direction === 'left' || direction === 'Left') {
             nextIndex--;
@@ -230,7 +243,7 @@ export class VirtualCardRow {
             return null; // At boundaries, let FocusManager handle normal wrap/exit logic
         }
 
-        // 1. Update our internal state
+        // 1. Update our internal state (for vertical navigation restoration)
         this.currentIndex = nextIndex;
 
         // 2. Recalculate DOM nodes window to ensure the target is rendered
