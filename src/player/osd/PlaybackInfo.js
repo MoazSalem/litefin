@@ -2,6 +2,7 @@ import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { MediaHelper } from '../core/MediaHelper.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { i18n } from '../../utils/i18n.js';
 
 /**
  * PlaybackInfo
@@ -49,7 +50,7 @@ export default class PlaybackInfo extends BaseMenu {
         const html = `
             <div id="osdPlaybackInfoOverlay" class="playback-info-overlay">
                 <div class="playback-info-header">
-                    <span class="playback-info-title">Playback Info</span>
+                    <span class="playback-info-title">${i18n.t('PlaybackInfo')}</span>
                     <button class="playback-info-close" data-action="closePlaybackInfo" tabindex="0">${closeIcon}</button>
                 </div>
                 <div class="playback-info-content" id="playbackInfoContent">

@@ -5,13 +5,14 @@ import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('FavoritesPage');
 
 class FavoritesPage extends Page {
     constructor() {
         super();
-        this.title = 'Favorites';
+        // Title translated in onInit
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
@@ -29,6 +30,7 @@ class FavoritesPage extends Page {
     }
 
     async onInit() {
+        this.title = i18n.t('Favorites');
         this._bindNavigation();
         await this._loadFavorites();
 
@@ -108,19 +110,23 @@ class FavoritesPage extends Page {
             // Prepare sections data
             const sectionsData = [];
             if (movies.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-movie', title: 'Movies', items: movies.Items, type: 'movie' });
+                sectionsData.push({ id: 'fav-movie', title: i18n.t('Movies'), items: movies.Items, type: 'movie' });
             if (shows.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-series', title: 'Shows', items: shows.Items, type: 'series' });
+                sectionsData.push({ id: 'fav-series', title: i18n.t('Shows'), items: shows.Items, type: 'series' });
             if (seasons.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-season', title: 'Seasons', items: seasons.Items, type: 'season' });
+                sectionsData.push({ id: 'fav-season', title: i18n.t('Seasons'), items: seasons.Items, type: 'season' });
             if (episodes.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-episode', title: 'Episodes', items: episodes.Items, type: 'episode' });
+                sectionsData.push({
+                    id: 'fav-episode',
+                    title: i18n.t('Episodes'),
+                    items: episodes.Items,
+                    type: 'episode'
+                });
             if (people.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-person', title: 'People', items: people.Items, type: 'person' });
+                sectionsData.push({ id: 'fav-person', title: i18n.t('People'), items: people.Items, type: 'person' });
 
             if (sectionsData.length === 0) {
-                container.innerHTML =
-                    '<div class="page-error" style="display:block; position:static; margin:40px;">No favorites found. Go add some!</div>';
+                container.innerHTML = `<div class="page-error" style="display:block; position:static; margin:40px;">${i18n.t('NoFavoritesFound')}</div>`;
                 return;
             }
 

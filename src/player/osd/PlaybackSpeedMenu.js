@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { logger } from '../../utils/Logger.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('PlaybackSpeedMenu');
 
@@ -8,7 +9,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
-        this.title = 'Playback Speed';
+        this.title = i18n.t('PlaybackSpeed');
         this.options = [
             0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4
         ].map(speed => ({
@@ -86,7 +87,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${this.title}</div>
+                <div class="track-menu-title">${i18n.t('PlaybackSpeed')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

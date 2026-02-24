@@ -41,6 +41,9 @@ class LayoutManager {
         // Current layout
         this._layout = LAYOUT.CLASSIC;
 
+        // Current theme (initialized in init() or constructor fallback)
+        this._theme = 'purplehaze';
+
         // Current font
         this._uiFont = 'default';
     }
@@ -90,7 +93,8 @@ class LayoutManager {
         state.set('app:layout', layout, true);
 
         // Validate theme for new layout
-        if (!this.getAvailableThemes().includes(this._theme)) {
+        // Only validate if theme is already initialized to avoid reset during boot
+        if (this._theme && !this.getAvailableThemes().includes(this._theme)) {
             // Reset to dark if current theme not available
             this.setTheme('dark', save);
         }

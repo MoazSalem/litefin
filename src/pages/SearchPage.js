@@ -11,13 +11,14 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('SearchPage');
 
 class SearchPage extends Page {
     constructor() {
         super();
-        this.title = 'Search';
+        // Title translated in onInit
 
         this._query = '';
         this._lastSearchedQuery = ''; // Track to prevent redundant searches
@@ -37,6 +38,7 @@ class SearchPage extends Page {
                                 type="text" 
                                 id="search-input" 
                                 class="search-input"
+                                data-i18n="SearchPlaceholder"
                                 placeholder="Search..."
                                 autocomplete="off"
                                 tabindex="0"
@@ -57,12 +59,12 @@ class SearchPage extends Page {
                                 <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
                             </svg>
                         </p>
-                        <p>Start typing to search</p>
+                        <p data-i18n="StartTypingToSearch">Start typing to search</p>
                     </div>
                     
                     <!-- No results -->
                     <div class="search-no-results hidden" id="no-results">
-                        <p>No results found</p>
+                        <p data-i18n="NoResultsFound">No results found</p>
                     </div>
                     
                     <!-- Loading -->
@@ -75,10 +77,14 @@ class SearchPage extends Page {
     }
 
     onInit() {
+        this.title = i18n.t('Search');
         this._searchInput = this.$('#search-input');
 
         // Bind events
         this._bindEvents();
+
+        // Hydrate DOM
+        i18n.translateDOM(this.el);
 
         // Setup focus
         this._setupFocus();
@@ -246,7 +252,7 @@ class SearchPage extends Page {
         if (movies.length > 0) {
             this._grids.movies = new MediaGrid({
                 id: 'search-movies',
-                title: 'Movies',
+                title: i18n.t('Movies'),
                 items: movies,
                 type: 'poster',
                 limit: 10,
@@ -259,7 +265,7 @@ class SearchPage extends Page {
         if (series.length > 0) {
             this._grids.series = new MediaGrid({
                 id: 'search-series',
-                title: 'TV Shows',
+                title: i18n.t('TVShows'),
                 items: series,
                 type: 'poster',
                 limit: 10,
@@ -272,7 +278,7 @@ class SearchPage extends Page {
         if (episodes.length > 0) {
             this._grids.episodes = new MediaGrid({
                 id: 'search-episodes',
-                title: 'Episodes',
+                title: i18n.t('Episodes'),
                 items: episodes,
                 type: 'episode', // 'episode' or 'episode-primary'
                 isLandscape: true,
@@ -286,7 +292,7 @@ class SearchPage extends Page {
         if (people.length > 0) {
             this._grids.people = new MediaGrid({
                 id: 'search-people',
-                title: 'Cast & Crew',
+                title: i18n.t('CastCrew'),
                 items: people,
                 type: 'person', // Special card type? Or just poster.
                 limit: 10,

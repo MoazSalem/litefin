@@ -2,6 +2,7 @@ import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('QualityMenu');
 
@@ -9,7 +10,7 @@ export default class QualityMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
-        this.title = 'Quality';
+        this.title = i18n.t('Quality');
         
         // Standard Jellyfin bitrates
         this.bitrates = [
@@ -45,7 +46,7 @@ export default class QualityMenu extends BaseMenu {
         const margin = 100000; // 100kbps margin
         const limit = (sourceBitrate || Infinity) + margin;
 
-        const options = [{ id: 0, label: 'Auto', icon: ICONS.auto || ICONS.check }];
+        const options = [{ id: 0, label: i18n.t('Auto'), icon: ICONS.auto || ICONS.check }];
         
         this.bitrates.forEach(b => {
             if (b.val <= limit) {
@@ -141,7 +142,7 @@ export default class QualityMenu extends BaseMenu {
             const checkIcon = isSelected ? ICONS.check : '';
             
             // User requested: Auto = Direct Play, Lower = Transcoding
-            const secondaryLabel = opt.id === 0 ? 'Direct Play' : 'Transcoding';
+            const secondaryLabel = opt.id === 0 ? i18n.t('DirectPlay') : i18n.t('Transcoding');
             
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 

@@ -14,6 +14,7 @@ import CardRenderer from '../utils/CardRenderer.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('Library');
 
@@ -62,7 +63,7 @@ class LibraryPage extends Page {
                     <!-- Header Section -->
                     <header class="library-header" id="library-header">
                         <div class="library-title-row">
-                            <h1 class="library-title" id="library-title">Library</h1>
+                            <h1 class="library-title" id="library-title" data-i18n="Library">Library</h1>
                         </div>
 
                         <!-- Dynamic Tabs -->
@@ -83,9 +84,7 @@ class LibraryPage extends Page {
                                             <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span>
-                                    <span class="control-btn-text">  
-                                    Shuffle
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Shuffle">Shuffle</span>
                                 </button>
                                 <button class="control-btn" id="btn-sort" tabindex="0">
                                     <span class="icon">
@@ -95,9 +94,7 @@ class LibraryPage extends Page {
                                             <path d="M11 18H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
                                         </svg>
                                     </span> 
-                                    <span class="control-btn-text">
-                                    Sort
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Sort">Sort</span>
                                 </button>
                                 <button class="control-btn" id="btn-filter" tabindex="0">
                                     <span class="icon">
@@ -105,9 +102,7 @@ class LibraryPage extends Page {
                                             <path d="M21 4H3L10 12.42V19L14 21V12.42L21 4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span> 
-                                    <span class="control-btn-text">
-                                    Filter
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Filter">Filter</span>
                                 </button>
                                 <button class="control-btn" id="btn-quick-reset" tabindex="0" style="display: none;">
                                     <span class="icon">
@@ -115,9 +110,7 @@ class LibraryPage extends Page {
                                             <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span> 
-                                    <span class="control-btn-text">
-                                    Reset
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Reset">Reset</span>
                                 </button>
                                 <button class="control-btn" id="btn-prev-top" tabindex="0">
                                     <span class="icon">
@@ -125,14 +118,10 @@ class LibraryPage extends Page {
                                             <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span>
-                                    <span class="control-btn-text">
-                                    Prev
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Prev">Prev</span>
                                 </button>
                                 <button class="control-btn" id="btn-next-top" tabindex="0">
-                                    <span class="control-btn-text">
-                                    Next
-                                    </span>
+                                    <span class="control-btn-text" data-i18n="Next">Next</span>
                                     <span class="icon">
                                         <svg viewBox="0 0 24 24" fill="none" class="control-svg" style="margin-right: 0;">
                                             <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -181,15 +170,11 @@ class LibraryPage extends Page {
                                     <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </span>
-                            <span class="control-btn-text">
-                            Previous
-                            </span>
+                            <span class="control-btn-text" data-i18n="Prev">Previous</span>
                         </button>
                         <span class="pagination-info" id="pagination-info">Page 1</span>
                         <button class="pagination-btn" id="btn-next" tabindex="0">
-                            <span class="control-btn-text">
-                            Next
-                            </span>
+                            <span class="control-btn-text" data-i18n="Next">Next</span>
                             <span class="icon">
                                 <svg viewBox="0 0 24 24" fill="none" class="control-svg" style="margin-right: 0;">
                                     <path d="M9 18L15 12L9 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -222,6 +207,9 @@ class LibraryPage extends Page {
         this._renderTabs();
         this._renderAlphaPicker();
         this._updateControlsVisibility();
+
+        // 2.5 Hydrate fixed UI strings
+        i18n.translateDOM(this.el);
 
         // 3. Bind Events
         this._bindEvents();

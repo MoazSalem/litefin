@@ -1,4 +1,5 @@
 import BaseMenu from './BaseMenu.js';
+import { i18n } from '../../utils/i18n.js';
 
 /**
  * TrackMenu
@@ -89,17 +90,17 @@ export default class TrackMenu extends BaseMenu {
                     'ass', 'ssa'  // server transcodes these to VTT
                 ]);
                 tracks = tracks.filter(t => TEXT_CODECS.has((t.Codec || '').toLowerCase()));
-                title = 'Secondary (Text Only)';
+                title = i18n.t('SecondaryTextOnly');
             } else {
-                title = 'Subtitles';
+                title = i18n.t('Subtitles');
             }
 
             currentIndex = (this.mode === 'secondary') ? this.osd.currentSecondarySubtitleIndex : this.osd.currentSubtitleIndex;
-            tracks = [{ Index: -1, DisplayTitle: 'Off' }, ...tracks];
+            tracks = [{ Index: -1, DisplayTitle: i18n.t('Off') }, ...tracks];
         } else {
             const tracksRaw = player.getAudioTracks ? player.getAudioTracks() : [];
             tracks = (tracksRaw.then) ? await tracksRaw : tracksRaw;
-            title = 'Audio';
+            title = i18n.t('Audio');
             currentIndex = this.osd.currentAudioIndex;
         }
 
@@ -115,7 +116,7 @@ export default class TrackMenu extends BaseMenu {
 
         let headerHtml = '';
         if (this.type === 'subtitles') {
-            const label = (this.mode === 'primary') ? 'Secondary Subtitle' : '← Back';
+            const label = (this.mode === 'primary') ? i18n.t('SecondarySubtitle') : '← ' + i18n.t('Back');
             headerHtml = `
                 <button class="track-option track-mode-switch">
                     <span class="track-option-check"></span>
@@ -127,7 +128,7 @@ export default class TrackMenu extends BaseMenu {
         const optionsHtml = tracks.map((track, i) => {
             const isSelected = track.Index === currentIndex;
             
-            const label = track.DisplayTitle || track.Title || track.Language || `Track ${track.Index}`;
+            const label = track.DisplayTitle || track.Title || track.Language || i18n.t('TrackIndex', track.Index);
             let metadataHtml = '';
 
             // For subtitles, add Type and Location metadata

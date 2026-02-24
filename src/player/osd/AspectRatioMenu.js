@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { logger } from '../../utils/Logger.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('AspectRatioMenu');
 
@@ -9,9 +10,9 @@ export default class AspectRatioMenu extends BaseMenu {
         super(osdController);
         this.isModal = true;
         this.options = [
-            { id: 'auto', label: 'Auto', icon: ICONS.aspectRatio },
-            { id: 'zoom', label: 'Zoom', icon: ICONS.zoomIn },
-            { id: 'stretch', label: 'Stretch', icon: ICONS.aspectRatio } // Reusing icon for now
+            { id: 'auto', label: i18n.t('Auto'), icon: ICONS.aspectRatio },
+            { id: 'zoom', label: i18n.t('Zoom'), icon: ICONS.zoomIn },
+            { id: 'stretch', label: i18n.t('Stretch'), icon: ICONS.aspectRatio } // Reusing icon for now
         ];
     }
 
@@ -88,7 +89,7 @@ export default class AspectRatioMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">Aspect Ratio</div>
+                <div class="track-menu-title">${i18n.t('AspectRatio')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

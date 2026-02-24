@@ -21,6 +21,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('HomePage');
 
@@ -124,7 +125,7 @@ class HomePage extends Page {
 
             if (!hideMyMedia && this._libraries.length > 0) {
                 rowsData.push({
-                    title: 'My Media',
+                    title: i18n.t('MyMedia'),
                     items: this._libraries,
                     type: 'library'
                 });
@@ -133,7 +134,7 @@ class HomePage extends Page {
             // 1. Continue watching
             if (resumeItems?.Items?.length > 0) {
                 rowsData.push({
-                    title: 'Continue Watching',
+                    title: i18n.t('ContinueWatching'),
                     items: resumeItems.Items,
                     type: 'resume'
                 });
@@ -142,7 +143,7 @@ class HomePage extends Page {
             // 2. Next up
             if (nextUp?.Items?.length > 0) {
                 rowsData.push({
-                    title: 'Next Up',
+                    title: i18n.t('NextUp'),
                     items: nextUp.Items,
                     type: 'episode',
                     contextType: 'nextUp' // Trigger spoiler prevention
@@ -153,7 +154,7 @@ class HomePage extends Page {
             latestResults.forEach((latest, i) => {
                 if (latest?.length > 0) {
                     rowsData.push({
-                        title: `Recently Added In ${this._libraries[i].Name}`,
+                        title: i18n.t('LatestFrom', [this._libraries[i].Name]),
                         items: latest,
                         libraryId: this._libraries[i].Id,
                         type: 'latest'
@@ -165,7 +166,7 @@ class HomePage extends Page {
             this._renderRows(rowsData);
 
             if (rowsData.length === 0 && this._libraries.length === 0) {
-                this.showError('No libraries found. Please check your Jellyfin user permissions.');
+                this.showError(i18n.t('NoLibraries'));
             }
         } catch (error) {
             log.error('Failed to load content', error);

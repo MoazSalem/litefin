@@ -45,6 +45,7 @@ function getPlugins() {
                 { from: 'config.xml', to: 'config.xml' },
                 { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
+                { from: 'src/locales', to: 'locales' },
                 { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'libpgs.worker.js' }
             ]
         }),

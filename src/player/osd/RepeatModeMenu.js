@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { playQueue } from '../../core/PlayQueue.js';
+import { i18n } from '../../utils/i18n.js';
 
 /**
  * RepeatModeMenu
@@ -59,9 +60,9 @@ export default class RepeatModeMenu extends BaseMenu {
         const currentMode = playQueue.getRepeatMode() || 'RepeatNone';
 
         const modes = [
-            { id: 'RepeatNone', label: 'Off', icon: ICONS.repeat },
-            { id: 'RepeatAll', label: 'Repeat All', icon: ICONS.repeat },
-            { id: 'RepeatOne', label: 'Repeat One', icon: ICONS.repeatOne }
+            { id: 'RepeatNone', label: i18n.t('Off'), icon: ICONS.repeat },
+            { id: 'RepeatAll', label: i18n.t('RepeatAll'), icon: ICONS.repeat },
+            { id: 'RepeatOne', label: i18n.t('RepeatOne'), icon: ICONS.repeatOne }
         ];
 
         let selectedIndex = modes.findIndex(m => m.id === currentMode);
@@ -80,7 +81,7 @@ export default class RepeatModeMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">Repeat Mode</div>
+                <div class="track-menu-title">${i18n.t('RepeatMode')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

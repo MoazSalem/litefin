@@ -1,5 +1,6 @@
 import BaseMenu from './BaseMenu.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
+import { i18n } from '../../utils/i18n.js';
 
 /**
  * SubtitleQuickSettings
@@ -52,7 +53,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu subtitle-settings-menu">
-                <div class="track-menu-title">Subtitle Appearance</div>
+                <div class="track-menu-title">${i18n.t('SubtitleAppearance')}</div>
                 <div class="track-menu-options">
                     ${itemsHtml}
                 </div>
@@ -84,22 +85,22 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'position',
                 type: 'select',
-                label: 'Vertical Position',
+                label: i18n.t('VerticalPosition'),
                 key: 'subtitleVerticalPosition',
                 visible: !isASS,
                 options: [
-                    { value: '-1', label: 'Bottom (Low)' },
-                    { value: '-2', label: 'Bottom (Standard)' },
-                    { value: '-3.6', label: 'Bottom (High)' },
-                    { value: '0', label: 'Top' },
-                    { value: '2', label: 'Top (Low)' },
-                    { value: 'custom', label: 'Custom (Absolute)' }
+                    { value: '-1', label: i18n.t('BottomLow') },
+                    { value: '-2', label: i18n.t('BottomStandard') },
+                    { value: '-3.6', label: i18n.t('BottomHigh') },
+                    { value: '0', label: i18n.t('Top') },
+                    { value: '2', label: i18n.t('TopLow') },
+                    { value: 'custom', label: i18n.t('CustomAbsolute') }
                 ]
             },
             {
                 id: 'customPosition',
                 type: 'slider',
-                label: 'Absolute Position',
+                label: i18n.t('AbsolutePosition'),
                 key: 'subtitleVerticalPositionCustom',
                 min: 0, max: 100, step: 1, unit: '%',
                 visible: !isASS && verticalPos === 'custom'
@@ -109,22 +110,22 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'size',
                 type: 'select',
-                label: 'Text Size',
+                label: i18n.t('TextSize'),
                 key: 'subtitleSize',
                 visible: !isASS,
                 options: [
-                    { value: 'small', label: 'Small' },
-                    { value: 'medium', label: 'Medium' },
-                    { value: 'large', label: 'Large' },
-                    { value: 'larger', label: 'Larger' },
-                    { value: 'extralarge', label: 'Extra Large' },
-                    { value: 'custom', label: 'Custom' }
+                    { value: 'small', label: i18n.t('Small') },
+                    { value: 'medium', label: i18n.t('Medium') },
+                    { value: 'large', label: i18n.t('Large') },
+                    { value: 'larger', label: i18n.t('Larger') },
+                    { value: 'extralarge', label: i18n.t('ExtraLarge') },
+                    { value: 'custom', label: i18n.t('Custom') }
                 ]
             },
             {
                 id: 'customSize',
                 type: 'slider',
-                label: 'Custom Size',
+                label: i18n.t('CustomSize'),
                 key: 'subtitleSizeCustomValue',
                 min: 1, max: 20, step: 1, unit: 'vh',
                 visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
@@ -132,30 +133,30 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'font',
                 type: 'select',
-                label: 'Font Family',
+                label: i18n.t('FontFamily'),
                 key: 'subtitleFont',
                 visible: !isASS,
                 options: [
-                    { value: '', label: 'Default - Tizen Sans' },
-                    { value: 'poppins', label: 'Modern - Poppins' },
-                    { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                    { value: 'typewriter', label: 'Typewriter' },
-                    { value: 'print', label: 'Print' },
-                    { value: 'console', label: 'Console' },
-                    { value: 'cursive', label: 'Cursive' },
-                    { value: 'casual', label: 'Casual' },
-                    { value: 'smallcaps', label: 'Small Caps' }
+                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: 'poppins', label: i18n.t('ModernPoppins') },
+                    { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                    { value: 'typewriter', label: i18n.t('Typewriter') },
+                    { value: 'print', label: i18n.t('Print') },
+                    { value: 'console', label: i18n.t('Console') },
+                    { value: 'cursive', label: i18n.t('Cursive') },
+                    { value: 'casual', label: i18n.t('Casual') },
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
                 ]
             },
             {
                 id: 'weight',
                 type: 'select',
-                label: 'Font Weight',
+                label: i18n.t('FontWeight'),
                 key: 'subtitleWeight',
                 visible: !isASS,
                 options: [
-                    { value: 'normal', label: 'Normal' },
-                    { value: 'bold', label: 'Bold' }
+                    { value: 'normal', label: i18n.t('Normal') },
+                    { value: 'bold', label: i18n.t('Bold') }
                 ]
             },
 
@@ -163,43 +164,43 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'color',
                 type: 'select',
-                label: 'Text Color',
+                label: i18n.t('TextColor'),
                 key: 'subtitleTextColor',
                 visible: !isASS,
                 options: [
-                    { value: '#ffffff', label: 'White' },
-                    { value: '#d3d3d3', label: 'Light Grey' },
-                    { value: '#a9a9a9', label: 'Dark Grey' },
-                    { value: '#000000', label: 'Black' },
-                    { value: '#ffff00', label: 'Yellow' },
-                    { value: '#00ffff', label: 'Cyan' },
-                    { value: '#0000ff', label: 'Blue' }
+                    { value: '#ffffff', label: i18n.t('White') },
+                    { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                    { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                    { value: '#000000', label: i18n.t('Black') },
+                    { value: '#ffff00', label: i18n.t('Yellow') },
+                    { value: '#00ffff', label: i18n.t('Cyan') },
+                    { value: '#0000ff', label: i18n.t('Blue') }
                 ]
             },
-            { id: 'textOpacity', type: 'slider', label: 'Text Opacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
+            { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
 
             // Background
             {
                 id: 'bg',
                 type: 'select',
-                label: 'Background',
+                label: i18n.t('Background'),
                 key: 'subtitleTextBackground',
                 visible: !isASS,
                 options: [
-                    { value: 'transparent', label: 'None' },
-                    { value: '#000000', label: 'Black' },
-                    { value: '#ffffff', label: 'White' },
-                    { value: '#d3d3d3', label: 'Light Grey' },
-                    { value: '#a9a9a9', label: 'Dark Grey' },
-                    { value: '#ffff00', label: 'Yellow' },
-                    { value: '#00ffff', label: 'Cyan' },
-                    { value: '#0000ff', label: 'Blue' }
+                    { value: 'transparent', label: i18n.t('None') },
+                    { value: '#000000', label: i18n.t('Black') },
+                    { value: '#ffffff', label: i18n.t('White') },
+                    { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                    { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                    { value: '#ffff00', label: i18n.t('Yellow') },
+                    { value: '#00ffff', label: i18n.t('Cyan') },
+                    { value: '#0000ff', label: i18n.t('Blue') }
                 ]
             },
             {
                 id: 'bgOpacity',
                 type: 'slider',
-                label: 'Background Opacity',
+                label: i18n.t('BackgroundOpacity'),
                 key: 'subtitleBackgroundOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
                 visible: !isASS && bgColor !== 'transparent'
@@ -209,22 +210,22 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'shadow',
                 type: 'select',
-                label: 'Text Shadow',
+                label: i18n.t('TextShadow'),
                 key: 'subtitleDropShadow',
                 visible: !isASS,
                 options: [
-                    { value: 'none', label: 'None' },
-                    { value: 'uniform', label: 'Uniform' },
-                    { value: 'dropshadow', label: 'Drop Shadow' },
-                    { value: 'raised', label: 'Raised' },
-                    { value: 'depressed', label: 'Depressed' },
-                    { value: 'border', label: 'Border' }
+                    { value: 'none', label: i18n.t('None') },
+                    { value: 'uniform', label: i18n.t('Uniform') },
+                    { value: 'dropshadow', label: i18n.t('DropShadow') },
+                    { value: 'raised', label: i18n.t('Raised') },
+                    { value: 'depressed', label: i18n.t('Depressed') },
+                    { value: 'border', label: i18n.t('Border') }
                 ]
             },
             {
                 id: 'borderWidth',
                 type: 'slider',
-                label: 'Border Width',
+                label: i18n.t('BorderWidth'),
                 key: 'subtitleBorderWidth',
                 min: 1, max: 20, step: 1, unit: 'px',
                 visible: !isASS && shadowType === 'border'
@@ -232,25 +233,25 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'shadowColor',
                 type: 'select',
-                label: 'Shadow Color',
+                label: i18n.t('ShadowColor'),
                 key: 'subtitleDropShadowColor',
                 options: [
-                    { value: '#000000', label: 'Black' },
-                    { value: '#ffffff', label: 'White' },
-                    { value: '#ff0000', label: 'Red' },
-                    { value: '#00ff00', label: 'Green' },
-                    { value: '#0000ff', label: 'Blue' },
-                    { value: '#ffff00', label: 'Yellow' },
-                    { value: '#00ffff', label: 'Cyan' },
-                    { value: '#ff00ff', label: 'Magenta' },
-                    { value: '#808080', label: 'Grey' }
+                    { value: '#000000', label: i18n.t('Black') },
+                    { value: '#ffffff', label: i18n.t('White') },
+                    { value: '#ff0000', label: i18n.t('Red') },
+                    { value: '#00ff00', label: i18n.t('Green') },
+                    { value: '#0000ff', label: i18n.t('Blue') },
+                    { value: '#ffff00', label: i18n.t('Yellow') },
+                    { value: '#00ffff', label: i18n.t('Cyan') },
+                    { value: '#ff00ff', label: i18n.t('Magenta') },
+                    { value: '#808080', label: i18n.t('Grey') }
                 ],
                 visible: !isASS && shadowType !== 'none'
             },
             {
                 id: 'shadowOpacity',
                 type: 'slider',
-                label: 'Shadow Opacity',
+                label: i18n.t('ShadowOpacity'),
                 key: 'subtitleDropShadowOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
                 visible: !isASS && shadowType !== 'none'
@@ -258,7 +259,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'shadowBlur',
                 type: 'slider',
-                label: 'Shadow Blur',
+                label: i18n.t('ShadowBlur'),
                 key: 'subtitleDropShadowBlur',
                 min: 0, max: 20, step: 1, unit: 'px',
                 visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
@@ -266,25 +267,25 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'fontAss',
                 type: 'select',
-                label: 'ASS Format Font Family',
+                label: i18n.t('AssFontFamily'),
                 key: 'subtitleFontAss',
                 visible: isASS,
                 options: [
-                    { value: '', label: 'Default - Tizen Sans' },
-                    { value: 'poppins', label: 'Modern - Poppins' },
-                    { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                    { value: 'typewriter', label: 'Typewriter' },
-                    { value: 'print', label: 'Print' },
-                    { value: 'console', label: 'Console' },
-                    { value: 'cursive', label: 'Cursive' },
-                    { value: 'casual', label: 'Casual' },
-                    { value: 'smallcaps', label: 'Small Caps' }
+                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: 'poppins', label: i18n.t('ModernPoppins') },
+                    { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                    { value: 'typewriter', label: i18n.t('Typewriter') },
+                    { value: 'print', label: i18n.t('Print') },
+                    { value: 'console', label: i18n.t('Console') },
+                    { value: 'cursive', label: i18n.t('Cursive') },
+                    { value: 'casual', label: i18n.t('Casual') },
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
                 ]
             },
             {
                 id: 'fontScaleAss',
                 type: 'slider',
-                label: 'Font Scale (ASS)',
+                label: i18n.t('FontScaleAss'),
                 key: 'subtitleFontScale',
                 min: 0.5, max: 3.0, step: 0.1, unit: 'x',
                 visible: isASS
@@ -292,7 +293,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'bottomOffsetAss',
                 type: 'slider',
-                label: 'Vertical Position (ASS)',
+                label: i18n.t('VerticalPositionAss'),
                 key: 'subtitleBottomOffset',
                 min: -100, max: 750, step: 5, unit: 'px',
                 visible: isASS
@@ -300,7 +301,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'outlineThicknessAss',
                 type: 'slider',
-                label: 'Outline Thickness (ASS)',
+                label: i18n.t('OutlineThicknessAss'),
                 key: 'subtitleOutlineThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
                 visible: isASS
@@ -308,7 +309,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'shadowThicknessAss',
                 type: 'slider',
-                label: 'Shadow Thickness (ASS)',
+                label: i18n.t('ShadowThicknessAss'),
                 key: 'subtitleShadowThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
                 visible: isASS
@@ -316,7 +317,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'lineHeightAss',
                 type: 'slider',
-                label: 'Vertical Spacing (ASS)',
+                label: i18n.t('VerticalSpacingAss'),
                 key: 'subtitleLineHeight',
                 min: -50, max: 50, step: 1, unit: 'px',
                 visible: isASS
@@ -324,12 +325,12 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'letterSpacingAss',
                 type: 'slider',
-                label: 'Horizontal Spacing (ASS)',
+                label: i18n.t('HorizontalSpacingAss'),
                 key: 'subtitleLetterSpacing',
                 min: -20, max: 40, step: 0.5, unit: 'px',
                 visible: isASS
             },
-
+ 
             // ================================================================
             // SECONDARY SUBTITLE SETTINGS
             // Shown only when a secondary subtitle track is active and primary
@@ -339,7 +340,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'secondaryPosition',
                 type: 'slider',
-                label: 'Secondary subtitle position',
+                label: i18n.t('SecondarySubtitlePosition'),
                 key: 'secondarySubtitleVerticalPositionCustom',
                 min: 0, max: 100, step: 1, unit: '%',
                 visible: hasSecondary
@@ -347,16 +348,16 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'secondarySize',
                 type: 'select',
-                label: 'Secondary Size',
+                label: i18n.t('SecondarySize'),
                 key: 'secondarySubtitleSize',
                 visible: hasSecondary,
                 options: [
-                    { value: 'smaller',    label: 'Smaller' },
-                    { value: 'small',      label: 'Small' },
-                    { value: 'medium',     label: 'Medium' },
-                    { value: 'large',      label: 'Large' },
-                    { value: 'larger',     label: 'Larger' },
-                    { value: 'extralarge', label: 'Extra Large' }
+                    { value: 'smaller',    label: i18n.t('Smaller') },
+                    { value: 'small',      label: i18n.t('Small') },
+                    { value: 'medium',     label: i18n.t('Medium') },
+                    { value: 'large',      label: i18n.t('Large') },
+                    { value: 'larger',     label: i18n.t('Larger') },
+                    { value: 'extralarge', label: i18n.t('ExtraLarge') }
                 ]
             }
         ];

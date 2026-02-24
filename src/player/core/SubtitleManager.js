@@ -20,6 +20,7 @@ import SubtitleStyles from '../../utils/SubtitleStyles.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { toast } from '../../ui/Toast.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('SubtitleManager');
 
@@ -540,8 +541,7 @@ export default class SubtitleManager {
         if (!burnIn) {
             // Client Renders mode — user doesn't know the server could handle this, tell them
             toast.show(
-                `Subtitle format "${codec || 'unknown'}" can't be rendered by this client. ` +
-                `Force Transcode playback mode or change the subtitle render mode in settings.`,
+                i18n.t('SubtitleFormatError', [codec || 'unknown']),
                 8000  // 8 s — enough time to actually read and remember
             );
         }

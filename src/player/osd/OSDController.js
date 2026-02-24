@@ -2,6 +2,7 @@ import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
+import { i18n } from '../../utils/i18n.js';
 import { ICONS } from './icons.js';
 
 import TrackMenu from './TrackMenu.js';
@@ -202,7 +203,7 @@ export default class OSDController extends Component {
                 <!-- Header -->
                 <div class="osd-header" id="osdHeader">
                     <div class="osd-header-left">
-                        <button class="osd-btn osd-back-btn" data-action="exit" aria-label="Back" tabindex="0">
+                        <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('Back')}" tabindex="0">
                             ${ICONS.arrowBack}
                         </button>
                         <span class="osd-title" id="osdTitle"></span>
@@ -1135,7 +1136,7 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
             const remainingMs = (duration - current) / 10000;
             const endTime = new Date(Date.now() + remainingMs);
-            endsAtEl.textContent = 'Ends at ' + endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            endsAtEl.textContent = i18n.t('EndsAt') + endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
         }
     }
 

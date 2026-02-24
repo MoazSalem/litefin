@@ -37,7 +37,7 @@ async function bootstrap() {
 
     // Initialize the app
     // app.init() now owns the hardware, debug, layout, and auth sequence
-    app.init({
+    await app.init({
         container: '#app'
     });
 

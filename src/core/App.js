@@ -15,6 +15,7 @@ import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { layoutManager } from '../ui/LayoutManager.js';
+import { i18n } from '../utils/i18n.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -75,6 +76,10 @@ class App {
 
         // 3. Initialize layout manager
         layoutManager.init();
+
+        // 3.5. Initialize translations
+        // Ensures language dictionaries are loaded before the UI renders
+        await i18n.init('en');
 
         // 4. Try to restore auth session
         await auth.init();
@@ -157,9 +162,13 @@ class App {
      * @private
      */
     _initializeState() {
-        // App settings
-        state.set('app:layout', 'classic'); // 'classic' or 'modern'
-        state.set('app:theme', 'purplehaze');
+        // App settings - only set defaults if not already loaded by layoutManager.init()
+        if (!state.has('app:layout')) {
+            state.set('app:layout', 'classic'); // 'classic' or 'modern'
+        }
+        if (!state.has('app:theme')) {
+            state.set('app:theme', 'purplehaze');
+        }
 
         // User state - only set defaults if not already set by auth.init()
         if (!state.has('user:authenticated')) {

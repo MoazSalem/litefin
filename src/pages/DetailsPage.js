@@ -24,6 +24,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('DetailsPage');
 
@@ -74,10 +75,10 @@ class DetailsPage extends Page {
                             <section class="details-actions" id="actions">
                                 <button class="btn btn-primary play-btn" tabindex="0">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                                    <span>Play</span>
+                                    <span data-i18n="Play">Play</span>
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
-                                    <span>Resume</span>
+                                    <span data-i18n="Resume">Resume</span>
                                 </button>
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="Reset Progress">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -125,55 +126,55 @@ class DetailsPage extends Page {
 
                     <!-- Collection Movies (BoxSet) -->
                     <section class="details-collection-movies media-row hidden" id="collection-movies-section">
-                        <h2 class="row-title">Movies in Collection</h2>
+                        <h2 class="row-title" data-i18n="MoviesInCollection">Movies in Collection</h2>
                         <div class="collection-row row-items" id="collection-movies-row"></div>
                     </section>
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
                     
                     <!-- Next Up (for series) -->
                     <section class="details-next-up media-row hidden" id="next-up-section">
-                        <h2 class="row-title">Next Up</h2>
+                        <h2 class="row-title" data-i18n="NextUp">Next Up</h2>
                         <div class="next-up-row row-items" id="next-up-row"></div>
                     </section>
                     
                     <!-- Seasons (for series) -->
                     <section class="details-seasons media-row hidden" id="seasons-section">
-                        <h2 class="row-title">Seasons</h2>
+                        <h2 class="row-title" data-i18n="Seasons">Seasons</h2>
                         <div class="seasons-row" id="seasons-row"></div>
                     </section>
                     
                     <!-- Episodes (for season/series) -->
                     <section class="details-episodes media-row hidden" id="episodes-section">
-                        <h2 class="row-title">Episodes</h2>
+                        <h2 class="row-title" data-i18n="Episodes">Episodes</h2>
                         <div class="episodes-list" id="episodes-list"></div>
                     </section>
 
                     <!-- More from Season (for episodes) -->
                     <section class="details-season-episodes media-row hidden" id="more-from-season-section">
-                        <h2 class="row-title" id="more-from-season-title">More from Season</h2>
+                        <h2 class="row-title" id="more-from-season-title" data-i18n="MoreFromSeason">More from Season</h2>
                         <div class="season-episodes-row row-items" id="more-from-season-row"></div>
                     </section>
 
                     <!-- Cast & Crew -->
                     <section class="details-people media-row hidden" id="people-section">
-                        <h2 class="row-title">Cast & Crew</h2>
+                        <h2 class="row-title" data-i18n="CastCrew">Cast & Crew</h2>
                         <div class="people-row row-items" id="people-row"></div>
                     </section>
 
                     <!-- Guest Stars (for episodes) -->
                     <section class="details-guest-stars media-row hidden" id="guest-stars-section">
-                        <h2 class="row-title">Guest Stars</h2>
+                        <h2 class="row-title" data-i18n="GuestStars">Guest Stars</h2>
                         <div class="guest-stars-row row-items" id="guest-stars-row"></div>
                     </section>
                     
                     <!-- Similar items -->
                     <section class="details-similar media-row hidden" id="similar-section">
-                        <h2 class="row-title">More Like This</h2>
+                        <h2 class="row-title" data-i18n="MoreLikeThis">More Like This</h2>
                         <div class="similar-row" id="similar-row"></div>
                     </section>
                 </div>
@@ -192,6 +193,9 @@ class DetailsPage extends Page {
 
             // Bind actions
             this._bindActions();
+
+            // Translate static UI labels
+            i18n.translateDOM(this.el);
 
             // Load item details
             await this._loadDetails();

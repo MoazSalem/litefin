@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
 import { logger } from '../../utils/Logger.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create( 'PlaybackModeMenu' );
 
@@ -8,12 +9,12 @@ export default class PlaybackModeMenu extends BaseMenu {
     constructor( osdController ) {
         super( osdController );
         this.isModal = true;
-        this.title = 'Playback Mode';
+        this.title = i18n.t('PlaybackMode');
         this.options = [
-            { id: 'auto', label: 'Auto' },
-            { id: 'directPlay', label: 'Force Direct Play' },
-            { id: 'transcode', label: 'Force Transcode' },
-            { id: 'remux', label: 'Force Remux' }
+            { id: 'auto', label: i18n.t('Auto') },
+            { id: 'directPlay', label: i18n.t('ForceDirectPlay') },
+            { id: 'transcode', label: i18n.t('ForceTranscode') },
+            { id: 'remux', label: i18n.t('ForceRemux') }
         ];
     }
 
@@ -83,7 +84,7 @@ export default class PlaybackModeMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${this.title}</div>
+                <div class="track-menu-title">${i18n.t('PlaybackMode')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

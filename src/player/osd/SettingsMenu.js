@@ -1,5 +1,6 @@
 import BaseMenu from './BaseMenu.js';
 import { ICONS } from './icons.js';
+import { i18n } from '../../utils/i18n.js';
 
 /**
  * SettingsMenu
@@ -66,15 +67,15 @@ export default class SettingsMenu extends BaseMenu {
         }
 
         const options = [
-            { id: 'aspectRatio', label: 'Aspect Ratio', icon: ICONS.aspectRatio },
-            { id: 'playbackSpeed', label: 'Playback Speed', icon: ICONS.speed },
-            { id: 'quality', label: 'Quality', icon: ICONS.quality },
-            { id: 'playbackMode', label: 'Playback Mode', icon: ICONS.layers },
-            { id: 'repeatMode', label: 'Repeat Mode', icon: ICONS.repeat },
-            { id: 'playbackInfo', label: 'Playback Info', icon: ICONS.info },
-            { id: 'subtitleOffset', label: 'Subtitle Offset', icon: ICONS.sync },
-            { id: 'subtitleAppearance', label: 'Subtitle Appearance', icon: ICONS.palette }
-            // Future: { id: 'skipIntro', label: 'Skip Intro', icon: ... }
+            { id: 'aspectRatio', label: i18n.t('AspectRatio'), icon: ICONS.aspectRatio },
+            { id: 'playbackSpeed', label: i18n.t('PlaybackSpeed'), icon: ICONS.speed },
+            { id: 'quality', label: i18n.t('Quality'), icon: ICONS.quality },
+            { id: 'playbackMode', label: i18n.t('PlaybackMode'), icon: ICONS.layers },
+            { id: 'repeatMode', label: i18n.t('RepeatMode'), icon: ICONS.repeat },
+            { id: 'playbackInfo', label: i18n.t('PlaybackInfo'), icon: ICONS.info },
+            { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), icon: ICONS.sync },
+            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), icon: ICONS.palette }
+            // Future: { id: 'skipIntro', label: i18n.t('SkipIntro'), icon: ... }
         ];
 
         const optionsHtml = options.map((opt, i) => `
@@ -86,7 +87,7 @@ export default class SettingsMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">Settings</div>
+                <div class="track-menu-title">${i18n.t('Settings')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>
