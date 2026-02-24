@@ -107,7 +107,7 @@ export default class SubtitleOffset extends BaseMenu {
         
         if (valueEl) {
             const sign = this.offset > 0 ? '+' : '';
-            valueEl.textContent = i18n.t('SecondsShort', `${sign}${this.offset.toFixed(1)}`);
+            valueEl.textContent = i18n.t('SecondsShort', [ `${sign}${this.offset.toFixed(1)}` ]);
         }
         
         if (slider) {
@@ -122,7 +122,14 @@ export default class SubtitleOffset extends BaseMenu {
             
             const fill = this.$el.querySelector('#osdOffsetFill');
             if (fill) {
-                fill.style.left = start + '%';
+                const isRTL = document.documentElement.dir === 'rtl';
+                if (isRTL) {
+                    fill.style.left = 'auto';
+                    fill.style.right = start + '%';
+                } else {
+                    fill.style.right = 'auto';
+                    fill.style.left = start + '%';
+                }
                 fill.style.width = (end - start) + '%';
             }
         }
@@ -138,11 +145,16 @@ export default class SubtitleOffset extends BaseMenu {
 
         switch (key) {
             case 'left':
+            case 'right': {
                 if (isSlider) {
-                    // Rely on native input behavior to avoid double steps (0.2 instead of 0.1)
+                    // Rely on native input behavior to avoid double steps
                     return true;
                 }
-                if (isClose) {
+
+                const isRTL = document.documentElement.dir === 'rtl';
+                const isEscapeKey = (isRTL && key === 'right') || (!isRTL && key === 'left');
+
+                if (isEscapeKey && isClose) {
                     // Go to Player Close button (Header Row 0, Index 0)
                     this.osd._currentFocusRow = 0;
                     this.osd._currentFocusIndex = 0;
@@ -151,22 +163,22 @@ export default class SubtitleOffset extends BaseMenu {
                     this.osd._updateFocus();
                     return true;
                 }
-                return false;
-            case 'right': {
-                if (isSlider) {
-                    // Rely on native input behavior
-                    return true;
-                }
                 
-                // If on Close button, try to move to PI Close if open
-                const idx = this.osd._cachedOverlayRow.findIndex(el => el.classList.contains('playback-info-close'));
-                if (idx !== -1) {
-                    this.osd._currentFocusIndex = idx;
-                    this.osd.activeMenu = this.osd.playbackInfo; // Switch control to PlaybackInfo
-                    this.osd._updateFocus();
-                    return true;
+                // If not escaping but pressing the inward key from Close button (Right in LTR, Left in RTL)
+                const isInwardKey = (isRTL && key === 'left') || (!isRTL && key === 'right');
+                if (isInwardKey && isClose) {
+                    // Try to move to PI Close if open
+                    const idx = this.osd._cachedOverlayRow.findIndex(el => el.classList.contains('playback-info-close'));
+                    if (idx !== -1) {
+                        this.osd._currentFocusIndex = idx;
+                        this.osd.activeMenu = this.osd.playbackInfo; // Switch control to PlaybackInfo
+                        this.osd._updateFocus();
+                        return true;
+                    }
+                    return true; // Block inward key if PI not open
                 }
-                return true; // Block Right from Close if PI not open
+
+                return false;
             }
             case 'up': {
                 if (isSlider) {

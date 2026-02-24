@@ -27,6 +27,7 @@ import './styles/player-osd.css';
 import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';
+import './styles/rtl.css'; // Directional overrides
 import './themes/classic/index.js'; // All classic themes
 
 /**

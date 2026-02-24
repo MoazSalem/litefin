@@ -428,10 +428,10 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 this.updateFocus();
                 return true;
             case 'left':
-                this._handleAdjust( -1 );
+                this._handleAdjust( document.documentElement.dir === 'rtl' ? 1 : -1 );
                 return true;
             case 'right':
-                this._handleAdjust( 1 );
+                this._handleAdjust( document.documentElement.dir === 'rtl' ? -1 : 1 );
                 return true;
             case 'enter':
                 this._handleAdjust( 1 ); // Cycling for select items

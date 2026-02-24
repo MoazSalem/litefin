@@ -161,7 +161,10 @@ class Sidebar extends Component {
             // Always land on the Home button when entering the sidebar
             defaultFocusSelector: '#sidebar-home',
             onMove: (direction, focusedEl) => {
-                if (direction === 'right') {
+                const isRtl = document.documentElement.dir === 'rtl';
+                const exitDirection = isRtl ? 'left' : 'right';
+
+                if (direction === exitDirection) {
                     const pageContainer = document.getElementById('page-container');
                     if (!pageContainer) return false;
 

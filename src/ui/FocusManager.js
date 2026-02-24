@@ -191,8 +191,21 @@ class FocusManager {
                 const max = parseFloat(el.max) || 100;
                 let value = parseFloat(el.value) || 0;
 
-                // Adjust value based on direction
-                if (direction === 'right') {
+                // Detect if the slider is rendered in RTL mode
+                let isRTL = document.documentElement.dir === 'rtl';
+                if (window.getComputedStyle) {
+                    isRTL = window.getComputedStyle(el).direction === 'rtl';
+                }
+
+                // In RTL, min is on the right and max is on the left visually.
+                // Pressing Left should increase value (move towards max).
+                let effectiveDirection = direction;
+                if (isRTL) {
+                    effectiveDirection = direction === 'left' ? 'right' : 'left';
+                }
+
+                // Adjust value based on effective direction
+                if (effectiveDirection === 'right') {
                     value = Math.min(max, value + step);
                 } else {
                     value = Math.max(min, value - step);
@@ -417,9 +430,16 @@ class FocusManager {
 
         // 1. Handling strict orientations
         if (config.orientation === 'horizontal') {
-            if (direction === 'left') {
+            const isRtl = document.documentElement.dir === 'rtl';
+            let logicalDirection = direction;
+            if (isRtl) {
+                if (direction === 'left') logicalDirection = 'right';
+                else if (direction === 'right') logicalDirection = 'left';
+            }
+
+            if (logicalDirection === 'left') {
                 if (currentIndex > 0) nextElement = focusables[currentIndex - 1];
-            } else if (direction === 'right') {
+            } else if (logicalDirection === 'right') {
                 if (currentIndex < focusables.length - 1) nextElement = focusables[currentIndex + 1];
             }
         } else if (config.orientation === 'vertical') {
@@ -459,7 +479,14 @@ class FocusManager {
         const config = this._sections.get(this._activeSection);
         if (!config) return;
 
-        const key = `leave${direction.charAt(0).toUpperCase() + direction.slice(1)}`;
+        const isRtl = document.documentElement.dir === 'rtl';
+        let leaveDirection = direction;
+        if (isRtl) {
+            if (direction === 'left') leaveDirection = 'right';
+            else if (direction === 'right') leaveDirection = 'left';
+        }
+
+        const key = `leave${leaveDirection.charAt(0).toUpperCase() + leaveDirection.slice(1)}`;
         let nextSection = config[key];
 
         log.debug(`_leaveSection: direction=${direction}, key=${key}, nextSection=${nextSection}`);

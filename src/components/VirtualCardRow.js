@@ -133,7 +133,14 @@ export class VirtualCardRow {
                     // Include 60px padding-left from layout.css
                     const leftPos = 60 + i * this.totalItemWidth;
                     cardNode.style.position = 'absolute';
-                    cardNode.style.left = `${leftPos}px`;
+
+                    const isRtl = document.documentElement.dir === 'rtl';
+                    if (isRtl) {
+                        cardNode.style.right = `${leftPos}px`;
+                    } else {
+                        cardNode.style.left = `${leftPos}px`;
+                    }
+
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
 
                     // Add index for identifying the card in focus handlers
@@ -194,13 +201,20 @@ export class VirtualCardRow {
         if (this.totalItems === 0) return null;
 
         const trackRect = this.track.getBoundingClientRect();
-        // Calculate relative X inside the track container
-        const relativeX = documentX - trackRect.left;
+        const isRtl = document.documentElement.dir === 'rtl';
+
+        let relativeX;
+        let bestIndex;
+
+        if (isRtl) {
+            relativeX = trackRect.right - documentX;
+        } else {
+            relativeX = documentX - trackRect.left;
+        }
 
         // Items are placed at: 60 + i * totalItemWidth
         // We want to find index i where target center is closest
-        // center i = 60 + i * totalItemWidth + itemWidth / 2
-        let bestIndex = Math.round((relativeX - 60 - this.itemWidth / 2) / this.totalItemWidth);
+        bestIndex = Math.round((relativeX - 60 - this.itemWidth / 2) / this.totalItemWidth);
         bestIndex = Math.max(0, Math.min(this.totalItems - 1, bestIndex));
 
         this.currentIndex = bestIndex;
@@ -231,12 +245,20 @@ export class VirtualCardRow {
         // The current index is now passed in directly from the physically active DOM node.
         let nextIndex = currentIndex !== undefined ? currentIndex : this.currentIndex;
 
-        if (direction === 'left' || direction === 'Left') {
-            nextIndex--;
-        } else if (direction === 'right' || direction === 'Right') {
-            nextIndex++;
-        } else {
+        const isLeft = direction === 'left' || direction === 'Left';
+        const isRight = direction === 'right' || direction === 'Right';
+        const isRtl = document.documentElement.dir === 'rtl';
+
+        if (!isLeft && !isRight) {
             return null; // Ignore non-horizontal movement
+        }
+
+        if (isRtl) {
+            if (isLeft) nextIndex++;
+            else if (isRight) nextIndex--;
+        } else {
+            if (isLeft) nextIndex--;
+            else if (isRight) nextIndex++;
         }
 
         if (nextIndex < 0 || nextIndex >= this.totalItems) {

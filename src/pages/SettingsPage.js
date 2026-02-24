@@ -29,6 +29,9 @@ class SettingsPage extends Page {
         super();
         this.title = i18n.t('Settings');
         this.activeTab = 'appearance'; // Default tab
+
+        // Build languages list for Audio/Subtitle preferences
+        this.languages = [{ value: 'Default', label: i18n.t('Default') }, ...availableLanguages];
     }
 
     render() {
@@ -142,6 +145,24 @@ class SettingsPage extends Page {
                             'app-language-select',
                             availableLanguages,
                             storage.getItem('app_language') || 'en-us'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LayoutDirection">Layout Direction</span>
+                        <span class="setting-description" data-i18n="LayoutDirectionDescription">Force the application's text reading direction (requires restart)</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'layout-direction-select',
+                            [
+                                { value: 'auto', label: i18n.t('DirectionAuto', ['Auto']) },
+                                { value: 'ltr', label: i18n.t('DirectionLTR', ['Left-to-Right']) },
+                                { value: 'rtl', label: i18n.t('DirectionRTL', ['Right-to-Left']) }
+                            ],
+                            storage.getItem('layout_direction') || 'auto'
                         )}
                     </div>
                 </div>
@@ -1038,7 +1059,7 @@ class SettingsPage extends Page {
                 <h2 class="content-title" data-i18n="AboutLitefin">${i18n.t('AboutLitefin')}</h2>
                 
                 <div class="about-card" tabindex="0">
-                    <h3 class="app-version">${i18n.t('AppVersion', __APP_VERSION__)}</h3>
+                    <h3 class="app-version">${i18n.t('AppVersion', [__APP_VERSION__])}</h3>
                     <p class="about-desc" data-i18n="AppDescription">
                         ${i18n.t('AppDescription')}
                     </p>
@@ -1594,6 +1615,7 @@ class SettingsPage extends Page {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
             'app-language-select': { key: 'app_language', type: 'local' },
+            'layout-direction-select': { key: 'layout_direction', type: 'local' },
             layout: { key: 'layout', type: 'local' },
             'theme-select': { key: 'theme', type: 'local' },
             'ui-font-select': { key: 'uiFont', type: 'local' },
@@ -1659,7 +1681,11 @@ class SettingsPage extends Page {
                             layoutManager.setUiFont(newValue);
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
-                            if (settingConfig.key === 'layout' || settingConfig.key === 'app_language') {
+                            if (
+                                settingConfig.key === 'layout' ||
+                                settingConfig.key === 'app_language' ||
+                                settingConfig.key === 'layout_direction'
+                            ) {
                                 window.location.reload();
                             }
                         } else if (settingConfig.type === 'service') {
@@ -1906,27 +1932,20 @@ class SettingsPage extends Page {
 
     _setupFocus() {
         // Navigation: Sidebar <-> Content
+        // We define these purely logically (LTR space).
+        // FocusManager automatically inverts 'leaveLeft' and 'leaveRight' when document dir is 'rtl'.
         focusManager.register('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',
             leaveRight: 'settings-content',
             leaveLeft: 'sidebar',
-            enterTo: 'last-focused'
+            enterTo: 'last-focused',
+            defaultFocusSelector: '.settings-menu-btn.active'
         });
 
         focusManager.register('settings-content', this.$('#settings-content-panel'), {
             orientation: 'vertical',
-            // Custom Left Navigation: Always return to the ACTIVE sidebar tab
-            // This ensures predictable navigation ("Back to parent") behavior
-            onMove: (dir) => {
-                if (dir === 'left') {
-                    const activeBtn = this.$(`.settings-menu-btn[data-tab="${this.activeTab}"]`);
-                    if (activeBtn) {
-                        focusManager.focusElement(activeBtn);
-                        return true; // Handled
-                    }
-                }
-                return false;
-            },
+            leaveLeft: 'settings-sidebar',
+            leaveRight: null,
             enterTo: 'last-focused'
         });
     }

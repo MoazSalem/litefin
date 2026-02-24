@@ -357,20 +357,33 @@ class ScrollController {
                 const track = rowItems.querySelector('.row-items-track');
 
                 if (track) {
-                    const elementLeft = element.offsetLeft;
+                    const isRtl = document.documentElement.dir === 'rtl';
+
+                    let elementPos;
+                    if (isRtl) {
+                        elementPos = parseInt(element.style.right || '0', 10);
+                    } else {
+                        elementPos = element.offsetLeft;
+                    }
+
                     const elementWidth = element.offsetWidth;
                     const containerWidth = rowItems.clientWidth;
                     const trackWidth = track.scrollWidth;
 
                     // Ideal scroll to center the card
-                    const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
+                    const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
 
                     // Clamp to the start and end bounds
                     const maxScroll = Math.max(0, trackWidth - containerWidth);
                     const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
                     // Use completely hardware-accelerated CSS transform!
-                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                    if (isRtl) {
+                        // In RTL, moving track right reveals further elements on the left
+                        track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                    } else {
+                        track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                    }
                 } else {
                     // Fallback for native horizontal scrolls
                     const elementLeft = element.offsetLeft;

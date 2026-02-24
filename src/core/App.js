@@ -82,6 +82,20 @@ class App {
         const appLanguage = storage.getItem('app_language') || 'en-us';
         await i18n.init(appLanguage);
 
+        // 3.6. Initialize Layout Direction (RTL/LTR)
+        const layoutDirection = storage.getItem('layout_direction') || 'auto';
+        let isRtl = false;
+
+        if (layoutDirection === 'auto') {
+            const rtlLangs = ['ar', 'he', 'fa', 'ur', 'ur_pk', 'yi', 'dv', 'ps', 'ckb', 'ug', 'syr'];
+            const langBase = appLanguage.split('-')[0].toLowerCase();
+            isRtl = rtlLangs.includes(langBase) || rtlLangs.includes(appLanguage.toLowerCase());
+        } else {
+            isRtl = layoutDirection === 'rtl';
+        }
+
+        document.documentElement.setAttribute('dir', isRtl ? 'rtl' : 'ltr');
+
         // 4. Try to restore auth session
         await auth.init();
 

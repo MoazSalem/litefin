@@ -168,9 +168,11 @@ class TizenAdapter {
             // Failing to prevent default allows the TV to natively jump its internal hardware focus
             // instantly before JS calculates the virtual row, triggering ghost focusin loops.
             const activeElem = document.activeElement;
-            const isInput = activeElem && (activeElem.tagName === 'INPUT' || activeElem.tagName === 'TEXTAREA');
+            const isTextInput =
+                activeElem &&
+                ((activeElem.tagName === 'INPUT' && activeElem.type !== 'range') || activeElem.tagName === 'TEXTAREA');
 
-            if (!isInput) {
+            if (!isTextInput) {
                 if (
                     [TIZEN_KEYS.LEFT, TIZEN_KEYS.RIGHT, TIZEN_KEYS.UP, TIZEN_KEYS.DOWN, TIZEN_KEYS.ENTER].includes(
                         keyCode

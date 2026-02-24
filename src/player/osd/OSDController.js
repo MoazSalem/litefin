@@ -750,6 +750,9 @@ export default class OSDController extends Component {
                 if (this._currentFocusIndex > 0) this._currentFocusIndex--;
             } else if (this._currentFocusRow === 2) {
                 this._executeAction('rewind');
+            } else if (this._currentFocusRow === 0 && document.documentElement.dir === 'rtl') {
+                // In RTL, Left from Header (Back) goes to Overlays (which are visually on the left)
+                this._enterOverlaysFromHeader();
             }
         } else if (direction === 'right') {
             if (this._currentFocusRow === 1) {
@@ -757,30 +760,34 @@ export default class OSDController extends Component {
                 if (this._currentFocusIndex < controls.length - 1) this._currentFocusIndex++;
             } else if (this._currentFocusRow === 2) {
                 this._executeAction('fastForward');
-            } else if (this._currentFocusRow === 0) {
-                // Header (Back) -> Right
-                // 1. Try Subtitle Offset Close
-                let idx = this._cachedOverlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
-                if (idx !== -1) {
-                    this._currentFocusRow = -1;
-                    this._currentFocusIndex = idx;
-                    // Explicitly activate menu so its handleKey takes over for Down/Left
-                    this.activeMenu = this.subtitleOffset;
-                } else {
-                    // 2. Try Playback Info Close
-                    idx = this._cachedOverlayRow.findIndex(el => el.classList.contains('playback-info-close'));
-                    if (idx !== -1) {
-                        this._currentFocusRow = -1;
-                        this._currentFocusIndex = idx;
-                        // Explicitly activate menu
-                        this.activeMenu = this.playbackInfo;
-                    }
-                }
+            } else if (this._currentFocusRow === 0 && document.documentElement.dir !== 'rtl') {
+                // In LTR, Right from Header (Back) goes to Overlays (which are visually on the right)
+                this._enterOverlaysFromHeader();
             }
         }
         
         this._updateFocus();
         return true;
+    }
+
+    _enterOverlaysFromHeader() {
+        // 1. Try Subtitle Offset Close
+        let idx = this._cachedOverlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
+        if (idx !== -1) {
+            this._currentFocusRow = -1;
+            this._currentFocusIndex = idx;
+            // Explicitly activate menu so its handleKey takes over for Down/Left
+            this.activeMenu = this.subtitleOffset;
+        } else {
+            // 2. Try Playback Info Close
+            idx = this._cachedOverlayRow.findIndex(el => el.classList.contains('playback-info-close'));
+            if (idx !== -1) {
+                this._currentFocusRow = -1;
+                this._currentFocusIndex = idx;
+                // Explicitly activate menu
+                this.activeMenu = this.playbackInfo;
+            }
+        }
     }
 
 
@@ -1136,7 +1143,7 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
             const remainingMs = (duration - current) / 10000;
             const endTime = new Date(Date.now() + remainingMs);
-            endsAtEl.textContent = i18n.t('EndsAtValue', endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+            endsAtEl.textContent = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
         }
     }
 

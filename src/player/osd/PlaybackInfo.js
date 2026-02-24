@@ -237,7 +237,11 @@ export default class PlaybackInfo extends BaseMenu {
 
         switch (key) {
             case 'left':
-                if (isClose) {
+            case 'right': {
+                const isRTL = document.documentElement.dir === 'rtl';
+                const isEscapeKey = (isRTL && key === 'right') || (!isRTL && key === 'left');
+
+                if (isEscapeKey && isClose) {
                     // 1. Try Offset Close
                     const idx = this.osd._cachedOverlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
                     if (idx !== -1) {
@@ -255,6 +259,7 @@ export default class PlaybackInfo extends BaseMenu {
                     return true;
                 }
                 return true;
+            }
             case 'down': {
                 // Go to Play/Pause (Controls Row 1), usually index ~2
                 this.osd._currentFocusRow = 1;

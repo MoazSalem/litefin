@@ -1,0 +1,333 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - RTL (Right-to-Left) Overrides
+ * ============================================================================
+ * Automatically applied when the HTML document has dir="rtl".
+ * Reverses layout properties for languages like Arabic, Hebrew, and Persian.
+ * ============================================================================
+ */
+
+/* ================== SIDEBAR ================== */
+[dir="rtl"] .sidebar {
+    left: auto;
+    right: 0;
+    transform: translate3d(100px, 0, 0); /* Match collapsed width logic */
+    border-right: none;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* ================== SETTINGS ================== */
+[dir="rtl"] .settings-sidebar {
+    border-right: none;
+    border-left: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+}
+
+[dir="rtl"] .settings-menu-btn .menu-icon {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .sidebar.hidden {
+    transform: translate3d(100%, 0, 0);
+}
+
+[dir="rtl"] .sidebar.expanded {
+    transform: translate3d(0, 0, 0);
+}
+
+/* Base translation offset to keep icons in view when collapsed */
+/* Originally translate3d(-250px, 0, 0) in LTR, now +250 in RTL */
+/* Wait, sidebar width is 350, collapsed is 100. Diff = 250px */
+[dir="rtl"] .sidebar {
+    transform: translate3d(250px, 0, 0);
+}
+
+[dir="rtl"] .sidebar:not(.expanded) .logo-icon,
+[dir="rtl"] .sidebar:not(.expanded) .item-icon {
+    transform: translate3d(-250px, 0, 0);
+}
+
+[dir="rtl"] .logo-text {
+    margin-left: 0;
+    margin-right: 0px;
+}
+
+[dir="rtl"] .sidebar.expanded .logo-text {
+    margin-left: 0;
+    margin-right: 15px;
+}
+
+[dir="rtl"] .sidebar-item {
+    text-align: right;
+}
+
+[dir="rtl"] .item-text {
+    padding-right: 20px; 
+    padding-left: 20px; /* Keep padding equal */
+}
+
+[dir="rtl"] .library-item .item-text {
+    padding-left: 0;
+    padding-right: 32px;
+}
+
+[dir="rtl"] .sidebar-focus-indicator {
+    left: auto;
+    right: 0;
+}
+
+/* ================== LAYOUT ================== */
+[dir="rtl"] #sidebar-container {
+    left: auto;
+    right: 0;
+}
+
+[dir="rtl"] #page-container {
+    left: 0;
+    right: var(--sidebar-width-collapsed, 100px);
+}
+
+[dir="rtl"] body.no-sidebar #page-container {
+    right: 0;
+}
+
+[dir="rtl"] .header-left > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+[dir="rtl"] .header-logo > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .header-mid {
+    left: auto;
+    right: 50%;
+    transform: translateX(50%);
+}
+
+[dir="rtl"] .header-mid > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 15px;
+}
+
+[dir="rtl"] .header-nav > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .header-clock {
+    margin-left: 0;
+    margin-right: 8px;
+}
+
+/* ================== PLAYER OSD ================== */
+[dir="rtl"] .osd-btn {
+    margin-left: 0;
+    margin-right: 1.8em;
+}
+
+[dir="rtl"] .osd-header-left .osd-btn {
+    margin-right: 0;
+    margin-left: 1.8em;
+}
+
+[dir="rtl"] .osd-time {
+    margin-left: 0;
+    margin-right: 0.72em;
+}
+
+[dir="rtl"] .osd-ends-at {
+    margin-left: 0;
+    margin-right: 2.4em;
+}
+
+[dir="rtl"] .time-slider-container {
+    direction: ltr; /* Timelines always progress left-to-right */
+}
+
+[dir="rtl"] .volume-slider-container {
+    margin-left: 0;
+    margin-right: 20px;
+}
+
+[dir="rtl"] .track-option .track-option-check {
+    margin-right: 0;
+    margin-left: 1em;
+}
+
+/* ================== LIBRARY / ROW ITEMS ================== */
+[dir="rtl"] .row-title {
+    margin-left: 0;
+    margin-right: -20px;
+    padding-left: 0;
+    padding-right: 20px;
+    border-left: none;
+    border-right: 3px solid transparent;
+}
+
+[dir="rtl"] .media-row {
+    padding-left: 0;
+    padding-right: 60px;
+}
+
+[dir="rtl"] .virtual-card {
+    margin-right: 0;
+    margin-left: 20px; /* Gap between cards */
+}
+
+/* ================== COMPONENTS ================== */
+[dir="rtl"] .metadata-item {
+    margin-right: 0;
+    margin-left: 15px;
+}
+
+[dir="rtl"] .metadata-item:not(:last-child)::after {
+    right: auto;
+    left: -10px;
+}
+
+/* ================== DETAILS PAGE ================== */
+[dir="rtl"] .hero-poster {
+    margin-right: 0;
+    margin-left: 60px;
+}
+
+[dir="rtl"] .details-logo {
+    right: auto;
+    left: 0;
+    justify-content: flex-start;
+}
+
+[dir="rtl"] .meta-item {
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+[dir="rtl"] .meta-item:last-child {
+    margin-left: 0;
+}
+
+[dir="rtl"] .details-actions > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .play-btn svg,
+[dir="rtl"] .resume-btn svg {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .reset-btn {
+    margin-right: 0 !important;
+    margin-left: 16px !important;
+}
+
+[dir="rtl"] .details-rich-meta {
+    padding-left: 20px;
+    padding-right: 20px;
+}
+
+[dir="rtl"] .overview-text {
+    direction: ltr;
+    text-align: right;
+}
+
+[dir="rtl"] .meta-label {
+    text-align: right;
+}
+
+[dir="rtl"] .meta-value-list {
+    direction: ltr;
+    justify-content: flex-end;
+}
+
+/* Metadata values are forced to LTR (mostly English), so we use LTR margins */
+[dir="rtl"] .meta-value-list .meta-chip {
+    margin-left: 0;
+    margin-right: 8px;
+}
+
+[dir="rtl"] .meta-value-list .meta-chip:not(:last-child)::after {
+    margin-left: 0;
+    margin-right: 6px;
+}
+
+[dir="rtl"] .person-grid .media-card {
+    margin-right: 0 !important;
+    margin-left: 24px !important;
+}
+
+[dir="rtl"] .person-grid .media-card:nth-child(5n) {
+    margin-left: 0 !important;
+}
+
+[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(5n) {
+    margin-left: 24px !important;
+}
+
+[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(3n) {
+    margin-left: 0 !important;
+}
+
+[dir="rtl"] .btn-icon-text .icon {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+/* ================== PLAYER OSD ================== */
+/* Media playback intuitively strictly adheres to Left-to-Right progression globally.
+   Enforcing LTR strictly to preserve physical skip patterns and skip bar progress mapping. */
+[dir="rtl"] .player-osd .osd-bottom {
+    direction: ltr !important;
+}
+
+/* OSD Header Back Button Flip */
+[dir="rtl"] .osd-back-btn .osd-icon {
+    transform: scaleX(-1);
+}
+
+/* Track Menu & Quick Settings Icons/Badges */
+[dir="rtl"] .track-option-check {
+    margin-right: 0;
+    margin-left: 0.96em;
+}
+
+[dir="rtl"] .track-option-icon {
+    margin-right: 0;
+    margin-left: 1.25em;
+}
+
+[dir="rtl"] .track-badge {
+    margin-left: 0;
+    margin-right: 10px;
+}
+
+[dir="rtl"] .sub-setting-label {
+    text-align: right;
+}
+
+[dir="rtl"] .sub-setting-value {
+    margin-left: 0 !important;
+    margin-right: 20px !important;
+}
+
+/* Playback Info Positioning */
+[dir="rtl"] #osdPlaybackInfoOverlay {
+    left: 40px;
+    right: auto;
+}
+
+/* Slider Mirroring in RTL Modals - Scoped to avoid breaking main OSD timeline */
+[dir="rtl"] .menu-slider .osd-slider,
+[dir="rtl"] .osd-offset-slider {
+    direction: rtl !important;
+}
+
+[dir="rtl"] .menu-slider .osd-slider-fill {
+    left: auto;
+    right: 0;
+}
+

@@ -291,7 +291,7 @@
     "SecondarySubtitlePosition": "Secondary subtitle position",
     "SecondaryTextOnly": "Secondary (Text Only)",
     "Seconds": "{0} seconds",
-    "SecondsShort": "{0}s",
+    "SecondsShort": "{0}ث",
     "SeeMore": "See More",
     "SelectOption": "Select Option",
     "SelectUser": "Select User",
@@ -362,5 +362,10 @@
     "YearLabel": "Year: {0}",
     "AppLanguage": "App Language",
     "AppLanguageDescription": "Choose the language used throughout the app (requires restart)",
-    "Language": "Language"
+    "Language": "Language",
+    "LayoutDirection": "Layout Direction",
+    "LayoutDirectionDescription": "Force the application's text reading direction (requires restart)",
+    "DirectionAuto": "{0} (Based on Language)",
+    "DirectionLTR": "Left-to-Right",
+    "DirectionRTL": "Right-to-Left"
 }
