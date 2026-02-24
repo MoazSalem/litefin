@@ -241,7 +241,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="MaxResolution">Max Resolution</span>
+                        <span class="setting-name" data-i18n="LabelMaxVideoResolution">Max Resolution</span>
                         <span class="setting-description" data-i18n="MaxResolutionDescription">Override panel detection (Auto uses hardware APIs)</span>
                     </div>
                     <div class="setting-control">
@@ -296,7 +296,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="PreferredAudioLanguage">Preferred Audio Language</span>
+                        <span class="setting-name" data-i18n="LabelAudioLanguagePreference">Preferred Audio Language</span>
                         <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">Default language for audio tracks</span>
                     </div>
                     <div class="setting-control">
@@ -310,7 +310,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="SkipForwardDuration">Skip Forward Duration</span>
+                        <span class="setting-name" data-i18n="LabelSkipForwardLength">Skip Forward Duration</span>
                         <span class="setting-description" data-i18n="SkipForwardDurationDescription">Seconds to skip when pressing forward</span>
                     </div>
                     <div class="setting-control">
@@ -330,7 +330,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="SkipBackDuration">Skip Back Duration</span>
+                        <span class="setting-name" data-i18n="LabelSkipBackLength">Skip Back Duration</span>
                         <span class="setting-description" data-i18n="SkipBackDurationDescription">Seconds to skip when pressing back</span>
                     </div>
                     <div class="setting-control">
@@ -350,7 +350,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="AutoPlayNext">Auto-play Next Episode</span>
+                        <span class="setting-name" data-i18n="PlayNextEpisodeAutomatically">Auto-play Next Episode</span>
                         <span class="setting-description" data-i18n="AutoPlayNextDescription">Automatically play next episode when current ends</span>
                     </div>
                     <div class="setting-control">
@@ -511,7 +511,7 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="PreferredSubtitleLanguage">Preferred Subtitle Language</span>
+                        <span class="setting-name" data-i18n="LabelPreferredSubtitleLanguage">Preferred Subtitle Language</span>
                         <span class="setting-description" data-i18n="PreferredSubtitleLanguageDescription">Default language for subtitles</span>
                     </div>
                     <div class="setting-control">
@@ -533,7 +533,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="SubtitleMode">Subtitle Mode</span>
+                        <span class="setting-name" data-i18n="LabelSubtitlePlaybackMode">Subtitle Mode</span>
                         <span class="setting-description" data-i18n="SubtitleModeDescription">When to show subtitles automatically</span>
                     </div>
                     <div class="setting-control">
@@ -584,7 +584,7 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Subtitle Appearance Section -->
-                <h3 class="setting-section-title" data-i18n="Appearance">Appearance</h3>
+                <h3 class="setting-section-title" data-i18n="HeaderSubtitleAppearance">Appearance</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -612,7 +612,7 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="TextSize">Text Size</span>
+                        <span class="setting-name" data-i18n="LabelTextSize">Text Size</span>
                         <span class="setting-description" data-i18n="TextSizeDescription">Subtitle text size</span>
                     </div>
                     <div class="setting-control">
@@ -649,7 +649,7 @@ class SettingsPage extends Page {
 
                   <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="VerticalPosition">Vertical Position</span>
+                        <span class="setting-name" data-i18n="LabelSubtitleVerticalPosition">Vertical Position</span>
                         <span class="setting-description" data-i18n="VerticalPositionDescription">Subtitle vertical position</span>
                     </div>
                     <div class="setting-control">
@@ -686,7 +686,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="FontWeight">Font Weight</span>
+                        <span class="setting-name" data-i18n="LabelTextWeight">Font Weight</span>
                         <span class="setting-description" data-i18n="FontWeightDescription">Subtitle text thickness</span>
                     </div>
                     <div class="setting-control">
@@ -703,20 +703,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="TextColor">Text Color</span>
+                        <span class="setting-name" data-i18n="LabelTextColor">Text Color</span>
                         <span class="setting-description" data-i18n="TextColorDescription">Subtitle text color</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-color-select',
                             [
-                                { value: '#ffffff', label: i18n.t('White') },
+                                { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                                 { value: '#d3d3d3', label: i18n.t('LightGrey') },
                                 { value: '#a9a9a9', label: i18n.t('DarkGrey') },
-                                { value: '#000000', label: i18n.t('Black') },
-                                { value: '#ffff00', label: i18n.t('Yellow') },
-                                { value: '#00ffff', label: i18n.t('Cyan') },
-                                { value: '#0000ff', label: i18n.t('Blue') }
+                                { value: '#000000', label: i18n.t('SubtitleBlack') },
+                                { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                                { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                                { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                             ],
                             PlayerSettings.get('subtitleTextColor') || '#ffffff'
                         )}
@@ -749,13 +749,13 @@ class SettingsPage extends Page {
                             'subtitle-bg-select',
                             [
                                 { value: 'transparent', label: i18n.t('None') },
-                                { value: '#000000', label: i18n.t('Black') },
-                                { value: '#ffffff', label: i18n.t('White') },
+                                { value: '#000000', label: i18n.t('SubtitleBlack') },
+                                { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                                 { value: '#d3d3d3', label: i18n.t('LightGrey') },
                                 { value: '#a9a9a9', label: i18n.t('DarkGrey') },
-                                { value: '#ffff00', label: i18n.t('Yellow') },
-                                { value: '#00ffff', label: i18n.t('Cyan') },
-                                { value: '#0000ff', label: i18n.t('Blue') }
+                                { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                                { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                                { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                             ],
                             PlayerSettings.get('subtitleTextBackground')
                         )}
@@ -824,14 +824,14 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'subtitle-shadow-color-select',
                             [
-                                { value: '#000000', label: i18n.t('Black') },
-                                { value: '#ffffff', label: i18n.t('White') },
-                                { value: '#ff0000', label: i18n.t('Red') },
-                                { value: '#00ff00', label: i18n.t('Green') },
-                                { value: '#0000ff', label: i18n.t('Blue') },
-                                { value: '#ffff00', label: i18n.t('Yellow') },
-                                { value: '#00ffff', label: i18n.t('Cyan') },
-                                { value: '#ff00ff', label: i18n.t('Magenta') },
+                                { value: '#000000', label: i18n.t('SubtitleBlack') },
+                                { value: '#ffffff', label: i18n.t('SubtitleWhite') },
+                                { value: '#ff0000', label: i18n.t('SubtitleRed') },
+                                { value: '#00ff00', label: i18n.t('SubtitleGreen') },
+                                { value: '#0000ff', label: i18n.t('SubtitleBlue') },
+                                { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                                { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                                { value: '#ff00ff', label: i18n.t('SubtitleMagenta') },
                                 { value: '#808080', label: i18n.t('Grey') }
                             ],
                             PlayerSettings.get('subtitleDropShadowColor') || '#000000'
@@ -1004,8 +1004,8 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-actions centered">
-                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0" data-i18n="SignOut">
-                        ${i18n.t('SignOut')}
+                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0" data-i18n="ButtonSignOut">
+                        ${i18n.t('ButtonSignOut')}
                     </button>
                 </div>
             </div>
@@ -1496,7 +1496,7 @@ class SettingsPage extends Page {
                         .join('')}
                 </div>
                 <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="Cancel">${i18n.t('Cancel')}</button>
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="ButtonCancel">${i18n.t('ButtonCancel')}</button>
                 </div>
             </div>
         `;

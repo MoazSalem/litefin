@@ -203,7 +203,7 @@ export default class OSDController extends Component {
                 <!-- Header -->
                 <div class="osd-header" id="osdHeader">
                     <div class="osd-header-left">
-                        <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('Back')}" tabindex="0">
+                        <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('ButtonBack')}" tabindex="0">
                             ${ICONS.arrowBack}
                         </button>
                         <span class="osd-title" id="osdTitle"></span>
@@ -1136,7 +1136,7 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
             const remainingMs = (duration - current) / 10000;
             const endTime = new Date(Date.now() + remainingMs);
-            endsAtEl.textContent = i18n.t('EndsAt') + endTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            endsAtEl.textContent = i18n.t('EndsAtValue', endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
         }
     }
 

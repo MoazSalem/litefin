@@ -38,7 +38,7 @@ const QUICK_CONNECT_MAX_POLLS = 36;
 class LoginPage extends Page {
     constructor() {
         super();
-        this.title = i18n.t('Login');
+        this.title = i18n.t('ButtonSignIn');
 
         this._state = STATE.SERVER;
         this._users = [];
@@ -159,7 +159,7 @@ class LoginPage extends Page {
                                 type="text" 
                                 id="manual-username" 
                                 class="text-input tv-input"
-                                placeholder="${i18n.t('Username')}"
+                                placeholder="${i18n.t('LabelUsername')}"
                                 readonly
                                 tabindex="0"
                             >
@@ -169,16 +169,16 @@ class LoginPage extends Page {
                                 type="password" 
                                 id="manual-password" 
                                 class="text-input tv-input"
-                                placeholder="${i18n.t('Password')}"
+                                placeholder="${i18n.t('LabelPassword')}"
                                 readonly
                                 tabindex="0"
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0" data-i18n="SignIn">
+                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0" data-i18n="ButtonSignIn">
                                 Sign In
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Back">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
                                 Back
                             </button>
                         </div>
@@ -204,10 +204,10 @@ class LoginPage extends Page {
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary login-btn" tabindex="0" data-i18n="SignIn">
+                            <button type="button" class="btn btn-primary login-btn" tabindex="0" data-i18n="ButtonSignIn">
                                 Sign In
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Back">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
                                 Back
                             </button>
                         </div>
@@ -226,7 +226,7 @@ class LoginPage extends Page {
                         <p class="quick-connect-status" id="quick-connect-status" data-i18n="WaitingForAuthorization">Waiting for authorization…</p>
                         <p class="login-error" id="quick-connect-error"></p>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Cancel">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonCancel">
                                 Cancel
                             </button>
                         </div>

@@ -114,7 +114,12 @@ class FavoritesPage extends Page {
             if (shows.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-series', title: i18n.t('Shows'), items: shows.Items, type: 'series' });
             if (seasons.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-season', title: i18n.t('Seasons'), items: seasons.Items, type: 'season' });
+                sectionsData.push({
+                    id: 'fav-season',
+                    title: i18n.t('HeaderSeasons'),
+                    items: seasons.Items,
+                    type: 'season'
+                });
             if (episodes.TotalRecordCount > 0)
                 sectionsData.push({
                     id: 'fav-episode',

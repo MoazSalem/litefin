@@ -116,7 +116,7 @@ export default class TrackMenu extends BaseMenu {
 
         let headerHtml = '';
         if (this.type === 'subtitles') {
-            const label = (this.mode === 'primary') ? i18n.t('SecondarySubtitle') : '← ' + i18n.t('Back');
+            const label = (this.mode === 'primary') ? i18n.t('SecondarySubtitle') : '← ' + i18n.t('ButtonBack');
             headerHtml = `
                 <button class="track-option track-mode-switch">
                     <span class="track-option-check"></span>

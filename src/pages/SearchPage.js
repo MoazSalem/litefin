@@ -265,7 +265,7 @@ class SearchPage extends Page {
         if (series.length > 0) {
             this._grids.series = new MediaGrid({
                 id: 'search-series',
-                title: i18n.t('TVShows'),
+                title: i18n.t('TypeOptionPluralSeries'),
                 items: series,
                 type: 'poster',
                 limit: 10,
@@ -292,7 +292,7 @@ class SearchPage extends Page {
         if (people.length > 0) {
             this._grids.people = new MediaGrid({
                 id: 'search-people',
-                title: i18n.t('CastCrew'),
+                title: i18n.t('HeaderCastAndCrew'),
                 items: people,
                 type: 'person', // Special card type? Or just poster.
                 limit: 10,

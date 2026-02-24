@@ -118,7 +118,7 @@ class LibraryPage extends Page {
                                             <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                         </svg>
                                     </span>
-                                    <span class="control-btn-text" data-i18n="Prev">Prev</span>
+                                    <span class="control-btn-text" data-i18n="Previous">Prev</span>
                                 </button>
                                 <button class="control-btn" id="btn-next-top" tabindex="0">
                                     <span class="control-btn-text" data-i18n="Next">Next</span>
@@ -170,7 +170,7 @@ class LibraryPage extends Page {
                                     <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                 </svg>
                             </span>
-                            <span class="control-btn-text" data-i18n="Prev">Previous</span>
+                            <span class="control-btn-text" data-i18n="Previous">Previous</span>
                         </button>
                         <span class="pagination-info" id="pagination-info">Page 1</span>
                         <button class="pagination-btn" id="btn-next" tabindex="0">
@@ -584,7 +584,7 @@ class LibraryPage extends Page {
 
                 if (resume.Items && resume.Items.length > 0) {
                     rows.push({
-                        title: i18n.t('ContinueWatching'),
+                        title: i18n.t('HeaderContinueWatching'),
                         items: resume.Items,
                         isLandscape: true,
                         cardType: 'backdrop',
@@ -601,7 +601,15 @@ class LibraryPage extends Page {
                     });
                 }
                 if (latest && latest.length > 0) {
-                    rows.push({ title: i18n.t('LatestAdded'), items: latest });
+                    let header = 'HeaderRecentlyAdded';
+                    if (collectionType === 'tvshows') {
+                        header = 'HeaderLatestEpisodes';
+                    } else if (collectionType === 'movies') {
+                        header = 'HeaderLatestMovies';
+                    } else if (collectionType === 'music') {
+                        header = 'HeaderLatestMusic';
+                    }
+                    rows.push({ title: i18n.t(header), items: latest });
                 }
 
                 // 2. "Because You Watch..." (Based on active resume items)
@@ -624,7 +632,7 @@ class LibraryPage extends Page {
                             IncludeItemTypes: suggestionTypes
                         });
                         if (similar.Items && similar.Items.length > 0) {
-                            rows.push({ title: i18n.t('BecauseYouWatch', targetName), items: similar.Items });
+                            rows.push({ title: i18n.t('SimilarTo', targetName), items: similar.Items });
                         }
                     } catch (e) {
                         log.warn('Failed to load similar suggestions', e);
@@ -649,7 +657,10 @@ class LibraryPage extends Page {
                             IncludeItemTypes: suggestionTypes
                         });
                         if (similarFav.Items && similarFav.Items.length > 0) {
-                            rows.push({ title: i18n.t('BecauseYouLike', favItem.Name), items: similarFav.Items });
+                            rows.push({
+                                title: i18n.t('RecommendationBecauseYouLike', favItem.Name),
+                                items: similarFav.Items
+                            });
                         }
                     }
                 } catch (e) {

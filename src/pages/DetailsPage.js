@@ -78,7 +78,7 @@ class DetailsPage extends Page {
                                     <span data-i18n="Play">Play</span>
                                 </button>
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
-                                    <span data-i18n="Resume">Resume</span>
+                                    <span data-i18n="ButtonResume">Resume</span>
                                 </button>
                                 <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -91,7 +91,7 @@ class DetailsPage extends Page {
                                         <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
                                     </svg>
                                 </button>
-                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkAsWatched')}">
+                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkWatched')}">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </button>
                                 <!-- Favorite Button Injected Here -->
@@ -113,7 +113,7 @@ class DetailsPage extends Page {
                             <!-- Overview -->
                             <div class="details-overview">
                                 <p class="overview-text line-clamp-6"></p>
-                                <button class="see-more-btn" tabindex="0" data-i18n="SeeMore">${i18n.t('SeeMore')}</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore">${i18n.t('ShowMore')}</button>
                             </div>
 
                         </div>
@@ -126,13 +126,13 @@ class DetailsPage extends Page {
 
                     <!-- Collection Movies (BoxSet) -->
                     <section class="details-collection-movies media-row hidden" id="collection-movies-section">
-                        <h2 class="row-title" data-i18n="MoviesInCollection">Movies in Collection</h2>
+                        <h2 class="row-title" data-i18n="Movies">Movies in Collection</h2>
                         <div class="collection-row row-items" id="collection-movies-row"></div>
                     </section>
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="Series">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
                     
@@ -144,7 +144,7 @@ class DetailsPage extends Page {
                     
                     <!-- Seasons (for series) -->
                     <section class="details-seasons media-row hidden" id="seasons-section">
-                        <h2 class="row-title" data-i18n="Seasons">Seasons</h2>
+                        <h2 class="row-title" data-i18n="HeaderSeasons">Seasons</h2>
                         <div class="seasons-row" id="seasons-row"></div>
                     </section>
                     
@@ -156,25 +156,25 @@ class DetailsPage extends Page {
 
                     <!-- More from Season (for episodes) -->
                     <section class="details-season-episodes media-row hidden" id="more-from-season-section">
-                        <h2 class="row-title" id="more-from-season-title" data-i18n="MoreFromSeason">More from Season</h2>
+                        <h2 class="row-title" id="more-from-season-title" data-i18n="HeaderMoreFromSeason">More from Season</h2>
                         <div class="season-episodes-row row-items" id="more-from-season-row"></div>
                     </section>
 
                     <!-- Cast & Crew -->
                     <section class="details-people media-row hidden" id="people-section">
-                        <h2 class="row-title" data-i18n="CastCrew">Cast & Crew</h2>
+                        <h2 class="row-title" data-i18n="HeaderCastAndCrew">Cast & Crew</h2>
                         <div class="people-row row-items" id="people-row"></div>
                     </section>
 
                     <!-- Guest Stars (for episodes) -->
                     <section class="details-guest-stars media-row hidden" id="guest-stars-section">
-                        <h2 class="row-title" data-i18n="GuestStars">Guest Stars</h2>
+                        <h2 class="row-title" data-i18n="HeaderGuestCast">Guest Stars</h2>
                         <div class="guest-stars-row row-items" id="guest-stars-row"></div>
                     </section>
                     
                     <!-- Similar items -->
                     <section class="details-similar media-row hidden" id="similar-section">
-                        <h2 class="row-title" data-i18n="MoreLikeThis">More Like This</h2>
+                        <h2 class="row-title" data-i18n="HeaderMoreLikeThis">More Like This</h2>
                         <div class="similar-row" id="similar-row"></div>
                     </section>
                 </div>
@@ -1265,12 +1265,12 @@ class DetailsPage extends Page {
                 if (isExpanded) {
                     // Collapse
                     overviewEl.classList.add('line-clamp-6');
-                    seeMoreBtn.textContent = 'See More';
+                    seeMoreBtn.textContent = i18n.t('ShowMore');
                     this.el.scrollTop = 0; // Optional: Reset scroll
                 } else {
                     // Expand
                     overviewEl.classList.remove('line-clamp-6');
-                    seeMoreBtn.textContent = 'See Less';
+                    seeMoreBtn.textContent = i18n.t('ShowLess');
                 }
 
                 // Keep focus on the button using precision scroll

@@ -125,7 +125,7 @@ class HomePage extends Page {
 
             if (!hideMyMedia && this._libraries.length > 0) {
                 rowsData.push({
-                    title: i18n.t('MyMedia'),
+                    title: i18n.t('HeaderMyMedia'),
                     items: this._libraries,
                     type: 'library'
                 });
@@ -134,7 +134,7 @@ class HomePage extends Page {
             // 1. Continue watching
             if (resumeItems?.Items?.length > 0) {
                 rowsData.push({
-                    title: i18n.t('ContinueWatching'),
+                    title: i18n.t('HeaderContinueWatching'),
                     items: resumeItems.Items,
                     type: 'resume'
                 });

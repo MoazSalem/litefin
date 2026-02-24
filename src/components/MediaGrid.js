@@ -10,6 +10,7 @@
 import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { router } from '../core/Router.js';
+import { i18n } from '../utils/i18n.js';
 
 import CardRenderer from '../utils/CardRenderer.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -57,7 +58,7 @@ class MediaGrid extends Component {
                 
             <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'flex' : 'none'}; justify-content: center;">
                 <button class="btn see-more-btn" id="${btnId}" tabindex="0">
-                    ${this.expanded ? 'See Less' : 'See More'}
+                    ${this.expanded ? i18n.t('ShowLess') : i18n.t('ShowMore')}
                 </button>
             </div>
         `;
@@ -129,7 +130,7 @@ class MediaGrid extends Component {
         // Update button text
         const btn = document.getElementById(`${this.id}-btn`);
         if (btn) {
-            btn.textContent = this.expanded ? 'See Less' : 'See More';
+            btn.textContent = this.expanded ? i18n.t('ShowLess') : i18n.t('ShowMore');
         }
 
         // Parent notification (optional) - allows PersonPage to re-register focus sections

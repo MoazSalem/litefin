@@ -168,13 +168,13 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleTextColor',
                 visible: !isASS,
                 options: [
-                    { value: '#ffffff', label: i18n.t('White') },
+                    { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                     { value: '#d3d3d3', label: i18n.t('LightGrey') },
                     { value: '#a9a9a9', label: i18n.t('DarkGrey') },
-                    { value: '#000000', label: i18n.t('Black') },
-                    { value: '#ffff00', label: i18n.t('Yellow') },
-                    { value: '#00ffff', label: i18n.t('Cyan') },
-                    { value: '#0000ff', label: i18n.t('Blue') }
+                    { value: '#000000', label: i18n.t('SubtitleBlack') },
+                    { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                    { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                    { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                 ]
             },
             { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
@@ -188,13 +188,13 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: !isASS,
                 options: [
                     { value: 'transparent', label: i18n.t('None') },
-                    { value: '#000000', label: i18n.t('Black') },
-                    { value: '#ffffff', label: i18n.t('White') },
+                    { value: '#000000', label: i18n.t('SubtitleBlack') },
+                    { value: '#ffffff', label: i18n.t('SubtitleWhite') },
                     { value: '#d3d3d3', label: i18n.t('LightGrey') },
                     { value: '#a9a9a9', label: i18n.t('DarkGrey') },
-                    { value: '#ffff00', label: i18n.t('Yellow') },
-                    { value: '#00ffff', label: i18n.t('Cyan') },
-                    { value: '#0000ff', label: i18n.t('Blue') }
+                    { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                    { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                    { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                 ]
             },
             {
@@ -236,14 +236,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('ShadowColor'),
                 key: 'subtitleDropShadowColor',
                 options: [
-                    { value: '#000000', label: i18n.t('Black') },
-                    { value: '#ffffff', label: i18n.t('White') },
-                    { value: '#ff0000', label: i18n.t('Red') },
-                    { value: '#00ff00', label: i18n.t('Green') },
-                    { value: '#0000ff', label: i18n.t('Blue') },
-                    { value: '#ffff00', label: i18n.t('Yellow') },
-                    { value: '#00ffff', label: i18n.t('Cyan') },
-                    { value: '#ff00ff', label: i18n.t('Magenta') },
+                    { value: '#000000', label: i18n.t('SubtitleBlack') },
+                    { value: '#ffffff', label: i18n.t('SubtitleWhite') },
+                    { value: '#ff0000', label: i18n.t('SubtitleRed') },
+                    { value: '#00ff00', label: i18n.t('SubtitleGreen') },
+                    { value: '#0000ff', label: i18n.t('SubtitleBlue') },
+                    { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                    { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                    { value: '#ff00ff', label: i18n.t('SubtitleMagenta') },
                     { value: '#808080', label: i18n.t('Grey') }
                 ],
                 visible: !isASS && shadowType !== 'none'
