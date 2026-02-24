@@ -19,13 +19,14 @@ import FontLoader from '../utils/FontLoader.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('SettingsPage');
 
 class SettingsPage extends Page {
     constructor() {
         super();
-        this.title = 'Settings';
+        this.title = i18n.t('Settings');
         this.activeTab = 'appearance'; // Default tab
     }
 
@@ -33,32 +34,32 @@ class SettingsPage extends Page {
         const tabs = [
             {
                 id: 'appearance',
-                label: 'Display',
+                label: i18n.t('Display'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
             },
             {
                 id: 'player',
-                label: 'Playback',
+                label: i18n.t('Playback'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
             },
             {
                 id: 'subtitles',
-                label: 'Subtitles',
+                label: i18n.t('Subtitles'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>'
             },
             {
                 id: 'account',
-                label: 'Account',
+                label: i18n.t('Account'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
             },
             {
                 id: 'about',
-                label: 'About',
+                label: i18n.t('About'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
             },
             {
                 id: 'debug',
-                label: 'Debug',
+                label: i18n.t('Debug'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>'
             }
         ];
@@ -72,7 +73,7 @@ class SettingsPage extends Page {
                     <!-- Sidebar -->
                     <aside class="settings-sidebar" id="settings-sidebar">
                         <div class="settings-sidebar-header">
-                            <h2>Settings</h2>
+                            <h2 data-i18n="Settings">Settings</h2>
                         </div>
                         ${tabs
                             .map(
@@ -125,15 +126,15 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Display</h2>
+                <h2 class="content-title" data-i18n="Display">Display</h2>
 
                 <!-- Theme Section -->
-                <h3 class="setting-section-title">Theme</h3>
+                <h3 class="setting-section-title" data-i18n="ColorTheme">Theme</h3>
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Layout Mode</span>
-                        <span class="setting-description">Choose optimized layout for your screen</span>
+                        <span class="setting-name" data-i18n="LayoutMode">Layout Mode</span>
+                        <span class="setting-description" data-i18n="LayoutModeDescription">Choose optimized layout for your screen</span>
                     </div>
                     <div class="setting-control">
                         <button class="btn btn-option layout-btn ${currentLayout === 'classic' ? 'active' : ''}" data-layout="classic" tabindex="0">Classic</button>
@@ -143,8 +144,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Color Theme</span>
-                        <span class="setting-description">Select your preferred color scheme</span>
+                        <span class="setting-name" data-i18n="ColorTheme">Color Theme</span>
+                        <span class="setting-description" data-i18n="ColorThemeDescription">Select your preferred color scheme</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -160,22 +161,22 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">App Font</span>
-                        <span class="setting-description">Select global font style</span>
+                        <span class="setting-name" data-i18n="AppFont">App Font</span>
+                        <span class="setting-description" data-i18n="AppFontDescription">Select global font style</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'ui-font-select',
                             [
-                                { value: 'poppins', label: 'Default - Poppins' },
-                                { value: 'system', label: 'Tizen Sans (System)' },
-                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
-                                { value: 'print', label: 'Print - Merriweather' },
-                                { value: 'console', label: 'Console - Inconsolata' },
-                                { value: 'cursive', label: 'Cursive - Dancing Script' },
-                                { value: 'casual', label: 'Casual - Patrick Hand' },
-                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                                { value: 'poppins', label: i18n.t('ModernPoppins') },
+                                { value: 'system', label: i18n.t('DefaultTizenSans') },
+                                { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                                { value: 'typewriter', label: i18n.t('Typewriter') },
+                                { value: 'print', label: i18n.t('Print') },
+                                { value: 'console', label: i18n.t('Console') },
+                                { value: 'cursive', label: i18n.t('Cursive') },
+                                { value: 'casual', label: i18n.t('Casual') },
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -183,12 +184,12 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Home Screen Section -->
-                <h3 class="setting-section-title">Home Screen</h3>
+                <h3 class="setting-section-title" data-i18n="HomeScreen">Home Screen</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Home Screen Customization</span>
-                        <span class="setting-description">Hide "My Media" row from home screen</span>
+                        <span class="setting-name" data-i18n="HomeScreenCustomization">Home Screen Customization</span>
+                        <span class="setting-description" data-i18n="HomeScreenCustomizationDescription">Hide "My Media" row from home screen</span>
                     </div>
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
@@ -200,21 +201,21 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Image Related Section -->
-                <h3 class="setting-section-title">Image Related</h3>
+                <h3 class="setting-section-title" data-i18n="ImageRelated">Image Related</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Image Quality</span>
-                        <span class="setting-description">Adjust for device performance (requires restart)</span>
+                        <span class="setting-name" data-i18n="ImageQuality">Image Quality</span>
+                        <span class="setting-description" data-i18n="ImageQualityDescription">Adjust for device performance (requires restart)</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'image-quality-select',
                             [
-                                { value: 'low', label: 'Low (Fastest)' },
-                                { value: 'medium', label: 'Medium (Balanced)' },
-                                { value: 'high', label: 'High (High Quality)' },
-                                { value: 'ultra', label: 'Ultra (Maximum)' }
+                                { value: 'low', label: i18n.t('Small') + ' (' + i18n.t('Small') + ')' }, // Placeholder for actual "Low" label if missing
+                                { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'high', label: i18n.t('High') || 'High' },
+                                { value: 'ultra', label: i18n.t('ExtraLarge') || 'Ultra' }
                             ],
                             imageService.getPreset() || 'medium'
                         )}
@@ -228,293 +229,268 @@ class SettingsPage extends Page {
      * Render Player tab with video/audio quality and playback behavior
      */
     _renderPlayerTab() {
+        const currentMaxRes = PlayerSettings.get('maxResolution') || 'auto';
+        const currentBitrate = PlayerSettings.get('maxBitrateInternet') || 0;
+        const currentBackend = PlayerSettings.get('playerBackend') || 'auto';
+        const skipForward = PlayerSettings.get('skipForwardLength') || 30000;
+        const skipBack = PlayerSettings.get('skipBackLength') || 10000;
+
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Playback</h2>
-                
-                <!-- Video Quality Section -->
-                <h3 class="setting-section-title">Video Quality</h3>
-                
+                <h2 class="content-title" data-i18n="VideoQuality">Video Quality</h2>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Max Resolution</span>
-                        <span class="setting-description">Override panel detection (Auto uses hardware APIs)</span>
+                        <span class="setting-name" data-i18n="MaxResolution">Max Resolution</span>
+                        <span class="setting-description" data-i18n="MaxResolutionDescription">Override panel detection (Auto uses hardware APIs)</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'max-resolution-select',
                             [
-                                { value: 'auto', label: 'Auto (Detect)' },
-                                { value: '360p', label: '360p SD' },
-                                { value: '480p', label: '480p SD' },
-                                { value: '720p', label: '720p HD' },
-                                { value: '1080p', label: '1080p FHD' },
-                                { value: '2160p', label: '4K UHD' },
-                                { value: '4320p', label: '8K UHD' }
+                                { value: 'auto', label: i18n.t('AutoRecommended') },
+                                { value: '7680x4320', label: '7680x4320 (8K)' },
+                                { value: '3840x2160', label: '3840x2160 (4K)' },
+                                { value: '1920x1080', label: '1920x1080 (FHD)' },
+                                { value: '1280x720', label: '1280x720 (HD)' }
                             ],
-                            PlayerSettings.get('maxResolution') || 'auto'
+                            currentMaxRes
                         )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Max Streaming Bitrate</span>
-                        <span class="setting-description">Quality when streaming over internet</span>
+                        <span class="setting-name" data-i18n="MaxStreamingBitrate">Max Streaming Bitrate</span>
+                        <span class="setting-description" data-i18n="MaxStreamingBitrateDescription">Quality when streaming over internet</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'max-bitrate-select',
                             [
-                                { value: '120000000', label: '120 Mbps (4K Max)' },
-                                { value: '80000000', label: '80 Mbps (4K High)' },
-                                { value: '60000000', label: '60 Mbps (4K)' },
-                                { value: '40000000', label: '40 Mbps (1080p Max)' },
-                                { value: '20000000', label: '20 Mbps (1080p)' },
-                                { value: '15000000', label: '15 Mbps' },
-                                { value: '10000000', label: '10 Mbps' },
-                                { value: '8000000', label: '8 Mbps' },
-                                { value: '6000000', label: '6 Mbps' },
-                                { value: '4000000', label: '4 Mbps' },
-                                { value: '3000000', label: '3 Mbps' },
-                                { value: '1500000', label: '1.5 Mbps' },
-                                { value: '720000', label: '720 kbps' },
-                                { value: '420000', label: '420 kbps' }
+                                { value: 0, label: i18n.t('AutoHighQuality') },
+                                { value: 120000000, label: '120 Mbps' },
+                                { value: 80000000, label: '80 Mbps' },
+                                { value: 60000000, label: '60 Mbps' },
+                                { value: 40000000, label: '40 Mbps' },
+                                { value: 30000000, label: '30 Mbps' },
+                                { value: 20000000, label: '20 Mbps' },
+                                { value: 15000000, label: '15 Mbps' },
+                                { value: 10000000, label: '10 Mbps' },
+                                { value: 8000000, label: '8 Mbps' },
+                                { value: 6000000, label: '6 Mbps' },
+                                { value: 4000000, label: '4 Mbps' },
+                                { value: 3000000, label: '3 Mbps' },
+                                { value: 2000000, label: '2 Mbps' },
+                                { value: 1500000, label: '1.5 Mbps' },
+                                { value: 1000000, label: '1 Mbps' },
+                                { value: 750000, label: '750 Kbps' },
+                                { value: 500000, label: '500 Kbps' }
                             ],
-                            String(PlayerSettings.get('maxBitrateInternet') || 120000000)
+                            currentBitrate
                         )}
                     </div>
                 </div>
 
+                <h3 class="setting-section-title" data-i18n="PlaybackBehavior">Playback Behavior</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Preferred Audio Language</span>
-                        <span class="setting-description">Default language for audio tracks</span>
+                        <span class="setting-name" data-i18n="PreferredAudioLanguage">Preferred Audio Language</span>
+                        <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">Default language for audio tracks</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'audio-lang-select',
-                            [
-                                { value: 'auto', label: 'Auto' },
-                                { value: 'eng', label: 'English' },
-                                { value: 'ara', label: 'Arabic' },
-                                { value: 'spa', label: 'Spanish' },
-                                { value: 'fre', label: 'French' },
-                                { value: 'jpn', label: 'Japanese' },
-                                { value: 'kor', label: 'Korean' }
-                            ],
-                            storage.getItem('pref:audioLang') || 'auto'
+                            this.languages,
+                            storage.getItem('pref:audioLang') || 'Default'
                         )}
                     </div>
                 </div>
 
-                <!-- Playback Behavior Section -->
-                <h3 class="setting-section-title">Playback Behavior</h3>
-                
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Skip Forward Duration</span>
-                        <span class="setting-description">Seconds to skip when pressing forward</span>
+                        <span class="setting-name" data-i18n="SkipForwardDuration">Skip Forward Duration</span>
+                        <span class="setting-description" data-i18n="SkipForwardDurationDescription">Seconds to skip when pressing forward</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'skip-forward-select',
                             [
-                                { value: '5000', label: '5 seconds' },
-                                { value: '10000', label: '10 seconds' },
-                                { value: '15000', label: '15 seconds' },
-                                { value: '30000', label: '30 seconds' }
+                                { value: 5000, label: i18n.t('Seconds', ['5']) },
+                                { value: 10000, label: i18n.t('Seconds', ['10']) },
+                                { value: 15000, label: i18n.t('Seconds', ['15']) },
+                                { value: 30000, label: i18n.t('Seconds', ['30']) },
+                                { value: 60000, label: i18n.t('Seconds', ['60']) }
                             ],
-                            String(PlayerSettings.get('skipForwardLength'))
+                            skipForward
                         )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Skip Back Duration</span>
-                        <span class="setting-description">Seconds to skip when pressing back</span>
+                        <span class="setting-name" data-i18n="SkipBackDuration">Skip Back Duration</span>
+                        <span class="setting-description" data-i18n="SkipBackDurationDescription">Seconds to skip when pressing back</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'skip-back-select',
                             [
-                                { value: '5000', label: '5 seconds' },
-                                { value: '10000', label: '10 seconds' },
-                                { value: '15000', label: '15 seconds' },
-                                { value: '30000', label: '30 seconds' }
+                                { value: 5000, label: i18n.t('Seconds', ['5']) },
+                                { value: 10000, label: i18n.t('Seconds', ['10']) },
+                                { value: 15000, label: i18n.t('Seconds', ['15']) },
+                                { value: 30000, label: i18n.t('Seconds', ['30']) },
+                                { value: 60000, label: i18n.t('Seconds', ['60']) }
                             ],
-                            String(PlayerSettings.get('skipBackLength'))
+                            skipBack
                         )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Auto-play Next Episode</span>
-                        <span class="setting-description">Automatically play next episode when current ends</span>
+                        <span class="setting-name" data-i18n="AutoPlayNext">Auto-play Next Episode</span>
+                        <span class="setting-description" data-i18n="AutoPlayNextDescription">Automatically play next episode when current ends</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableNextEpisodeAutoPlay') ? 'active' : ''}" 
-                                 id="toggle-auto-next" 
-                                 data-setting="enableNextEpisodeAutoPlay"
-                                 tabindex="0"
-                                 aria-label="Toggle auto-play next">
+                        <button class="toggle-switch ${PlayerSettings.get('enableNextEpisodeAutoPlay') ? 'active' : ''}" 
+                                id="toggle-auto-next" 
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- ============================================================ -->
-                <!-- Playback Compatibility Section -->
-                <!-- ============================================================ -->
-                <h3 class="setting-section-title">Playback Compatibility</h3>
+                <h3 class="setting-section-title" data-i18n="PlaybackCompatibility">Playback Compatibility</h3>
 
-                <!-- Player Backend Selection -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Player Backend</span>
-                        <span class="setting-description">Manually select playback engine (Restart required)</span>
+                        <span class="setting-name" data-i18n="PlayerBackend">Player Backend</span>
+                        <span class="setting-description" data-i18n="PlayerBackendDescription">Manually select playback engine (Restart required)</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'player-backend-select',
                             [
-                                { value: 'auto', label: 'Auto (Recommended)' },
-                                { value: 'avplay', label: 'Tizen AVPlay (Native)' },
-                                { value: 'html5', label: 'HTML5 Video (Web Standard)' }
+                                { value: 'auto', label: i18n.t('AutoRecommended') },
+                                { value: 'web', label: 'Web (Standard)' },
+                                { value: 'tizen', label: 'Native (Tizen)' }
                             ],
-                            PlayerSettings.get('playerBackend') || 'auto'
+                            currentBackend
                         )}
                     </div>
                 </div>
 
-                <!-- HEVC Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">HEVC / H.265</span>
-                        <span class="setting-description">Direct play HEVC content (supported on all Tizen 4+ TVs)</span>
+                        <span class="setting-name">Enable HEVC (H.265)</span>
+                        <span class="setting-description" data-i18n="HEVCDescription">Direct play HEVC content (supported on all Tizen 4+ TVs)</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableHEVC') ? 'active' : ''}" 
-                                 id="toggle-enable-hevc" 
-                                 data-setting="enableHEVC"
-                                 tabindex="0"
-                                 aria-label="Toggle HEVC">
+                        <button class="toggle-switch ${PlayerSettings.get('enableH265') ? 'active' : ''}" 
+                                id="toggle-enable-hevc" 
+                                data-setting="enableH265"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- HDR Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">HDR10 / HLG</span>
-                        <span class="setting-description">Pass HDR content to the display without transcoding</span>
+                        <span class="setting-name">Enable HDR (High Dynamic Range)</span>
+                        <span class="setting-description" data-i18n="HDRDescription">Pass HDR content to the display without transcoding</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableHDR') ? 'active' : ''}" 
-                                 id="toggle-enable-hdr" 
-                                 data-setting="enableHDR"
-                                 tabindex="0"
-                                 aria-label="Toggle HDR">
+                        <button class="toggle-switch ${PlayerSettings.get('enableHDR') ? 'active' : ''}" 
+                                id="toggle-enable-hdr" 
+                                data-setting="enableHDR"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- Dolby Vision Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Dolby Vision</span>
-                        <span class="setting-description">Enable DV if your TV supports it (auto-detected)</span>
+                        <span class="setting-name">Enable Dolby Vision</span>
+                        <span class="setting-description" data-i18n="DolbyVisionDescription">Enable DV if your TV supports it (auto-detected)</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableDolbyVision') ? 'active' : ''}" 
-                                 id="toggle-enable-dv" 
-                                 data-setting="enableDolbyVision"
-                                 tabindex="0"
-                                 aria-label="Toggle Dolby Vision">
+                        <button class="toggle-switch ${PlayerSettings.get('enableDV') ? 'active' : ''}" 
+                                id="toggle-enable-dv" 
+                                data-setting="enableDV"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- Advanced Codec Section -->
-                <h3 class="setting-section-title">Advanced Codec Settings</h3>
+                <h3 class="setting-section-title" data-i18n="AdvancedCodecSettings">Advanced Codec Settings</h3>
 
-                <!-- AV1 Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">AV1</span>
-                        <span class="setting-description">Direct play AV1 content (requires Tizen 5.5+ / 2020+ TV)</span>
+                        <span class="setting-name">Enable AV1 Decode</span>
+                        <span class="setting-description" data-i18n="AV1Description">Direct play AV1 content (requires Tizen 5.5+ / 2020+ TV)</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableAV1') ? 'active' : ''}" 
-                                 id="toggle-enable-av1" 
-                                 data-setting="enableAV1"
-                                 tabindex="0"
-                                 aria-label="Toggle AV1">
+                        <button class="toggle-switch ${PlayerSettings.get('enableAV1') ? 'active' : ''}" 
+                                id="toggle-enable-av1" 
+                                data-setting="enableAV1"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- VP9 Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">VP9</span>
-                        <span class="setting-description">Direct play VP9 content (WebM, YouTube-style files)</span>
+                        <span class="setting-name">Enable VP9 Decode</span>
+                        <span class="setting-description" data-i18n="VP9Description">Direct play VP9 content (WebM, YouTube-style files)</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableVP9') ? 'active' : ''}" 
-                                 id="toggle-enable-vp9" 
-                                 data-setting="enableVP9"
-                                 tabindex="0"
-                                 aria-label="Toggle VP9">
+                        <button class="toggle-switch ${PlayerSettings.get('enableVP9') ? 'active' : ''}" 
+                                id="toggle-enable-vp9" 
+                                data-setting="enableVP9"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- DTS Passthrough Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">DTS Passthrough</span>
-                        <span class="setting-description">⚠ Samsung TVs do NOT decode DTS — only enable with external audio</span>
+                        <span class="setting-name" data-i18n="DTSPassthrough">DTS Passthrough</span>
+                        <span class="setting-description" data-i18n="DTSPassthroughDescription">⚠ Samsung TVs do NOT decode DTS — only enable with external audio</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableDts') ? 'active' : ''}" 
-                                 id="toggle-enable-dts" 
-                                 data-setting="enableDts"
-                                 tabindex="0"
-                                 aria-label="Toggle DTS">
+                        <button class="toggle-switch ${PlayerSettings.get('enableDTS') ? 'active' : ''}" 
+                                id="toggle-enable-dts" 
+                                data-setting="enableDTS"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- TrueHD Passthrough Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">TrueHD Passthrough</span>
-                        <span class="setting-description">⚠ Not in Samsung specs — only enable with external audio</span>
+                        <span class="setting-name" data-i18n="TrueHDPassthrough">TrueHD Passthrough</span>
+                        <span class="setting-description" data-i18n="TrueHDPassthroughDescription">⚠ Not in Samsung specs — only enable with external audio</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('enableTrueHd') ? 'active' : ''}" 
-                                 id="toggle-enable-truehd" 
-                                 data-setting="enableTrueHd"
-                                 tabindex="0"
-                                 aria-label="Toggle TrueHD">
+                        <button class="toggle-switch ${PlayerSettings.get('enableTrueHD') ? 'active' : ''}" 
+                                id="toggle-enable-truehd" 
+                                data-setting="enableTrueHD"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
 
-                <!-- Force Transcode Toggle -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Force Transcode</span>
-                        <span class="setting-description">⚠ Emergency fallback — forces ALL content to transcode via HLS</span>
+                        <span class="setting-name" data-i18n="ForceTranscode">Force Transcode</span>
+                        <span class="setting-description" data-i18n="ForceTranscodeDescription">⚠ Emergency fallback — forces ALL content to transcode via HLS</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${PlayerSettings.get('forceTranscode') ? 'active' : ''}" 
-                                 id="toggle-force-transcode" 
-                                 data-setting="forceTranscode"
-                                 tabindex="0"
-                                 aria-label="Toggle Force Transcode">
+                        <button class="toggle-switch ${PlayerSettings.get('forceTranscode') ? 'active' : ''}" 
+                                id="toggle-force-transcode" 
+                                data-setting="forceTranscode"
+                                tabindex="0">
                         </button>
                     </div>
                 </div>
@@ -528,27 +504,27 @@ class SettingsPage extends Page {
     _renderSubtitlesTab() {
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Subtitles</h2>
+                <h2 class="content-title" data-i18n="Subtitles">Subtitles</h2>
                 
                 <!-- Subtitle Behavior Section -->
-                <h3 class="setting-section-title">Behavior</h3>
+                <h3 class="setting-section-title" data-i18n="Behavior">Behavior</h3>
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Preferred Subtitle Language</span>
-                        <span class="setting-description">Default language for subtitles</span>
+                        <span class="setting-name" data-i18n="PreferredSubtitleLanguage">Preferred Subtitle Language</span>
+                        <span class="setting-description" data-i18n="PreferredSubtitleLanguageDescription">Default language for subtitles</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-lang-select',
                             [
-                                { value: 'none', label: 'None' },
-                                { value: 'eng', label: 'English' },
-                                { value: 'ara', label: 'Arabic' },
-                                { value: 'spa', label: 'Spanish' },
-                                { value: 'fre', label: 'French' },
-                                { value: 'jpn', label: 'Japanese' },
-                                { value: 'kor', label: 'Korean' }
+                                { value: 'none', label: i18n.t('None') },
+                                { value: 'eng', label: i18n.t('English') },
+                                { value: 'ara', label: i18n.t('Arabic') },
+                                { value: 'spa', label: i18n.t('Spanish') },
+                                { value: 'fre', label: i18n.t('French') },
+                                { value: 'jpn', label: i18n.t('Japanese') },
+                                { value: 'kor', label: i18n.t('Korean') }
                             ],
                             storage.getItem('pref:subtitleLang') || 'none'
                         )}
@@ -557,18 +533,18 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Subtitle Mode</span>
-                        <span class="setting-description">When to show subtitles automatically</span>
+                        <span class="setting-name" data-i18n="SubtitleMode">Subtitle Mode</span>
+                        <span class="setting-description" data-i18n="SubtitleModeDescription">When to show subtitles automatically</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-mode-select',
                             [
-                                { value: 'Default', label: 'Default (Server preference)' },
-                                { value: 'Smart', label: 'Smart (Foreign audio only)' },
-                                { value: 'OnlyForced', label: 'Only Forced' },
-                                { value: 'Always', label: 'Always' },
-                                { value: 'None', label: 'None' }
+                                { value: 'Default', label: i18n.t('DefaultServerPreference') },
+                                { value: 'Smart', label: i18n.t('SmartForeignAudioOnly') },
+                                { value: 'OnlyForced', label: i18n.t('OnlyForced') },
+                                { value: 'Always', label: i18n.t('Always') },
+                                { value: 'None', label: i18n.t('None') }
                             ],
                             PlayerSettings.get('subtitleMode')
                         )}
@@ -577,28 +553,16 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Subtitle Delivery</span>
-                        <span class="setting-description">How subtitles are delivered during video playback</span>
+                        <span class="setting-name" data-i18n="SubtitleDelivery">Subtitle Delivery</span>
+                        <span class="setting-description" data-i18n="SubtitleDeliveryDescription">How subtitles are delivered during video playback</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-burn-in-select',
                             [
-                                /*
-                                 * '' = Off: server sends subtitle files externally,
-                                 *           our ASSRenderer draws them in the browser.
-                                 *           Best quality + no forced transcode.
-                                 *
-                                 * 'allcomplex' = Auto: server burns complex/bitmap formats
-                                 *                      (PGS, VOBSUB, styled ASS) into video.
-                                 *                      Same as stock Jellyfin behaviour.
-                                 *
-                                 * 'all' = Always Burn: server bakes ALL subs into the video.
-                                 *                      Most compatible, but forces a transcode.
-                                 */
-                                { value: '', label: 'Client Renders (Recommended)' },
-                                { value: 'allcomplex', label: 'Auto (Complex formats only)' },
-                                { value: 'all', label: 'Always Burn In' }
+                                { value: '', label: i18n.t('ClientRendersRecommended') },
+                                { value: 'allcomplex', label: i18n.t('AutoComplexFormatsOnly') },
+                                { value: 'all', label: i18n.t('AlwaysBurnIn') }
                             ],
                             PlayerSettings.get('subtitleBurnIn') || ''
                         )}
@@ -607,40 +571,39 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Disable ASS/SSA Rendering</span>
-                        <span class="setting-description">Disable ASS/SSA styling (converts to text)</span>
+                        <span class="setting-name" data-i18n="DisableAssRendering">Disable ASS/SSA Rendering</span>
+                        <span class="setting-description" data-i18n="DisableAssRenderingDescription">Disable ASS/SSA styling (converts to text)</span>
                     </div>
                     <div class="setting-control">
                          <button class="toggle-switch ${PlayerSettings.get('disableAssStyling') ? 'active' : ''}" 
                                  id="subtitle-force-text-toggle" 
                                  data-setting="disableAssStyling"
-                                 tabindex="0"
-                                 aria-label="Toggle force text only">
+                                 tabindex="0">
                         </button>
                     </div>
                 </div>
 
                 <!-- Subtitle Appearance Section -->
-                <h3 class="setting-section-title">Appearance</h3>
+                <h3 class="setting-section-title" data-i18n="Appearance">Appearance</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Font Family</span>
-                        <span class="setting-description">Subtitle font style</span>
+                        <span class="setting-name" data-i18n="AppFont">Font Family</span>
+                        <span class="setting-description" data-i18n="AppFontDescription">Subtitle font style</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-font-select',
                             [
-                                { value: '', label: 'Default - Tizen Sans' },
-                                { value: 'poppins', label: 'Modern - Poppins' },
-                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
-                                { value: 'print', label: 'Print - Merriweather' },
-                                { value: 'console', label: 'Console - Inconsolata' },
-                                { value: 'cursive', label: 'Cursive - Dancing Script' },
-                                { value: 'casual', label: 'Casual - Patrick Hand' },
-                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                { value: 'poppins', label: i18n.t('ModernPoppins') },
+                                { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                                { value: 'typewriter', label: i18n.t('Typewriter') },
+                                { value: 'print', label: i18n.t('Print') },
+                                { value: 'console', label: i18n.t('Console') },
+                                { value: 'cursive', label: i18n.t('Cursive') },
+                                { value: 'casual', label: i18n.t('Casual') },
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -649,19 +612,19 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Size</span>
-                        <span class="setting-description">Subtitle text size</span>
+                        <span class="setting-name" data-i18n="TextSize">Text Size</span>
+                        <span class="setting-description" data-i18n="TextSizeDescription">Subtitle text size</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-size-select',
                             [
-                                { value: 'small', label: 'Small' },
-                                { value: 'medium', label: 'Medium' },
-                                { value: 'large', label: 'Large' },
-                                { value: 'larger', label: 'Larger' },
-                                { value: 'extralarge', label: 'Extra Large' },
-                                { value: 'custom', label: 'Custom' }
+                                { value: 'small', label: i18n.t('Small') },
+                                { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'large', label: i18n.t('Large') },
+                                { value: 'larger', label: i18n.t('Larger') },
+                                { value: 'extralarge', label: i18n.t('ExtraLarge') },
+                                { value: 'custom', label: i18n.t('Custom') }
                             ],
                             PlayerSettings.get('subtitleSize')
                         )}
@@ -670,7 +633,7 @@ class SettingsPage extends Page {
 
                 <div class="setting-item" id="subtitle-custom-size-container" style="display: ${PlayerSettings.get('subtitleSize') === 'custom' ? '' : 'none'}">
                     <div class="setting-label">
-                        <span class="setting-name">Custom Size (vh)</span>
+                        <span class="setting-name" data-i18n="CustomSize">Custom Size (vh)</span>
                         <span class="setting-description">Manually adjust subtitle size</span>
                     </div>
                     <div class="setting-control slider-control">
@@ -686,29 +649,29 @@ class SettingsPage extends Page {
 
                   <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Vertical Position</span>
-                        <span class="setting-description">Subtitle vertical position</span>
+                        <span class="setting-name" data-i18n="VerticalPosition">Vertical Position</span>
+                        <span class="setting-description" data-i18n="VerticalPositionDescription">Subtitle vertical position</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-position-select',
                             [
-                                { value: '-1', label: 'Bottom (Low)' },
-                                { value: '-2', label: 'Bottom (Standard)' },
-                                { value: '-5', label: 'Bottom (High)' },
-                                { value: '0', label: 'Top' },
-                                { value: '2', label: 'Top (Low)' },
-                                { value: 'custom', label: 'Custom (Absolute)' }
+                                { value: '-1', label: i18n.t('BottomLow') },
+                                { value: '-2', label: i18n.t('BottomStandard') },
+                                { value: '-5', label: i18n.t('BottomHigh') },
+                                { value: '0', label: i18n.t('Top') },
+                                { value: '2', label: i18n.t('TopLow') },
+                                { value: 'custom', label: i18n.t('CustomAbsolute') }
                             ],
-                            String(PlayerSettings.get('subtitleVerticalPosition')) // allow 0
+                            String(PlayerSettings.get('subtitleVerticalPosition'))
                         )}
                     </div>
                 </div>
 
                 <div class="setting-item" id="subtitle-custom-pos-container">
                     <div class="setting-label">
-                        <span class="setting-name">Absolute Position %</span>
-                        <span class="setting-description">Distance from bottom (0-100%)</span>
+                        <span class="setting-name" data-i18n="AbsolutePosition">Absolute Position %</span>
+                        <span class="setting-description" data-i18n="AbsolutePositionDescription">Distance from bottom (0-100%)</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -723,15 +686,15 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Font Weight</span>
-                        <span class="setting-description">Subtitle text thickness</span>
+                        <span class="setting-name" data-i18n="FontWeight">Font Weight</span>
+                        <span class="setting-description" data-i18n="FontWeightDescription">Subtitle text thickness</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-weight-select',
                             [
-                                { value: 'normal', label: 'Normal' },
-                                { value: 'bold', label: 'Bold' }
+                                { value: 'normal', label: i18n.t('Normal') },
+                                { value: 'bold', label: i18n.t('Bold') }
                             ],
                             PlayerSettings.get('subtitleWeight') || 'normal'
                         )}
@@ -740,30 +703,30 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Color</span>
-                        <span class="setting-description">Subtitle text color</span>
+                        <span class="setting-name" data-i18n="TextColor">Text Color</span>
+                        <span class="setting-description" data-i18n="TextColorDescription">Subtitle text color</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-color-select',
                             [
-                                { value: '#ffffff', label: 'White' },
-                                { value: '#d3d3d3', label: 'Light Grey' },
-                                { value: '#a9a9a9', label: 'Dark Grey' },
-                                { value: '#000000', label: 'Black' },
-                                { value: '#ffff00', label: 'Yellow' },
-                                { value: '#00ffff', label: 'Cyan' },
-                                { value: '#0000ff', label: 'Blue' }
+                                { value: '#ffffff', label: i18n.t('White') },
+                                { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                                { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                                { value: '#000000', label: i18n.t('Black') },
+                                { value: '#ffff00', label: i18n.t('Yellow') },
+                                { value: '#00ffff', label: i18n.t('Cyan') },
+                                { value: '#0000ff', label: i18n.t('Blue') }
                             ],
                             PlayerSettings.get('subtitleTextColor') || '#ffffff'
                         )}
                     </div>
                 </div>
 
-                                <div class="setting-item">
+                <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Opacity</span>
-                        <span class="setting-description">Subtitle text transparency</span>
+                        <span class="setting-name" data-i18n="TextOpacity">Text Opacity</span>
+                        <span class="setting-description" data-i18n="TextOpacityDescription">Subtitle text transparency</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -778,21 +741,21 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Background Color</span>
-                        <span class="setting-description">Subtitle background color</span>
+                        <span class="setting-name" data-i18n="BackgroundColor">Background Color</span>
+                        <span class="setting-description" data-i18n="BackgroundColorDescription">Subtitle background color</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-bg-select',
                             [
-                                { value: 'transparent', label: 'None' },
-                                { value: '#000000', label: 'Black' },
-                                { value: '#ffffff', label: 'White' },
-                                { value: '#d3d3d3', label: 'Light Grey' },
-                                { value: '#a9a9a9', label: 'Dark Grey' },
-                                { value: '#ffff00', label: 'Yellow' },
-                                { value: '#00ffff', label: 'Cyan' },
-                                { value: '#0000ff', label: 'Blue' }
+                                { value: 'transparent', label: i18n.t('None') },
+                                { value: '#000000', label: i18n.t('Black') },
+                                { value: '#ffffff', label: i18n.t('White') },
+                                { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                                { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                                { value: '#ffff00', label: i18n.t('Yellow') },
+                                { value: '#00ffff', label: i18n.t('Cyan') },
+                                { value: '#0000ff', label: i18n.t('Blue') }
                             ],
                             PlayerSettings.get('subtitleTextBackground')
                         )}
@@ -801,8 +764,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item" id="subtitle-bg-opacity-container">
                     <div class="setting-label">
-                        <span class="setting-name">Background Opacity</span>
-                        <span class="setting-description">Subtitle background transparency</span>
+                        <span class="setting-name" data-i18n="BackgroundOpacity">Background Opacity</span>
+                        <span class="setting-description" data-i18n="BackgroundOpacityDescription">Subtitle background transparency</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -817,19 +780,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Text Shadow Style</span>
-                        <span class="setting-description">Subtitle shadow type</span>
+                        <span class="setting-name" data-i18n="TextShadowStyle">Text Shadow Style</span>
+                        <span class="setting-description" data-i18n="TextShadowStyleDescription">Subtitle shadow type</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-shadow-select',
                             [
-                                { value: 'none', label: 'None' },
-                                { value: 'uniform', label: 'Uniform' },
-                                { value: 'border', label: 'Border' },
-                                { value: 'dropshadow', label: 'Drop Shadow' },
-                                { value: 'raised', label: 'Raised' },
-                                { value: 'depressed', label: 'Depressed' }
+                                { value: 'none', label: i18n.t('None') },
+                                { value: 'uniform', label: i18n.t('Uniform') },
+                                { value: 'border', label: i18n.t('Border') },
+                                { value: 'dropshadow', label: i18n.t('DropShadow') },
+                                { value: 'raised', label: i18n.t('Raised') },
+                                { value: 'depressed', label: i18n.t('Depressed') }
                             ],
                             PlayerSettings.get('subtitleDropShadow')
                         )}
@@ -838,8 +801,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item" id="subtitle-border-width-container" style="display: ${PlayerSettings.get('subtitleDropShadow') === 'border' ? '' : 'none'}">
                     <div class="setting-label">
-                        <span class="setting-name">Border Width</span>
-                        <span class="setting-description">Width of the sharp text border</span>
+                        <span class="setting-name" data-i18n="BorderWidth">Border Width</span>
+                        <span class="setting-description" data-i18n="BorderWidthDescription">Width of the sharp text border</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -854,22 +817,22 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Shadow Color</span>
-                        <span class="setting-description">Color of the drop shadow</span>
+                        <span class="setting-name" data-i18n="ShadowColor">Shadow Color</span>
+                        <span class="setting-description" data-i18n="ShadowColorDescription">Color of the drop shadow</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-shadow-color-select',
                             [
-                                { value: '#000000', label: 'Black' },
-                                { value: '#ffffff', label: 'White' },
-                                { value: '#ff0000', label: 'Red' },
-                                { value: '#00ff00', label: 'Green' },
-                                { value: '#0000ff', label: 'Blue' },
-                                { value: '#ffff00', label: 'Yellow' },
-                                { value: '#00ffff', label: 'Cyan' },
-                                { value: '#ff00ff', label: 'Magenta' },
-                                { value: '#808080', label: 'Grey' }
+                                { value: '#000000', label: i18n.t('Black') },
+                                { value: '#ffffff', label: i18n.t('White') },
+                                { value: '#ff0000', label: i18n.t('Red') },
+                                { value: '#00ff00', label: i18n.t('Green') },
+                                { value: '#0000ff', label: i18n.t('Blue') },
+                                { value: '#ffff00', label: i18n.t('Yellow') },
+                                { value: '#00ffff', label: i18n.t('Cyan') },
+                                { value: '#ff00ff', label: i18n.t('Magenta') },
+                                { value: '#808080', label: i18n.t('Grey') }
                             ],
                             PlayerSettings.get('subtitleDropShadowColor') || '#000000'
                         )}
@@ -878,8 +841,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item" id="subtitle-shadow-opacity-container" style="display: ${!PlayerSettings.get('subtitleDropShadow') || PlayerSettings.get('subtitleDropShadow') === 'none' || PlayerSettings.get('subtitleDropShadow') === 'border' ? 'none' : ''}">
                     <div class="setting-label">
-                        <span class="setting-name">Shadow Opacity</span>
-                        <span class="setting-description">Opacity of the drop shadow</span>
+                        <span class="setting-name" data-i18n="ShadowOpacity">Shadow Opacity</span>
+                        <span class="setting-description" data-i18n="ShadowOpacityDescription">Opacity of the drop shadow</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -892,30 +855,27 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                    </div>
-                </div>
-
                 <!-- Advanced ASS Settings -->
-                <h3 class="setting-section-title">ASS Apperance Settings</h3>
+                <h3 class="setting-section-title" data-i18n="AdvancedAssSettings">Advanced ASS Settings</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Font Family (ASS)</span>
-                        <span class="setting-description">Force overrides font for ASS/SSA subs</span>
+                        <span class="setting-name" data-i18n="AssFontFamily">Font Family (ASS)</span>
+                        <span class="setting-description" data-i18n="FontFamilyAssDescription">Force overrides font for ASS/SSA subs</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-font-ass-select',
                             [
-                                { value: '', label: 'Default - Tizen Sans' },
-                                { value: 'poppins', label: 'Modern - Poppins' },
-                                { value: 'noto-arabic', label: 'Arabic - Noto Sans' },
-                                { value: 'typewriter', label: 'Typewriter - Courier Prime' },
-                                { value: 'print', label: 'Print - Merriweather' },
-                                { value: 'console', label: 'Console - Inconsolata' },
-                                { value: 'cursive', label: 'Cursive - Dancing Script' },
-                                { value: 'casual', label: 'Casual - Patrick Hand' },
-                                { value: 'smallcaps', label: 'Small Caps - Variant' }
+                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                { value: 'poppins', label: i18n.t('ModernPoppins') },
+                                { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
+                                { value: 'typewriter', label: i18n.t('Typewriter') },
+                                { value: 'print', label: i18n.t('Print') },
+                                { value: 'console', label: i18n.t('Console') },
+                                { value: 'cursive', label: i18n.t('Cursive') },
+                                { value: 'casual', label: i18n.t('Casual') },
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}
@@ -924,8 +884,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Font Scale (ASS)</span>
-                        <span class="setting-description">Vertical/Horizontal scaling booster</span>
+                        <span class="setting-name" data-i18n="FontScaleAss">Font Scale (ASS)</span>
+                        <span class="setting-description" data-i18n="FontScaleAssDescription">Vertical/Horizontal scaling booster</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -941,8 +901,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Vertical Position (ASS)</span>
-                        <span class="setting-description">Main track bottom offset</span>
+                        <span class="setting-name" data-i18n="VerticalPositionAss">Vertical Position (ASS)</span>
+                        <span class="setting-description" data-i18n="VerticalPositionAssDescription">Main track bottom offset</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -958,8 +918,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Outline Thickness (ASS)</span>
-                        <span class="setting-description">Text border stroke width</span>
+                        <span class="setting-name" data-i18n="OutlineThicknessAss">Outline Thickness (ASS)</span>
+                        <span class="setting-description" data-i18n="OutlineThicknessAssDescription">Text border stroke width</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -975,8 +935,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Shadow Thickness (ASS)</span>
-                        <span class="setting-description">Text shadow depth</span>
+                        <span class="setting-name" data-i18n="ShadowThicknessAss">Shadow Thickness (ASS)</span>
+                        <span class="setting-description" data-i18n="ShadowThicknessAssDescription">Text shadow depth</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -992,8 +952,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Vertical Spacing (ASS)</span>
-                        <span class="setting-description">Adjust gap between lines</span>
+                        <span class="setting-name" data-i18n="VerticalSpacingAss">Vertical Spacing (ASS)</span>
+                        <span class="setting-description" data-i18n="VerticalSpacingAssDescription">Adjust gap between lines</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -1009,8 +969,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Horizontal Spacing (ASS)</span>
-                        <span class="setting-description">Adjust gap between characters</span>
+                        <span class="setting-name" data-i18n="HorizontalSpacingAss">Horizontal Spacing (ASS)</span>
+                        <span class="setting-description" data-i18n="HorizontalSpacingAssDescription">Adjust gap between characters</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
@@ -1033,19 +993,19 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Account</h2>
+                <h2 class="content-title" data-i18n="Account">${i18n.t('Account')}</h2>
                 
                 <div class="user-profile-card">
                     <div class="user-avatar-wrapper">
                          ${this._renderUserAvatar(user)}
                     </div>
-                    <h3 class="user-name-large">${user?.Name || 'Guest'}</h3>
-                    <p class="server-url-display">${serverUrl || 'Offline'}</p>
+                    <h3 class="user-name-large">${user?.Name || i18n.t('Guest')}</h3>
+                    <p class="server-url-display">${serverUrl || i18n.t('Offline')}</p>
                 </div>
 
                 <div class="setting-actions centered">
-                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0">
-                        Sign Out
+                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0" data-i18n="SignOut">
+                        ${i18n.t('SignOut')}
                     </button>
                 </div>
             </div>
@@ -1057,34 +1017,33 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">About Litefin</h2>
+                <h2 class="content-title" data-i18n="AboutLitefin">${i18n.t('AboutLitefin')}</h2>
                 
                 <div class="about-card" tabindex="0">
-                    <h3 class="app-version">Version ${__APP_VERSION__}</h3>
-                    <p class="about-desc">
-                        A lightweight, community-driven Jellyfin client optimized for Tizen TVs.
-                        Built with love for speed and simplicity.
+                    <h3 class="app-version">${i18n.t('AppVersion', __APP_VERSION__)}</h3>
+                    <p class="about-desc" data-i18n="AppDescription">
+                        ${i18n.t('AppDescription')}
                     </p>
-                    <p class="about-credits">Developed by MoazSalem</p>
+                    <p class="about-credits" data-i18n="DevelopedBy">${i18n.t('DevelopedBy')}</p>
                 </div>
 
-                <h3 class="setting-section-title">Device Information</h3>
+                <h3 class="setting-section-title" data-i18n="DeviceInformation">${i18n.t('DeviceInformation')}</h3>
                 <div class="about-card identity-card" tabindex="0">
                     <div class="identity-grid">
                         <div class="identity-item">
-                            <span class="identity-label">Model</span>
+                            <span class="identity-label" data-i18n="Model">${i18n.t('Model')}</span>
                             <span class="identity-value">${caps.modelName}</span>
                         </div>
                         <div class="identity-item">
-                            <span class="identity-label">Platform</span>
+                            <span class="identity-label" data-i18n="Platform">${i18n.t('Platform')}</span>
                             <span class="identity-value">Tizen ${caps.tizenVersion}</span>
                         </div>
                         <div class="identity-item">
-                            <span class="identity-label">Resolution</span>
+                            <span class="identity-label" data-i18n="Resolution">${i18n.t('Resolution')}</span>
                             <span class="identity-value">${caps.screenWidth}x${caps.screenHeight} (${caps.uhd8K ? '8K' : caps.uhd ? '4K' : 'FHD'})</span>
                         </div>
                         <div class="identity-item">
-                            <span class="identity-label">HDR Support</span>
+                            <span class="identity-label" data-i18n="HDRSupport">${i18n.t('HDRSupport')}</span>
                             <span class="identity-value">${
                                 [
                                     caps.hdr10 ? 'HDR10' : null,
@@ -1093,11 +1052,11 @@ class SettingsPage extends Page {
                                     caps.dolbyVision ? 'Dolby Vision' : null
                                 ]
                                     .filter(Boolean)
-                                    .join(', ') || 'SDR Only'
+                                    .join(', ') || i18n.t('SDROnly')
                             }</span>
                         </div>
                         <div class="identity-item">
-                            <span class="identity-label">Video Codecs</span>
+                            <span class="identity-label" data-i18n="VideoCodecs">${i18n.t('VideoCodecs')}</span>
                             <span class="identity-value">${[
                                 'H.264',
                                 caps.hevc ? 'HEVC' : null,
@@ -1119,15 +1078,15 @@ class SettingsPage extends Page {
 
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title">Debug</h2>
+                <h2 class="content-title" data-i18n="Debug">${i18n.t('Debug')}</h2>
 
                 <!-- Logging Section -->
-                <h3 class="setting-section-title">Logging</h3>
+                <h3 class="setting-section-title" data-i18n="Logging">${i18n.t('Logging')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Enable Debug Logs</span>
-                        <span class="setting-description">Allow application to output logs to console</span>
+                        <span class="setting-name" data-i18n="EnableDebugLogs">${i18n.t('EnableDebugLogs')}</span>
+                        <span class="setting-description" data-i18n="EnableDebugLogsDescription">${i18n.t('EnableDebugLogsDescription')}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${logsEnabled ? 'active' : ''}" 
@@ -1139,8 +1098,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Show Debug Overlay</span>
-                        <span class="setting-description">Display logs on screen (requires Debug Logs)</span>
+                        <span class="setting-name" data-i18n="ShowDebugOverlay">${i18n.t('ShowDebugOverlay')}</span>
+                        <span class="setting-description" data-i18n="ShowDebugOverlayDescription">${i18n.t('ShowDebugOverlayDescription')}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${overlayEnabled ? 'active' : ''}" 
@@ -1153,29 +1112,29 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Upload Logs</span>
-                        <span class="setting-description">Send current session logs to the jellyfin server</span>
+                        <span class="setting-name" data-i18n="UploadLogs">${i18n.t('UploadLogs')}</span>
+                        <span class="setting-description" data-i18n="UploadLogsDescription">${i18n.t('UploadLogsDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-option" id="btn-upload-logs" tabindex="0" style="width: auto; min-width: 120px;">
-                            Upload
+                        <button class="btn btn-option" id="btn-upload-logs" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Upload">
+                            ${i18n.t('Upload')}
                         </button>
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Overlay Width</span>
-                        <span class="setting-description">Horizontal size of the debug window</span>
+                        <span class="setting-name" data-i18n="OverlayWidth">${i18n.t('OverlayWidth')}</span>
+                        <span class="setting-description" data-i18n="OverlayWidthDescription">${i18n.t('OverlayWidthDescription')}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'debug-width-select',
                             [
-                                { value: 'small', label: 'Small' },
-                                { value: 'medium', label: 'Medium' },
-                                { value: 'large', label: 'Large' },
-                                { value: 'full', label: 'Full Screen' }
+                                { value: 'small', label: i18n.t('Small') },
+                                { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'large', label: i18n.t('Large') },
+                                { value: 'full', label: i18n.t('FullScreen') }
                             ],
                             debugOverlay.Width || 'small'
                         )}
@@ -1184,17 +1143,17 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Overlay Height</span>
-                        <span class="setting-description">Vertical size of the debug window</span>
+                        <span class="setting-name" data-i18n="OverlayHeight">${i18n.t('OverlayHeight')}</span>
+                        <span class="setting-description" data-i18n="OverlayHeightDescription">${i18n.t('OverlayHeightDescription')}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'debug-height-select',
                             [
-                                { value: 'small', label: 'Small' },
-                                { value: 'medium', label: 'Medium' },
-                                { value: 'large', label: 'Large' },
-                                { value: 'full', label: 'Full Screen' }
+                                { value: 'small', label: i18n.t('Small') },
+                                { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'large', label: i18n.t('Large') },
+                                { value: 'full', label: i18n.t('FullScreen') }
                             ],
                             debugOverlay.Height || 'small'
                         )}
@@ -1203,17 +1162,17 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name">Overlay Position</span>
-                        <span class="setting-description">Screen location of the debug window</span>
+                        <span class="setting-name" data-i18n="OverlayPosition">${i18n.t('OverlayPosition')}</span>
+                        <span class="setting-description" data-i18n="OverlayPositionDescription">${i18n.t('OverlayPositionDescription')}</span>
                     </div>
-            <div class="setting-control">
+                    <div class="setting-control">
                         ${this._renderDropdown(
                             'debug-position-select',
                             [
-                                { value: 'top-left', label: 'Top Left' },
-                                { value: 'top-right', label: 'Top Right' },
-                                { value: 'bottom-left', label: 'Bottom Left' },
-                                { value: 'bottom-right', label: 'Bottom Right' }
+                                { value: 'top-left', label: i18n.t('TopLeft') },
+                                { value: 'top-right', label: i18n.t('TopRight') },
+                                { value: 'bottom-left', label: i18n.t('BottomLeft') },
+                                { value: 'bottom-right', label: i18n.t('BottomRight') }
                             ],
                             debugOverlay.Position || 'bottom-right'
                         )}
@@ -1221,25 +1180,25 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- Module Filters -->
-                <h3 class="setting-section-title">Module Filters</h3>
+                <h3 class="setting-section-title" data-i18n="ModuleFilters">${i18n.t('ModuleFilters')}</h3>
                 <div class="module-filters-grid">
                     <div class="setting-item compact">
                         <div class="setting-label">
-                            <span class="setting-name">Enable All Filters</span>
+                            <span class="setting-name" data-i18n="EnableAllFilters">${i18n.t('EnableAllFilters')}</span>
                         </div>
                         <div class="setting-control">
-                            <button class="btn btn-option" id="btn-enable-all-filters" tabindex="0" style="width: auto; min-width: 100px;">
-                                Enable
+                            <button class="btn btn-option" id="btn-enable-all-filters" tabindex="0" style="width: auto; min-width: 100px;" data-i18n="Enable">
+                                ${i18n.t('Enable')}
                             </button>
                         </div>
                     </div>
                     <div class="setting-item compact">
                         <div class="setting-label">
-                            <span class="setting-name">Disable All Filters</span>
+                            <span class="setting-name" data-i18n="DisableAllFilters">${i18n.t('DisableAllFilters')}</span>
                         </div>
                         <div class="setting-control">
-                            <button class="btn btn-option" id="btn-disable-all-filters" tabindex="0" style="width: auto; min-width: 100px;">
-                                Disable
+                            <button class="btn btn-option" id="btn-disable-all-filters" tabindex="0" style="width: auto; min-width: 100px;" data-i18n="Disable">
+                                ${i18n.t('Disable')}
                             </button>
                         </div>
                     </div>
@@ -1375,7 +1334,7 @@ class SettingsPage extends Page {
         if (uploadLogsBtn) {
             uploadLogsBtn.addEventListener('click', async () => {
                 uploadLogsBtn.disabled = true;
-                uploadLogsBtn.textContent = 'Uploading...';
+                uploadLogsBtn.textContent = i18n.t('Uploading');
 
                 try {
                     const logs = debugOverlay.getLogDump();
@@ -1389,18 +1348,18 @@ class SettingsPage extends Page {
                     await api.uploadClientLog(filename, logs);
 
                     // Success feedback
-                    uploadLogsBtn.textContent = 'Success!';
+                    uploadLogsBtn.textContent = i18n.t('Success');
                     setTimeout(() => {
                         uploadLogsBtn.disabled = false;
-                        uploadLogsBtn.textContent = 'Upload';
+                        uploadLogsBtn.textContent = i18n.t('Upload');
                     }, 2000);
                 } catch (error) {
                     log.error('Failed to upload logs:', error);
-                    uploadLogsBtn.textContent = 'Failed';
+                    uploadLogsBtn.textContent = i18n.t('Failed');
                     // Re-enable after delay
                     setTimeout(() => {
                         uploadLogsBtn.disabled = false;
-                        uploadLogsBtn.textContent = 'Upload';
+                        uploadLogsBtn.textContent = i18n.t('Upload');
                     }, 2000);
 
                     // Show error toast if we had one, but button text update is good for now
@@ -1495,7 +1454,7 @@ class SettingsPage extends Page {
     _renderDropdown(id, options, currentValue) {
         // Find current label
         const currentOption = options.find((o) => o.value === currentValue) || options[0];
-        const currentLabel = currentOption ? currentOption.label : 'Select';
+        const currentLabel = currentOption ? currentOption.label : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
@@ -1537,7 +1496,7 @@ class SettingsPage extends Page {
                         .join('')}
                 </div>
                 <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0" data-i18n="Cancel">${i18n.t('Cancel')}</button>
                 </div>
             </div>
         `;
@@ -1660,7 +1619,7 @@ class SettingsPage extends Page {
                 const currentValue = btn.dataset.value;
                 const settingConfig = settingsMap[id];
                 const title =
-                    btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || 'Select Option';
+                    btn.closest('.setting-item')?.querySelector('.setting-name')?.textContent || i18n.t('SelectOption');
 
                 this._renderSelectionModal(title, options, currentValue, (newValue) => {
                     // Update button UI
@@ -1975,12 +1934,12 @@ class SettingsPage extends Page {
 
     _getThemeDisplayName(theme) {
         const names = {
-            dark: 'Dark',
-            light: 'Light',
-            blueradiance: 'Blue Radiance',
-            purplehaze: 'Purple Haze',
-            wmc: 'WMC',
-            appletv: 'Apple TV'
+            dark: i18n.t('Dark'),
+            light: i18n.t('Light'),
+            blueradiance: i18n.t('BlueRadiance'),
+            purplehaze: i18n.t('PurpleHaze'),
+            wmc: i18n.t('WMC'),
+            appletv: i18n.t('AppleTV')
         };
         return names[theme] || theme;
     }

@@ -153,10 +153,10 @@ class LibraryPage extends Page {
                                         <path d="M21 21L15 15M17 10C17 13.866 13.866 17 10 17C6.13401 17 3 13.866 3 10C3 6.13401 6.13401 3 10 3C13.866 3 17 6.13401 17 10Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                                     </svg>
                                 </div>
-                                <h2 class="empty-state-title">No items found</h2>
-                                <p class="empty-state-text">Try adjusting your filters or search to find what you're looking for.</p>
-                                <button class="empty-state-btn focusable" id="btn-reset-filters" tabindex="0">
-                                    Clear All Filters
+                                <h2 class="empty-state-title" data-i18n="NoItemsFound">${i18n.t('NoItemsFound')}</h2>
+                                <p class="empty-state-text" data-i18n="NoItemsFoundDescription">${i18n.t('NoItemsFoundDescription')}</p>
+                                <button class="empty-state-btn focusable" id="btn-reset-filters" tabindex="0" data-i18n="ClearAllFilters">
+                                    ${i18n.t('ClearAllFilters')}
                                 </button>
                             </div>
                         </div>
@@ -208,6 +208,9 @@ class LibraryPage extends Page {
         this._renderAlphaPicker();
         this._updateControlsVisibility();
 
+        // Translate static UI labels
+        i18n.translateDOM(this.el);
+
         // 2.5 Hydrate fixed UI strings
         i18n.translateDOM(this.el);
 
@@ -245,7 +248,7 @@ class LibraryPage extends Page {
         } else if (this.params.year) {
             this.state.viewType = 'Items';
             const year = decodeURIComponent(this.params.year);
-            this.$('#library-title').textContent = `Year: ${year}`;
+            this.$('#library-title').textContent = i18n.t('YearLabel', year);
             this.title = year;
         } else if (this.params.personId) {
             this.state.viewType = 'Items';
@@ -261,7 +264,7 @@ class LibraryPage extends Page {
         } else if (this.params.tagName) {
             this.state.viewType = 'Items';
             const tagName = decodeURIComponent(this.params.tagName);
-            this.$('#library-title').textContent = `Tag: ${tagName}`;
+            this.$('#library-title').textContent = i18n.t('TagLabel', tagName);
             this.title = tagName;
         }
 
@@ -581,7 +584,7 @@ class LibraryPage extends Page {
 
                 if (resume.Items && resume.Items.length > 0) {
                     rows.push({
-                        title: 'Continue Watching',
+                        title: i18n.t('ContinueWatching'),
                         items: resume.Items,
                         isLandscape: true,
                         cardType: 'backdrop',
@@ -590,7 +593,7 @@ class LibraryPage extends Page {
                 }
                 if (nextUp.Items && nextUp.Items.length > 0) {
                     rows.push({
-                        title: 'Next Up',
+                        title: i18n.t('NextUp'),
                         items: nextUp.Items,
                         isLandscape: true,
                         cardType: 'backdrop',
@@ -598,7 +601,7 @@ class LibraryPage extends Page {
                     });
                 }
                 if (latest && latest.length > 0) {
-                    rows.push({ title: 'Latest Added', items: latest });
+                    rows.push({ title: i18n.t('LatestAdded'), items: latest });
                 }
 
                 // 2. "Because You Watch..." (Based on active resume items)
@@ -621,7 +624,7 @@ class LibraryPage extends Page {
                             IncludeItemTypes: suggestionTypes
                         });
                         if (similar.Items && similar.Items.length > 0) {
-                            rows.push({ title: `Because you watch ${targetName}`, items: similar.Items });
+                            rows.push({ title: i18n.t('BecauseYouWatch', targetName), items: similar.Items });
                         }
                     } catch (e) {
                         log.warn('Failed to load similar suggestions', e);
@@ -646,7 +649,7 @@ class LibraryPage extends Page {
                             IncludeItemTypes: suggestionTypes
                         });
                         if (similarFav.Items && similarFav.Items.length > 0) {
-                            rows.push({ title: `Because you like ${favItem.Name}`, items: similarFav.Items });
+                            rows.push({ title: i18n.t('BecauseYouLike', favItem.Name), items: similarFav.Items });
                         }
                     }
                 } catch (e) {
@@ -752,8 +755,8 @@ class LibraryPage extends Page {
 
                     let title = d.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' });
 
-                    if (dZero.getTime() === today.getTime()) title = 'Today';
-                    else if (dZero.getTime() === tomorrow.getTime()) title = 'Tomorrow';
+                    if (dZero.getTime() === today.getTime()) title = i18n.t('Today');
+                    else if (dZero.getTime() === tomorrow.getTime()) title = i18n.t('Tomorrow');
 
                     return {
                         title: title,
@@ -792,7 +795,7 @@ class LibraryPage extends Page {
             this._updatePaginationUI();
         } catch (e) {
             log.error('Failed to load items', e);
-            this.$('#library-grid').innerHTML = `<p class="error-msg">Failed to load content</p>`;
+            this.$('#library-grid').innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
         } finally {
             this.setLoading(false);
             // Apply Header visibility and specialization AFTER content is loaded

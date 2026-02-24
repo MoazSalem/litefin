@@ -15,6 +15,7 @@ import { animationManager } from '../ui/AnimationManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { i18n } from '../utils/i18n.js';
 
 const log = logger.create('Login');
 
@@ -37,7 +38,7 @@ const QUICK_CONNECT_MAX_POLLS = 36;
 class LoginPage extends Page {
     constructor() {
         super();
-        this.title = 'Login';
+        this.title = i18n.t('Login');
 
         this._state = STATE.SERVER;
         this._users = [];
@@ -88,12 +89,12 @@ class LoginPage extends Page {
                             </svg>
                             <h1 class="login-logo">Litefin</h1>
                         </div>
-                        <p class="login-tagline">Jellyfin Client for Tizen OS</p>
+                        <p class="login-tagline" data-i18n="LitefinTagline">${i18n.t('LitefinTagline')}</p>
                     </div>
                     
                     <!-- Server URL Form -->
                     <div class="login-section server-section" data-section="server">
-                        <label class="input-label">Connect to Server</label>
+                        <label class="input-label" data-i18n="ConnectToServer">Connect to Server</label>
                         <div class="server-input-container">
                             <input 
                                 type="url" 
@@ -104,7 +105,7 @@ class LoginPage extends Page {
                                 readonly
                                 tabindex="0"
                             >
-                            <button type="button" class="btn btn-primary connect-btn" tabindex="0">
+                            <button type="button" class="btn btn-primary connect-btn" tabindex="0" data-i18n="Connect">
                                 Connect
                             </button>
                         </div>
@@ -113,7 +114,7 @@ class LoginPage extends Page {
                         <!-- Discovered Servers -->
                         <div class="discovered-servers" id="discovered-servers">
                             <div class="discovered-header">
-                                <h3>Discovered Servers</h3>
+                                <h3 data-i18n="DiscoveredServers">Discovered Servers</h3>
                                 <button class="btn-icon-small refresh-btn" id="refresh-discovery" title="Refresh">
                                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M23 4v6h-6"></path>
@@ -124,7 +125,7 @@ class LoginPage extends Page {
                             </div>
                             <div class="discovery-status" id="discovery-status">
                                 <div class="loading-spinner-small"></div>
-                                <span>Scanning network...</span>
+                                <span data-i18n="ScanningNetwork">Scanning network...</span>
                             </div>
                             <ul class="server-list" id="server-list"></ul>
                         </div>
@@ -132,19 +133,19 @@ class LoginPage extends Page {
                     
                     <!-- User Selection -->
                     <div class="login-section users-section hidden" data-section="users">
-                        <h2>Select User</h2>
+                        <h2 data-i18n="SelectUser">Select User</h2>
                         <div class="users-grid" id="users-grid">
                             <!-- Users will be rendered here -->
                         </div>
                         <p class="login-error" id="users-error"></p>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0" data-i18n="QuickConnect">
                                 Quick Connect
                             </button>
-                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0" data-i18n="ManualLogin">
                                 Manual Login
                             </button>
-                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="LogoutOfServer">
                                 Log out of server
                             </button>
                         </div>
@@ -152,13 +153,13 @@ class LoginPage extends Page {
                     
                     <!-- Manual Login Form -->
                     <div class="login-section manual-section hidden" data-section="manual">
-                        <h2>Manual Login</h2>
+                        <h2 data-i18n="ManualLogin">Manual Login</h2>
                         <div class="input-group">
                             <input 
                                 type="text" 
                                 id="manual-username" 
                                 class="text-input tv-input"
-                                placeholder="Username"
+                                placeholder="${i18n.t('Username')}"
                                 readonly
                                 tabindex="0"
                             >
@@ -168,16 +169,16 @@ class LoginPage extends Page {
                                 type="password" 
                                 id="manual-password" 
                                 class="text-input tv-input"
-                                placeholder="Password"
+                                placeholder="${i18n.t('Password')}"
                                 readonly
                                 tabindex="0"
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
+                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0" data-i18n="SignIn">
                                 Sign In
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Back">
                                 Back
                             </button>
                         </div>
@@ -186,7 +187,7 @@ class LoginPage extends Page {
                     
                     <!-- Password Form -->
                     <div class="login-section password-section hidden" data-section="password">
-                        <h2>Enter Password</h2>
+                        <h2 data-i18n="EnterPassword">Enter Password</h2>
                         <div class="selected-user" id="selected-user">
                             <img class="user-avatar" src="" alt="" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
                             <div class="user-avatar-placeholder hidden">?</div>
@@ -197,16 +198,16 @@ class LoginPage extends Page {
                                 type="password" 
                                 id="password-input" 
                                 class="text-input tv-input"
-                                placeholder="Password (leave empty if none)"
+                                placeholder="${i18n.t('PasswordPlaceholder')}"
                                 readonly
                                 tabindex="0"
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary login-btn" tabindex="0">
+                            <button type="button" class="btn btn-primary login-btn" tabindex="0" data-i18n="SignIn">
                                 Sign In
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Back">
                                 Back
                             </button>
                         </div>
@@ -215,17 +216,17 @@ class LoginPage extends Page {
                     
                     <!-- Quick Connect -->
                     <div class="login-section quick-connect-section hidden" data-section="quick-connect">
-                        <h2>Quick Connect</h2>
-                        <p class="quick-connect-instructions">
+                        <h2 data-i18n="QuickConnect">Quick Connect</h2>
+                        <p class="quick-connect-instructions" data-i18n="QuickConnectInstructions">
                             Open your Jellyfin app or web UI on another device, go to
-                            <strong>Dashboard → Quick Connect</strong>, and enter this code:
+                            Dashboard → Quick Connect, and enter this code:
                         </p>
                         <!-- The big, beautiful code the user reads off the screen -->
                         <div class="quick-connect-code" id="quick-connect-code">------</div>
-                        <p class="quick-connect-status" id="quick-connect-status">Waiting for authorization…</p>
+                        <p class="quick-connect-status" id="quick-connect-status" data-i18n="WaitingForAuthorization">Waiting for authorization…</p>
                         <p class="login-error" id="quick-connect-error"></p>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="Cancel">
                                 Cancel
                             </button>
                         </div>
@@ -257,6 +258,9 @@ class LoginPage extends Page {
         this._serverList = this.$('#server-list');
         this._discoveryStatus = this.$('#discovery-status');
 
+        // Translate the page
+        i18n.translateDOM(this.el);
+
         // Bind events
         this._bindEvents();
 
@@ -275,10 +279,7 @@ class LoginPage extends Page {
             // No saved server or known offline - show server selection immediately
             if (savedUrl) {
                 this._serverInput.value = savedUrl;
-                this._showError(
-                    'server-error',
-                    'Server is unreachable. Please enter a different address or try again later.'
-                );
+                this._showError('server-error', i18n.t('ServerUnreachableMessage'));
             }
 
             this._startDiscovery();
@@ -530,9 +531,9 @@ class LoginPage extends Page {
             this._showState(STATE.SERVER);
 
             if (error instanceof ServerUnreachableError) {
-                this._showError('server-error', 'Server is unreachable. Check your network and server status.');
+                this._showError('server-error', i18n.t('ServerUnreachableMessage'));
             } else {
-                this._showError('server-error', error.message || 'Failed to connect');
+                this._showError('server-error', error.message || i18n.t('Error'));
             }
 
             this._startDiscovery();
@@ -597,7 +598,7 @@ class LoginPage extends Page {
         const url = this._serverInput.value.trim();
 
         if (!url) {
-            this._showError('server-error', 'Please enter a server URL');
+            this._showError('server-error', i18n.t('EnterServerURL'));
             return;
         }
 
@@ -644,9 +645,9 @@ class LoginPage extends Page {
         } catch (error) {
             this._showState(STATE.SERVER);
             if (error instanceof ServerUnreachableError) {
-                this._showError('server-error', 'Cannot reach server. Check the URL and your network connection.');
+                this._showError('server-error', i18n.t('ServerUnreachableMessage'));
             } else {
-                this._showError('server-error', error.message || 'Failed to connect');
+                this._showError('server-error', error.message || i18n.t('Error'));
             }
         }
     }
@@ -749,7 +750,7 @@ class LoginPage extends Page {
         } catch (error) {
             log.error('_selectUser error:', error);
             this._showState(STATE.USERS);
-            this._showError('users-error', error.message || 'Login failed');
+            this._showError('users-error', error.message || i18n.t('Error'));
         }
     }
 
@@ -772,7 +773,7 @@ class LoginPage extends Page {
             router.navigate('/home', { replace: true });
         } catch (error) {
             this._showState(STATE.PASSWORD);
-            this._showError('password-error', error.message || 'Login failed');
+            this._showError('password-error', error.message || i18n.t('Error'));
             this._passwordInput.focus();
         }
     }
@@ -801,7 +802,7 @@ class LoginPage extends Page {
         log.info(`LoginPage: Manual Login. User="${username}" PassLength=${password ? password.length : 0}`);
 
         if (!username) {
-            this._showError('manual-error', 'Username is required');
+            this._showError('manual-error', i18n.t('UsernameRequired'));
             return;
         }
 
@@ -817,7 +818,7 @@ class LoginPage extends Page {
             router.navigate('/home', { replace: true });
         } catch (error) {
             this._showState(STATE.MANUAL);
-            this._showError('manual-error', error.message || 'Login failed');
+            this._showError('manual-error', error.message || i18n.t('Error'));
             this._manualUsername.focus();
         }
     }
@@ -944,7 +945,7 @@ class LoginPage extends Page {
         } catch (error) {
             log.error('LoginPage: Discovery failed', error);
             if (this._discoveryStatus) {
-                this._discoveryStatus.innerHTML = '<span>Discovery failed</span>';
+                this._discoveryStatus.innerHTML = `<span>${i18n.t('Error')}</span>`;
             }
         } finally {
             this._isDiscovering = false;
@@ -977,7 +978,7 @@ class LoginPage extends Page {
         if (this._discoveredServers.length === 0) {
             // Only show empty message if NOT discovering
             if (!this._isDiscovering) {
-                this._serverList.innerHTML = '<li class="server-item empty">No servers found</li>';
+                this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
             } else {
                 this._serverList.innerHTML = '';
             }
@@ -1063,14 +1064,14 @@ class LoginPage extends Page {
             const isEnabled = await api.isQuickConnectEnabled();
             if (!isEnabled) {
                 this._showState(STATE.USERS);
-                this._showError('users-error', 'Quick Connect is not enabled on this server.');
+                this._showError('users-error', i18n.t('QuickConnectDisabled'));
                 return;
             }
 
             // Step 2 — Initiate: get { Secret, Code }
             const result = await api.initiateQuickConnect();
             if (!result || !result.Secret || !result.Code) {
-                throw new Error('Server returned an invalid Quick Connect response');
+                throw new Error(i18n.t('Error'));
             }
 
             // Save secret for polling and (eventually) for authentication
@@ -1088,7 +1089,7 @@ class LoginPage extends Page {
             const codeEl = this.$('#quick-connect-code');
             const statusEl = this.$('#quick-connect-status');
             if (codeEl) codeEl.textContent = displayCode;
-            if (statusEl) statusEl.textContent = 'Waiting for authorization…';
+            if (statusEl) statusEl.textContent = i18n.t('WaitingForAuthorization');
 
             // Focus the Cancel button so the TV remote has somewhere to go
             setTimeout(() => {
@@ -1104,7 +1105,7 @@ class LoginPage extends Page {
                 if (this._quickConnectPollCount > QUICK_CONNECT_MAX_POLLS) {
                     this._cancelQuickConnect();
                     this._showState(STATE.USERS);
-                    this._showError('users-error', 'Quick Connect timed out. Try again.');
+                    this._showError('users-error', i18n.t('QuickConnectTimeout'));
                     return;
                 }
 
@@ -1135,7 +1136,7 @@ class LoginPage extends Page {
             log.error('Quick Connect initiation failed:', error);
             this._cancelQuickConnect();
             this._showState(STATE.USERS);
-            this._showError('users-error', error.message || 'Quick Connect failed. Try again.');
+            this._showError('users-error', error.message || i18n.t('Error'));
         }
     }
 

@@ -80,28 +80,28 @@ class DetailsPage extends Page {
                                 <button class="btn btn-secondary resume-btn hidden" tabindex="-1">
                                     <span data-i18n="Resume">Resume</span>
                                 </button>
-                                <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="Reset Progress">
+                                <button class="btn btn-icon reset-btn hidden" tabindex="-1" aria-label="${i18n.t('ResetProgress')}">
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                                         <path d="M3 3v5h5"/>
                                     </svg>
                                 </button>
-                                <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="Shuffle">
+                                <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="${i18n.t('Shuffle')}">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
                                         <path d="M10.59 9.17L5.41 4 4 5.41l5.17 5.17 1.42-1.41zM14.5 4l2.04 2.04L4 18.59 5.41 20 17.96 7.46 20 9.5V4h-5.5zm.33 9.41l-1.41 1.41 3.13 3.13L14.5 20H20v-5.5l-2.04 2.04-3.13-3.13z"/>
                                     </svg>
                                 </button>
-                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="Mark as watched">
+                                <button class="btn btn-icon watched-btn" tabindex="0" aria-label="${i18n.t('MarkAsWatched')}">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
                                 </button>
                                 <!-- Favorite Button Injected Here -->
-                                <button class="btn btn-icon audio-btn" tabindex="0" aria-label="Audio Tracks">
+                                <button class="btn btn-icon audio-btn" tabindex="0" aria-label="${i18n.t('AudioTracks')}">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M12 3v9.28c-.47-.17-.97-.28-1.5-.28C8.01 12 6 14.01 6 16.5S8.01 21 10.5 21c2.31 0 4.2-1.75 4.45-4H15V6h4V3h-7z"/></svg>
                                 </button>
-                                <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="Subtitle Tracks">
+                                <button class="btn btn-icon subtitle-btn" tabindex="0" aria-label="${i18n.t('SubtitleTracks')}">
                                     <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><path d="M19 4H5c-1.11 0-2 .9-2 2v12c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-8 7H9.5v-.5h-2v3h2V13H11v1c0 .55-.45 1-1 1H7c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1zm7 0h-1.5v-.5h-2v3h2V13H18v1c0 .55-.45 1-1 1h-3c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1h3c.55 0 1 .45 1 1v1z"/></svg>
                                 </button>
-                                <button class="btn btn-icon more-btn" tabindex="0" aria-label="More Options">
+                                <button class="btn btn-icon more-btn" tabindex="0" aria-label="${i18n.t('MoreOptions')}">
                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <circle cx="12" cy="12" r="1"></circle>
                                         <circle cx="12" cy="5" r="1"></circle>
@@ -113,7 +113,7 @@ class DetailsPage extends Page {
                             <!-- Overview -->
                             <div class="details-overview">
                                 <p class="overview-text line-clamp-6"></p>
-                                <button class="see-more-btn" tabindex="0">See More</button>
+                                <button class="see-more-btn" tabindex="0" data-i18n="SeeMore">${i18n.t('SeeMore')}</button>
                             </div>
 
                         </div>
@@ -320,7 +320,7 @@ class DetailsPage extends Page {
             }
         } catch (error) {
             log.error('Failed to load', error);
-            this.showError('Failed to load details');
+            this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
         }
     }

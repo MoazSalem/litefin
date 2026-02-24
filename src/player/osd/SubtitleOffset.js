@@ -107,7 +107,7 @@ export default class SubtitleOffset extends BaseMenu {
         
         if (valueEl) {
             const sign = this.offset > 0 ? '+' : '';
-            valueEl.textContent = `${sign}${this.offset.toFixed(1)}s`;
+            valueEl.textContent = i18n.t('SecondsShort', `${sign}${this.offset.toFixed(1)}`);
         }
         
         if (slider) {

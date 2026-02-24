@@ -331,7 +331,8 @@ class Sidebar extends Component {
             // Add Segment Header
             const header = document.createElement('div');
             header.className = 'sidebar-section-header';
-            header.textContent = 'Media Libraries';
+            header.dataset.i18n = 'MediaLibraries';
+            header.textContent = i18n.t('MediaLibraries');
             container.appendChild(header);
 
             items.forEach((lib) => {
@@ -369,7 +370,7 @@ class Sidebar extends Component {
 
     _getUserName() {
         const user = auth.getCurrentUser();
-        return user && user.Name ? user.Name : 'User';
+        return user && user.Name ? user.Name : i18n.t('Username');
     }
 
     _onNavigate({ path }) {

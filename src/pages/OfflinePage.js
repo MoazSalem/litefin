@@ -10,6 +10,7 @@
 import Page from './Page.js';
 import { auth } from '../api/index.js';
 import { router } from '../core/Router.js';
+import i18n from '../core/i18n.js';
 import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -20,11 +21,11 @@ const log = logger.create('OfflinePage');
 class OfflinePage extends Page {
     constructor() {
         super();
-        this.title = 'Server Offline';
+        this.title = i18n.t('ServerOffline');
     }
 
     render() {
-        const serverUrl = auth.getSavedServerUrl() || 'your server';
+        const serverUrl = auth.getSavedServerUrl() || i18n.t('YourServer');
 
         return `
             <div class="page offline-page">
@@ -41,20 +42,19 @@ class OfflinePage extends Page {
                         </svg>
                     </div>
                     
-                    <h1 class="offline-title">Server Unreachable</h1>
+                    <h1 class="offline-title" data-i18n="ServerUnreachable">${i18n.t('ServerUnreachable')}</h1>
                     <p class="offline-message">
-                        We couldn't connect to <strong>${serverUrl}</strong>.<br>
-                        Check if your server is running or try another one.
+                        ${i18n.t('ConnectionErrorMessage', serverUrl)}
                     </p>
                     
                     <div class="offline-actions" id="offline-actions">
-                        <button class="btn btn-primary retry-btn focusable" tabindex="0">Try Again</button>
-                        <button class="btn btn-secondary change-server-btn focusable" tabindex="0">Change Server</button>
+                        <button class="btn btn-primary retry-btn focusable" tabindex="0" data-i18n="TryAgain">${i18n.t('TryAgain')}</button>
+                        <button class="btn btn-secondary change-server-btn focusable" tabindex="0" data-i18n="ChangeServer">${i18n.t('ChangeServer')}</button>
                     </div>
                 </div>
                 
                 <div class="offline-footer">
-                    <button class="exit-btn focusable" tabindex="0">Exit App</button>
+                    <button class="exit-btn focusable" tabindex="0" data-i18n="ExitApp">${i18n.t('ExitApp')}</button>
                 </div>
             </div>
         `;
@@ -63,6 +63,9 @@ class OfflinePage extends Page {
     onMounted() {
         this._setupFocus();
         this._bindEvents();
+
+        // Translate static UI labels
+        i18n.translateDOM(this.el);
 
         // Start auto-retry interval
         this._startAutoRetry();
