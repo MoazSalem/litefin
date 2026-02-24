@@ -359,5 +359,8 @@
     "VideoRangeType": "Video range type",
     "WMC": "WMC",
     "WaitingForAuthorization": "Waiting for authorization...",
-    "YearLabel": "Year: {0}"
+    "YearLabel": "Year: {0}",
+    "AppLanguage": "App Language",
+    "AppLanguageDescription": "Choose the language used throughout the app (requires restart)",
+    "Language": "Language"
 }

@@ -20,6 +20,7 @@ import { debugOverlay } from '../ui/DebugOverlay.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { availableLanguages } from '../locales/languages.js';
 
 const log = logger.create('SettingsPage');
 
@@ -127,6 +128,23 @@ class SettingsPage extends Page {
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="Display">Display</h2>
+
+                <!-- Language Section -->
+                <h3 class="setting-section-title" data-i18n="Language">Language</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AppLanguage">App Language</span>
+                        <span class="setting-description" data-i18n="AppLanguageDescription">Choose the language used throughout the app (requires restart)</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'app-language-select',
+                            availableLanguages,
+                            storage.getItem('app_language') || 'en-us'
+                        )}
+                    </div>
+                </div>
 
                 <!-- Theme Section -->
                 <h3 class="setting-section-title" data-i18n="ColorTheme">Theme</h3>
@@ -1575,6 +1593,7 @@ class SettingsPage extends Page {
     _bindDropdownEvents() {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
+            'app-language-select': { key: 'app_language', type: 'local' },
             layout: { key: 'layout', type: 'local' },
             'theme-select': { key: 'theme', type: 'local' },
             'ui-font-select': { key: 'uiFont', type: 'local' },
@@ -1640,7 +1659,7 @@ class SettingsPage extends Page {
                             layoutManager.setUiFont(newValue);
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
-                            if (settingConfig.key === 'layout') {
+                            if (settingConfig.key === 'layout' || settingConfig.key === 'app_language') {
                                 window.location.reload();
                             }
                         } else if (settingConfig.type === 'service') {

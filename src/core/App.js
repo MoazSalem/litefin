@@ -79,7 +79,8 @@ class App {
 
         // 3.5. Initialize translations
         // Ensures language dictionaries are loaded before the UI renders
-        await i18n.init('en');
+        const appLanguage = storage.getItem('app_language') || 'en-us';
+        await i18n.init(appLanguage);
 
         // 4. Try to restore auth session
         await auth.init();

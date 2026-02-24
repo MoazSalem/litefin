@@ -10,7 +10,7 @@
 import Page from './Page.js';
 import { auth } from '../api/index.js';
 import { router } from '../core/Router.js';
-import i18n from '../core/i18n.js';
+import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
