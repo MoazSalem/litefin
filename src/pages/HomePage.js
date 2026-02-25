@@ -154,7 +154,7 @@ class HomePage extends Page {
             latestResults.forEach((latest, i) => {
                 if (latest?.length > 0) {
                     rowsData.push({
-                        title: i18n.t('LatestFrom', [this._libraries[i].Name]),
+                        title: i18n.t('LatestFromLibrary', [this._libraries[i].Name]),
                         items: latest,
                         libraryId: this._libraries[i].Id,
                         type: 'latest'

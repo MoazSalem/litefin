@@ -132,7 +132,7 @@ class DetailsPage extends Page {
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="Series">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="Shows">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
                     

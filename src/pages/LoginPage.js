@@ -142,10 +142,10 @@ class LoginPage extends Page {
                             <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0" data-i18n="QuickConnect">
                                 Quick Connect
                             </button>
-                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0" data-i18n="ManualLogin">
+                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0" data-i18n="ButtonManualLogin">
                                 Manual Login
                             </button>
-                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="LogoutOfServer">
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="ButtonChangeServer">
                                 Log out of server
                             </button>
                         </div>

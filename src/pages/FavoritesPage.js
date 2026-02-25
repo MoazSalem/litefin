@@ -112,7 +112,12 @@ class FavoritesPage extends Page {
             if (movies.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-movie', title: i18n.t('Movies'), items: movies.Items, type: 'movie' });
             if (shows.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-series', title: i18n.t('Shows'), items: shows.Items, type: 'series' });
+                sectionsData.push({
+                    id: 'fav-series',
+                    title: i18n.t('TypeOptionPluralSeries'),
+                    items: shows.Items,
+                    type: 'series'
+                });
             if (seasons.TotalRecordCount > 0)
                 sectionsData.push({
                     id: 'fav-season',

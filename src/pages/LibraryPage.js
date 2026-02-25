@@ -63,7 +63,7 @@ class LibraryPage extends Page {
                     <!-- Header Section -->
                     <header class="library-header" id="library-header">
                         <div class="library-title-row">
-                            <h1 class="library-title" id="library-title" data-i18n="Library">Library</h1>
+                            <h1 class="library-title" id="library-title">${i18n.t('Library')}</h1>
                         </div>
 
                         <!-- Dynamic Tabs -->
@@ -839,7 +839,7 @@ class LibraryPage extends Page {
         const currentPage = Math.floor(startIndex / limit) + 1;
         const totalPages = Math.ceil(totalRecordCount / limit);
 
-        this.$('#pagination-info').textContent = `Page ${currentPage} of ${totalPages || 1}`;
+        this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
 
         // Hide/Show logic for single page or horizontal row views (Genres/Suggestions)
         const isHorizontalView = this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions';
@@ -899,11 +899,11 @@ class LibraryPage extends Page {
 
         if (collectionType === 'tvshows') {
             tabs = [
-                { id: 'Items', label: 'Shows' },
+                { id: 'Items', label: 'TypeOptionPluralSeries' },
                 { id: 'Suggestions', label: 'Suggestions' },
-                { id: 'Upcoming', label: 'Upcoming' },
+                { id: 'Upcoming', label: 'TabUpcoming' },
                 { id: 'Genres', label: 'Genres' },
-                { id: 'Networks', label: 'Networks' },
+                { id: 'Networks', label: 'TabNetworks' },
                 { id: 'Episodes', label: 'Episodes' }
             ];
         } else if (collectionType === 'movies') {
@@ -917,7 +917,7 @@ class LibraryPage extends Page {
         } else {
             // Generic fallback
             tabs = [
-                { id: 'Items', label: 'Items' },
+                { id: 'Items', label: 'Folders' },
                 { id: 'Suggestions', label: 'Suggestions' },
                 { id: 'Genres', label: 'Genres' },
                 { id: 'Folders', label: 'Folders' }
@@ -931,8 +931,9 @@ class LibraryPage extends Page {
                 (tab) => `
             <button class="tab-btn ${this.state.viewType === tab.id ? 'active' : ''}" 
                     data-type="${tab.id}" 
-                    tabindex="0">
-                ${tab.label}
+                    tabindex="0"
+                    data-i18n="${tab.label}">
+                ${i18n.t(tab.label)}
             </button>
         `
             )
@@ -1016,7 +1017,7 @@ class LibraryPage extends Page {
         if (!items || items.length === 0) {
             grid.innerHTML = '';
             this.$('#empty-state').classList.remove('hidden');
-            this.$('#count-indicator').textContent = '0 items';
+            this.$('#count-indicator').textContent = i18n.t('ItemCount', [0]);
             this.$('#pagination-info').textContent = '';
 
             // Check if controls should be visible (logic matched with _updateHeaderVisibility)
@@ -1103,7 +1104,7 @@ class LibraryPage extends Page {
         // Update Count
         const start = this.state.startIndex + 1;
         const end = Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
-        this.$('#count-indicator').textContent = `${start}-${end} of ${this.state.totalRecordCount}`;
+        this.$('#count-indicator').textContent = i18n.t('ListPaging', [start, end, this.state.totalRecordCount]);
 
         // Generate HTML
         const html = items
@@ -1198,7 +1199,7 @@ class LibraryPage extends Page {
                 if (btnReset) {
                     if (isUpcoming || isSuggestions) {
                         btnReset.style.display = 'none';
-                        this.$('#count-indicator').textContent = 'No items found'; // Better message
+                        this.$('#count-indicator').textContent = i18n.t('NoItemsFound'); // Better message
                     } else {
                         btnReset.style.display = '';
                         // Only register focus if the button is visible
@@ -1724,26 +1725,26 @@ class LibraryPage extends Page {
             // TV Show Specific Options
             sortOptions = [
                 { label: 'Name', value: 'SortName' },
-                { label: 'Random', value: 'Random' },
-                { label: 'Community Rating', value: 'CommunityRating,SortName' },
-                { label: 'Date Show Added', value: 'DateCreated,SortName' },
-                { label: 'Date Episode Added', value: 'DateLastContentAdded,SortName' },
-                { label: 'Date Played', value: 'SeriesDatePlayed,SortName' },
-                { label: 'Parental Rating', value: 'OfficialRating,SortName' },
-                { label: 'Release Date', value: 'PremiereDate,SortName' }
+                { label: 'OptionRandom', value: 'Random' },
+                { label: 'CommunityRating', value: 'CommunityRating,SortName' },
+                { label: 'OptionDateShowAdded', value: 'DateCreated,SortName' },
+                { label: 'OptionDateEpisodeAdded', value: 'DateLastContentAdded,SortName' },
+                { label: 'OptionDatePlayed', value: 'SeriesDatePlayed,SortName' },
+                { label: 'OptionParentalRating', value: 'OfficialRating,SortName' },
+                { label: 'OptionReleaseDate', value: 'PremiereDate,SortName' }
             ];
         } else {
             // Standard / Movie Options
             sortOptions = [
                 { label: 'Name', value: 'SortName' },
-                { label: 'Random', value: 'Random' },
-                { label: 'Community Rating', value: 'CommunityRating,SortName' },
-                { label: 'Critics Rating', value: 'CriticRating,SortName' },
-                { label: 'Date Added', value: 'DateCreated,SortName' },
-                { label: 'Date Played', value: 'DatePlayed,SortName' },
-                { label: 'Parental Rating', value: 'OfficialRating,SortName' },
-                { label: 'Play Count', value: 'PlayCount,SortName' },
-                { label: 'Release Date', value: 'ProductionYear,PremiereDate,SortName' },
+                { label: 'OptionRandom', value: 'Random' },
+                { label: 'CommunityRating', value: 'CommunityRating,SortName' },
+                { label: 'CriticRating', value: 'OptionCriticRating,SortName' },
+                { label: 'OptionDateAdded', value: 'DateCreated,SortName' },
+                { label: 'OptionDatePlayed', value: 'DatePlayed,SortName' },
+                { label: 'OptionParentalRating', value: 'OfficialRating,SortName' },
+                { label: 'OptionPlayCount', value: 'PlayCount,SortName' },
+                { label: 'OptionReleaseDate', value: 'ProductionYear,PremiereDate,SortName' },
                 { label: 'Runtime', value: 'Runtime,SortName' }
             ];
         }
@@ -1768,7 +1769,7 @@ class LibraryPage extends Page {
                 <div class="sort-columns">
                     <!-- Sort By Column -->
                     <div class="sort-column" id="sort-by-col">
-                        <h2 class="modal-title">Sort By</h2>
+                        <h2 class="modal-title" data-i18n="HeaderSortBy">${i18n.t('HeaderSortBy')}</h2>
                         <div class="modal-options">
                             ${sortOptions
                                 .map(
@@ -1778,7 +1779,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span>${opt.label}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
                                 </button>
                             `
                                 )
@@ -1788,7 +1789,7 @@ class LibraryPage extends Page {
 
                     <!-- Sort Order Column -->
                     <div class="sort-column" id="sort-order-col">
-                        <h2 class="modal-title">Order</h2>
+                        <h2 class="modal-title" data-i18n="HeaderSortOrder">${i18n.t('HeaderSortOrder')}</h2>
                         <div class="modal-options">
                             ${orderOptions
                                 .map(
@@ -1798,7 +1799,7 @@ class LibraryPage extends Page {
                                         data-value="${opt.value}"
                                         tabindex="0">
                                     <div class="radio-icon"></div>
-                                    <span>${opt.label}</span>
+                                    <span data-i18n="${opt.label}">${i18n.t(opt.label)}</span>
                                 </button>
                             `
                                 )
@@ -1808,8 +1809,8 @@ class LibraryPage extends Page {
                 </div>
 
                 <div class="modal-actions">
-                    <button class="modal-action-btn close" id="btn-sort-close">Close</button>
-                    <button class="modal-action-btn apply" id="btn-sort-apply">Apply</button>
+                    <button class="modal-action-btn close" id="btn-sort-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
+                    <button class="modal-action-btn apply" id="btn-sort-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
                 </div>
             </div>
         `;
@@ -1958,19 +1959,19 @@ class LibraryPage extends Page {
                 items: [
                     { label: 'Played', key: 'IsPlayed', type: 'boolean' },
                     { label: 'Unplayed', key: 'IsUnplayed', type: 'boolean' },
-                    { label: 'Resumable', key: 'IsResumable', type: 'boolean' },
+                    { label: 'OptionResumable', key: 'IsResumable', type: 'boolean' },
                     { label: 'Favorites', key: 'IsFavorite', type: 'boolean' }
                 ]
             },
             {
-                title: 'Features',
+                title: 'HeaderFeatures',
                 id: 'sec-features',
                 items: [
                     { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
                     { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
-                    { label: 'Special Features', key: 'HasSpecialFeature', type: 'boolean' },
-                    { label: 'Theme Song', key: 'HasThemeSong', type: 'boolean' },
-                    { label: 'Theme Video', key: 'HasThemeVideo', type: 'boolean' }
+                    { label: 'SpecialFeatures', key: 'HasSpecialFeature', type: 'boolean' },
+                    { label: 'ThemeSong', key: 'HasThemeSong', type: 'boolean' },
+                    { label: 'ThemeVideo', key: 'HasThemeVideo', type: 'boolean' }
                 ]
             },
             {
@@ -1980,7 +1981,7 @@ class LibraryPage extends Page {
                 items: data.Genres.map((g) => ({ label: g, value: g, type: 'multi' }))
             },
             {
-                title: 'Parental Ratings',
+                title: 'HeaderParentalRatings',
                 id: 'sec-ratings',
                 itemKey: 'OfficialRatings',
                 items: data.OfficialRatings.map((r) => ({ label: r, value: r, type: 'multi' }))
@@ -1992,20 +1993,20 @@ class LibraryPage extends Page {
                 items: data.Tags.map((t) => ({ label: t, value: t, type: 'multi' }))
             },
             {
-                title: 'Video Types',
+                title: 'HeaderVideoTypes',
                 id: 'sec-videotypes',
                 itemKey: 'VideoTypes', // Comma list
                 items: [
-                    { label: 'Bluray', value: 'Bluray', type: 'multi' },
-                    { label: 'DVD', value: 'Dvd', type: 'multi' },
-                    { label: '4K', key: 'Is4K', type: 'boolean' }, // Is4K is a separate bool usually
-                    { label: 'HD', key: 'IsHD', type: 'boolean' },
-                    { label: 'SD', key: 'IsSD', type: 'boolean' }, // Logic: IsHD=false usually
-                    { label: '3D', key: 'Is3D', type: 'boolean' }
+                    { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
+                    { label: 'OptionDvd', value: 'Dvd', type: 'multi' },
+                    { label: 'Option4K', key: 'Is4K', type: 'boolean' },
+                    { label: 'OptionIsHD', key: 'IsHD', type: 'boolean' },
+                    { label: 'OptionIsSD', key: 'IsSD', type: 'boolean' },
+                    { label: 'Option3D', key: 'Is3D', type: 'boolean' }
                 ]
             },
             {
-                title: 'Years',
+                title: 'HeaderYears',
                 id: 'sec-years',
                 itemKey: 'Years',
                 items: data.Years.map((y) => ({ label: y.toString(), value: y.toString(), type: 'multi' }))
@@ -2025,7 +2026,7 @@ class LibraryPage extends Page {
         // Render HTML Structure
         const html = `
             <div class="library-modal filter-modal split-view">
-                <h2 class="modal-title">Filters</h2>
+                <h2 class="modal-title" data-i18n="Filters">${i18n.t('Filters')}</h2>
                 <div class="filter-split-container">
                     <!-- Left Sidebar -->
                     <div class="filter-sidebar" id="filter-sidebar">
@@ -2033,8 +2034,9 @@ class LibraryPage extends Page {
                             .map(
                                 (s) => `
                             <button class="filter-category-btn ${s.id === activeSectionId ? 'active' : ''}" 
-                                    data-id="${s.id}" tabindex="0">
-                                ${s.title}
+                                    data-id="${s.id}" tabindex="0"
+                                    data-i18n="${s.title}">
+                                ${i18n.t(s.title)}
                             </button>
                         `
                             )
@@ -2048,9 +2050,9 @@ class LibraryPage extends Page {
                 </div>
 
                 <div class="modal-actions">
-                    <button class="modal-action-btn clear" id="btn-filter-clear">Clear</button>
-                    <button class="modal-action-btn close" id="btn-filter-close">Close</button>
-                    <button class="modal-action-btn apply" id="btn-filter-apply">Apply</button>
+                    <button class="modal-action-btn clear" id="btn-filter-clear" data-i18n="ButtonClear">${i18n.t('ButtonClear')}</button>
+                    <button class="modal-action-btn close" id="btn-filter-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
+                    <button class="modal-action-btn apply" id="btn-filter-apply" data-i18n="ButtonApply">${i18n.t('ButtonApply')}</button>
                 </div>
             </div>
         `;
@@ -2133,7 +2135,7 @@ class LibraryPage extends Page {
                             <div class="checkbox-box">
                                 <span class="check-mark">✔</span>
                             </div>
-                            <span class="btn-label">${item.label}</span>
+                                <span class="btn-label" data-i18n="${item.label}">${i18n.t(item.label)}</span>
                         </button>
                     `;
                     })
@@ -2390,7 +2392,7 @@ class LibraryPage extends Page {
                         )
                         .join('')}
                 </div>
-                <button class="modal-close-btn" id="modal-close">Close</button>
+                <button class="modal-close-btn" id="modal-close" data-i18n="ButtonClose">${i18n.t('ButtonClose')}</button>
             </div>
         `;
 

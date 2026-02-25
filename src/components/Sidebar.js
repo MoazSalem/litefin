@@ -334,8 +334,8 @@ class Sidebar extends Component {
             // Add Segment Header
             const header = document.createElement('div');
             header.className = 'sidebar-section-header';
-            header.dataset.i18n = 'MediaLibraries';
-            header.textContent = i18n.t('MediaLibraries');
+            header.dataset.i18n = 'HeaderMyMedia';
+            header.textContent = i18n.t('HeaderMyMedia');
             container.appendChild(header);
 
             items.forEach((lib) => {

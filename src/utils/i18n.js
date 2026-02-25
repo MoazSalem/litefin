@@ -12,7 +12,9 @@ const log = logger.create('i18n');
 class I18nManager {
     constructor() {
         this.dictionary = {};
-        this.currentLang = 'en';
+        this.fallbackDictionary = {};
+        this.currentLang = 'en-us';
+        this.fallbackLang = 'en-us';
     }
 
     /**
@@ -34,7 +36,9 @@ class I18nManager {
             if (response.ok) {
                 const data = await response.json();
                 this.dictionary = data;
-                log.info(`[i18n] Successfully loaded ${Object.keys(this.dictionary).length} keys`);
+                log.info(
+                    `[i18n] Successfully loaded ${Object.keys(this.dictionary).length} keys for ${this.currentLang}`
+                );
             } else {
                 log.error(`[i18n] Failed to load locale file: ${response.status} ${response.statusText}`);
                 throw new Error(`Failed to load ${this.currentLang}.json: ${response.status}`);
@@ -49,6 +53,28 @@ class I18nManager {
             // Fallback ensures t() just returns keys instead of crashing
             this.dictionary = {};
         }
+
+        // Load fallback dictionary if necessary
+        if (this.currentLang !== this.fallbackLang) {
+            try {
+                const fallbackUrl = `${basePath}locales/${this.fallbackLang}.json`;
+                const fallbackResponse = await fetch(fallbackUrl);
+                if (fallbackResponse.ok) {
+                    this.fallbackDictionary = await fallbackResponse.json();
+                    log.info(
+                        `[i18n] Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
+                    );
+                } else {
+                    log.error(`[i18n] Failed to load fallback locale file`);
+                }
+            } catch (error) {
+                log.error(`[i18n] Failed to load fallback dictionary`, error);
+                this.fallbackDictionary = {};
+            }
+        } else {
+            // If language is already the fallback, point fallback to main dict to avoid double loading
+            this.fallbackDictionary = this.dictionary;
+        }
     }
 
     /**
@@ -60,6 +86,11 @@ class I18nManager {
     t(key, args = []) {
         if (!key) return '';
         let str = this.dictionary[key];
+
+        // Fallback to en-us.json if key missing
+        if (str === undefined) {
+            str = this.fallbackDictionary[key];
+        }
 
         // Fallback to key itself if translation is missing (helps debugging)
         if (str === undefined) {

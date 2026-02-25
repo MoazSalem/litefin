@@ -133,11 +133,11 @@ class SettingsPage extends Page {
                 <h2 class="content-title" data-i18n="Display">Display</h2>
 
                 <!-- Language Section -->
-                <h3 class="setting-section-title" data-i18n="Language">Language</h3>
+                <h3 class="setting-section-title" data-i18n="LabelLanguage">Language</h3>
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="AppLanguage">App Language</span>
+                        <span class="setting-name" data-i18n="LabelPreferredDisplayLanguage">App Language</span>
                         <span class="setting-description" data-i18n="AppLanguageDescription">Choose the language used throughout the app (requires restart)</span>
                     </div>
                     <div class="setting-control">
