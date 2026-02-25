@@ -1964,7 +1964,7 @@ class LibraryPage extends Page {
                 ]
             },
             {
-                title: 'HeaderFeatures',
+                title: 'Features',
                 id: 'sec-features',
                 items: [
                     { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },

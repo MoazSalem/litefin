@@ -12,6 +12,7 @@ import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import MediaGrid from '../components/MediaGrid.js';
+import { i18n } from '../utils/i18n.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -211,19 +212,19 @@ class PersonPage extends Page {
             if (p.PremiereDate) {
                 try {
                     const born = new Date(p.PremiereDate).getFullYear();
-                    parts.push(`Born ${born}`);
+                    parts.push(i18n.t('BirthDateValue', [born]));
                 } catch (e) {}
             }
 
             if (p.EndDate) {
                 try {
                     const died = new Date(p.EndDate).getFullYear();
-                    parts.push(`Died ${died}`);
+                    parts.push(i18n.t('DeathDateValue', [died]));
                 } catch (e) {}
             }
 
             if (p.ProductionLocations && p.ProductionLocations.length > 0) {
-                parts.push(p.ProductionLocations[0]);
+                parts.push(i18n.t('BirthPlaceValue', [p.ProductionLocations[0]]));
             }
 
             metaEl.textContent = parts.join(' • ');
@@ -284,8 +285,11 @@ class PersonPage extends Page {
                 if (subtitle) {
                     const currentText = subtitle.textContent;
                     // Add role to existing subtitle (e.g., "2024 · as John Smith")
-                    if (!currentText.includes('as ')) {
-                        subtitle.textContent = currentText ? `${currentText} · as ${role}` : `as ${role}`;
+                    const asPrefix = i18n.t('LabelAsRole', ['']).trim();
+                    if (!currentText.includes(asPrefix)) {
+                        subtitle.textContent = currentText
+                            ? `${currentText} · ${i18n.t('LabelAsRole', [role])}`
+                            : i18n.t('LabelAsRole', [role]);
                     }
                 } else {
                     // Create subtitle if it doesn't exist
@@ -293,7 +297,7 @@ class PersonPage extends Page {
                     if (cardInfo) {
                         const newSubtitle = document.createElement('div');
                         newSubtitle.className = 'card-subtitle';
-                        newSubtitle.textContent = `as ${role}`;
+                        newSubtitle.textContent = i18n.t('LabelAsRole', [role]);
                         cardInfo.appendChild(newSubtitle);
                     }
                 }
@@ -330,7 +334,7 @@ class PersonPage extends Page {
         if (movies.length > 0) {
             this._grids.movies = new MediaGrid({
                 id: 'person-movies',
-                title: 'Movies',
+                title: i18n.t('Movies'),
                 items: movies,
                 type: 'poster',
                 limit: 10,
@@ -347,7 +351,7 @@ class PersonPage extends Page {
         if (shows.length > 0) {
             this._grids.shows = new MediaGrid({
                 id: 'person-shows',
-                title: 'Shows',
+                title: i18n.t('Series'),
                 items: shows,
                 type: 'poster',
                 limit: 10,
@@ -364,7 +368,7 @@ class PersonPage extends Page {
         if (episodes.length > 0) {
             this._grids.episodes = new MediaGrid({
                 id: 'person-episodes',
-                title: 'Episodes',
+                title: i18n.t('Episodes'),
                 items: episodes,
                 type: 'episode-primary', // Use special type
                 isLandscape: true, // Force landscape grid

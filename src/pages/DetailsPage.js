@@ -132,7 +132,7 @@ class DetailsPage extends Page {
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="Shows">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="TypeOptionPluralSeries">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
                     
@@ -646,13 +646,14 @@ class DetailsPage extends Page {
         const htmlParts = [];
 
         // Helper to create row
-        const createRow = (label, items) => {
+        const createRow = (key, items) => {
             if (!items || items.length === 0) return '';
+            const translatedLabel = i18n.t(key);
             const valuesHtml = items
                 .map((i) => {
                     const name = i.Name || i; // Handle object or string
                     const id = i.Id || '';
-                    const type = label.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
+                    const type = key.toLowerCase(); // 'genres', 'studios', 'directors', 'writers', 'tags'
 
                     return `<button class="meta-chip" tabindex="-1" data-id="${id}" data-type="${type}" data-name="${name}">${name}</button>`;
                 })
@@ -660,7 +661,7 @@ class DetailsPage extends Page {
 
             return `
                 <div class="rich-meta-row">
-                    <div class="meta-label">${label}</div>
+                    <div class="meta-label">${translatedLabel}</div>
                     <div class="meta-value-list">${valuesHtml}</div>
                 </div>
             `;
@@ -883,7 +884,7 @@ class DetailsPage extends Page {
             // Ends At
             const endTime = new Date(Date.now() + item.RunTimeTicks / 10000);
             const timeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-            endsAtText = `Ends at ${timeString}`;
+            endsAtText = i18n.t('EndsAtValue', [timeString]);
         }
 
         const rating = item.OfficialRating;
@@ -1052,7 +1053,8 @@ class DetailsPage extends Page {
         resumeBtn.classList.add('btn-primary');
 
         const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-        resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>Resume (${resumeTime}m)</span>`;
+        const resumeLabel = i18n.t('ResumeAt', [resumeTime + 'm']);
+        resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${resumeLabel}</span>`;
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
         // we must manually force focus to the Resume button so focus isn't lost.
@@ -1426,7 +1428,15 @@ class DetailsPage extends Page {
             listId: 'more-from-season-row',
             items: episodes,
             isLandscape: true,
-            titleElText: this._item.SeasonName ? `More from ${this._item.SeasonName}` : null,
+            titleElText: this._item.SeasonName
+                ? i18n.t('MoreFromValue', [
+                      this._item.SeasonName.toLowerCase().startsWith('season ')
+                          ? this._item.SeasonName.replace(/season\s+/i, i18n.t('Season') + ' ')
+                          : /^\d+$/.test(this._item.SeasonName)
+                            ? i18n.t('Season') + ' ' + this._item.SeasonName
+                            : this._item.SeasonName
+                  ])
+                : null,
             renderCard: (ep) => this._renderMediaCard(ep, true, 'episode'),
             focusSectionName: 'more-from-season-section'
         });
@@ -1645,7 +1655,7 @@ class DetailsPage extends Page {
             currentIndex = defaultStream ? defaultStream.Index : tracks[0]?.Index || 0;
         }
 
-        this._renderTrackSelectionMenu('Audio', tracks, currentIndex, (index) => {
+        this._renderTrackSelectionMenu(i18n.t('Audio'), tracks, currentIndex, (index) => {
             if (this._selectedAudioIndex === index) return;
 
             this._selectedAudioIndex = index;
@@ -1665,9 +1675,9 @@ class DetailsPage extends Page {
         }
 
         // Add "Off" option
-        const displayTracks = [{ Index: -1, DisplayTitle: 'Off', Title: 'Off' }, ...tracks];
+        const displayTracks = [{ Index: -1, DisplayTitle: i18n.t('Off'), Title: i18n.t('Off') }, ...tracks];
 
-        this._renderTrackSelectionMenu('Subtitles', displayTracks, currentIndex, (index) => {
+        this._renderTrackSelectionMenu(i18n.t('Subtitles'), displayTracks, currentIndex, (index) => {
             if (this._selectedSubtitleIndex === index) return;
 
             this._selectedSubtitleIndex = index;
@@ -1695,7 +1705,8 @@ class DetailsPage extends Page {
         const optionsHtml = tracks
             .map((track, i) => {
                 const isSelected = track.Index === currentIndex;
-                const label = track.DisplayTitle || track.Title || track.Language || `Track ${track.Index}`;
+                const label =
+                    track.DisplayTitle || track.Title || track.Language || i18n.t('TrackIndex', [track.Index]);
                 let metadataHtml = '';
 
                 // For subtitles, add Type and Location metadata
@@ -1729,7 +1740,7 @@ class DetailsPage extends Page {
                     ${optionsHtml}
                 </div>
                 <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
                 </div>
             </div>
         `;
@@ -1839,8 +1850,8 @@ class DetailsPage extends Page {
         document.body.appendChild(overlay);
 
         const options = [
-            { id: 'refresh', label: 'Refresh Metadata' },
-            { id: 'edit-subtitles', label: 'Edit Subtitles (not implemented yet)' }
+            { id: 'refresh', label: i18n.t('RefreshMetadata') },
+            { id: 'edit-subtitles', label: i18n.t('EditSubtitles') }
         ];
 
         const optionsHtml = options
@@ -1856,13 +1867,13 @@ class DetailsPage extends Page {
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
                 <div class="modal-header">
-                    <h2>Options</h2>
+                    <h2>${i18n.t('MoreOptions')}</h2>
                 </div>
                 <div class="modal-options">
                     ${optionsHtml}
                 </div>
                 <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">Cancel</button>
+                    <button class="modal-action-btn" id="btn-modal-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
                 </div>
             </div>
         `;
@@ -1977,9 +1988,9 @@ class DetailsPage extends Page {
         document.body.appendChild(overlay);
 
         const options = [
-            { id: 'scan', label: 'Scan for new and updated files', mode: 'Default', replace: false },
-            { id: 'missing', label: 'Search for missing metadata', mode: 'FullRefresh', replace: false },
-            { id: 'all', label: 'Replace all metadata', mode: 'FullRefresh', replace: true }
+            { id: 'scan', label: i18n.t('ScanForNewAndUpdatedFiles'), mode: 'Default', replace: false },
+            { id: 'missing', label: i18n.t('SearchForMissingMetadata'), mode: 'FullRefresh', replace: false },
+            { id: 'all', label: i18n.t('ReplaceAllMetadata'), mode: 'FullRefresh', replace: true }
         ];
 
         const optionsHtml = options
@@ -1995,13 +2006,13 @@ class DetailsPage extends Page {
         overlay.innerHTML = `
             <div class="settings-modal" role="dialog" aria-modal="true">
                 <div class="modal-header">
-                    <h2>Refresh Metadata</h2>
+                    <h2>${i18n.t('RefreshMetadata')}</h2>
                 </div>
                 <div class="modal-options">
                     ${optionsHtml}
                 </div>
                 <div class="modal-actions">
-                    <button class="modal-action-btn" id="btn-refresh-cancel" tabindex="0">Cancel</button>
+                    <button class="modal-action-btn" id="btn-refresh-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
                 </div>
             </div>
         `;
@@ -2040,10 +2051,10 @@ class DetailsPage extends Page {
                     ReplaceAllMetadata: opt.replace,
                     ReplaceAllImages: opt.replace
                 });
-                toast.show('Refresh Queued');
+                toast.show(i18n.t('MessageRefreshQueued'));
             } catch (e) {
                 log.error('Failed to queue metadata refresh', e);
-                toast.show('Failed to queue refresh');
+                toast.show(i18n.t('MessageRefreshFailed'));
             }
         };
 

@@ -94,7 +94,7 @@ class LoginPage extends Page {
                     
                     <!-- Server URL Form -->
                     <div class="login-section server-section" data-section="server">
-                        <label class="input-label" data-i18n="ConnectToServer">Connect to Server</label>
+                        <label class="input-label" data-i18n="HeaderConnectToServer">Connect to Server</label>
                         <div class="server-input-container">
                             <input 
                                 type="url" 
@@ -153,7 +153,7 @@ class LoginPage extends Page {
                     
                     <!-- Manual Login Form -->
                     <div class="login-section manual-section hidden" data-section="manual">
-                        <h2 data-i18n="ManualLogin">Manual Login</h2>
+                        <h2 data-i18n="ButtonManualLogin">Manual Login</h2>
                         <div class="input-group">
                             <input 
                                 type="text" 

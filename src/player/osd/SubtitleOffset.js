@@ -44,7 +44,7 @@ export default class SubtitleOffset extends BaseMenu {
             <div id="osdOffsetOverlay" class="osd-offset-popup">
                 <div class="osd-offset-header">
                     <div class="osd-offset-title-group">
-                        <span class="osd-offset-title">${i18n.t('SubtitleOffsetUpper')}</span>
+                        <span class="osd-offset-title">${i18n.t('SubtitleOffset')}</span>
                         <span class="osd-offset-value" id="osdOffsetValue">0.0s</span>
                     </div>
                     <button class="osd-offset-close focusable" data-action="closeSubtitleOffset" tabindex="0">

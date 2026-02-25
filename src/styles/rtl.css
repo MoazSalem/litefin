@@ -388,3 +388,36 @@
 [dir="rtl"] .sort-column:last-child {
     border-left: none;
 }
+
+/* ================== LOGIN PAGE ================== */
+[dir="rtl"] .login-logo-svg {
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+[dir="rtl"] .server-section {
+    text-align: right;
+}
+
+[dir="rtl"] .server-input-container > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .discovered-servers {
+    text-align: right;
+}
+
+[dir="rtl"] .discovery-status > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .server-item > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .user-name {
+    text-align: center; /* Maintain center for users grid */
+}
