@@ -59,7 +59,7 @@ class Sidebar extends Component {
                     <div class="item-icon user-avatar-container">
                         ${this._renderUserAvatar()}
                     </div>
-                    <span class="item-text">${this._getUserName()}</span>
+                    <span class="item-text user-name">${this._getUserName()}</span>
                 </button>
 
                 <!-- Navigation Items -->

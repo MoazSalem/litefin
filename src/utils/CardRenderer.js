@@ -9,6 +9,7 @@
 
 import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
+import { i18n } from './i18n.js';
 
 class CardRenderer {
     /**
@@ -269,11 +270,11 @@ class CardRenderer {
 
         // --- 3. Text Generation ---
 
-        let titleText = item.Name;
+        let titleText = i18n.ensureBiDi(item.Name);
         let subtitleText = '';
 
         if (type === 'person') {
-            subtitleText = item.Role || item.Type;
+            subtitleText = i18n.ensureBiDi(item.Role || item.Type);
         } else if (item.Type === 'Episode') {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
@@ -281,19 +282,23 @@ class CardRenderer {
 
             if (isLandscape) {
                 if (contextType === 'season-grid') {
-                    titleText = `${e} - ${item.Name}`;
+                    titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
                     subtitleText = '';
                 } else {
                     // Next Up Style (Keep Series Name)
-                    titleText = item.SeriesName || item.Name;
-                    subtitleText = `${episodeCode} - ${item.Name} `;
+                    titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+                    subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
                 }
             } else {
                 // Poster Style
-                subtitleText = `${episodeCode} `;
+                subtitleText = i18n.ensureBiDi(`${episodeCode} `);
             }
         } else if (type === 'season') {
-            // For seasons, item.Name is "Season 1", usually fine.
+            if (item.IndexNumber === 0) {
+                titleText = i18n.t('Specials');
+            } else {
+                titleText = i18n.t('SeasonValue', [item.IndexNumber]);
+            }
         } else {
             // Movies/Shows - show year and role if available
             const parts = [];
@@ -301,7 +306,9 @@ class CardRenderer {
 
             // Support both standard Role and _roleName (from MediaGrid mapping)
             const role = item.Role || item._roleName;
-            if (role) parts.push(`as ${role} `);
+            if (role) {
+                parts.push(i18n.t('LabelAsRole', [role]));
+            }
 
             subtitleText = parts.join(' · ');
         }

@@ -343,6 +343,18 @@ export class ApiClient {
     }
 
     // ========================================================================
+    // Localization Endpoints
+    // ========================================================================
+
+    /**
+     * Get list of cultures (languages) supported by the server
+     * @returns {Promise<Array>} List of culture objects
+     */
+    async getCultures() {
+        return this.get('/Localization/Cultures');
+    }
+
+    // ========================================================================
     // User Endpoints
     // ========================================================================
 

@@ -23,6 +23,7 @@ class I18nManager {
      */
     async init(langCode = 'en') {
         this.currentLang = langCode;
+        this.isRTL = langCode === 'ar' || langCode === 'he' || langCode === 'fa';
 
         // Resolve path relative to the current location (handles file:// in Tizen)
         const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
@@ -97,12 +98,33 @@ class I18nManager {
             return key;
         }
 
-        // Apply string interpolation if args exist
+        // Apply regular interpolation
         if (args.length > 0) {
             for (let i = 0; i < args.length; i++) {
-                // Relies on simple string replacement for {0}, {1}, etc.
                 str = str.replace(new RegExp(`\\{${i}\\}`, 'g'), args[i]);
             }
+        }
+
+        // Apply BiDi/Parentheses fix for RTL (Tizen/BiDi mirroring bug)
+        return this.ensureBiDi(str);
+    }
+
+    /**
+     * Ensures correct BiDi rendering for strings containing parentheses in RTL mode.
+     * Uses LRE (Left-to-Right Embedding) and LRM hints to force correct mirroring.
+     * @param {string} str - String to fix
+     * @returns {string} Fixed string
+     */
+    ensureBiDi(str) {
+        if (!this.isRTL || !str) return str;
+
+        // If it contains parentheses, we need to be extra careful with BiDi mirroring on TV browsers.
+        if (str.includes('(') || str.includes(')')) {
+            // 1. Wrap each parenthesis with LRM (\u200E) to hint its directionality to the engine.
+            const punctuated = str.replace(/\(/g, '\u200E(').replace(/\)/g, ')\u200E');
+
+            // 2. Wrap the entire string in LRE (\u202A) and PDF (\u202C) to isolate the LTR run.
+            return `\u202A${punctuated}\u202C`;
         }
 
         return str;

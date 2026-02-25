@@ -256,6 +256,10 @@
     transition-delay: 0.15s;
 }
 
+.sidebar .user-name {
+    margin-top: 0;
+}
+
 /* Navigation & Libraries Container */
 .sidebar-nav,
 .sidebar-libraries {

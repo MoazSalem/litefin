@@ -900,18 +900,16 @@ class DetailsPage extends Page {
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
         const isSeason = item.Type === 'Season';
-        const displayTitle = isSeason ? item.SeriesName || item.Name : item.Name;
-        const displaySubtitle = isSeason
-            ? item.Name
-            : item.OriginalTitle && item.OriginalTitle !== item.Name
-              ? item.OriginalTitle
-              : '';
+        const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
+        const displaySubtitle = i18n.ensureBiDi(
+            isSeason ? item.Name : item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : ''
+        );
 
         this.$('#hero-info').innerHTML = `
             <div id="details-logo" class="details-logo"></div>
             <h1 class="details-title">${displayTitle}</h1>
             ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info">S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}</p>` : ''}
+            ${item.Type === 'Episode' ? `<p class="details-episode-info">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
             
             <div class="details-meta-row">
                 ${metaHtml}
@@ -1214,8 +1212,8 @@ class DetailsPage extends Page {
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: #00a4dc;"></div></div>` : ''}
                             </div>
                             <div class="episode-info">
-                                <span class="episode-number">S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}</span>
-                                <span class="episode-title">${ep.Name}</span>
+                                <span class="episode-number">${i18n.ensureBiDi(`S${(ep.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(ep.IndexNumber || 0).toString().padStart(2, '0')}`)}</span>
+                                <span class="episode-title">${i18n.ensureBiDi(ep.Name)}</span>
                                 <p class="episode-overview">${ep.Overview?.substring(0, 100) || ''}...</p>
                             </div>
                         </button>

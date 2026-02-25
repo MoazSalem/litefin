@@ -24,14 +24,47 @@ import { availableLanguages } from '../locales/languages.js';
 
 const log = logger.create('SettingsPage');
 
+// Cache cultures across page instances
+let cachedCultures = null;
+
 class SettingsPage extends Page {
     constructor() {
         super();
         this.title = i18n.t('Settings');
         this.activeTab = 'appearance'; // Default tab
 
-        // Build languages list for Audio/Subtitle preferences
-        this.languages = [{ value: 'Default', label: i18n.t('Default') }, ...availableLanguages];
+        // UI Languages (for app interface)
+        this.uiLanguages = availableLanguages;
+
+        // Preference Languages (Audio/Subtitle) - fetched from server
+        this.prefLanguages = cachedCultures || [{ value: 'Default', label: i18n.t('Default') }];
+    }
+
+    async onInit() {
+        // If we don't have cultures cached, fetch them
+        if (!cachedCultures) {
+            try {
+                const cultures = await api.getCultures();
+                // Map to dropdown format and sort alphabetically by display name
+                cachedCultures = cultures
+                    .map((c) => ({
+                        value: c.ThreeLetterISOLanguageName,
+                        label: i18n.ensureBiDi(c.DisplayName)
+                    }))
+                    .sort((a, b) => a.label.localeCompare(b.label));
+
+                this.prefLanguages = cachedCultures;
+
+                // Re-render if we are on a tab that uses these languages
+                if (this.activeTab === 'player' || this.activeTab === 'subtitles') {
+                    this._switchTab(this.activeTab, true);
+                }
+            } catch (error) {
+                log.error('Failed to fetch cultures:', error);
+            }
+        }
+
+        this.markReady();
     }
 
     render() {
@@ -143,7 +176,7 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'app-language-select',
-                            availableLanguages,
+                            this.uiLanguages,
                             storage.getItem('app_language') || 'en-us'
                         )}
                     </div>
@@ -341,7 +374,7 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'audio-lang-select',
-                            this.languages,
+                            [{ value: 'Default', label: i18n.t('Default') }, ...this.prefLanguages],
                             storage.getItem('pref:audioLang') || 'Default'
                         )}
                     </div>
@@ -556,15 +589,7 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         ${this._renderDropdown(
                             'subtitle-lang-select',
-                            [
-                                { value: 'none', label: i18n.t('None') },
-                                { value: 'eng', label: i18n.t('English') },
-                                { value: 'ara', label: i18n.t('Arabic') },
-                                { value: 'spa', label: i18n.t('Spanish') },
-                                { value: 'fre', label: i18n.t('French') },
-                                { value: 'jpn', label: i18n.t('Japanese') },
-                                { value: 'kor', label: i18n.t('Korean') }
-                            ],
+                            [{ value: 'none', label: i18n.t('None') }, ...this.prefLanguages],
                             storage.getItem('pref:subtitleLang') || 'none'
                         )}
                     </div>
@@ -1290,7 +1315,7 @@ class SettingsPage extends Page {
         this.$$('.settings-menu-btn').forEach((btn) => {
             btn.addEventListener('click', () => {
                 const tab = btn.dataset.tab;
-                this._switchTab(tab);
+                this._switchTab(tab, false, true);
             });
 
             // Also switch on focus for hover-like preview?
@@ -1497,7 +1522,7 @@ class SettingsPage extends Page {
     _renderDropdown(id, options, currentValue) {
         // Find current label
         const currentOption = options.find((o) => o.value === currentValue) || options[0];
-        const currentLabel = currentOption ? currentOption.label : i18n.t('Select');
+        const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
 
         // Render as a button that triggers the modal
         return `
@@ -1531,7 +1556,7 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                            <span>${opt.label}</span>
+                            <span>${i18n.ensureBiDi(opt.label)}</span>
                             <div class="check-icon"></div>
                         </button>
                     `
@@ -1912,7 +1937,7 @@ class SettingsPage extends Page {
         });
     }
 
-    _switchTab(tabId, force = false) {
+    _switchTab(tabId, force = false, focusContent = false) {
         if (this.activeTab === tabId && !force) return;
         this.activeTab = tabId;
 
@@ -1932,9 +1957,12 @@ class SettingsPage extends Page {
 
             this._bindContentEvents(); // Re-bind events for new content
 
-            // Invalidate focus cache
             focusManager.invalidateCache('settings-content');
             this._setupFocus();
+
+            if (focusContent) {
+                focusManager.setActiveSection('settings-content', true);
+            }
         }
     }
 

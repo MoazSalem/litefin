@@ -1,6 +1,10 @@
 // Auto-generated language mapping
 export const availableLanguages = [
     {
+        "value": "en-us",
+        "label": "English"
+    },
+    {
         "value": "ab",
         "label": "Abkhazian"
     },
@@ -9,340 +13,20 @@ export const availableLanguages = [
         "label": "Afrikaans"
     },
     {
-        "value": "en-us",
-        "label": "American English"
-    },
-    {
-        "value": "br",
-        "label": "Brezhoneg"
-    },
-    {
-        "value": "en-gb",
-        "label": "British English"
-    },
-    {
-        "value": "ca",
-        "label": "Català"
-    },
-    {
-        "value": "cs",
-        "label": "Čeština"
-    },
-    {
-        "value": "ch",
-        "label": "Chamorro"
-    },
-    {
-        "value": "cy",
-        "label": "Cymraeg"
-    },
-    {
-        "value": "da",
-        "label": "Dansk"
-    },
-    {
-        "value": "de",
-        "label": "Deutsch"
-    },
-    {
-        "value": "dv",
-        "label": "Divehi"
-    },
-    {
-        "value": "et",
-        "label": "Eesti"
-    },
-    {
-        "value": "es",
-        "label": "Español"
-    },
-    {
-        "value": "es-ar",
-        "label": "Español (Argentina)"
-    },
-    {
-        "value": "es_DO",
-        "label": "Español (República Dominicana)"
-    },
-    {
-        "value": "es-mx",
-        "label": "Español de México"
-    },
-    {
-        "value": "es_419",
-        "label": "Español latinoamericano"
-    },
-    {
-        "value": "eo",
-        "label": "Esperanto"
-    },
-    {
-        "value": "eu",
-        "label": "Euskara"
-    },
-    {
-        "value": "fil",
-        "label": "Filipino"
-    },
-    {
-        "value": "fo",
-        "label": "Føroyskt"
-    },
-    {
-        "value": "fr",
-        "label": "Français"
-    },
-    {
-        "value": "fr-ca",
-        "label": "Français canadien"
-    },
-    {
-        "value": "ga",
-        "label": "Gaeilge"
-    },
-    {
-        "value": "gl",
-        "label": "Galego"
-    },
-    {
-        "value": "ht",
-        "label": "Haitian Creole"
-    },
-    {
-        "value": "hr",
-        "label": "Hrvatski"
-    },
-    {
-        "value": "id",
-        "label": "Indonesia"
-    },
-    {
-        "value": "zu",
-        "label": "IsiZulu"
-    },
-    {
-        "value": "is-is",
-        "label": "Íslenska (Ísland)"
-    },
-    {
-        "value": "it",
-        "label": "Italiano"
-    },
-    {
-        "value": "kw",
-        "label": "Kernewek"
-    },
-    {
-        "value": "sw",
-        "label": "Kiswahili"
-    },
-    {
-        "value": "lv",
-        "label": "Latviešu"
-    },
-    {
-        "value": "lb",
-        "label": "Lëtzebuergesch"
-    },
-    {
-        "value": "lt-lt",
-        "label": "Lietuvių (Lietuva)"
-    },
-    {
-        "value": "jbo",
-        "label": "Lojban"
-    },
-    {
-        "value": "hu",
-        "label": "Magyar"
-    },
-    {
-        "value": "mg",
-        "label": "Malagasy"
-    },
-    {
-        "value": "mt",
-        "label": "Malti"
-    },
-    {
-        "value": "mi",
-        "label": "Māori"
-    },
-    {
-        "value": "ms",
-        "label": "Melayu"
-    },
-    {
-        "value": "enm",
-        "label": "Middle English"
-    },
-    {
-        "value": "nl",
-        "label": "Nederlands"
-    },
-    {
-        "value": "nb",
-        "label": "Norsk bokmål"
-    },
-    {
-        "value": "nn",
-        "label": "Norsk nynorsk"
-    },
-    {
-        "value": "uz",
-        "label": "O‘zbek"
-    },
-    {
-        "value": "oc",
-        "label": "Occitan"
-    },
-    {
-        "value": "pl",
-        "label": "Polski"
-    },
-    {
-        "value": "pt",
-        "label": "Português"
-    },
-    {
-        "value": "pt-br",
-        "label": "Português (Brasil)"
-    },
-    {
-        "value": "pt-pt",
-        "label": "Português europeu"
-    },
-    {
-        "value": "pr",
-        "label": "Pr"
-    },
-    {
-        "value": "ro",
-        "label": "Română"
-    },
-    {
-        "value": "gsw",
-        "label": "Schwiizertüütsch"
-    },
-    {
         "value": "sq",
         "label": "Shqip"
     },
     {
-        "value": "sk",
-        "label": "Slovenčina"
-    },
-    {
-        "value": "sl-si",
-        "label": "Slovenščina (Slovenija)"
-    },
-    {
-        "value": "so",
-        "label": "Soomaali"
-    },
-    {
-        "value": "fi",
-        "label": "Suomi"
-    },
-    {
-        "value": "sv",
-        "label": "Svenska"
-    },
-    {
-        "value": "kab",
-        "label": "Taqbaylit"
-    },
-    {
-        "value": "vi",
-        "label": "Tiếng Việt"
-    },
-    {
-        "value": "tr",
-        "label": "Türkçe"
-    },
-    {
-        "value": "el",
-        "label": "Ελληνικά"
-    },
-    {
-        "value": "be-by",
-        "label": "Беларуская (Беларусь)"
-    },
-    {
-        "value": "bg-bg",
-        "label": "Български (България)"
-    },
-    {
-        "value": "ky",
-        "label": "Кыргызча"
-    },
-    {
-        "value": "kk",
-        "label": "Қазақ тілі"
-    },
-    {
-        "value": "mk",
-        "label": "Македонски"
-    },
-    {
-        "value": "mn",
-        "label": "Монгол"
-    },
-    {
-        "value": "ru",
-        "label": "Русский"
-    },
-    {
-        "value": "sr",
-        "label": "Српски"
-    },
-    {
-        "value": "uk",
-        "label": "Українська"
-    },
-    {
-        "value": "ka",
-        "label": "Ქართული"
-    },
-    {
-        "value": "hy",
-        "label": "Հայերեն"
-    },
-    {
-        "value": "he",
-        "label": "עברית"
-    },
-    {
-        "value": "ug",
-        "label": "ئۇيغۇرچە"
-    },
-    {
-        "value": "ur_PK",
-        "label": "اردو (پاکستان)"
+        "value": "en_US",
+        "label": "American English"
     },
     {
         "value": "ar",
         "label": "العربية"
     },
     {
-        "value": "fa",
-        "label": "فارسی"
-    },
-    {
-        "value": "ckb",
-        "label": "کوردیی ناوەندی"
-    },
-    {
-        "value": "ne",
-        "label": "नेपाली"
-    },
-    {
-        "value": "mr",
-        "label": "मराठी"
-    },
-    {
-        "value": "hi-in",
-        "label": "हिन्दी (भारत)"
+        "value": "hy",
+        "label": "Հայերեն"
     },
     {
         "value": "as",
@@ -357,44 +41,48 @@ export const availableLanguages = [
         "label": "বাংলা (বাংলাদেশ)"
     },
     {
-        "value": "pa",
-        "label": "ਪੰਜਾਬੀ"
+        "value": "eu",
+        "label": "Euskara"
     },
     {
-        "value": "gu",
-        "label": "ગુજરાતી"
+        "value": "be-by",
+        "label": "Беларуская (Беларусь)"
     },
     {
-        "value": "ta",
-        "label": "தமிழ்"
+        "value": "pt-br",
+        "label": "Português (Brasil)"
     },
     {
-        "value": "te",
-        "label": "తెలుగు"
+        "value": "br",
+        "label": "Brezhoneg"
     },
     {
-        "value": "kn",
-        "label": "ಕನ್ನಡ"
+        "value": "en-gb",
+        "label": "British English"
     },
     {
-        "value": "ml",
-        "label": "മലയാളം"
-    },
-    {
-        "value": "si",
-        "label": "සිංහල"
-    },
-    {
-        "value": "th",
-        "label": "ไทย"
+        "value": "bg-bg",
+        "label": "Български (България)"
     },
     {
         "value": "my",
         "label": "မြန်မာ"
     },
     {
-        "value": "ko",
-        "label": "한국어"
+        "value": "fr-ca",
+        "label": "Français canadien"
+    },
+    {
+        "value": "ca",
+        "label": "Català"
+    },
+    {
+        "value": "ckb",
+        "label": "کوردیی ناوەندی"
+    },
+    {
+        "value": "ch",
+        "label": "Chamorro"
     },
     {
         "value": "zh-cn",
@@ -409,7 +97,323 @@ export const availableLanguages = [
         "label": "中文（台灣）"
     },
     {
+        "value": "kw",
+        "label": "Kernewek"
+    },
+    {
+        "value": "hr",
+        "label": "Hrvatski"
+    },
+    {
+        "value": "cs",
+        "label": "Čeština"
+    },
+    {
+        "value": "da",
+        "label": "Dansk"
+    },
+    {
+        "value": "dv",
+        "label": "Divehi"
+    },
+    {
+        "value": "nl",
+        "label": "Nederlands"
+    },
+    {
+        "value": "eo",
+        "label": "Esperanto"
+    },
+    {
+        "value": "et",
+        "label": "Eesti"
+    },
+    {
+        "value": "pt-pt",
+        "label": "Português europeu"
+    },
+    {
+        "value": "fo",
+        "label": "Føroyskt"
+    },
+    {
+        "value": "fil",
+        "label": "Filipino"
+    },
+    {
+        "value": "fi",
+        "label": "Suomi"
+    },
+    {
+        "value": "fr",
+        "label": "Français"
+    },
+    {
+        "value": "gl",
+        "label": "Galego"
+    },
+    {
+        "value": "ka",
+        "label": "Ქართული"
+    },
+    {
+        "value": "de",
+        "label": "Deutsch"
+    },
+    {
+        "value": "el",
+        "label": "Ελληνικά"
+    },
+    {
+        "value": "gu",
+        "label": "ગુજરાતી"
+    },
+    {
+        "value": "ht",
+        "label": "Haitian Creole"
+    },
+    {
+        "value": "he",
+        "label": "עברית"
+    },
+    {
+        "value": "hi-in",
+        "label": "हिन्दी (भारत)"
+    },
+    {
+        "value": "hu",
+        "label": "Magyar"
+    },
+    {
+        "value": "is-is",
+        "label": "Íslenska (Ísland)"
+    },
+    {
+        "value": "id",
+        "label": "Indonesia"
+    },
+    {
+        "value": "ga",
+        "label": "Gaeilge"
+    },
+    {
+        "value": "it",
+        "label": "Italiano"
+    },
+    {
         "value": "ja",
         "label": "日本語"
+    },
+    {
+        "value": "kab",
+        "label": "Taqbaylit"
+    },
+    {
+        "value": "kn",
+        "label": "ಕನ್ನಡ"
+    },
+    {
+        "value": "kk",
+        "label": "Қазақ тілі"
+    },
+    {
+        "value": "ko",
+        "label": "한국어"
+    },
+    {
+        "value": "ky",
+        "label": "Кыргызча"
+    },
+    {
+        "value": "es_419",
+        "label": "Español latinoamericano"
+    },
+    {
+        "value": "lv",
+        "label": "Latviešu"
+    },
+    {
+        "value": "lt-lt",
+        "label": "Lietuvių (Lietuva)"
+    },
+    {
+        "value": "jbo",
+        "label": "Lojban"
+    },
+    {
+        "value": "lb",
+        "label": "Lëtzebuergesch"
+    },
+    {
+        "value": "mk",
+        "label": "Македонски"
+    },
+    {
+        "value": "mg",
+        "label": "Malagasy"
+    },
+    {
+        "value": "ms",
+        "label": "Melayu"
+    },
+    {
+        "value": "ml",
+        "label": "മലയാളം"
+    },
+    {
+        "value": "mt",
+        "label": "Malti"
+    },
+    {
+        "value": "mi",
+        "label": "Māori"
+    },
+    {
+        "value": "mr",
+        "label": "मराठी"
+    },
+    {
+        "value": "es-mx",
+        "label": "Español de México"
+    },
+    {
+        "value": "enm",
+        "label": "Middle English"
+    },
+    {
+        "value": "mn",
+        "label": "Монгол"
+    },
+    {
+        "value": "ne",
+        "label": "नेपाली"
+    },
+    {
+        "value": "nb",
+        "label": "Norsk bokmål"
+    },
+    {
+        "value": "nn",
+        "label": "Norsk nynorsk"
+    },
+    {
+        "value": "oc",
+        "label": "Occitan"
+    },
+    {
+        "value": "fa",
+        "label": "فارسی"
+    },
+    {
+        "value": "pl",
+        "label": "Polski"
+    },
+    {
+        "value": "pt",
+        "label": "Português"
+    },
+    {
+        "value": "pr",
+        "label": "Pr"
+    },
+    {
+        "value": "pa",
+        "label": "ਪੰਜਾਬੀ"
+    },
+    {
+        "value": "ro",
+        "label": "Română"
+    },
+    {
+        "value": "ru",
+        "label": "Русский"
+    },
+    {
+        "value": "sr",
+        "label": "Српски"
+    },
+    {
+        "value": "si",
+        "label": "සිංහල"
+    },
+    {
+        "value": "sk",
+        "label": "Slovenčina"
+    },
+    {
+        "value": "sl-si",
+        "label": "Slovenščina (Slovenija)"
+    },
+    {
+        "value": "so",
+        "label": "Soomaali"
+    },
+    {
+        "value": "es",
+        "label": "Español"
+    },
+    {
+        "value": "es-ar",
+        "label": "Español (Argentina)"
+    },
+    {
+        "value": "es_DO",
+        "label": "Español (República Dominicana)"
+    },
+    {
+        "value": "sw",
+        "label": "Kiswahili"
+    },
+    {
+        "value": "sv",
+        "label": "Svenska"
+    },
+    {
+        "value": "gsw",
+        "label": "Schwiizertüütsch"
+    },
+    {
+        "value": "ta",
+        "label": "தமிழ்"
+    },
+    {
+        "value": "te",
+        "label": "తెలుగు"
+    },
+    {
+        "value": "th",
+        "label": "ไทย"
+    },
+    {
+        "value": "tr",
+        "label": "Türkçe"
+    },
+    {
+        "value": "uk",
+        "label": "Українська"
+    },
+    {
+        "value": "ur_PK",
+        "label": "اردو (پاکستان)"
+    },
+    {
+        "value": "ug",
+        "label": "ئۇيغۇرچە"
+    },
+    {
+        "value": "uz",
+        "label": "O‘zbek"
+    },
+    {
+        "value": "vi",
+        "label": "Tiếng Việt"
+    },
+    {
+        "value": "cy",
+        "label": "Cymraeg"
+    },
+    {
+        "value": "zu",
+        "label": "IsiZulu"
     }
 ];

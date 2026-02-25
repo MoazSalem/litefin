@@ -241,6 +241,7 @@
 [dir="rtl"] .resume-btn svg {
     margin-right: 0;
     margin-left: 12px;
+    transform: scaleX(-1);
 }
 
 [dir="rtl"] .reset-btn {
@@ -484,4 +485,18 @@
 
 [dir="rtl"] .identity-card {
     text-align: right !important;
+}
+
+/* ================== MISC / PUNCTUATION FIXES ================== */
+[dir="rtl"] .meta-item,
+[dir="rtl"] .episode-number,
+[dir="rtl"] .episode-title,
+[dir="rtl"] .setting-label,
+[dir="rtl"] .select-option,
+[dir="rtl"] .rich-meta-row,
+[dir="rtl"] .details-original-title,
+[dir="rtl"] .meta-ends-at,
+[dir="rtl"] .hero-info p,
+[dir="rtl"] .overview-text {
+    unicode-bidi: isolate;
 }
