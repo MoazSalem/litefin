@@ -67,27 +67,26 @@ export default class SettingsMenu extends BaseMenu {
         }
 
         const options = [
-            { id: 'aspectRatio', label: i18n.t('AspectRatio'), icon: ICONS.aspectRatio },
-            { id: 'playbackSpeed', label: i18n.t('PlaybackSpeed'), icon: ICONS.speed },
-            { id: 'quality', label: i18n.t('Quality'), icon: ICONS.quality },
-            { id: 'playbackMode', label: i18n.t('PlaybackMode'), icon: ICONS.layers },
-            { id: 'repeatMode', label: i18n.t('RepeatMode'), icon: ICONS.repeat },
-            { id: 'playbackInfo', label: i18n.t('PlaybackInfo'), icon: ICONS.info },
-            { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), icon: ICONS.sync },
-            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), icon: ICONS.palette }
-            // Future: { id: 'skipIntro', label: i18n.t('SkipIntro'), icon: ... }
+            { id: 'aspectRatio', label: i18n.t('AspectRatio'), key: 'AspectRatio', icon: ICONS.aspectRatio },
+            { id: 'playbackSpeed', label: i18n.t('PlaybackRate'), key: 'PlaybackRate', icon: ICONS.speed },
+            { id: 'quality', label: i18n.t('Quality'), key: 'Quality', icon: ICONS.quality },
+            { id: 'playbackMode', label: i18n.t('PlaybackMode'), key: 'PlaybackMode', icon: ICONS.layers },
+            { id: 'repeatMode', label: i18n.t('RepeatMode'), key: 'RepeatMode', icon: ICONS.repeat },
+            { id: 'playbackInfo', label: i18n.t('PlaybackData'), key: 'PlaybackData', icon: ICONS.info },
+            { id: 'subtitleOffset', label: i18n.t('SubtitleOffset'), key: 'SubtitleOffset', icon: ICONS.sync },
+            { id: 'subtitleAppearance', label: i18n.t('SubtitleAppearance'), key: 'SubtitleAppearance', icon: ICONS.palette }
         ];
 
         const optionsHtml = options.map((opt, i) => `
             <button class="track-option track-item" data-id="${opt.id}" data-menu-index="${i}">
                 <span class="track-option-icon">${opt.icon || ''}</span>
-                <span class="track-option-label">${opt.label}</span>
+                <span class="track-option-label" data-i18n="${opt.key}">${opt.label}</span>
             </button>
         `).join('');
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${i18n.t('Settings')}</div>
+                <div class="track-menu-title" data-i18n="Settings">${i18n.t('Settings')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

@@ -10,9 +10,9 @@ export default class AspectRatioMenu extends BaseMenu {
         super(osdController);
         this.isModal = true;
         this.options = [
-            { id: 'auto', label: i18n.t('Auto'), icon: ICONS.aspectRatio },
-            { id: 'zoom', label: i18n.t('Zoom'), icon: ICONS.zoomIn },
-            { id: 'stretch', label: i18n.t('Stretch'), icon: ICONS.aspectRatio } // Reusing icon for now
+            { id: 'auto', label: i18n.t('Auto'), key: 'Auto', icon: ICONS.aspectRatio },
+            { id: 'zoom', label: i18n.t('Zoom'), key: 'Zoom', icon: ICONS.zoomIn },
+            { id: 'stretch', label: i18n.t('Stretch'), key: 'Stretch', icon: ICONS.aspectRatio } // Reusing icon for now
         ];
     }
 
@@ -81,7 +81,7 @@ export default class AspectRatioMenu extends BaseMenu {
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">
                 <span class="track-option-icon">${opt.icon || ''}</span>
-                <span class="track-option-label">${opt.label}</span>
+                <span class="track-option-label" data-i18n="${opt.key}">${opt.label}</span>
                 <span class="track-option-check">${checkIcon}</span>
             </button>
             `;
@@ -89,7 +89,7 @@ export default class AspectRatioMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${i18n.t('AspectRatio')}</div>
+                <div class="track-menu-title" data-i18n="AspectRatio">${i18n.t('AspectRatio')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

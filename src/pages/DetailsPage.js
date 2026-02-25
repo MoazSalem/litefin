@@ -132,7 +132,7 @@ class DetailsPage extends Page {
 
                     <!-- Collection Shows (BoxSet) -->
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
-                        <h2 class="row-title" data-i18n="TypeOptionPluralSeries">Shows in Collection</h2>
+                        <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
                     
@@ -883,7 +883,7 @@ class DetailsPage extends Page {
 
             // Ends At
             const endTime = new Date(Date.now() + item.RunTimeTicks / 10000);
-            const timeString = endTime.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+            const timeString = i18n.formatLocalTime(endTime);
             endsAtText = i18n.t('EndsAtValue', [timeString]);
         }
 

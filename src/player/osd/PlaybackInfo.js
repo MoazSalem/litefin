@@ -50,7 +50,7 @@ export default class PlaybackInfo extends BaseMenu {
         const html = `
             <div id="osdPlaybackInfoOverlay" class="playback-info-overlay">
                 <div class="playback-info-header">
-                    <span class="playback-info-title">${i18n.t('PlaybackInfo')}</span>
+                    <span class="playback-info-title">${i18n.t('LabelPlaybackInfo')}</span>
                     <button class="playback-info-close" data-action="closePlaybackInfo" tabindex="0">${closeIcon}</button>
                 </div>
                 <div class="playback-info-content" id="playbackInfoContent">
@@ -170,17 +170,17 @@ export default class PlaybackInfo extends BaseMenu {
         const displayPlayMethod = playMethod === 'DirectStream' ? 'Remuxing' : playMethod;
         
         html += createSection('', [
-            { label: i18n.t('Player'), value: playerType },
-            { label: i18n.t('PlayMethod'), value: displayPlayMethod },
-            { label: i18n.t('Protocol'), value: protocol },
-            { label: i18n.t('StreamType'), value: streamType }
+            { label: i18n.t('LabelPlayer'), value: playerType },
+            { label: i18n.t('LabelPlayMethod'), value: displayPlayMethod },
+            { label: i18n.t('LabelProtocol'), value: protocol },
+            { label: i18n.t('LabelStreamType'), value: streamType }
         ]);
 
-        html += createSection(i18n.t('VideoInfo'), [
-            { label: i18n.t('PlayerDimensions'), value: playerDimensions },
-            { label: i18n.t('VideoResolution'), value: videoRes },
-            { label: i18n.t('DroppedFrames'), value: droppedFrames },
-            { label: i18n.t('CorruptedFrames'), value: corruptedFrames }
+        html += createSection(i18n.t('LabelVideoInfo'), [
+            { label: i18n.t('LabelPlayerDimensions'), value: playerDimensions },
+            { label: i18n.t('LabelVideoResolution'), value: videoRes },
+            { label: i18n.t('LabelDroppedFrames'), value: droppedFrames },
+            { label: i18n.t('LabelCorruptedFrames'), value: corruptedFrames }
         ]);
 
         if (playMethod !== 'DirectPlay') {
@@ -193,10 +193,10 @@ export default class PlaybackInfo extends BaseMenu {
             const effectiveLimit = manualBitrate || globalBitrate;
             const limitDisplay = effectiveLimit ? (effectiveLimit / 1000000).toFixed(1) + ' Mbps' : i18n.t('Unlimited');
 
-            html += createSection(i18n.t('TrackIndex', displayPlayMethod) + ` ${i18n.t('Information')}`, [ // Reusing TrackIndex format if it fits, or just title
-                { label: i18n.t('VideoCodec'), value: `${videoStream?.Codec?.toUpperCase() || i18n.t('None')} (${vMethod})` },
-                { label: i18n.t('AudioCodec'), value: `${activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')} (${aMethod})` },
-                { label: i18n.t('BitrateLimit'), value: limitDisplay }
+            html += createSection(i18n.t('LabelTranscodingInfo'), [ // Reusing TrackIndex format if it fits, or just title
+                { label: i18n.t('LabelVideoCodec'), value: `${videoStream?.Codec?.toUpperCase() || i18n.t('None')} (${vMethod})` },
+                { label: i18n.t('LabelAudioCodec'), value: `${activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')} (${aMethod})` },
+                { label: i18n.t('LabelRemoteClientBitrateLimit'), value: limitDisplay }
             ]);
         }
 
@@ -211,17 +211,17 @@ export default class PlaybackInfo extends BaseMenu {
             const aBitrateVal = getBitrate(activeAudioStream);
             const audioBitrate = aBitrateVal ? (aBitrateVal / 1000).toFixed(0) + ' kbps' : i18n.t('None');
             
-            html += createSection(i18n.t('OriginalMediaInfo'), [
-                { label: i18n.t('Container'), value: mediaSource.Container || i18n.t('None') },
-                { label: i18n.t('Size'), value: sizeMb },
-                { label: i18n.t('Bitrate'), value: totalBitrate },
-                { label: i18n.t('VideoCodec'), value: (videoStream?.Codec?.toUpperCase() || i18n.t('None')) + (videoStream?.Profile ? ' ' + videoStream.Profile : '') },
-                { label: i18n.t('VideoBitrate'), value: videoBitrate },
-                { label: i18n.t('VideoRangeType'), value: videoStream?.VideoRange || 'SDR' },
-                { label: i18n.t('AudioCodec'), value: (activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')) + (activeAudioStream?.Profile ? ' ' + activeAudioStream.Profile : '') },
-                { label: i18n.t('AudioBitrate'), value: audioBitrate },
-                { label: i18n.t('AudioChannels'), value: activeAudioStream?.Channels || i18n.t('None') },
-                { label: i18n.t('AudioSampleRate'), value: activeAudioStream?.SampleRate ? activeAudioStream.SampleRate + ' Hz' : i18n.t('None') }
+            html += createSection(i18n.t('LabelOriginalMediaInfo'), [
+                { label: i18n.t('LabelProfileContainer'), value: mediaSource.Container || i18n.t('None') },
+                { label: i18n.t('LabelSize'), value: sizeMb },
+                { label: i18n.t('LabelBitrate'), value: totalBitrate },
+                { label: i18n.t('LabelVideoCodec'), value: (videoStream?.Codec?.toUpperCase() || i18n.t('None')) + (videoStream?.Profile ? ' ' + videoStream.Profile : '') },
+                { label: i18n.t('LabelVideoBitrate'), value: videoBitrate },
+                { label: i18n.t('LabelVideoRangeType'), value: videoStream?.VideoRange || 'SDR' },
+                { label: i18n.t('LabelAudioCodec'), value: (activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')) + (activeAudioStream?.Profile ? ' ' + activeAudioStream.Profile : '') },
+                { label: i18n.t('LabelAudioBitrate'), value: audioBitrate },
+                { label: i18n.t('LabelAudioChannels'), value: activeAudioStream?.Channels || i18n.t('None') },
+                { label: i18n.t('LabelAudioSampleRate'), value: activeAudioStream?.SampleRate ? activeAudioStream.SampleRate + ' Hz' : i18n.t('None') }
             ]);
         }
 

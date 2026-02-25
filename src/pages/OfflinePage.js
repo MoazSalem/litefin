@@ -44,17 +44,17 @@ class OfflinePage extends Page {
                     
                     <h1 class="offline-title" data-i18n="ServerUnreachable">${i18n.t('ServerUnreachable')}</h1>
                     <p class="offline-message">
-                        ${i18n.t('ConnectionErrorMessage', serverUrl)}
+                        ${i18n.t('ConnectionErrorMessage', [serverUrl])}
                     </p>
                     
                     <div class="offline-actions" id="offline-actions">
-                        <button class="btn btn-primary retry-btn focusable" tabindex="0" data-i18n="TryAgain">${i18n.t('TryAgain')}</button>
-                        <button class="btn btn-secondary change-server-btn focusable" tabindex="0" data-i18n="ChangeServer">${i18n.t('ChangeServer')}</button>
+                        <button class="btn btn-primary retry-btn focusable" tabindex="0" data-i18n="ButtonTryAgain">${i18n.t('ButtonTryAgain')}</button>
+                        <button class="btn btn-secondary change-server-btn focusable" tabindex="0" data-i18n="ButtonChangeServer">${i18n.t('ButtonChangeServer')}</button>
                     </div>
                 </div>
                 
                 <div class="offline-footer">
-                    <button class="exit-btn focusable" tabindex="0" data-i18n="ExitApp">${i18n.t('ExitApp')}</button>
+                    <button class="exit-btn focusable" tabindex="0" data-i18n="ButtonExitApp">${i18n.t('ButtonExitApp')}</button>
                 </div>
             </div>
         `;

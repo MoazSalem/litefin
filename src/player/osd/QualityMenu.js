@@ -143,13 +143,27 @@ export default class QualityMenu extends BaseMenu {
             
             // User requested: Auto = Direct Play, Lower = Transcoding
             const secondaryLabel = opt.id === 0 ? i18n.t('DirectPlay') : i18n.t('Transcoding');
+            const secondaryKey = opt.id === 0 ? 'DirectPlay' : 'Transcoding';
             
+            // Format dynamic label
+            let label = opt.label;
+            let labelKey = '';
+            if (opt.id > 0) {
+                if (opt.id >= 1000000) {
+                    label = i18n.t('BitrateMbps', [ (opt.id / 1000000).toString() ]);
+                } else {
+                    label = i18n.t('BitrateKbps', [ (opt.id / 1000).toString() ]);
+                }
+            } else {
+                labelKey = 'Auto';
+            }
+
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" 
                     data-id="${opt.id}" data-menu-index="${i}">
                 <div class="track-option-content">
-                    <span class="track-option-label">${opt.label}</span>
-                    <span class="track-option-secondary">${secondaryLabel}</span>
+                    <span class="track-option-label" ${labelKey ? `data-i18n="${labelKey}"` : ''}>${label}</span>
+                    <span class="track-option-secondary" data-i18n="${secondaryKey}">${secondaryLabel}</span>
                 </div>
                 <span class="track-option-check">${checkIcon}</span>
             </button>
@@ -158,7 +172,7 @@ export default class QualityMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${this.title}</div>
+                <div class="track-menu-title" data-i18n="Quality">${this.title}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

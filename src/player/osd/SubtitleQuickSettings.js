@@ -86,6 +86,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'position',
                 type: 'select',
                 label: i18n.t('VerticalPosition'),
+                labelKey: 'VerticalPosition',
                 key: 'subtitleVerticalPosition',
                 visible: !isASS,
                 options: [
@@ -101,6 +102,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'customPosition',
                 type: 'slider',
                 label: i18n.t('AbsolutePosition'),
+                labelKey: 'AbsolutePosition',
                 key: 'subtitleVerticalPositionCustom',
                 min: 0, max: 100, step: 1, unit: '%',
                 visible: !isASS && verticalPos === 'custom'
@@ -110,7 +112,8 @@ export default class SubtitleQuickSettings extends BaseMenu {
             {
                 id: 'size',
                 type: 'select',
-                label: i18n.t('TextSize'),
+                label: i18n.t('LabelTextSize'),
+                labelKey: 'LabelTextSize',
                 key: 'subtitleSize',
                 visible: !isASS,
                 options: [
@@ -126,6 +129,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'customSize',
                 type: 'slider',
                 label: i18n.t('CustomSize'),
+                labelKey: 'CustomSize',
                 key: 'subtitleSizeCustomValue',
                 min: 1, max: 20, step: 1, unit: 'vh',
                 visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
@@ -134,6 +138,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'font',
                 type: 'select',
                 label: i18n.t('FontFamily'),
+                labelKey: 'FontFamily',
                 key: 'subtitleFont',
                 visible: !isASS,
                 options: [
@@ -152,6 +157,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'weight',
                 type: 'select',
                 label: i18n.t('FontWeight'),
+                labelKey: 'FontWeight',
                 key: 'subtitleWeight',
                 visible: !isASS,
                 options: [
@@ -165,6 +171,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'color',
                 type: 'select',
                 label: i18n.t('TextColor'),
+                labelKey: 'TextColor',
                 key: 'subtitleTextColor',
                 visible: !isASS,
                 options: [
@@ -177,13 +184,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                 ]
             },
-            { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
+            { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), labelKey: 'TextOpacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
 
             // Background
             {
                 id: 'bg',
                 type: 'select',
-                label: i18n.t('Background'),
+                label: i18n.t('BackgroundColor'),
+                labelKey: 'BackgroundColor',
                 key: 'subtitleTextBackground',
                 visible: !isASS,
                 options: [
@@ -201,6 +209,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'bgOpacity',
                 type: 'slider',
                 label: i18n.t('BackgroundOpacity'),
+                labelKey: 'BackgroundOpacity',
                 key: 'subtitleBackgroundOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
                 visible: !isASS && bgColor !== 'transparent'
@@ -211,6 +220,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'shadow',
                 type: 'select',
                 label: i18n.t('TextShadow'),
+                labelKey: 'TextShadow',
                 key: 'subtitleDropShadow',
                 visible: !isASS,
                 options: [
@@ -226,6 +236,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'borderWidth',
                 type: 'slider',
                 label: i18n.t('BorderWidth'),
+                labelKey: 'BorderWidth',
                 key: 'subtitleBorderWidth',
                 min: 1, max: 20, step: 1, unit: 'px',
                 visible: !isASS && shadowType === 'border'
@@ -234,6 +245,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'shadowColor',
                 type: 'select',
                 label: i18n.t('ShadowColor'),
+                labelKey: 'ShadowColor',
                 key: 'subtitleDropShadowColor',
                 options: [
                     { value: '#000000', label: i18n.t('SubtitleBlack') },
@@ -252,6 +264,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'shadowOpacity',
                 type: 'slider',
                 label: i18n.t('ShadowOpacity'),
+                labelKey: 'ShadowOpacity',
                 key: 'subtitleDropShadowOpacity',
                 min: 0, max: 100, step: 5, unit: '%',
                 visible: !isASS && shadowType !== 'none'
@@ -260,6 +273,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'shadowBlur',
                 type: 'slider',
                 label: i18n.t('ShadowBlur'),
+                labelKey: 'ShadowBlur',
                 key: 'subtitleDropShadowBlur',
                 min: 0, max: 20, step: 1, unit: 'px',
                 visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
@@ -268,6 +282,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'fontAss',
                 type: 'select',
                 label: i18n.t('AssFontFamily'),
+                labelKey: 'AssFontFamily',
                 key: 'subtitleFontAss',
                 visible: isASS,
                 options: [
@@ -286,6 +301,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'fontScaleAss',
                 type: 'slider',
                 label: i18n.t('FontScaleAss'),
+                labelKey: 'FontScaleAss',
                 key: 'subtitleFontScale',
                 min: 0.5, max: 3.0, step: 0.1, unit: 'x',
                 visible: isASS
@@ -294,6 +310,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'bottomOffsetAss',
                 type: 'slider',
                 label: i18n.t('VerticalPositionAss'),
+                labelKey: 'VerticalPositionAss',
                 key: 'subtitleBottomOffset',
                 min: -100, max: 750, step: 5, unit: 'px',
                 visible: isASS
@@ -302,6 +319,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'outlineThicknessAss',
                 type: 'slider',
                 label: i18n.t('OutlineThicknessAss'),
+                labelKey: 'OutlineThicknessAss',
                 key: 'subtitleOutlineThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
                 visible: isASS
@@ -310,6 +328,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'shadowThicknessAss',
                 type: 'slider',
                 label: i18n.t('ShadowThicknessAss'),
+                labelKey: 'ShadowThicknessAss',
                 key: 'subtitleShadowThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
                 visible: isASS
@@ -318,6 +337,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'lineHeightAss',
                 type: 'slider',
                 label: i18n.t('VerticalSpacingAss'),
+                labelKey: 'VerticalSpacingAss',
                 key: 'subtitleLineHeight',
                 min: -50, max: 50, step: 1, unit: 'px',
                 visible: isASS
@@ -326,6 +346,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'letterSpacingAss',
                 type: 'slider',
                 label: i18n.t('HorizontalSpacingAss'),
+                labelKey: 'HorizontalSpacingAss',
                 key: 'subtitleLetterSpacing',
                 min: -20, max: 40, step: 0.5, unit: 'px',
                 visible: isASS
@@ -341,6 +362,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'secondaryPosition',
                 type: 'slider',
                 label: i18n.t('SecondarySubtitlePosition'),
+                labelKey: 'SecondarySubtitlePosition',
                 key: 'secondarySubtitleVerticalPositionCustom',
                 min: 0, max: 100, step: 1, unit: '%',
                 visible: hasSecondary
@@ -349,6 +371,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 id: 'secondarySize',
                 type: 'select',
                 label: i18n.t('SecondarySize'),
+                labelKey: 'SecondarySize',
                 key: 'secondarySubtitleSize',
                 visible: hasSecondary,
                 options: [
@@ -394,7 +417,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
             <div class="track-option track-item subtitle-setting-item ${isFocused ? 'focused' : ''}" 
                  data-index="${index}" 
                  tabindex="0">
-                <div class="sub-setting-label">${item.label}</div>
+                <div class="sub-setting-label" data-i18n="${item.labelKey || ''}">${item.label}</div>
                 <div class="sub-setting-control">${controlHtml}</div>
             </div>
         `;

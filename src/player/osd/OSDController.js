@@ -1143,7 +1143,7 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
             const remainingMs = (duration - current) / 10000;
             const endTime = new Date(Date.now() + remainingMs);
-            endsAtEl.textContent = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+            endsAtEl.textContent = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
         }
     }
 
@@ -1165,7 +1165,7 @@ export default class OSDController extends Component {
         const clockEl = this._osdEl.querySelector('#osdClock');
         if (clockEl) {
             const now = new Date();
-            clockEl.textContent = now.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+            clockEl.textContent = i18n.formatLocalTime(now);
         }
     }
 

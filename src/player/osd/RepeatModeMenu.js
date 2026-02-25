@@ -60,9 +60,9 @@ export default class RepeatModeMenu extends BaseMenu {
         const currentMode = playQueue.getRepeatMode() || 'RepeatNone';
 
         const modes = [
-            { id: 'RepeatNone', label: i18n.t('Off'), icon: ICONS.repeat },
-            { id: 'RepeatAll', label: i18n.t('RepeatAll'), icon: ICONS.repeat },
-            { id: 'RepeatOne', label: i18n.t('RepeatOne'), icon: ICONS.repeatOne }
+            { id: 'RepeatNone', label: i18n.t('Off'), key: 'Off', icon: ICONS.repeat },
+            { id: 'RepeatAll', label: i18n.t('RepeatAll'), key: 'RepeatAll', icon: ICONS.repeat },
+            { id: 'RepeatOne', label: i18n.t('RepeatOne'), key: 'RepeatOne', icon: ICONS.repeatOne }
         ];
 
         let selectedIndex = modes.findIndex(m => m.id === currentMode);
@@ -74,14 +74,14 @@ export default class RepeatModeMenu extends BaseMenu {
             return `
             <button class="track-option track-item ${isSelected ? 'selected' : ''}" data-id="${mode.id}" data-menu-index="${i}">
                 <span class="track-option-icon">${mode.icon}</span>
-                <span class="track-option-label">${mode.label}</span>
+                <span class="track-option-label" data-i18n="${mode.key}">${mode.label}</span>
                 ${isSelected ? `<span class="track-option-check">${ICONS.check}</span>` : ''}
             </button>
         `}).join('');
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${i18n.t('RepeatMode')}</div>
+                <div class="track-menu-title" data-i18n="RepeatMode">${i18n.t('RepeatMode')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>

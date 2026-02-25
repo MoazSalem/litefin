@@ -132,6 +132,29 @@ class I18nManager {
             }
         }
     }
+
+    /**
+     * Formats a Date object into a localized 12-hour time string with AM/PM.
+     * @param {Date} date - The date to format
+     * @returns {string} Formatted time string (e.g., "12:30 PM" or "12:30 م")
+     */
+    formatLocalTime(date) {
+        if (!date || !(date instanceof Date)) return '';
+
+        let hours = date.getHours();
+        const minutes = date.getMinutes();
+        const ampm = hours >= 12 ? this.t('TimePM') : this.t('TimeAM');
+
+        hours = hours % 12;
+        hours = hours ? hours : 12; // The hour '0' should be '12'
+
+        const minutesStr = minutes < 10 ? '0' + minutes : minutes;
+
+        // Space before AM/PM for LTR, but maybe no space or different for Arabic?
+        // Usually, in Arabic clocks, the AM/PM indicator "ص/م" follows the time.
+        // We'll use a space for now as it's standard for 12-hour displays.
+        return `${hours}:${minutesStr} ${ampm}`;
+    }
 }
 
 // Singleton export

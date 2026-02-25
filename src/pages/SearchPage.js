@@ -64,7 +64,7 @@ class SearchPage extends Page {
                     
                     <!-- No results -->
                     <div class="search-no-results hidden" id="no-results">
-                        <p data-i18n="NoResultsFound">No results found</p>
+                        <p id="no-results-text"></p>
                     </div>
                     
                     <!-- Loading -->
@@ -227,7 +227,12 @@ class SearchPage extends Page {
                 this._renderResults();
             } else {
                 this._clearResults();
-                this.$('#no-results')?.classList.remove('hidden');
+                const noResultsEl = this.$('#no-results');
+                const noResultsText = this.$('#no-results-text');
+                if (noResultsEl && noResultsText) {
+                    noResultsText.innerHTML = i18n.t('SearchResultsEmpty', [this._query]);
+                    noResultsEl.classList.remove('hidden');
+                }
             }
         } catch (error) {
             log.error('Search failed', error);

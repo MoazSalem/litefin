@@ -9,12 +9,12 @@ export default class PlaybackSpeedMenu extends BaseMenu {
     constructor(osdController) {
         super(osdController);
         this.isModal = true;
-        this.title = i18n.t('PlaybackSpeed');
+        this.title = i18n.t('PlaybackRate');
         this.options = [
             0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.5, 3, 3.5, 4
         ].map(speed => ({
             id: speed,
-            label: `${speed}x`,
+            label: i18n.t('SpeedValue', [ speed.toString() ]),
         }));
     }
 
@@ -87,7 +87,7 @@ export default class PlaybackSpeedMenu extends BaseMenu {
 
         this.$el.innerHTML = `
             <div class="track-menu">
-                <div class="track-menu-title">${i18n.t('PlaybackSpeed')}</div>
+                <div class="track-menu-title" data-i18n="PlaybackRate">${i18n.t('PlaybackRate')}</div>
                 <div class="track-menu-options">
                     ${optionsHtml}
                 </div>
