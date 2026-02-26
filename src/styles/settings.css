@@ -625,3 +625,74 @@
 }
 
 
+
+/* ==========================================================================
+   Plugins Tab
+   ========================================================================== */
+
+/* Plugin name row: name text + version chip + status badge, all inline */
+.plugin-version {
+    display: inline-block;
+    font-size: 0.75em;
+    font-weight: 500;
+    color: var(--jf-text-secondary);
+    background: rgba(255, 255, 255, 0.07);
+    padding: 2px 8px;
+    border-radius: 20px;
+    margin-left: 0.5em;
+    vertical-align: middle;
+    letter-spacing: 0.3px;
+}
+
+/* Status badge — small pill next to the plugin name */
+.plugin-status {
+    display: inline-block;
+    font-size: 0.7em;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    padding: 3px 10px;
+    border-radius: 20px;
+    margin-left: 0.6em;
+    vertical-align: middle;
+}
+
+.plugin-status--active {
+    /* Muted green — subtle so it doesn't dominate */
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+}
+
+.plugin-status--disabled {
+    /* Muted grey */
+    background: rgba(255, 255, 255, 0.07);
+    color: var(--jf-text-secondary);
+}
+
+.plugin-status--pending {
+    /* Amber — waiting for server dependency probe */
+    background: rgba(255, 159, 10, 0.15);
+    color: #ff9f0a;
+}
+
+/* Server dependency label */
+.plugin-dep {
+    margin-top: 4px;
+}
+
+.plugin-dep code {
+    font-family: monospace;
+    font-size: 0.9em;
+    background: rgba(255, 255, 255, 0.08);
+    padding: 1px 6px;
+    border-radius: 4px;
+}
+
+/* Empty-state message when no plugins are installed */
+.settings-empty-state {
+    color: var(--jf-text-secondary);
+    font-size: 1.2rem;
+    padding: 40px 0;
+    text-align: center;
+    opacity: 0.6;
+}

@@ -21,6 +21,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { availableLanguages } from '../locales/languages.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 
 const log = logger.create('SettingsPage');
 
@@ -95,6 +96,11 @@ class SettingsPage extends Page {
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
             },
             {
+                id: 'plugins',
+                label: i18n.t('Plugins'),
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17" y1="15" x2="9" y2="15"/></svg>'
+            },
+            {
                 id: 'debug',
                 label: i18n.t('Debug'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>'
@@ -151,9 +157,77 @@ class SettingsPage extends Page {
                 return this._renderAboutTab();
             case 'debug':
                 return this._renderDebugTab();
+            case 'plugins':
+                return this._renderPluginsTab();
             default:
                 return this._renderAppearanceTab();
         }
+    }
+
+    _renderPluginsTab() {
+        /* Get the live list from the PluginManager.
+           Each entry: { id, name, version, description, serverDependency, enabled, dependencyDeferred } */
+        const plugins = pluginManager.getPluginList();
+
+        // Helper: build a human-readable status badge for a plugin entry
+        const statusBadge = (p) => {
+            if (!p.enabled && !p.dependencyDeferred) {
+                // Disabled either by user choice or missing server plugin
+                return `<span class="plugin-status plugin-status--disabled">${i18n.t('Disabled')}</span>`;
+            }
+            if (p.dependencyDeferred) {
+                // Server dependency hasn't been probed yet (non-admin first boot)
+                return `<span class="plugin-status plugin-status--pending">${i18n.t('PendingVerification', ['Pending'])}</span>`;
+            }
+            return `<span class="plugin-status plugin-status--active">${i18n.t('Active')}</span>`;
+        };
+
+        // Build a toggle row for each plugin
+        const rows = plugins
+            .map(
+                (p) => `
+            <div class="setting-item">
+                <div class="setting-label">
+                    <span class="setting-name">
+                        ${p.name}
+                        <span class="plugin-version">v${p.version}</span>
+                        ${statusBadge(p)}
+                    </span>
+                    ${p.description ? `<span class="setting-description">${p.description}</span>` : ''}
+                    ${
+                        p.serverDependency
+                            ? `<span class="setting-description plugin-dep">
+                               ${i18n.t('RequiresPlugin', ['Requires'])}:
+                               <code>${p.serverDependency}</code>
+                           </span>`
+                            : ''
+                    }
+                </div>
+                <div class="setting-control">
+                    <button class="toggle-switch ${p.enabled ? 'active' : ''}"
+                            data-plugin-id="${p.id}"
+                            id="plugin-toggle-${p.id}"
+                            tabindex="0">
+                    </button>
+                </div>
+            </div>
+        `
+            )
+            .join('');
+
+        // Show a friendly empty state if no plugins are loaded
+        const content =
+            plugins.length > 0
+                ? rows
+                : `<p class="settings-empty-state">${i18n.t('NoPlugins', ['No plugins installed.'])}</p>`;
+
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title">${i18n.t('Plugins')}</h2>
+                <h3 class="setting-section-title">${i18n.t('InstalledPlugins', ['Installed Plugins'])}</h3>
+                ${content}
+            </div>
+        `;
     }
 
     _renderAppearanceTab() {
@@ -1434,6 +1508,30 @@ class SettingsPage extends Page {
                 }
             });
         }
+
+        // === Plugin Enable/Disable Toggles ===
+        // Each plugin toggle button has a data-plugin-id attribute.
+        // Wire them all using the same toggle pattern as the other settings switches.
+        this.$$('[data-plugin-id]').forEach((btn) => {
+            btn.addEventListener('click', async () => {
+                const pluginId = btn.dataset.pluginId;
+                const isCurrentlyEnabled = btn.classList.contains('active');
+                const newEnabled = !isCurrentlyEnabled;
+
+                // Optimistically update the toggle UI immediately for responsiveness
+                btn.classList.toggle('active', newEnabled);
+
+                // Update the inline status badge so the user sees feedback right away
+                const statusEl = btn.closest('.setting-item')?.querySelector('.plugin-status');
+                if (statusEl) {
+                    statusEl.className = `plugin-status plugin-status--${newEnabled ? 'active' : 'disabled'}`;
+                    statusEl.textContent = i18n.t(newEnabled ? 'Active' : 'Disabled');
+                }
+
+                // Propagate change through the plugin manager (may call destroy/init)
+                await pluginManager.setPluginEnabled(pluginId, newEnabled);
+            });
+        });
     }
 
     _renderSlider(id, value, min, max, step, unit = '%') {

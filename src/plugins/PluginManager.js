@@ -152,8 +152,14 @@ class PluginManager {
         for (const [id, entry] of this._plugins) {
             if (!entry.dependencyDeferred || !entry.plugin.serverDependency) continue;
 
-            // Clear the cached "deferred" result so isPluginAvailable re-runs with itemId
-            serverPluginClient._availabilityCache.delete(entry.plugin.serverDependency);
+            // Only clear the cache if the stored result was the deferred placeholder
+            // (available: false, deferred: true). A genuine available: true result — e.g.
+            // confirmed by an admin user before this session or by a previous playback probe —
+            // should NOT be thrown away. Once we know the plugin exists, we trust that result.
+            const cached = serverPluginClient._availabilityCache.get(entry.plugin.serverDependency);
+            if (cached?.deferred) {
+                serverPluginClient._availabilityCache.delete(entry.plugin.serverDependency);
+            }
 
             const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item.Id);
 
@@ -164,6 +170,14 @@ class PluginManager {
                 log.info(`Plugin '${id}' dependency confirmed at playback — enabling`);
                 entry.enabled = true;
                 entry.api._osdWidgetHost = this._widgetHost;
+
+                // Persist so non-admin users on next session skip the deferred probe entirely
+                try {
+                    const { storage } = await import('../utils/StorageService.js');
+                    storage.setItem(`serverPlugin:available:${entry.plugin.serverDependency}`, 'true');
+                } catch (err) {
+                    log.warn('Could not persist server plugin confirmation:', err);
+                }
 
                 // Run init now that we know the dependency is present
                 try {
@@ -308,6 +322,98 @@ class PluginManager {
         return Array.from(this._plugins.keys());
     }
 
+    /**
+     * Get a list of all loaded plugins with their metadata and current status.
+     * Used by the Settings > Plugins tab to render the plugin list.
+     *
+     * @returns {Array<{
+     *   id: string,
+     *   name: string,
+     *   version: string,
+     *   description: string,
+     *   serverDependency: string|undefined,
+     *   enabled: boolean,
+     *   dependencyDeferred: boolean
+     * }>}
+     */
+    getPluginList() {
+        return Array.from(this._plugins.entries()).map(([id, entry]) => ({
+            id,
+            name: entry.plugin.name || id,
+            version: entry.plugin.version || '?',
+            description: entry.plugin.description || '',
+            serverDependency: entry.plugin.serverDependency,
+            enabled: entry.enabled,
+            dependencyDeferred: entry.dependencyDeferred
+        }));
+    }
+
+    /**
+     * Enable or disable a plugin at runtime and persist the preference.
+     * If disabling: calls destroy() on the plugin and cleans up its API.
+     * If enabling: calls init() on the plugin (server dependency must already be resolved).
+     *
+     * @param {string} pluginId
+     * @param {boolean} enabled
+     */
+    async setPluginEnabled(pluginId, enabled) {
+        const entry = this._plugins.get(pluginId);
+        if (!entry) {
+            log.warn(`setPluginEnabled: unknown plugin '${pluginId}'`);
+            return;
+        }
+
+        // Persist preference so it survives restarts
+        // Convention: plugin:enabled:<id> = 'true' | 'false'
+        try {
+            const { storage } = await import('../utils/StorageService.js');
+            storage.setItem(`plugin:enabled:${pluginId}`, String(enabled));
+        } catch (err) {
+            log.warn('Could not persist plugin preference:', err);
+        }
+
+        if (enabled && !entry.enabled) {
+            // ------------------------------------------------------------------
+            // Re-enable a plugin that was user-disabled.
+            // We don't re-check server dependency here (it was already resolved
+            // or deferred at load time). Just call init() again.
+            // ------------------------------------------------------------------
+            entry.enabled = true;
+
+            // Wire the widget host if playback is active
+            entry.api._osdWidgetHost = this._widgetHost || null;
+
+            try {
+                await entry.plugin.init(entry.api);
+                log.info(`Plugin '${pluginId}' re-enabled by user`);
+            } catch (err) {
+                log.error(`Plugin '${pluginId}' init() threw during re-enable:`, err);
+                entry.enabled = false;
+            }
+        } else if (!enabled && entry.enabled) {
+            // ------------------------------------------------------------------
+            // User-disable a currently running plugin.
+            // ------------------------------------------------------------------
+            entry.enabled = false;
+
+            // Gracefully stop the plugin
+            try {
+                if (typeof entry.plugin.destroy === 'function') {
+                    entry.plugin.destroy(entry.api);
+                }
+            } catch (err) {
+                log.error(`Plugin '${pluginId}' destroy() threw during disable:`, err);
+            }
+
+            // Remove its OSD widgets if playback is active
+            if (this._widgetHost) {
+                this._widgetHost.removeAllWidgetsForPlugin(pluginId);
+            }
+
+            log.info(`Plugin '${pluginId}' disabled by user`);
+        }
+    }
+
     // ========================================================================
     // OSD Key Forwarding
     // ========================================================================
@@ -385,32 +491,81 @@ class PluginManager {
             return;
         }
 
+        // ------------------------------------------------------------------
+        // Check if the user has manually disabled this plugin via Settings.
+        // Storage key: plugin:enabled:<id> — 'false' means user turned it off.
+        // An absent key means the user hasn't changed the default (enabled).
+        // ------------------------------------------------------------------
+        let userDisabled = false;
+        try {
+            const { storage } = await import('../utils/StorageService.js');
+            const stored = storage.getItem(`plugin:enabled:${plugin.id}`);
+            if (stored === 'false') {
+                userDisabled = true;
+                log.info(`Plugin '${plugin.id}' is user-disabled (Settings)`);
+            }
+        } catch (err) {
+            log.warn('Could not read plugin preference:', err);
+        }
+
         // Check server dependency availability.
         // We do this at startup so we can warn early — but non-admin users
         // won't have an itemId yet, so the probe may be deferred.
-        let enabled = true;
+        let enabled = !userDisabled; // Start from user preference
         let dependencyDeferred = false;
 
-        if (plugin.serverDependency) {
-            const result = await serverPluginClient.isPluginAvailable(plugin.serverDependency);
+        if (plugin.serverDependency && enabled) {
+            // ------------------------------------------------------------------
+            // Before probing the server, check if we already confirmed this
+            // dependency is available in a previous session. This avoids the
+            // "Pending" badge for non-admin users who switch from an admin
+            // session — once the plugin is confirmed it stays confirmed.
+            // Storage key: serverPlugin:available:<dep> = 'true'
+            // ------------------------------------------------------------------
+            let previouslyConfirmed = false;
+            try {
+                const { storage } = await import('../utils/StorageService.js');
+                previouslyConfirmed = storage.getItem(`serverPlugin:available:${plugin.serverDependency}`) === 'true';
+            } catch (err) {
+                log.warn('Could not read server plugin confirmation:', err);
+            }
 
-            if (result.deferred) {
-                // Non-admin user, no itemId yet — can't probe the endpoint.
-                // Enable tentatively; we'll re-check in notifyPlayerStart with a real itemId.
-                log.info(`Plugin '${id}' dependency check deferred — will verify at playback start`);
-                dependencyDeferred = true;
-            } else if (!result.available) {
-                log.warn(`Plugin '${id}' disabled: server plugin '${plugin.serverDependency}' not found`);
+            if (previouslyConfirmed) {
+                // Dependency was confirmed in a previous session — trust it.
+                log.info(
+                    `Plugin '${id}' dependency '${plugin.serverDependency}' was previously confirmed — skipping probe`
+                );
+                // dependencyDeferred stays false, enabled stays true
+            } else {
+                const result = await serverPluginClient.isPluginAvailable(plugin.serverDependency);
 
-                // Warn the user via toast so they know the plugin was skipped
-                if (this._deps.toast) {
-                    this._deps.toast.show(
-                        `'${plugin.name || id}' requires the '${plugin.serverDependency}' server plugin`,
-                        { duration: 5000 }
-                    );
+                if (result.deferred) {
+                    // Non-admin user, no itemId yet — can't probe the endpoint.
+                    // Enable tentatively; we'll re-check in notifyPlayerStart with a real itemId.
+                    log.info(`Plugin '${id}' dependency check deferred — will verify at playback start`);
+                    dependencyDeferred = true;
+                } else if (result.available) {
+                    // Confirmed available — persist so future sessions (incl. non-admin) skip the probe.
+                    log.info(`Plugin '${id}' dependency confirmed at startup — persisting`);
+                    try {
+                        const { storage } = await import('../utils/StorageService.js');
+                        storage.setItem(`serverPlugin:available:${plugin.serverDependency}`, 'true');
+                    } catch (err) {
+                        log.warn('Could not persist server plugin confirmation:', err);
+                    }
+                } else {
+                    log.warn(`Plugin '${id}' disabled: server plugin '${plugin.serverDependency}' not found`);
+
+                    // Warn the user via toast so they know the plugin was skipped
+                    if (this._deps.toast) {
+                        this._deps.toast.show(
+                            `'${plugin.name || id}' requires the '${plugin.serverDependency}' server plugin`,
+                            { duration: 5000 }
+                        );
+                    }
+
+                    enabled = false;
                 }
-
-                enabled = false;
             }
         }
 
