@@ -1,0 +1,119 @@
+/**
+ * ============================================================================
+ * Skip Intro & Outro Widget — Styles
+ * ============================================================================
+ * Styles the "Skip Intro" and "Skip Credits" overlay buttons.
+ *
+ * The buttons sit inside the OSD .osd-overlays container (row -1),
+ * alongside Playback Info and Subtitle Offset panels.
+ * They inherit .osd-btn focus/hover states from the existing OSD stylesheet.
+ *
+ * Design: Apple Human Interface Guidelines inspired. Minimal, high-contrast,
+ * smooth spring-like transitions. Bottom-right corner placement, floating
+ * slightly above the control bar.
+ * ============================================================================
+ */
+
+/* ============================= Layout ====================================== */
+
+/*
+ * Both skip-intro and skip-outro use the same base widget layout.
+ * Position: bottom-right corner of the player, above the OSD controls row.
+ * Starts hidden (no .visible class) — PluginWidgetHost adds .visible when
+ * shouldShow() returns true for the current playback position.
+ */
+.plugin-widget.skip-intro-widget,
+.plugin-widget.skip-outro-widget {
+    position: absolute;
+    bottom: 14%;          /* Float above the OSD controls row */
+    right: 6%;
+    z-index: 10;          /* Above video plane, below modal menus */
+
+    /* Hidden by default — rendered but invisible until .visible is set */
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(12px);
+
+    /* Smooth entry/exit — approximates a spring feel within CSS constraints */
+    transition:
+        opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Visible state — triggered by PluginWidgetHost when shouldShow() returns true */
+.plugin-widget.skip-intro-widget.visible,
+.plugin-widget.skip-outro-widget.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+/* ============================= Button ====================================== */
+
+/*
+ * The skip button. Inherits .osd-btn class for consistent hover/focus ring.
+ * Pill shape, semi-transparent dark background with softened border.
+ * Sizing uses em so it scales with the player's root font-size.
+ */
+.skip-intro-btn {
+    display: flex;
+    align-items: center;
+    gap: 0.5em;
+
+    /* Pill shape */
+    padding: 0.6em 1.4em;
+    border-radius: 100px;
+
+    /* Dark, translucent background that works on any video content */
+    background: rgba(0, 0, 0, 0.72);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    border: 1.5px solid rgba(255, 255, 255, 0.18);
+
+    /* Typography */
+    color: #ffffff;
+    font-size: 1.3em;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+
+    /* OSD buttons get cursor:none on TV — keep consistent */
+    cursor: default;
+
+    /* Smooth scale + color transitions for hover/focus feedback */
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Focused state (OSD row -1 sets .focused class on the focused button) */
+.skip-intro-btn.focused,
+.skip-intro-btn:focus {
+    background: rgba(255, 255, 255, 0.18);
+    border-color: rgba(255, 255, 255, 0.6);
+    outline: none;
+
+    /* Slight pop for Apple-style spring feel */
+    transform: scale(1.04);
+}
+
+/* ============================= Label & Arrow ============================ */
+
+.skip-intro-label {
+    /* Just the text portion */
+    display: inline-block;
+}
+
+.skip-intro-arrow {
+    /* Triangular "play" arrow — animated on focus to reinforce the CTA */
+    display: inline-block;
+    font-size: 0.8em;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.skip-intro-btn.focused .skip-intro-arrow,
+.skip-intro-btn:focus .skip-intro-arrow {
+    /* Arrow nudges right when focused — micro-animation */
+    transform: translateX(4px);
+}

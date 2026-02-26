@@ -26,6 +26,7 @@ import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { logger } from '../utils/Logger.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 
 const log = logger.create('Player');
 
@@ -651,6 +652,14 @@ class PlayerPage extends Page {
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
+        // === Plugin System ===
+        // Notify all loaded plugins that player + OSD are ready.
+        // We pass the OSD so the PluginManager can set up its widget host
+        // into the .osd-overlays container before first frame.
+        pluginManager
+            .notifyPlayerStart(this._item, this._player, this._osd)
+            .catch((err) => log.error('pluginManager.notifyPlayerStart failed:', err));
+
         log.info('OSD initialized');
     }
 
@@ -1017,6 +1026,10 @@ class PlayerPage extends Page {
             this._reportPlaybackProgress();
             this._lastReportTime = now;
         }
+
+        // 4. Forward tick to plugin manager for widget visibility evaluation
+        //    (PluginWidgetHost.onTimeUpdate toggles .visible on plugin buttons)
+        pluginManager.notifyTimeUpdate(ticks, 0);
     }
 
     async _reportPlaybackStart() {
@@ -1546,6 +1559,9 @@ class PlayerPage extends Page {
             // Capture session info BEFORE stopping (stop clears internal state)
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            // Notify plugins that playback is ending — they clean up OSD widgets
+            pluginManager.notifyPlayerStop();
 
             // Stop the player
             if (this._player?.stop) {

@@ -33,6 +33,8 @@ import Sidebar from '../components/Sidebar.js';
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
+import { pluginManager } from '../plugins/PluginManager.js';
+import { focusManager } from '../ui/FocusManager.js';
 
 const log = logger.create('App');
 
@@ -98,6 +100,18 @@ class App {
 
         // 4. Try to restore auth session
         await auth.init();
+
+        // 4.5. Initialize Plugin Manager if user is already authenticated (session restored).
+        // If not authenticated, we do this on the 'auth:login' event instead (see _setupEventHandlers).
+        if (state.get('user:authenticated')) {
+            pluginManager
+                .init({
+                    api,
+                    focusManager,
+                    toast: null // Toast component reference wired up once UI is ready
+                })
+                .catch((err) => log.error('pluginManager.init failed:', err));
+        }
 
         // Get container element
         if (typeof options.container === 'string') {
@@ -267,12 +281,28 @@ class App {
         // Handle logout / Session Expiry
         eventBus.on('auth:logout', () => {
             log.info('User logged out - resetting to login page');
+            // Clear server plugin detection cache on logout (new server/user after login may differ)
+            pluginManager.destroy();
             router.reset('/login');
         });
 
         eventBus.on('auth:expired', () => {
             log.warn('Session expired - resetting to login page');
+            pluginManager.destroy();
             router.reset('/login');
+        });
+
+        // Initialize plugin manager when user successfully logs in
+        // (covers fresh logins, not session restores which are handled in init())
+        eventBus.on('auth:login', () => {
+            log.info('User logged in - initializing plugin manager');
+            pluginManager
+                .init({
+                    api,
+                    focusManager,
+                    toast: null // Toast wired up once UI is ready
+                })
+                .catch((err) => log.error('pluginManager.init (post-login) failed:', err));
         });
 
         // Handle application exit
