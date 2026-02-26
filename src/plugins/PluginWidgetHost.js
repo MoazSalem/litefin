@@ -231,9 +231,7 @@ class PluginWidgetHost {
                 this._widgets.delete(widgetId);
             }
         }
-        if (this._widgets.size === 0 || true) {
-            this._refreshOSDCache();
-        }
+        this._refreshOSDCache();
         log.debug(`All widgets for plugin '${pluginId}' removed`);
     }
 
@@ -252,6 +250,8 @@ class PluginWidgetHost {
         if (this._widgets.size === 0) return;
 
         let cacheInvalidated = false;
+        // Track whether any widget just became visible (to trigger auto-focus)
+        let justBecameVisible = false;
 
         for (const [, entry] of this._widgets) {
             const { widget, el } = entry;
@@ -268,11 +268,12 @@ class PluginWidgetHost {
             }
 
             if (shouldShow && !entry.visible) {
-                // Show the widget
+                // Widget just became visible — show it and flag for auto-focus
                 entry.hideCounter = 0;
                 entry.visible = true;
                 el.classList.add('visible');
                 cacheInvalidated = true;
+                justBecameVisible = true;
                 log.debug(`Widget '${widget.id}' shown at ${positionTicks}`);
             } else if (!shouldShow && entry.visible) {
                 // Hysteresis: require HIDE_HYSTERESIS consecutive "false" results before hiding
@@ -291,9 +292,31 @@ class PluginWidgetHost {
             }
         }
 
-        // Only refresh OSD focus cache if any visibility changed
         if (cacheInvalidated) {
-            this._refreshOSDCache();
+            // Check how many widgets are now visible
+            const anyVisible = [...this._widgets.values()].some((e) => e.visible);
+
+            if (justBecameVisible && anyVisible) {
+                // A widget just appeared — claim focus immediately so the user
+                // doesn't need to navigate to the overlay row manually.
+                // focusPluginWidget() also refreshes the cache internally.
+                if (this._osd && typeof this._osd.focusPluginWidget === 'function') {
+                    this._osd.focusPluginWidget(0);
+                } else {
+                    this._refreshOSDCache();
+                }
+            } else if (!anyVisible) {
+                // All widgets are now hidden — return focus to the controls row
+                // and re-enable the auto-hide timer.
+                if (this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+                    this._osd.restoreControlsFocus();
+                } else {
+                    this._refreshOSDCache();
+                }
+            } else {
+                // Some visibility changed but no new widget appeared — just refresh cache
+                this._refreshOSDCache();
+            }
         }
     }
 

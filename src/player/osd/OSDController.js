@@ -301,6 +301,52 @@ export default class OSDController extends Component {
         this._updateNavigationButtons();
     }
 
+    /**
+     * Called by PluginWidgetHost when a plugin widget becomes visible.
+     * Moves OSD focus to the overlay row (Row -1) and shows the OSD,
+     * so the button is immediately reachable with a single Enter press.
+     *
+     * @param {number} [widgetIndex=0] - Index within the overlay row to focus
+     */
+    focusPluginWidget(widgetIndex = 0) {
+        // Rebuild the cache so newly visible buttons are included
+        this._cacheFocusableElements();
+
+        // Nothing to focus if there are no focusable buttons in the overlay
+        if (this._cachedOverlayRow.length === 0) return;
+
+        // Plugin widget overlays are independent — they float above the video
+        // without requiring the main OSD controls to be visible (same pattern
+        // as subtitle offset / playback info panels).
+        // Do NOT force show() or suppress auto-hide here.
+
+        // Move focus to the overlay row
+        this._currentFocusRow = -1;
+        this._currentFocusIndex = Math.min(widgetIndex, this._cachedOverlayRow.length - 1);
+        this._updateFocus();
+    }
+
+    /**
+     * Called by PluginWidgetHost when all plugin widgets hide.
+     * Returns focus to the Controls row (Row 1) at the Play/Pause button,
+     * and re-enables the normal auto-hide timer.
+     */
+    restoreControlsFocus() {
+        // Rebuild cache so the now-hidden widget buttons are removed
+        this._cacheFocusableElements();
+
+        // Only restore if focus was actually in the overlay row
+        if (this._currentFocusRow === -1) {
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            this._updateFocus();
+        }
+
+        // Resume normal auto-hide behaviour
+        this.resetAutoHide();
+    }
+
     _updateNavigationButtons() {
         if (!this._osdEl) return;
         
@@ -726,9 +772,23 @@ export default class OSDController extends Component {
             if (this._currentFocusRow === 2) {
                 this._currentFocusRow = 1;
             } else if (this._currentFocusRow === 1) {
+                // If plugin widgets are visible in the overlay row, go there directly.
+                // The overlay row is visually ABOVE the controls, so Up from controls = overlay.
+                // Only fall through to header (Row 0) when no overlay widgets are present.
+                if (this._cachedOverlayRow.length > 0) {
+                    this._currentFocusRow = -1;
+                    this._currentFocusIndex = 0;
+                } else {
+                    this._currentFocusRow = 0;
+                }
+            } else if (this._currentFocusRow === -1) {
+                // Overlay → Header (back button). Completes the chain:
+                // Seekbar ↑ Controls ↑ Overlay ↑ Header
+                // From Header the user can then right/left into subtitle offset / playback info.
                 this._currentFocusRow = 0;
             } else if (this._currentFocusRow === 0) {
-                // Try move to persistent layer if any widget visible
+                // Header → overlay (for subtitle offset / playback info panels
+                // which are also in the overlay row but triggered via menu buttons)
                 if (this._cachedOverlayRow.length > 0) {
                     this._currentFocusRow = -1;
                     this._currentFocusIndex = 0;
@@ -736,12 +796,19 @@ export default class OSDController extends Component {
             }
         } else if (direction === 'down') {
             if (this._currentFocusRow === -1) {
-                // If exiting overlay, go straight to Controls (Row 1), skipping Header (Row 0)
-                // because usually overlays are visually below Header or take precedence
+                // Return from overlay row straight to Controls, landing on Play/Pause
                 this._currentFocusRow = 1;
-                this._currentFocusIndex = 0; // Default to first control (Play/Pause typically)
+                const playIdx = this._findActionIndex('togglePlay');
+                this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
             } else if (this._currentFocusRow === 0) {
-                this._currentFocusRow = 1;
+                // Mirror of Up from Row 1: if overlay widgets are visible, stop there first.
+                // Header ↓ Overlay ↓ Controls (symmetric with Controls ↑ Overlay ↑ Header)
+                if (this._cachedOverlayRow.length > 0) {
+                    this._currentFocusRow = -1;
+                    this._currentFocusIndex = 0;
+                } else {
+                    this._currentFocusRow = 1;
+                }
             } else if (this._currentFocusRow === 1) {
                 this._currentFocusRow = 2;
             }

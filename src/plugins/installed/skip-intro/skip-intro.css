@@ -25,9 +25,14 @@
 .plugin-widget.skip-intro-widget,
 .plugin-widget.skip-outro-widget {
     position: absolute;
-    bottom: 14%;          /* Float above the OSD controls row */
-    right: 6%;
+    /* High enough to float clearly above the controls row without clashing.
+       Controls row sits at ~12% from bottom; we go to 28% to leave breathing room. */
+    bottom: 28%;
+    left: 6%;             /* Left-aligned, matching the back button side */
     z-index: 10;          /* Above video plane, below modal menus */
+
+    /* Shrink-wrap to just the button — don't stretch across the overlay container */
+    width: fit-content;
 
     /* Hidden by default — rendered but invisible until .visible is set */
     opacity: 0;
@@ -58,7 +63,13 @@
 .skip-intro-btn {
     display: flex;
     align-items: center;
-    gap: 0.5em;
+
+
+    /* Override osd-btn's fixed icon-button dimensions — those assume square icon-only buttons.
+       We need auto width/height so the pill stretches to fit the label text. */
+    width: auto !important;
+    height: auto !important;
+    min-width: unset !important;
 
     /* Pill shape */
     padding: 0.6em 1.4em;
@@ -87,15 +98,15 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
-/* Focused state (OSD row -1 sets .focused class on the focused button) */
+/* Focused state — matches the standard OSD focus style (accent colour fill, no border/outline),
+   same as every other focusable button in the player. The base .osd-btn.focused rule already
+   sets background: var(--osd-accent-color); we just need to confirm the pill shape stays intact. */
 .skip-intro-btn.focused,
 .skip-intro-btn:focus {
-    background: rgba(255, 255, 255, 0.18);
-    border-color: rgba(255, 255, 255, 0.6);
+    background: var(--osd-accent-color);
+    border-color: transparent;
     outline: none;
-
-    /* Slight pop for Apple-style spring feel */
-    transform: scale(1.04);
+    color: #fff;
 }
 
 /* ============================= Label & Arrow ============================ */
@@ -109,6 +120,7 @@
     /* Triangular "play" arrow — animated on focus to reinforce the CTA */
     display: inline-block;
     font-size: 0.8em;
+    margin-left: 0.6em;   /* Replaces gap: 0.5em for Tizen compatibility */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
