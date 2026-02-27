@@ -1056,6 +1056,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OverrideOutlineShadow">${i18n.t('OverrideOutlineShadow')}</span>
+                        <span class="setting-description" data-i18n="OverrideOutlineShadowDescription">${i18n.t('OverrideOutlineShadowDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false ? 'active' : ''}" 
+                                id="subtitle-override-ass-toggle" 
+                                data-setting="subtitleOverrideAssOutlineShadow"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-outline-thickness-container" style="display: ${PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false ? '' : 'none'}">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OutlineThicknessAss">${i18n.t('OutlineThicknessAss')}</span>
                         <span class="setting-description" data-i18n="OutlineThicknessAssDescription">${i18n.t('OutlineThicknessAssDescription')}</span>
                     </div>
@@ -1071,7 +1085,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item">
+                <div class="setting-item" id="subtitle-shadow-thickness-container" style="display: ${PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ShadowThicknessAss">${i18n.t('ShadowThicknessAss')}</span>
                         <span class="setting-description" data-i18n="ShadowThicknessAssDescription">${i18n.t('ShadowThicknessAssDescription')}</span>
@@ -1427,6 +1441,26 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableNextEpisodeAutoPlay', newValue);
                 autoNextBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle ASS Outline/Shadow Override
+        const assOverrideBtn = this.$('#subtitle-override-ass-toggle');
+        if (assOverrideBtn) {
+            assOverrideBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleOverrideAssOutlineShadow', newValue);
+                assOverrideBtn.classList.toggle('active', newValue);
+
+                // Update visibility of thickness sliders
+                const outlineContainer = this.$('#subtitle-outline-thickness-container');
+                const shadowContainer = this.$('#subtitle-shadow-thickness-container');
+                if (outlineContainer) outlineContainer.style.display = newValue ? '' : 'none';
+                if (shadowContainer) shadowContainer.style.display = newValue ? '' : 'none';
+
+                // Invalidate focus cache so the newly visible items can be focused
+                focusManager.invalidateCache();
             });
         }
 

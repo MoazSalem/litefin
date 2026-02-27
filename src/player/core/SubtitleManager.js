@@ -405,8 +405,10 @@ export default class SubtitleManager {
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
             const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
-            const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
-            const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            // When the override toggle is off, pass null so the ASS file's own outline/shadow values are kept
+            const overrideOutlineShadow = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
+            const outlineThickness = overrideOutlineShadow ? PlayerSettings.get('subtitleOutlineThickness') : null;
+            const shadowThickness = overrideOutlineShadow ? PlayerSettings.get('subtitleShadowThickness') : null;
             const lineHeight = PlayerSettings.get('subtitleLineHeight');
             const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
             const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
@@ -600,8 +602,10 @@ export default class SubtitleManager {
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
             const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
-            const outlineThickness = PlayerSettings.get('subtitleOutlineThickness');
-            const shadowThickness = PlayerSettings.get('subtitleShadowThickness');
+            // When the override toggle is off, pass null so the ASS file's own outline/shadow values are kept
+            const overrideOutlineShadow = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
+            const outlineThickness = overrideOutlineShadow ? PlayerSettings.get('subtitleOutlineThickness') : null;
+            const shadowThickness = overrideOutlineShadow ? PlayerSettings.get('subtitleShadowThickness') : null;
             const lineHeight = PlayerSettings.get('subtitleLineHeight');
             const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
             const bottomOffset = PlayerSettings.get('subtitleBottomOffset');

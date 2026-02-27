@@ -74,6 +74,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
         // Check if we are currently rendering ASS subtitles
         const isASS = this.osd && this.osd.player && this.osd.player._subtitleManager && this.osd.player._subtitleManager.isASSActive();
 
+        // Whether the outline/shadow user overrides are enabled (default: true)
+        const overrideOutlineShadow = PlayerSettings.get( 'subtitleOverrideAssOutlineShadow' ) !== false;
+
         // Check if a secondary subtitle track is active
         // osd.currentSecondarySubtitleIndex is -1 when no secondary track is selected
         const hasSecondary = this.osd && this.osd.currentSecondarySubtitleIndex !== undefined &&
@@ -316,13 +319,25 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: isASS
             },
             {
+                id: 'overrideOutlineShadow',
+                type: 'select',
+                label: i18n.t( 'OverrideOutlineShadow' ),
+                labelKey: 'OverrideOutlineShadow',
+                key: 'subtitleOverrideAssOutlineShadow',
+                visible: isASS,
+                options: [
+                    { value: true,  label: i18n.t( 'On' )  },
+                    { value: false, label: i18n.t( 'Off' ) }
+                ]
+            },
+            {
                 id: 'outlineThicknessAss',
                 type: 'slider',
                 label: i18n.t('OutlineThicknessAss'),
                 labelKey: 'OutlineThicknessAss',
                 key: 'subtitleOutlineThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
-                visible: isASS
+                visible: isASS && overrideOutlineShadow
             },
             {
                 id: 'shadowThicknessAss',
@@ -331,7 +346,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 labelKey: 'ShadowThicknessAss',
                 key: 'subtitleShadowThickness',
                 min: 0.0, max: 5.0, step: 0.1, unit: '',
-                visible: isASS
+                visible: isASS && overrideOutlineShadow
             },
             {
                 id: 'lineHeightAss',

@@ -276,15 +276,15 @@ export default class ASSRenderer {
                     }
                 }
                 
-                // Override Outline
+                // Override Outline — null means "don't override; use the value from the ASS file"
                 const outlineIdx = styleFormat.indexOf('Outline');
-                if (outlineIdx !== -1) {
+                if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
                     parts[outlineIdx] = String(outlineThickness);
                 }
                 
-                // Override Shadow
+                // Override Shadow — null means "don't override; use the value from the ASS file"
                 const shadowIdx = styleFormat.indexOf('Shadow');
-                if (shadowIdx !== -1) {
+                if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
                     parts[shadowIdx] = String(shadowThickness);
                 }
                 

@@ -107,6 +107,9 @@ const DEFAULTS = {
     // Vertical position offset for ASS (baseline is 0px)
     subtitleBottomOffset: 0,
 
+    // Enable user-defined outline and shadow thickness overrides for ASS
+    subtitleOverrideAssOutlineShadow: false,
+
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 

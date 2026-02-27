@@ -378,6 +378,13 @@ class FocusManager {
             if (el.classList.contains('hidden')) continue;
             if (el.hasAttribute('hidden')) continue;
 
+            // Check if any parent element is marked as hidden (avoids offsetParent reflow)
+            // Tizen DOM allows fast closest() queries without layout thrashing
+            if (el.closest('.hidden') || el.closest('[hidden]')) continue;
+
+            // Inline styles for display: none on parents
+            if (el.closest('[style*="display: none"]') || el.closest('[style*="display:none"]')) continue;
+
             focusables.push(el);
         }
 
