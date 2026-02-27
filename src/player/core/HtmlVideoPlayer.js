@@ -347,22 +347,49 @@ export class HtmlVideoPlayer {
             }
         }
 
-        // Attempt unmuted playback.  If the browser autoplay policy blocks it
-        // (no prior user gesture — e.g. remote-launched), retry muted and
-        // schedule an unmute on the next user interaction (keypress or click).
-        try {
-            await video.play();
-        } catch (err) {
-            if (err.name === 'NotAllowedError') {
-                log.warn('Autoplay blocked — retrying muted (remote launch).');
-                video.muted = true;
-                await video.play();
-                // Queue unmute — fires automatically on first keydown or click
-                this._scheduleUnmuteOnInteraction(video);
-            } else {
-                throw err;
-            }
-        }
+        return new Promise((resolve, reject) => {
+            const onLoadedMetadata = () => {
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                // Apply initially requested tracks once native tracks are populated
+                if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+                    this.setAudioStreamIndex(options.audioStreamIndex);
+                }
+                if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
+                    this.setSubtitleStreamIndex(options.subtitleStreamIndex);
+                }
+            };
+
+            const onCanPlay = () => {
+                video.removeEventListener('canplay', onCanPlay);
+                video.removeEventListener('error', onError);
+
+                // Attempt unmuted playback.
+                video.play().then(resolve).catch((err) => {
+                    if (err.name === 'NotAllowedError') {
+                        log.warn('Autoplay blocked — retrying muted (remote launch).');
+                        video.muted = true;
+                        video.play().then(() => {
+                            this._scheduleUnmuteOnInteraction(video);
+                            resolve();
+                        }).catch(reject);
+                    } else {
+                        reject(err);
+                    }
+                });
+            };
+
+            const onError = () => {
+                const err = video.error;
+                log.error('Native video error:', err);
+                video.removeEventListener('canplay', onCanPlay);
+                video.removeEventListener('loadedmetadata', onLoadedMetadata);
+                reject(err);
+            };
+
+            video.addEventListener('loadedmetadata', onLoadedMetadata);
+            video.addEventListener('canplay', onCanPlay);
+            video.addEventListener('error', onError);
+        });
     }
 
     /**
@@ -615,6 +642,30 @@ export class HtmlVideoPlayer {
         }
 
         // Note: ASS/PGS rendering is planned for Phase 2/3 via SubtitleManager
+    }
+
+    /**
+     * Check if the backend can native switch audio tracks without restarting
+     * @returns {boolean}
+     */
+    supportsNativeAudioTracks() {
+        // Use existing video element, or create a throwaway one just to test feature support
+        const video = this._videoElement || document.createElement('video');
+        if (!video.audioTracks) return false;
+        
+        const userAgent = navigator.userAgent.toLowerCase();
+        
+        // Firefox only sees the first track
+        if (userAgent.includes('firefox')) return false;
+        
+        // Tizen logic: Requires 5.5+, but reportedly broken on Tizen 8
+        const tizenMatch = userAgent.match(/tizen (\d+\.\d+)/);
+        if (tizenMatch) {
+            const version = parseFloat(tizenMatch[1]);
+            if (version < 5.5 || version >= 8) return false;
+        }
+        
+        return true;
     }
 
     /**

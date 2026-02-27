@@ -399,8 +399,24 @@ export class JellyfinPlayer extends EventEmitter {
             // This applies both to the initial play() call (options.audioStreamIndex
             // explicitly set) AND to audio-switch restarts (_forceDirectStream flag).
             const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
+            const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
+            
+            // PlayerPage always passes the default audio track index. We only need to
+            // force a transcode if the user requested a track that is DIFFERENT from the default.
+            let isCustomAudioTrack = false;
+            if (options.audioStreamIndex !== undefined) {
+                // Determine the default track from the pre-fetched item if available
+                let defaultIndex = undefined;
+                if (options.item && options.item.MediaSources) {
+                    const fallbackSource = options.item.MediaSources[0];
+                    const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+                    if (ms) defaultIndex = ms.DefaultAudioStreamIndex;
+                }
+                isCustomAudioTrack = (options.audioStreamIndex !== defaultIndex);
+            }
+
             const needsDirectStreamForAudio = options._forceDirectStream ||
-                (isHtml5Backend && options.audioStreamIndex !== undefined);
+                (isHtml5Backend && !supportsNativeAudio && isCustomAudioTrack);
 
             if (needsDirectStreamForAudio) {
                 log.info('HTML5 audio track selection: clearing DirectPlayProfiles to force DirectStream/Transcode');
@@ -790,20 +806,13 @@ export class JellyfinPlayer extends EventEmitter {
 
         // =====================================================================
         // Determine whether we need to restart playback to apply the audio change.
-        //
-        // Two cases ALWAYS require a restart:
-        //   1. Transcode / DirectStream — the audio track is baked into the
-        //      server's HLS output, so a live backend call has no effect.
-        //   2. HtmlVideoPlayer (Chrome / browser) — Chrome does NOT implement
-        //      the HTMLMediaElement.audioTracks API (it's undefined), so there
-        //      is no way to switch tracks live.  Only TizenAVPlayer supports
-        //      native live audio switching via AVPlay's track APIs.
         // =====================================================================
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream';
 
         // True whenever this backend cannot live-switch audio tracks
-        const requiresRestart = isTranscoding || !(this._backend instanceof TizenAVPlayer);
+        const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
+        const requiresRestart = isTranscoding || (!(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart}`);
 
@@ -811,18 +820,25 @@ export class JellyfinPlayer extends EventEmitter {
             log.info(`Restarting playback for audio track: ${index} (method: ${this._currentPlayMethod ?? 'DirectPlay/HTML5'})`);
 
             const currentTicks = this.getCurrentPositionTicks();
+            
+            // Check if the requested index is the original default track
+            let isCustomAudioTrack = true;
+            if (this._currentItem && this._currentItem.MediaSources) {
+                const msId = this._currentPlayOptions.mediaSourceId;
+                const fallbackSource = this._currentItem.MediaSources[0];
+                const ms = this._currentItem.MediaSources.find(m => m.Id === msId) || fallbackSource;
+                if (ms && index === ms.DefaultAudioStreamIndex) {
+                    isCustomAudioTrack = false;
+                }
+            }
 
             // Build new play options carrying the updated audio stream index.
-            // _forceDirectStream tells play() to clear DirectPlayProfiles so the
-            // server is forced into DirectStream/Transcode, producing a
-            // TranscodingUrl with AudioStreamIndex already embedded — the only
-            // way to switch audio tracks on the HTML5 backend (Chrome has no
-            // native audioTracks API and static DirectPlay URLs ignore AudioStreamIndex).
             const restartOptions = {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
                 startPositionTicks: currentTicks,
-                _forceDirectStream: !(this._backend instanceof TizenAVPlayer)
+                // Only force DirectStream if backend can't switch natively AND the track isn't the default direct play track
+                _forceDirectStream: !(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio && isCustomAudioTrack
             };
 
             // Persist so future restarts (bitrate change, etc.) carry the right track
