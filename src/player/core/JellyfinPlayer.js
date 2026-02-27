@@ -331,7 +331,7 @@ export class JellyfinPlayer extends EventEmitter {
                 // SubtitleManager handles both primary and secondary subtitle ticking
                 this._subtitleManager.tick(event.data.time);
             } catch (e) {
-                console.error('Error ticking subtitle manager:', e);
+                console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
             
             // Re-emit normalized timeupdate with absolute ticks

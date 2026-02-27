@@ -1,0 +1,13 @@
+diff --git a/node_modules/libjass/libjass.js b/node_modules/libjass/libjass.js
+index ddea430..98fd049 100644
+--- a/node_modules/libjass/libjass.js
++++ b/node_modules/libjass/libjass.js
+@@ -6462,7 +6462,7 @@
+                 var dialogueAnimationStylesElement = result.getElementsByTagName("style")[0];
+                 if (dialogueAnimationStylesElement !== undefined) {
+                     var sheet = dialogueAnimationStylesElement.sheet;
+-                    if (sheet.cssRules.length === 0) {
++                    if (sheet && sheet.cssRules && sheet.cssRules.length === 0) {
+                         sheet.cssText = dialogueAnimationStylesElement.textContent;
+                     }
+                 }

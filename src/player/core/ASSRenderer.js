@@ -127,8 +127,8 @@ export default class ASSRenderer {
                 content, 
                 this._fontFamily, 
                 this._fontScale || 1.0, 
-                this._outlineThickness || 0.4, 
-                this._shadowThickness || 0.3
+                this._outlineThickness || 0.8, 
+                this._shadowThickness || 0.5
             );
             
             this._ass = await libjass.ASS.fromString(processedContent);
@@ -504,7 +504,7 @@ export default class ASSRenderer {
         // Renderer settings — disable SVG filters for Tizen compatibility
         // (uses CSS text-shadow instead, which works on Chrome 56+)
         const settings = new libjass.renderers.RendererSettings();
-        settings.enableSvg = true;
+        settings.enableSvg = false;
 
         // Create WebRenderer: (ass, clock, wrapperDiv, settings)
         this._renderer = new libjass.renderers.WebRenderer(
