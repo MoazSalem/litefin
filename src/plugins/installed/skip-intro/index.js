@@ -17,8 +17,8 @@
  *     the PluginWidgetHost — no OSD changes are needed.
  * ============================================================================
  */
-
 import './skip-intro.css';
+import { i18n } from '../../../utils/i18n.js';
 
 // ============================================================================
 // Constants
@@ -53,6 +53,8 @@ const skipIntroPlugin = {
     // Currently loaded segments for the active item
     _introSegment: null,
     _outroSegment: null,
+    _recapSegment: null,
+    _previewSegment: null,
 
     // Saved PluginAPI reference (set in init)
     _api: null,
@@ -98,6 +100,12 @@ const skipIntroPlugin = {
         if (this._outroSegment) {
             api.addOSDWidget(this._buildWidget('outro', this._outroSegment, api));
         }
+        if (this._recapSegment) {
+            api.addOSDWidget(this._buildWidget('recap', this._recapSegment, api));
+        }
+        if (this._previewSegment) {
+            api.addOSDWidget(this._buildWidget('preview', this._previewSegment, api));
+        }
     },
 
     /**
@@ -128,6 +136,8 @@ const skipIntroPlugin = {
         this._cache.clear();
         this._introSegment = null;
         this._outroSegment = null;
+        this._recapSegment = null;
+        this._previewSegment = null;
     },
 
     // ========================================================================
@@ -148,6 +158,8 @@ const skipIntroPlugin = {
             const cached = this._cache.get(itemId);
             this._introSegment = cached.intro;
             this._outroSegment = cached.outro;
+            this._recapSegment = cached.recap;
+            this._previewSegment = cached.preview;
             api.log.debug(`Skip Intro: segments for ${itemId} loaded from cache`);
             return;
         }
@@ -171,13 +183,32 @@ const skipIntroPlugin = {
                     ? { start: credits.Start * TICKS_PER_SECOND, end: credits.End * TICKS_PER_SECOND }
                     : null;
 
+            // Parse recap segment -- only valid if End > 0
+            const recap = data?.Recap;
+            this._recapSegment =
+                recap?.End > 0 ? { start: recap.Start * TICKS_PER_SECOND, end: recap.End * TICKS_PER_SECOND } : null;
+
+            // Parse preview segment -- only valid if End > 0
+            const preview = data?.Preview;
+            this._previewSegment =
+                preview?.End > 0
+                    ? { start: preview.Start * TICKS_PER_SECOND, end: preview.End * TICKS_PER_SECOND }
+                    : null;
+
             // Cache result for this item
-            this._cache.set(itemId, { intro: this._introSegment, outro: this._outroSegment });
+            this._cache.set(itemId, {
+                intro: this._introSegment,
+                outro: this._outroSegment,
+                recap: this._recapSegment,
+                preview: this._previewSegment
+            });
 
             api.log.info(
                 `Skip Intro: fetched segments for ${itemId}`,
                 `intro=${this._introSegment ? 'yes' : 'no'}`,
-                `outro=${this._outroSegment ? 'yes' : 'no'}`
+                `outro=${this._outroSegment ? 'yes' : 'no'}`,
+                `recap=${this._recapSegment ? 'yes' : 'no'}`,
+                `preview=${this._previewSegment ? 'yes' : 'no'}`
             );
         } catch (err) {
             // 404 = intro-skipper has no data for this episode (not all episodes have intros)
@@ -187,9 +218,11 @@ const skipIntroPlugin = {
                 api.log.warn(`Skip Intro: failed to fetch segments for ${itemId}:`, err.message);
             }
             // Cache null result to avoid re-fetching for the same episode on timeupdate
-            this._cache.set(itemId, { intro: null, outro: null });
+            this._cache.set(itemId, { intro: null, outro: null, recap: null, preview: null });
             this._introSegment = null;
             this._outroSegment = null;
+            this._recapSegment = null;
+            this._previewSegment = null;
         }
     },
 
@@ -203,12 +236,26 @@ const skipIntroPlugin = {
      * @private
      */
     _buildWidget(type, segment, api) {
-        const isIntro = type === 'intro';
+        let labelKey = 'SkipIntro';
+        let widgetId = 'skip-intro-btn';
+        let cssClass = 'skip-intro-widget';
+
+        if (type === 'outro') {
+            labelKey = 'SkipCredits';
+            widgetId = 'skip-outro-btn';
+            cssClass = 'skip-outro-widget';
+        } else if (type === 'recap') {
+            labelKey = 'SkipRecap';
+            widgetId = 'skip-recap-btn';
+            cssClass = 'skip-recap-widget';
+        } else if (type === 'preview') {
+            labelKey = 'SkipPreview';
+            widgetId = 'skip-preview-btn';
+            cssClass = 'skip-preview-widget';
+        }
 
         // Button labels — keeping it simple and familiar to Jellyfin users
-        const label = isIntro ? 'Skip Intro' : 'Skip Credits';
-        const widgetId = isIntro ? 'skip-intro-btn' : 'skip-outro-btn';
-        const cssClass = isIntro ? 'skip-intro-widget' : 'skip-outro-widget';
+        const label = i18n.t(labelKey);
 
         return {
             id: widgetId,

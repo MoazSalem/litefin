@@ -23,7 +23,9 @@
  * shouldShow() returns true for the current playback position.
  */
 .plugin-widget.skip-intro-widget,
-.plugin-widget.skip-outro-widget {
+.plugin-widget.skip-outro-widget,
+.plugin-widget.skip-recap-widget,
+.plugin-widget.skip-preview-widget {
     position: absolute;
     /* High enough to float clearly above the controls row without clashing.
        Controls row sits at ~12% from bottom; we go to 28% to leave breathing room. */
@@ -47,7 +49,9 @@
 
 /* Visible state — triggered by PluginWidgetHost when shouldShow() returns true */
 .plugin-widget.skip-intro-widget.visible,
-.plugin-widget.skip-outro-widget.visible {
+.plugin-widget.skip-outro-widget.visible,
+.plugin-widget.skip-recap-widget.visible,
+.plugin-widget.skip-preview-widget.visible {
     opacity: 1;
     pointer-events: auto;
     transform: translateY(0);
@@ -60,7 +64,9 @@
  * .osd-main.osd-hidden means the OSD is hidden.
  */
 .player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-intro-widget.sync-osd.visible,
-.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-outro-widget.sync-osd.visible {
+.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-outro-widget.sync-osd.visible,
+.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-recap-widget.sync-osd.visible,
+.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-preview-widget.sync-osd.visible {
     opacity: 0;
     pointer-events: none;
     transform: translateY(12px);
@@ -141,4 +147,26 @@
 .skip-intro-btn:focus .skip-intro-arrow {
     /* Arrow nudges right when focused — micro-animation */
     transform: translateX(4px);
+}
+
+/* ============================= RTL Support ============================== */
+
+[dir="rtl"] .plugin-widget.skip-intro-widget,
+[dir="rtl"] .plugin-widget.skip-outro-widget,
+[dir="rtl"] .plugin-widget.skip-recap-widget,
+[dir="rtl"] .plugin-widget.skip-preview-widget {
+    left: auto;
+    right: 6%;
+}
+
+[dir="rtl"] .skip-intro-arrow {
+    /* Move gap from left to right for RTL layout */
+    margin-left: 0;
+    margin-right: 0.6em;
+}
+
+[dir="rtl"] .skip-intro-btn.focused .skip-intro-arrow,
+[dir="rtl"] .skip-intro-btn:focus .skip-intro-arrow {
+    /* Move arrow away from text (leftwards) in RTL */
+    transform: translateX(-4px);
 }
