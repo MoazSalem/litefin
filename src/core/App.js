@@ -308,8 +308,9 @@ class App {
         // Handle application exit
         eventBus.on('app:exitRequested', () => {
             log.info('Exit requested - closing application');
-            // Ensure session is reported as ended if possible
-            this._endSessionOnServer();
+            // We DO NOT end the session on the server here.
+            // Calling /Sessions/Logout actively revokes the authentication token.
+            // The dashboard Offline status is handled automatically by the WebSocket dropping.
             tizenAdapter.exit();
         });
 
@@ -432,35 +433,13 @@ class App {
     }
 
     /**
-     * End session on server when app is closing
-     * Uses synchronous XHR because async may not complete before app closes
+     * Obsolete: Do not call this method.
+     * Ending the session via /Sessions/Logout permanently revokes the user's access token,
+     * which causes a 401 Unauthorized error on the next launch.
      * @private
      */
     _endSessionOnServer() {
-        // Skip if not authenticated
-        if (!state.get('user:authenticated')) {
-            return;
-        }
-
-        const serverUrl = api._serverUrl;
-        if (!serverUrl) return;
-
-        const authHeader = api.getAuthHeader();
-        if (!authHeader) return;
-
-        log.info('Ending session on server...');
-
-        try {
-            // Use synchronous XHR - async won't complete before app exits
-            const xhr = new XMLHttpRequest();
-            xhr.open('POST', `${serverUrl}/Sessions/Logout`, false); // false = synchronous
-            xhr.setRequestHeader('X-Emby-Authorization', authHeader);
-            xhr.setRequestHeader('Content-Type', 'application/json');
-            xhr.send();
-            log.info('Session ended on server');
-        } catch (e) {
-            log.warn('Failed to end session on server:', e);
-        }
+        // Obsolete - intentionally empty
     }
 
     /**
