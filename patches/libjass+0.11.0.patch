@@ -1,5 +1,5 @@
 diff --git a/node_modules/libjass/libjass.js b/node_modules/libjass/libjass.js
-index ddea430..e58cae3 100644
+index ddea430..28d9258 100644
 --- a/node_modules/libjass/libjass.js
 +++ b/node_modules/libjass/libjass.js
 @@ -1375,7 +1375,7 @@
@@ -53,20 +53,150 @@ index ddea430..e58cae3 100644
                      } else if (part instanceof parts.Fade) {
                          dialogueAnimationCollection.add("linear", [ new keyframe_1.Keyframe(0, new map_1.Map([ [ "opacity", "0" ] ])), new keyframe_1.Keyframe(part.start, new map_1.Map([ [ "opacity", "1" ] ])), new keyframe_1.Keyframe(dialogue.end - dialogue.start - part.end, new map_1.Map([ [ "opacity", "1" ] ])), new keyframe_1.Keyframe(dialogue.end - dialogue.start, new map_1.Map([ [ "opacity", "0" ] ])) ]);
                      } else if (part instanceof parts.ComplexFade) {
-@@ -6322,12 +6355,28 @@
+@@ -6318,16 +6351,158 @@
+                         startNewSpan(true);
+                     }
+                 }
++                
++                // STAIRCASE FIX: In ASS, geometric transforms like \frz (rotation) and \fax/\fay (shear)
++                // should apply to the ENTIRE dialogue text as one unit, not to each <span> individually.
++                // When applied per-span, each inline-block element rotates from its own local origin,
++                // creating a cascading \staircase/ visual artifact.
++                //
++                // This also handles pure scale transforms (\fscx/\fscy) which benefit from container-level
++                // application so that line-heights and inter-sub spacing compress proportionally.
++                //
++                // Three handling strategies depending on transform type and whether \pos is present:
++                //
++                // 1. ROTATION/SHEAR (causeStaircase = true):
++                //    → geoWrapper div (inline-block, carries the transform)
++                //    → Outer sub handles \pos alignment only; wrapper rotates around text block center
++                //    → Avoids rotation-origin shift that would occur if composing on the same element
++                //
++                // 2. PURE SCALE, \pos present (causeStaircase = false, hasPosTag = true):
++                //    → Store in sub._sharedScaleTransform; second loop prepends to divTransformStyle
++                //    → Safe because scale around the alignment anchor doesn't shift visual anchor
++                //
++                // 3. PURE SCALE, NO \pos (causeStaircase = false, hasPosTag = false):
++                //    → Apply directly to sub.style.transform (the sub is in block flow, not absolute)
++                //    → ALSO scale the sub's marginTop/marginBottom proportionally, so the visual gap
++                //      between two simultaneously shown stacked dialogue subs is proportional to the
++                //      compressed text height rather than the unscaled layout height
++                //
++                // NOTE: libjass always creates a trailing empty placeholder <span> with no transform.
++                // We skip untransformed spans in the shared-transform check.
++
++                // Pre-check: does this dialogue have a \pos or \move tag?
++                // This determines which scale-handling path to use.
++                var hasPosTag = false;
++                for (var pi = 0; pi < dialogue.parts.length; pi++) {
++                    if (dialogue.parts[pi] instanceof parts.Position || dialogue.parts[pi] instanceof parts.Move) {
++                        hasPosTag = true;
++                        break;
++                    }
++                }
++
++                var allSpans = sub.querySelectorAll("span");
++                if (allSpans.length > 0) {
++                    var firstSpanTransform = null;
++                    var allMatch = true;
++                    for (var si = 0; si < allSpans.length; si++) {
++                        var spanT = allSpans[si].style.webkitTransform || allSpans[si].style.transform || "";
++                        if (spanT === "") continue; // skip empty trailing placeholder spans
++                        if (firstSpanTransform === null) {
++                            firstSpanTransform = spanT;
++                        } else if (spanT !== firstSpanTransform) {
++                            allMatch = false;
++                            break;
++                        }
++                    }
++                    if (allMatch && firstSpanTransform !== null) {
++                        // Determine if the transform causes staircase: rotation and shear do, pure scale doesn't.
++                        var causeStaircase = /rotate/i.test(firstSpanTransform);
++                        if (!causeStaircase) {
++                            // Check for shear in matrix(a,b,c,d,e,f): non-zero b or c → shear → staircase
++                            var matrixMatch = firstSpanTransform.match(/matrix\(([^)]+)\)/);
++                            if (matrixMatch) {
++                                var mVals = matrixMatch[1].split(",").map(function(s) { return parseFloat(s.trim()); });
++                                if (mVals.length >= 4 && (Math.abs(mVals[1]) > 0.001 || Math.abs(mVals[2]) > 0.001)) {
++                                    causeStaircase = true;
++                                }
++                            }
++                        }
++
++                        // Clear the shared transform from all individual spans (applies in all 3 paths)
++                        for (var si = 0; si < allSpans.length; si++) {
++                            allSpans[si].style.webkitTransform = "";
++                            allSpans[si].style.transform = "";
++                        }
++
++                        if (causeStaircase) {
++                            // PATH 1: ROTATION / SHEAR — geoWrapper div approach.
++                            // A separate inline-block wrapper carries the rotation/shear, so the entire
++                            // text block transforms around the wrapper's center (correct behavior), while
++                            // the outer sub handles alignment/positioning with a clean transform-origin.
++                            var geoWrapper = document.createElement("div");
++                            geoWrapper.style.display = "inline-block";
++                            geoWrapper.style.webkitTransform = firstSpanTransform;
++                            geoWrapper.style.transform = firstSpanTransform;
++                            while (sub.firstChild) { geoWrapper.appendChild(sub.firstChild); }
++                            sub.appendChild(geoWrapper);
++
++                        } else if (hasPosTag) {
++                            // PATH 2: PURE SCALE + \pos — store for second loop to prepend to divTransformStyle.
++                            // Scale on a positioned element is safe to compose with the alignment translate.
++                            sub._sharedScaleTransform = firstSpanTransform;
++
++                        } else {
++                            // PATH 3: PURE SCALE + NO \pos — apply directly to the sub container.
++                            // The sub lives in normal block flow inside the .an* wrapper. Applying scaleY
++                            // to it compresses the whole block visually. We also proportionally reduce
++                            // sub.marginTop/marginBottom so the gap between simultaneously stacked
++                            // dialog subs is proportional to the compressed height, not the full layout height.
++                            sub.style.webkitTransform = firstSpanTransform;
++                            sub.style.transform = firstSpanTransform;
++
++                            // Extract the Y-scale factor to proportionally scale the vertical margins.
++                            // This ensures that when two dialogue boxes are stacked in .an2, the gap
++                            // between them visually matches the compressed line height, not the full height.
++                            var scaleYFactor = 1;
++                            var scaleYMatch = firstSpanTransform.match(/scaleY\(([^)]+)\)/);
++                            if (scaleYMatch) {
++                                scaleYFactor = parseFloat(scaleYMatch[1]);
++                            } else {
++                                // matrix(a,b,c,d,e,f): the d-term (index 3) is the Y scale factor
++                                var scaleMatrixMatch = firstSpanTransform.match(/matrix\(([^)]+)\)/);
++                                if (scaleMatrixMatch) {
++                                    var sm = scaleMatrixMatch[1].split(",").map(function(s) { return parseFloat(s.trim()); });
++                                    if (sm.length >= 4) scaleYFactor = Math.abs(sm[3]);
++                                }
++                            }
++                            if (scaleYFactor !== 1 && scaleYFactor > 0) {
++                                var marginV = parseFloat(sub.style.marginTop) || 0;
++                                sub.style.marginTop    = (marginV * scaleYFactor).toFixed(3) + "px";
++                                sub.style.marginBottom = (marginV * scaleYFactor).toFixed(3) + "px";
++                            }
++                        }
++                    }
++                }
++                
+                 for (var _d = 0, _e = dialogue.parts; _d < _e.length; _d++) {
                      var part = _e[_d];
                      if (part instanceof parts.Position || part instanceof parts.Move) {
                          var transformOrigin = WebRenderer._transformOrigins[dialogue.alignment];
-+                        // On Tizen, when animating -webkit-transform: translate() (like we patched for \move),
-+                        // the initial base transform here MUST still exist but we need to ensure it applies identically.
-+                        // Our animation from the previous step overrides 'transform' completely during the animation.
-+                        // Wait, CSS animations override the base transform.
-+                        // So if we have a base transform here: `translate(-50%, -50%) translate(-margin, -margin)`
-+                        // The animation `translate(dx, dy)` will OVERWRITE it, losing the alignment!
-+                        // We must inject the alignment into the animation keyframes themselves if it's a \move!
 +                        
++                        // Build the base alignment transform string (unchanged from original libjass logic)
                          var divTransformStyle = "translate(" + -transformOrigin[0] + "%, " + -transformOrigin[1] + "%) translate(-" + sub.style.marginLeft + ", -" + sub.style.marginTop + ")";
                          var transformOriginString = transformOrigin[0] + "% " + transformOrigin[1] + "%";
++                        
++                        // For pure-scale shared transforms (\fscx/\fscy), prepend the scale to the container
++                        // transform so line-height is also compressed/expanded correctly. This is safe with
++                        // scale (unlike rotation) because scale around the alignment anchor doesn't shift the
++                        // visual anchor point noticeably.
++                        if (sub._sharedScaleTransform) {
++                            divTransformStyle = sub._sharedScaleTransform + " " + divTransformStyle;
++                            delete sub._sharedScaleTransform;
++                        }
 +                        
 +                        // Apply base static transforms (alignment via percentage translate + margin offset)
                          sub.style.webkitTransform = divTransformStyle;
@@ -82,7 +212,7 @@ index ddea430..e58cae3 100644
                          break;
                      }
                  }
-@@ -6462,11 +6511,25 @@
+@@ -6462,11 +6637,25 @@
                  var dialogueAnimationStylesElement = result.getElementsByTagName("style")[0];
                  if (dialogueAnimationStylesElement !== undefined) {
                      var sheet = dialogueAnimationStylesElement.sheet;
@@ -109,7 +239,7 @@ index ddea430..e58cae3 100644
              };
              WebRenderer.prototype._onClockPlay = function () {
                  _super.prototype._onClockPlay.call(this);
-@@ -6484,6 +6547,9 @@
+@@ -6484,6 +6673,9 @@
                          _this._removeSub(sub);
                      }
                  });
@@ -119,7 +249,7 @@ index ddea430..e58cae3 100644
                  _super.prototype._onClockTick.call(this);
              };
              WebRenderer.prototype._onClockPause = function () {
-@@ -6493,6 +6559,11 @@
+@@ -6493,6 +6685,11 @@
              WebRenderer.prototype._onClockStop = function () {
                  _super.prototype._onClockStop.call(this);
                  this._subsWrapper.style.display = "none";
@@ -131,7 +261,7 @@ index ddea430..e58cae3 100644
              };
              WebRenderer.prototype._onClockRateChange = function () {
                  _super.prototype._onClockRateChange.call(this);
-@@ -6527,6 +6598,58 @@
+@@ -6527,6 +6724,58 @@
              WebRenderer.prototype._removeSub = function (sub) {
                  sub.parentNode.removeChild(sub);
              };
@@ -190,7 +320,7 @@ index ddea430..e58cae3 100644
              WebRenderer.prototype._removeAllSubs = function () {
                  var _this = this;
                  this._currentSubs.forEach(function (sub) {
-@@ -6654,6 +6777,14 @@
+@@ -6654,6 +6903,14 @@
                  }
                  span.style.textDecoration = textDecoration.trim();
                  var transform = "";
@@ -205,7 +335,7 @@ index ddea430..e58cae3 100644
                  if (isTextOnlySpan) {
                      if (this._fontScaleY !== this._fontScaleX) {
                          transform += "scaleY(" + (this._fontScaleY / this._fontScaleX).toFixed(3) + ") ";
-@@ -6678,7 +6809,13 @@
+@@ -6678,7 +6935,13 @@
                  if (this._skewX !== null || this._skewY !== null) {
                      var skewX = SpanStyles._valueOrDefault(this._skewX, 0);
                      var skewY = SpanStyles._valueOrDefault(this._skewY, 0);

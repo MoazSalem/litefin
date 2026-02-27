@@ -208,7 +208,7 @@ export default class ASSRenderer {
         log.debug(`Wrapper updated: className="${this._wrapper.className}", lineH=${this._lineHeight}, bottom=${this._bottomOffset}, letterS=${this._letterSpacing}`);
     }
 
-    async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
+    async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
         log.info(`ASSRenderer.setFontStyles: class="${className}", family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}, lineH=${lineHeight}, letterS=${letterSpacing}, bottom=${bottomOffset}`);
         this._fontClass = className;
         this._fontFamily = fontFamily;
@@ -236,7 +236,7 @@ export default class ASSRenderer {
         }
     }
 
-    _preProcessAssContent(content, fontFamily, fontScale = 1.0, outlineThickness = 0.4, shadowThickness = 0.3) {
+    _preProcessAssContent(content, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5) {
         if (!content) return content;
 
         log.info(`Preprocessing ASS content with font="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);

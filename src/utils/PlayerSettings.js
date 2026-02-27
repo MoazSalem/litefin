@@ -98,8 +98,8 @@ const DEFAULTS = {
     // Shadow thickness for ASS (baseline is 0.5)
     subtitleShadowThickness: 0.5,
 
-    // Vertical spacing offset for ASS (baseline is -6px)
-    subtitleLineHeight: -6,
+    // Vertical spacing offset for ASS (baseline is 0px)
+    subtitleLineHeight: 0,
 
     // Letter spacing for ASS (baseline is 0.0)
     subtitleLetterSpacing: 0,
