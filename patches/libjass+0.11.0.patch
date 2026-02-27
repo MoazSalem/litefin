@@ -1,8 +1,87 @@
 diff --git a/node_modules/libjass/libjass.js b/node_modules/libjass/libjass.js
-index ddea430..98fd049 100644
+index ddea430..63c34ba 100644
 --- a/node_modules/libjass/libjass.js
 +++ b/node_modules/libjass/libjass.js
-@@ -6462,7 +6462,7 @@
+@@ -6227,7 +6227,25 @@
+                         sub.style.top = (this._scaleY * part.y).toFixed(3) + "px";
+                     } else if (part instanceof parts.Move) {
+                         sub.style.position = "absolute";
+-                        dialogueAnimationCollection.add("linear", [ new keyframe_1.Keyframe(0, new map_1.Map([ [ "left", (this._scaleX * part.x1).toFixed(3) + "px" ], [ "top", (this._scaleY * part.y1).toFixed(3) + "px" ] ])), new keyframe_1.Keyframe(part.t1, new map_1.Map([ [ "left", (this._scaleX * part.x1).toFixed(3) + "px" ], [ "top", (this._scaleY * part.y1).toFixed(3) + "px" ] ])), new keyframe_1.Keyframe(part.t2, new map_1.Map([ [ "left", (this._scaleX * part.x2).toFixed(3) + "px" ], [ "top", (this._scaleY * part.y2).toFixed(3) + "px" ] ])), new keyframe_1.Keyframe(dialogue.end - dialogue.start, new map_1.Map([ [ "left", (this._scaleX * part.x2).toFixed(3) + "px" ], [ "top", (this._scaleY * part.y2).toFixed(3) + "px" ] ])) ]);
++                        // Note: On Tizen, setting 'left' and 'top' via CSS animation while a static 'transform' (margin offset) is applied
++                        // causes the element to incorrectly anchor to 0,0. We need to apply the left/top as base styles,
++                        // and animate the *difference* using transform translations.
++                        
++                        sub.style.left = (this._scaleX * part.x1).toFixed(3) + "px";
++                        sub.style.top = (this._scaleY * part.y1).toFixed(3) + "px";
++                        
++                        var dx = (this._scaleX * (part.x2 - part.x1)).toFixed(3) + "px";
++                        var dy = (this._scaleY * (part.y2 - part.y1)).toFixed(3) + "px";
++                        
++                        // We animate the transform to shift from the initial point (0,0 relative) to the final point (dx,dy relative).
++                        // Note: WebRenderer sets a static transform later for margins/origins, so we must rely on Tizen's animation 
++                        // engine to composite this transform animation with the base transform.
++                        dialogueAnimationCollection.add("linear", [ 
++                            new keyframe_1.Keyframe(0, new map_1.Map([ [ "-webkit-transform", "translate(0, 0)" ], [ "transform", "translate(0, 0)" ] ])), 
++                            new keyframe_1.Keyframe(part.t1, new map_1.Map([ [ "-webkit-transform", "translate(0, 0)" ], [ "transform", "translate(0, 0)" ] ])), 
++                            new keyframe_1.Keyframe(part.t2, new map_1.Map([ [ "-webkit-transform", "translate(" + dx + ", " + dy + ")" ], [ "transform", "translate(" + dx + ", " + dy + ")" ] ])), 
++                            new keyframe_1.Keyframe(dialogue.end - dialogue.start, new map_1.Map([ [ "-webkit-transform", "translate(" + dx + ", " + dy + ")" ], [ "transform", "translate(" + dx + ", " + dy + ")" ] ])) 
++                        ]);
+                     } else if (part instanceof parts.Fade) {
+                         dialogueAnimationCollection.add("linear", [ new keyframe_1.Keyframe(0, new map_1.Map([ [ "opacity", "0" ] ])), new keyframe_1.Keyframe(part.start, new map_1.Map([ [ "opacity", "1" ] ])), new keyframe_1.Keyframe(dialogue.end - dialogue.start - part.end, new map_1.Map([ [ "opacity", "1" ] ])), new keyframe_1.Keyframe(dialogue.end - dialogue.start, new map_1.Map([ [ "opacity", "0" ] ])) ]);
+                     } else if (part instanceof parts.ComplexFade) {
+@@ -6322,12 +6340,51 @@
+                     var part = _e[_d];
+                     if (part instanceof parts.Position || part instanceof parts.Move) {
+                         var transformOrigin = WebRenderer._transformOrigins[dialogue.alignment];
++                        // On Tizen, when animating -webkit-transform: translate() (like we patched for \move),
++                        // the initial base transform here MUST still exist but we need to ensure it applies identically.
++                        // Our animation from the previous step overrides 'transform' completely during the animation.
++                        // Wait, CSS animations override the base transform.
++                        // So if we have a base transform here: `translate(-50%, -50%) translate(-margin, -margin)`
++                        // The animation `translate(dx, dy)` will OVERWRITE it, losing the alignment!
++                        // We must inject the alignment into the animation keyframes themselves if it's a \move!
++                        
+                         var divTransformStyle = "translate(" + -transformOrigin[0] + "%, " + -transformOrigin[1] + "%) translate(-" + sub.style.marginLeft + ", -" + sub.style.marginTop + ")";
+                         var transformOriginString = transformOrigin[0] + "% " + transformOrigin[1] + "%";
++                        
++                        // Apply base static transforms
+                         sub.style.webkitTransform = divTransformStyle;
+                         sub.style.webkitTransformOrigin = transformOriginString;
+                         sub.style.transform = divTransformStyle;
+                         sub.style.transformOrigin = transformOriginString;
++                        
++                        // If it's a \move, we need to rebuild the animation to INCLUDE these base alignment translates,
++                        // because CSS animations replace the transform property, rather than appending to it.
++                        if (part instanceof parts.Move) {
++                            var dxOffset = (this._scaleX * (part.x2 - part.x1));
++                            var dyOffset = (this._scaleY * (part.y2 - part.y1));
++                            
++                            // Tizen WebKit animation parser often fails when given multiple chained `translate()` functions in a keyframe.
++                            // We must calculate the exact pixel values and supply a single `translate(Xpx, Ypx)` string.
++                            
++                            // First, extract the alignment offsets (since transformOrigin is in %, we keep it as %)
++                            // But margin is in pixels. The previous divTransformStyle was:
++                            // "translate(-originX%, -originY%) translate(-marginLeft, -marginTop)"
++                            // To be absolutely safe with older WebKits, we'll just put them in one translate3d 
++                            // or keep the margin in px and calculate it.
++                            
++                            // The safest way that is guaranteed to parse in Tizen animations is calc():
++                            var tStart = "translate(calc(" + -transformOrigin[0] + "% - " + (sub.style.marginLeft || "0px") + "), calc(" + -transformOrigin[1] + "% - " + (sub.style.marginTop || "0px") + "))";
++                            var tEnd = "translate(calc(" + -transformOrigin[0] + "% - " + (sub.style.marginLeft || "0px") + " + " + dxOffset.toFixed(3) + "px), calc(" + -transformOrigin[1] + "% - " + (sub.style.marginTop || "0px") + " + " + dyOffset.toFixed(3) + "px))";
++                            
++                            // Re-bind the animation with the fully composited transform string
++                            dialogueAnimationCollection.add("linear", [ 
++                                new keyframe_1.Keyframe(0, new map_1.Map([ [ "-webkit-transform", tStart ], [ "transform", tStart ] ])), 
++                                new keyframe_1.Keyframe(part.t1, new map_1.Map([ [ "-webkit-transform", tStart ], [ "transform", tStart ] ])), 
++                                new keyframe_1.Keyframe(part.t2, new map_1.Map([ [ "-webkit-transform", tEnd ], [ "transform", tEnd ] ])), 
++                                new keyframe_1.Keyframe(dialogue.end - dialogue.start, new map_1.Map([ [ "-webkit-transform", tEnd ], [ "transform", tEnd ] ])) 
++                            ]);
++                        }
++                        
+                         break;
+                     }
+                 }
+@@ -6462,7 +6519,7 @@
                  var dialogueAnimationStylesElement = result.getElementsByTagName("style")[0];
                  if (dialogueAnimationStylesElement !== undefined) {
                      var sheet = dialogueAnimationStylesElement.sheet;
