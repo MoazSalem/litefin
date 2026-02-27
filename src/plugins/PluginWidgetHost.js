@@ -60,6 +60,7 @@ class PluginWidgetHost {
         //   pluginId: string,     — the owning plugin's ID
         //   hideCounter: number,  — consecutive hide evaluations (for hysteresis)
         //   visible: boolean      — current visibility state
+        //   syncTimer: number|null— setTimeout ID for 8-second independent visibility window
         // }
         this._widgets = new Map();
 
@@ -173,7 +174,8 @@ class PluginWidgetHost {
             el,
             pluginId,
             hideCounter: 0,
-            visible: alwaysVisible
+            visible: alwaysVisible,
+            syncTimer: null
         });
 
         // Bind Enter key action on the element (via click — standard OSD click delegation)
@@ -205,6 +207,10 @@ class PluginWidgetHost {
         const entry = this._widgets.get(widgetId);
         if (!entry) return;
 
+        if (entry.syncTimer) {
+            clearTimeout(entry.syncTimer);
+        }
+
         // Remove from DOM
         if (entry.el && entry.el.parentNode) {
             entry.el.parentNode.removeChild(entry.el);
@@ -225,6 +231,9 @@ class PluginWidgetHost {
         for (const [widgetId, entry] of this._widgets) {
             // Widget IDs are namespaced as '<pluginId>:<widgetId>'
             if (entry.pluginId === pluginId) {
+                if (entry.syncTimer) {
+                    clearTimeout(entry.syncTimer);
+                }
                 if (entry.el && entry.el.parentNode) {
                     entry.el.parentNode.removeChild(entry.el);
                 }
@@ -271,7 +280,21 @@ class PluginWidgetHost {
                 // Widget just became visible — show it and flag for auto-focus
                 entry.hideCounter = 0;
                 entry.visible = true;
+                el.classList.remove('sync-osd'); // Start completely independent
                 el.classList.add('visible');
+
+                // Clear any old timer
+                if (entry.syncTimer) clearTimeout(entry.syncTimer);
+
+                // After 8 seconds, sync visibility with the OSD
+                entry.syncTimer = setTimeout(() => {
+                    entry.syncTimer = null;
+                    if (entry.visible) {
+                        el.classList.add('sync-osd');
+                        log.debug(`Widget '${widget.id}' now syncing visibility with OSD`);
+                    }
+                }, 8000);
+
                 cacheInvalidated = true;
                 justBecameVisible = true;
                 log.debug(`Widget '${widget.id}' shown at ${positionTicks}`);
@@ -283,6 +306,11 @@ class PluginWidgetHost {
                     entry.hideCounter = 0;
                     entry.visible = false;
                     el.classList.remove('visible');
+                    el.classList.remove('sync-osd');
+                    if (entry.syncTimer) {
+                        clearTimeout(entry.syncTimer);
+                        entry.syncTimer = null;
+                    }
                     cacheInvalidated = true;
                     log.debug(`Widget '${widget.id}' hidden at ${positionTicks}`);
                 }
@@ -369,6 +397,7 @@ class PluginWidgetHost {
      */
     destroy() {
         for (const [, entry] of this._widgets) {
+            if (entry.syncTimer) clearTimeout(entry.syncTimer);
             if (entry.el && entry.el.parentNode) {
                 entry.el.parentNode.removeChild(entry.el);
             }
