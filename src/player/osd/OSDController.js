@@ -729,12 +729,15 @@ export default class OSDController extends Component {
 
         // Media keys
         if (key === 'play' || key === 'playPause') {
-             // Show OSD and focus play button
-             this.show();
-             this._currentFocusRow = 1;
-             const playIdx = this._findActionIndex('togglePlay');
-             if (playIdx !== -1) this._currentFocusIndex = playIdx;
-             this._updateFocus();
+             this.show(); // Always show/reset timer
+             
+             // Only force focus to Play button if OSD was previously hidden
+             if (wasHidden) {
+                 this._currentFocusRow = 1;
+                 const playIdx = this._findActionIndex('togglePlay');
+                 if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                 this._updateFocus();
+             }
 
              this._executeAction('togglePlay');
              return true;
