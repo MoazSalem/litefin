@@ -953,11 +953,31 @@ class DetailsPage extends Page {
         this._updateButtons();
     }
 
-    _handleMetaClick(element) {
+    async _handleMetaClick(element) {
         const type = element.dataset.type;
         const id = element.dataset.id;
         const name = element.dataset.name || element.dataset.value;
-        const libraryId = this._item.ParentId || this._item.LibraryId || state.get('activeLibraryId');
+
+        let libraryId = this._item.LibraryId || state.get('activeLibraryId');
+
+        // If LibraryId is missing and we are on an Episode/Season (which has a SeriesId),
+        // fetch the Series item to get the true top-level LibraryId, instead of using the Season's ID.
+        if (!libraryId && this._item.SeriesId) {
+            try {
+                log.info('Fetching Series details to determine true LibraryId...');
+                const seriesItem = await api.getItem(this._item.SeriesId);
+                libraryId = seriesItem.ParentId || seriesItem.LibraryId;
+
+                // Cache it dynamically to prevent subsequent network requests for other rich meta tags
+                this._item.LibraryId = libraryId;
+            } catch (err) {
+                log.error('Failed to determine LibraryId from Series', err);
+            }
+        }
+
+        // Fallback to ParentId for top-level items like Movies or standalone Series
+        // (where ParentId IS the LibraryId).
+        libraryId = libraryId || this._item.ParentId;
 
         if (!libraryId) {
             log.warn('Could not determine LibraryId for item', this._item);
