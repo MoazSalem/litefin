@@ -561,12 +561,10 @@ class FocusManager {
                 }
             }
 
-            // Pass instantScroll as parameter (not a class field) to avoid
-            // fragile state if the call chain ever becomes async
-            const instantScroll = direction === 'up' || direction === 'down';
-
             // Pass originElement to allow selecting closest target in new section
-            this.setActiveSection(nextSection, true, originElement, { instantScroll, direction });
+            // We NO LONGER force instantScroll for vertical moves, allowing the
+            // ScrollController's easeOutQuad to provide smooth row-to-row transitions.
+            this.setActiveSection(nextSection, true, originElement, { direction });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback

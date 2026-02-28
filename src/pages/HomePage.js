@@ -15,7 +15,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
-import { animationManager } from '../ui/AnimationManager.js';
+// AnimationManager removed — CSS .focused class handles card scale via GPU compositor
 
 import { focusManager } from '../ui/FocusManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -200,9 +200,12 @@ class HomePage extends Page {
 
         this.setLoading(false);
 
+        // Notify base Page class that async content is ready for focus restoration
+        this.restoreScrollFocusWhenReady();
+
         // Final Focus Check: If nothing is focused yet (e.g. empty results or error),
         // focus the header so navigation is possible.
-        if (!focusManager.getActiveSection()) {
+        if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
             this.setActiveSection('sidebar');
         }
     }
@@ -309,7 +312,10 @@ class HomePage extends Page {
             this._virtualRows.push(virtualRow);
 
             // Register Focus section with VirtualCardRow hook interception
-            this.registerFocusSection(`home-row-${i}`, sectionEl, {
+            // OPTIMIZATION: Register focus on .row-items (which has CSS containment) instead of .media-row.
+            // This isolates layout recalculations during scroll, matching FavoritesPage performance.
+            const itemsContainer = sectionEl.querySelector('.row-items');
+            this.registerFocusSection(`home-row-${i}`, itemsContainer, {
                 orientation: 'horizontal',
                 leaveUp: i === 0 ? null : `home-row-${i - 1}`, // Top row leaves up to nothing (or header)
                 leaveDown: i < rowsData.length - 1 ? `home-row-${i + 1}` : null,
@@ -377,7 +383,12 @@ class HomePage extends Page {
             }
         });
 
-        // Focus/Blur delegation (these bubble)
+        // Focus delegation (bubbles from all card descendants)
+        // NOTE: We do NOT call animationManager.focusScale here because that writes
+        // inline style.transition and style.transform synchronously on every keypress,
+        // forcing costly style recalculations during the active rAF scroll loop on Tizen.
+        // The CSS `.focused` class applied by FocusManager handles scale via the GPU
+        // compositor without any layout invalidation — identical to FavoritesPage behavior.
         container.addEventListener('focusin', (e) => {
             if (e.target.classList.contains('media-card')) {
                 // Sync VirtualCardRow internal index when focus jumps via Spatial Navigator
@@ -388,12 +399,6 @@ class HomePage extends Page {
                         this._virtualRows[rowIndex].syncIndexFromNode(e.target);
                     }
                 }
-                animationManager.focusScale(e.target, true);
-            }
-        });
-        container.addEventListener('focusout', (e) => {
-            if (e.target.classList.contains('media-card')) {
-                animationManager.focusScale(e.target, false);
             }
         });
 

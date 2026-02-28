@@ -9,16 +9,13 @@
 import { storage } from './StorageService.js';
 
 class ImageService {
-    constructor() {
-        this._quality = storage.getItem('pref:imageQuality') || 'medium';
-    }
-
     /**
-     * Get current quality preset
+     * Get current quality preset dynamically.
+     * Prevents race conditions with storage.init() during app boot.
      * @returns {string} low | medium | high | ultra
      */
     getPreset() {
-        return this._quality;
+        return storage.getItem('pref:imageQuality') || 'medium';
     }
 
     /**
@@ -27,7 +24,6 @@ class ImageService {
      */
     setPreset(preset) {
         if (['low', 'medium', 'high', 'ultra'].includes(preset)) {
-            this._quality = preset;
             storage.setItem('pref:imageQuality', preset);
             return true;
         }
@@ -71,7 +67,7 @@ class ImageService {
             }
         };
 
-        const currentScale = presets[this._quality] || presets.medium;
+        const currentScale = presets[this.getPreset()] || presets.medium;
 
         let maxWidth = 300; // Default safety
         if (type === 'poster') maxWidth = currentScale.poster;

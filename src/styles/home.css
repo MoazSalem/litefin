@@ -82,6 +82,12 @@
     /* Focus Border: Moved here, transparent by default */
     border: 3px solid transparent;
     background-clip: padding-box;
+
+    /* PERFORMANCE: Force GPU compositing for the heavy image block */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform;
+    contain: strict;
 }
 
 
@@ -105,6 +111,20 @@
     height: 100%;
     object-fit: cover;
     z-index: 1;
+
+    /* PERFORMANCE: Isolate image decoding and painting */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: transform, opacity;
+    contain: strict;
+    
+    /* Pre-load state */
+    opacity: 0;
+    transition: opacity 150ms ease-out;
+}
+
+.media-card .card-image img.loaded {
+    opacity: 1;
 }
 
 .media-card .card-info {

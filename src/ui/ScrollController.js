@@ -240,12 +240,28 @@ class ScrollController {
         this._pageContent = pageContent;
 
         // Helper: compute element offset relative to a scroll container
-        // using getBoundingClientRect for sub-pixel accuracy on Tizen
+        // using offsetTop to remain immune to actively animating scroll positions.
         const getCumulativeOffsetTop = (el, relativeTo) => {
             if (!el || !relativeTo) return 0;
-            const elRect = el.getBoundingClientRect();
-            const relRect = relativeTo.getBoundingClientRect();
-            return elRect.top - relRect.top + relativeTo.scrollTop;
+
+            let top = 0;
+            let current = el;
+
+            while (current && current !== relativeTo && current !== document.body) {
+                top += current.offsetTop || 0;
+                current = current.offsetParent;
+            }
+
+            // Fallback: If the offsetParent chain broke before reaching relativeTo
+            // (e.g. due to fixed positioning or portal), use bounding rects as a last resort.
+            // NOTE: This fallback will drift if relativeTo is actively animating its scroll!
+            if (current !== relativeTo) {
+                const elRect = el.getBoundingClientRect();
+                const relRect = relativeTo.getBoundingClientRect();
+                return elRect.top - relRect.top + relativeTo.scrollTop;
+            }
+
+            return top;
         };
 
         // ----------------------------------------------------------------
