@@ -1,6 +1,7 @@
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
+import { state } from '../core/StateManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
@@ -156,10 +157,37 @@ class FavoritesPage extends Page {
             // Notify base Page class that async content is ready for focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // Set initial focus to first content row if nothing was restored
-            if (sectionsData.length > 0 && !focusManager.getActiveSection() && !focusManager.getFocused()) {
-                this.setActiveSection(sectionsData[0].id);
-            }
+            requestAnimationFrame(() => {
+                const lastFocusedObj = state.get('favorites:lastFocusedItem');
+                let restoredFocus = false;
+
+                if (lastFocusedObj) {
+                    const targetId = lastFocusedObj.itemId;
+                    const sectionId = lastFocusedObj.sectionId;
+
+                    const savedCard = container.querySelector(
+                        `#${sectionId}-items .media-card[data-item-id="${targetId}"]`
+                    );
+
+                    if (savedCard) {
+                        this.setActiveSection(sectionId, false);
+                        focusManager.focusElement(savedCard, { instantScroll: true });
+                        restoredFocus = true;
+                    }
+
+                    state.delete('favorites:lastFocusedItem');
+                }
+
+                // Set initial focus to first content row if nothing was restored
+                if (
+                    !restoredFocus &&
+                    sectionsData.length > 0 &&
+                    !focusManager.getActiveSection() &&
+                    !focusManager.getFocused()
+                ) {
+                    this.setActiveSection(sectionsData[0].id);
+                }
+            });
         } catch (e) {
             log.error('Failed to load favorites', e);
             this.setLoading(false);
@@ -211,6 +239,12 @@ class FavoritesPage extends Page {
         itemsContainer.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card && card.dataset.itemId) {
+                // Save clicked item for exact focus restoration
+                state.set('favorites:lastFocusedItem', {
+                    itemId: card.dataset.itemId,
+                    sectionId: sectionId
+                });
+
                 if (type === 'person') {
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
