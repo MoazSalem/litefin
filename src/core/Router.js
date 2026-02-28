@@ -104,6 +104,25 @@ class Router {
         // Track this navigation so _onHashChange knows it was expected
         this._lastNavigatePath = path;
 
+        // Tab Navigation / History Jump Support:
+        // If navigating to a path that is already in the history stack (like clicking a sidebar item),
+        // we truncate the stack and restore its saved state instead of pushing a fresh duplicate.
+        const existingIndex = this._history.findIndex((entry) => entry.path === path);
+        if (existingIndex !== -1 && existingIndex < this._history.length - 1 && !replace) {
+            log.info(`Path "${path}" found in history at index ${existingIndex}. Jumping back and restoring state.`);
+            // Truncate history to the existing entry
+            this._history = this._history.slice(0, existingIndex + 1);
+
+            const targetEntry = this._history[this._history.length - 1];
+
+            // Flag as back navigation to trigger Page.js state restoration
+            this._isBackNavigation = true;
+            this._pendingRestoreState = targetEntry ? targetEntry.state : null;
+
+            window.location.replace(`#${path}`);
+            return;
+        }
+
         if (replace) {
             // Remove the current entry from internal history so the next one replaces it
             this._history.pop();

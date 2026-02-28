@@ -1721,14 +1721,14 @@ class SettingsPage extends Page {
         });
 
         // Register Focus Sections
-        focusManager.register('modal-options', overlay.querySelector('.modal-options'), {
+        this.registerFocusSection('modal-options', overlay.querySelector('.modal-options'), {
             orientation: 'vertical',
             leaveDown: 'modal-actions',
             leaveUp: 'modal-actions',
             enterTo: 'last-focused'
         });
 
-        focusManager.register('modal-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('modal-actions', overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
             leaveUp: 'modal-options',
             onMove: (direction) => {
@@ -2103,7 +2103,7 @@ class SettingsPage extends Page {
         // Navigation: Sidebar <-> Content
         // We define these purely logically (LTR space).
         // FocusManager automatically inverts 'leaveLeft' and 'leaveRight' when document dir is 'rtl'.
-        focusManager.register('settings-sidebar', this.$('#settings-sidebar'), {
+        this.registerFocusSection('settings-sidebar', this.$('#settings-sidebar'), {
             orientation: 'vertical',
             leaveRight: 'settings-content',
             leaveLeft: 'sidebar',
@@ -2111,7 +2111,7 @@ class SettingsPage extends Page {
             defaultFocusSelector: '.settings-menu-btn.active'
         });
 
-        focusManager.register('settings-content', this.$('#settings-content-panel'), {
+        this.registerFocusSection('settings-content', this.$('#settings-content-panel'), {
             orientation: 'vertical',
             leaveLeft: 'settings-sidebar',
             leaveRight: null,

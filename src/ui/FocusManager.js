@@ -161,6 +161,9 @@ class FocusManager {
                 if (this._trapStack.length === 0) {
                     const sectionName = this.getSectionForElement(e.target);
                     if (sectionName && this._activeSection !== sectionName) {
+                        if (this._activeSection) {
+                            this._previousSection = this._activeSection;
+                        }
                         this._activeSection = sectionName;
                         eventBus.emit('focus:sectionChanged', sectionName);
                         log.debug(`Auto-synced active section to "${sectionName}" via focusin`);

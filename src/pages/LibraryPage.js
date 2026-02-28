@@ -1151,7 +1151,7 @@ class LibraryPage extends Page {
         const alphaContainer = this.$('#alpha-picker-container');
         const isAlphaVisible = alphaContainer && alphaContainer.style.display !== 'none';
 
-        focusManager.register('library-controls', this.$('#library-controls'), {
+        this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
             leaveUp: 'library-tabs',
             leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
@@ -1374,7 +1374,7 @@ class LibraryPage extends Page {
                 return false; // Let default handling proceed
             };
 
-            focusManager.register(rowId, section, {
+            this.registerFocusSection(rowId, section, {
                 orientation: orientation,
                 columns: 6, // Only used for grid orientation
                 // Navigation between rows
@@ -1411,7 +1411,7 @@ class LibraryPage extends Page {
 
         // Update Alpha Picker
         if (rows.length > 0) {
-            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+            this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
                 orientation: 'horizontal',
                 leaveUp: 'library-controls',
                 leaveDown: 'row-0',
@@ -1420,7 +1420,7 @@ class LibraryPage extends Page {
             });
 
             // Update library-controls to point to first row
-            focusManager.register('library-controls', this.$('#library-controls'), {
+            this.registerFocusSection('library-controls', this.$('#library-controls'), {
                 orientation: 'horizontal',
                 leaveUp: 'library-tabs',
                 leaveDown: 'row-0', // Direct to first row for Genres view
@@ -1429,7 +1429,7 @@ class LibraryPage extends Page {
             });
 
             // Update library-tabs to point to first row directly when controls hidden
-            focusManager.register('library-tabs', this.$('#library-tabs'), {
+            this.registerFocusSection('library-tabs', this.$('#library-tabs'), {
                 orientation: 'horizontal',
                 leaveUp: null,
                 leaveDown: 'row-0', // Direct to first row
@@ -1866,7 +1866,7 @@ class LibraryPage extends Page {
         });
 
         // Register Sections
-        focusManager.register('sort-by-col', overlay.querySelector('#sort-by-col'), {
+        this.registerFocusSection('sort-by-col', overlay.querySelector('#sort-by-col'), {
             orientation: 'vertical',
             leaveUp: 'sort-actions',
             leaveLeft: 'sort-actions',
@@ -1874,7 +1874,7 @@ class LibraryPage extends Page {
             leaveDown: 'sort-actions'
         });
 
-        focusManager.register('sort-order-col', overlay.querySelector('#sort-order-col'), {
+        this.registerFocusSection('sort-order-col', overlay.querySelector('#sort-order-col'), {
             orientation: 'vertical',
             leaveUp: 'sort-actions',
             leaveLeft: 'sort-by-col',
@@ -1882,7 +1882,7 @@ class LibraryPage extends Page {
             leaveDown: 'sort-actions'
         });
 
-        focusManager.register('sort-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('sort-actions', overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {
@@ -2167,7 +2167,7 @@ class LibraryPage extends Page {
 
                 // Update FocusManager registry and cache
                 // Note: Invalidate cache is crucial as DOM size changes
-                focusManager.register('filter-items', container, {
+                this.registerFocusSection('filter-items', container, {
                     orientation: 'grid',
                     leaveLeft: 'filter-sidebar',
                     leaveRight: 'filter-actions', // Note: Spatial logic will handle this mostly
@@ -2196,7 +2196,7 @@ class LibraryPage extends Page {
             appendItems(0, initialCount);
 
             // Register filter-items section (Dynamic)
-            focusManager.register('filter-items', container, {
+            this.registerFocusSection('filter-items', container, {
                 orientation: 'grid', // Switch to grid for side-by-side items
                 leaveLeft: 'filter-sidebar',
                 leaveUp: 'filter-actions',
@@ -2301,7 +2301,7 @@ class LibraryPage extends Page {
         });
 
         // Focus Management Registration
-        focusManager.register('filter-sidebar', overlay.querySelector('.filter-sidebar'), {
+        this.registerFocusSection('filter-sidebar', overlay.querySelector('.filter-sidebar'), {
             orientation: 'vertical',
             leaveUp: 'filter-actions',
             leaveRight: 'filter-items',
@@ -2310,7 +2310,7 @@ class LibraryPage extends Page {
             selector: '.filter-category-btn'
         });
 
-        focusManager.register('filter-actions', overlay.querySelector('.modal-actions'), {
+        this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
             onMove: (direction) => {
                 if (direction === 'up') {
@@ -2414,7 +2414,7 @@ class LibraryPage extends Page {
 
         // Single section for the whole modal handles navigation naturally
         // (options -> close button)
-        focusManager.register('library-modal', this.$('.library-modal'), {
+        this.registerFocusSection('library-modal', this.$('.library-modal'), {
             orientation: 'vertical',
             enterTo: 'first'
         });
@@ -2489,9 +2489,9 @@ class LibraryPage extends Page {
             // 1. Controls configuration
             const controlsConfig = focusManager.getSectionConfig('library-controls');
             if (controlsConfig) {
-                focusManager.register('library-controls', this.$('#library-controls'), {
+                this.registerFocusSection('library-controls', this.$('#library-controls'), {
                     ...controlsConfig,
-                    leaveUp: 'sidebar', // No tabs above, go back to sidebar
+                    leaveUp: 'sidebar', // No transition upwards, go back to sidebar
                     leaveDown: 'alpha-picker',
                     leaveLeft: 'sidebar'
                 });
@@ -2500,7 +2500,7 @@ class LibraryPage extends Page {
             // 2. Alpha Picker configuration
             const alphaConfig = focusManager.getSectionConfig('alpha-picker');
             if (alphaConfig) {
-                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
                     ...alphaConfig,
                     leaveUp: 'library-controls',
                     leaveDown: 'library-grid',
@@ -2511,7 +2511,7 @@ class LibraryPage extends Page {
             // 3. Grid configuration
             const gridConfig = focusManager.getSectionConfig('library-grid');
             if (gridConfig) {
-                focusManager.register('library-grid', this.$('#library-grid'), {
+                this.registerFocusSection('library-grid', this.$('#library-grid'), {
                     ...gridConfig,
                     leaveUp: 'alpha-picker',
                     leaveDown: gridConfig.leaveDown || 'library-pagination'
@@ -2534,7 +2534,7 @@ class LibraryPage extends Page {
 
             const tabsConfig = focusManager.getSectionConfig('library-tabs');
             if (tabsConfig) {
-                focusManager.register('library-tabs', tabsContainer, {
+                this.registerFocusSection('library-tabs', tabsContainer, {
                     ...tabsConfig,
                     leaveDown: nextTarget
                 });
@@ -2545,7 +2545,7 @@ class LibraryPage extends Page {
         if (shouldShow) {
             const controlsConfig = focusManager.getSectionConfig('library-controls');
             if (controlsConfig) {
-                focusManager.register('library-controls', this.$('#library-controls'), {
+                this.registerFocusSection('library-controls', this.$('#library-controls'), {
                     ...controlsConfig,
                     leaveDown: 'alpha-picker'
                 });
@@ -2553,7 +2553,7 @@ class LibraryPage extends Page {
 
             const alphaConfig = focusManager.getSectionConfig('alpha-picker');
             if (alphaConfig) {
-                focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
                     ...alphaConfig,
                     leaveDown: 'library-grid'
                 });
@@ -2563,7 +2563,7 @@ class LibraryPage extends Page {
         // Update Grid leaveUp
         const gridConfig = focusManager.getSectionConfig('library-grid');
         if (gridConfig) {
-            focusManager.register('library-grid', this.$('#library-grid'), {
+            this.registerFocusSection('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
                 leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs',
                 leaveDown: gridConfig.leaveDown || 'library-pagination'

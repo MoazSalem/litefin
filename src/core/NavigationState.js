@@ -30,8 +30,24 @@ class NavigationState {
     captureState(pageInstance) {
         // Find the main scroll container
         const scrollContainer = this._getScrollContainer(pageInstance);
-        const focusedEl = focusManager.getFocused();
-        const sectionName = focusManager.getSectionForElement(focusedEl);
+
+        let focusedEl = focusManager.getFocused();
+        let sectionName = focusManager.getSectionForElement(focusedEl);
+
+        // If the user is navigating via the sidebar, their focus is currently on the sidebar block.
+        // We actually want to capture what they were focused on IN THE PAGE before they moved
+        // to the sidebar.
+        if (sectionName === 'sidebar') {
+            const prevSection = focusManager.getPreviousSection();
+            if (prevSection && prevSection !== 'sidebar') {
+                const memory = focusManager._focusMemory.get(prevSection);
+                if (memory && memory.element) {
+                    focusedEl = memory.element;
+                    sectionName = prevSection;
+                    if (this._debug) log.debug(`Sidebar intercept: capturing underlying page focus (${prevSection})`);
+                }
+            }
+        }
 
         const state = {
             // Scroll position
