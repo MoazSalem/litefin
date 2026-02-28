@@ -172,8 +172,8 @@ class HomePage extends Page {
             // ================================================================
             this._preWarmImageCache(rowsData);
 
-            // Render rows
-            this._renderRows(rowsData);
+            // Render rows (awaits focus restoration to prevent visual jumping)
+            await this._renderRows(rowsData);
 
             if (rowsData.length === 0 && this._libraries.length === 0) {
                 this.showError(i18n.t('NoLibraries'));
@@ -359,8 +359,14 @@ class HomePage extends Page {
         container.addEventListener('click', (e) => {
             const card = e.target.closest('.media-card');
             if (card?.dataset?.itemId) {
-                // Save clicked item for focus restoration on back navigation
-                state.set('home:lastFocusedItemId', card.dataset.itemId);
+                // Save clicked item and its row index for exact focus restoration
+                const row = card.closest('.media-row');
+                const rowIndex = row ? row.dataset.rowIndex : '0';
+
+                state.set('home:lastFocusedItem', {
+                    itemId: card.dataset.itemId,
+                    rowIndex: rowIndex
+                });
 
                 const type = card.dataset.contextType;
                 if (type === 'library') {
@@ -391,48 +397,78 @@ class HomePage extends Page {
             }
         });
 
-        // Set first row as active if content loaded
-        if (rowsData.length > 0) {
-            // Use requestAnimationFrame to ensure DOM is painted and offsetParent is valid
-            requestAnimationFrame(() => {
-                // Check for saved focus to restore (from back navigation)
-                const lastFocusedId = state.get('home:lastFocusedItemId');
-                let restoredFocus = false;
+        // Return a promise that resolves after the DOM is updated and focus is restored
+        return new Promise((resolve) => {
+            // Set first row as active if content loaded
+            if (rowsData.length > 0) {
+                // Use requestAnimationFrame to ensure DOM is painted and offsetParent is valid
+                requestAnimationFrame(() => {
+                    // Check for saved focus to restore (from back navigation)
+                    // Fallback to legacy 'home:lastFocusedItemId' if 'home:lastFocusedItem' object doesn't exist yet
+                    const lastFocusedObj = state.get('home:lastFocusedItem');
+                    const legacyLastFocusedId = state.get('home:lastFocusedItemId');
 
-                if (lastFocusedId) {
-                    // Find the card with that item ID
-                    const savedCard = container.querySelector(`.media-card[data-item-id="${lastFocusedId}"]`);
-                    if (savedCard) {
-                        // Find which row it's in and set that section active
-                        const row = savedCard.closest('.media-row');
-                        if (row) {
-                            const rowIndex = row.dataset.rowIndex;
-                            this.setActiveSection(`home-row-${rowIndex}`);
-                            focusManager.focusElement(savedCard);
-                            restoredFocus = true;
+                    let restoredFocus = false;
+
+                    if (lastFocusedObj || legacyLastFocusedId) {
+                        const targetId = lastFocusedObj ? lastFocusedObj.itemId : legacyLastFocusedId;
+                        const targetRowIndex = lastFocusedObj ? lastFocusedObj.rowIndex : null;
+
+                        let savedCard = null;
+
+                        // First try to find it in the specific row
+                        if (targetRowIndex !== null) {
+                            const targetRow = container.querySelector(`.media-row[data-row-index="${targetRowIndex}"]`);
+                            if (targetRow) {
+                                savedCard = targetRow.querySelector(`.media-card[data-item-id="${targetId}"]`);
+                            }
+                        }
+
+                        // Fallback to finding it anywhere if exact row match failed
+                        if (!savedCard) {
+                            savedCard = container.querySelector(`.media-card[data-item-id="${targetId}"]`);
+                        }
+
+                        if (savedCard) {
+                            // Find which row it's in and set that section active
+                            const row = savedCard.closest('.media-row');
+                            if (row) {
+                                const rowIndex = row.dataset.rowIndex;
+                                // Set section active but DO NOT restore focus automatically,
+                                // because we are about to instantly focus the specific card.
+                                this.setActiveSection(`home-row-${rowIndex}`, false);
+                                focusManager.focusElement(savedCard, { instantScroll: true });
+                                restoredFocus = true;
+                            }
+                        }
+
+                        // Clear the saved state after use
+                        state.delete('home:lastFocusedItem');
+                        state.delete('home:lastFocusedItemId');
+                    }
+
+                    // Default: focus first row if no restoration happened
+                    if (!restoredFocus) {
+                        this.setActiveSection('home-row-0', false);
+
+                        // Fallback: If no element focused, try focusing first card manually
+                        if (!focusManager.getFocused()) {
+                            const firstCard = container.querySelector('[data-row-index="0"] .media-card');
+                            if (firstCard) {
+                                focusManager.focusElement(firstCard, { instantScroll: true });
+                            } else {
+                                // Worst case: back to header
+                                this.setActiveSection('sidebar');
+                            }
                         }
                     }
-                    // Clear the saved state after use
-                    state.delete('home:lastFocusedItemId');
-                }
 
-                // Default: focus first row if no restoration happened
-                if (!restoredFocus) {
-                    this.setActiveSection('home-row-0');
-
-                    // Fallback: If no element focused, try focusing first card manually
-                    if (!focusManager.getFocused()) {
-                        const firstCard = container.querySelector('[data-row-index="0"] .media-card');
-                        if (firstCard) {
-                            focusManager.focusElement(firstCard);
-                        } else {
-                            // Worst case: back to header
-                            this.setActiveSection('sidebar');
-                        }
-                    }
-                }
-            });
-        }
+                    resolve();
+                });
+            } else {
+                resolve();
+            }
+        });
     }
 
     onBack() {

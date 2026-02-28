@@ -104,8 +104,8 @@ class ScrollController {
 
         const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
 
-        // Already at target — snap and bail
-        if (Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+        // Already at target or instant scroll requested — snap and bail
+        if (duration <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
             if (isVertical) container.scrollTop = targetScroll;
             else container.scrollLeft = targetScroll;
             return;
@@ -319,7 +319,7 @@ class ScrollController {
             // and avoids unnecessary scrolls between tightly packed items
             // (e.g. genre header → genre grid within the same .media-row).
             if (Math.abs(targetScroll - currentScroll) > SCROLL_ALIGN_THRESHOLD) {
-                this.smoothScrollTo(pageContent, targetScroll);
+                this.smoothScrollTo(pageContent, targetScroll, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
             }
         }
 
@@ -349,7 +349,11 @@ class ScrollController {
                     ) {
                         // Center the row vertically
                         const targetScroll = rowTop - viewHeight / 2 + rowHeight / 2;
-                        this.smoothScrollTo(pageContent, Math.max(0, targetScroll));
+                        this.smoothScrollTo(
+                            pageContent,
+                            Math.max(0, targetScroll),
+                            options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL
+                        );
                     }
                 }
 
@@ -378,11 +382,26 @@ class ScrollController {
                     const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
                     // Use completely hardware-accelerated CSS transform!
-                    if (isRtl) {
-                        // In RTL, moving track right reveals further elements on the left
-                        track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                    if (options.instantScroll) {
+                        // Bypass CSS transitions for instant snap
+                        const oldTransition = track.style.transition;
+                        track.style.transition = 'none';
+                        if (isRtl) {
+                            track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                        } else {
+                            track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        }
+                        // Force reflow to apply instantly, then restore
+                        /* eslint-disable-next-line no-unused-expressions */
+                        track.offsetHeight;
+                        track.style.transition = oldTransition;
                     } else {
-                        track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        if (isRtl) {
+                            // In RTL, moving track right reveals further elements on the left
+                            track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                        } else {
+                            track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        }
                     }
                 } else {
                     // Fallback for native horizontal scrolls
@@ -393,7 +412,12 @@ class ScrollController {
                     const targetScroll = elementLeft - containerWidth / 2 + elementWidth / 2;
                     const finalScrollLeft = Math.max(0, targetScroll);
 
-                    this.smoothScrollTo(rowItems, finalScrollLeft, SCROLL_DURATION_HORIZONTAL, 'horizontal');
+                    this.smoothScrollTo(
+                        rowItems,
+                        finalScrollLeft,
+                        options.instantScroll ? 0 : SCROLL_DURATION_HORIZONTAL,
+                        'horizontal'
+                    );
                 }
             } else if (activePageContent) {
                 // Generic vertical scroll-into-view (grids, lists, tall rows)
@@ -438,7 +462,11 @@ class ScrollController {
 
                 // Apply vertical scroll with smooth easing
                 if (Math.abs(finalScrollTop - currentScroll) > SCROLL_SNAP_THRESHOLD) {
-                    this.smoothScrollTo(activePageContent, finalScrollTop);
+                    this.smoothScrollTo(
+                        activePageContent,
+                        finalScrollTop,
+                        options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL
+                    );
                 }
             }
         }

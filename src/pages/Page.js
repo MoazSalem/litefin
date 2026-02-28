@@ -176,10 +176,10 @@ class Page extends Component {
 
     /**
      * Set the active focus section
-     * @param {string} name - Section name
+     * @param {...any} args - Arguments passed to focusManager.setActiveSection
      */
-    setActiveSection(name) {
-        focusManager.setActiveSection(name);
+    setActiveSection(...args) {
+        focusManager.setActiveSection(...args);
     }
 
     /**
