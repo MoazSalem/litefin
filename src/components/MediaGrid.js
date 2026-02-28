@@ -35,6 +35,7 @@ class MediaGrid extends Component {
 
         // Callbacks
         this.onSeeMore = config.onSeeMore || null; // Optional override
+        this.onClick = config.onClick || null; // Optional override for click handling
     }
 
     render() {
@@ -90,8 +91,12 @@ class MediaGrid extends Component {
         if (grid) {
             grid.addEventListener('click', (e) => {
                 const card = e.target.closest('.media-card');
-                if (card?.dataset?.itemId) {
-                    router.navigate(`/details/${card.dataset.itemId}`);
+                if (card) {
+                    if (this.onClick) {
+                        this.onClick(card);
+                    } else if (card.dataset.itemId) {
+                        router.navigate(`/details/${card.dataset.itemId}`);
+                    }
                 }
             });
 

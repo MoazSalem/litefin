@@ -308,16 +308,58 @@ class DetailsPage extends Page {
 
             // If we have a pending navigation state, it will be handled by restoreScrollFocusWhenReady()
             // which was called in onInit. If not, we handle initial landing here.
-            if (!this._pendingNavState) {
-                if (this._item.UserData?.PlaybackPositionTicks > 0) {
-                    // If we have resume progress (Movie/Episode), FORCE focus to the resume button
-                    const resumeBtn = this.$('.resume-btn');
-                    if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
-                        log.info('Forcing focus to Resume button');
-                        focusManager.focusElement(resumeBtn);
+            requestAnimationFrame(() => {
+                const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                const lastFocusedObj = state.get(stateKey);
+                let restoredFocus = false;
+
+                if (lastFocusedObj) {
+                    const targetId = lastFocusedObj.itemId;
+                    const sectionId = lastFocusedObj.sectionId;
+
+                    // Support virtual rows (where elements might not be in DOM yet) by finding index
+                    const virtualRow = this._virtualRows ? this._virtualRows[sectionId] : null;
+
+                    if (virtualRow) {
+                        const index = virtualRow.items.findIndex(
+                            (i) => i.Id === targetId || i.Id?.toString() === targetId
+                        );
+                        if (index !== -1) {
+                            this.setActiveSection(sectionId, false);
+                            const node = virtualRow.focusByIndex(index);
+                            if (node) {
+                                focusManager.focusElement(node, { instantScroll: true });
+                                restoredFocus = true;
+                            }
+                        }
+                    } else {
+                        // Standard fallback for non-virtual row sections (like similar items if they aren't virtual)
+                        const sectionConfig = focusManager.getSectionConfig(sectionId);
+                        const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+                        const savedCard = sectionContainer.querySelector(
+                            `[data-item-id="${targetId}"], [data-id="${targetId}"]`
+                        );
+                        if (savedCard) {
+                            this.setActiveSection(sectionId, false);
+                            focusManager.focusElement(savedCard, { instantScroll: true });
+                            restoredFocus = true;
+                        }
+                    }
+
+                    state.delete(stateKey);
+                }
+
+                if (!restoredFocus && !this._pendingNavState) {
+                    if (this._item.UserData?.PlaybackPositionTicks > 0) {
+                        // If we have resume progress (Movie/Episode), FORCE focus to the resume button
+                        const resumeBtn = this.$('.resume-btn');
+                        if (resumeBtn && !resumeBtn.classList.contains('hidden')) {
+                            log.info('Forcing focus to Resume button');
+                            focusManager.focusElement(resumeBtn);
+                        }
                     }
                 }
-            }
+            });
         } catch (error) {
             log.error('Failed to load', error);
             this.showError(i18n.t('FailedToLoadDetails'));
@@ -575,6 +617,22 @@ class DetailsPage extends Page {
         list.onclick = (e) => {
             const card = e.target.closest('.media-card');
             if (card) {
+                // Save clicked item for exact focus restoration, scoped by current page item ID
+                // to prevent child DetailsPages from consuming parent state
+                const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                if (card.dataset.itemId) {
+                    state.set(stateKey, {
+                        itemId: card.dataset.itemId,
+                        sectionId: focusSectionName
+                    });
+                } else if (card.dataset.id) {
+                    // Fallback for some cards that might use data-id
+                    state.set(stateKey, {
+                        itemId: card.dataset.id,
+                        sectionId: focusSectionName
+                    });
+                }
+
                 if (onClick) {
                     onClick(card);
                 } else if (card.dataset.itemId) {
@@ -1183,7 +1241,17 @@ class DetailsPage extends Page {
                 type: 'episode',
                 contextType: 'season-grid',
                 limit: 1000,
-                isLandscape: true
+                isLandscape: true,
+                onClick: (card) => {
+                    const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                    if (card.dataset.itemId) {
+                        state.set(stateKey, {
+                            itemId: card.dataset.itemId,
+                            sectionId: 'details-episodes'
+                        });
+                        router.navigate(`/details/${card.dataset.itemId}`);
+                    }
+                }
             });
 
             container.innerHTML = this._episodeGrid.render();

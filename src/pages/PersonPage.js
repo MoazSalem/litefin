@@ -13,6 +13,8 @@ import { focusManager } from '../ui/FocusManager.js';
 import { imageService } from '../utils/ImageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
+import { state } from '../core/StateManager.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -124,8 +126,66 @@ class PersonPage extends Page {
         } finally {
             this.setLoading(false);
 
-            // Focus Nav first
-            this.setActiveSection('person-fav-actions');
+            // Focus Nav restored or default
+            requestAnimationFrame(() => {
+                const stateKey = `person:lastFocusedItem:${this._personId}`;
+                const lastFocusedObj = state.get(stateKey);
+                let restoredFocus = false;
+
+                if (lastFocusedObj) {
+                    const targetId = lastFocusedObj.itemId;
+                    const sectionId = lastFocusedObj.sectionId;
+
+                    const sectionConfig = focusManager.getSectionConfig(sectionId);
+                    const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+
+                    // Ensure the grid is expanded if the item is beyond the limit
+                    const gridKeyMap = {
+                        'person-movies-items': 'movies',
+                        'person-shows-items': 'shows',
+                        'person-episodes-items': 'episodes'
+                    };
+                    const gridKey = gridKeyMap[sectionId];
+                    if (gridKey && this._grids[gridKey]) {
+                        const grid = this._grids[gridKey];
+                        const index = grid.items.findIndex((i) => i.Id === targetId || i.Id?.toString() === targetId);
+                        if (index >= grid.limit && !grid.expanded) {
+                            grid.expanded = true;
+                            // Re-render items synchronously so the DOM query below succeeds
+                            const gridContainer = this.$(`#${grid.id}-items`);
+                            if (gridContainer) {
+                                gridContainer.innerHTML = grid._renderItems();
+                                lazyLoader.observe(gridContainer);
+                                focusManager.invalidateCache(`${grid.id}-items`);
+                            }
+                            // Update button visually
+                            const btn = this.$(`#${grid.id}-btn`);
+                            if (btn) btn.textContent = i18n.t('ShowLess');
+
+                            // Re-apply roles if needed
+                            if (gridKey !== 'episodes') {
+                                this._applyRolesToCards();
+                            }
+                        }
+                    }
+
+                    const savedCard = sectionContainer.querySelector(
+                        `[data-item-id="${targetId}"], [data-id="${targetId}"]`
+                    );
+
+                    if (savedCard) {
+                        this.setActiveSection(sectionId, false);
+                        focusManager.focusElement(savedCard, { instantScroll: true });
+                        restoredFocus = true;
+                    }
+
+                    state.delete(stateKey);
+                }
+
+                if (!restoredFocus) {
+                    this.setActiveSection('person-fav-actions');
+                }
+            });
         }
     }
 
@@ -338,6 +398,7 @@ class PersonPage extends Page {
                 items: movies,
                 type: 'poster',
                 limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('person-movies-items', card),
                 onSeeMore: () => {
                     this._registerWorkSections();
                     // Reapply character roles after grid re-renders
@@ -355,6 +416,7 @@ class PersonPage extends Page {
                 items: shows,
                 type: 'poster',
                 limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('person-shows-items', card),
                 onSeeMore: () => {
                     this._registerWorkSections();
                     // Reapply character roles after grid re-renders
@@ -373,6 +435,7 @@ class PersonPage extends Page {
                 type: 'episode-primary', // Use special type
                 isLandscape: true, // Force landscape grid
                 limit: 8,
+                onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card),
                 onSeeMore: () => this._registerWorkSections()
             });
             this._grids.episodes.mount(worksContainer);
@@ -476,6 +539,18 @@ class PersonPage extends Page {
                 });
             }
         });
+    }
+
+    _saveStateAndNavigate(sectionId, card) {
+        if (!card.dataset.itemId) return;
+
+        const stateKey = `person:lastFocusedItem:${this._personId}`;
+        state.set(stateKey, {
+            itemId: card.dataset.itemId,
+            sectionId: sectionId
+        });
+
+        router.navigate(`/details/${card.dataset.itemId}`);
     }
 
     _setupFocus() {
