@@ -315,6 +315,12 @@ const skipIntroPlugin = {
                 player.seek(seekTarget);
 
                 pluginApi.log.info(`Skip ${type}: seeking to ${seekTarget}`);
+
+                // Instantly remove focus outline to make the UI feel snappier before
+                // the next timeupdate tick officially hides the button element
+                if (document.activeElement && document.activeElement.classList.contains(widgetId)) {
+                    document.activeElement.blur();
+                }
             }
         };
     }

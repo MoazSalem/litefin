@@ -40,7 +40,7 @@ const log = logger.create('PluginWidgetHost');
 
 // Number of consecutive "hide" evaluations required before hiding a widget.
 // This prevents flickering when playback position sits exactly on a boundary.
-const HIDE_HYSTERESIS = 3;
+const HIDE_HYSTERESIS = 1;
 
 // ============================================================================
 // PluginWidgetHost Class
@@ -286,14 +286,14 @@ class PluginWidgetHost {
                 // Clear any old timer
                 if (entry.syncTimer) clearTimeout(entry.syncTimer);
 
-                // After 8 seconds, sync visibility with the OSD
+                // After 5 seconds, sync visibility with the OSD
                 entry.syncTimer = setTimeout(() => {
                     entry.syncTimer = null;
                     if (entry.visible) {
                         el.classList.add('sync-osd');
                         log.debug(`Widget '${widget.id}' now syncing visibility with OSD`);
                     }
-                }, 8000);
+                }, 5000);
 
                 cacheInvalidated = true;
                 justBecameVisible = true;

@@ -296,6 +296,7 @@ export default class OSDController extends Component {
     show() {
         const main = this._osdEl.querySelector('.osd-main');
         if (main) main.classList.remove('osd-hidden');
+        if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
         this.resetAutoHide();
         this._updateNavigationButtons();
@@ -458,6 +459,7 @@ export default class OSDController extends Component {
         
         const main = this._osdEl.querySelector('.osd-main');
         if (main) main.classList.add('osd-hidden');
+        if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
     }
 

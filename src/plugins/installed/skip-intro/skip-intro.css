@@ -63,10 +63,10 @@
  * When sync-osd is present, we tie the widget's visibility to the main OSD.
  * .osd-main.osd-hidden means the OSD is hidden.
  */
-.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-intro-widget.sync-osd.visible,
-.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-outro-widget.sync-osd.visible,
-.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-recap-widget.sync-osd.visible,
-.player-osd:has(.osd-main.osd-hidden) .plugin-widget.skip-preview-widget.sync-osd.visible {
+.player-osd.osd-is-hidden .plugin-widget.skip-intro-widget.sync-osd.visible,
+.player-osd.osd-is-hidden .plugin-widget.skip-outro-widget.sync-osd.visible,
+.player-osd.osd-is-hidden .plugin-widget.skip-recap-widget.sync-osd.visible,
+.player-osd.osd-is-hidden .plugin-widget.skip-preview-widget.sync-osd.visible {
     opacity: 0;
     pointer-events: none;
     transform: translateY(12px);
