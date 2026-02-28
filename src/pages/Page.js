@@ -55,6 +55,11 @@ class Page extends Component {
             this._readyResolve();
             this._readyResolve = null;
         }
+
+        // Ensure DOM has painted the new state before revealing it
+        setTimeout(() => {
+            eventBus.emit('app:hideSplash');
+        }, 10);
     }
 
     /**
@@ -222,6 +227,11 @@ class Page extends Component {
             }
         } else if (isCurrentlyLoading) {
             this.el.classList.remove('loading');
+
+            // Ensure DOM has painted the new state before revealing it
+            setTimeout(() => {
+                eventBus.emit('app:hideSplash');
+            }, 10);
         }
     }
 

@@ -149,11 +149,17 @@ body.player-active #sidebar-container {
     height: 100vh;
     display: none;
     z-index: 9999;
-    background-color: var(--jf-background);
+    background-color: transparent;
 }
 
 .page.loading .page-loading {
     display: block;
+}
+
+/* Hide the internal spinner if the global one is still up, 
+   but keep the layout active to block clicks */
+body.app-splash-active .page-loading .loading-spinner {
+    opacity: 0;
 }
 
 .loading-spinner {

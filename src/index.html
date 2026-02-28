@@ -58,25 +58,39 @@
             width: 100vw;
             height: 100vh;
             display: block;
-            z-index: 9999;
+            z-index: 2147483647; /* Absolute max z-index */
             background-color: var(--jf-background, #101010);
+            transition: opacity 0.4s ease-out;
+            transform: translateZ(0); /* Hardware accelerate to compete with sidebar */
+            will-change: opacity;
+        }
+
+        .splash-content.fade-out {
+            opacity: 0;
+            pointer-events: none;
         }
 
         .page-loading {
-            position: fixed;
+            position: absolute;
             top: 0;
             left: 0;
             right: 0;
             bottom: 0;
-            width: 100vw;
-            height: 100vh;
+            width: 100%;
+            height: 100%;
             display: none;
-            z-index: 9999;
-            background-color: var(--jf-background, #101010);
+            z-index: 2000;
+            background-color: transparent;
         }
 
         .page.loading .page-loading {
             display: block;
+        }
+
+        /* Hide the internal spinner if the global one is still up, 
+           but keep the layout active to block clicks */
+        body.app-splash-active .page-loading .loading-spinner {
+            opacity: 0;
         }
 
         .page-loading.hidden {
@@ -146,11 +160,11 @@
     </style>
 </head>
 
-<body>
+<body class="app-splash-active">
     <!-- Main application container -->
     <div id="app">
         <!-- Loading screen shown before JS loads -->
-        <div class="splash-content">
+        <div id="app-splash" class="splash-content">
             <div class="loading-spinner"></div>
         </div>
     </div>

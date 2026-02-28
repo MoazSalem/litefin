@@ -16,6 +16,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('Login');
 
@@ -286,6 +287,13 @@ class LoginPage extends Page {
             setTimeout(() => {
                 this._serverInput.focus();
             }, 100);
+
+            // Ensure splash hides after switching states (if it was up)
+            setTimeout(() => {
+                import('../core/EventBus.js').then(({ eventBus }) => {
+                    eventBus.emit('app:hideSplash');
+                });
+            }, 10);
         }
     }
 
@@ -879,6 +887,13 @@ class LoginPage extends Page {
         if (activeSection) {
             activeSection.classList.remove('hidden');
             animationManager.fadeIn(activeSection, { duration: 200 });
+
+            if (newState !== STATE.LOADING) {
+                // Ensure DOM has painted the new state before revealing it
+                setTimeout(() => {
+                    eventBus.emit('app:hideSplash');
+                }, 10);
+            }
         }
     }
 

@@ -70,6 +70,7 @@ class OfflinePage extends Page {
         // Start auto-retry interval
         this._startAutoRetry();
 
+        eventBus.emit('app:hideSplash');
         log.info('Offline page mounted');
     }
 

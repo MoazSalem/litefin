@@ -146,17 +146,60 @@ class App {
         // Create Sidebar Container and Page Container if they don't exist
         // This splits the view into [Sidebar | Page]
 
-        // 1. Check if we need to restructure the DOM
+        // 1. Setup DOM structure without destroying the initial static splash screen
         if (!document.getElementById('sidebar-container')) {
-            this.container.innerHTML = `
+            this.container.insertAdjacentHTML(
+                'afterbegin',
+                `
                 <div id="sidebar-container"></div>
                 <div id="page-container" class="page-container"></div>
-            `;
+            `
+            );
         }
 
-        // 2. Initialize Sidebar (Static import used for Tizen 4 compatibility)
+        // 2. Initialize Sidebar (Static import used for Tizen 4 compatibility).
+        // Mount the sidebar first, then hide it; we need the sidebar to exist
+        // for focus registration, but we'll have it be invisible until the loading sequence completes.
         this.sidebar = new Sidebar();
         this.sidebar.mount(document.getElementById('sidebar-container'));
+
+        // Hide the sidebar at the CSS level so the GPU layer doesn't render it over the splash screen.
+        // We use visibility:hidden + pointer-events:none instead of display:none so the
+        // sidebar still occupies its layout space (no flicker-reflow when revealed).
+        const sidebarContainer = document.getElementById('sidebar-container');
+        if (sidebarContainer) {
+            sidebarContainer.style.opacity = '0';
+            sidebarContainer.style.pointerEvents = 'none';
+        }
+
+        // Setup global splash removal handler - this fires exactly once when the initial page
+        // (HomePage, LoginPage, or OfflinePage) finishes its data loading.
+        let splashHidden = false;
+        eventBus.on('app:hideSplash', () => {
+            // Guard against duplicate calls
+            if (splashHidden) return;
+            splashHidden = true;
+
+            // Reveal the sidebar now that the content beneath is ready
+            const sidebar = document.getElementById('sidebar-container');
+            if (sidebar) {
+                sidebar.style.opacity = '';
+                sidebar.style.pointerEvents = '';
+            }
+
+            // Remove the body class that blocks duplicate page-level spinners
+            document.body.classList.remove('app-splash-active');
+
+            // Fade out and remove the global splash screen
+            const splash = document.getElementById('app-splash');
+            if (splash) {
+                log.info('Hiding initial splash screen');
+                splash.classList.add('fade-out');
+                setTimeout(() => {
+                    if (splash.parentNode) splash.parentNode.removeChild(splash);
+                }, 400); // Matches CSS transition duration
+            }
+        });
 
         // Register routes
         this._registerRoutes();

@@ -158,6 +158,13 @@
     align-items: center;
     justify-content: center;
     min-height: 200px;
+    background-color: transparent;
+}
+
+/* Hide the internal spinner if the global one is still up, 
+   but keep the layout space */
+body.app-splash-active .loading-section .loading-spinner {
+    opacity: 0;
 }
 
 .loading-section .loading-spinner {
