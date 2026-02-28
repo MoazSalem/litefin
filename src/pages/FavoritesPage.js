@@ -2,8 +2,9 @@ import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { imageService } from '../utils/ImageService.js';
+import CardRenderer from '../utils/CardRenderer.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 
@@ -149,8 +150,14 @@ class FavoritesPage extends Page {
                 this._renderSection(current.title, current.items, current.type, current.id, prevId, nextId);
             }
 
-            // Set initial focus to first content row
-            if (sectionsData.length > 0) {
+            // Start lazy loading to catch any immediately visible cover art
+            lazyLoader.observe(container);
+
+            // Notify base Page class that async content is ready for focus restoration
+            this.restoreScrollFocusWhenReady();
+
+            // Set initial focus to first content row if nothing was restored
+            if (sectionsData.length > 0 && !focusManager.getActiveSection() && !focusManager.getFocused()) {
                 this.setActiveSection(sectionsData[0].id);
             }
         } catch (e) {
@@ -190,7 +197,11 @@ class FavoritesPage extends Page {
             isLandscape: type === 'episode',
             visibleCount: type === 'episode' ? 8 : 12,
             focusSectionId: sectionId,
-            renderCard: (item) => this._renderCard(item, type)
+            renderCard: (item) =>
+                CardRenderer.createCardHtml(item, {
+                    isLandscape: type === 'episode',
+                    type: type
+                })
         });
 
         if (!this._virtualRows) this._virtualRows = {};
@@ -199,11 +210,11 @@ class FavoritesPage extends Page {
         // Click handling
         itemsContainer.onclick = (e) => {
             const card = e.target.closest('.media-card');
-            if (card && card.dataset.id) {
+            if (card && card.dataset.itemId) {
                 if (type === 'person') {
-                    router.navigate(`/person/${card.dataset.id}`);
+                    router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
-                    router.navigate(`/details/${card.dataset.id}`);
+                    router.navigate(`/details/${card.dataset.itemId}`);
                 }
             }
         };
@@ -240,65 +251,6 @@ class FavoritesPage extends Page {
                 return virtualRow.focusByIndex(index);
             }
         });
-    }
-
-    _renderCard(item, type) {
-        const isEpisode = type === 'episode';
-        const isPerson = type === 'person';
-
-        const isSeason = type === 'season';
-
-        // Image options
-        const imageOpts = imageService.getParams('poster');
-        const imageUrl = api.getImageUrl(item.Id, 'Primary', { ...imageOpts, tag: item.ImageTags.Primary });
-
-        // Layout class
-        // Episodes: Landscape (user requested Primary Image, which for episodes is landscape thumb usually)
-        // Others: Portrait
-        let cardClass = 'media-card';
-        if (isEpisode) cardClass += ' landscape';
-
-        let title = item.Name;
-        let subtitle = '';
-
-        if (isEpisode) {
-            // For Episodes:
-            // Title = Show Name (ParentTitle)
-            // Subtitle = "SxxExx - Episode Name"
-            title = item.ParentTitle || item.Name; // Default to Name if ParentTitle missing, but user wants Show Name
-
-            const seasonIndex = item.ParentIndexNumber != null ? item.ParentIndexNumber : '?';
-            const episodeIndex = item.IndexNumber != null ? item.IndexNumber : '?';
-            const epName = item.Name;
-            subtitle = `S${seasonIndex}E${episodeIndex} - ${epName}`;
-        } else if (isSeason) {
-            // For Seasons:
-            // Title = Show Name (ParentTitle)
-            // Subtitle = Season Name (item.Name)
-            title = item.ParentTitle || item.Name;
-            subtitle = item.Name; // e.g. "Season 1"
-        } else if (item.ProductionYear && !isPerson) {
-            subtitle = item.ProductionYear;
-        }
-
-        // Try getting count from root or UserData
-        let count = item.UnplayedItemCount;
-        if (count === undefined && item.UserData && item.UserData.UnplayedItemCount !== undefined) {
-            count = item.UserData.UnplayedItemCount;
-        }
-
-        return `
-            <button class="${cardClass}" data-id="${item.Id}" tabindex="0">
-                <div class="card-image">
-                    <img src="${imageUrl}" alt="${title}" loading="lazy" />
-                    ${count ? `<div class="count-badge">${count}</div>` : ''}
-                </div>
-                <div class="card-info">
-                    <div class="card-title">${title}</div>
-                    ${!isPerson ? `<div class="card-subtitle">${subtitle}</div>` : ''}
-                </div>
-            </button>
-        `;
     }
 }
 
