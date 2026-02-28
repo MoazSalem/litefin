@@ -17,6 +17,7 @@
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('DeviceProfile');
 
@@ -42,6 +43,12 @@ function _getModelName() {
             log.warn('Could not get model name from systeminfo:', e.message);
         }
     }
+
+    if (!_cachedModelName) {
+        if (platformInfo.isWebOS) return 'LG WebOS TV';
+        if (platformInfo.isWeb) return 'Generic Web Browser';
+    }
+
     return _cachedModelName || '';
 }
 
@@ -65,9 +72,16 @@ export function detectTizenVersion() {
         }
     }
 
-    // Safe default — Tizen 4 (2018, earliest commonly supported)
-    log.warn('Could not detect Tizen version, defaulting to 4');
-    return 4;
+    // Safe default for Tizen
+    log.warn('Could not detect Tizen version from systeminfo');
+
+    // If we're explicitly on Web or WebOS, return a high version number
+    // to bypass legacy Tizen 4 codec restrictions in the rest of this file.
+    if (platformInfo.isWeb || platformInfo.isWebOS) {
+        return 99;
+    }
+
+    return 4; // Tizen 4 fallback
 }
 
 // ============================================================================
@@ -103,21 +117,27 @@ export function getDeviceCapabilities() {
     const isFHD = MODEL_FHD.some((m) => modelName.includes(m));
     const isHD = MODEL_HD.some((m) => modelName.includes(m));
 
-    // Default: 4K (the vast majority of Samsung Tizen TVs)
     let uhd = true;
     let uhd8K = false;
-    if (is8K) {
-        uhd8K = true;
-    } else if (isFHD || isHD) {
-        uhd = false;
+
+    // If on a generic web browser or WebOS, assume 4K standard
+    if (platformInfo.isWeb || platformInfo.isWebOS) {
+        uhd = true;
+        uhd8K = false;
+    } else {
+        if (is8K) {
+            uhd8K = true;
+        } else if (isFHD || isHD) {
+            uhd = false;
+        }
     }
     log.info(`Panel resolution for model "${modelName}": ${uhd8K ? '8K' : uhd ? '4K' : isFHD ? 'FHD' : 'HD'}`);
 
     // --- HDR Capabilities ---
     // HDR10 on most UHD panels from Tizen 4+ (2018+)
     // Dolby Vision: rare even on premium models — default off, user can enable
-    const hdr10 = tizenVersion >= 4 && uhd;
-    const dolbyVision = false;
+    const hdr10 = (tizenVersion >= 4 && uhd) || platformInfo.isWebOS;
+    const dolbyVision = platformInfo.isWebOS; // WebOS often supports DV natively
 
     let deviceId = '';
 
@@ -134,7 +154,12 @@ export function getDeviceCapabilities() {
     if (!deviceId) {
         deviceId = storage.getItem('litefin_device_id');
         if (!deviceId) {
-            deviceId = 'litefin_tizen_' + Date.now().toString(36) + Math.random().toString(36).substring(2);
+            const prefix = platformInfo.isWebOS
+                ? 'litefin_webos_'
+                : platformInfo.isTizen
+                  ? 'litefin_tizen_'
+                  : 'litefin_web_';
+            deviceId = prefix + Date.now().toString(36) + Math.random().toString(36).substring(2);
             storage.setItem('litefin_device_id', deviceId);
         }
     }

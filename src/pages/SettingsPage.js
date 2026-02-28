@@ -22,6 +22,7 @@ import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { availableLanguages } from '../locales/languages.js';
 import { pluginManager } from '../plugins/PluginManager.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('SettingsPage');
 
@@ -1188,7 +1189,7 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Platform">${i18n.t('Platform')}</span>
-                            <span class="identity-value">${i18n.t('TizenValue', [caps.tizenVersion])}</span>
+                            <span class="identity-value">${platformInfo.isWeb ? 'Web Browser' : platformInfo.isWebOS ? 'LG WebOS' : i18n.t('TizenValue', [caps.tizenVersion])}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Resolution">${i18n.t('Resolution')}</span>

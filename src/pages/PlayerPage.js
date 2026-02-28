@@ -27,6 +27,7 @@ import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { logger } from '../utils/Logger.js';
 import { pluginManager } from '../plugins/PluginManager.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('Player');
 
@@ -667,7 +668,7 @@ class PlayerPage extends Page {
      * Check if running on Tizen platform
      */
     _isTizen() {
-        return typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined';
+        return platformInfo.isTizen;
     }
 
     // ========================================================================

@@ -14,6 +14,7 @@ import { api } from '../api/ApiClient.js';
 import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
 
@@ -64,6 +65,9 @@ class App {
         // 1.5. Initialize StorageService — loads all localStorage into memory
         // This MUST happen before any other service reads from storage
         storage.init();
+
+        // 1.6. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
+        platformInfo.init();
 
         // 2. Initialize Debug Overlay (loads state from StorageService cache)
         const DEBUG_LOGS = storage.getItem('debug_logs_enabled') === 'true';
