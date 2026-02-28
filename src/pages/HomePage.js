@@ -22,6 +22,8 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { imageCache } from '../utils/ImageCache.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('HomePage');
 
@@ -162,6 +164,14 @@ class HomePage extends Page {
                 }
             });
 
+            // ================================================================
+            // IMAGE CACHE PRE-WARMING
+            // Fire background fetches for all homepage image URLs before rendering.
+            // By the time LazyLoader triggers each image, the blob will likely
+            // already be in IndexedDB and the in-memory map — instant load.
+            // ================================================================
+            this._preWarmImageCache(rowsData);
+
             // Render rows
             this._renderRows(rowsData);
 
@@ -194,6 +204,69 @@ class HomePage extends Page {
         // focus the header so navigation is possible.
         if (!focusManager.getActiveSection()) {
             this.setActiveSection('sidebar');
+        }
+    }
+
+    /**
+     * Collect all image URLs that will be needed for the homepage rows
+     * and hand them to ImageCache for background pre-fetching.
+     * Only covers the Jellyfin image types that CardRenderer uses on the
+     * homepage: Primary, Thumb, and Backdrop — with the same size params
+     * that ImageService would pick for each layout.
+     *
+     * @param {Array} rowsData - Array of row descriptor objects from _loadContent
+     * @private
+     */
+    _preWarmImageCache(rowsData) {
+        const urls = [];
+        const MAX_PER_ROW = 10; // Only cache a screen-worth per row
+
+        for (const row of rowsData) {
+            if (!row.items || row.items.length === 0) continue;
+
+            // Determine if this row uses landscape (thumb/backdrop) or poster sizing
+            const isLandscape = row.type === 'resume' || row.type === 'episode' || row.type === 'library';
+            const sizeType = isLandscape ? 'backdrop' : 'poster';
+            const { maxWidth, quality } = imageService.getParams(sizeType);
+
+            // Take at most MAX_PER_ROW items to keep pre-warming bounded
+            const items = row.items.slice(0, MAX_PER_ROW);
+
+            for (const item of items) {
+                const itemId = item.Id;
+                let url = null;
+
+                if (isLandscape) {
+                    // Prefer Thumb — fall through to Backdrop — then Primary
+                    if (item.ImageTags?.Thumb) {
+                        url = api.getImageUrl(itemId, 'Thumb', { maxWidth, quality, tag: item.ImageTags.Thumb });
+                    } else if (item.BackdropImageTags?.length > 0) {
+                        url = api.getImageUrl(itemId, 'Backdrop', { maxWidth, quality });
+                    } else if (item.SeriesId && item.SeriesThumbImageTag) {
+                        url = api.getImageUrl(item.SeriesId, 'Thumb', {
+                            maxWidth,
+                            quality,
+                            tag: item.SeriesThumbImageTag
+                        });
+                    } else if (item.ImageTags?.Primary) {
+                        url = api.getImageUrl(itemId, 'Primary', { maxWidth, quality, tag: item.ImageTags.Primary });
+                    }
+                } else {
+                    // Poster mode — prefer item Primary, fall back to Series Primary
+                    if (item.ImageTags?.Primary) {
+                        url = api.getImageUrl(itemId, 'Primary', { maxWidth, quality, tag: item.ImageTags.Primary });
+                    } else if (item.SeriesId) {
+                        url = api.getImageUrl(item.SeriesId, 'Primary', { maxWidth, quality });
+                    }
+                }
+
+                if (url) urls.push(url);
+            }
+        }
+
+        if (urls.length > 0) {
+            // Fire background pre-fetch — non-blocking
+            imageCache.preload(urls);
         }
     }
 

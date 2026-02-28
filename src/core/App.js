@@ -36,6 +36,7 @@ import { storage } from '../utils/StorageService.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { imageCache } from '../utils/ImageCache.js';
 
 const log = logger.create('App');
 
@@ -68,6 +69,10 @@ class App {
 
         // 1.6. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
         platformInfo.init();
+
+        // 1.7. Initialize Image Cache — opens IndexedDB for homepage blob caching
+        // Non-blocking: runs in background, cache degrades gracefully if unavailable
+        imageCache.init().catch((err) => log.warn('ImageCache init failed:', err));
 
         // 2. Initialize Debug Overlay (loads state from StorageService cache)
         const DEBUG_LOGS = storage.getItem('debug_logs_enabled') === 'true';
