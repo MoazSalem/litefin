@@ -136,14 +136,25 @@ class FocusManager {
                 // Explicitly remove .focused class from the previous element
                 if (this._focusedElement) {
                     this._focusedElement.classList.remove('focused');
+
+                    // Remove generic .focused-row from parent settings items if applicable
+                    const oldSettingItem = this._focusedElement.closest('.setting-item');
+                    if (oldSettingItem) {
+                        oldSettingItem.classList.remove('focused-row');
+                    }
                 }
 
                 this._focusedElement = e.target;
 
                 // Add .focused to the new element so focus styling applies correctly
-                // when an element is natively focused bypassing focusManager.focusElement
                 if (this._focusedElement) {
                     this._focusedElement.classList.add('focused');
+
+                    // Add generic .focused-row to parent settings items to highlight the whole row
+                    const newSettingItem = this._focusedElement.closest('.setting-item');
+                    if (newSettingItem) {
+                        newSettingItem.classList.add('focused-row');
+                    }
                 }
 
                 // Auto-sync active section if the element belongs to one (but not during trap)
@@ -287,6 +298,13 @@ class FocusManager {
     clearFocus() {
         if (this._focusedElement) {
             this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+
             this._focusedElement.blur();
             this._focusedElement = null;
             log.debug('Focus cleared');
@@ -535,6 +553,12 @@ class FocusManager {
             // Unfocus current
             if (this._focusedElement) {
                 this._focusedElement.classList.remove('focused');
+
+                // Remove generic .focused-row from parent settings items
+                const oldSettingItem = this._focusedElement.closest('.setting-item');
+                if (oldSettingItem) {
+                    oldSettingItem.classList.remove('focused-row');
+                }
             }
 
             // Pass instantScroll as parameter (not a class field) to avoid
@@ -569,6 +593,13 @@ class FocusManager {
         // TIZEN FIX: Explicitly blur the old element to remove native :focus state
         if (this._focusedElement && this._focusedElement !== element) {
             this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+
             this._focusedElement.blur(); // Clear native :focus styling on Tizen
         }
 
@@ -603,6 +634,12 @@ class FocusManager {
 
         // NOW modify the DOM (Dirty the layout)
         this._focusedElement.classList.add('focused');
+
+        // Add generic .focused-row to parent settings items to highlight the whole row
+        const newSettingItem = this._focusedElement.closest('.setting-item');
+        if (newSettingItem) {
+            newSettingItem.classList.add('focused-row');
+        }
 
         // NATIVE FOCUS DISABLED: eliminates scroll rebounding/fighting on Tizen
         // FocusManager handles all input internally via EventBus.

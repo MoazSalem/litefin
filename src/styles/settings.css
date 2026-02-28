@@ -123,17 +123,17 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 24px 0;
-    padding: 24px 0;
+    padding: 24px 24px;
     min-height: 80px;
     transition: background-color 0.2s ease;
-    border-radius: 16px;
-    padding-left: 16px;
-    padding-right: 16px;
+    border-radius: 8px;
+    margin: 8px 0;
+    border: 1px solid transparent;
 }
 
-.setting-item:focus-within {
-    background-color: rgba(255, 255, 255, 0.03);
+.setting-item:focus-within,
+.setting-item.focused-row {
+    background-color: rgba(var(--jf-accent-rgb), 0.15);
 }
 
 .setting-label {
