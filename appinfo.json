@@ -1,0 +1,14 @@
+{
+    "id": "org.litefin.app",
+    "version": "0.7.0",
+    "vendor": "Litefin",
+    "type": "web",
+    "main": "index.html",
+    "title": "Litefin",
+    "icon": "icon.png",
+    "largeIcon": "icon.png",
+    "bgColor": "#000000",
+    "transparent": false,
+    "allowCrossDomain": true,
+    "appDescription": "Native Jellyfin client for Smart TVs"
+}

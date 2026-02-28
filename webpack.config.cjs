@@ -43,10 +43,11 @@ function getPlugins() {
         new CopyWebpackPlugin({
             patterns: [
                 { from: 'config.xml', to: 'config.xml' },
+                { from: 'appinfo.json', to: 'appinfo.json' },
                 { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
                 { from: 'src/locales', to: 'locales' },
-                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'libpgs.worker.js' }
+                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' }
             ]
         }),
         new webpack.DefinePlugin({

@@ -44,3 +44,4 @@ npm-debug.log*
 knowledge.md
 /.agents
 GEMINI.md
+*.ipk

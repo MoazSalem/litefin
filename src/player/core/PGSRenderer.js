@@ -68,7 +68,7 @@ class PGSRenderer {
             video: this._video, // Can be null/undefined for AVPlay, libpgs handles it if we provide canvas
             canvas: this._canvas,
             subUrl: this._url,
-            workerUrl: 'libpgs.worker.js', // Copied to root by webpack
+            workerUrl: 'js/libpgs.worker.js', // Copied to js/ by webpack
             timeOffset: this._timeOffset
         };
 
