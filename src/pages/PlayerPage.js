@@ -584,6 +584,14 @@ class PlayerPage extends Page {
 
         // Initialize OSD
         this._initOSD();
+
+        // === Plugin System ===
+        // Notify all loaded plugins that player + OSD are ready.
+        // Doing this here rather than inside _initOSD ensures plugins
+        // are restarted properly when we advance to the next track.
+        pluginManager
+            .notifyPlayerStart(this._item, this._player, this._osd)
+            .catch((err) => log.error('pluginManager.notifyPlayerStart failed:', err));
     }
 
     /**
@@ -652,14 +660,6 @@ class PlayerPage extends Page {
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
-        // === Plugin System ===
-        // Notify all loaded plugins that player + OSD are ready.
-        // We pass the OSD so the PluginManager can set up its widget host
-        // into the .osd-overlays container before first frame.
-        pluginManager
-            .notifyPlayerStart(this._item, this._player, this._osd)
-            .catch((err) => log.error('pluginManager.notifyPlayerStart failed:', err));
-
         log.info('OSD initialized');
     }
 
@@ -726,6 +726,9 @@ class PlayerPage extends Page {
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+            // Notify plugins that the previous session ended before starting the same item again
+            pluginManager.notifyPlayerStop();
+
             if (this._player?.stop) this._player.stop();
 
             this._reportPlaybackStopped(mediaSource, positionTicks, false).then(() => {
@@ -787,6 +790,9 @@ class PlayerPage extends Page {
             // Capture current info before stopping
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            // Notify plugins that old playback stopped
+            pluginManager.notifyPlayerStop();
 
             // Stop current playback cleanly
             if (this._player?.stop) {
@@ -907,6 +913,9 @@ class PlayerPage extends Page {
                     const mediaSource = this._player?.getCurrentMediaSource?.();
                     const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+                    // Notify plugins before switch
+                    pluginManager.notifyPlayerStop();
+
                     if (this._player?.stop) {
                         await this._player.stop();
                     }
@@ -959,6 +968,9 @@ class PlayerPage extends Page {
                 // Capture current info before stopping
                 const mediaSource = this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+                // Notify plugins before traversing back
+                pluginManager.notifyPlayerStop();
 
                 // Stop current playback cleanly
                 if (this._player?.stop) {
