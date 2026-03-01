@@ -83,7 +83,17 @@ export default class ASSRenderer {
             // Apply the user-set subtitle delay offset.
             // Positive delay → subtract from time → clock runs slower → cues fire later.
             const offsetTime = timeSeconds - (this._delaySeconds || 0);
-            this._clock.tick(offsetTime);
+            try {
+                this._clock.tick(offsetTime);
+            } catch (err) {
+                /*
+                 * libjass can throw on malformed ASS vector drawing commands (\p tag)
+                 * where the internal SVG element is undefined. We cannot patch libjass,
+                 * but we CAN suppress the error so it doesn't spam on every timeupdate.
+                 * The subtitle simply won't render for that cue rather than crashing the app.
+                 */
+                log.warn('libjass tick error (likely malformed \\p drawing tag):', err.message);
+            }
         }
     }
 
@@ -295,9 +305,17 @@ export default class ASSRenderer {
 
             // 3. Strip problematic inline overrides from Dialogues (\fn, \bord, \shad, etc.)
             if (trimmed.startsWith('Dialogue:')) {
-                // This regex strips \fn..., \bord..., \shad..., \out..., etc.
-                // It targets the tag name and everything until the next \ or }
-                return line.replace(/\\(fn|bord|shad|s?out|s?shad)[^\\}]+(?=[\\}])/g, '');
+                /*
+                 * Strip per-dialogue font/border/shadow overrides that conflict
+                 * with the style-level values we enforced above.
+                 *
+                 * IMPORTANT: Exclude ')' from the match character class so we
+                 * never consume the closing paren of a \t() animation block.
+                 * Original regex used [^\\}]+ which would swallow ')', silently
+                 * corrupting the ASS tag structure in karaoke/fx tracks and
+                 * producing garbled positioning for \pos()-based subtitles.
+                 */
+                return line.replace(/\\(fn|bord|shad|s?out|s?shad)[^\\})]+(?=[\\})])/g, '');
             }
 
             return line;
@@ -461,6 +479,14 @@ export default class ASSRenderer {
         this._wrapper.style.height = '100%';
         this._wrapper.style.pointerEvents = 'none';
         this._wrapper.style.zIndex = '1';
+        /*
+         * Force LTR on the wrapper regardless of the document direction.
+         * libjass uses absolute CSS pixel positioning for \pos() coordinates.
+         * If the parent has direction:rtl (e.g. Arabic locale), CSS layout
+         * can flip the internal coordinate system, compressing or mirroring
+         * karaoke/fx subtitle lines that use individual \pos() per syllable.
+         */
+        this._wrapper.style.direction = 'ltr';
 
         // Append to the player container (overlays the video)
         this._container.appendChild(this._wrapper);
@@ -475,6 +501,21 @@ export default class ASSRenderer {
         log.info('Created ManualClock (Unified Strategy)');
 
         if (this._videoElement) {
+            /*
+             * CRITICAL: Always remove any previously registered listeners before adding
+             * new ones. _createRenderer() can be called multiple times (e.g. from
+             * setFontStyles() when the user changes the subtitle font). Without this
+             * removal step, every call stacks a new 'timeupdate' listener on top of
+             * the old one. Since this._onTimeUpdate is reassigned, destroy() can no
+             * longer clean up the old listener reference — causing double-ticking that
+             * puts libjass's SVG state machine into a half-initialized state and crashes
+             * with "Cannot read properties of undefined (reading 'appendItem')".
+             */
+            if (this._onTimeUpdate) this._videoElement.removeEventListener('timeupdate', this._onTimeUpdate);
+            if (this._onSeeking)    this._videoElement.removeEventListener('seeking', this._onSeeking);
+            if (this._onPlay)       this._videoElement.removeEventListener('play', this._onPlay);
+            if (this._onPause)      this._videoElement.removeEventListener('pause', this._onPause);
+
             // Drive the ManualClock via HTML5 Video events.
             // NOTE: All time updates go through this.tick() so the offset is applied.
             this._onTimeUpdate = () => this.tick(this._videoElement.currentTime);
@@ -543,6 +584,10 @@ export default class ASSRenderer {
         // videoWidth/Height are 0 at that point.
         // ================================================================
         if (this._videoElement) {
+            // Remove any pre-existing loadedmetadata listener before registering a new one
+            if (this._onMetadata) {
+                this._videoElement.removeEventListener('loadedmetadata', this._onMetadata);
+            }
             this._onMetadata = () => {
                 log.info('Video metadata loaded, re-resizing subtitle overlay');
                 this._resizeRenderer();
