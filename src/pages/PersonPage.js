@@ -434,7 +434,7 @@ class PersonPage extends Page {
                 items: episodes,
                 type: 'episode-primary', // Use special type
                 isLandscape: true, // Force landscape grid
-                limit: 8,
+                limit: 9,
                 onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card),
                 onSeeMore: () => this._registerWorkSections()
             });

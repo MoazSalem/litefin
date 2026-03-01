@@ -12,6 +12,9 @@ import { focusManager } from '../ui/FocusManager.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { state } from '../core/StateManager.js';
+import { lazyLoader } from '../utils/LazyLoader.js';
+import { router } from '../core/Router.js';
 
 const log = logger.create('SearchPage');
 
@@ -89,18 +92,95 @@ class SearchPage extends Page {
         // Setup focus
         this._setupFocus();
 
-        // Initial Focus Sequence
-        // 1. Remove readonly to allow KB to open initially (user requested this "great" behavior)
-        this._searchInput.removeAttribute('readonly');
+        // State Rehydration Check
+        const searchState = state.get('search:state');
 
-        setTimeout(() => {
-            this._searchInput.focus();
-            // Note: We leave it editable so usage works immediately.
-            // It will become readonly only when user navigates AWAY (blur).
-        }, 100);
+        if (!searchState) {
+            // Initial Focus Sequence (Only if NOT restoring state)
+            // 1. Remove readonly to allow KB to open initially
+            this._searchInput.removeAttribute('readonly');
 
-        // Show empty state
-        this.$('#search-empty')?.classList.remove('hidden');
+            setTimeout(() => {
+                this._searchInput.focus();
+                // Note: We leave it editable so usage works immediately.
+                // It will become readonly only when user navigates AWAY (blur).
+            }, 100);
+
+            // Show empty state
+            this.$('#search-empty')?.classList.remove('hidden');
+        } else {
+            // Rehydrate state
+            this._query = searchState.query;
+            this._results = searchState.results;
+            this._lastSearchedQuery = searchState.query;
+
+            if (this._searchInput) {
+                this._searchInput.value = this._query;
+            }
+
+            // Hide empty state immediately
+            this.$('#search-empty')?.classList.add('hidden');
+
+            if (this._results && this._results.length > 0) {
+                this._renderResults();
+
+                // Restore Focus
+                requestAnimationFrame(() => {
+                    let restoredFocus = false;
+                    const targetId = searchState.focusItemId;
+                    const sectionId = searchState.focusSectionId;
+
+                    if (targetId && sectionId) {
+                        const sectionConfig = focusManager.getSectionConfig(sectionId);
+                        const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+
+                        // Auto-expand logic if index > limit
+                        const gridKeyMap = {
+                            'search-movies-items': 'movies',
+                            'search-series-items': 'series',
+                            'search-episodes-items': 'episodes',
+                            'search-people-items': 'people'
+                        };
+                        const gridKey = gridKeyMap[sectionId];
+                        if (gridKey && this._grids[gridKey]) {
+                            const grid = this._grids[gridKey];
+                            const index = grid.items.findIndex(
+                                (i) => i.Id === targetId || i.Id?.toString() === targetId
+                            );
+                            if (index >= grid.limit && !grid.expanded) {
+                                grid.expanded = true;
+                                const gridContainer = this.$(`#${grid.id}-items`);
+                                if (gridContainer) {
+                                    gridContainer.innerHTML = grid._renderItems();
+                                    lazyLoader.observe(gridContainer);
+                                    focusManager.invalidateCache(`${grid.id}-items`);
+                                }
+                                const btn = this.$(`#${grid.id}-btn`);
+                                if (btn) btn.textContent = i18n.t('ShowLess');
+                            }
+                        }
+
+                        const savedCard = sectionContainer.querySelector(
+                            `[data-item-id="${targetId}"], [data-id="${targetId}"]`
+                        );
+
+                        if (savedCard) {
+                            this.setActiveSection(sectionId, false);
+                            focusManager.focusElement(savedCard, { instantScroll: true });
+                            restoredFocus = true;
+                        }
+                    }
+
+                    if (!restoredFocus) {
+                        this.setActiveSection('search-header');
+                    }
+
+                    state.delete('search:state');
+                });
+            } else {
+                state.delete('search:state');
+            }
+        }
     }
 
     _bindEvents() {
@@ -261,6 +341,7 @@ class SearchPage extends Page {
                 items: movies,
                 type: 'poster',
                 limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-movies-items', card),
                 onSeeMore: () => this._registerSearchFocus()
             });
             this._grids.movies.mount(container);
@@ -274,6 +355,7 @@ class SearchPage extends Page {
                 items: series,
                 type: 'poster',
                 limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-series-items', card),
                 onSeeMore: () => this._registerSearchFocus()
             });
             this._grids.series.mount(container);
@@ -287,7 +369,8 @@ class SearchPage extends Page {
                 items: episodes,
                 type: 'episode', // 'episode' or 'episode-primary'
                 isLandscape: true,
-                limit: 8,
+                limit: 9,
+                onClick: (card) => this._saveStateAndNavigate('search-episodes-items', card),
                 onSeeMore: () => this._registerSearchFocus()
             });
             this._grids.episodes.mount(container);
@@ -301,6 +384,7 @@ class SearchPage extends Page {
                 items: people,
                 type: 'person', // Special card type? Or just poster.
                 limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-people-items', card),
                 onSeeMore: () => this._registerSearchFocus()
             });
             this._grids.people.mount(container);
@@ -391,6 +475,26 @@ class SearchPage extends Page {
 
         this._results = [];
         this._grids = {};
+    }
+
+    _saveStateAndNavigate(sectionId, card) {
+        if (!card.dataset.itemId) return;
+
+        state.set('search:state', {
+            query: this._query,
+            results: this._results,
+            focusItemId: card.dataset.itemId,
+            focusSectionId: sectionId
+        });
+
+        const itemType = card.dataset.type || 'Movie';
+        let route = `/details/${card.dataset.itemId}`;
+
+        if (itemType === 'Person') {
+            route = `/person/${card.dataset.itemId}`;
+        }
+
+        router.navigate(route);
     }
 
     onBack() {
