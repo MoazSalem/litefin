@@ -52,3 +52,11 @@ if (document.readyState === 'loading') {
 } else {
     bootstrap();
 }
+
+// Signal to the startup error catcher in index.html that
+// our bundle parsed and executed successfully. This disables
+// the global error overlay for post-bootstrap errors (which
+// the app handles internally).
+if (typeof window.__litefin_mark_loaded === 'function') {
+    window.__litefin_mark_loaded();
+}

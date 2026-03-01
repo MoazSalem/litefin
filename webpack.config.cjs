@@ -93,7 +93,7 @@ const es6Config = {
 };
 
 // ============================================================================
-// Normal build - Tizen 5.0+ (Chromium 69)
+// Normal build - Tizen 5.0+ (Chromium 63)
 // ============================================================================
 const normalConfig = {
     name: 'normal',
@@ -124,7 +124,7 @@ const normalConfig = {
                             [
                                 '@babel/preset-env',
                                 {
-                                    targets: { chrome: '69' },
+                                    targets: { chrome: '63' },
                                     useBuiltIns: 'usage',
                                     corejs: 3
                                 }

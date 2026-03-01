@@ -45,7 +45,7 @@ async function webpackES6() {
 }
 
 async function webpackNormal() {
-    console.info('Building Normal bundle (Chromium 69, Partialy transpilied)...');
+    console.info('Building Normal bundle (Chromium 63, Partialy transpilied)...');
     await execAsync('npx webpack --config webpack.config.cjs --config-name normal');
     console.info('Normal build complete');
 }

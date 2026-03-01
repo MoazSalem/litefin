@@ -9,14 +9,172 @@
 </head>
 
     <script>
+        // ====================================================================
+        // STARTUP ERROR CATCHER (ES5 ONLY — must run on Tizen 3.0+)
+        // ====================================================================
+        // Catches any JS errors during initial bundle loading, including
+        // SyntaxErrors from unsupported ES6+ features on older WebViews.
+        // Renders a full-screen diagnostic overlay so we can actually see
+        // what went wrong on a TV with no DevTools access.
+        // ====================================================================
+        (function() {
+            // Track whether the app successfully bootstrapped
+            var appLoaded = false;
+
+            // Mark app as loaded once the main bundle finishes executing
+            // (index.js sets this at the end of its bootstrap sequence)
+            window.__litefin_mark_loaded = function() {
+                appLoaded = true;
+            };
+
+            // ----------------------------------------------------------------
+            // Render a full-screen error overlay with diagnostic info
+            // ----------------------------------------------------------------
+            function showErrorOverlay(title, details) {
+                // Only show once — don't spam overlays for cascading errors
+                if (document.getElementById('startup-error-overlay')) return;
+
+                var overlay = document.createElement('div');
+                overlay.id = 'startup-error-overlay';
+                overlay.style.cssText = [
+                    'position: fixed',
+                    'top: 0',
+                    'left: 0',
+                    'right: 0',
+                    'bottom: 0',
+                    'z-index: 2147483647',
+                    'background: #1a1a2e',
+                    'color: #e0e0e0',
+                    'font-family: monospace, sans-serif',
+                    'font-size: 18px',
+                    'padding: 40px 60px',
+                    'overflow-y: auto',
+                    'box-sizing: border-box'
+                ].join(';');
+
+                // Build the error display content
+                var html = '';
+                html += '<div style="margin-bottom: 24px;">';
+                html += '<span style="font-size: 36px;">&#9888;</span> '; // Warning icon
+                html += '<span style="font-size: 28px; font-weight: bold; color: #ff6b6b;">';
+                html += title;
+                html += '</span>';
+                html += '</div>';
+
+                // Error details box
+                html += '<div style="';
+                html += 'background: #0f0f23;';
+                html += 'border: 1px solid #333;';
+                html += 'border-radius: 8px;';
+                html += 'padding: 20px 24px;';
+                html += 'margin-bottom: 24px;';
+                html += 'white-space: pre-wrap;';
+                html += 'word-break: break-word;';
+                html += 'line-height: 1.6;';
+                html += 'font-size: 16px;';
+                html += '">';
+                html += details;
+                html += '</div>';
+
+                // User agent info for diagnostics
+                html += '<div style="color: #888; font-size: 14px; margin-top: 16px;">';
+                html += '<strong>User Agent:</strong> ' + navigator.userAgent;
+                html += '</div>';
+
+                overlay.innerHTML = html;
+
+                // Hide the splash spinner so the error is clearly visible
+                var splash = document.getElementById('app-splash');
+                if (splash) splash.style.display = 'none';
+
+                document.body.appendChild(overlay);
+            }
+
+            // ----------------------------------------------------------------
+            // Global error handler — catches runtime errors AND parse errors
+            // when the browser attempts to evaluate the bundled script
+            // ----------------------------------------------------------------
+            window.onerror = function(message, source, lineno, colno, error) {
+                // Skip if the app already loaded successfully
+                // (post-load errors are handled by the app's own error handling)
+                if (appLoaded) return;
+
+                var details = '';
+                details += '<span style="color: #ff6b6b;">' + (message || 'Unknown error') + '</span>\n\n';
+
+                if (source) {
+                    details += '<strong>Source:</strong> ' + source + '\n';
+                }
+                if (lineno) {
+                    details += '<strong>Line:</strong> ' + lineno;
+                    if (colno) details += ', <strong>Col:</strong> ' + colno;
+                    details += '\n';
+                }
+                if (error && error.stack) {
+                    details += '\n<strong>Stack Trace:</strong>\n';
+                    details += error.stack;
+                }
+
+                showErrorOverlay('Startup Error', details);
+            };
+
+            // ----------------------------------------------------------------
+            // Unhandled promise rejection handler — catches async failures
+            // during bootstrap (e.g. failed fetch, import errors)
+            // ----------------------------------------------------------------
+            if (typeof window.addEventListener === 'function') {
+                window.addEventListener('unhandledrejection', function(event) {
+                    if (appLoaded) return;
+
+                    var reason = event.reason || {};
+                    var details = '';
+
+                    if (typeof reason === 'string') {
+                        details += '<span style="color: #ff6b6b;">' + reason + '</span>\n';
+                    } else {
+                        details += '<span style="color: #ff6b6b;">';
+                        details += (reason.message || 'Unhandled Promise Rejection');
+                        details += '</span>\n';
+
+                        if (reason.stack) {
+                            details += '\n<strong>Stack Trace:</strong>\n';
+                            details += reason.stack;
+                        }
+                    }
+
+                    showErrorOverlay('Async Startup Error', details);
+                });
+            }
+
+            // ----------------------------------------------------------------
+            // Safety net: if the app hasn't loaded after 15 seconds,
+            // something went very wrong — show a timeout diagnostic
+            // ----------------------------------------------------------------
+            setTimeout(function() {
+                if (!appLoaded && !document.getElementById('startup-error-overlay')) {
+                    showErrorOverlay(
+                        'Startup Timeout',
+                        '<span style="color: #ffa94d;">The application did not finish loading within 15 seconds.</span>\n\n' +
+                        'This may indicate:\n' +
+                        '  - A JavaScript syntax error the browser could not report\n' +
+                        '  - A network issue loading required resources\n' +
+                        '  - An incompatible WebView version\n\n' +
+                        'Check the console output for more details.'
+                    );
+                }
+            }, 15000);
+        })();
+    </script>
+
+    <script>
         // Immediately restore theme to prevent flash of wrong color
         (function() {
             try {
-                const savedTheme = localStorage.getItem('litefin:theme') || 'purplehaze';
+                var savedTheme = localStorage.getItem('litefin:theme') || 'purplehaze';
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
                 // Theme variables for early loading (must match CSS)
-                const themes = {
+                var themes = {
                     'dark': { accent: '#00a4dc', bg: '#101010' },
                     'light': { accent: '#00a4dc', bg: '#f5f5f5' },
                     'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a' },
@@ -25,7 +183,7 @@
                     'appletv': { accent: '#0a84ff', bg: '#000000' }
                 };
 
-                const currentTheme = themes[savedTheme] || themes['dark'];
+                var currentTheme = themes[savedTheme] || themes['dark'];
                 document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
                 document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
             } catch (e) {
