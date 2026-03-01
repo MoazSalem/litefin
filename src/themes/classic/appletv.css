@@ -69,8 +69,15 @@
     /* ========================================================================
        Transitions - Apple's smooth feel
        ======================================================================== */
-    --jf-transition-fast: 200ms cubic-bezier(0.25, 0.1, 0.25, 1);
     --jf-transition-normal: 350ms cubic-bezier(0.25, 0.1, 0.25, 1);
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(58, 58, 60, 0.8);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.2);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: #ffffff;
+    --jf-action-btn-active-border: #ffffff;
+    --jf-action-btn-active-color: #000000;
 }
 
 /* Apple TV specific styles */

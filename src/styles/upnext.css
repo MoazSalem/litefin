@@ -2,22 +2,6 @@
  * ============================================================================
  * Up Next Dialog - Styles
  * ============================================================================
- *
- * Glassmorphism card positioned in the bottom corner of the player overlay.
- * Follows Apple HIG principles: clear hierarchy, ample touch targets,
- * smooth spring-inspired transitions.
- *
- * Layout:
- *   ┌─────────────────────────┐  ← .upnext-dialog
- *   │ [thumb] | UP NEXT        │
- *   │         | SeriesName     │
- *   │         | E5 – Ep Title  │
- *   │         | Starting in Xs │
- *   │  [Play Now]  [Hide]      │
- *   └─────────────────────────┘
- *
- * RTL support: `[dir="rtl"] .upnext-dialog` pins to bottom-left.
- * ============================================================================
  */
 
 /* ============================================================================
@@ -27,31 +11,22 @@
 .upnext-dialog {
     /*
      * Position: absolute within .osd-overlays (which fills the full player).
-     * Sits 11.5em above the bottom to clear the OSD seekbar/controls AND
+     * Sits 13.5em above the bottom to clear the OSD seekbar/controls AND
      * the secondary player option menus (subtitles/audio tracks).
      * Right-aligned for LTR; overridden to left-aligned for RTL below.
      */
     position: absolute;
-    bottom: 12.5em;
+    bottom: 13.5em;
     right: 2.4em;
     left: auto;
 
     /* Tizen TV safe-area clearance */
     max-width: min(480px, 42vw);
 
-    /* Glassmorphism card */
-    background: rgba(12, 12, 18, 0.82);
-    backdrop-filter: blur(20px) saturate(1.4);
-    -webkit-backdrop-filter: blur(20px) saturate(1.4);
-
-    border: 1px solid rgba(255, 255, 255, 0.10);
+    /* Solid-ish background (blur removed for Tizen performance) */
+    background: rgba(12, 12, 18, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 16px;
-
-    /* Soft accent glow on top edge */
-    box-shadow:
-        0 0 0 1px rgba(0, 164, 220, 0.08),
-        0 8px 32px rgba(0, 0, 0, 0.55),
-        0 2px 8px rgba(0, 0, 0, 0.40);
 
     /* Layout: the top content area (thumbnail + info) sits above the actions bar */
     display: flex;
@@ -242,7 +217,7 @@
 .upnext-rating {
     font-size: 0.7em;
     font-weight: 700;
-    color: rgba(245, 197, 24, 0.70);
+    color: #f5c518;
     border: 1px solid rgba(255, 255, 255, 0.35);
     border-radius: 4px;
     padding: 1px 6px;
@@ -310,7 +285,7 @@
 .upnext-btn-play {
     background: var(--osd-accent-color, #00a4dc);
     color: #fff;
-    box-shadow: 0 2px 12px rgba(0, 164, 220, 0.35);
+    border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .upnext-btn-play:hover {
@@ -321,7 +296,7 @@
 .upnext-btn-hide {
     background: rgba(255, 255, 255, 0.10);
     color: rgba(255, 255, 255, 0.80);
-    border: 1px solid rgba(255, 255, 255, 0.12);
+    border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .upnext-btn-hide:hover {
@@ -339,25 +314,20 @@
 .upnext-btn.focused,
 .upnext-btn:focus {
     outline: none;
-    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.90), 0 0 0 5px rgba(0, 164, 220, 0.60);
+    border: 2px solid var(--jf-action-btn-active-border) !important;
 }
 
 .upnext-btn-play.focused,
 .upnext-btn-play:focus {
-    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 75%, white 25%);
-    box-shadow:
-        0 0 0 3px rgba(255, 255, 255, 0.90),
-        0 0 0 5px rgba(0, 164, 220, 0.60),
-        0 4px 18px rgba(0, 164, 220, 0.5);
+    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 80%, white 20%) !important;
+    border: 2px solid var(--jf-action-btn-active-border) !important;
 }
 
 .upnext-btn-hide.focused,
 .upnext-btn-hide:focus {
-    background: rgba(255, 255, 255, 0.22);
-    color: #fff;
-    box-shadow:
-        0 0 0 3px rgba(255, 255, 255, 0.90),
-        0 0 0 5px rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.22) !important;
+    color: #fff !important;
+    border: 2px solid var(--jf-action-btn-active-border) !important;
 }
 
 /* ============================================================================

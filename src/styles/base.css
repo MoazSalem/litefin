@@ -21,8 +21,15 @@
 }
 
 :root {
-    /* Define base font variable - Poppins is now the default */
     --jf-font-family: 'Poppins', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+
+    /* Global Action Button Defaults (Fallbacks for themes) */
+    --jf-action-btn-bg: rgba(255, 255, 255, 0.10);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.20);
+    --jf-action-btn-color: #ffffff;
+    --jf-action-btn-active-bg: #ffffff;
+    --jf-action-btn-active-border: #ffffff;
+    --jf-action-btn-active-color: #101010;
 }
 
 /* Custom UI Font Overrides */

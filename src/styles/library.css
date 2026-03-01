@@ -79,7 +79,7 @@
     background-color: rgba(40, 40, 40, 0.8);
     /* Match Resume/Icon btn in details */
     color: var(--text-primary);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid var(--jf-action-btn-border)!important;
     font-size: 20px;
     font-weight: 600;
     cursor: pointer;
@@ -90,7 +90,6 @@
     background-color: #ffffff;
     /* Match Play btn in details */
     color: #000000;
-    border-color: #ffffff;
 }
 
 /* Unified Focus Styles - Preserving Roundness */
@@ -105,9 +104,9 @@
     outline: none !important;
     background-color: var(--jf-accent) !important;
     color: #ffffff !important;
-    border-color: var(--jf-accent) !important;
     transform: scale(1.05);
     z-index: 10;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* Specific Radius Enforcement on Focus (Fixes Tizen "Rectangle" bug) */
@@ -155,7 +154,7 @@
     background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
     color: var(--text-primary);
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid var(--jf-action-btn-border)!important;
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
@@ -289,7 +288,7 @@
     -webkit-appearance: none;
     background-color: rgba(255, 255, 255, 0.1);
     color: white;
-    border: 2px solid rgba(255, 255, 255, 0.2);
+    border: 2px solid var(--jf-action-btn-border)!important;
     padding: 18px 48px;
     border-radius: 40px;
     -webkit-border-radius: 40px;
@@ -303,7 +302,6 @@
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     background-color: var(--jf-accent) !important;
-    border-color: #ffffff !important;
     color: #ffffff !important;
     transform: scale(1.1);
     outline: none !important;
@@ -411,6 +409,7 @@
     background-color: var(--jf-accent) !important;
     transform: scale(1.1);
     border-radius: 50% !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* --- Pagination Footer --- */
@@ -777,7 +776,7 @@
     padding: 12px 30px;
     margin-left: 20px;
     /* Increased margin for Tizen flex gap fallback */
-    border: 2px solid transparent;
+    border: 2px solid var(--jf-action-btn-border)!important;
     border-radius: 8px;
     -webkit-border-radius: 8px;
     overflow: hidden;
@@ -793,8 +792,8 @@
 
 .modal-action-btn:focus,
 .modal-action-btn.focused {
+    border-color: var(--jf-action-btn-active-border)!important;
     transform: scale(1.15);
-    border-color: white;
     background-color: var(--jf-accent);
     color: white;
     z-index: 10;

@@ -498,10 +498,10 @@ progress.card-progress::-webkit-progress-value {
 .modal-option-btn.focused {
     background: var(--jf-accent) !important; /* Force priority over .selected */
     color: white !important;
-    border-color: rgba(255, 255, 255, 0.5) !important;
     /* Subtle white inner border */
     outline: none;
     transform: scale(1.01);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 

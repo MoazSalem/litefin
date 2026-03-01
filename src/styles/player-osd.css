@@ -248,7 +248,7 @@
     background: var(--osd-accent-color);
     color: var(--jf-text-primary, #fff);
     outline: none !important;
-    border: none !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
     /* No transform scale - causes lag on Tizen */
 }
 
@@ -274,10 +274,10 @@
 
 .osd-back-btn:focus,
 .osd-back-btn.focused {
+    border: 2px solid var(--jf-action-btn-active-border) !important;
     background: var(--osd-accent-color);
     color: var(--jf-text-primary, #fff);
     outline: none !important;
-    border: none !important;
 }
 
 .osd-back-btn .osd-icon {
@@ -305,7 +305,7 @@
     background: var(--osd-accent-color);
     color: var(--jf-text-primary, #fff);
     outline: none !important;
-    border: none !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 .osd-btn-play .osd-icon {
@@ -371,6 +371,7 @@
     left: 50%;
     transform: translateX(-50%);
     background: var(--osd-gradient-dark, rgba(0, 0, 0, 0.9));
+    border: 2px solid var(--jf-action-btn-border)!important;
     color: var(--osd-text-color, #fff);
     font-size: 1.68em;
     /* 1.4em * 1.2 */
@@ -863,6 +864,7 @@
 .playback-info-close.focused {
     background: var(--osd-accent-color);
     outline: none;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* Sections */
@@ -998,6 +1000,7 @@
     background: var(--osd-accent-color);
     transform: scale(1.1);
     outline: none !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* Removed redundant/conflicting container height */

@@ -69,8 +69,15 @@
     /* ========================================================================
        Transitions
        ======================================================================== */
-    --jf-transition-fast: 150ms ease;
     --jf-transition-normal: 250ms ease;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(30, 48, 80, 0.8);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.2);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: #e8f4f8;
+    --jf-action-btn-active-border: #e8f4f8;
+    --jf-action-btn-active-color: #0a0f1a;
 }
 
 /* Blue Radiance gradient overlay effect */

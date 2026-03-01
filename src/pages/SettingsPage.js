@@ -277,18 +277,7 @@ class SettingsPage extends Page {
 
                 <!-- Theme Section -->
                 <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LayoutMode">${i18n.t('LayoutMode')}</span>
-                        <span class="setting-description" data-i18n="LayoutModeDescription">${i18n.t('LayoutModeDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="btn btn-option layout-btn ${currentLayout === 'classic' ? 'active' : ''}" data-layout="classic" tabindex="0">${i18n.t('LayoutClassic')}</button>
-                        <button class="btn btn-option layout-btn ${currentLayout === 'modern' ? 'active' : ''}" data-layout="modern" tabindex="-1" disabled>${i18n.t('LayoutModern')}</button>
-                    </div>
-                </div>
-
+            
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</span>

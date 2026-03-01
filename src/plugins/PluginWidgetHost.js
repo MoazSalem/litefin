@@ -42,6 +42,9 @@ const log = logger.create('PluginWidgetHost');
 // This prevents flickering when playback position sits exactly on a boundary.
 const HIDE_HYSTERESIS = 1;
 
+// Ticks per second (Jellyfin standard)
+const TICKS_PER_SECOND = 10_000_000;
+
 // ============================================================================
 // PluginWidgetHost Class
 // ============================================================================
@@ -262,6 +265,12 @@ class PluginWidgetHost {
         // Track whether any widget just became visible (to trigger auto-focus)
         let justBecameVisible = false;
 
+        // Detect manual seek (jump > 2 seconds) to bypass hysteresis
+        const isSeek =
+            this._lastPositionTicks !== undefined &&
+            Math.abs(positionTicks - this._lastPositionTicks) > TICKS_PER_SECOND * 2;
+        this._lastPositionTicks = positionTicks;
+
         for (const [, entry] of this._widgets) {
             const { widget, el } = entry;
 
@@ -300,9 +309,10 @@ class PluginWidgetHost {
                 log.debug(`Widget '${widget.id}' shown at ${positionTicks}`);
             } else if (!shouldShow && entry.visible) {
                 // Hysteresis: require HIDE_HYSTERESIS consecutive "false" results before hiding
+                // UNLESS the user just performed a manual seek (jumped > 2s of playback)
                 entry.hideCounter++;
 
-                if (entry.hideCounter >= HIDE_HYSTERESIS) {
+                if (isSeek || entry.hideCounter >= HIDE_HYSTERESIS) {
                     entry.hideCounter = 0;
                     entry.visible = false;
                     el.classList.remove('visible');
@@ -312,7 +322,7 @@ class PluginWidgetHost {
                         entry.syncTimer = null;
                     }
                     cacheInvalidated = true;
-                    log.debug(`Widget '${widget.id}' hidden at ${positionTicks}`);
+                    log.debug(`Widget '${widget.id}' hidden at ${positionTicks} (isSeek=${isSeek})`);
                 }
             } else if (shouldShow) {
                 // Currently visible and should remain visible — reset hide counter

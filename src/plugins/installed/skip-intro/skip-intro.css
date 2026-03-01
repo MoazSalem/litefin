@@ -94,11 +94,9 @@
     padding: 0.6em 1.4em;
     border-radius: 100px;
 
-    /* Dark, translucent background that works on any video content */
-    background: rgba(0, 0, 0, 0.72);
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-    border: 1.5px solid rgba(255, 255, 255, 0.18);
+    /* Solid background (blur removed for Tizen performance) */
+    background: rgba(12, 12, 18, 0.92);
+    border: 2px solid var(--jf-action-btn-border)!important;
 
     /* Typography */
     color: #ffffff;
@@ -122,10 +120,10 @@
    sets background: var(--osd-accent-color); we just need to confirm the pill shape stays intact. */
 .skip-intro-btn.focused,
 .skip-intro-btn:focus {
-    background: var(--osd-accent-color);
-    border-color: transparent;
-    outline: none;
-    color: #fff;
+    background: var(--osd-accent-color) !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    outline: none !important;
+    color: #fff !important;
 }
 
 /* ============================= Label & Arrow ============================ */

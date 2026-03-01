@@ -168,7 +168,7 @@
     padding: 12px 24px;
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
-    border: 3px solid var(--jf-action-btn-border, transparent);
+    border: 2px solid var(--jf-action-btn-border)!important;
     border-radius: 40px;
     -webkit-border-radius: 40px;
     overflow: hidden;
@@ -196,7 +196,7 @@
 
 .btn-option:focus,
 .btn-option.focused {
-    border-color: var(--jf-button-border-focus);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
     /* High contrast focus */
     background: var(--jf-accent-hover);
     transform: scale(1.05);
@@ -209,7 +209,7 @@
     padding: 12px 24px;
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
-    border: 3px solid var(--jf-action-btn-border, transparent);
+    border: 2px solid var(--jf-action-btn-border)!important;
     border-radius: 40px;
     -webkit-border-radius: 40px;
     overflow: hidden;
@@ -225,7 +225,7 @@
 .select-btn.focused {
     background: var(--jf-accent);
     color: white;
-    border-color: var(--jf-button-border-focus);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.05);
 }
 
@@ -282,7 +282,7 @@
     font-size: 1.1rem;
     color: var(--jf-text-secondary);
     background: transparent;
-    border: 2px solid transparent;
+    border: 2px solid var(--jf-action-btn-border)!important;
     border-radius: 8px;
     text-align: left;
     cursor: pointer;
@@ -387,14 +387,14 @@
     padding: 16px 48px;
     border-radius: 40px;
     font-weight: 600;
-    border: 3px solid transparent;
+    border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .switch-user-btn:focus,
 .switch-user-btn.focused {
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
-    border-color: var(--jf-button-border-focus);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* About Card */
@@ -405,13 +405,13 @@
     text-align: center;
     margin-top: 20px;
     margin-bottom: 60px;
-    border: 2px solid transparent;
+    border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .about-card:focus,
 .about-card.focused {
     background: rgba(255, 255, 255, 0.1);
-    border-color: var(--jf-accent);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
     outline: none;
     transform: scale(1.02);
 }

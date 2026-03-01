@@ -308,6 +308,7 @@
     color: white;
     border-color: var(--jf-button-border-focus);
     outline: none !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
 /* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */

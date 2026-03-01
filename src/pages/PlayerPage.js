@@ -485,7 +485,13 @@ class PlayerPage extends Page {
         this._player.on('mediastreamschange', (data) => this._onMediaStreamsChange(data));
         this._player.on('refreshsubtitles', () => this._refreshSubtitleStyles());
         this._player.on('volumechange', () => this._reportPlaybackProgress('timeupdate'));
-        this._player.on('seek', (data) => this._reportPlaybackProgress('timeupdate', data?.positionTicks));
+        this._player.on('seek', (data) => {
+            if (data && data.positionTicks !== undefined) {
+                this._onTimeUpdate(data.positionTicks);
+            } else {
+                this._reportPlaybackProgress('timeupdate');
+            }
+        });
         // Waiting listener removed to prevent loading screen during seek/buffer
         this._player.on('restarting', () => {
             log.info('Player restarting (quality change), showing loading');
