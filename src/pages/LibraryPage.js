@@ -290,9 +290,6 @@ class LibraryPage extends Page {
         // 3. Bind Events
         this._bindEvents();
 
-        // 5. Register Focus
-        this._setupFocus();
-
         // 4. Handle Genre/Studio Mode or Initial Data
         if (this.params.genreId) {
             this.state.viewType = 'Items'; // Force Items view for Genre
@@ -342,6 +339,7 @@ class LibraryPage extends Page {
         }
 
         await this._loadItems();
+        this._setupFocus();
 
         // Mark the page as rendered, fulfilling the Promise for NavigationState
         // to restore scroll/focus
@@ -373,16 +371,24 @@ class LibraryPage extends Page {
 
         if (collectionType === 'boxsets') {
             // Try controls first (Sort/Filter), else Grid
-            // But controls are usually enabled for BoxSets now.
-            this.setActiveSection('library-controls');
+            if (this.$('#library-controls')?.style.display !== 'none') {
+                this.setActiveSection('library-controls');
+            } else {
+                this.setActiveSection('library-grid');
+            }
         } else {
             // Standard views have tabs
             // Ensure tabs are actually visible?
             if (this.$('#library-tabs')?.style.display !== 'none') {
                 this.setActiveSection('library-tabs');
-            } else {
-                // Fallback (e.g. if tabs hidden for some reason)
+            } else if (this._isSubView()) {
+                this.setActiveSection('library-grid'); // Default subview focus
+            } else if (this.$('#library-controls')?.style.display !== 'none') {
+                // Fallback (e.g. if tabs hidden for some reason, but controls are present)
                 this.setActiveSection('library-controls');
+            } else {
+                // Sub-views have both tabs and controls hidden
+                this.setActiveSection('library-grid');
             }
         }
     }
@@ -396,7 +402,7 @@ class LibraryPage extends Page {
         this.$('#alpha-picker')?.addEventListener('click', this._handleAlphaClick.bind(this));
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
-        this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(-1));
+        this.$('#btn-prev-top')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-next-top')?.addEventListener('click', () => this._handlePageChange(1));
         this.$('#btn-reset-filters')?.addEventListener('click', this._handleResetFilters.bind(this));
 
@@ -559,12 +565,23 @@ class LibraryPage extends Page {
             this.state.viewType === 'Episodes' ||
             this.state.viewType === 'Upcoming' ||
             this.state.viewType === 'Networks';
+
+        const contentContainer = this.$('.library-content');
+
         if (!isHorizontalLayout) {
             if (rowsContainer) rowsContainer.style.display = 'none';
             if (grid) grid.style.display = '';
         } else {
             if (rowsContainer) rowsContainer.style.display = '';
             if (grid) grid.style.display = 'none';
+        }
+
+        if (contentContainer) {
+            if (this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming') {
+                contentContainer.classList.add('horizontal-rows');
+            } else {
+                contentContainer.classList.remove('horizontal-rows');
+            }
         }
 
         if (grid && !isHorizontalLayout) {
@@ -739,7 +756,7 @@ class LibraryPage extends Page {
                             IncludeItemTypes: suggestionTypes
                         });
                         if (similar.Items && similar.Items.length > 0) {
-                            rows.push({ title: i18n.t('SimilarTo', targetName), items: similar.Items });
+                            rows.push({ title: i18n.t('SimilarTo', [targetName]), items: similar.Items });
                         }
                     } catch (e) {
                         log.warn('Failed to load similar suggestions', e);
@@ -765,7 +782,7 @@ class LibraryPage extends Page {
                         });
                         if (similarFav.Items && similarFav.Items.length > 0) {
                             rows.push({
-                                title: i18n.t('RecommendationBecauseYouLike', favItem.Name),
+                                title: i18n.t('RecommendationBecauseYouLike', [favItem.Name]),
                                 items: similarFav.Items
                             });
                         }
@@ -985,12 +1002,22 @@ class LibraryPage extends Page {
     // Rendering Logic
     // ========================================================================
 
+    _isSubView() {
+        return !!(
+            this.params.genreId ||
+            this.params.studioId ||
+            this.params.personId ||
+            this.params.tagName ||
+            this.params.year
+        );
+    }
+
     _renderTabs() {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
         const tabsContainer = this.$('#library-tabs');
 
-        // Hide tabs for BoxSets (Collections) library
-        if (collectionType === 'boxsets') {
+        // Hide tabs for BoxSets (Collections) library or if we are deep linking into a subview
+        if (collectionType === 'boxsets' || this._isSubView()) {
             if (tabsContainer) {
                 tabsContainer.style.display = 'none';
                 tabsContainer.innerHTML = '';
@@ -1133,11 +1160,17 @@ class LibraryPage extends Page {
             const isMovieMain = collectionType === 'movies' && viewType === 'Items';
             const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
             const isEpisodes = viewType === 'Episodes';
-            const shouldShowControls = isMovieMain || isTVMain || isEpisodes;
+            // Do not show any header controls if we are deep linking to a specific genre/studio
+            const shouldShowControls = isMovieMain || isTVMain || isEpisodes || this._isSubView();
 
             const btnReset = this.$('#btn-reset-filters');
             if (btnReset) {
                 btnReset.style.display = shouldShowControls ? '' : 'none';
+            }
+
+            const btnShuffle = this.$('#btn-shuffle');
+            if (btnShuffle) {
+                btnShuffle.style.display = shouldShowControls && !this._isSubView() ? '' : 'none';
             }
 
             if (shouldShowControls) {
@@ -1163,7 +1196,7 @@ class LibraryPage extends Page {
                     focusManager.register('library-controls', this.$('#library-controls'), {
                         ...controlsConfig,
                         leaveDown:
-                            this.$('#alpha-picker-container').style.display === 'none'
+                            !shouldShowControls || this.$('#alpha-picker-container')?.style.display === 'none'
                                 ? 'empty-state-btn'
                                 : 'alpha-picker'
                     });
@@ -1192,12 +1225,23 @@ class LibraryPage extends Page {
                 if (!hasValidFocus) {
                     // Try to restore focus to the active tab button
                     const activeTabBtn = this.$(`.tab-btn[data-type="${this.state.viewType}"]`);
-                    if (activeTabBtn && (isTabsActive || !currentFocus || currentFocus === document.body)) {
+                    if (
+                        activeTabBtn &&
+                        !this._isSubView() &&
+                        (isTabsActive || !currentFocus || currentFocus === document.body)
+                    ) {
                         log.info('Restoring focus to active tab:', this.state.viewType);
                         focusManager.setActiveSection('library-tabs');
                         activeTabBtn.focus();
-                    } else {
-                        // Fallback to Sidebar if we really lost context
+                    } else if (this._isSubView() && (!currentFocus || currentFocus === document.body)) {
+                        log.info('Sub-view empty loaded, focusing controls');
+                        if (this.$('#library-controls')?.style.display !== 'none') {
+                            focusManager.setActiveSection('library-controls');
+                        } else {
+                            focusManager.setActiveSection('sidebar');
+                        }
+                    } else if (!this._isSubView()) {
+                        // Fallback to Sidebar if we really lost context and not in a sub-view
                         log.info('Lost focus context, defaulting to sidebar');
                         focusManager.setActiveSection('sidebar');
                     }
@@ -1234,37 +1278,56 @@ class LibraryPage extends Page {
         // Lazy Load Images
         lazyLoader.observe(grid);
 
+        // Calculate expected alpha visibility (avoids DOM race conditions with _updateHeaderVisibility)
+        const collectionType = this.state.libraryInfo?.CollectionType;
+        const viewType = this.state.viewType;
+        const isMovieMain = collectionType === 'movies' && viewType === 'Items';
+        const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
+        const isEpisodes = viewType === 'Episodes';
+        const isAlphaVisible = isMovieMain || isTVMain || isEpisodes || this._isSubView();
+
         // Update Alpha Picker navigation to point to grid
-        focusManager.register('alpha-picker', this.$('#alpha-picker'), {
-            orientation: 'horizontal',
-            leaveUp: 'library-controls',
-            leaveDown: 'library-grid',
-            leaveLeft: 'sidebar',
-            enterTo: 'active-element'
-        });
+        if (isAlphaVisible) {
+            focusManager.register('alpha-picker', this.$('#alpha-picker'), {
+                orientation: 'horizontal',
+                leaveUp: 'library-controls',
+                leaveDown: 'library-grid',
+                leaveLeft: 'sidebar',
+                enterTo: 'active-element'
+            });
+        }
 
         // Re-register focus for grid items
         focusManager.register('library-grid', grid, {
             orientation: 'grid',
-            leaveUp: 'library-controls', // or alpha picker
+            leaveUp: isAlphaVisible ? 'alpha-picker' : 'library-controls',
             leaveDown: 'library-pagination',
             leaveLeft: 'sidebar',
             selector: '.media-card',
             scrollOffsetTop: 100
         });
 
-        // Ensure library-controls points correctly to alpha-picker (fix for switching from Suggestions)
-        // Check if alpha picker is actually visible
-        const alphaContainer = this.$('#alpha-picker-container');
-        const isAlphaVisible = alphaContainer && alphaContainer.style.display !== 'none';
-
         this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
-            leaveUp: 'library-tabs',
+            leaveUp: this._isSubView() ? null : 'library-tabs',
             leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
             leaveLeft: 'sidebar',
             selector: 'button'
         });
+
+        // Ensure focus goes to first element in grid if subview
+        if (this._isSubView()) {
+            requestAnimationFrame(() => {
+                const currentFocus = document.activeElement;
+                if (!currentFocus || currentFocus === document.body) {
+                    const firstItem = grid.querySelector('.media-card');
+                    if (firstItem) {
+                        focusManager.setActiveSection('library-grid', false);
+                        focusManager.focusElement(firstItem, { instantScroll: true });
+                    }
+                }
+            });
+        }
     }
     _renderHorizontalRows(rows) {
         const grid = this.$('#library-grid');
@@ -1337,8 +1400,11 @@ class LibraryPage extends Page {
         // so we navigate straight back to the tabs.
         // NOTE: Genres uses grid layout with focusable headers, so it goes through controls.
         const isHorizontalLayout = this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming';
-        const nextUpTarget =
-            isHorizontalLayout || this.state.viewType === 'Genres' ? 'library-tabs' : 'library-controls';
+        const nextUpTarget = this._isSubView()
+            ? null
+            : isHorizontalLayout || this.state.viewType === 'Genres'
+              ? 'library-tabs'
+              : 'library-controls';
 
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
@@ -1521,7 +1587,7 @@ class LibraryPage extends Page {
         if (rows.length > 0) {
             this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
                 orientation: 'horizontal',
-                leaveUp: 'library-controls',
+                leaveUp: this._isSubView() ? null : 'library-controls',
                 leaveDown: 'row-0',
                 leaveLeft: 'sidebar',
                 enterTo: 'active-element'
@@ -1530,7 +1596,7 @@ class LibraryPage extends Page {
             // Update library-controls to point to first row
             this.registerFocusSection('library-controls', this.$('#library-controls'), {
                 orientation: 'horizontal',
-                leaveUp: 'library-tabs',
+                leaveUp: this._isSubView() ? null : 'library-tabs',
                 leaveDown: 'row-0', // Direct to first row for Genres view
                 leaveLeft: 'sidebar',
                 selector: 'button'
@@ -1740,8 +1806,12 @@ class LibraryPage extends Page {
         if (firstItem) {
             focusManager.focusElement(firstItem);
         } else {
-            // Fallback if empty, maybe focus controls?
-            this.setActiveSection('library-controls');
+            // Fallback if empty, check if controls are visible
+            if (this.$('#library-controls')?.style.display !== 'none') {
+                this.setActiveSection('library-controls');
+            } else {
+                this.setActiveSection('library-grid');
+            }
         }
     }
 
@@ -1786,10 +1856,11 @@ class LibraryPage extends Page {
     }
 
     _updateControlsVisibility() {
-        // Shuffle button is available except for Episodes view
+        // Shuffle button is available except for Episodes view or when in a sub-view
         const btnShuffle = this.$('#btn-shuffle');
         if (btnShuffle) {
-            btnShuffle.style.display = this.state.viewType === 'Episodes' ? 'none' : '';
+            const isEpisodes = this.state.viewType === 'Episodes';
+            btnShuffle.style.display = isEpisodes || this._isSubView() ? 'none' : '';
         }
 
         // Quick Reset button visibility based on filters
@@ -2580,63 +2651,25 @@ class LibraryPage extends Page {
         const isEpisodes = viewType === 'Episodes';
         const shouldShow = isMovieMain || isTVMain || isEpisodes;
 
+        const isSubView = this._isSubView();
+        const isControlsVisible = shouldShow || isSubView;
+        const isAlphaVisible = shouldShow || isSubView;
+        const isTabsVisible = collectionType !== 'boxsets' && !isSubView;
+
         const controls = this.$('#library-controls');
+        const controlsRow = this.$('.library-controls-row');
         const alphaPicker = this.$('#alpha-picker-container');
-
-        if (controls) controls.style.display = shouldShow ? 'flex' : 'none';
-        if (alphaPicker) alphaPicker.style.display = shouldShow ? 'block' : 'none';
-
-        // Bridge focus chain: library-tabs -> (controls -> alpha ->) content
         const tabsContainer = this.$('#library-tabs');
 
-        // Special Case: BoxSets (Collections) have NO tabs, but HAVE controls
-        // We need to bridge Sidebar -> Controls directly, and Controls -> Up (Sidebar?)
-        if (collectionType === 'boxsets' && shouldShow) {
-            // 1. Controls configuration
-            const controlsConfig = focusManager.getSectionConfig('library-controls');
-            if (controlsConfig) {
-                this.registerFocusSection('library-controls', this.$('#library-controls'), {
-                    ...controlsConfig,
-                    leaveUp: 'sidebar', // No transition upwards, go back to sidebar
-                    leaveDown: 'alpha-picker',
-                    leaveLeft: 'sidebar'
-                });
-            }
+        if (controlsRow) controlsRow.style.display = isControlsVisible ? 'flex' : 'none';
+        if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'block' : 'none';
 
-            // 2. Alpha Picker configuration
-            const alphaConfig = focusManager.getSectionConfig('alpha-picker');
-            if (alphaConfig) {
-                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
-                    ...alphaConfig,
-                    leaveUp: 'library-controls',
-                    leaveDown: 'library-grid',
-                    leaveLeft: 'sidebar'
-                });
-            }
-
-            // 3. Grid configuration
-            const gridConfig = focusManager.getSectionConfig('library-grid');
-            if (gridConfig) {
-                this.registerFocusSection('library-grid', this.$('#library-grid'), {
-                    ...gridConfig,
-                    leaveUp: 'alpha-picker',
-                    leaveDown: gridConfig.leaveDown || 'library-pagination'
-                });
-            }
-            // Skip standard tab logic
-            return;
-        }
-
-        if (tabsContainer) {
-            let nextTarget = 'library-controls';
-
-            if (!shouldShow) {
-                if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
-                    nextTarget = 'row-0'; // Match the horizontal row ID
-                } else {
-                    nextTarget = 'library-grid';
-                }
-            }
+        // 1. Configure Tabs (if visible)
+        if (tabsContainer && isTabsVisible) {
+            let nextTarget = 'library-grid';
+            if (isControlsVisible) nextTarget = 'library-controls';
+            else if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming')
+                nextTarget = 'row-0';
 
             const tabsConfig = focusManager.getSectionConfig('library-tabs');
             if (tabsConfig) {
@@ -2647,31 +2680,54 @@ class LibraryPage extends Page {
             }
         }
 
-        // Ensure intermediate sections point to the right place too
-        if (shouldShow) {
+        // 2. Configure Controls (if visible)
+        if (controls && isControlsVisible) {
             const controlsConfig = focusManager.getSectionConfig('library-controls');
             if (controlsConfig) {
-                this.registerFocusSection('library-controls', this.$('#library-controls'), {
-                    ...controlsConfig,
-                    leaveDown: 'alpha-picker'
-                });
-            }
+                // Determine what's below controls... if alpha isn't there, are we on a horizontal row page or a grid page?
+                let controlsLeaveDown = 'library-grid';
+                if (isAlphaVisible) {
+                    controlsLeaveDown = 'alpha-picker';
+                } else if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
+                    controlsLeaveDown = 'row-0';
+                }
 
-            const alphaConfig = focusManager.getSectionConfig('alpha-picker');
-            if (alphaConfig) {
-                this.registerFocusSection('alpha-picker', this.$('#alpha-picker'), {
-                    ...alphaConfig,
-                    leaveDown: 'library-grid'
+                this.registerFocusSection('library-controls', controls, {
+                    ...controlsConfig,
+                    leaveUp: isTabsVisible ? 'library-tabs' : 'sidebar', // sidebar if top
+                    leaveDown: controlsLeaveDown
                 });
             }
         }
 
-        // Update Grid leaveUp
+        // 3. Configure Alpha Picker (if visible)
+        if (alphaPicker && isAlphaVisible) {
+            const alphaConfig = focusManager.getSectionConfig('alpha-picker');
+            if (alphaConfig) {
+                let alphaLeaveDown = 'library-grid';
+                if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
+                    alphaLeaveDown = 'row-0';
+                }
+
+                this.registerFocusSection('alpha-picker', alphaPicker, {
+                    ...alphaConfig,
+                    leaveUp: isControlsVisible ? 'library-controls' : isTabsVisible ? 'library-tabs' : 'sidebar',
+                    leaveDown: alphaLeaveDown
+                });
+            }
+        }
+
+        // 4. Configure Grid (always present, but visibility varies)
         const gridConfig = focusManager.getSectionConfig('library-grid');
         if (gridConfig) {
+            let gridLeaveUp = 'sidebar'; // Fallback to sidebar if isolated
+            if (isAlphaVisible) gridLeaveUp = 'alpha-picker';
+            else if (isControlsVisible) gridLeaveUp = 'library-controls';
+            else if (isTabsVisible) gridLeaveUp = 'library-tabs';
+
             this.registerFocusSection('library-grid', this.$('#library-grid'), {
                 ...gridConfig,
-                leaveUp: shouldShow ? 'alpha-picker' : 'library-tabs',
+                leaveUp: gridLeaveUp,
                 leaveDown: gridConfig.leaveDown || 'library-pagination'
             });
         }

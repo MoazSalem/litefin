@@ -1,11 +1,10 @@
 /* --- Horizontal Rows (Suggestions / Hubs) --- */
 .library-rows-container {
     width: 100%;
-    padding-bottom: 60px;
+    padding-bottom: 40px;
     display: flex;
     flex-direction: column;
-    gap: 30px;
-    /* Increased for premium TV feel */
+    gap: 15px;
 }
 
 /* Row Container */
@@ -15,7 +14,7 @@
     /* CRITICAL: Allow focused cards to scale out of bounds */
     display: flex;
     flex-direction: column;
-    margin-bottom: 40px;
+    padding: 0 0px;
     /* Fallback for older Tizen missing flex gap */
 }
 
@@ -36,26 +35,24 @@
 
 /* Row Header - Container */
 .library-row-header {
-    margin-top: 10px;
-    margin-bottom: 15px;
-    padding-top: 10px;
+    margin-top: 0px;
+    margin-bottom: 5px;
+    padding-top: 5px;
     /* Internal safe zone for scrolling */
-    padding-left: 20px;
-    /* Align with sidebar/content */
 }
 
 /* The actual focusable button within the header */
 .header-focusable {
-    font-size: 36px;
+    font-size: 30px;
     /* Increased from 24px */
     font-weight: 800;
     /* Extra bold for TV prominence */
     color: var(--jf-text-primary);
-    padding: 10px 24px;
-    border-radius: 16px;
+    padding: 6px 16px;
+    border-radius: 12px;
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     cursor: pointer;
     /* Only transition specific properties - 'all' is expensive on TV devices */
     transition: transform 0.2s ease-out, background-color 0.2s ease-out;
@@ -66,13 +63,13 @@
 }
 
 .header-static {
-    font-size: 36px;
+    font-size: 30px;
     font-weight: 800;
     color: var(--jf-text-primary);
-    padding: 10px 24px;
+    padding: 6px 16px;
     display: inline-flex;
     align-items: center;
-    gap: 12px;
+    gap: 8px;
 }
 
 .header-focusable:focus,
@@ -103,9 +100,9 @@
 /* Library row uses .row-items for horizontal scrolling (from layout.css) */
 /* Additional padding customization for library context */
 .library-row .row-items {
-    padding: 30px 20px 40px 20px;
+    padding: 15px 20px 25px 20px;
     /* Larger top padding to prevent clip during scale animation */
-    gap: 24px;
+    gap: 20px;
 }
 
 /* TV Scaling: Card sizes for library genre rows */

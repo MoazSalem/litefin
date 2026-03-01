@@ -214,6 +214,26 @@
     flex-direction: column;
 }
 
+/* Bypass global padding specifically for horizontal row views (e.g., Suggestions) 
+   so rows can bleed to the edges of the screen and scroll freely. */
+.library-content.horizontal-rows {
+    padding-left: 0;
+    padding-right: 0;
+    padding-bottom: 0;
+    width: 100%;
+}
+
+.library-content.horizontal-rows .row-items-track {
+    /* Reduce track padding, but keep left padding aligned with headers */
+    padding-left: 50px;
+    padding-right: 50px;
+}
+
+.library-content.horizontal-rows .library-row-header {
+    /* Align headers with the row items when global padding is stripped */
+    margin-left: 50px;
+}
+
 /* --- Empty State --- */
 .empty-state {
     flex: 1;

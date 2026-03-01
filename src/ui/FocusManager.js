@@ -445,7 +445,12 @@ class FocusManager {
         }
 
         const focusables = this._getFocusables(this._activeSection);
-        if (!focusables.length) return;
+
+        // If the section is completely empty, immediately try to leave it
+        if (!focusables.length) {
+            this._leaveSection(direction);
+            return;
+        }
 
         // If nothing focused, focus first available
         if (!this._focusedElement || !config.container.contains(this._focusedElement)) {
@@ -537,7 +542,7 @@ class FocusManager {
             }
 
             // Section is empty, try to skip to the next one in the same direction
-            log.debug(`_leaveSection: Section ${nextSection} is empty, skipping...`);
+            // log.debug(`_leaveSection: Section ${nextSection} is empty, skipping...`);
             const skipToSection = nextConfig ? nextConfig[key] : null;
 
             if (!skipToSection || !this._sections.has(skipToSection)) {
@@ -674,7 +679,14 @@ class FocusManager {
 
         const focusables = this._getFocusables(sectionName);
         const memory = this._focusMemory.get(sectionName);
-        if (!focusables.length) return;
+
+        if (!focusables.length) {
+            if (options.direction) {
+                // If we entered this empty section via a directional move, continue propagating
+                this._leaveSection(options.direction);
+            }
+            return;
+        }
 
         // Whether to skip scroll (passed from _leaveSection for vertical transitions)
         const skipScroll = !!options.instantScroll;
