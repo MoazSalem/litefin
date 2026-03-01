@@ -57,16 +57,54 @@ function getPlugins() {
 }
 
 // ============================================================================
-// ES6 build - Tizen 6.0+ (No transpilation, pure ES6+)
+// ES6 build - Tizen 6.5+ (No transpilation, pure ES6+, no source maps)
 // ============================================================================
 const es6Config = {
     name: 'es6',
     mode: 'production',
-    devtool: 'source-map', // Enable source maps for debugging
+    // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
     output: {
         path: path.resolve(__dirname, 'dist/es6'),
+        filename: 'js/[name].js',
+        clean: true
+    },
+
+    optimization: {
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            }
+        ]
+    },
+
+    plugins: getPlugins()
+};
+
+// ============================================================================
+// Debug build - Tizen 6.5+ (ES6, full source maps for sdb/remote DevTools)
+// Use this when you need readable stack traces while debugging on-device.
+// Never ship this build — source maps roughly double the output size.
+// ============================================================================
+const debugConfig = {
+    name: 'debug',
+    mode: 'production',
+    devtool: 'source-map', // Full source maps for on-TV debugging via sdb
+    entry: './src/index.js',
+
+    output: {
+        path: path.resolve(__dirname, 'dist/debug'),
         filename: 'js/[name].js',
         clean: true
     },
@@ -98,7 +136,7 @@ const es6Config = {
 const normalConfig = {
     name: 'normal',
     mode: 'production',
-    devtool: 'source-map', // Enable source maps
+    // No source maps — production build
     entry: './src/index.js',
 
     output: {
@@ -201,4 +239,6 @@ const legacyConfig = {
     plugins: getPlugins()
 };
 
-module.exports = [es6Config, normalConfig, legacyConfig];
+// Export all configs. Run a specific one with --config-name <name>.
+// e.g. npx webpack --config webpack.config.cjs --config-name debug
+module.exports = [es6Config, debugConfig, normalConfig, legacyConfig];

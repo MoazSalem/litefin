@@ -9,6 +9,7 @@
         "build:es6": "webpack --config webpack.config.cjs --config-name es6",
         "build:normal": "webpack --config webpack.config.cjs --config-name normal",
         "build:legacy": "webpack --config webpack.config.cjs --config-name legacy",
+        "build:debug": "webpack --config webpack.config.cjs --config-name debug",
         "dev": "webpack --config webpack.config.cjs --config-name normal-watch",
         "lint": "eslint src/",
         "lint:fix": "eslint src/ --fix",
@@ -20,6 +21,7 @@
         "package:es6": "gulp buildPackageES6",
         "package:normal": "gulp buildPackageNormal",
         "package:legacy": "gulp buildPackageLegacy",
+        "package:debug": "gulp buildPackageDebug",
         "postinstall": "patch-package"
     },
     "keywords": [

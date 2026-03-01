@@ -50,6 +50,13 @@ async function webpackNormal() {
     console.info('Normal build complete');
 }
 
+async function webpackDebug() {
+    // Debug build: same as ES6 but with source maps — for on-device debugging via sdb
+    console.info('Building Debug bundle (ES6 + source maps)...');
+    await execAsync('npx webpack --config webpack.config.cjs --config-name debug');
+    console.info('Debug build complete');
+}
+
 async function webpackLegacy() {
     console.info('Building legacy bundle (Fully Transpiled To ES5)...');
     await execAsync('npx webpack --config webpack.config.cjs --config-name legacy');
@@ -155,6 +162,16 @@ async function packageNormal() {
     await createWgt(buildDir, wgtName);
 }
 
+async function packageDebug() {
+    // Debug build ships with source maps — use only for on-device debugging
+    const buildDir = 'dist/debug';
+    const wgtName = `Litefin-${version}-debug.wgt`;
+
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    await createWgt(buildDir, wgtName);
+}
+
 async function packageWebos() {
     const buildDir = 'dist/normal'; // Re-use the normal build payload for WebOS
     const outputDir = '.'; // Output to root
@@ -220,12 +237,14 @@ const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageE
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
 const buildPackageWebos = gulp.series(syncVersion, cleanDist, webpackNormal, packageWebos);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
+const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
 
 // Just build (no packaging)
 const build = gulp.series(syncVersion, cleanDist, webpackAll);
 const buildES6 = gulp.series(syncVersion, cleanDist, webpackES6);
 const buildNormal = gulp.series(syncVersion, cleanDist, webpackNormal);
 const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
+const buildDebug = gulp.series(syncVersion, webpackDebug);
 
 export {
     clean,
@@ -234,20 +253,24 @@ export {
     webpackES6,
     webpackNormal,
     webpackLegacy,
+    webpackDebug,
     webpackAll,
     packageES6,
     packageNormal,
     packageWebos,
     packageLegacy,
+    packageDebug,
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
     buildPackageWebos,
     buildPackageLegacy,
+    buildPackageDebug,
     build,
     buildES6,
     buildNormal,
-    buildLegacy
+    buildLegacy,
+    buildDebug
 };
 
 export default buildPackage;
