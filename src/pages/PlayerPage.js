@@ -816,6 +816,8 @@ class PlayerPage extends Page {
             // Update OSD title
             if (this._osd) {
                 this._osd.updateItem(nextItem);
+                // Reset Up Next state so the dialog re-triggers for the new episode
+                this._osd.resetUpNext();
             }
 
             // Restart playback
@@ -990,6 +992,8 @@ class PlayerPage extends Page {
 
                 if (this._osd) {
                     this._osd.updateItem(prevItem);
+                    // Reset Up Next state so the dialog can re-trigger for the new episode
+                    this._osd.resetUpNext();
                 }
 
                 await this._startPlayback();
@@ -1043,6 +1047,13 @@ class PlayerPage extends Page {
         // 4. Forward tick to plugin manager for widget visibility evaluation
         //    (PluginWidgetHost.onTimeUpdate toggles .visible on plugin buttons)
         pluginManager.notifyTimeUpdate(ticks, 0);
+
+        // 5. Evaluate whether the Up Next episode dialog should be shown.
+        //    Delegates all threshold maths and state tracking to OSDController.
+        if (this._osd) {
+            const duration = this._player?.getDurationTicks?.() || 0;
+            this._osd.showUpNextIfNeeded(ticks, duration, this._item);
+        }
     }
 
     async _reportPlaybackStart() {

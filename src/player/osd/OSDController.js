@@ -15,6 +15,7 @@ import PlaybackSpeedMenu from './PlaybackSpeedMenu.js';
 import QualityMenu from './QualityMenu.js';
 import PlaybackModeMenu from './PlaybackModeMenu.js';
 import RepeatModeMenu from './RepeatModeMenu.js';
+import UpNextDialog from './UpNextDialog.js';
 
 const log = logger.create('OSDController');
 
@@ -66,6 +67,16 @@ export default class OSDController extends Component {
         this._cachedControlsRow = [];
         this._cachedSeekbar = null;
 
+        /*
+         * Up Next dialog state.
+         * _upNextShown: true once the dialog has been triggered for the current
+         *   item — prevents re-triggering on every tick while still visible.
+         * _upNextHiddenByUser: true when the user pressed "Hide" manually —
+         *   prevents re-showing until they seek back past the threshold.
+         */
+        this._upNextShown = false;
+        this._upNextHiddenByUser = false;
+
         // Ensure playQueue updates visually
         this._boundHandleQueueUpdate = this._handleQueueUpdate.bind(this);
         import('../../core/EventBus.js').then(({ eventBus }) => {
@@ -104,6 +115,9 @@ export default class OSDController extends Component {
         this.playbackModeMenu = new PlaybackModeMenu(this);
         this.repeatModeMenu = new RepeatModeMenu(this);
 
+        // Up Next dialog — persistent overlay card, not modal
+        this.upNextDialog = new UpNextDialog(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -115,7 +129,8 @@ export default class OSDController extends Component {
             this.playbackSpeedMenu,
             this.qualityMenu,
             this.playbackModeMenu,
-            this.repeatModeMenu
+            this.repeatModeMenu,
+            this.upNextDialog
         ];
     }
 
@@ -714,9 +729,15 @@ export default class OSDController extends Component {
             return true;
         }
 
-        // Delegate to active 2nd layer widget if focus is on Row -1
+        // Delegate to active 2nd-layer widget if focus is on Row -1 AND
+        // the currently focused element belongs to that widget.
+        // Without the second check, pressing Right on the skip-outro button
+        // (also in Row -1) would be incorrectly forwarded to the Up Next dialog
+        // because activeMenu is set to upNextDialog for the whole session.
         if (this._currentFocusRow === -1 && this.activeMenu && !this.activeMenu.isModal) {
-            if (this.activeMenu.handleKey(key)) return true;
+            const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+            const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
+            if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
         }
 
         // Internal OSD Nav
@@ -782,7 +803,18 @@ export default class OSDController extends Component {
                 // Only fall through to header (Row 0) when no overlay widgets are present.
                 if (this._cachedOverlayRow.length > 0) {
                     this._currentFocusRow = -1;
-                    this._currentFocusIndex = 0;
+                    /*
+                     * When the Up Next dialog is visible, land on "Play Now" specifically
+                     * rather than blindly using index 0 (which may be the skip-outro button
+                     * or any other widget at the front of the overlay DOM order).
+                     */
+                    if (this.upNextDialog?.isVisible && this.upNextDialog.$el) {
+                        const playNow = this.upNextDialog.$el.querySelector('.upnext-btn-play');
+                        const idx = playNow ? this._cachedOverlayRow.indexOf(playNow) : -1;
+                        this._currentFocusIndex = idx !== -1 ? idx : 0;
+                    } else {
+                        this._currentFocusIndex = 0;
+                    }
                 } else {
                     this._currentFocusRow = 0;
                 }
@@ -818,7 +850,20 @@ export default class OSDController extends Component {
                 this._currentFocusRow = 2;
             }
         } else if (direction === 'left') {
-            if (this._currentFocusRow === 1) {
+            if (this._currentFocusRow === -1) {
+                /*
+                 * Overlay row Left/Right: In LTR, Left = lower cache index.
+                 * In RTL, the physical Left key moves focus to a HIGHER index
+                 * (spatially right) — swap the direction so navigation matches
+                 * what the user sees on screen.
+                 */
+                const isRTL = document.documentElement.dir === 'rtl';
+                if (isRTL) {
+                    if (this._currentFocusIndex < this._cachedOverlayRow.length - 1) this._currentFocusIndex++;
+                } else {
+                    if (this._currentFocusIndex > 0) this._currentFocusIndex--;
+                }
+            } else if (this._currentFocusRow === 1) {
                 if (this._currentFocusIndex > 0) this._currentFocusIndex--;
             } else if (this._currentFocusRow === 2) {
                 this._executeAction('rewind');
@@ -827,7 +872,17 @@ export default class OSDController extends Component {
                 this._enterOverlaysFromHeader();
             }
         } else if (direction === 'right') {
-            if (this._currentFocusRow === 1) {
+            if (this._currentFocusRow === -1) {
+                /*
+                 * In RTL, physical Right = spatially left = lower cache index.
+                 */
+                const isRTL = document.documentElement.dir === 'rtl';
+                if (isRTL) {
+                    if (this._currentFocusIndex > 0) this._currentFocusIndex--;
+                } else {
+                    if (this._currentFocusIndex < this._cachedOverlayRow.length - 1) this._currentFocusIndex++;
+                }
+            } else if (this._currentFocusRow === 1) {
                 const controls = this._getControls();
                 if (this._currentFocusIndex < controls.length - 1) this._currentFocusIndex++;
             } else if (this._currentFocusRow === 2) {
@@ -946,6 +1001,19 @@ export default class OSDController extends Component {
             if (btn) {
                 btn.classList.add('focused');
                 btn.focus();
+
+                /*
+                 * If the focused button lives inside the Up Next dialog, sync its
+                 * internal _focusedButton counter. This handles the case where the
+                 * user navigates FROM the skip-outro button INTO the dialog via
+                 * OSD's _navigate() — without this sync the dialog's counter is
+                 * stale and left/right navigation would jump to the wrong button.
+                 */
+                if (this.upNextDialog?.isVisible && this.upNextDialog.$el?.contains(btn)) {
+                    const btns = Array.from(this.upNextDialog.$el.querySelectorAll('.upnext-btn'));
+                    const btnIdx = btns.indexOf(btn);
+                    if (btnIdx !== -1) this.upNextDialog._focusedButton = btnIdx;
+                }
             } else {
                 // Fallback if overlay closed
                 this._currentFocusRow = 0;
@@ -1320,6 +1388,253 @@ export default class OSDController extends Component {
              };
              this._updateTimeDisplay(tempPlayer);
              this._updatePositionSlider(tempPlayer);
+
+             /*
+              * If the user seeks BEFORE the Up Next trigger threshold, reset the
+              * shown/hidden flags so the dialog can re-trigger when they naturally
+              * reach the outro again.
+              *
+              * Use the cached _upNextShowAtTicks (computed from the last chapter or
+              * time-based method) so seeks WITHIN the outro region don't reset the
+              * flags and cause the dialog to reappear with a focus-stealing
+              * toggleUpNext(true) call.
+              *
+              * Fall back to 45 s remaining if _upNextShowAtTicks is not yet set
+              * (e.g. the user seeks before playback reaches the threshold calculation).
+              */
+             const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+             if (duration > 0) {
+                 const threshold = this._upNextShowAtTicks ?? (duration - 45 * 10_000_000);
+                 if (e.positionTicks < threshold) {
+                     // Genuinely before the outro region — allow the dialog to re-trigger
+                     if (this._upNextShown || this._upNextHiddenByUser) {
+                         log.debug('[UpNext] Seek reset — dialog will re-trigger near end');
+                         this._upNextShown = false;
+                         this._upNextHiddenByUser = false;
+                         // Hide the dialog if it's still visible
+                         if (this.upNextDialog?.isVisible) {
+                             this.upNextDialog.hide();
+                             if (this.activeMenu === this.upNextDialog) {
+                                 this.activeMenu = null;
+                             }
+                             this._cacheFocusableElements();
+                         }
+                     }
+                 }
+                 // Seeking within the outro: keep flags as-is, no retrigger
+             }
+        }
+    }
+
+    // =========================================================================
+    // Up Next Dialog management
+    // =========================================================================
+
+    /**
+     * Show or hide the Up Next dialog.
+     * Follows the same toggle pattern as togglePlaybackInfo() / toggleSubtitleOffset().
+     *
+     * @param {boolean} show - True to show, false to hide
+     */
+    toggleUpNext(show) {
+        if (show) {
+            // Guard: only show if there's something to preview
+            if (!this.upNextDialog._nextItem) return;
+
+            /*
+             * Set activeMenu so handleInput() at the Row -1 delegation gate
+             * (line: `if this._currentFocusRow === -1 && this.activeMenu && !isModal`)
+             * will forward Left/Right/Enter/Back to the dialog's handleKey().
+             *
+             * We do NOT switch _currentFocusRow here — the user navigates to
+             * the dialog by pressing Up from the controls row, same as any
+             * other overlay widget (subtitle offset, skip-outro, etc.).
+             */
+            this.activeMenu = this.upNextDialog;
+            this.upNextDialog.show();
+            this._cacheFocusableElements();
+
+            /*
+             * Immediately place OSD focus on Row -1 at the "Play Now" button.
+             *
+             * Without this, _currentFocusRow stays wherever it was (controls or
+             * seekbar) so Right/Left keys hit _navigate() for the wrong row and
+             * cause unexpected seeks or control moves instead of moving between
+             * Play Now ↔ Hide.
+             */
+            this._currentFocusRow = -1;
+            const playNowBtn = this.upNextDialog.$el?.querySelector('.upnext-btn-play');
+            const playNowIdx = playNowBtn ? this._cachedOverlayRow.indexOf(playNowBtn) : 0;
+            this._currentFocusIndex = playNowIdx !== -1 ? playNowIdx : 0;
+            this._updateFocus();
+        } else {
+            this.upNextDialog.hide();
+            // Only clear activeMenu if the dialog was the active one —
+            // don't accidentally clobber a settings menu that might be open.
+            if (this.activeMenu === this.upNextDialog) {
+                this.activeMenu = null;
+            }
+            this._cacheFocusableElements();
+        }
+    }
+
+    /**
+     * Evaluate whether to auto-show the Up Next dialog based on playback position.
+     * Called from PlayerPage on every timeupdate tick (~500 ms).
+     *
+     * Scaling thresholds (mirrors jellyfin-web upnextdialog):
+     *   episode ≥ 50 min → show at 40 s remaining
+     *   episode ≥ 40 min → show at 35 s remaining
+     *   everything else (but ≥ 10 min) → show at 30 s remaining
+     *
+     * @param {number} positionTicks  - Current playback position in 100-ns ticks
+     * @param {number} durationTicks  - Total episode duration in 100-ns ticks
+     * @param {Object|null} currentItem - The currently playing media item
+     */
+    showUpNextIfNeeded(positionTicks, durationTicks, currentItem) {
+        // Ticks constants (10 million ticks = 1 second, 600 million = 1 minute)
+        const TICKS_PER_SECOND = 10_000_000;
+        const TICKS_PER_MINUTE = 600_000_000;
+        const MIN_DURATION = 10 * TICKS_PER_MINUTE; // Minimum 10-minute episode
+
+        // -------------------------------------------------------------------
+        // Fast path: dialog is already visible — just update the countdown.
+        // Do NOT re-call toggleUpNext(true) (that would recapture focus on
+        // every keyframe while the user is seeking through the outro).
+        // -------------------------------------------------------------------
+        if (this.upNextDialog.isVisible) {
+            const timeRemainingTicks = durationTicks - positionTicks;
+            const secondsRemaining = Math.ceil(timeRemainingTicks / TICKS_PER_SECOND);
+            this.upNextDialog.updateCountdown(secondsRemaining);
+            return;
+        }
+
+        // -------------------------------------------------------------------
+        // Pre-conditions: bail early if we should not show the dialog
+        // -------------------------------------------------------------------
+
+        // Already shown or user explicitly dismissed it this playthrough
+        if (this._upNextShown || this._upNextHiddenByUser) return;
+
+        // Only trigger for episodes
+        if (!currentItem || currentItem.Type !== 'Episode') return;
+
+        // Need valid timing data
+        if (!positionTicks || !durationTicks || durationTicks < MIN_DURATION) return;
+
+        /*
+         * Use the module-scope playQueue singleton imported at the top of this file.
+         * It is always available synchronously — no dynamic import required.
+         */
+        if (!playQueue.hasNext()) return;
+
+        // Check user setting
+        if (!PlayerSettings.get('enableNextEpisodeAutoPlay')) return;
+
+        // -------------------------------------------------------------------
+        // Calculate the "show at" threshold
+        // Priority: start of the last chapter (semantic) → time-based fallback
+        // -------------------------------------------------------------------
+        let showAtTicks;
+
+        /*
+         * If the player exposes chapters, use the last chapter's start position
+         * as the trigger point. This is semantically correct — the last chapter
+         * is typically the "credits" or "epilogue" section, which is exactly
+         * when viewers are ready to move on to the next episode.
+         */
+        const chapters = this._player?.getChapters ? this._player.getChapters() : [];
+
+        if (chapters && chapters.length >= 2) {
+            // At least two chapters: use the LAST chapter's start position.
+            // We require ≥2 so we don't trigger on a single dummy chapter at 0.
+            const lastChapter = chapters[chapters.length - 1];
+            const lastChapterTicks = lastChapter.StartPositionTicks || 0;
+
+            // Sanity check: the last chapter must start at least 30 s into the
+            // episode and leave at least 5 s before the end, otherwise ignore it
+            // and fall through to the time-based method.
+            const MIN_CHAPTER_OFFSET = 30 * TICKS_PER_SECOND;
+            const MIN_REMAINING = 5 * TICKS_PER_SECOND;
+            if (lastChapterTicks >= MIN_CHAPTER_OFFSET && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
+                showAtTicks = lastChapterTicks;
+            }
+        }
+
+        if (showAtTicks == null) {
+            // No usable chapters — fall back to "X seconds remaining" method
+            let showAtSeconds = 30;
+            if (durationTicks >= 50 * TICKS_PER_MINUTE) {
+                showAtSeconds = 40;
+            } else if (durationTicks >= 40 * TICKS_PER_MINUTE) {
+                showAtSeconds = 35;
+            }
+            showAtTicks = durationTicks - showAtSeconds * TICKS_PER_SECOND;
+        }
+
+        /*
+         * Cache the threshold so _onPlayerSeek can compare against the real
+         * chapter-aware value instead of a hardcoded 45-second buffer.
+         */
+        this._upNextShowAtTicks = showAtTicks;
+
+        const timeRemainingTicks = durationTicks - positionTicks;
+
+        // Must have at least 5 seconds remaining to avoid showing for a split second
+        const MIN_REMAINING_TICKS = 5 * TICKS_PER_SECOND;
+
+        if (positionTicks >= showAtTicks && timeRemainingTicks >= MIN_REMAINING_TICKS) {
+            // Lock the flag so we don't re-trigger on every subsequent tick
+            this._upNextShown = true;
+
+            // Populate the next item from the queue
+            const nextItem = playQueue.peekNext();
+            if (nextItem) {
+                this.upNextDialog.setNextItem(nextItem);
+                const secondsRemaining = Math.ceil(timeRemainingTicks / TICKS_PER_SECOND);
+                this.upNextDialog.updateCountdown(secondsRemaining);
+                this.toggleUpNext(true);
+                log.debug(`[UpNext] Showing dialog. ${secondsRemaining}s remaining.`);
+            } else {
+                // Queue check passed but peekNext() returned null — don't spam
+                this._upNextShown = false;
+            }
+        }
+    }
+
+    /**
+     * Hide the Up Next dialog and mark it as user-dismissed.
+     * Called by UpNextDialog itself (Hide button / Back key) and by PlayerPage
+     * when a new item starts playing.
+     *
+     * @param {boolean} [userDismissed=true] - Pass false to reset without marking
+     *   as user-dismissed (e.g. on item change).
+     */
+    hideUpNext(userDismissed = true) {
+        if (userDismissed) {
+            // Mark as explicitly dismissed so we don't re-trigger for this playthrough
+            this._upNextHiddenByUser = true;
+        }
+        this.toggleUpNext(false);
+    }
+
+    /**
+     * Reset Up Next dialog state entirely.
+     * Called by PlayerPage when a new item starts playing so the dialog can
+     * trigger fresh for the new episode.
+     */
+    resetUpNext() {
+        this._upNextShown = false;
+        this._upNextHiddenByUser = false;
+        // Clear the cached trigger threshold so the next episode recalculates fresh
+        this._upNextShowAtTicks = null;
+        // Hide the dialog if it's still visible from the previous item
+        if (this.upNextDialog && this.upNextDialog.isVisible) {
+            this.upNextDialog.hide();
+            if (this.activeMenu === this.upNextDialog) {
+                this.activeMenu = null;
+            }
+            this._cacheFocusableElements();
         }
     }
 

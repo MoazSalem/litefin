@@ -325,10 +325,13 @@ class PluginWidgetHost {
             const anyVisible = [...this._widgets.values()].some((e) => e.visible);
 
             if (justBecameVisible && anyVisible) {
-                // A widget just appeared — claim focus immediately so the user
-                // doesn't need to navigate to the overlay row manually.
+                // A widget just appeared — claim focus only when the OSD is
+                // hidden (user is watching without controls visible). If the OSD
+                // is visible the user is actively in controls; let them navigate
+                // up to the button themselves instead of stealing focus.
                 // focusPluginWidget() also refreshes the cache internally.
-                if (this._osd && typeof this._osd.focusPluginWidget === 'function') {
+                const osdIsHidden = this._osd && !this._osd._isOsdVisible;
+                if (osdIsHidden && this._osd && typeof this._osd.focusPluginWidget === 'function') {
                     this._osd.focusPluginWidget(0);
                 } else {
                     this._refreshOSDCache();

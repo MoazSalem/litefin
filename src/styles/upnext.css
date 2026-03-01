@@ -1,0 +1,359 @@
+/**
+ * ============================================================================
+ * Up Next Dialog - Styles
+ * ============================================================================
+ *
+ * Glassmorphism card positioned in the bottom corner of the player overlay.
+ * Follows Apple HIG principles: clear hierarchy, ample touch targets,
+ * smooth spring-inspired transitions.
+ *
+ * Layout:
+ *   ┌─────────────────────────┐  ← .upnext-dialog
+ *   │ [thumb] | UP NEXT        │
+ *   │         | SeriesName     │
+ *   │         | E5 – Ep Title  │
+ *   │         | Starting in Xs │
+ *   │  [Play Now]  [Hide]      │
+ *   └─────────────────────────┘
+ *
+ * RTL support: `[dir="rtl"] .upnext-dialog` pins to bottom-left.
+ * ============================================================================
+ */
+
+/* ============================================================================
+   Card Container
+   ============================================================================ */
+
+.upnext-dialog {
+    /*
+     * Position: absolute within .osd-overlays (which fills the full player).
+     * Sits 8em above the bottom to clear the OSD seekbar/controls when visible.
+     * Right-aligned for LTR; overridden to left-aligned for RTL below.
+     */
+    position: absolute;
+    bottom: 8em;
+    right: 2.4em;
+    left: auto;
+
+    /* Tizen TV safe-area clearance */
+    max-width: min(480px, 42vw);
+
+    /* Glassmorphism card */
+    background: rgba(12, 12, 18, 0.82);
+    backdrop-filter: blur(20px) saturate(1.4);
+    -webkit-backdrop-filter: blur(20px) saturate(1.4);
+
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 16px;
+
+    /* Soft accent glow on top edge */
+    box-shadow:
+        0 0 0 1px rgba(0, 164, 220, 0.08),
+        0 8px 32px rgba(0, 0, 0, 0.55),
+        0 2px 8px rgba(0, 0, 0, 0.40);
+
+    /* Layout: the top content area (thumbnail + info) sits above the actions bar */
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+
+    /* Interaction */
+    pointer-events: all;
+    user-select: none;
+    overflow: hidden;
+
+    /* GPU acceleration — critical for smooth Tizen animations */
+    transform: translateZ(0) translateY(12px);
+    -webkit-transform: translateZ(0) translateY(12px);
+    will-change: transform, opacity;
+
+    /* Hidden by default — transition driven by .visible class */
+    opacity: 0;
+    pointer-events: none;
+
+    /*
+     * Slide-up + fade-in animation.
+     * cubic-bezier(0.34, 1.56, 0.64, 1) approximates a spring overshoot.
+     * On Tizen, backdrop-filter is expensive so we use a short duration.
+     */
+    transition:
+        opacity 0.28s cubic-bezier(0.4, 0, 0.2, 1),
+        transform 0.32s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Visible state — added/removed by BaseMenu.show()/hide() */
+.upnext-dialog.visible {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateZ(0) translateY(0);
+    -webkit-transform: translateZ(0) translateY(0);
+}
+
+/* RTL: pin to bottom-left instead of bottom-right */
+[dir="rtl"] .upnext-dialog {
+    right: auto;
+    left: 2.4em;
+}
+
+/* ============================================================================
+   Content Row: thumbnail + text info side-by-side
+   ============================================================================ */
+
+.upnext-content-row {
+    /*
+     * Lay out the thumbnail and text info horizontally.
+     * The card itself (.upnext-dialog) is flex-column, so
+     * this row sits above the actions bar.
+     */
+    display: flex;
+    flex-direction: row;
+    align-items: flex-start;
+    gap: 1.0em;
+    padding: 1.4em 1.4em 0.6em 1.4em;
+}
+
+/* ============================================================================
+   Thumbnail
+   ============================================================================ */
+
+.upnext-thumbnail-wrap {
+    position: relative;
+    flex-shrink: 0;
+    width: 120px;
+    height: 68px; /* 16:9 */
+    border-radius: 8px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.06);
+    align-self: flex-start;
+    /* No extra margin — padding is handled by the parent .upnext-content-row */
+}
+
+.upnext-thumbnail {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    /* Smooth load */
+    transition: opacity 0.2s ease;
+}
+
+/* Episode badge (e.g. "S2E5") overlaid on thumbnail */
+.upnext-badge {
+    position: absolute;
+    bottom: 4px;
+    right: 4px;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 0.7em;
+    font-weight: bold;
+    padding: 2px 5px;
+    border-radius: 4px;
+    line-height: 1.4;
+    letter-spacing: 0.02em;
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+}
+
+/* ============================================================================
+   Text Info Block
+   ============================================================================ */
+
+.upnext-info {
+    /*
+     * Inner flex column alongside the thumbnail in .upnext-content-row.
+     * The content-row provides all outer padding — no extra top/left padding needed here.
+     */
+    display: flex;
+    flex-direction: column;
+    gap: 0.2em;
+    flex: 1;
+    min-width: 0; /* Allows text truncation to work */
+    padding: 0; /* Padding handled by parent .upnext-content-row */
+}
+
+/* The "UP NEXT" eyelet above the series name */
+.upnext-label {
+    font-size: 0.7em;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    color: var(--osd-accent-color, #00a4dc);
+    opacity: 0.9;
+    margin-bottom: 0.3em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Series / show name (secondary — smaller, muted) */
+.upnext-series {
+    font-size: 0.82em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.60);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.3;
+}
+
+/* Episode title (primary — bold, white) */
+.upnext-title {
+    font-size: 1.0em;
+    font-weight: 700;
+    color: #fff;
+    line-height: 1.3;
+    /* Allow up to 2 lines, then ellipsis */
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    overflow: hidden;
+}
+
+/* Meta row: rating badge + countdown on same line */
+.upnext-meta {
+    display: flex;
+    align-items: center;
+    gap: 0.6em;
+    margin-top: 0.3em;
+    flex-wrap: wrap;
+}
+
+/* Community score badge (e.g. "★ 8.0") */
+.upnext-rating {
+    font-size: 0.7em;
+    font-weight: 700;
+    color: rgba(245, 197, 24, 0.70);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    border-radius: 4px;
+    padding: 1px 6px;
+    letter-spacing: 0.04em;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+
+/* Countdown ("Starting in 28s") */
+.upnext-countdown {
+    font-size: 0.82em;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ============================================================================
+   Action Buttons Row
+   ============================================================================ */
+
+.upnext-actions {
+    display: flex;
+    flex-direction: row;
+    gap: 0.8em;
+    padding: 0.8em 1.4em 1.4em;
+    justify-content: flex-end;
+    align-items: center;
+}
+
+/* Base button styles */
+.upnext-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5em;
+    padding: 0.56em 1.2em;
+    border: none;
+    border-radius: 10px;
+    font-size: 0.92em;
+    font-weight: 700;
+    cursor: pointer;
+    transition:
+        background 0.15s ease-out,
+        transform 0.12s ease-out,
+        box-shadow 0.15s ease-out;
+
+    /* GPU acceleration for Tizen */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: background, transform;
+    outline: none;
+    -webkit-tap-highlight-color: transparent;
+}
+
+/* "Play Now" — accent-colored primary action */
+.upnext-btn-play {
+    background: var(--osd-accent-color, #00a4dc);
+    color: #fff;
+    box-shadow: 0 2px 12px rgba(0, 164, 220, 0.35);
+}
+
+.upnext-btn-play:hover {
+    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 80%, white 20%);
+}
+
+/* "Hide" — muted ghost button */
+.upnext-btn-hide {
+    background: rgba(255, 255, 255, 0.10);
+    color: rgba(255, 255, 255, 0.80);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.upnext-btn-hide:hover {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+}
+
+/* ---- TV D-pad focus state ------------------------------------------------ */
+
+/*
+ * The .focused class is toggled by UpNextDialog._updateButtonFocus()
+ * as the user navigates between buttons.
+ * Focus ring on TV must be unmistakable since there's no mouse cursor.
+ */
+.upnext-btn.focused,
+.upnext-btn:focus {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.90), 0 0 0 5px rgba(0, 164, 220, 0.60);
+}
+
+.upnext-btn-play.focused,
+.upnext-btn-play:focus {
+    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 75%, white 25%);
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.90),
+        0 0 0 5px rgba(0, 164, 220, 0.60),
+        0 4px 18px rgba(0, 164, 220, 0.5);
+}
+
+.upnext-btn-hide.focused,
+.upnext-btn-hide:focus {
+    background: rgba(255, 255, 255, 0.22);
+    color: #fff;
+    box-shadow:
+        0 0 0 3px rgba(255, 255, 255, 0.90),
+        0 0 0 5px rgba(255, 255, 255, 0.25);
+}
+
+/* ============================================================================
+   Responsive / accessibility
+   ============================================================================ */
+
+/*
+ * On very small screens (unlikely on Tizen TV but good practice),
+ * reduce the thumbnail size so the card doesn't overflow.
+ */
+@media (max-width: 600px) {
+    .upnext-dialog {
+        max-width: 90vw;
+        right: 1.2em;
+    }
+
+    [dir="rtl"] .upnext-dialog {
+        left: 1.2em;
+    }
+
+    .upnext-thumbnail-wrap {
+        width: 88px;
+        height: 50px;
+    }
+}
