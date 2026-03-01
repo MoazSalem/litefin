@@ -599,6 +599,21 @@ export function buildJellyfinProfile(options = {}) {
     // to prevent the server from deciding "RefFrames too high -> Transcode".
     // We assume the user knows what they are doing.
     if (playbackMode !== 'remux') {
+        // When HDR is disabled by the user, we tell the server that each video
+        // codec can only be direct-played when the content is SDR. Any HDR
+        // stream (HDR10, HLG, PQ…) will therefore trigger a server-side
+        // transcode with tone-mapping down to SDR.
+        const hdrCondition = !enableHDR
+            ? [
+                  {
+                      Condition: 'EqualsAny',
+                      Property: 'VideoRangeType',
+                      Value: 'SDR',
+                      IsRequired: false
+                  }
+              ]
+            : [];
+
         codecProfiles = [
             // --- H.264 constraints ---
             {
@@ -634,7 +649,9 @@ export function buildJellyfinProfile(options = {}) {
                         Property: 'RefFrames',
                         Value: '16',
                         IsRequired: false
-                    }
+                    },
+                    // Restrict to SDR if HDR pass-through is disabled
+                    ...hdrCondition
                 ]
             },
             // --- Audio channel limit (global) ---
@@ -674,12 +691,16 @@ export function buildJellyfinProfile(options = {}) {
                         Property: 'VideoBitDepth',
                         Value: hevcBitDepth,
                         IsRequired: false
-                    }
+                    },
+                    // Restrict to SDR if HDR pass-through is disabled
+                    ...hdrCondition
                 ]
             });
         }
 
-        // VP9 constraints (profile 0 for SDR, profile 2 for HDR 10-bit)
+        // VP9 constraints — profile 0 for SDR, profile 2 for HDR 10-bit.
+        // When HDR is disabled, only profile 0 (SDR) is advertised so
+        // HDR VP9 content is not direct-played.
         if (enableVP9) {
             codecProfiles.push({
                 Type: 'Video',
@@ -688,9 +709,13 @@ export function buildJellyfinProfile(options = {}) {
                     {
                         Condition: 'EqualsAny',
                         Property: 'VideoProfile',
-                        Value: 'profile 0|profile 2',
+                        // When HDR is off, only allow SDR profile 0; with HDR
+                        // both profile 0 (SDR) and profile 2 (HDR 10-bit) are OK.
+                        Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
                         IsRequired: false
-                    }
+                    },
+                    // Restrict to SDR if HDR pass-through is disabled
+                    ...hdrCondition
                 ]
             });
         }
@@ -708,11 +733,16 @@ export function buildJellyfinProfile(options = {}) {
                         IsRequired: false
                     },
                     {
+                        // HDR AV1 content is typically 10-bit; SDR AV1 is 8-bit.
+                        // Constrain to 8-bit when HDR is disabled so the server
+                        // knows it must tone-map 10-bit HDR AV1 content.
                         Condition: 'LessThanEqual',
                         Property: 'VideoBitDepth',
                         Value: enableHDR ? '10' : '8',
                         IsRequired: false
-                    }
+                    },
+                    // Restrict to SDR if HDR pass-through is disabled
+                    ...hdrCondition
                 ]
             });
         }
