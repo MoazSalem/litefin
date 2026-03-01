@@ -76,8 +76,9 @@ class ScrollController {
 
         // ====================================================================
         // Cached reference to .page-content for fast lookups
+        // (Removed in favor of explicit container targeting to prevent
+        //  sidebar from scrolling main content)
         // ====================================================================
-        this._pageContent = null;
     }
 
     // ========================================================================
@@ -202,17 +203,12 @@ class ScrollController {
      * @returns {HTMLElement|null} The scrollable container, or null
      */
     getScrollContainer(element) {
-        if (!element) return this._pageContent;
+        if (!element) return null;
 
         // Check for specific scrollable containers used in modals/filters
-        const container = element.closest('.modal-options, .filter-main, .page-content');
+        const container = element.closest('.modal-options, .filter-main, .page-content, .settings-sidebar');
 
-        // Cache the main page-content reference if we found it
-        if (container && container.classList.contains('page-content')) {
-            this._pageContent = container;
-        }
-
-        return container || this._pageContent;
+        return container;
     }
 
     /**
@@ -237,7 +233,6 @@ class ScrollController {
     scrollIntoView(element, config = {}, options = {}) {
         // Resolve the scroll container for this element
         const pageContent = this.getScrollContainer(element);
-        this._pageContent = pageContent;
 
         // Helper: compute element offset relative to a scroll container
         // using offsetTop to remain immune to actively animating scroll positions.
@@ -493,7 +488,7 @@ class ScrollController {
      * Should be called when navigating between pages.
      */
     resetCache() {
-        this._pageContent = null;
+        // No longer relies on a globally cached pageContent
     }
 }
 
