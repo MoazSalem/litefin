@@ -59,7 +59,8 @@
     -webkit-border-radius: 12px;
     overflow: hidden;
     background-clip: padding-box;
-    transition: all 0.2s ease;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
+    will-change: transform;
 }
 
 .settings-menu-btn .menu-icon {
@@ -88,6 +89,7 @@
     background: var(--jf-accent);
     color: white;
     outline: none !important;
+    transform: scale(1.05);
 }
 
 /* Content Panel */
@@ -177,6 +179,8 @@
     text-align: center;
     /* Force light text color (approx white) because the background is always dark glass */
     color: var(--jf-text-primary, rgb(229, 231, 235));
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .btn-option:disabled {
@@ -219,6 +223,8 @@
     color: var(--jf-text-primary, rgb(229, 231, 235));
     cursor: pointer;
     outline: none;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .select-btn:focus,
@@ -287,6 +293,8 @@
     text-align: left;
     cursor: pointer;
     margin-bottom: 4px;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .select-option:last-child {
@@ -299,6 +307,7 @@
     background: rgba(255, 255, 255, 0.1);
     color: white;
     outline: none;
+    transform: scale(1.02);
 }
 
 .select-option.selected {
@@ -388,6 +397,8 @@
     border-radius: 40px;
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .switch-user-btn:focus,
@@ -406,6 +417,8 @@
     margin-top: 20px;
     margin-bottom: 60px;
     border: 2px solid var(--jf-action-btn-border)!important;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .about-card:focus,
@@ -483,6 +496,8 @@
     cursor: pointer;
     border: 2px solid transparent;
     outline: none;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
+    will-change: transform;
 }
 
 .toggle-switch::after {

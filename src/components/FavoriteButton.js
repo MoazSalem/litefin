@@ -74,6 +74,12 @@ class FavoriteButton extends Component {
 
             // Update UI properly (without nesting buttons)
             if (this.el) {
+                // Add pulse animation trigger
+                this.el.classList.remove('pulse-trigger');
+                void this.el.offsetWidth; // Force reflow
+                this.el.classList.add('pulse-trigger');
+                setTimeout(() => this.el.classList.remove('pulse-trigger'), 500);
+
                 // Update class
                 if (this.isFavorite) {
                     this.el.classList.add('active');

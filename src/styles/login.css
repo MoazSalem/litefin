@@ -78,7 +78,8 @@
     font-size: 1.75rem;
     border-radius: 6px;
     color: var(--jf-text-primary, #fff);
-    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    will-change: transform;
 }
 
 .server-url-input:focus,
@@ -99,7 +100,8 @@
     border-radius: 6px;
     cursor: pointer;
     margin: 0;
-    transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .connect-btn:focus,
@@ -137,6 +139,8 @@
     backdrop-filter: blur(10px);
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: var(--jf-text-primary);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 /* Reset .back-btn specific overrides when inside login-actions */
@@ -251,7 +255,8 @@ body.app-splash-active .loading-section .loading-spinner {
     border-radius: var(--jf-border-radius);
     margin-bottom: 12px;
     cursor: pointer;
-    transition: background var(--jf-transition-fast);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
+    will-change: transform;
 }
 
 .server-item>*:not(:last-child) {
@@ -329,7 +334,7 @@ body.app-splash-active .loading-section .loading-spinner {
     
     /* No visible border by default to avoid Tizen image artifacts */
     border: none;
-    transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     
     will-change: transform;
 }
@@ -437,7 +442,8 @@ body.app-splash-active .loading-section .loading-spinner {
 /* Generic Input Focus */
 .login-page .text-input {
     border: 4px solid transparent;
-    transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s, background-color 0.2s;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+    will-change: transform;
 }
 
 .login-page .text-input:focus,
@@ -450,7 +456,8 @@ body.app-splash-active .loading-section .loading-spinner {
 /* Generic Button Focus */
 .login-page .btn {
     border: 4px solid transparent;
-    transition: transform 0.2s, border-color 0.2s, background-color 0.2s;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .login-page .btn:focus,

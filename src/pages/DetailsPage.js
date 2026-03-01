@@ -2228,14 +2228,25 @@ class DetailsPage extends Page {
 
     async _toggleWatched() {
         const isPlayed = this._item.UserData?.Played;
+        const btn = this.$('.watched-btn');
+
+        // Add pulse animation trigger
+        if (btn) {
+            btn.classList.remove('pulse-trigger');
+            void btn.offsetWidth; // Force reflow
+            btn.classList.add('pulse-trigger');
+
+            // Remove after animation finishes (0.4s in CSS)
+            setTimeout(() => btn.classList.remove('pulse-trigger'), 500);
+        }
 
         try {
             if (isPlayed) {
                 await api.unmarkPlayed(this._itemId);
-                this.$('.watched-btn').classList.remove('active');
+                btn?.classList.remove('active');
             } else {
                 await api.markPlayed(this._itemId);
-                this.$('.watched-btn').classList.add('active');
+                btn?.classList.add('active');
             }
 
             this._item.UserData = this._item.UserData || {};

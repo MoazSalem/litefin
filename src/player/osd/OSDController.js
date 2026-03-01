@@ -1150,6 +1150,15 @@ export default class OSDController extends Component {
             if (wasFavorite) await this._api.unmarkFavorite(this._currentItem.Id);
             else await this._api.markFavorite(this._currentItem.Id);
             this._currentItem.UserData.IsFavorite = !wasFavorite;
+            
+            const btn = this._osdEl.querySelector('#osdFavoriteBtn');
+            if (btn) {
+                btn.classList.remove('pulse-trigger');
+                void btn.offsetWidth; // Force reflow
+                btn.classList.add('pulse-trigger');
+                setTimeout(() => btn.classList.remove('pulse-trigger'), 500);
+            }
+
             this._updateFavoriteButton(this._currentItem);
         } catch (e) { 
             log.error('Fav toggle failed. API:', !!this._api, 'Item:', !!this._currentItem, 'Error:', e); 
@@ -1712,6 +1721,12 @@ export default class OSDController extends Component {
         if (!btn || !item?.UserData) return;
         const isFavorite = item.UserData.IsFavorite;
         btn.innerHTML = isFavorite ? ICONS.favoriteFilled : ICONS.favorite;
-        btn.style.color = isFavorite ? '#e74c3c' : '';
+        
+        if (isFavorite) {
+            btn.classList.add('active');
+        } else {
+            btn.classList.remove('active');
+        }
+        btn.style.color = '';
     }
 }

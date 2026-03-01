@@ -13,6 +13,8 @@
     border-radius: var(--jf-border-radius);
     cursor: pointer;
     margin: 12px;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .btn-primary {
@@ -28,6 +30,7 @@
     border-color: var(--jf-button-border-focus);
     outline: none;
     color: #FFF;
+    transform: scale(1.05);
 }
 
 .btn-secondary {
@@ -482,7 +485,8 @@ progress.card-progress::-webkit-progress-value {
     align-items: center;
     flex-shrink: 0;
     /* Prevent shrinking/distortion on TV browsers */
-    transition: background-color 0.2s ease, border-color 0.2s ease;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 
@@ -500,7 +504,7 @@ progress.card-progress::-webkit-progress-value {
     color: white !important;
     /* Subtle white inner border */
     outline: none;
-    transform: scale(1.01);
+    transform: scale(1.03);
     border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
@@ -543,7 +547,7 @@ progress.card-progress::-webkit-progress-value {
 .modal-action-btn.focused {
     background: var(--jf-accent);
     outline: none;
-    transform: scale(1.01);
+    transform: scale(1.05);
 }
 
 /* Modal Close Button Focus (Individualized) */

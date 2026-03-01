@@ -1967,6 +1967,41 @@ class SettingsPage extends Page {
             }
         }
 
+        // Initial Visibility Check for Custom Size
+        const customSizeContainer = document.getElementById('subtitle-custom-size-container');
+        if (customSizeContainer) {
+            const currentSize = PlayerSettings.get('subtitleSize');
+            if (currentSize === 'custom') {
+                customSizeContainer.style.display = '';
+            } else {
+                customSizeContainer.style.display = 'none';
+            }
+        }
+
+        // Initial Visibility Checks for Shadow Properties
+        const shadowStyle = PlayerSettings.get('subtitleDropShadow');
+        const borderWidthContainer = document.getElementById('subtitle-border-width-container');
+        if (borderWidthContainer) {
+            borderWidthContainer.style.display = shadowStyle === 'border' ? '' : 'none';
+        }
+
+        const opacityContainer = document.getElementById('subtitle-shadow-opacity-container');
+        if (opacityContainer) {
+            opacityContainer.style.display = shadowStyle === 'none' || shadowStyle === 'border' ? 'none' : '';
+        }
+
+        // Initial Visibility Checks for ASS Overrides
+        const assOverride = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
+        const outlineThicknessContainer = document.getElementById('subtitle-outline-thickness-container');
+        if (outlineThicknessContainer) {
+            outlineThicknessContainer.style.display = assOverride ? '' : 'none';
+        }
+
+        const shadowThicknessContainer = document.getElementById('subtitle-shadow-thickness-container');
+        if (shadowThicknessContainer) {
+            shadowThicknessContainer.style.display = assOverride ? '' : 'none';
+        }
+
         // Debug Toggles
         const toggleLogs = this.$('#toggle-debug-logs');
         if (toggleLogs) {

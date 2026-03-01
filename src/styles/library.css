@@ -84,6 +84,8 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .tab-btn.active {
@@ -104,7 +106,7 @@
     outline: none !important;
     background-color: var(--jf-accent) !important;
     color: #ffffff !important;
-    transform: scale(1.05);
+    transform: scale(1.08);
     z-index: 10;
     border: 2px solid var(--jf-action-btn-active-border)!important;
 }
@@ -158,6 +160,8 @@
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .control-svg {
@@ -297,6 +301,8 @@
     font-size: 22px;
     font-weight: 600;
     cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .empty-state-btn:focus,
@@ -393,6 +399,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
+    will-change: transform;
 }
 
 .alpha-btn.active {
@@ -407,7 +415,7 @@
     /* Remove square focus */
     color: var(--text-primary) !important;
     background-color: var(--jf-accent) !important;
-    transform: scale(1.1);
+    transform: scale(1.2);
     border-radius: 50% !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
 }
@@ -434,6 +442,8 @@
     /* Larger Pill */
     font-size: 24px;
     font-weight: 700;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .pagination-btn:disabled {
@@ -648,6 +658,8 @@
     overflow: hidden;
     background-clip: padding-box;
     /* Standardize corners */
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-left-color 0.18s ease, padding 0.18s ease;
+    will-change: transform;
 }
 
 .filter-category-btn:focus,
@@ -784,6 +796,8 @@
     font-size: 1.1rem;
     font-weight: 600;
     cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+    will-change: transform;
 }
 
 .modal-action-btn:first-child {

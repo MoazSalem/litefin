@@ -129,17 +129,38 @@ class PlayerPage extends Page {
                 // Apply directly to the loading overlay to ensure visibility
                 const loader = this.el.querySelector('.page-loading');
                 if (loader) {
-                    loader.style.backgroundSize = 'cover';
-                    loader.style.backgroundPosition = 'center';
-
-                    // IMPORTANT: Override the solid background color from base.css
-                    // We need a gradient over the image for text contrast, but base color must be transparent
+                    // Make the main loader background transparent so the backdrop shows through
                     loader.style.backgroundColor = 'transparent';
 
-                    // Add a pseudo-element-like gradient overlay via background-image
-                    loader.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
+                    // Create a dedicated background layer to fade in independently of the spinner
+                    let backdropLayer = loader.querySelector('.loading-backdrop-layer');
+                    if (!backdropLayer) {
+                        backdropLayer = document.createElement('div');
+                        backdropLayer.className = 'loading-backdrop-layer';
+                        backdropLayer.style.position = 'absolute';
+                        backdropLayer.style.top = '0';
+                        backdropLayer.style.left = '0';
+                        backdropLayer.style.width = '100%';
+                        backdropLayer.style.height = '100%';
+                        backdropLayer.style.backgroundSize = 'cover';
+                        backdropLayer.style.backgroundPosition = 'center';
+                        backdropLayer.style.opacity = '0';
+                        backdropLayer.style.transition = 'opacity 0.6s ease-in-out';
+                        backdropLayer.style.zIndex = '-1';
+                        loader.insertBefore(backdropLayer, loader.firstChild);
+                    }
 
-                    this._loadingBackdrop = loader; // Mark for cleanup
+                    // Preload the image to prevent "half sliced" progressive loading artifact
+                    const img = new Image();
+                    img.onload = () => {
+                        backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
+                        requestAnimationFrame(() => {
+                            backdropLayer.style.opacity = '1';
+                        });
+                    };
+                    img.src = backdropUrl;
+
+                    this._loadingBackdrop = backdropLayer; // Mark for cleanup
                 }
             }
 
