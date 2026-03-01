@@ -1085,12 +1085,14 @@ export default class OSDController extends Component {
                 break;
             case 'rewind': {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack; 
-                this._performDebouncedSeek(-skipBackMs * 10000); 
+                this._performDebouncedSeek(-skipBackMs * 10000);
+                this.resetAutoHide();
                 break;
             }
             case 'fastForward': {
                 const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
                 this._performDebouncedSeek(skipFwdMs * 10000);
+                this.resetAutoHide();
                 break;
             }
             case 'previousTrack': this.emit('previous'); break;
@@ -1098,12 +1100,14 @@ export default class OSDController extends Component {
                 log.info('executeAction previousChapter');
                 if (this._player && this._player.previousChapter) {
                     this._player.previousChapter();
+                    this.resetAutoHide();
                 }
                 break;
             case 'nextChapter':
                 log.info('executeAction nextChapter');
                 if (this._player && this._player.nextChapter) {
                     this._player.nextChapter();
+                    this.resetAutoHide();
                 }
                 break;
             case 'nextTrack': this.emit('next'); break;

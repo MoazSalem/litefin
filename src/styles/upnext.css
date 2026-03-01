@@ -27,11 +27,12 @@
 .upnext-dialog {
     /*
      * Position: absolute within .osd-overlays (which fills the full player).
-     * Sits 8em above the bottom to clear the OSD seekbar/controls when visible.
+     * Sits 11.5em above the bottom to clear the OSD seekbar/controls AND
+     * the secondary player option menus (subtitles/audio tracks).
      * Right-aligned for LTR; overridden to left-aligned for RTL below.
      */
     position: absolute;
-    bottom: 8em;
+    bottom: 12.5em;
     right: 2.4em;
     left: auto;
 
@@ -55,7 +56,6 @@
     /* Layout: the top content area (thumbnail + info) sits above the actions bar */
     display: flex;
     flex-direction: column;
-    gap: 0;
 
     /* Interaction */
     pointer-events: all;
@@ -108,8 +108,17 @@
     display: flex;
     flex-direction: row;
     align-items: flex-start;
-    gap: 1.0em;
     padding: 1.4em 1.4em 0.6em 1.4em;
+}
+
+/* Fallback for 'gap: 1.0em' on older WebKit (Tizen) */
+.upnext-content-row > *:not(:last-child) {
+    margin-right: 1.0em;
+}
+
+[dir="rtl"] .upnext-content-row > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 1.0em;
 }
 
 /* ============================================================================
@@ -215,9 +224,18 @@
 .upnext-meta {
     display: flex;
     align-items: center;
-    gap: 0.6em;
     margin-top: 0.3em;
     flex-wrap: wrap;
+}
+
+/* Fallback for 'gap: 0.6em' on older WebKit */
+.upnext-meta > *:not(:last-child) {
+    margin-right: 0.6em;
+}
+
+[dir="rtl"] .upnext-meta > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 0.6em;
 }
 
 /* Community score badge (e.g. "★ 8.0") */
@@ -250,17 +268,25 @@
 .upnext-actions {
     display: flex;
     flex-direction: row;
-    gap: 0.8em;
     padding: 0.8em 1.4em 1.4em;
     justify-content: flex-end;
     align-items: center;
+}
+
+/* Fallback for 'gap: 0.8em' on older WebKit */
+.upnext-actions > *:not(:last-child) {
+    margin-right: 0.8em;
+}
+
+[dir="rtl"] .upnext-actions > *:not(:last-child) {
+    margin-right: 0;
+    margin-left: 0.8em;
 }
 
 /* Base button styles */
 .upnext-btn {
     display: inline-flex;
     align-items: center;
-    gap: 0.5em;
     padding: 0.56em 1.2em;
     border: none;
     border-radius: 10px;
