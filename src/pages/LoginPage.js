@@ -11,7 +11,7 @@ import Page from './Page.js';
 import { auth, api, discoverServers, cancelDiscovery, ServerUnreachableError } from '../api/index.js';
 import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
-import { animationManager } from '../ui/AnimationManager.js';
+
 import { focusManager } from '../ui/FocusManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
@@ -886,7 +886,6 @@ class LoginPage extends Page {
         const activeSection = this.$(`[data-section="${newState}"]`);
         if (activeSection) {
             activeSection.classList.remove('hidden');
-            animationManager.fadeIn(activeSection, { duration: 200 });
 
             if (newState !== STATE.LOADING) {
                 // Ensure DOM has painted the new state before revealing it
