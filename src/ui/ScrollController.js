@@ -75,10 +75,20 @@ class ScrollController {
         this._horizontalScrollAnimationId = null;
 
         // ====================================================================
-        // Cached reference to .page-content for fast lookups
-        // (Removed in favor of explicit container targeting to prevent
-        //  sidebar from scrolling main content)
+        // PERFORMANCE: offsetTop cache to prevent DOM reflows on every keypress.
+        //
+        // getCumulativeOffsetTop() walks the offsetParent chain — each step
+        // reads .offsetTop and .offsetParent, both of which force a synchronous
+        // layout recalculation (reflow) on Tizen's slow CPU.
+        //
+        // Since media rows don't move within the page, their offsetTop relative
+        // to .page-content is stable between keypresses. We cache each row's
+        // computed offset in a WeakMap keyed by the row element itself.
+        //
+        // The cache is cleared on page navigation (resetCache) or when the
+        // scroll container changes.
         // ====================================================================
+        this._offsetCache = new WeakMap();
     }
 
     // ========================================================================
@@ -236,8 +246,29 @@ class ScrollController {
 
         // Helper: compute element offset relative to a scroll container
         // using offsetTop to remain immune to actively animating scroll positions.
+        //
+        // PERFORMANCE RULES FOR CACHING:
+        //
+        //   ✓ CACHE stable elements (e.g. .media-row): their offsetTop within
+        //     .page-content is fixed for the page lifetime — safe to cache.
+        //
+        //   ✗ DO NOT cache card elements inside .row-items-track:
+        //     - The track uses CSS transform: translate3d(), which breaks the
+        //       offsetParent chain before reaching .page-content.
+        //     - The fallback path uses getBoundingClientRect(), which is
+        //       scroll-relative — its value changes as the page scrolls.
+        //     - Caching a scroll-relative BoundingRect value poisons the cache
+        //       with a stale number that causes wrong scroll targets on the next keypress.
+        //     - VirtualCardRow also reuses/repositions DOM nodes, so the same
+        //       element key can represent a different card on the next window update.
         const getCumulativeOffsetTop = (el, relativeTo) => {
             if (!el || !relativeTo) return 0;
+
+            // Check cache first — avoid reflow if already computed for this element
+            const cached = this._offsetCache.get(el);
+            if (cached !== undefined && cached.container === relativeTo) {
+                return cached.value;
+            }
 
             let top = 0;
             let current = el;
@@ -247,13 +278,22 @@ class ScrollController {
                 current = current.offsetParent;
             }
 
-            // Fallback: If the offsetParent chain broke before reaching relativeTo
-            // (e.g. due to fixed positioning or portal), use bounding rects as a last resort.
-            // NOTE: This fallback will drift if relativeTo is actively animating its scroll!
-            if (current !== relativeTo) {
+            if (current === relativeTo) {
+                this._offsetCache.set(el, { container: relativeTo, value: top });
+            } else {
+                // Fallback: the chain broke early (e.g. CSS transform on an ancestor
+                // or a fixed-position portal). Use getBoundingClientRect as a last resort.
+                //
+                // IMPORTANT: getBoundingClientRect() is SCROLL-RELATIVE — it includes
+                // the container's current scrollTop in its result. This means the value
+                // will be WRONG if the page scrolls between compute and use.
+                // We compensate by adding scrollTop, but we CANNOT cache this result
+                // because the effective scrollTop used at computation time won't match
+                // the scrollTop at the next call site.
                 const elRect = el.getBoundingClientRect();
                 const relRect = relativeTo.getBoundingClientRect();
-                return elRect.top - relRect.top + relativeTo.scrollTop;
+                top = elRect.top - relRect.top + relativeTo.scrollTop;
+                // NOT cached — value is volatile
             }
 
             return top;
@@ -488,7 +528,9 @@ class ScrollController {
      * Should be called when navigating between pages.
      */
     resetCache() {
-        // No longer relies on a globally cached pageContent
+        // Clear the offsetTop cache so stale row positions don't persist
+        // across page navigations (rows on the new page have different offsets).
+        this._offsetCache = new WeakMap();
     }
 }
 

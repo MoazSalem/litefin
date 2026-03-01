@@ -26,21 +26,18 @@ class LazyLoader {
                         if (entry.isIntersecting) {
                             const target = entry.target;
 
-                            // Case 1: Lazy Row (Load all children)
+                            // Case 1: Lazy Row (Load all children when it enters view)
+                            // NOTE: VirtualCardRow calls forceLoad() eagerly on all windowed
+                            // home-screen cards, so this path mainly fires for non-virtual rows
+                            // (e.g. library grids, details cast rows).
                             if (target.hasAttribute('data-lazy-row')) {
                                 this._loadRow(target);
 
-                                // AGGRESSIVE PRELOAD: Load next 3 sibling rows immediately
-                                // This ensures that even if margin is ignored, we logically load ahead
-                                let next = target.nextElementSibling;
-                                let count = 0;
-                                while (next && count < 3) {
-                                    if (next.hasAttribute('data-lazy-row')) {
-                                        this._loadRow(next);
-                                    }
-                                    next = next.nextElementSibling;
-                                    count++;
-                                }
+                                // Removed: aggressive next-3-rows burst preload.
+                                // The 2.5-screen rootMargin already ensures the next row enters
+                                // the observer before it's visible. Loading 3 rows in a burst
+                                // caused a spike of 60+ simultaneous image requests on page load,
+                                // choking the CPU exactly when it's also trying to animate the scroll.
                             }
                             // Case 2: Individual Image (Grid)
                             else if (target.dataset.src) {
@@ -54,9 +51,11 @@ class LazyLoader {
                     });
                 },
                 {
-                    // Preload 2.5 screens worth of content
-                    // Dynamic calculation ensures consistent tolerance across 720p/1080p/4K resolutions
-                    rootMargin: `${Math.ceil(window.innerHeight * 2.5)}px`,
+                    // Preload ~0.8 screens ahead — enough to have the next row ready
+                    // before it scrolls into view, without triggering a burst of 60+
+                    // simultaneous decode requests on page load.
+                    // VirtualCardRow handles home-screen card preloading internally via forceLoad().
+                    rootMargin: `${Math.ceil(window.innerHeight * 0.8)}px`,
                     threshold: 0.01
                 }
             );

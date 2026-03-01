@@ -270,6 +270,12 @@ class FocusManager {
 
         this._sections.set(name, config);
         this.invalidateCache(name);
+
+        // PERFORMANCE: Tag the container with its section name so getSectionForElement
+        // can use a single O(1) closest() DOM lookup instead of looping all sections.
+        // The attribute is removed in unregister() to keep the DOM clean.
+        container.dataset.fmSection = name;
+
         log.debug(`Registered section "${name}"`);
     }
 
@@ -284,6 +290,13 @@ class FocusManager {
             if (section === name) {
                 this.clearFocus();
             }
+        }
+
+        // PERFORMANCE: Remove the data-fm-section tag we set in register()
+        // so the container is clean and doesn't confuse future closest() calls.
+        const config = this._sections.get(name);
+        if (config && config.container && config.container.dataset) {
+            delete config.container.dataset.fmSection;
         }
 
         this._sections.delete(name);
@@ -488,9 +501,17 @@ class FocusManager {
 
         // 2. If we found a target, move to it
         if (nextElement) {
-            this.focusElement(nextElement);
-            // Track timing AFTER focus for next rapid-scroll detection
-            this._lastMoveTime = Date.now();
+            // ----------------------------------------------------------------
+            // RAPID NAVIGATION MODE
+            // If the user is holding a key (two consecutive keypresses < 200ms
+            // apart), disable the smooth scroll animation and snap instantly.
+            // This prevents the scroll queue from building up behind held keys,
+            // which causes the page to keep scrolling after the user stops.
+            // The 200ms threshold matches the Tizen key-repeat interval.
+            // ----------------------------------------------------------------
+            const isRapidNav = this._prevMoveTime > 0 && this._lastMoveTime - this._prevMoveTime < 200;
+
+            this.focusElement(nextElement, { instantScroll: isRapidNav });
             return;
         }
 
@@ -529,9 +550,18 @@ class FocusManager {
         const maxSearchDepth = MAX_SECTION_SKIP_DEPTH;
         let searchDepth = 0;
 
+        // PERFORMANCE: Track which sections we've already queried in this skip loop
+        // to avoid calling _getFocusables(forceRefresh=true) on the same section twice.
+        const checkedSections = new Set();
+
         while (nextSection && this._sections.has(nextSection) && searchDepth < maxSearchDepth) {
             const nextConfig = this._sections.get(nextSection);
-            const focusables = this._getFocusables(nextSection, true); // Force refresh
+
+            // Only force-refresh if we haven't already checked this section in this loop
+            const forceRefresh = !checkedSections.has(nextSection);
+            checkedSections.add(nextSection);
+
+            const focusables = this._getFocusables(nextSection, forceRefresh);
 
             if (focusables && focusables.length > 0) {
                 // Found a valid section with focusable elements!
@@ -828,27 +858,39 @@ class FocusManager {
     }
 
     /**
-     * Find the registered section name that contains the element
+     * Find the registered section name that contains the element.
+     *
+     * PERFORMANCE: Uses a two-stage lookup:
+     * 1. O(1) closest('[data-fm-section]') DOM traversal — sections tag their
+     *    containers with this attribute in register(). This is almost always
+     *    sufficient and avoids looping all sections on every focusin event.
+     * 2. O(n) linear fallback for edge cases where closest() can't find the tag
+     *    (e.g. __trap__ containers injected without going through register's tagging).
+     *
      * @param {HTMLElement} element
      */
     getSectionForElement(element) {
         if (!element) return null;
 
-        // Fast path: check active section first (most lookups are for the current section)
-        if (this._activeSection) {
-            const activeConfig = this._sections.get(this._activeSection);
-            if (activeConfig && activeConfig.container.contains(element)) {
-                return this._activeSection;
+        // Fast path: walk up the DOM to find the nearest section container.
+        // This replaces the old O(n) linear sections scan for the vast majority of calls.
+        const sectionContainer = element.closest('[data-fm-section]');
+        if (sectionContainer) {
+            const name = sectionContainer.dataset.fmSection;
+            // Verify the section is still registered (not just a stale attribute)
+            if (this._sections.has(name)) {
+                return name;
             }
         }
 
-        // Fallback: linear scan through all sections
+        // Fallback: linear scan — only needed when closest() fails (e.g. portals,
+        // fixed position containers, or sections registered before the attribute patch).
         for (const [name, config] of this._sections.entries()) {
-            if (name === this._activeSection) continue; // Already checked
             if (config.container.contains(element)) {
                 return name;
             }
         }
+
         return null;
     }
 
