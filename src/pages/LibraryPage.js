@@ -15,6 +15,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { state } from '../core/StateManager.js';
 
 const log = logger.create('Library');
 
@@ -200,6 +201,78 @@ class LibraryPage extends Page {
         this.setLoading(true);
         this.state.libraryId = this.params.id;
 
+        const cacheKey = this._getCacheKey();
+
+        // State Rehydration Check
+        const savedState = state.get(cacheKey);
+        if (savedState) {
+            // Merge cached state properties
+            Object.assign(this.state, savedState.stateData);
+
+            // 1. Setup UI Components
+            this._renderTabs();
+            this._renderAlphaPicker();
+            this._updateControlsVisibility();
+            this._updateHeaderVisibility();
+            i18n.translateDOM(this.el);
+            this._bindEvents();
+
+            this.$('#library-title').textContent = this.state.libraryInfo?.Name || this.title;
+
+            // 2. Hide loading skeleton, show correct container
+            const isHorizontalLayout =
+                this.state.viewType === 'Genres' ||
+                this.state.viewType === 'Suggestions' ||
+                this.state.viewType === 'Upcoming';
+
+            const rowsContainer = this.$('#library-rows');
+            const grid = this.$('#library-grid');
+
+            if (!isHorizontalLayout) {
+                if (rowsContainer) rowsContainer.style.display = 'none';
+                if (grid) grid.style.display = '';
+                this._renderGrid(this.state.items);
+            } else {
+                if (rowsContainer) rowsContainer.style.display = '';
+                if (grid) grid.style.display = 'none';
+                this._renderHorizontalRows(this.state.items);
+            }
+
+            this._updatePaginationUI();
+            this.setLoading(false);
+
+            // 3. Restore Focus
+            requestAnimationFrame(() => {
+                let restoredFocus = false;
+                const targetId = savedState.focusItemId;
+                const sectionId = savedState.focusSectionId;
+
+                if (targetId && sectionId) {
+                    const sectionConfig = focusManager.getSectionConfig(sectionId);
+                    const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
+
+                    const savedElement = sectionContainer.querySelector(
+                        `[data-item-id="${targetId}"], [data-id="${targetId}"], [id="${targetId}"]`
+                    );
+
+                    if (savedElement) {
+                        this.setActiveSection(sectionId, false);
+                        focusManager.focusElement(savedElement, { instantScroll: true });
+                        restoredFocus = true;
+                    }
+                }
+
+                if (!restoredFocus) {
+                    this._setupFocus();
+                }
+
+                state.delete(cacheKey);
+                this.markReady();
+            });
+
+            return;
+        }
+
         // 1. Fetch Library Info
         await this._fetchLibraryInfo();
 
@@ -338,16 +411,19 @@ class LibraryPage extends Page {
             // Handle genre header clicks
             const headerBtn = e.target.closest('.header-focusable');
             if (headerBtn) {
-                const rowHeader = headerBtn.closest('.library-row-header');
-                if (!rowHeader) return;
-
-                const rowEl = rowHeader.parentElement; // .library-row
-                if (!rowEl) return;
-
-                const genreId = rowEl.dataset.genreId;
+                const genreId = headerBtn.dataset.genreId || headerBtn.closest('.library-row')?.dataset?.genreId;
 
                 if (genreId) {
                     log.info('Navigating to Genre:', genreId);
+
+                    // Save state pointing to the row header
+                    let sectionId = null;
+                    const rowAncestor = headerBtn.closest('.library-row');
+                    if (rowAncestor && rowAncestor.id) {
+                        sectionId = rowAncestor.id;
+                    }
+                    this._saveState(sectionId, headerBtn.id || headerBtn.dataset.id || genreId);
+
                     // Navigate to Genre Filtered Page
                     router.navigate(`/library/${this.state.libraryId}/genre/${genreId}`);
                 }
@@ -358,6 +434,19 @@ class LibraryPage extends Page {
             const mediaCard = e.target.closest('.media-card');
             if (mediaCard?.dataset?.itemId) {
                 const itemId = mediaCard.dataset.itemId;
+
+                let sectionId = null;
+                const gridAncestor = mediaCard.closest('#library-grid');
+                if (gridAncestor) {
+                    sectionId = 'library-grid';
+                } else {
+                    const rowAncestor = mediaCard.closest('.library-row');
+                    if (rowAncestor && rowAncestor.id) {
+                        sectionId = rowAncestor.id;
+                    }
+                }
+
+                this._saveState(sectionId, itemId);
 
                 // Special handling for Networks view: navigate to studio-filtered library
                 if (this.state.viewType === 'Networks') {
@@ -370,6 +459,24 @@ class LibraryPage extends Page {
                 log.info('Navigating to item details:', itemId);
                 router.navigate(`/details/${itemId}`);
             }
+        });
+    }
+
+    _getCacheKey() {
+        const parts = [`library:state:${this.params.id}`];
+        if (this.params.genreId) parts.push(`genre:${this.params.genreId}`);
+        if (this.params.studioId) parts.push(`studio:${this.params.studioId}`);
+        if (this.params.year) parts.push(`year:${this.params.year}`);
+        if (this.params.personId) parts.push(`person:${this.params.personId}`);
+        if (this.params.tagName) parts.push(`tag:${this.params.tagName}`);
+        return parts.join(':');
+    }
+
+    _saveState(focusSectionId, focusItemId) {
+        state.set(this._getCacheKey(), {
+            stateData: this.state,
+            focusSectionId,
+            focusItemId
         });
     }
 
@@ -667,8 +774,8 @@ class LibraryPage extends Page {
                     log.warn('Failed to load favorite suggestions', e);
                 }
 
-                this.state.items = []; // Clear grid items
-                this._renderHorizontalRows(rows);
+                this.state.items = rows; // Store rows for caching/restoration
+                this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
                 return; // Skip grid render
             } else if (viewType === 'Genres') {
@@ -717,8 +824,8 @@ class LibraryPage extends Page {
 
                 const loadedRows = (await Promise.all(rowPromises)).filter((r) => r && r.items.length > 0);
 
-                this.state.items = [];
-                this._renderHorizontalRows(loadedRows);
+                this.state.items = loadedRows; // Store rows for caching/restoration
+                this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
                 return;
             } else if (viewType === 'Upcoming') {
@@ -776,11 +883,11 @@ class LibraryPage extends Page {
                     };
                 });
 
-                this.state.items = [];
+                this.state.items = displayRows; // Store rows for caching/restoration
                 // CRITICAL: Reset totalRecordCount to prevent stale pagination footer
                 this.state.totalRecordCount = 0;
 
-                this._renderHorizontalRows(displayRows);
+                this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
                 return;
             } else if (viewType === 'Episodes') {
@@ -1236,9 +1343,11 @@ class LibraryPage extends Page {
         rows.forEach((row, rowIndex) => {
             const headerId = `header-${rowIndex}`;
             const listId = `list-${rowIndex}`;
+            const rowId = `row-${rowIndex}`;
 
             const section = document.createElement('div');
             section.className = 'library-row media-row'; // media-row for FocusManager scroll detection
+            section.id = rowId; // Ensure DOM carries the focus section ID
             section.dataset.index = rowIndex;
             section.dataset.genreId = row.genreId || '';
 
@@ -1248,7 +1357,7 @@ class LibraryPage extends Page {
             const headerHtml = isActionable
                 ? `
                 <div class="library-row-header" id="${headerId}">
-                    <button class="header-focusable" tabindex="0" data-genre-id="${row.genreId}">
+                    <button class="header-focusable" tabindex="0" id="${row.genreId}" data-genre-id="${row.genreId}">
                         <span class="header-title">${row.title}</span>
                         <i class="fa-solid fa-chevron-right header-arrow"></i>
                     </button>
@@ -1333,7 +1442,6 @@ class LibraryPage extends Page {
 
             // Register SINGLE section for entire row (header + grid)
             // This prevents section-change scroll logic from causing inconsistencies
-            const rowId = `row-${rowIndex}`;
             // Simplify selector for Upcoming which has no headers
             const selector = this.state.viewType === 'Upcoming' ? '.media-card' : '.header-focusable, .media-card';
             // Use horizontal orientation for Upcoming/Suggestions, grid for Genres
@@ -1656,23 +1764,21 @@ class LibraryPage extends Page {
 
             const params = {
                 ParentId: this.state.libraryId,
-                SortBy: 'Random',
                 Limit: 1,
+                SortBy: 'Random',
                 Recursive: true,
                 IncludeItemTypes: includeItemTypes,
-                ExcludeLocationTypes: 'Virtual' // Filter out missing files
+                ExcludeLocationTypes: 'Virtual'
             };
-
-            // Respect current filters if any? Usually shuffle ignores view filters for global "Shuffle"
-            // But maybe we should respect "Unplayed"? Let's keep it simple first.
 
             const result = await api.getItems(params);
 
             if (result.Items && result.Items.length > 0) {
-                const randomItem = result.Items[0];
-                router.navigate(`/details/${randomItem.Id}`);
+                const item = result.Items[0];
+                this._saveState('library-controls', 'btn-shuffle');
+                router.navigate(`/details/${item.Id}`);
             } else {
-                log.warn('No items found');
+                log.warn('No items found for shuffle');
             }
         } catch (e) {
             log.error('Failed to fetch random item', e);
