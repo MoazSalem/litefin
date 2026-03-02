@@ -47,7 +47,14 @@ function getPlugins() {
                 { from: 'icon.png', to: 'icon.png' },
                 { from: 'src/assets', to: 'assets', noErrorOnMissing: true },
                 { from: 'src/locales', to: 'locales' },
-                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' }
+                { from: 'node_modules/libpgs/dist/libpgs.worker.js', to: 'js/libpgs.worker.js' },
+                /*
+                 * WebOS SDK: required for window.webOS and window.webOS.service to exist.
+                 * Without this script the Luna service check in ApiClient.js
+                 * will silently fall through to the HTTP scan on WebOS.
+                 * The file is a no-op on non-WebOS platforms so safe to include in all builds.
+                 */
+                { from: 'node_modules/webostvjs/webOSTV.js', to: 'js/webOSTV.js' }
             ]
         }),
         new webpack.DefinePlugin({

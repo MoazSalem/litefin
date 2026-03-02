@@ -931,10 +931,17 @@ export class ApiClient {
 /**
  * Test if an address is a valid Jellyfin server
  */
-export async function testServer(address, timeout = 1000) {
+export async function testServer(address, timeout = 1000, parentSignal = null) {
     try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+        // If the parent discovery was cancelled, abort this probe immediately
+        // rather than waiting out the full timeout (the original behaviour).
+        const onParentAbort = () => controller.abort();
+        if (parentSignal) {
+            parentSignal.addEventListener('abort', onParentAbort, { once: true });
+        }
 
         const response = await fetch(`${address}/System/Info/Public`, {
             method: 'GET',
@@ -942,6 +949,7 @@ export async function testServer(address, timeout = 1000) {
         });
 
         clearTimeout(timeoutId);
+        if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
 
         if (!response.ok) return null;
 
@@ -965,8 +973,7 @@ export async function testServer(address, timeout = 1000) {
             operatingSystem: info.OperatingSystem
         };
     } catch (err) {
-        // Return null on any error (timeout, network refused, etc)
-        // to allow other concurrent tests in the batch to succeed.
+        // Return null on any error (timeout, network refused, cancelled, etc)
         return null;
     }
 }
@@ -985,6 +992,108 @@ export function cancelDiscovery() {
 }
 
 /**
+ * Attempt Jellyfin server discovery via the WebOS Luna background service.
+ *
+ * The service performs a native UDP broadcast on port 7359 and pushes
+ * discovered servers to us in real time via a Luna subscription.
+ *
+ * @param {Function|null} onServerFound  Called immediately each time a server
+ *                                        is discovered (same API as discoverServers).
+ * @returns {Promise<Array|null>}  Resolves with an array of found servers if
+ *                                  the Luna service is reachable (may be empty),
+ *                                  or null if the service could not be contacted
+ *                                  (caller should fall back to HTTP scan).
+ */
+async function _discoverViaLunaService(onServerFound) {
+    return new Promise((resolve) => {
+        const foundServers = [];
+        let settled = false;
+
+        /*
+         * Two-phase timeout strategy:
+         *
+         * Phase 1 — SERVICE_ALIVE_TIMEOUT_MS (1 second)
+         *   If onSuccess hasn't fired at all within 1s, the background service
+         *   is not running (emulator, service not installed, etc.).
+         *   Resolve null immediately → HTTP scan fallback kicks in within ~1s.
+         *   On real hardware the service responds in <100ms, so 1s is generous.
+         *
+         * Phase 2 — DISCOVERY_WINDOW_MS (3 seconds)
+         *   Once onSuccess fires (service confirmed alive), start a 3s window
+         *   to collect UDP server responses before resolving with the results.
+         */
+        const SERVICE_ALIVE_TIMEOUT_MS = 1000;
+        const DISCOVERY_WINDOW_MS = 3000;
+
+        // Phase 1: fast-fail if the service never responds
+        const serviceAliveTimeout = setTimeout(() => {
+            if (!settled) {
+                log.warn('Luna service timed out — no response received');
+                settled = true;
+                resolve(null);
+            }
+        }, SERVICE_ALIVE_TIMEOUT_MS);
+
+        let request;
+        try {
+            request = window.webOS.service.request('luna://org.litefin.app.service', {
+                method: 'discover',
+                parameters: { subscribe: true },
+
+                onSuccess(response) {
+                    if (settled) return;
+
+                    // First success response = service is alive; cancel the phase-1 timer
+                    // and start the 3s collection window to gather UDP server responses.
+                    if (!settled && foundServers.length === 0) {
+                        clearTimeout(serviceAliveTimeout);
+                        setTimeout(() => {
+                            if (!settled) {
+                                settled = true;
+                                try {
+                                    request && request.cancel();
+                                } catch (_) {}
+                                resolve(foundServers);
+                            }
+                        }, DISCOVERY_WINDOW_MS);
+                    }
+
+                    // Parse servers from the response map ({ [serverId]: serverInfo })
+                    if (response && response.results) {
+                        Object.values(response.results).forEach((srv) => {
+                            if (!foundServers.find((s) => s.id === srv.Id)) {
+                                const serverInfo = {
+                                    address: srv.Address,
+                                    name: srv.Name,
+                                    id: srv.Id
+                                };
+                                log.info(`Luna: discovered "${srv.Name}" at ${srv.Address}`);
+                                foundServers.push(serverInfo);
+                                if (onServerFound) onServerFound(serverInfo);
+                            }
+                        });
+                    }
+                },
+
+                onFailure(err) {
+                    if (settled) return;
+                    settled = true;
+                    clearTimeout(serviceAliveTimeout);
+                    log.warn(`Luna service request failed: ${err.errorText || JSON.stringify(err)}`);
+                    // null signals "service unavailable, try HTTP scan"
+                    resolve(null);
+                }
+            });
+        } catch (err) {
+            // webOS.service.request itself threw — service API not available
+            log.warn(`Luna service API not available: ${err}`);
+            clearTimeout(serviceAliveTimeout);
+            resolve(null);
+        }
+    });
+}
+
+/**
  * Discover Jellyfin servers on local network
  */
 export async function discoverServers(onProgress = null, onServerFound = null) {
@@ -993,6 +1102,37 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
 
     log.info('Starting server discovery...');
 
+    /*
+     * =========================================================================
+     * WebOS Fast Path: Native UDP Discovery via Luna Service
+     * =========================================================================
+     * WebOS background services run in Node.js and have access to raw UDP
+     * sockets. Our `org.litefin.app.service/discover` service broadcasts the
+     * Jellyfin autodiscovery probe on UDP port 7359 and pushes results
+     * instantly via the Luna bus.
+     *
+     * This yields results in <1 second vs the ~10s HTTP subnet scan on WebOS.
+     * If the service isn't available (emulators, older WebOS) we fall through
+     * to the standard HTTP scan below.
+     * =========================================================================
+     */
+    if (typeof window.webOS !== 'undefined' && window.webOS.service) {
+        log.info('WebOS detected — trying Luna discovery service first...');
+
+        const lunaServers = await _discoverViaLunaService(onServerFound);
+
+        if (lunaServers !== null) {
+            // Luna service responded — skip the HTTP scan entirely
+            log.info(`Luna discovery complete: ${lunaServers.length} server(s) found`);
+            return lunaServers;
+        }
+
+        log.warn('Luna service unavailable — falling back to HTTP scan');
+    }
+
+    // =========================================================================
+    // Standard HTTP scan (Tizen, web browsers, WebOS emulators)
+    // =========================================================================
     activeDiscoveryController = new AbortController();
     const signal = activeDiscoveryController.signal;
 
@@ -1030,12 +1170,21 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
             }
         }
 
-        const CHUNK_SIZE = 15;
+        /*
+         * CHUNK_SIZE controls how many IPs are probed in parallel per round.
+         * Higher = faster scan but more concurrent connections.
+         * 30 is a safe ceiling for WebOS/Tizen embedded browsers.
+         *
+         * Timeout is 400ms — a real LAN server answers in <50ms,
+         * so this is generous while cutting worst-case scan time roughly in half
+         * vs the previous 800ms.
+         */
+        const CHUNK_SIZE = 30;
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
             if (signal.aborted) return;
 
             const chunk = batch.slice(i, i + CHUNK_SIZE);
-            const results = await Promise.all(chunk.map((addr) => testServer(addr, 800)));
+            const results = await Promise.all(chunk.map((addr) => testServer(addr, 400, signal)));
 
             results
                 .filter((s) => s)

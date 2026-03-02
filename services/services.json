@@ -1,0 +1,9 @@
+{
+    "id": "org.litefin.app.service",
+    "description": "Litefin Jellyfin Discovery Service",
+    "services": [
+        {
+            "name": "org.litefin.app.service"
+        }
+    ]
+}

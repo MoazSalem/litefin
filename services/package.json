@@ -1,0 +1,8 @@
+{
+    "name": "org.litefin.app.service",
+    "version": "1.0.0",
+    "description": "Litefin Jellyfin Discovery Background Service",
+    "main": "service.js",
+    "scripts": {},
+    "dependencies": {}
+}

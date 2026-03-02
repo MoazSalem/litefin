@@ -201,7 +201,9 @@ async function createIpk(buildDir, outputDir, finalName) {
         const ipkOutDir = `${stagingDir}-out`;
         mkdirSync(ipkOutDir, { recursive: true });
 
-        const { stdout, stderr } = await execAsync(`npx ares-package --no-minify "${stagingDir}" -o "${ipkOutDir}"`);
+        const { stdout, stderr } = await execAsync(
+            `npx ares-package --no-minify "${stagingDir}" "services" -o "${ipkOutDir}"`
+        );
         if (stdout) console.info(stdout);
         if (stderr) console.warn(stderr);
 
