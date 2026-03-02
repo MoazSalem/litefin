@@ -1,14 +1,17 @@
 {
     "id": "org.litefin.app",
-    "version": "0.7.5",
+    "version": "0.7.6",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",
     "title": "Litefin",
-    "icon": "icon.png",
-    "largeIcon": "icon.png",
-    "bgColor": "#000000",
     "transparent": false,
-    "allowCrossDomain": true,
-    "appDescription": "Native Jellyfin client for Smart TVs"
+    "appDescription": "Native Jellyfin client for WebOS",
+    "disableBackHistoryAPI": true,
+    "icon": "icon-80.png",
+    "largeIcon": "icon-130.png",
+    "bgImage": "assets/splash.png",
+    "splashBackground": "assets/splash.png",
+    "bgColor": "#0f0a14",
+    "iconColor": "#0f0a14"
 }

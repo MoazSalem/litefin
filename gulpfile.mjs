@@ -1,6 +1,6 @@
 import gulp from 'gulp';
 import { deleteAsync as del } from 'del';
-import { readFileSync, createWriteStream, copyFileSync, existsSync } from 'fs';
+import { readFileSync, createWriteStream, copyFileSync, existsSync, renameSync, cpSync, mkdirSync } from 'fs';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import archiver from 'archiver';
@@ -15,6 +15,11 @@ console.info('Building Litefin Tizen app');
 const configXmlContent = readFileSync('./config.xml', 'utf8');
 const versionMatch = configXmlContent.match(/<widget[^>]*\sversion="([^"]+)"/);
 const version = versionMatch ? versionMatch[1] : '0.0.0';
+
+// Read appId from appinfo.json so we can predict the IPK filename that
+// ares-package generates and rename it to match our naming convention.
+const appinfoContent = JSON.parse(readFileSync('./appinfo.json', 'utf8'));
+const appId = appinfoContent.id; // e.g. org.litefin.app
 
 console.log(`Package Version: ${version}`);
 
@@ -32,6 +37,10 @@ function cleanDist() {
 
 function cleanWgt() {
     return del(['*.wgt']);
+}
+
+function cleanIpk() {
+    return del(['*.ipk']);
 }
 
 // ============================================================================
@@ -128,21 +137,92 @@ async function createWgt(buildDir, outputName) {
     });
 }
 
-async function createIpk(buildDir, outputDir) {
-    // WebOS packages should not include Tizen's config.xml
-    const configPath = path.join(buildDir, 'config.xml');
+async function createIpk(buildDir, outputDir, finalName) {
+    /*
+     * IMPORTANT: We must NOT modify `buildDir` directly because the Tizen WGT
+     * packaging tasks may be reading from the same directory in parallel.
+     * Instead, copy the build output to a uniquely-named staging directory,
+     * strip the Tizen-only `config.xml` from the copy, then package from there.
+     */
+    const stagingDir = `${buildDir}-webos-staging`;
+
+    // Wipe any leftover staging dir from a previous failed run
+    await del([stagingDir]);
+
+    // Copy the entire build output to the staging directory using Node's
+    // built-in cpSync — avoids xcopy/cp platform differences and path issues.
+    console.info(`Staging WebOS build: ${buildDir} → ${stagingDir}`);
+    cpSync(buildDir, stagingDir, { recursive: true });
+
+    // Remove Tizen-specific files that ares-package doesn't recognise
+    const configPath = path.join(stagingDir, 'config.xml');
     if (existsSync(configPath)) {
         await del([configPath]);
     }
 
-    console.info(`Running ares-package on ${buildDir}...`);
+    /*
+     * Copy WebOS-specific icon and splash assets from the project root.
+     * These are intentionally NOT part of the shared webpack CopyPlugin output
+     * so they never end up inside Tizen WGT packages.
+     *   icon-80.png       → 80×80 icon (required by WebOS)
+     *   icon-130.png      → 130×130 large icon (required by WebOS)
+     *   splash.png        → splash/background image referenced in appinfo.json
+     */
+    const webosAssets = [
+        { src: 'icon-80.png', dest: path.join(stagingDir, 'icon-80.png') },
+        { src: 'icon-130.png', dest: path.join(stagingDir, 'icon-130.png') },
+        { src: 'splash.png', dest: path.join(stagingDir, 'assets', 'splash.png') }
+    ];
+
+    for (const asset of webosAssets) {
+        if (existsSync(asset.src)) {
+            // Ensure asset sub-directory exists (e.g. assets/ for splash)
+            mkdirSync(path.dirname(asset.dest), { recursive: true });
+            copyFileSync(asset.src, asset.dest);
+            console.info(`Copied WebOS asset: ${asset.src} → ${asset.dest}`);
+        } else {
+            console.warn(`WebOS asset not found (skipping): ${asset.src}`);
+        }
+    }
+
+    console.info(`Running ares-package on ${stagingDir}...`);
     try {
-        const { stdout, stderr } = await execAsync(`npx ares-package ${buildDir} -o ${outputDir}`);
-        console.info(stdout);
+        /*
+         * --no-minify: ares-package ships with an old UglifyJS-based minifier
+         * that can't handle ES6+ syntax (optional chaining, arrow functions, etc.).
+         * All our webpack builds are already fully minified in production mode,
+         * so disabling ares-package's minification step is correct and necessary.
+         *
+         * PARALLELISM: we output to a unique per-variant subdirectory, NOT to the
+         * shared root '.'. All 4 WebOS tasks run in parallel and ares-package always
+         * names its output `{appId}_{version}_all.ipk`. Without isolation, all 4
+         * tasks race to create and rename that exact filename, and only 2 survive.
+         */
+        const ipkOutDir = `${stagingDir}-out`;
+        mkdirSync(ipkOutDir, { recursive: true });
+
+        const { stdout, stderr } = await execAsync(`npx ares-package --no-minify "${stagingDir}" -o "${ipkOutDir}"`);
+        if (stdout) console.info(stdout);
         if (stderr) console.warn(stderr);
+
+        // Rename the generated IPK and move it to the final output directory
+        const generatedName = path.join(ipkOutDir, `${appId}_${version}_all.ipk`);
+        const targetName = path.join(outputDir, finalName || `${appId}_${version}_all.ipk`);
+        if (existsSync(generatedName)) {
+            renameSync(generatedName, targetName);
+            console.info(`Renamed IPK → ${path.basename(targetName)}`);
+        } else {
+            console.warn(`Expected IPK not found: ${generatedName}`);
+        }
+
+        // Clean up the unique IPK output dir
+        await del([ipkOutDir]);
     } catch (error) {
         console.error('Failed to create IPK:', error);
         throw error;
+    } finally {
+        // Always clean up staging dir, even on error
+        await del([stagingDir]);
     }
 }
 
@@ -179,11 +259,36 @@ async function packageDebug() {
 }
 
 async function packageWebos() {
-    const buildDir = 'dist/normal'; // Re-use the normal build payload for WebOS
-    const outputDir = '.'; // Output to root
+    // Default normal build shipped as WebOS IPK — matches Tizen's default WGT naming
+    const buildDir = 'dist/normal';
+    const ipkName = `Litefin-${version}-webos.ipk`;
 
-    console.info(`Creating WebOS IPK...`);
-    await createIpk(buildDir, outputDir);
+    console.info(`Creating ${ipkName}...`);
+    await createIpk(buildDir, '.', ipkName);
+}
+
+async function packageWebosES6() {
+    const buildDir = 'dist/es6';
+    const ipkName = `Litefin-${version}-es6-webos.ipk`;
+
+    console.info(`Creating ${ipkName}...`);
+    await createIpk(buildDir, '.', ipkName);
+}
+
+async function packageWebosLegacy() {
+    const buildDir = 'dist/legacy';
+    const ipkName = `Litefin-${version}-legacy-webos.ipk`;
+
+    console.info(`Creating ${ipkName}...`);
+    await createIpk(buildDir, '.', ipkName);
+}
+
+async function packageWebosUltraLegacy() {
+    const buildDir = 'dist/ultra-legacy';
+    const ipkName = `Litefin-${version}-ultra-legacy-webos.ipk`;
+
+    console.info(`Creating ${ipkName}...`);
+    await createIpk(buildDir, '.', ipkName);
 }
 
 async function packageLegacy() {
@@ -239,21 +344,44 @@ async function syncVersion() {
 // ============================================================================
 
 // Build and package all versions (default for npm run package)
+// Produces 4 WGT (Tizen) + 4 IPK (WebOS) in parallel
 const buildPackage = gulp.series(
     syncVersion,
     cleanDist,
-    cleanWgt,
+    gulp.parallel(cleanWgt, cleanIpk),
     webpackAll,
-    gulp.parallel(packageES6, packageNormal, packageLegacy, packageUltraLegacy)
+    gulp.parallel(
+        // Tizen WGT
+        packageES6,
+        packageNormal,
+        packageLegacy,
+        packageUltraLegacy,
+        // WebOS IPK
+        packageWebosES6,
+        packageWebos,
+        packageWebosLegacy,
+        packageWebosUltraLegacy
+    )
 );
 
-// Individual build+package tasks
+// Individual Tizen build+package tasks
 const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
-const buildPackageWebos = gulp.series(syncVersion, cleanDist, webpackNormal, packageWebos);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
 const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
+
+// Individual WebOS build+package tasks
+const buildPackageWebos = gulp.series(syncVersion, cleanDist, cleanIpk, webpackNormal, packageWebos);
+const buildPackageWebosES6 = gulp.series(syncVersion, cleanDist, cleanIpk, webpackES6, packageWebosES6);
+const buildPackageWebosLegacy = gulp.series(syncVersion, cleanDist, cleanIpk, webpackLegacy, packageWebosLegacy);
+const buildPackageWebosUltraLegacy = gulp.series(
+    syncVersion,
+    cleanDist,
+    cleanIpk,
+    webpackUltraLegacy,
+    packageWebosUltraLegacy
+);
 
 // Just build (no packaging)
 const build = gulp.series(syncVersion, cleanDist, webpackAll);
@@ -267,25 +395,37 @@ export {
     clean,
     cleanDist,
     cleanWgt,
+    cleanIpk,
     webpackES6,
     webpackNormal,
     webpackLegacy,
     webpackUltraLegacy,
     webpackDebug,
     webpackAll,
+    // Tizen WGT packaging
     packageES6,
     packageNormal,
-    packageWebos,
     packageLegacy,
     packageUltraLegacy,
     packageDebug,
+    // WebOS IPK packaging
+    packageWebos,
+    packageWebosES6,
+    packageWebosLegacy,
+    packageWebosUltraLegacy,
+    // Tizen build+package
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
-    buildPackageWebos,
     buildPackageLegacy,
     buildPackageUltraLegacy,
     buildPackageDebug,
+    // WebOS build+package
+    buildPackageWebos,
+    buildPackageWebosES6,
+    buildPackageWebosLegacy,
+    buildPackageWebosUltraLegacy,
+    // Build only
     build,
     buildES6,
     buildNormal,
