@@ -104,7 +104,7 @@
 
 /* Page loading styles moved to base.css */
 .page.loading .page-content>*:not(.page-loading) {
-    opacity: 0.3;
+    opacity: 0;
 }
 
 /* Global Horizontal Scroll Row (Moved from home.css) */

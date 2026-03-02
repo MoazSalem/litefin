@@ -280,10 +280,14 @@ class DetailsPage extends Page {
             this._setupFavoriteButton();
             this._renderRichMetadata();
 
-            // 3. Parallelize loading of ALL major content (Images, Rows, Similar)
-            // This ensures we aren't blocked by the 1.5s poster timeout while
-            // the episode/season data is ready.
-            const loadTasks = [this._loadImages(), this._loadSecondaryContent()];
+            // 3. Fire image loading in the background (fire-and-forget).
+            // The poster and backdrop are not used for layout — they are decorative
+            // overlays. We do NOT await them so the content rows are never held up
+            // by a slow image download or the 800ms safety timeout.
+            this._loadImages(); // non-blocking
+
+            // 4. Parallelize loading of all major content (rows, similar items)
+            const loadTasks = [this._loadSecondaryContent()];
 
             if (this._item.Type !== 'Season') {
                 loadTasks.push(this._loadSimilar());
@@ -300,12 +304,10 @@ class DetailsPage extends Page {
                 });
             });
 
-            // 5. FINALLY dismiss loading - page is now 100% ready and navigable
-            this.setLoading(false);
-
             // FIX: Ensure Focus Manager knows about the Resume button if it appeared
             focusManager.invalidateCache('details-actions');
 
+            // 5. Restore custom scroll/focus FIRST before hiding the loading overlay
             // If we have a pending navigation state, it will be handled by restoreScrollFocusWhenReady()
             // which was called in onInit. If not, we handle initial landing here.
             requestAnimationFrame(() => {
@@ -359,6 +361,11 @@ class DetailsPage extends Page {
                         }
                     }
                 }
+
+                // 6. NOW hide loading - page is scrolled and focused correctly
+                requestAnimationFrame(() => {
+                    this.setLoading(false);
+                });
             });
         } catch (error) {
             log.error('Failed to load', error);
@@ -377,16 +384,15 @@ class DetailsPage extends Page {
             let resolved = false;
 
             // Safety timeout: don't block page interaction forever if the
-            // poster is slow. 1500ms is generous enough for TV network
-            // latency + image decode, but still fast enough that users
-            // won't stare at a blank poster area.
+            // poster is slow. 800ms is sufficient — poster loading is fire-and-forget
+            // now, so we can be more aggressive without impacting page readiness.
             const timeout = setTimeout(() => {
                 if (!resolved) {
                     log.warn('Poster load timed out, showing content');
                     resolved = true;
                     resolve();
                 }
-            }, 1500);
+            }, 800);
 
             const onPosterReady = () => {
                 if (!resolved) {
@@ -599,6 +605,11 @@ class DetailsPage extends Page {
         const virtualRow = new VirtualCardRow(trackContainer, items, {
             isLandscape: isLandscape,
             visibleCount: isLandscape ? 8 : 12,
+            // For portrait rows, eagerly render up to 7 cards on initial load to prevent
+            // the blank-then-pop effect when the user first navigates down to the row.
+            // For landscape (episodes, next-up), pre-render only 5 for the same reason.
+            // We cap portrait at 7 instead of items.length to keep construction time low.
+            initialWindow: isLandscape ? 5 : Math.min(7, items.length),
             focusSectionId: focusSectionName,
             renderCard: renderCard
         });
@@ -1569,8 +1580,20 @@ class DetailsPage extends Page {
 
     async _loadSimilar() {
         try {
-            const response = await api.getSimilar(this._itemId);
-            this._similar = response.Items || [];
+            const cacheKey = `details:similar:${this._itemId}`;
+            const cachedSimilar = state.get(cacheKey);
+
+            if (cachedSimilar) {
+                this._similar = cachedSimilar;
+            } else {
+                const response = await api.getSimilar(this._itemId);
+                this._similar = response.Items || [];
+                // Cache the randomized result for the duration of the session
+                // so Back navigation restores the exact same row.
+                if (this._similar.length > 0) {
+                    state.set(cacheKey, this._similar);
+                }
+            }
 
             if (this._similar.length > 0) {
                 this._renderSimilar();

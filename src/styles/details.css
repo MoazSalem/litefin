@@ -451,7 +451,7 @@
 .rich-meta-row {
     display: flex;
     align-items: baseline;
-    padding: 16px 0;
+    padding: 6px 0;
     /* Touch target spacing */
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     /* Row separators */
@@ -477,9 +477,10 @@
 }
 
 .meta-chip {
-    margin-right: 12px;
-    margin-bottom: 12px; /* Add vertical spacing for multi-line wrapping */
-    padding: 6px 14px;
+    margin-right: 4px;
+    margin-top: 4px;
+    margin-bottom: 4px;
+    padding: 6px 10px;
     border-radius: 40px;
     -webkit-border-radius: 40px;
     background: rgba(255, 255, 255, 0.05);
@@ -529,9 +530,9 @@
     overflow: hidden;
     background-clip: padding-box;
     color: var(--jf-text-primary);
-    font-size: 1.3rem;
+    font-size: 1.1rem;
     font-weight: 600;
-    padding: 12px 32px;
+    padding: 6px 12px;
     display: inline-block;
 }
 
