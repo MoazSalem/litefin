@@ -110,7 +110,7 @@ class HomePage extends Page {
                 api.getNextUp(),
                 // Map libraries to fetch requests
                 ...this._libraries.map((lib) =>
-                    api.getLatestItems(lib.Id, { Limit: 20 }).catch((e) => {
+                    api.getLatestItems(lib.Id).catch((e) => {
                         log.warn(`Failed to load latest for ${lib.Name}`, e);
                         return null; // Return null on error, filter later
                     })
@@ -305,7 +305,14 @@ class HomePage extends Page {
             const trackContainer = sectionEl.querySelector('.row-items-track');
             const virtualRow = new VirtualCardRow(trackContainer, row.items, {
                 isLandscape: isLandscape,
-                visibleCount: isLandscape ? 8 : 12, // Load slightly more standard poster cards
+                visibleCount: isLandscape ? 8 : 12, // Sliding window size after initial load
+                // Pre-render items at construction time so every row is ready before the
+                // user scrolls to it, eliminating on-demand DOM creation lag.
+                // Landscape rows only pre-render 5 cards — they are ~400px wide so ~4-5
+                // fit on a 1920px screen, keeping memory usage tight. Portrait rows get
+                // the full set since they're narrower and pack more cards per screen.
+                // The sliding window takes over on first navigation and evicts stale nodes.
+                initialWindow: isLandscape ? 5 : row.items.length,
                 focusSectionId: `home-row-${i}`,
                 renderCard: (item) => this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type)
             });

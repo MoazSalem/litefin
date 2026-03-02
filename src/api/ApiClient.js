@@ -455,7 +455,8 @@ export class ApiClient {
      */
     async getLatestItems(parentId, params = {}) {
         const defaults = {
-            Limit: 16,
+            // 20 items gives a comfortable scrollable collection per library row
+            Limit: 20,
             Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
@@ -470,7 +471,9 @@ export class ApiClient {
      */
     async getResumeItems(params = {}) {
         const defaults = {
-            Limit: 12,
+            // Fetch enough items to fill the horizontal row generously —
+            // users can scroll through up to 20 continue-watching entries
+            Limit: 20,
             Recursive: true,
             Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag',
             ImageTypeLimit: 1,

@@ -6,7 +6,11 @@ export class VirtualCardRow {
      * @param {HTMLElement} trackContainer - The `.row-items-track` wrapper element
      * @param {Array} items - Array of data items to render
      * @param {Object} options - Configuration for rendering options
-     * @param {number} [options.visibleCount=10] - Number of items to render simultaneously
+     * @param {number} [options.visibleCount=10] - Number of items to render simultaneously in the sliding window
+     * @param {number|null} [options.initialWindow=null] - If set, ALL items up to this count are rendered eagerly
+     *   on construction so the row is fully ready before the user scrolls to it.
+     *   After the first interactive navigation, _updateWindow trims back to the normal sliding window.
+     *   Pass `items.length` to pre-render everything.
      * @param {boolean} [options.isLandscape=false] - If items use the landscape (wider) layout
      * @param {Function} options.renderCard - Callback returning HTML string for an item
      */
@@ -15,6 +19,12 @@ export class VirtualCardRow {
         this.items = items;
 
         this.visibleCount = options.visibleCount || 10;
+
+        // Optional: pre-render a larger initial window to avoid on-demand DOM creation
+        // lag when the user first scrolls into this row. Resets to the normal sliding
+        // window on the first interactive _updateWindow call.
+        this._initialWindow = options.initialWindow != null ? options.initialWindow : null;
+        this._initialRenderDone = false; // Tracks whether the eager boot render has fired
         this.isLandscape = options.isLandscape || false;
         this.focusSectionId = options.focusSectionId;
         this.renderCard = options.renderCard;
@@ -70,7 +80,14 @@ export class VirtualCardRow {
 
         this.domNodes = new Map(); // Maps index -> HTMLElement
 
-        // Render the initial block
+        // Render the initial block.
+        // If an initialWindow was requested, temporarily widen visibleCount so
+        // _updateWindow builds the full initial set of DOM nodes in one pass.
+        // The flag is cleared on the next _updateWindow call so the normal
+        // sliding window takes over transparently from that point.
+        if (this._initialWindow != null) {
+            this._isBootRender = true;
+        }
         this._updateWindow(0);
     }
 
@@ -80,6 +97,58 @@ export class VirtualCardRow {
      */
     _updateWindow(centerIndex) {
         if (this.totalItems === 0) return;
+
+        // ── Boot-render path ────────────────────────────────────────────────
+        // On the very first call (triggered by the constructor), if initialWindow
+        // was requested we build the full initial set of DOM nodes in one pass.
+        // All subsequent calls fall through to the normal sliding-window logic.
+        if (this._isBootRender) {
+            this._isBootRender = false; // Never repeat the boot path
+            const bootEnd = Math.min(this.totalItems - 1, this._initialWindow - 1);
+
+            // Build [0 .. bootEnd] — unconditionally, no size checks needed
+            const start = 0;
+            const end = bootEnd;
+
+            for (let i = start; i <= end; i++) {
+                if (!this.domNodes.has(i)) {
+                    const tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = this.renderCard(this.items[i]).trim();
+                    const cardNode = tempDiv.firstElementChild;
+                    if (cardNode) {
+                        const leftPos = 60 + i * this.totalItemWidth;
+                        cardNode.style.position = 'absolute';
+                        const isRtl = document.documentElement.dir === 'rtl';
+                        if (isRtl) {
+                            cardNode.style.right = `${leftPos}px`;
+                        } else {
+                            cardNode.style.left = `${leftPos}px`;
+                        }
+                        cardNode.style.top = '0';
+                        cardNode.dataset.virtualIndex = i;
+                        cardNode.setAttribute('data-virtual-index', i);
+                        this.track.appendChild(cardNode);
+                        this.domNodes.set(i, cardNode);
+
+                        // Eager image load — same as the normal window path
+                        const img = cardNode.querySelector('img.lazy');
+                        if (img) {
+                            lazyLoader.forceLoad(img);
+                        }
+                    }
+                }
+            }
+
+            // Invalidate FocusManager spatial cache so freshly added nodes are seen
+            if (this.focusSectionId) {
+                focusManager.invalidateCache(this.focusSectionId);
+            }
+
+            // Boot render is complete. Normal _updateWindow calls will trim the window
+            // back to visibleCount as the user navigates, which is exactly what we want.
+            return;
+        }
+        // ── End boot-render path ────────────────────────────────────────────
 
         let start = Math.max(0, centerIndex - this.bufferZone);
         let end = Math.min(this.totalItems - 1, centerIndex + this.bufferZone);
