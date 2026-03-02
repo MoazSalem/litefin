@@ -60,7 +60,7 @@
     overflow: hidden;
     background-clip: padding-box;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only — ~8 sidebar buttons */
 }
 
 .settings-menu-btn .menu-icon {
@@ -90,6 +90,7 @@
     color: white;
     outline: none !important;
     transform: scale(1.05);
+    will-change: transform;
 }
 
 /* Content Panel */
@@ -180,10 +181,9 @@
     background-clip: padding-box;
     min-width: 100px;
     text-align: center;
-    /* Force light text color (approx white) because the background is always dark glass */
     color: var(--jf-text-primary, rgb(229, 231, 235));
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only — can be 10+ option buttons per setting row */
 }
 
 .btn-option:disabled {
@@ -208,6 +208,7 @@
     background: var(--jf-accent-hover);
     transform: scale(1.05);
     outline: none !important;
+    will-change: transform;
 }
 
 /* Select Inputs */
@@ -227,7 +228,7 @@
     cursor: pointer;
     outline: none;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only */
 }
 
 .select-btn:focus,
@@ -236,6 +237,7 @@
     color: white;
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.05);
+    will-change: transform;
 }
 
 .select-btn .btn-label {
@@ -297,7 +299,7 @@
     cursor: pointer;
     margin-bottom: 4px;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only — dropdown can have 10-20 options */
 }
 
 .select-option:last-child {
@@ -311,6 +313,7 @@
     color: white;
     outline: none;
     transform: scale(1.02);
+    will-change: transform;
 }
 
 .select-option.selected {
@@ -401,7 +404,7 @@
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only */
 }
 
 .switch-user-btn:focus,
@@ -409,6 +412,7 @@
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    will-change: transform;
 }
 
 /* About Card */
@@ -421,7 +425,7 @@
     margin-bottom: 60px;
     border: 2px solid var(--jf-action-btn-border)!important;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* Singleton, but follow the same focus-only pattern */
 }
 
 .about-card:focus,
@@ -430,6 +434,7 @@
     border: 2px solid var(--jf-action-btn-active-border)!important;
     outline: none;
     transform: scale(1.02);
+    will-change: transform;
 }
 
 .app-version {
@@ -525,7 +530,8 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     border: 2px solid transparent;
     outline: none;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
-    will-change: transform;
+    /* No permanent will-change — the playback settings tab has 15+ toggles.
+       Promoting each to a compositor layer would exhaust VRAM on Tizen. */
 }
 
 .toggle-switch::after {
@@ -551,6 +557,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
 .toggle-switch.focused {
     border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
+    will-change: transform;
 }
 
 /* ==========================================================================

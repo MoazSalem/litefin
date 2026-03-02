@@ -494,7 +494,8 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
     display: inline-flex;
     align-items: center;
-    will-change: transform;
+    /* No permanent will-change — genre/studio/cast chips can be 20+ per page.
+       Only the focused chip gets a compositor layer (via :focus rule below). */
 }
 
 
@@ -509,6 +510,8 @@
     outline: none !important;
     text-decoration: none !important;
     z-index: 5;
+    /* Promote only the focused chip */
+    will-change: transform;
 }
 
 /* Comma removed for chip-style design */
@@ -553,12 +556,12 @@
 /* Smooth focus for cast/similar items (matches Home scaling) */
 .media-card {
     transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
-    /* GPU Force - KEEP: Interactive element */
-    transform: translateZ(0);
-    will-change: transform;
     justify-self: center;
 
-    /* PERFORMANCE: Layout isolation */
+    /* PERFORMANCE: Layout isolation without compositor promotion.
+       home.css already handles the will-change: transform on :focus.
+       Avoid permanent transform: translateZ(0) here — it promotes every
+       cast/similar/episode card to its own GPU layer (20-50+ layers). */
     contain: layout style;
 }
 
@@ -595,10 +598,10 @@
     overflow: hidden;
     background-clip: padding-box;
 
-    /* PERFORMANCE: Layout isolation and layer promotion */
-    transform: translateZ(0);
-    will-change: transform;
-    contain: layout style;
+    /* PERFORMANCE: Paint containment isolates repaints per card without
+       promoting each one to a compositor layer. Episodes can be 20+ per season.
+       will-change added only on :focus (below). */
+    contain: layout style paint;
 }
 
 
@@ -613,6 +616,8 @@
     outline: none !important;
     border: 4px solid var(--jf-button-border-focus);
     z-index: 10;
+    /* Promote only the focused card to its own compositor layer */
+    will-change: transform;
 }
 
 .episode-thumb {

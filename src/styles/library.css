@@ -712,7 +712,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     background-clip: padding-box;
     /* Standardize corners */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-left-color 0.18s ease, padding 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only — only ~5 filter categories exist but still
+       no reason to hold GPU layers for all of them permanently. */
 }
 
 .filter-category-btn:focus,
@@ -722,6 +723,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     border-left-color: white;
     padding-left: 45px;
     outline: none;
+    will-change: transform;
 }
 
 .filter-category-btn.active {
@@ -868,7 +870,7 @@ html[data-layout-tier="legacy"] .filter-main > * {
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change on :focus only */
 }
 
 .modal-action-btn:first-child {
@@ -883,6 +885,7 @@ html[data-layout-tier="legacy"] .filter-main > * {
     color: white;
     z-index: 10;
     outline: none;
+    will-change: transform;
 }
 
 .modal-action-btn.apply {
@@ -993,12 +996,10 @@ html[data-layout-tier="legacy"] .filter-main > * {
     margin: 5px;
     /* Extra robustness */
 
-    /* PERFORMANCE: Aggressive GPU acceleration for TV hardware */
-    will-change: transform;
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    
-    /* Layout isolation prevents content changes inside the card from
-       triggering global layout passes on the main thread. */
+    /* PERFORMANCE: Layout isolation prevents content changes inside the card from
+       triggering global layout passes. home.css already handles the compositor
+       promotion strategy (will-change only on :focus). Do NOT add permanent
+       transform: translateZ(0) here — it overrides that strategy and promotes
+       every row card (could be 30-60+ at once) to its own GPU layer. */
     contain: layout style;
 }
