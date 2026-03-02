@@ -16,6 +16,7 @@ import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 
 const log = logger.create('LayoutManager');
 
@@ -159,6 +160,13 @@ class LayoutManager {
 
         // Update HTML attribute for CSS
         document.documentElement.setAttribute('data-theme', theme);
+
+        /*
+         * Re-apply the CSS vars polyfill so it picks up the new theme's
+         * custom property values. On Chrome 49+ (Tizen 4.0+) this is a no-op
+         * because platformInfo.layoutTier !== 'legacy'.
+         */
+        cssVarsPolyfill.update();
 
         // Update state
         state.set('app:theme', theme, true);

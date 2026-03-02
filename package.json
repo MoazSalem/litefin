@@ -58,6 +58,7 @@
         "webpack-cli": "^5.1.4"
     },
     "dependencies": {
+        "css-vars-ponyfill": "^2.4.9",
         "hls.js": "^1.6.15",
         "libjass": "^0.11.0",
         "libpgs": "^0.8.1",

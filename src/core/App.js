@@ -37,6 +37,7 @@ import { debugOverlay } from '../ui/DebugOverlay.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
+import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 
 const log = logger.create('App');
 
@@ -87,6 +88,11 @@ class App {
 
         // 3. Initialize layout manager
         layoutManager.init();
+
+        // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
+        //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
+        //      CSS variables are already present on <html> when the polyfill scans the DOM.
+        cssVarsPolyfill.init();
 
         // 3.5. Initialize translations
         // Ensures language dictionaries are loaded before the UI renders
