@@ -398,30 +398,9 @@ export default class OSDController extends Component {
         const chapters = this._player.getChapters ? this._player.getChapters() : [];
         const hasChapters = chapters && chapters.length > 0;
 
-        const prevChapterBtn = this._osdEl.querySelector('[data-action="previousChapter"]');
-        const nextChapterBtn = this._osdEl.querySelector('[data-action="nextChapter"]');
-
-        if (hasChapters) {
-             if (prevChapterBtn) {
-                 prevChapterBtn.classList.remove('osd-btn-disabled');
-                 prevChapterBtn.setAttribute('tabindex', '0');
-             }
-             if (nextChapterBtn) {
-                 nextChapterBtn.classList.remove('osd-btn-disabled');
-                 nextChapterBtn.setAttribute('tabindex', '0');
-             }
-             this._renderChapterMarkers();
-        } else {
-             if (prevChapterBtn) {
-                 prevChapterBtn.classList.add('osd-btn-disabled');
-                 prevChapterBtn.setAttribute('tabindex', '-1');
-             }
-             if (nextChapterBtn) {
-                 nextChapterBtn.classList.add('osd-btn-disabled');
-                 nextChapterBtn.setAttribute('tabindex', '-1');
-             }
-             this._renderChapterMarkers();
-        }
+        // Sync button enabled state and render/clear markers
+        this._syncChapterButtonState(hasChapters);
+        this._renderChapterMarkers();
     }
 
     _renderChapterMarkers() {
@@ -466,6 +445,44 @@ export default class OSDController extends Component {
         });
 
         log.debug(`Rendered ${container.children.length} markers`);
+
+        /*
+         * On slower devices (Tizen 5.0), the 'chaptersloaded' event from the player
+         * can fire BEFORE OSDController has mounted and registered its listener,
+         * leaving the chapter buttons permanently disabled even though chapters
+         * are actually available. The seekbar markers render correctly because
+         * _renderChapterMarkers() is also triggered by 'durationchange' and
+         * 'loadedmetadata' — which always fire after mount.
+         *
+         * When we reach here, we know chapters are definitely loaded and valid
+         * (we just rendered markers). Sync the button state so the buttons are
+         * always consistent with what the seekbar shows, regardless of event ordering.
+         */
+        this._syncChapterButtonState(true);
+    }
+
+    /**
+     * Enable or disable the prev/next chapter buttons without re-rendering markers.
+     * Called from both _updateChapterButtons() and _renderChapterMarkers() so that
+     * either code path can recover from missed or out-of-order events.
+     * @param {boolean} enabled
+     * @private
+     */
+    _syncChapterButtonState(enabled) {
+        const prevChapterBtn = this._osdEl?.querySelector('[data-action="previousChapter"]');
+        const nextChapterBtn = this._osdEl?.querySelector('[data-action="nextChapter"]');
+
+        if (enabled) {
+            prevChapterBtn?.classList.remove('osd-btn-disabled');
+            prevChapterBtn?.setAttribute('tabindex', '0');
+            nextChapterBtn?.classList.remove('osd-btn-disabled');
+            nextChapterBtn?.setAttribute('tabindex', '0');
+        } else {
+            prevChapterBtn?.classList.add('osd-btn-disabled');
+            prevChapterBtn?.setAttribute('tabindex', '-1');
+            nextChapterBtn?.classList.add('osd-btn-disabled');
+            nextChapterBtn?.setAttribute('tabindex', '-1');
+        }
     }
 
     hide() {
