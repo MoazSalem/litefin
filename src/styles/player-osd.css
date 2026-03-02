@@ -235,14 +235,15 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 0;
     margin: 0;
-    /* GPU acceleration */
-    transform: translateZ(0);
-    -webkit-transform: translateZ(0);
-    will-change: background, transform;
+    /* No permanent will-change — the OSD has ~11 buttons and the whole
+       .player-osd container is already a compositor layer via translateZ(0).
+       Each button gets its own layer only when it's actively focused. */
 }
 
 .osd-btn:hover {
     background: var(--osd-btn-hover);
+    /* Promote only the hovered button to its own compositor layer */
+    will-change: transform;
 }
 
 .osd-btn:focus,
@@ -252,6 +253,8 @@
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.15);
+    /* Promote only the focused button */
+    will-change: transform;
 }
 
 .osd-btn.active {

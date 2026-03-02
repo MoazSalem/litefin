@@ -669,17 +669,27 @@ export class TizenAVPlayer {
 
         try {
             if (index < 0) {
+                // -1 = disable subtitles
                 this._avplay.setSilentSubtitle(true);
-                this._currentSubtitleStreamIndex = index; // Update state
+                this._currentSubtitleStreamIndex = index;
             } else {
-                this._avplay.setSilentSubtitle(false);
-
-                const tracks = this._avplay.getTotalTrackInfo();
-                const textTracks = tracks.filter((t) => t.type === 'TEXT');
-
-                if (textTracks[index]) {
-                    this._avplay.setSelectTrack('TEXT', textTracks[index].index);
-                    this._currentSubtitleStreamIndex = index; // Update state
+                /*
+                 * IMPORTANT: `index` here is a Jellyfin stream index (e.g. 3, 5, 7),
+                 * NOT a 0-based Tizen array position. Using it directly as textTracks[index]
+                 * would select the completely wrong track.
+                 *
+                 * We must map it via _findTizenSubtitleIndex(), which finds the N-th
+                 * embedded subtitle in the Jellyfin MediaStreams list and maps that
+                 * to the corresponding Tizen TEXT track by position.
+                 */
+                const tizenSubIndex = this._findTizenSubtitleIndex(index);
+                if (tizenSubIndex !== null) {
+                    this._avplay.setSilentSubtitle(false);
+                    this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                    this._currentSubtitleStreamIndex = index;
+                    log.debug(`setSubtitleStreamIndex: Jellyfin ${index} → Tizen TEXT ${tizenSubIndex}`);
+                } else {
+                    log.warn(`setSubtitleStreamIndex: Could not map Jellyfin index ${index} to Tizen TEXT track`);
                 }
             }
         } catch (e) {
@@ -747,7 +757,7 @@ export class TizenAVPlayer {
         if (!this._avplay || !this._isPrepared) return 0;
 
         try {
-            let timeMs = Number(this._avplay.getCurrentTime());
+            const timeMs = Number(this._avplay.getCurrentTime());
             if (isNaN(timeMs)) return 0;
 
             return timeMs / 1000;

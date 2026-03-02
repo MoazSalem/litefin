@@ -59,6 +59,26 @@ export default class ASSRenderer {
         // Last known playback time for nudging on style change
         this._lastTime = null;
 
+        /*
+         * Seek debounce: when the user jumps a chapter or scrubs rapidly,
+         * `_onSeeking` fires followed by a burst of `timeupdate` events while
+         * the browser re-buffers. Each tick drives libjass ASS cue lookups
+         * synchronously on the main thread — the same thread that runs the
+         * OSD opacity CSS transition. We debounce seek ticks so that libjass
+         * only re-renders once after the seek settles (100ms of silence),
+         * freeing the main thread for the OSD animation to complete smoothly.
+         */
+        this._seekDebounceTimer = null;
+        this._isSeeking = false;
+
+        /*
+         * Timeupdate throttle: during normal playback we tick libjass at most
+         * once every 100ms (matching the AVPlay tick rate and providing
+         * sub-100ms subtitle accuracy without excessive main-thread load).
+         */
+        this._lastTickTime = 0;
+        this._tickThrottleMs = 100;
+
         log.info('ASSRenderer initialized' +
             (this._isVirtual ? ' (AVPlay/ManualClock mode)' : ' (HTML5/VideoClock mode)'));
     }
@@ -80,20 +100,57 @@ export default class ASSRenderer {
     tick(timeSeconds) {
         this._lastTime = timeSeconds;
         if (this._clock) {
-            // Apply the user-set subtitle delay offset.
-            // Positive delay → subtract from time → clock runs slower → cues fire later.
-            const offsetTime = timeSeconds - (this._delaySeconds || 0);
-            try {
-                this._clock.tick(offsetTime);
-            } catch (err) {
-                /*
-                 * libjass can throw on malformed ASS vector drawing commands (\p tag)
-                 * where the internal SVG element is undefined. We cannot patch libjass,
-                 * but we CAN suppress the error so it doesn't spam on every timeupdate.
-                 * The subtitle simply won't render for that cue rather than crashing the app.
-                 */
-                log.warn('libjass tick error (likely malformed \\p drawing tag):', err.message);
+            /*
+             * During a seek burst (chapter jump / scrubbing), suppress individual
+             * ticks and coalesce them into a single tick 100ms after the seek settles.
+             * This prevents libjass from doing repeated synchronous ASS cue layout
+             * work while the OSD show animation is also running on the main thread.
+             */
+            if (this._isSeeking) {
+                // Cancel any previous pending debounce
+                if (this._seekDebounceTimer) clearTimeout(this._seekDebounceTimer);
+                this._seekDebounceTimer = setTimeout(() => {
+                    this._isSeeking = false;
+                    this._seekDebounceTimer = null;
+                    this._doTick(timeSeconds);
+                }, 100);
+                return;
             }
+
+            /*
+             * During normal playback, throttle to _tickThrottleMs (100ms).
+             * libjass interpolates between ticks internally, so this doesn't
+             * visibly degrade subtitle accuracy while cutting main-thread load.
+             */
+            const now = Date.now();
+            if (now - this._lastTickTime < this._tickThrottleMs) return;
+            this._lastTickTime = now;
+
+            this._doTick(timeSeconds);
+        }
+    }
+
+    /**
+     * Internal: apply the delay offset and call clock.tick().
+     * Separated so seek debounce and normal throttle share the same path.
+     * @param {number} timeSeconds
+     * @private
+     */
+    _doTick(timeSeconds) {
+        if (!this._clock) return;
+        // Apply the user-set subtitle delay offset.
+        // Positive delay → subtract from time → clock runs slower → cues fire later.
+        const offsetTime = timeSeconds - (this._delaySeconds || 0);
+        try {
+            this._clock.tick(offsetTime);
+        } catch (err) {
+            /*
+             * libjass can throw on malformed ASS vector drawing commands (\p tag)
+             * where the internal SVG element is undefined. We cannot patch libjass,
+             * but we CAN suppress the error so it doesn't spam on every timeupdate.
+             * The subtitle simply won't render for that cue rather than crashing the app.
+             */
+            log.warn('libjass tick error (likely malformed \\p drawing tag):', err.message);
         }
     }
 
@@ -404,6 +461,14 @@ export default class ASSRenderer {
             this._onWindowResize = null;
         }
 
+        // Cancel any pending seek debounce timers to prevent stale callbacks
+        // from calling _doTick() after the renderer has been destroyed.
+        if (this._seekDebounceTimer) {
+            clearTimeout(this._seekDebounceTimer);
+            this._seekDebounceTimer = null;
+        }
+        this._isSeeking = false;
+
         // Disable the clock first (stops ticking)
         if (this._clock) {
             try {
@@ -520,8 +585,21 @@ export default class ASSRenderer {
             // NOTE: All time updates go through this.tick() so the offset is applied.
             this._onTimeUpdate = () => this.tick(this._videoElement.currentTime);
             this._onSeeking = () => {
-                // On seek, also go through tick() so the offset is applied
-                if (this._clock) this.tick(this._videoElement.currentTime);
+                /*
+                 * Mark that we are in a seek burst. tick() will suppress individual
+                 * ticks and debounce into a single tick once the seek settles.
+                 * This prevents libjass from hammering the main thread during
+                 * rapid seeks (chapter jumps, scrubbing through the seekbar) at
+                 * the same moment the OSD is showing its opacity transition.
+                 */
+                this._isSeeking = true;
+                if (this._seekDebounceTimer) clearTimeout(this._seekDebounceTimer);
+                // Schedule the debounced tick in case seeked never fires
+                this._seekDebounceTimer = setTimeout(() => {
+                    this._isSeeking = false;
+                    this._seekDebounceTimer = null;
+                    if (this._clock) this._doTick(this._videoElement.currentTime);
+                }, 150);
             };
             this._onPlay = () => {
                 if (this._clock) this._clock.play();
