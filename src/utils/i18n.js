@@ -18,32 +18,85 @@ class I18nManager {
     }
 
     /**
+     * Fetches a local JSON file using XMLHttpRequest.
+     *
+     * WHY NOT fetch():
+     * WebOS (all versions) blocks fetch() for file:// URLs due to its WebView
+     * security model, even for files within the same app package. XHR does NOT
+     * have this restriction and is the safe cross-platform way to load local
+     * assets on both Tizen AND WebOS.
+     *
+     * @param {string} url - The URL to load
+     * @returns {Promise<Object>} Parsed JSON data
+     */
+    _loadJson(url) {
+        return new Promise(function (resolve, reject) {
+            const xhr = new XMLHttpRequest();
+
+            xhr.onreadystatechange = function () {
+                if (xhr.readyState !== 4) return;
+
+                /*
+                 * On file:// protocol, a successful local XHR returns status 0
+                 * (not 200) because there is no HTTP server. We treat status 0
+                 * or 200 as success to cover both packaged-app and dev-server
+                 * scenarios.
+                 */
+                if (xhr.status === 200 || xhr.status === 0) {
+                    try {
+                        resolve(JSON.parse(xhr.responseText));
+                    } catch (e) {
+                        reject(new Error('JSON parse error: ' + e.message));
+                    }
+                } else {
+                    reject(new Error('XHR failed with status ' + xhr.status));
+                }
+            };
+
+            xhr.onerror = function () {
+                reject(new Error('XHR network error loading: ' + url));
+            };
+
+            // Synchronous=false: async XHR, won't block the TV's single UI thread
+            xhr.open('GET', url, true);
+            xhr.send();
+        });
+    }
+
+    /**
+     * Resolves the base URL for locale files.
+     *
+     * Uses window.location.href (not pathname) so the resulting URL is always
+     * an absolute URL (e.g. file:///media/.../index.html → file:///media/.../locales/).
+     * Using a relative URL built from an absolute base avoids the XHR treating
+     * the path as relative to a non-existent HTTP root on WebOS.
+     *
+     * @param {string} lang - BCP-47 language tag
+     * @returns {string} Absolute URL to the locale JSON file
+     */
+    _localeUrl(lang) {
+        // Strip the filename part of the current page URL to get the app root.
+        // e.g. file:///media/.../org.litefin.app/index.html → file:///media/.../org.litefin.app/
+        const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        return base + 'locales/' + lang + '.json';
+    }
+
+    /**
      * Initializes the language manager.
-     * @param {string} langCode - Language ('en', 'es', etc.)
+     * @param {string} langCode - Language ('en-us', 'es', etc.)
      */
     async init(langCode = 'en') {
         this.currentLang = langCode;
         this.isRTL = langCode === 'ar' || langCode === 'he' || langCode === 'fa';
 
-        // Resolve path relative to the current location (handles file:// in Tizen)
-        const basePath = window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1);
-        const url = `${basePath}locales/${this.currentLang}.json`;
-
+        const url = this._localeUrl(this.currentLang);
         log.info(`[i18n] Initializing with lang: ${this.currentLang}, url: ${url}`);
 
         try {
-            // Lazy load the JSON mapping
-            const response = await fetch(url);
-            if (response.ok) {
-                const data = await response.json();
-                this.dictionary = data;
-                log.info(
-                    `[i18n] Successfully loaded ${Object.keys(this.dictionary).length} keys for ${this.currentLang}`
-                );
-            } else {
-                log.error(`[i18n] Failed to load locale file: ${response.status} ${response.statusText}`);
-                throw new Error(`Failed to load ${this.currentLang}.json: ${response.status}`);
-            }
+            // Use XHR instead of fetch() — works on both Tizen and WebOS file:// contexts
+            const data = await this._loadJson(url);
+            this.dictionary = data;
+            log.info(`[i18n] Successfully loaded ${Object.keys(this.dictionary).length} keys for ${this.currentLang}`);
         } catch (error) {
             log.error(`[i18n] Init failed, falling back to empty dict`, {
                 url,
@@ -58,16 +111,12 @@ class I18nManager {
         // Load fallback dictionary if necessary
         if (this.currentLang !== this.fallbackLang) {
             try {
-                const fallbackUrl = `${basePath}locales/${this.fallbackLang}.json`;
-                const fallbackResponse = await fetch(fallbackUrl);
-                if (fallbackResponse.ok) {
-                    this.fallbackDictionary = await fallbackResponse.json();
-                    log.info(
-                        `[i18n] Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
-                    );
-                } else {
-                    log.error(`[i18n] Failed to load fallback locale file`);
-                }
+                const fallbackUrl = this._localeUrl(this.fallbackLang);
+                const data = await this._loadJson(fallbackUrl);
+                this.fallbackDictionary = data;
+                log.info(
+                    `[i18n] Successfully loaded ${Object.keys(this.fallbackDictionary).length} keys for fallback (${this.fallbackLang})`
+                );
             } catch (error) {
                 log.error(`[i18n] Failed to load fallback dictionary`, error);
                 this.fallbackDictionary = {};
