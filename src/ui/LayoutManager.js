@@ -15,6 +15,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('LayoutManager');
 
@@ -61,7 +62,20 @@ class LayoutManager {
         this.setTheme(savedTheme, false);
         this.setUiFont(savedUiFont, false);
 
-        log.info(`Initialized with layout="${this._layout}", theme="${this._theme}", uiFont="${this._uiFont}"`);
+        /*
+         * Stamp the CSS layout tier onto <html> so stylesheet rules can branch
+         * between CSS Grid (modern) and flex-wrap (legacy) using attribute
+         * selectors: html[data-layout-tier="legacy"] { ... }
+         *
+         * PlatformInfo must be initialized BEFORE LayoutManager.init() for
+         * this to reflect the detected Chrome version; otherwise it defaults
+         * to 'modern' (safe fallback — grid works on anything Chrome 57+).
+         */
+        document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
+
+        log.info(
+            `Initialized with layout="${this._layout}", theme="${this._theme}", uiFont="${this._uiFont}", tier="${platformInfo.layoutTier}"`
+        );
     }
 
     /**

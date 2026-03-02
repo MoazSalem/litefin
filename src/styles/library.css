@@ -362,6 +362,28 @@
     /* Hits strictly 4 per row at 1080p */
 }
 
+/*
+ * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * The minmax() responsive grid can't be replicated exactly with flex-wrap,
+ * so we use fixed 300px card widths (matching a typical 5-per-row at 1080p).
+ * Landscape cards use 380px to match the 4-per-row landscape intent.
+ */
+html[data-layout-tier="legacy"] .library-grid {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+html[data-layout-tier="legacy"] .library-grid .media-card {
+    /* Fixed width matching the minmax target at 1080p: ~300px portrait */
+    width: 300px !important;
+    margin: 0 30px 40px 0 !important;
+}
+
+html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
+    width: 380px !important;
+    margin: 0 30px 40px 0 !important;
+}
+
 /* --- Alpha Picker (Right Side) --- */
 .alpha-picker-container {
     display: flex;
@@ -695,6 +717,24 @@
     grid-auto-rows: max-content;
     /* Redundant gap removed, using margin on children for Tizen */
     align-content: start;
+}
+
+/*
+ * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * filter-main is the filter modal's checkbox grid. Use flex-wrap with
+ * fixed ~220px widths to match the auto-fill column intent.
+ */
+html[data-layout-tier="legacy"] .filter-main {
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+}
+
+html[data-layout-tier="legacy"] .filter-main > * {
+    /* Match the minmax target at typical 1080p widths */
+    width: 220px;
+    margin-right: 20px;
+    margin-bottom: 12px;
 }
 
 /* Scrollbar styling for modal lists */

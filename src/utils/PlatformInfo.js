@@ -16,6 +16,14 @@ const log = logger.create('PlatformInfo');
 class PlatformInfo {
     constructor() {
         this._platform = 'web'; // Default to web
+
+        /*
+         * Layout tier controls which CSS rendering path is used.
+         *   'modern' — Chrome 57+: CSS Grid is available (Tizen 5.0+)
+         *   'legacy' — Chrome <57: CSS Grid is unsupported (Tizen 3.0 / 4.0)
+         * Stamped onto <html data-layout-tier> by LayoutManager.init().
+         */
+        this._layoutTier = 'modern'; // Safe default
     }
 
     /**
@@ -54,6 +62,20 @@ class PlatformInfo {
 
         log.info(`Detected platform: ${this._platform}`);
 
+        // -------------------------------------------------------------------
+        // Layout Tier Detection — based on Chrome version in the UA string.
+        //   CSS Grid landed in Chrome 57. Tizen 3.0 ships Chrome 47,
+        //   Tizen 4.0 ships Chrome 56 — both pre-Grid. We stamp this as a
+        //   data attribute on <html> so CSS can switch rendering paths without
+        //   any runtime JS branching in components.
+        // -------------------------------------------------------------------
+        const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+        const chromeVersion = chromeMatch ? parseInt(chromeMatch[1], 10) : 999;
+
+        // Chrome 57+ has CSS Grid support; anything below falls back to flex-wrap.
+        this._layoutTier = chromeVersion >= 57 ? 'modern' : 'legacy';
+        log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
+
         // Cache the result
         storage.setItem('app_platform', this._platform);
     }
@@ -76,6 +98,14 @@ class PlatformInfo {
     /** @returns {string} The raw platform string ('tizen', 'webos', 'web') */
     get platformString() {
         return this._platform;
+    }
+
+    /**
+     * The CSS layout tier for this device.
+     * @returns {'modern'|'legacy'} 'modern' if CSS Grid is supported (Chrome 57+), 'legacy' otherwise.
+     */
+    get layoutTier() {
+        return this._layoutTier;
     }
 }
 

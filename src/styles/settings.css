@@ -466,6 +466,27 @@
     row-gap: 30px;
 }
 
+/*
+ * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Replicate the 2-column identity grid using flex-wrap with calc widths.
+ */
+html[data-layout-tier="legacy"] .identity-grid {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+html[data-layout-tier="legacy"] .identity-grid .identity-item {
+    /* Two items per row with a 30px gap between them */
+    width: calc(50% - 15px);
+    margin-right: 30px;
+    margin-bottom: 30px;
+}
+
+/* Remove right margin from every second item (even columns) */
+html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
+    margin-right: 0;
+}
+
 .identity-item {
     display: flex;
     flex-direction: column;

@@ -158,3 +158,23 @@
     width: 400px !important;
     max-width: 400px !important;
 }
+
+/*
+ * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Replicate the auto-fill grid with flex-wrap and explicit card widths.
+ * Cards already have forced widths (240px / 400px) so the visual result is identical.
+ */
+html[data-layout-tier="legacy"] .genre-grid-items {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0; /* Remove grid gap; spacing comes from card margins below */
+}
+
+html[data-layout-tier="legacy"] .genre-grid-items .media-card {
+    /* Re-enable margin since grid gap no longer applies */
+    margin: 0 32px 32px 0 !important;
+}
+
+html[data-layout-tier="legacy"] .genre-grid-items.landscape .media-card {
+    margin: 0 32px 32px 0 !important;
+}
