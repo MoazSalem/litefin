@@ -929,53 +929,88 @@ export class ApiClient {
 // ============================================================================
 
 /**
- * Test if an address is a valid Jellyfin server
+ * Test if an address is a valid Jellyfin server.
+ *
+ * Uses XMLHttpRequest instead of fetch() + AbortController because:
+ *   - AbortController requires Chrome 66+
+ *   - WebOS 4 ships Chromium 53, Tizen 3.0 ships Chromium 47
+ *   - Without a working abort, fetch() hangs until OS TCP timeout (~60-120s)
+ *     which makes subnet scanning unbearably slow on older platforms
+ *   - XHR.timeout is a native hard-kill supported since Chrome 29
  */
-export async function testServer(address, timeout = 1000, parentSignal = null) {
-    try {
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), timeout);
+export function testServer(address, timeout = 1000, parentSignal = null) {
+    return new Promise((resolve) => {
+        const xhr = new XMLHttpRequest();
 
-        // If the parent discovery was cancelled, abort this probe immediately
-        // rather than waiting out the full timeout (the original behaviour).
-        const onParentAbort = () => controller.abort();
+        // Hard-kill the request at the OS level after `timeout` ms.
+        // This is the key fix — unlike AbortController, xhr.timeout works on
+        // Chromium 29+ and actually terminates the underlying TCP connection.
+        xhr.timeout = timeout;
+
+        function done(result) {
+            // Cleanup the parent signal listener before resolving
+            if (parentSignal && onParentAbort) {
+                parentSignal.removeEventListener('abort', onParentAbort);
+            }
+            resolve(result);
+        }
+
+        // If the parent discovery scan was cancelled, abort this probe too
+        const onParentAbort = () => {
+            xhr.abort();
+            done(null);
+        };
+
         if (parentSignal) {
+            // Already cancelled before we even started
+            if (parentSignal.aborted) {
+                resolve(null);
+                return;
+            }
             parentSignal.addEventListener('abort', onParentAbort, { once: true });
         }
 
-        const response = await fetch(`${address}/System/Info/Public`, {
-            method: 'GET',
-            signal: controller.signal
-        });
+        xhr.onreadystatechange = function () {
+            if (xhr.readyState !== 4) return;
 
-        clearTimeout(timeoutId);
-        if (parentSignal) parentSignal.removeEventListener('abort', onParentAbort);
-
-        if (!response.ok) return null;
-
-        const info = await response.json();
-
-        let serverName = info.ServerName;
-        if (!serverName || serverName.trim() === '') {
-            try {
-                const url = new URL(address);
-                serverName = url.hostname;
-            } catch (e) {
-                serverName = 'Jellyfin Server';
+            if (xhr.status !== 200) {
+                done(null);
+                return;
             }
-        }
 
-        return {
-            address: address,
-            name: serverName,
-            id: info.Id,
-            version: info.Version,
-            operatingSystem: info.OperatingSystem
+            try {
+                const info = JSON.parse(xhr.responseText);
+
+                let serverName = info.ServerName;
+                if (!serverName || serverName.trim() === '') {
+                    // Fall back to hostname extracted from the address URL
+                    try {
+                        serverName = new URL(address).hostname;
+                    } catch (_) {
+                        serverName = 'Jellyfin Server';
+                    }
+                }
+
+                done({
+                    address: address,
+                    name: serverName,
+                    id: info.Id,
+                    version: info.Version,
+                    operatingSystem: info.OperatingSystem
+                });
+            } catch (_) {
+                // Malformed JSON from the server — not a Jellyfin instance
+                done(null);
+            }
         };
-    } catch (err) {
-        // Return null on any error (timeout, network refused, cancelled, etc)
-        return null;
-    }
+
+        // Both timeout and network errors resolve to null (not found)
+        xhr.ontimeout = () => done(null);
+        xhr.onerror = () => done(null);
+
+        xhr.open('GET', `${address}/System/Info/Public`, /* async */ true);
+        xhr.send();
+    });
 }
 
 let activeDiscoveryController = null;
