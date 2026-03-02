@@ -96,8 +96,6 @@
 
 .hero-poster {
     width: 420px;
-    aspect-ratio: 2/3;
-    /* Enforce 2:3 aspect ratio */
     flex-shrink: 0;
     margin-right: 60px;
     background-color: transparent;
@@ -479,37 +477,42 @@
 }
 
 .meta-chip {
-    margin-right: 8px;
-    /* Replacement for gap */
-    background: transparent;
-    border: 2px solid transparent;
-    /* Added base border to prevent layout jump */
-    border-radius: 4px;
+    margin-right: 12px;
+    margin-bottom: 12px; /* Add vertical spacing for multi-line wrapping */
+    padding: 6px 14px;
+    border-radius: 40px;
+    -webkit-border-radius: 40px;
+    background: rgba(255, 255, 255, 0.05);
+    border: 2px solid rgba(255, 255, 255, 0.1) !important;
     background-clip: padding-box;
     color: var(--jf-text-primary);
     font-size: 1.1rem;
-    padding: 2px 6px;
+    font-weight: 500;
     cursor: pointer;
     text-decoration: none;
-    opacity: 0.9;
-    transition: opacity 0.2s, color 0.2s, border-color 0.2s;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, color 0.18s ease;
+    display: inline-flex;
+    align-items: center;
+    will-change: transform;
 }
 
 
 .meta-chip:hover,
 .meta-chip:focus,
 .meta-chip.focused {
-    color: var(--jf-accent);
+    background-color: var(--jf-accent) !important;
+    color: white !important;
+    border-color: var(--jf-button-border-focus) !important;
+    transform: scale(1.1);
     opacity: 1;
     outline: none !important;
-    text-decoration: underline;
+    text-decoration: none !important;
+    z-index: 5;
 }
 
+/* Comma removed for chip-style design */
 .meta-chip:not(:last-child)::after {
-    content: ",";
-    margin-right: 6px;
-    color: var(--jf-text-secondary);
-    display: inline-block;
+    content: none;
 }
 
 /* See More Button Container */
@@ -613,7 +616,7 @@
 
 .episode-thumb {
     width: 100%;
-    aspect-ratio: 16/9;
+    height: 236px; /* 16:9 approx for standard detail widths, prevents collapse on Tizen */
     flex-shrink: 0;
     margin-right: 0;
     border-radius: 0;
@@ -693,14 +696,14 @@
 /* FIX: Aspect Ratio for Lazy Loading (Prevent Scroll Jump) */
 .card-image {
     width: 100%;
-    aspect-ratio: 2/3; /* Default Portrait */
+    height: 360px; /* Fixed height fallback for Tizen (approx 2:3 portrait) */
     background-color: rgba(255, 255, 255, 0.05); /* Placeholder bg */
 }
 
 /* Landscape grid modifier */
 .landscape .card-image,
 .landscape-grid .card-image {
-    aspect-ratio: 16/9 !important;
+    height: 225px !important; /* 16:9 approx for landscape cards */
 }
 
 .person-grid .media-card:nth-child(5n) {

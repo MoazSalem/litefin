@@ -160,9 +160,12 @@
 
 .setting-control {
     display: flex;
-    gap: 12px;
     flex-wrap: wrap;
     justify-content: flex-end;
+}
+
+.btn-option {
+    margin-left: 12px;
 }
 
 /* Buttons inside settings */
@@ -459,13 +462,17 @@
 .identity-grid {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
-    gap: 30px;
+    column-gap: 30px;
+    row-gap: 30px;
 }
 
 .identity-item {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+}
+
+.identity-label {
+    margin-bottom: 8px;
 }
 
 .identity-label {
@@ -535,8 +542,11 @@
     display: flex;
     align-items: center;
     min-width: 260px;
-    gap: 16px;
     padding: 8px 0;
+}
+
+.slider-label {
+    margin-right: 16px;
 }
 
 .slider-container {

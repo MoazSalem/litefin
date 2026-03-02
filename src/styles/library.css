@@ -38,9 +38,16 @@
     padding: 40px 50px 0 50px;
     display: flex;
     flex-direction: column;
-    gap: 30px;
     /* More breathing room between Title, Tabs, and Controls */
     z-index: 10;
+}
+
+.library-title-row {
+    margin-bottom: 30px;
+}
+
+.library-tabs {
+    margin-bottom: 30px;
 }
 
 .library-title-row {
@@ -906,10 +913,13 @@
     overflow-x: auto;
     padding: 10px 0;
     /* Space for focus ring */
-    gap: 20px;
     scrollbar-width: none;
     align-items: center;
     /* Vertical alignment */
+}
+
+.media-card {
+    margin-right: 20px;
 }
 
 

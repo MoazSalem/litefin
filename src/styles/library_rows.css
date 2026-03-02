@@ -4,7 +4,10 @@
     padding-bottom: 40px;
     display: flex;
     flex-direction: column;
-    gap: 15px;
+}
+
+.library-row {
+    margin-bottom: 15px;
 }
 
 /* Row Container */
@@ -52,7 +55,6 @@
     border-radius: 12px;
     display: inline-flex;
     align-items: center;
-    gap: 8px;
     cursor: pointer;
     /* Only transition specific properties - 'all' is expensive on TV devices */
     transition: transform 0.2s ease-out, background-color 0.2s ease-out;
@@ -60,6 +62,11 @@
     border: 3px solid transparent;
     outline: none;
     transform-origin: left center;
+}
+
+.header-focusable svg,
+.header-static svg {
+    margin-right: 8px;
 }
 
 .header-static {
@@ -102,7 +109,10 @@
 .library-row .row-items {
     padding: 15px 20px 25px 20px;
     /* Larger top padding to prevent clip during scale animation */
-    gap: 20px;
+}
+
+.library-row .row-items .media-card {
+    margin-right: 20px;
 }
 
 /* TV Scaling: Card sizes for library genre rows */

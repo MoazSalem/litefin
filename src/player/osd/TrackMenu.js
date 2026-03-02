@@ -130,7 +130,7 @@ export default class TrackMenu extends BaseMenu {
         const optionsHtml = tracks.map((track, i) => {
             const isSelected = track.Index === currentIndex;
             
-            const label = track.DisplayTitle || track.Title || track.Language || i18n.t('TrackIndex', track.Index);
+            const label = track.DisplayTitle || track.Title || track.Language || i18n.t('TrackIndex', [track.Index]);
             let metadataHtml = '';
 
             // For subtitles, add Type and Location metadata

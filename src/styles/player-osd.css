@@ -948,11 +948,18 @@
     color: #fff;
     display: flex;
     flex-direction: column;
-    gap: 12px;
     z-index: 2000;
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1), transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.osd-offset-header {
+    margin-bottom: 12px;
+}
+
+.osd-offset-content {
+    margin-bottom: 12px;
 }
 
 .osd-offset-header {
@@ -965,7 +972,10 @@
 .osd-offset-title-group {
     display: flex;
     align-items: baseline;
-    gap: 12px;
+}
+
+.osd-offset-title {
+    margin-right: 12px;
 }
 
 .osd-offset-content {

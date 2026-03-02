@@ -318,7 +318,7 @@ class LibraryPage extends Page {
         } else if (this.params.year) {
             this.state.viewType = 'Items';
             const year = decodeURIComponent(this.params.year);
-            this.$('#library-title').textContent = i18n.t('YearLabel', year);
+            this.$('#library-title').textContent = i18n.t('YearLabel', [year]);
             this.title = year;
         } else if (this.params.personId) {
             this.state.viewType = 'Items';
@@ -334,7 +334,7 @@ class LibraryPage extends Page {
         } else if (this.params.tagName) {
             this.state.viewType = 'Items';
             const tagName = decodeURIComponent(this.params.tagName);
-            this.$('#library-title').textContent = i18n.t('TagLabel', tagName);
+            this.$('#library-title').textContent = i18n.t('TagLabel', [tagName]);
             this.title = tagName;
         }
 

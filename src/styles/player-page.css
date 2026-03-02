@@ -80,10 +80,8 @@
 
 /* Glassmorphism Utility */
 .glass-panel {
-    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.5)) !important;
-    backdrop-filter: blur(30px) !important;
-    -webkit-backdrop-filter: blur(30px) !important;
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.1)) !important;
+    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8)) !important;
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2)) !important;
 }
 
 /* Glass Panel for Error */
@@ -91,10 +89,8 @@
     width: 600px;
     padding: 60px;
     border-radius: 40px;
-    background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.5));
-    backdrop-filter: blur(30px);
-    -webkit-backdrop-filter: blur(30px);
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.1));
+    background: var(--jf-action-btn-bg, rgba(30, 30, 30, 0.9));
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -324,15 +320,18 @@
     display: flex;
     justify-content: center;
     align-items: center;
-    gap: 24px;
+}
+
+.osd-btn {
+    margin-left: 12px;
+    margin-right: 12px;
 }
 
 .osd-btn {
     width: 56px;
     height: 56px;
     border: none;
-    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.1));
-    backdrop-filter: blur(10px);
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.15));
     border-radius: 50%;
     color: var(--osd-text-color, #fff);
     cursor: pointer;
@@ -389,7 +388,10 @@
     bottom: 160px;
     display: flex;
     flex-direction: column;
-    gap: 12px;
+}
+
+.osd-secondary-controls .osd-btn {
+    margin-bottom: 12px;
 }
 
 /* ==========================================================================

@@ -135,8 +135,7 @@
     border-radius: 4px;
     line-height: 1.4;
     letter-spacing: 0.02em;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    /* Blur removed for Tizen compatibility */
 }
 
 /* ============================================================================
@@ -144,16 +143,20 @@
    ============================================================================ */
 
 .upnext-info {
-    /*
-     * Inner flex column alongside the thumbnail in .upnext-content-row.
-     * The content-row provides all outer padding — no extra top/left padding needed here.
-     */
     display: flex;
     flex-direction: column;
-    gap: 0.2em;
     flex: 1;
     min-width: 0; /* Allows text truncation to work */
     padding: 0; /* Padding handled by parent .upnext-content-row */
+}
+
+/* Direct margin spacing for Tizen compatibility */
+.upnext-label {
+    margin-bottom: 0.1em;
+}
+
+.upnext-title {
+    margin-bottom: 0.1em;
 }
 
 /* The "UP NEXT" eyelet above the series name */
