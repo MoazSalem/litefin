@@ -290,55 +290,67 @@ class LibraryPage extends Page {
         // 3. Bind Events
         this._bindEvents();
 
-        // 4. Handle Genre/Studio Mode or Initial Data
-        if (this.params.genreId) {
-            this.state.viewType = 'Items'; // Force Items view for Genre
-            // Fetch Genre Info for Title
-            try {
-                const genre = await api.getItem(this.params.genreId);
-                if (genre) {
-                    this.$('#library-title').textContent = genre.Name; // Show Genre Name
-                    this.title = genre.Name;
-                }
-            } catch (e) {
-                log.error('Failed to fetch genre info', e);
-            }
-        } else if (this.params.studioId) {
-            this.state.viewType = 'Items'; // Force Items view for Studio
-            // Fetch Studio Info for Title
-            try {
-                const studio = await api.getItem(this.params.studioId);
-                if (studio) {
-                    this.$('#library-title').textContent = studio.Name; // Show Studio Name
-                    this.title = studio.Name;
-                }
-            } catch (e) {
-                log.error('Failed to fetch studio info', e);
-            }
-        } else if (this.params.year) {
+        // 4. Handle Genre/Studio/Person Mode — set viewType synchronously FIRST so
+        // _loadItems() (running in parallel below) sees the correct value immediately.
+        // The API calls for the display title run concurrently with the items fetch.
+        if (
+            this.params.genreId ||
+            this.params.studioId ||
+            this.params.year ||
+            this.params.personId ||
+            this.params.tagName
+        ) {
             this.state.viewType = 'Items';
-            const year = decodeURIComponent(this.params.year);
-            this.$('#library-title').textContent = i18n.t('YearLabel', [year]);
-            this.title = year;
-        } else if (this.params.personId) {
-            this.state.viewType = 'Items';
-            try {
-                const person = await api.getItem(this.params.personId);
-                if (person) {
-                    this.$('#library-title').textContent = person.Name;
-                    this.title = person.Name;
-                }
-            } catch (e) {
-                log.error('Failed to fetch person info', e);
-            }
-        } else if (this.params.tagName) {
-            this.state.viewType = 'Items';
-            const tagName = decodeURIComponent(this.params.tagName);
-            this.$('#library-title').textContent = i18n.t('TagLabel', [tagName]);
-            this.title = tagName;
         }
 
-        await this._loadItems();
+        // Build an async task that resolves the human-readable title from the server.
+        // Year and tag don't need a network call and resolve synchronously.
+        const infoFetchPromise = (async () => {
+            if (this.params.genreId) {
+                try {
+                    const genre = await api.getItem(this.params.genreId);
+                    if (genre) {
+                        this.$('#library-title').textContent = genre.Name;
+                        this.title = genre.Name;
+                    }
+                } catch (e) {
+                    log.error('Failed to fetch genre info', e);
+                }
+            } else if (this.params.studioId) {
+                try {
+                    const studio = await api.getItem(this.params.studioId);
+                    if (studio) {
+                        this.$('#library-title').textContent = studio.Name;
+                        this.title = studio.Name;
+                    }
+                } catch (e) {
+                    log.error('Failed to fetch studio info', e);
+                }
+            } else if (this.params.year) {
+                const year = decodeURIComponent(this.params.year);
+                this.$('#library-title').textContent = i18n.t('YearLabel', [year]);
+                this.title = year;
+            } else if (this.params.personId) {
+                try {
+                    const person = await api.getItem(this.params.personId);
+                    if (person) {
+                        this.$('#library-title').textContent = person.Name;
+                        this.title = person.Name;
+                    }
+                } catch (e) {
+                    log.error('Failed to fetch person info', e);
+                }
+            } else if (this.params.tagName) {
+                const tagName = decodeURIComponent(this.params.tagName);
+                this.$('#library-title').textContent = i18n.t('TagLabel', [tagName]);
+                this.title = tagName;
+            }
+        })();
+
+        // Run title resolution and item loading simultaneously. viewType is already set
+        // above synchronously, so _loadItems() is guaranteed to see the correct value.
+        await Promise.all([infoFetchPromise, this._loadItems()]);
+
         this._setupFocus();
 
         // Mark the page as rendered, fulfilling the Promise for NavigationState
@@ -693,17 +705,39 @@ class LibraryPage extends Page {
                 }
                 result = await api.getItems(params);
             } else if (viewType === 'Suggestions') {
-                // Fetch multiple rows for Suggestions with Recommendations
+                // Fetch multiple rows for Suggestions with Recommendations.
+                // Each source is individually try/catched so one failing API call
+                // doesn't kill the entire Suggestions page — we render what we get.
                 const rows = [];
 
                 const collectionType = this.state.libraryInfo?.CollectionType;
                 const suggestionTypes = collectionType === 'tvshows' ? 'Series' : 'Movie,Series';
 
-                // 1. Continue Watching & Next Up & Latest (Parallel Fetch)
+                // ------------------------------------------------------------------
+                // 1. Continue Watching, Next Up, and Latest — parallel fetch
+                //    Each is wrapped independently so a 404/400 on one still renders the others.
+                // NOTE: getNextUp uses /Shows/NextUp which does NOT accept ParentId —
+                //       it's a global TV endpoint. We omit ParentId to avoid 400 errors
+                //       on Jellyfin servers that validate parameter compatibility.
+                // ------------------------------------------------------------------
                 const [resume, nextUp, latest] = await Promise.all([
-                    api.getResumeItems({ Limit: 12, ParentId: this.state.libraryId }),
-                    api.getNextUp({ Limit: 12, ParentId: this.state.libraryId }),
-                    api.getLatestItems(this.state.libraryId, { Limit: 12, IncludeItemTypes: suggestionTypes })
+                    // Intentionally no ParentId here — resume items are user-global and
+                    // scoping by library forces the server to cross-reference all episodes
+                    // in the library, which is very slow on large TV libraries.
+                    api.getResumeItems({ Limit: 8 }).catch((e) => {
+                        log.warn('Failed to fetch resume items for Suggestions', e);
+                        return { Items: [] };
+                    }),
+                    api.getNextUp({ Limit: 8 }).catch((e) => {
+                        log.warn('Failed to fetch nextUp for Suggestions', e);
+                        return { Items: [] };
+                    }),
+                    api
+                        .getLatestItems(this.state.libraryId, { Limit: 8, IncludeItemTypes: suggestionTypes })
+                        .catch((e) => {
+                            log.warn('Failed to fetch latest items for Suggestions', e);
+                            return [];
+                        })
                 ]);
 
                 if (resume.Items && resume.Items.length > 0) {
@@ -736,7 +770,9 @@ class LibraryPage extends Page {
                     rows.push({ title: i18n.t(header), items: latest });
                 }
 
-                // 2. "Because You Watch..." (Based on active resume items)
+                // ------------------------------------------------------------------
+                // 2. "Because You Watch..." — based on active resume items
+                // ------------------------------------------------------------------
                 if (resume.Items && resume.Items.length > 0) {
                     // Pick a random item from likely candidates
                     const candidates = resume.Items.slice(0, 3);
@@ -763,7 +799,9 @@ class LibraryPage extends Page {
                     }
                 }
 
-                // 3. "Because You Like..." (Based on random Favorite in this library)
+                // ------------------------------------------------------------------
+                // 3. "Because You Like..." — based on random Favorite in this library
+                // ------------------------------------------------------------------
                 try {
                     const favorites = await api.getItems({
                         ParentId: this.state.libraryId,
@@ -1307,6 +1345,17 @@ class LibraryPage extends Page {
             scrollOffsetTop: 100
         });
 
+        // Register pagination footer — the grid's leaveDown points here.
+        // Without this registration the section is a ghost and focus is silently
+        // dropped when the user presses DOWN from the last grid row.
+        focusManager.register('library-pagination', this.$('#library-pagination'), {
+            orientation: 'horizontal',
+            leaveUp: 'library-grid',
+            leaveLeft: 'sidebar',
+            selector: 'button:not(:disabled)',
+            enterTo: 'default-element' // Land on first enabled (Prev or Next)
+        });
+
         this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
             leaveUp: this._isSubView() ? null : 'library-tabs',
@@ -1482,7 +1531,11 @@ class LibraryPage extends Page {
                 const trackContainer = section.querySelector('.row-items-track');
                 virtualRow = new VirtualCardRow(trackContainer, displayItems, {
                     isLandscape: row.isLandscape || false,
-                    visibleCount: row.isLandscape || false ? 8 : 12,
+                    visibleCount: row.isLandscape ? 8 : 12,
+                    // Eagerly render the first several cards so the row is navigable
+                    // immediately when focused rather than building nodes on first keypress.
+                    // 5 for landscape (wider cards), 7 for portrait.
+                    initialWindow: row.isLandscape ? 5 : Math.min(7, displayItems.length),
                     focusSectionId: `library-row-${rowIndex}`,
                     renderCard: (item) =>
                         CardRenderer.createCardHtml(item, {
@@ -2662,7 +2715,7 @@ class LibraryPage extends Page {
         const tabsContainer = this.$('#library-tabs');
 
         if (controlsRow) controlsRow.style.display = isControlsVisible ? 'flex' : 'none';
-        if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'block' : 'none';
+        if (alphaPicker) alphaPicker.style.display = isAlphaVisible ? 'flex' : 'none';
 
         // 1. Configure Tabs (if visible)
         if (tabsContainer && isTabsVisible) {
@@ -2729,6 +2782,16 @@ class LibraryPage extends Page {
                 ...gridConfig,
                 leaveUp: gridLeaveUp,
                 leaveDown: gridConfig.leaveDown || 'library-pagination'
+            });
+
+            // Re-register pagination here too — ensures it's always wired
+            // in case the state-restore path runs without a full _renderGrid call.
+            this.registerFocusSection('library-pagination', this.$('#library-pagination'), {
+                orientation: 'horizontal',
+                leaveUp: 'library-grid',
+                leaveLeft: 'sidebar',
+                selector: 'button:not(:disabled)',
+                enterTo: 'default-element'
             });
         }
     }

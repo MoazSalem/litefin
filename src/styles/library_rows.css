@@ -135,6 +135,7 @@
     /* Use fixed 240px to match home.css .media-card exactly */
     grid-template-columns: repeat(auto-fill, 240px);
     grid-gap: 32px;
+    justify-content: center;
     gap: 32px;
     padding: 24px 10px 0px 10px;
     width: 100%;

@@ -69,7 +69,8 @@
 .library-tabs {
     display: flex;
     overflow-x: auto;
-    padding: 20px 0px;
+    padding: 6px 0;
+    margin-bottom: 6px;
     justify-content: center;
     scrollbar-width: none;
     flex-wrap: wrap;
@@ -92,7 +93,8 @@
     cursor: pointer;
     white-space: nowrap;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* No will-change here — with 6+ tabs all getting a compositor layer upfront
+       it wastes VRAM on Tizen. Only the focused button needs promotion. */
 }
 
 .tab-btn.active {
@@ -116,6 +118,9 @@
     transform: scale(1.08);
     z-index: 10;
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    /* Only promote the ONE focused button to its own compositor layer.
+       All others share the parent layer with zero GPU overhead. */
+    will-change: transform;
 }
 
 /* Specific Radius Enforcement on Focus (Fixes Tizen "Rectangle" bug) */
@@ -139,8 +144,7 @@
 .library-controls-row {
     display: flex;
     justify-content: center;
-    padding-bottom: 20px;
-    margin-top: -10px;
+    padding-bottom: 14px;
 }
 
 .library-controls {
@@ -168,7 +172,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change applied only on :focus — see unified focus rule above */
 }
 
 .control-svg {
@@ -309,7 +313,7 @@
     font-weight: 600;
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change applied on :focus only — see unified focus rule */
 }
 
 .empty-state-btn:focus,
@@ -353,14 +357,32 @@
     /* Let grid column size it */
     margin: 0 !important;
     /* Let grid gap handle spacing */
+
+    /*
+     * Grid-specific containment: isolate each card's layout and paint pass so
+     * focus/image transitions in one card don't cause the browser to re-layout
+     * or repaint the entire grid. This gives a boost on scroll-heavy grids.
+     *
+     * 'layout' — card's internal layout changes don't affect siblings
+     * 'style'  — counters/pseudo-element changes are scoped to this card
+     * 'paint'  — card clips to its box; overflow doesn't affect neighboring paint
+     *
+     * NOTE: We tried content-visibility: auto but it caused a stutter every ~3 items
+     * on Tizen hardware — the deferred layout cost hits all at once when cards enter
+     * the viewport, which is worse than steady state paint. Contain without
+     * content-visibility gives the repaint isolation benefits without the reveal hiccup.
+     */
+    contain: layout style paint;
 }
 
-/* Adjust for landscape items if needed via class modifier */
+
 /* Adjust for landscape items if needed via class modifier */
 .library-grid.landscape {
     grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
     /* Hits strictly 4 per row at 1080p */
 }
+
+
 
 /*
  * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
@@ -391,8 +413,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     align-items: center;
     justify-content: center;
     width: 100%;
-    padding: 10px 60px;
-    margin-bottom: 20px;
+    padding: 10px 0px;
     z-index: 20;
 }
 
@@ -406,7 +427,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     -webkit-border-radius: 40px;
     overflow: hidden;
     background-clip: padding-box;
-    padding: 12px 24px;
+    padding: 8px 24px;
 }
 
 .alpha-btn {
@@ -429,7 +450,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     align-items: center;
     justify-content: center;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
-    will-change: transform;
+    /* No permanent will-change — 27 alpha buttons × compositor layer = major VRAM waste.
+       Only the focused button gets promoted (via .alpha-btn:focus rule below). */
 }
 
 .alpha-btn.active {
@@ -447,6 +469,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     transform: scale(1.2);
     border-radius: 50% !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    /* Promote only the one focused button to its own compositor layer */
+    will-change: transform;
 }
 
 /* --- Pagination Footer --- */
@@ -472,7 +496,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
     font-size: 24px;
     font-weight: 700;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    will-change: transform;
+    /* will-change applied on :focus only — see unified focus rule */
 }
 
 .pagination-btn:disabled {
