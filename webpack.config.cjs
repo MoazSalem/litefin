@@ -57,7 +57,7 @@ function getPlugins() {
 }
 
 // ============================================================================
-// ES6 build - Tizen 6.5+ (No transpilation, pure ES6+, no source maps)
+// ES6 build - Tizen 6.5+ / WebOS 6.0+ (No transpilation, pure ES6+, no source maps)
 // ============================================================================
 const es6Config = {
     name: 'es6',
@@ -186,12 +186,12 @@ const normalConfig = {
 };
 
 // ============================================================================
-// Legacy build - Tizen 3.0+ (Chromium 47, ES5)
+// Legacy build - Tizen 3.0+ / webOS 4.0+ (Chromium 47, ES5)
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
     mode: 'production',
-    entry: './src/index.js',
+    entry: ['url-search-params-polyfill', './src/index.js'],
 
     output: {
         path: path.resolve(__dirname, 'dist/legacy'),
@@ -239,6 +239,60 @@ const legacyConfig = {
     plugins: getPlugins()
 };
 
+// ============================================================================
+// Ultra-Legacy build - Tizen 2.3+ / WebOS 1.0+ (Chromium 32, heavy polyfills)
+// ============================================================================
+const ultraLegacyConfig = {
+    name: 'ultra-legacy',
+    mode: 'production',
+    entry: ['whatwg-fetch', 'url-search-params-polyfill', './src/index.js'],
+
+    output: {
+        path: path.resolve(__dirname, 'dist/ultra-legacy'),
+        filename: 'js/[name].js',
+        clean: true
+    },
+
+    optimization: {
+        splitChunks: { chunks: 'all', maxSize: 100000 },
+        minimizer: ['...', new CssMinimizerPlugin()]
+    },
+
+    module: {
+        rules: [
+            {
+                test: /\.js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill)[\\/])/,
+                use: {
+                    loader: 'babel-loader',
+                    options: {
+                        presets: [
+                            [
+                                '@babel/preset-env',
+                                {
+                                    targets: { chrome: '32' },
+                                    useBuiltIns: 'usage',
+                                    corejs: 3
+                                }
+                            ]
+                        ]
+                    }
+                }
+            },
+            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            {
+                test: /\.(woff|woff2|eot|ttf|otf)$/i,
+                type: 'asset/resource',
+                generator: {
+                    filename: 'assets/fonts/[name][ext]'
+                }
+            }
+        ]
+    },
+
+    plugins: getPlugins()
+};
+
 // Export all configs. Run a specific one with --config-name <name>.
 // e.g. npx webpack --config webpack.config.cjs --config-name debug
-module.exports = [es6Config, debugConfig, normalConfig, legacyConfig];
+module.exports = [es6Config, debugConfig, normalConfig, legacyConfig, ultraLegacyConfig];

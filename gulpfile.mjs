@@ -63,6 +63,12 @@ async function webpackLegacy() {
     console.info('Legacy build complete');
 }
 
+async function webpackUltraLegacy() {
+    console.info('Building ultra-legacy bundle (Tizen 2.3 / Chrome 38)...');
+    await execAsync('npx webpack --config webpack.config.cjs --config-name ultra-legacy');
+    console.info('Ultra-Legacy build complete');
+}
+
 async function webpackAll() {
     console.info('Building all bundles...');
     await execAsync('npx webpack --config webpack.config.cjs');
@@ -189,6 +195,15 @@ async function packageLegacy() {
     await createWgt(buildDir, wgtName);
 }
 
+async function packageUltraLegacy() {
+    const buildDir = 'dist/ultra-legacy';
+    const wgtName = `Litefin-${version}-ultra-legacy.wgt`;
+
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    await createWgt(buildDir, wgtName);
+}
+
 // ============================================================================
 // Sync task
 // ============================================================================
@@ -223,13 +238,13 @@ async function syncVersion() {
 // Main tasks
 // ============================================================================
 
-// Build and package all 3 versions (default for npm run package)
+// Build and package all versions (default for npm run package)
 const buildPackage = gulp.series(
     syncVersion,
     cleanDist,
     cleanWgt,
     webpackAll,
-    gulp.parallel(packageES6, packageNormal, packageLegacy)
+    gulp.parallel(packageES6, packageNormal, packageLegacy, packageUltraLegacy)
 );
 
 // Individual build+package tasks
@@ -237,6 +252,7 @@ const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageE
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
 const buildPackageWebos = gulp.series(syncVersion, cleanDist, webpackNormal, packageWebos);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
+const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
 const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
 
 // Just build (no packaging)
@@ -244,6 +260,7 @@ const build = gulp.series(syncVersion, cleanDist, webpackAll);
 const buildES6 = gulp.series(syncVersion, cleanDist, webpackES6);
 const buildNormal = gulp.series(syncVersion, cleanDist, webpackNormal);
 const buildLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy);
+const buildUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy);
 const buildDebug = gulp.series(syncVersion, webpackDebug);
 
 export {
@@ -253,23 +270,27 @@ export {
     webpackES6,
     webpackNormal,
     webpackLegacy,
+    webpackUltraLegacy,
     webpackDebug,
     webpackAll,
     packageES6,
     packageNormal,
     packageWebos,
     packageLegacy,
+    packageUltraLegacy,
     packageDebug,
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
     buildPackageWebos,
     buildPackageLegacy,
+    buildPackageUltraLegacy,
     buildPackageDebug,
     build,
     buildES6,
     buildNormal,
     buildLegacy,
+    buildUltraLegacy,
     buildDebug
 };
 

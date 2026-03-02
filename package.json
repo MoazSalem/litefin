@@ -21,6 +21,7 @@
         "package:es6": "gulp buildPackageES6",
         "package:normal": "gulp buildPackageNormal",
         "package:legacy": "gulp buildPackageLegacy",
+        "package:ultra-legacy": "gulp buildPackageUltraLegacy",
         "package:debug": "gulp buildPackageDebug",
         "postinstall": "patch-package"
     },
@@ -62,6 +63,8 @@
         "hls.js": "^1.6.15",
         "libjass": "^0.11.0",
         "libpgs": "^0.8.1",
-        "screenfull": "^6.0.2"
+        "screenfull": "^6.0.2",
+        "url-search-params-polyfill": "^8.2.5",
+        "whatwg-fetch": "^3.6.20"
     }
 }
