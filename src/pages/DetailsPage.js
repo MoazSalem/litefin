@@ -272,8 +272,10 @@ class DetailsPage extends Page {
         this._hasEnteredEpisodesGrid = false;
 
         try {
-            // 1. Fetch Item (with People data)
-            this._item = await api.getItem(this._itemId, { Fields: 'People' });
+            // 1. Fetch Item (with detailed metadata fields)
+            this._item = await api.getItem(this._itemId, {
+                Fields: 'People,Genres,GenreItems,Studios,Tags,MediaStreams,Overview,LibraryId'
+            });
             this.title = this._item.Name;
 
             // 2. Render all text content immediately (Metadata, Hero Info)
@@ -751,8 +753,29 @@ class DetailsPage extends Page {
             `;
         };
 
-        // Genres (Prefer GenreItems for IDs)
-        const genres = item.GenreItems || item.Genres;
+        // Genres (Prefer GenreItems for IDs, but fallback to Name strings)
+        const genres = item.GenreItems && item.GenreItems.length > 0 ? item.GenreItems : item.Genres;
+
+        // Fallback to Album Genres for Audio items if they have none
+        if ((!genres || genres.length === 0) && item.Type === 'Audio' && item.AlbumId) {
+            // Check if we already faked/cached album genres to prevent infinite loop
+            if (!item._hasAlbumGenresFetched) {
+                // Fire and forget fetch
+                api.getItem(item.AlbumId)
+                    .then((album) => {
+                        item._hasAlbumGenresFetched = true;
+                        if (album.GenreItems?.length > 0 || album.Genres?.length > 0) {
+                            log.info('Inheriting Genres from Album metadata...');
+                            item.GenreItems = album.GenreItems;
+                            item.Genres = album.Genres;
+                            // Re-render metadata section
+                            this._renderRichMetadata();
+                        }
+                    })
+                    .catch((err) => log.warn('Failed to fetch album genres for fallback', err));
+            }
+        }
+
         if (genres && genres.length > 0) {
             htmlParts.push(createRow('Genres', genres));
         }
@@ -1044,18 +1067,41 @@ class DetailsPage extends Page {
 
         let libraryId = this._item.LibraryId || state.get('activeLibraryId');
 
-        // If LibraryId is missing and we are on an Episode/Season (which has a SeriesId),
-        // fetch the Series item to get the true top-level LibraryId, instead of using the Season's ID.
-        if (!libraryId && this._item.SeriesId) {
+        if (!libraryId) {
+            // For items opened from the Home screen or via deep links, LibraryId might be missing.
+            // The most robust way to find the true root library is to check the user's views.
             try {
-                log.info('Fetching Series details to determine true LibraryId...');
-                const seriesItem = await api.getItem(this._item.SeriesId);
-                libraryId = seriesItem.ParentId || seriesItem.LibraryId;
+                log.info(`Resolving true Library ID for Type="${this._item.Type}" via getUserViews...`);
+                const views = await api.getUserViews();
+                const items = views?.Items || [];
 
-                // Cache it dynamically to prevent subsequent network requests for other rich meta tags
+                let targetCollectionType = null;
+                const type = this._item.Type;
+
+                if (['Audio', 'MusicAlbum', 'MusicArtist', 'MusicGenre'].includes(type) || this._item.AlbumId) {
+                    targetCollectionType = 'music';
+                } else if (['Series', 'Season', 'Episode', 'TvChannel'].includes(type) || this._item.SeriesId) {
+                    targetCollectionType = 'tvshows';
+                } else if (['Movie', 'BoxSet', 'Video'].includes(type)) {
+                    targetCollectionType = 'movies';
+                }
+
+                if (targetCollectionType) {
+                    const view = items.find((v) => v.CollectionType === targetCollectionType);
+                    if (view) {
+                        libraryId = view.Id;
+                        log.info(`Resolved ${targetCollectionType} Library correctly: ${libraryId} (${view.Name})`);
+                    }
+                }
+
+                // If still not found, fallback to ParentId
+                libraryId = libraryId || this._item.ParentId;
+
+                // Cache it
                 this._item.LibraryId = libraryId;
             } catch (err) {
-                log.error('Failed to determine LibraryId from Series', err);
+                log.error('Failed to resolve LibraryId via views', err);
+                libraryId = this._item.ParentId;
             }
         }
 
@@ -1671,6 +1717,16 @@ class DetailsPage extends Page {
                         itemToPlay = episodes.Items[0];
                     } else {
                         return; // Empty collection
+                    }
+                }
+                // If the item doesn't have a CollectionType, try to infer it from its Type
+                if (!itemToPlay.CollectionType) {
+                    if (['MusicAlbum', 'MusicArtist', 'Audio', 'MusicGenre'].includes(itemToPlay.Type)) {
+                        itemToPlay.CollectionType = 'music';
+                    } else if (['Series', 'Season', 'Episode', 'TvChannel'].includes(itemToPlay.Type)) {
+                        itemToPlay.CollectionType = 'tvshows';
+                    } else if (['Movie', 'BoxSet'].includes(itemToPlay.Type)) {
+                        itemToPlay.CollectionType = 'movies';
                     }
                 }
 

@@ -281,6 +281,7 @@ class LibraryPage extends Page {
         this._renderTabs();
         this._renderAlphaPicker();
         this._updateControlsVisibility();
+        this._updateHeaderVisibility(); // Ensure initial visibility is correct
 
         // Translate static UI labels
         i18n.translateDOM(this.el);
@@ -309,13 +310,15 @@ class LibraryPage extends Page {
         const infoFetchPromise = (async () => {
             if (this.params.genreId) {
                 try {
+                    // Fetch basic item and fail gracefully (MusicGenres often 404 on raw getItem)
                     const genre = await api.getItem(this.params.genreId);
-                    if (genre) {
+                    if (genre && genre.Name) {
                         this.$('#library-title').textContent = genre.Name;
                         this.title = genre.Name;
                     }
                 } catch (e) {
-                    log.error('Failed to fetch genre info', e);
+                    log.warn('Failed to fetch genre info, checking if name is set in URL or using default', e);
+                    this.$('#library-title').textContent = i18n.t('Genres'); // Fallback
                 }
             } else if (this.params.studioId) {
                 try {
@@ -554,6 +557,20 @@ class LibraryPage extends Page {
     async _fetchLibraryInfo() {
         try {
             const item = await api.getItem(this.state.libraryId);
+
+            // If the libraryId is a deep link to an Album/Artist/Series, it won't have a CollectionType.
+            // Fake it so the LibraryPage behaves like it's inside that specific library type.
+            if (!item.CollectionType) {
+                // Expanded list of types that imply a specific collection context
+                if (['MusicAlbum', 'MusicArtist', 'Audio', 'MusicGenre', 'Artist'].includes(item.Type)) {
+                    item.CollectionType = 'music';
+                } else if (['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(item.Type)) {
+                    item.CollectionType = 'tvshows';
+                } else if (['Movie', 'BoxSet', 'Video'].includes(item.Type)) {
+                    item.CollectionType = 'movies';
+                }
+            }
+
             this.state.libraryInfo = item;
             this.$('#library-title').textContent = item.Name;
             this.title = item.Name; // Update Page title
@@ -619,35 +636,59 @@ class LibraryPage extends Page {
                 params.NameStartsWith = this.state.nameStartsWith;
             }
 
+            let subViewItemTypes = 'Movie,Series'; // Exclude Episode by default for all genre/studio/tag views
+            const info = this.state.libraryInfo;
+            // Infer music collection if Type is MusicAlbum, MusicArtist, MusicGenre, or CollectionType is music
+            const isMusic =
+                info?.CollectionType === 'music' ||
+                ['MusicAlbum', 'MusicArtist', 'Audio', 'MusicGenre'].includes(info?.Type);
+            const isTv =
+                info?.CollectionType === 'tvshows' ||
+                ['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(info?.Type);
+
+            if (isMusic) {
+                subViewItemTypes = 'MusicAlbum,Audio';
+            } else if (isTv) {
+                subViewItemTypes = 'Series';
+            } else if (info?.CollectionType === 'movies') {
+                subViewItemTypes = 'Movie';
+            } else {
+                log.info(
+                    'Defaulting to Movie/TV subview types for unknown collection:',
+                    info?.Type,
+                    info?.CollectionType
+                );
+            }
+
             // Apply Genre Filter (From Route)
             if (this.params.genreId) {
                 params.GenreIds = this.params.genreId;
                 params.Recursive = true;
-                params.IncludeItemTypes = 'Movie,Series,Episode'; // Broaden search for Genre view
+                params.IncludeItemTypes = subViewItemTypes; // Adapt to library type
             }
 
             // Apply Studio Filter (From Route)
             if (this.params.studioId) {
                 params.StudioIds = this.params.studioId;
-                params.IncludeItemTypes = 'Movie,Series,Episode';
+                params.IncludeItemTypes = subViewItemTypes;
             }
 
             // Apply Year Filter (From Route)
             if (this.params.year) {
                 params.Years = decodeURIComponent(this.params.year);
-                params.IncludeItemTypes = 'Movie,Series,Episode';
+                params.IncludeItemTypes = subViewItemTypes;
             }
 
             // Apply Person Filter (From Route)
             if (this.params.personId) {
                 params.PersonIds = this.params.personId;
-                params.IncludeItemTypes = 'Movie,Series,Episode';
+                params.IncludeItemTypes = subViewItemTypes;
             }
 
             // Apply Tag Filter (From Route)
             if (this.params.tagName) {
                 params.Tags = decodeURIComponent(this.params.tagName);
-                params.IncludeItemTypes = 'Movie,Series,Episode';
+                params.IncludeItemTypes = subViewItemTypes;
             }
 
             // Apply Advanced Filters
@@ -703,6 +744,9 @@ class LibraryPage extends Page {
                 } else if (this.state.libraryInfo?.CollectionType === 'boxsets') {
                     params.IncludeItemTypes = 'BoxSet';
                     params.Recursive = true;
+                } else if (this.state.libraryInfo?.CollectionType === 'music' && !this.params.genreId) {
+                    // For standard Item fetches in Music libraries without specific subview filters like genre
+                    params.IncludeItemTypes = 'MusicAlbum';
                 }
                 result = await api.getItems(params);
             } else if (viewType === 'Suggestions') {
@@ -1036,13 +1080,15 @@ class LibraryPage extends Page {
                 result = await api.getAlbumArtists({
                     ParentId: this.state.libraryId,
                     StartIndex: params.StartIndex,
-                    Limit: params.Limit
+                    Limit: params.Limit,
+                    NameStartsWith: params.NameStartsWith
                 });
             } else if (viewType === 'Artists') {
                 result = await api.getMusicArtists({
                     ParentId: this.state.libraryId,
                     StartIndex: params.StartIndex,
-                    Limit: params.Limit
+                    Limit: params.Limit,
+                    NameStartsWith: params.NameStartsWith
                 });
             } else if (viewType === 'Songs') {
                 params.IncludeItemTypes = 'Audio';
@@ -1246,6 +1292,12 @@ class LibraryPage extends Page {
                 { id: 'Genres', label: 'Genres' },
                 { id: 'Folders', label: 'Folders' }
             ];
+        }
+
+        // If the current viewType is not in the generated tabs, and we are not in a subview,
+        // default to the first tab to ensure correct rendering and API calls.
+        if (!tabs.some((t) => t.id === this.state.viewType) && !this._isSubView()) {
+            this.state.viewType = tabs[0].id;
         }
 
         if (!tabsContainer) return;
@@ -2063,7 +2115,16 @@ class LibraryPage extends Page {
             } else if (collectionType === 'movies') {
                 includeItemTypes = 'Movie';
             } else if (collectionType === 'music') {
-                includeItemTypes = 'Audio,MusicAlbum';
+                const viewType = this.state.viewType;
+                if (viewType === 'Artists' || viewType === 'AlbumArtists') {
+                    includeItemTypes = 'MusicArtist';
+                } else if (viewType === 'Albums') {
+                    includeItemTypes = 'MusicAlbum';
+                } else if (viewType === 'Songs') {
+                    includeItemTypes = 'Audio';
+                } else {
+                    includeItemTypes = 'Audio,MusicAlbum';
+                }
             }
 
             const params = {
@@ -2074,6 +2135,11 @@ class LibraryPage extends Page {
                 IncludeItemTypes: includeItemTypes,
                 ExcludeLocationTypes: 'Virtual'
             };
+
+            // Apply active filters to shuffle (fixes shuffle "ignoring" current view/alpha filter)
+            if (this.state.nameStartsWith) {
+                params.NameStartsWith = this.state.nameStartsWith;
+            }
 
             const result = await api.getItems(params);
 
@@ -2143,6 +2209,20 @@ class LibraryPage extends Page {
                 { label: 'OptionDatePlayed', value: 'SeriesDatePlayed,SortName' },
                 { label: 'OptionParentalRating', value: 'OfficialRating,SortName' },
                 { label: 'OptionReleaseDate', value: 'PremiereDate,SortName' }
+            ];
+        } else if (this.state.libraryInfo?.CollectionType === 'music') {
+            // Music Specific Options
+            sortOptions = [
+                { label: 'Name', value: 'SortName' },
+                { label: 'OptionRandom', value: 'Random' },
+                { label: 'Artist', value: 'Artist,SortName' },
+                { label: 'Album', value: 'Album,SortName' },
+                { label: 'OptionPlayCount', value: 'PlayCount,SortName' },
+                { label: 'CommunityRating', value: 'CommunityRating,SortName' },
+                { label: 'OptionDateAdded', value: 'DateCreated,SortName' },
+                { label: 'OptionDatePlayed', value: 'DatePlayed,SortName' },
+                { label: 'OptionReleaseDate', value: 'ProductionYear,PremiereDate,SortName' },
+                { label: 'Runtime', value: 'Runtime,SortName' }
             ];
         } else {
             // Standard / Movie Options
@@ -2362,6 +2442,8 @@ class LibraryPage extends Page {
         this._prevFocus = focusManager.getFocused();
         this._prevSection = focusManager.getActiveSection();
 
+        const isMusic = this.state.libraryInfo?.CollectionType === 'music';
+
         // Sections Definition
         const sections = [
             {
@@ -2377,6 +2459,7 @@ class LibraryPage extends Page {
             {
                 title: 'Features',
                 id: 'sec-features',
+                hidden: isMusic, // Hide video features for music
                 items: [
                     { label: 'Subtitles', key: 'HasSubtitles', type: 'boolean' },
                     { label: 'Trailer', key: 'HasTrailer', type: 'boolean' },
@@ -2406,6 +2489,7 @@ class LibraryPage extends Page {
             {
                 title: 'HeaderVideoTypes',
                 id: 'sec-videotypes',
+                hidden: isMusic, // Hide video types for music
                 itemKey: 'VideoTypes', // Comma list
                 items: [
                     { label: 'OptionBluray', value: 'Bluray', type: 'multi' },
@@ -2424,8 +2508,8 @@ class LibraryPage extends Page {
             }
         ];
 
-        // Filter out empty sections
-        const validSections = sections.filter((s) => s.items.length > 0);
+        // Filter out empty and hidden sections
+        const validSections = sections.filter((s) => s.items.length > 0 && !s.hidden);
 
         // Active Category State (Default to first)
         let activeSectionId = this.state.activeFilterSection || validSections[0].id;
