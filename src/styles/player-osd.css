@@ -260,7 +260,7 @@
 }
 
 .osd-btn.active {
-    color: #e74c3c;
+    color: var(--osd-accent-color);
 }
 
 .osd-btn.active:focus,

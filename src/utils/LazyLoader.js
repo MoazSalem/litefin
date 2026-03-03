@@ -130,7 +130,13 @@ class LazyLoader {
 
         // Extract fallback dataset attached by CardRenderer
         const parent = img.parentElement;
-        if (parent && parent.classList.contains('card-image')) {
+        const isSupportedParent =
+            parent &&
+            (parent.classList.contains('card-image') ||
+                parent.classList.contains('chapter-row__thumb-wrap') ||
+                parent.classList.contains('queue-row__thumb-wrap'));
+
+        if (isSupportedParent) {
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');
 

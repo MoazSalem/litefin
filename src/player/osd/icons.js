@@ -32,9 +32,9 @@ export const ICONS = {
 
     /* ── New: Queue & Chapters modal icons ── */
 
-    /* Queue: four horizontal lines representing a playlist */
-    queue: createIcon('M3 18h16v-2H3v2zm0-5h16v-2H3v2zm0-7v2h16V6H3z'),
+    /* Queue: three lines with a play indicator on the right */
+    queue: createIcon('M3 10h11v2H3v-2zm0-4h11v2H3V6zm0 8h7v2H3v-2zm13-1v8l6-4-6-4z'),
 
-    /* viewList: chapter-style list icon (title + subtitle pairs) */
-    viewList: createIcon('M4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm16-4H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-1 9H9V9h10v2zm-4 4H9v-2h6v2zm4-8H9V5h10v2z')
+    /* viewList: a cleaner "Timeline Ruler" icon for chapters */
+    viewList: createIcon('M4 4v16h1.5V4H4zm4 2h12v2H8V6zm0 5h12v2H8v-2zm0 5h12v2H8v-2z')
 };

@@ -258,6 +258,10 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="fastForward" tabindex="0">${ICONS.fastForward}</button>
                             <button class="osd-btn osd-btn-disabled" data-action="nextChapter" tabindex="-1" id="osdNextChapterBtn">${ICONS.chapterNext}</button>
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
+                            <!-- Queue modal button (always available) -->
+                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
+                            <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
+                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
                         </div>
                         <div class="osd-ends-at" id="osdEndsAt"></div>
                         <div class="osd-spacer"></div>
@@ -265,10 +269,6 @@ export default class OSDController extends Component {
                             <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
-                            <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
-                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
-                            <!-- Queue modal button (always available) -->
-                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>

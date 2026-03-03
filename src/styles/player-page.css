@@ -166,7 +166,7 @@
     min-height: 100px;
     flex: 0 0 100px;
     margin: 0 auto 32px auto;
-    background: var(--jf-accent-light, rgba(0, 164, 220, 0.2));
+    background: var(--jf-accent-light, rgba(var(--jf-accent-rgb, 0, 164, 220), 0.2));
     color: var(--jf-error, #f44336);
     border-radius: 50%;
     display: flex;

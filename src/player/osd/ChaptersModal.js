@@ -19,6 +19,7 @@
  */
 
 import BaseMenu from './BaseMenu.js';
+import lazyLoader from '../../utils/LazyLoader.js';
 
 export default class ChaptersModal extends BaseMenu {
 
@@ -88,6 +89,30 @@ export default class ChaptersModal extends BaseMenu {
         this._openedAt = Date.now();
     }
 
+    show() {
+        /* Capture focus context before opening */
+        this._prevRow = this.osd._currentFocusRow;
+        this._prevIndex = this.osd._currentFocusIndex;
+        super.show();
+    }
+
+    hide() {
+        super.hide();
+        
+        /* Restore focus conditionally */
+        if (this._restoreFocusToPlayPause) {
+            this.osd._currentFocusRow = 1;
+            const playIdx = this.osd._findActionIndex('togglePlay');
+            this.osd._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            this.osd._updateFocus();
+            this._restoreFocusToPlayPause = false; // Reset for next time
+        } else if (this._prevRow !== undefined) {
+            this.osd._currentFocusRow = this._prevRow;
+            this.osd._currentFocusIndex = this._prevIndex;
+            this.osd._updateFocus();
+        }
+    }
+
     // =========================================================================
     // BaseMenu Overrides
     // =========================================================================
@@ -111,6 +136,18 @@ export default class ChaptersModal extends BaseMenu {
         const rowsHtml = this._chapters.map((chapter, index) => {
             /* Format StartPositionTicks (100-ns units) → HH:MM:SS or MM:SS. */
             const timestamp = this._formatTicks(chapter.StartPositionTicks);
+            const name = chapter.Name || `Chapter ${index + 1}`;
+
+            // --- Fallback Data ---
+            let hash = 0;
+            for (let i = 0; i < name.length; i++) {
+                hash = name.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            const gradIndex = (Math.abs(hash) % 6) + 1;
+            const words = name.split(/[\s_-]+/);
+            let initials = words[0] ? words[0][0] : '?';
+            if (words.length > 1 && words[1]) initials += words[1][0];
+            initials = initials.toUpperCase();
 
             /* Chapter thumbnail URL — Jellyfin serves chapter images via the
              * Items/{itemId}/Images/Chapter/{index} endpoint.
@@ -134,11 +171,17 @@ export default class ChaptersModal extends BaseMenu {
                      data-index="${index}"
                      tabindex="${isActive ? '0' : '-1'}">
 
-                    <!-- Chapter thumbnail (optional) -->
-                    <div class="chapter-row__thumb-wrap">
+                    <!-- Chapter thumbnail -->
+                    <div class="chapter-row__thumb-wrap ${thumbUrl ? 'skeleton-shimmer' : ''}">
                         ${thumbUrl
-                            ? `<img class="chapter-row__thumb" src="${thumbUrl}" alt="" loading="lazy" />`
-                            : '<div class="chapter-row__thumb-placeholder"></div>'
+                            ? `<img class="chapter-row__thumb lazy" 
+                                    src="data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7" 
+                                    data-src="${thumbUrl}" 
+                                    data-fb-grad="${gradIndex}"
+                                    data-fb-init="${initials}"
+                                    data-fb-name="${name}"
+                                    alt="" />`
+                            : this._getFallbackHtml(name)
                         }
                         ${isActive ? '<div class="chapter-row__playing-dot"></div>' : ''}
                     </div>
@@ -175,6 +218,12 @@ export default class ChaptersModal extends BaseMenu {
 
         this.$el = overlay;
 
+        /* Enable lazy loading for thumbnails. */
+        const listEl = overlay.querySelector('.chapters-modal__list');
+        if (listEl) {
+            lazyLoader.observe(listEl);
+        }
+
         /* After the DOM is in place, scroll the active chapter into view. */
         this._scrollActiveIntoView();
     }
@@ -210,6 +259,9 @@ export default class ChaptersModal extends BaseMenu {
                     this.log.info(`Seeking to chapter ${this.focusIndex}: "${chapter.Name}" @ ${chapter.StartPositionTicks}`);
                     this.osd.player.seek(chapter.StartPositionTicks);
                 }
+                
+                /* Selection made: route focus to Play/Pause when hiding. */
+                this._restoreFocusToPlayPause = true;
                 this._close();
                 return true;
             }
@@ -307,5 +359,31 @@ export default class ChaptersModal extends BaseMenu {
             return `${hours}:${pad(minutes)}:${pad(seconds)}`;
         }
         return `${pad(minutes)}:${pad(seconds)}`;
+    }
+
+    /**
+     * Helper to load a fallback gradient card with initials
+     * @private
+     */
+    _getFallbackHtml(name) {
+        // Simple hash to consistently pick a gradient (1-6)
+        let hash = 0;
+        for (let i = 0; i < name.length; i++) {
+            hash = name.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        const gradNum = (Math.abs(hash) % 6) + 1;
+
+        // Get Initials (up to 2 characters)
+        const words = name.split(/[\s_-]+/);
+        let initials = words[0] ? words[0][0] : '?';
+        if (words.length > 1 && words[1]) initials += words[1][0];
+        initials = initials.toUpperCase();
+
+        return `
+            <div class="media-fallback grad-${gradNum}">
+                <div class="media-fallback-initials">${initials}</div>
+                <div class="media-fallback-name">${name}</div>
+            </div>
+        `;
     }
 }

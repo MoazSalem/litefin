@@ -204,7 +204,7 @@
     -webkit-align-items: center;
     align-items: center;
     
-    padding: 0.85em 1.6em;
+    padding: 0.65em 1.6em;
     cursor: pointer;
     -webkit-transition: background 0.15s ease, -webkit-transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
     transition: background 0.15s ease, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -226,7 +226,7 @@
 }
 
 .chapter-row.focused {
-    background: rgba(0, 164, 220, 0.22);  /* Accent tint */
+    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.3);  /* Theme accent tint */
     -webkit-transform: scaleX(1.01);
     transform: scaleX(1.01);
     -webkit-transform-origin: left;
@@ -235,7 +235,7 @@
 
 /* Active (currently playing) chapter */
 .chapter-row--active {
-    background: rgba(0, 164, 220, 0.1);
+    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.12);
 }
 
 .chapter-row--active .chapter-row__name {
@@ -252,7 +252,26 @@
     flex-shrink: 0;
     border-radius: 6px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
+}
+
+/* OSD Fallback Overrides (Tighter scaling for small thumbnails) */
+.chapter-row__thumb-wrap .media-fallback,
+.queue-row__thumb-wrap .media-fallback {
+    padding: 4px;
+    border-radius: 0; /* Let parent clip */
+}
+
+.chapter-row__thumb-wrap .media-fallback-initials,
+.queue-row__thumb-wrap .media-fallback-initials {
+    font-size: 1.4rem;
+    margin-bottom: 0;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+.chapter-row__thumb-wrap .media-fallback-name,
+.queue-row__thumb-wrap .media-fallback-name {
+    display: none !important; /* Redundant in list view */
 }
 
 .chapter-row__thumb {
@@ -279,7 +298,7 @@
     background: var(--osd-accent-color, #00a4dc);
     -webkit-animation: playing-dot-pulse 1.4s ease-in-out infinite;
     animation: playing-dot-pulse 1.4s ease-in-out infinite;
-    box-shadow: 0 0 6px var(--osd-accent-color, #00a4dc);
+    box-shadow: 0 0 6px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.8);
 }
 
 /* Standard keyframes for Tizen performance */
@@ -343,7 +362,7 @@
     -webkit-align-items: center;
     align-items: center;
     
-    padding: 0.7em 1.6em;
+    padding: 0.55em 1.6em;
     cursor: pointer;
     -webkit-transition: background 0.15s ease, -webkit-transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
     transition: background 0.15s ease, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -363,7 +382,7 @@
 }
 
 .queue-row.focused {
-    background: rgba(0, 164, 220, 0.22);
+    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.3);
     -webkit-transform: scaleX(1.01);
     transform: scaleX(1.01);
     -webkit-transform-origin: left;
@@ -372,7 +391,7 @@
 
 /* Currently playing item */
 .queue-row--active {
-    background: rgba(0, 164, 220, 0.1);
+    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.12);
 }
 
 .queue-row--active .queue-row__name {
@@ -392,16 +411,16 @@
     color: #fff;
 }
 
-/* Poster thumbnail */
+/* Poster thumbnail (Landscape ratio as requested) */
 .queue-row__thumb-wrap {
     position: relative;
-    width: 54px;
-    height: 76px;
+    width: 108px;
+    height: 60px;
     -webkit-flex-shrink: 0;
     flex-shrink: 0;
     border-radius: 4px;
     overflow: hidden;
-    background: rgba(255, 255, 255, 0.06);
+    background: rgba(255, 255, 255, 0.04);
 }
 
 .queue-row__thumb {
@@ -445,12 +464,12 @@
     background: -webkit-linear-gradient(
         270deg,
         transparent 50%,
-        rgba(0, 164, 220, 0.55) 100%
+        rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6) 100%
     );
     background: linear-gradient(
         180deg,
         transparent 50%,
-        rgba(0, 164, 220, 0.55) 100%
+        rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6) 100%
     );
 }
 

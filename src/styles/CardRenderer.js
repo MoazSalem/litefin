@@ -259,7 +259,7 @@ class CardRenderer {
                 '<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100; border-radius: 0 0 8px 8px; overflow: hidden;">' +
                 '<div style="width: ' +
                 progress +
-                '%; height: 100%; background-color: #00a4dc;"></div>' +
+                '%; height: 100%; background-color: var(--jf-accent, #00a4dc);"></div>' +
                 '</div>';
         }
 
