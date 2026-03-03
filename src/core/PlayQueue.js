@@ -175,7 +175,7 @@ class PlayQueue {
         this._isInitialized = true;
 
         try {
-            if (contextType === 'boxset' && (contextId || item.ParentId)) {
+            if ((contextType === 'boxset' || contextType === 'music') && (contextId || item.ParentId)) {
                 // Prioritize collection context if explicitly provided
                 await this._initBoxSetQueue(item, contextId || item.ParentId);
             } else if (contextType === 'season' && contextId) {
@@ -183,6 +183,9 @@ class PlayQueue {
                 await this._initSeasonQueue(item, contextId);
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 await this._initEpisodeQueue(item);
+            } else if (item.Type === 'Audio' && item.AlbumId) {
+                // Auto-init album queue for songs played standalone
+                await this._initBoxSetQueue(item, item.AlbumId);
             } else {
                 // Standalone item (Movie, etc.) — stamp and queue
                 _stampPlaylistItemId(item);
@@ -400,9 +403,8 @@ class PlayQueue {
     async _initBoxSetQueue(currentItem, parentId) {
         log.debug('Building BoxSet queue for parent:', parentId);
 
-        // Fetch movies and episodes separately to maintain UI-like ordering (Movies then Shows)
-        // This matches the visual layout where Movies are shown in their own row above Shows.
-        const [moviesResponse, episodesResponse] = await Promise.all([
+        // Fetch movies, episodes, and audio separately to maintain UI-like ordering
+        const [moviesResponse, episodesResponse, audioResponse] = await Promise.all([
             api.getItems({
                 ParentId: parentId,
                 Recursive: true,
@@ -418,14 +420,23 @@ class PlayQueue {
                 SortBy: 'SortName',
                 SortOrder: 'Ascending',
                 Limit: 100
+            }),
+            api.getItems({
+                ParentId: parentId,
+                Recursive: true,
+                IncludeItemTypes: 'Audio',
+                SortBy: 'SortName',
+                SortOrder: 'Ascending',
+                Limit: 100
             })
         ]);
 
         const movies = moviesResponse.Items || [];
         const episodes = episodesResponse.Items || [];
+        const audios = audioResponse.Items || [];
 
-        // Combine: Movies first, then Episodes, and stamp each with a PlaylistItemId
-        this._queue = [...movies, ...episodes];
+        // Combine: Movies first, then Episodes, then Audio, and stamp each with a PlaylistItemId
+        this._queue = [...movies, ...episodes, ...audios];
         this._queue.forEach(_stampPlaylistItemId);
 
         // Find our starting index

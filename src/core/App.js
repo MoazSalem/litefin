@@ -376,18 +376,50 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', ({ item, resume, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
+        eventBus.on('player:play', async ({ item, resume, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
-            // Store playback context for play queue building (e.g. 'boxset')
+            let itemToPlay = item;
+
+            // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
+            // the API cannot play it directly. We must resolve it to the first playable audio track.
+            if (
+                item &&
+                ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
+            ) {
+                try {
+                    const tracks = await api.getItems({
+                        ParentId: item.Id,
+                        Recursive: true,
+                        IncludeItemTypes: 'Audio',
+                        Limit: 1,
+                        SortBy: 'SortName',
+                        SortOrder: 'Ascending'
+                    });
+                    if (tracks.Items && tracks.Items.length > 0) {
+                        itemToPlay = tracks.Items[0];
+                        itemToPlay.contextType = 'music';
+                        itemToPlay.contextId = item.Id;
+                        log.info('Resolved music container to first track:', itemToPlay.Name);
+                    } else {
+                        log.warn('No playable audio tracks found in container:', item.Id);
+                        return;
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve audio container tracks:', e);
+                    return;
+                }
+            }
+
+            // Store playback context for play queue building (e.g. 'boxset', 'music')
             // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
-            state.set('player:contextType', item?.contextType || null);
-            state.set('player:contextId', item?.contextId || null);
+            state.set('player:contextType', itemToPlay?.contextType || null);
+            state.set('player:contextId', itemToPlay?.contextId || null);
 
             // Store backdrop URL for loading screen transition
             state.set('player:backdropUrl', backdropUrl || null);
 
-            if (!item?.Id) {
+            if (!itemToPlay?.Id) {
                 log.error('Cannot play - no item ID provided for playback request');
                 return;
             }
@@ -404,7 +436,7 @@ class App {
 
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
-            router.navigate(`/player/${item.Id}/${resumeParam}`);
+            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}`);
         });
 
         // ================================================================

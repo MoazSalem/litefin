@@ -1491,13 +1491,15 @@ export class JellyfinPlayer extends EventEmitter {
         }
 
 
-        // For Audio items, sending stream indices (even valid ones) often causes an HTTP 500 
-        // from the Jellyfin server. Therefore, we entirely omit both AudioStreamIndex and 
-        // SubtitleStreamIndex for audio playback.
+        // For Audio items, sending SubtitleStreamIndex often causes an HTTP 500 
+        // from the Jellyfin server. Therefore, we entirely omit it for audio playback.
+        // However, we MUST send AudioStreamIndex if available, even for audio tracks,
+        // otherwise forced transcode requests will fail with a 500 error.
+        if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+            requestBody.AudioStreamIndex = options.audioStreamIndex;
+        }
+
         if (!isAudioItem) {
-            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-                requestBody.AudioStreamIndex = options.audioStreamIndex;
-            }
             if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
                 requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
             }

@@ -1773,8 +1773,10 @@ class DetailsPage extends Page {
             try {
                 // Fetch first item in collection (recursive)
                 // We prefer Movies over Episodes to match the visual row priority
-                const sortParams = isShufflePlay ? { SortBy: 'Random' } : { SortBy: 'SortName' };
-                const [movies, episodes] = await Promise.all([
+                const sortParams = isShufflePlay
+                    ? { SortBy: 'Random' }
+                    : { SortBy: 'SortName', SortOrder: 'Ascending' };
+                const [movies, episodes, audio] = await Promise.all([
                     api.getItems({
                         ParentId: this._item.Id,
                         Recursive: true,
@@ -1788,11 +1790,18 @@ class DetailsPage extends Page {
                         IncludeItemTypes: 'Episode',
                         Limit: 1,
                         ...sortParams
+                    }),
+                    api.getItems({
+                        ParentId: this._item.Id,
+                        Recursive: true,
+                        IncludeItemTypes: 'Audio',
+                        Limit: 1,
+                        ...sortParams
                     })
                 ]);
 
                 if (isShufflePlay) {
-                    const allItems = [...(movies.Items || []), ...(episodes.Items || [])];
+                    const allItems = [...(movies.Items || []), ...(episodes.Items || []), ...(audio.Items || [])];
                     if (allItems.length > 0) {
                         itemToPlay = allItems[Math.floor(Math.random() * allItems.length)];
                     } else {
@@ -1803,6 +1812,8 @@ class DetailsPage extends Page {
                         itemToPlay = movies.Items[0];
                     } else if (episodes.Items && episodes.Items.length > 0) {
                         itemToPlay = episodes.Items[0];
+                    } else if (audio.Items && audio.Items.length > 0) {
+                        itemToPlay = audio.Items[0];
                     } else {
                         return; // Empty collection
                     }
