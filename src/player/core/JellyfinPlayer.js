@@ -1458,7 +1458,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @private
      */
     async _getPlaybackInfo(options, deviceProfile, manualBitrate = null) {
-        const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo`;
+        const url = `${this.serverUrl}/Items/${options.itemId}/PlaybackInfo?UserId=${options.userId}`;
 
         // Read max bitrate: priority to deviceProfile if passed (it contains the logic)
         // Fallback to manualBitrate or 120Mbps
@@ -1473,22 +1473,36 @@ export class JellyfinPlayer extends EventEmitter {
         const isAudioItem = (options.item?.MediaType === 'Audio') ||
                             (options.item?.Type === 'Audio') ||
                             (options.item?.Type === 'MusicAlbum') ||
-                            (options.item?.Type === 'AudioBook');
+                            (options.item?.Type === 'MusicArtist') ||
+                            (options.item?.Type === 'Artist') ||
+                            (options.item?.Type === 'AudioBook') ||
+                            (options.item?.Type === 'PodcastEpisode');
 
         const requestBody = {
             DeviceProfile: deviceProfile || buildJellyfinProfile(maxBitrate),
             UserId: options.userId,
             MaxStreamingBitrate: maxBitrate,
             StartTimeTicks: options.startPositionTicks || 0,
-            AudioStreamIndex: options.audioStreamIndex,
-            MediaSourceId: options.mediaSourceId,
             AutoOpenLiveStream: true
         };
 
-        // Only include subtitle index for video — sending it for audio causes HTTP 500
-        if (!isAudioItem) {
-            requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
+        if (options.mediaSourceId) {
+            requestBody.MediaSourceId = options.mediaSourceId;
         }
+
+
+        // For Audio items, sending stream indices (even valid ones) often causes an HTTP 500 
+        // from the Jellyfin server. Therefore, we entirely omit both AudioStreamIndex and 
+        // SubtitleStreamIndex for audio playback.
+        if (!isAudioItem) {
+            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+                requestBody.AudioStreamIndex = options.audioStreamIndex;
+            }
+            if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
+                requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
+            }
+        }
+
 
         const response = await fetch(url, {
             method: 'POST',
@@ -1500,7 +1514,11 @@ export class JellyfinPlayer extends EventEmitter {
         });
 
         if (!response.ok) {
-            throw new Error(`Failed to get playback info: ${response.status}`);
+            let errorText = '';
+            try {
+                errorText = await response.text();
+            } catch (e) {}
+            throw new Error(`Failed to get playback info: ${response.status} - ${errorText}`);
         }
 
         return response.json();

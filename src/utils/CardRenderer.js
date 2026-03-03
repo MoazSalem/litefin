@@ -28,33 +28,20 @@ class CardRenderer {
         const itemId = item.Id;
 
         // --- 1. Image Resolution Strategy ---
+        // Initialize with fallback HTML, which will be layered behind the image if one loads
+        imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
 
         if (type === 'person') {
-            // Person Handling (SVG Fallback)
-            // ArtistItems from the Jellyfin API are lightweight stubs that only carry Id + Name.
-            // They have no ImageTags or PrimaryImageTag. The Jellyfin image endpoint does NOT
-            // require a tag to serve an image — the tag is only used for HTTP cache-busting.
-            // So we build the URL from the Id alone, and only fall back to the SVG placeholder
-            // if the item has no Id at all.
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
-            if (primaryTag || itemId) {
-                const params = imageService.getParams('poster');
+            const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
+
+            if (primaryTag || (itemId && isArtist)) {
+                const params = imageService.getParams('poster'); // People usually have poster-like images
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    // Only include cache-busting tag if we have a real one
                     ...(primaryTag ? { tag: primaryTag } : {})
                 });
-            } else {
-                // No Id at all — show the generic person silhouette
-                imageInnerHtml = `
-                    <div class="person-fallback">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path stroke-linecap="round" stroke-linejoin="round" d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2" />
-                            <circle cx="12" cy="7" r="4" />
-                        </svg>
-                    </div>
-                `;
             }
         } else if (type === 'episode-primary') {
             // Force Episode Primary Image (for Person Page grid)
@@ -239,21 +226,27 @@ class CardRenderer {
                     maxWidth: params.maxWidth,
                     quality: params.quality
                 });
-            } else if (item.ImageTags?.Primary) {
-                // Standard Item
+            } else if (
+                item.ImageTags?.Primary ||
+                (itemId &&
+                    (item.Type === 'MusicArtist' ||
+                        item.Type === 'Artist' ||
+                        item.Type === 'MusicAlbum' ||
+                        item.Type === 'Audio'))
+            ) {
+                // Standard Item (allow ID fallback for Music items where stubs are common)
                 const params = imageService.getParams('poster');
+
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    tag: item.ImageTags.Primary
+                    ...(item.ImageTags?.Primary ? { tag: item.ImageTags.Primary } : {})
                 });
             }
         }
 
         // --- 1.5 Premium Fallbacks for Missing Images ---
-        if (!imageUrl) {
-            imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
-        }
+        // Fallback is already initialized at start of method, no change needed here.
 
         // --- 2. Overlays (Progress & Badges) ---
 
@@ -336,7 +329,7 @@ class CardRenderer {
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         const imagePart = imageUrl
-            ? `<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />`
+            ? `${imageInnerHtml}<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />`
             : imageInnerHtml;
         const finalContextType = contextType || item.Type;
 

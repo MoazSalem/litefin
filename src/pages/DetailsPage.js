@@ -530,13 +530,20 @@ class DetailsPage extends Page {
     }
 
     _renderArtists(artists) {
+        if (!artists || artists.length === 0) return;
+
+        const isMusic = this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio';
+
         this._renderVirtualRow({
             sectionId: 'artists-section',
             listId: 'artists-row',
             items: artists,
             isLandscape: false,
-            renderCard: (artist) => this._renderMediaCard(artist, false, 'person'),
+            renderCard: (artist) => {
+                return this._renderMediaCard(artist, false, isMusic ? 'square' : 'person');
+            },
             focusSectionName: 'artists-section',
+            cardType: isMusic ? 'square' : 'person',
             onClick: (card) => {
                 if (card.dataset.itemId) router.navigate(`/person/${card.dataset.itemId}`);
             }
@@ -664,6 +671,7 @@ class DetailsPage extends Page {
             leaveUpTarget,
             focusSectionName,
             titleElText,
+            cardType,
             onClick
         } = options;
 
@@ -687,10 +695,10 @@ class DetailsPage extends Page {
             visibleCount: isLandscape ? 8 : 12,
             // For portrait rows, eagerly render up to 7 cards on initial load to prevent
             // the blank-then-pop effect when the user first navigates down to the row.
-            // For landscape (episodes, next-up), pre-render only 5 for the same reason.
             // We cap portrait at 7 instead of items.length to keep construction time low.
             initialWindow: isLandscape ? 5 : Math.min(7, items.length),
             focusSectionId: focusSectionName,
+            cardType: cardType,
             renderCard: renderCard
         });
 
@@ -1741,13 +1749,20 @@ class DetailsPage extends Page {
     }
 
     _renderSimilar() {
+        if (!this._similar || this._similar.length === 0) return;
+
+        const isMusic = this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio';
+
         this._renderVirtualRow({
             sectionId: 'similar-section',
             listId: 'similar-row',
             items: this._similar,
             isLandscape: false,
-            renderCard: (item) => this._renderMediaCard(item, false, 'poster'),
-            focusSectionName: 'details-similar'
+            renderCard: (item) => {
+                return this._renderMediaCard(item, false, isMusic ? 'square' : 'poster');
+            },
+            focusSectionName: 'details-similar',
+            cardType: isMusic ? 'square' : 'poster'
         });
     }
 
