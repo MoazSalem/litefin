@@ -669,9 +669,14 @@ class PlayerPage extends Page {
         }
 
         // Create OSD component with all dependencies injected (no globals!)
+        // Detect audio-only items (Music, Audiobooks) so the OSD can hide
+        // video-specific controls like subtitle/track buttons and chapters.
+        const isAudioItem = this._item?.MediaType === 'Audio' || this._item?.Type === 'AudioBook';
+
         this._osd = new OSDController(this._player, {
             item: this._item,
-            api: api
+            api: api,
+            isAudio: isAudioItem
         });
 
         // Bind events

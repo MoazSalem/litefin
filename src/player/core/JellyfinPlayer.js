@@ -281,6 +281,18 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
+     * Check if the currently playing item is an audio-only item
+     * (Music, Audiobooks, Podcasts). Used by OSD and PlayerPage to
+     * hide video-specific controls (subtitles, tracks, chapters).
+     * @returns {boolean}
+     */
+    isAudio() {
+        const item = this._currentItem;
+        if (!item) return false;
+        return item.MediaType === 'Audio' || item.Type === 'AudioBook';
+    }
+
+    /**
      * Handle events from the backend player
      * @private
      */
@@ -430,37 +442,49 @@ export class JellyfinPlayer extends EventEmitter {
                  log.debug('MediaSource[0] keys:', Object.keys(playbackInfo.MediaSources[0]));
             }
 
-            // Chapter Recovery Strategy
-            // 1. Check if passed item has chapters (from options.item passed by PlayerPage)
-            // Note: We use options.item which we ensured is passed from PlayerPage
-            let chapters = options.item?.Chapters || [];
+            /*
+             * Audio items (Music, Audiobooks) never have chapters in Jellyfin's
+             * sense — skip the chapter fetch entirely to avoid a wasted API call.
+             * Video items still go through the normal 3-step chapter resolution.
+             */
+            const isAudioItem = options.item?.MediaType === 'Audio' ||
+                                 options.item?.Type === 'AudioBook';
 
-            if (chapters.length > 0) {
-                log.info('Using chapters from item object:', chapters.length);
-            } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
-                // 2. Check PlaybackInfo
-                chapters = playbackInfo.Chapters;
-                log.info('Using chapters from PlaybackInfo:', chapters.length);
-            } else {
-                // 3. Fallback: Fetch item details to get chapters
-                log.info('Chapters missing. Fetching item details...');
-                try {
-                    // Need to request 'Chapters' field explicitly just to be safe, though api.getItem might default to all fields
-                    const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters' });
-                    if (itemDetails && itemDetails.Chapters) {
-                        chapters = itemDetails.Chapters;
-                        log.info('Chapters fetched from API:', chapters.length);
-                    } else {
-                        log.info('No chapters found in API response.');
+            let chapters = [];
+
+            if (!isAudioItem) {
+                // Chapter Recovery Strategy
+                // 1. Check if passed item has chapters (from options.item passed by PlayerPage)
+                chapters = options.item?.Chapters || [];
+
+                if (chapters.length > 0) {
+                    log.info('Using chapters from item object:', chapters.length);
+                } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
+                    // 2. Check PlaybackInfo
+                    chapters = playbackInfo.Chapters;
+                    log.info('Using chapters from PlaybackInfo:', chapters.length);
+                } else {
+                    // 3. Fallback: Fetch item details to get chapters
+                    log.info('Chapters missing. Fetching item details...');
+                    try {
+                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters' });
+                        if (itemDetails && itemDetails.Chapters) {
+                            chapters = itemDetails.Chapters;
+                            log.info('Chapters fetched from API:', chapters.length);
+                        } else {
+                            log.info('No chapters found in API response.');
+                        }
+                    } catch (e) {
+                        log.warn('Failed to fetch item details for chapters:', e);
                     }
-                } catch (e) {
-                    log.warn('Failed to fetch item details for chapters:', e);
                 }
+            } else {
+                log.debug('Audio item — skipping chapter fetch');
             }
 
             this._chapters = chapters;
             log.debug('Final Chapters:', this._chapters.length);
-            
+
             if (this._chapters.length > 0) {
                 log.info('Chapters loaded:', this._chapters.length);
                 this.emit('chaptersloaded', { chapters: this._chapters });
@@ -632,13 +656,21 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSource
             });
 
-            // Initialize the SubtitleManager with the selected subtitle track.
-            // The subtitle index is already included in the server request, so
-            // this call only needs to set up CLIENT-SIDE rendering (fetch external
-            // text, parse ASS, etc.). Setting _playSetupInProgress=true tells
-            // setSubtitleStreamIndex to skip any restart-triggering logic — the
-            // server already has the correct subtitle in its transcode session.
-            if (this._currentSubtitleStreamIndex && this._currentSubtitleStreamIndex !== -1) {
+            /*
+             * Subtitle setup only applies to video. Audio items never have subtitle
+             * streams, so attempting to set one would cause spurious log warnings
+             * and unnecessary SubtitleManager.setPrimaryTrack() calls.
+             */
+            const isAudioItemSetup = options.item?.MediaType === 'Audio' ||
+                                      options.item?.Type === 'AudioBook';
+
+            if (!isAudioItemSetup && this._currentSubtitleStreamIndex && this._currentSubtitleStreamIndex !== -1) {
+                // Initialize the SubtitleManager with the selected subtitle track.
+                // The subtitle index is already included in the server request, so
+                // this call only needs to set up CLIENT-SIDE rendering (fetch external
+                // text, parse ASS, etc.). Setting _playSetupInProgress=true tells
+                // setSubtitleStreamIndex to skip any restart-triggering logic — the
+                // server already has the correct subtitle in its transcode session.
                 this._playSetupInProgress = true;
                 // Fire-and-forget — don't block playback on subtitle fetch
                 this.setSubtitleStreamIndex(this._currentSubtitleStreamIndex)
@@ -1432,22 +1464,39 @@ export class JellyfinPlayer extends EventEmitter {
         // Fallback to manualBitrate or 120Mbps
         const maxBitrate = deviceProfile?.MaxStreamingBitrate || manualBitrate || 120000000;
 
+        /*
+         * Audio items (Music, Audiobooks) do NOT have subtitle streams.
+         * The Jellyfin server returns HTTP 500 if SubtitleStreamIndex is
+         * present in the request body for Audio-type items. Only send it
+         * for Video items where subtitle selection makes sense.
+         */
+        const isAudioItem = (options.item?.MediaType === 'Audio') ||
+                            (options.item?.Type === 'Audio') ||
+                            (options.item?.Type === 'MusicAlbum') ||
+                            (options.item?.Type === 'AudioBook');
+
+        const requestBody = {
+            DeviceProfile: deviceProfile || buildJellyfinProfile(maxBitrate),
+            UserId: options.userId,
+            MaxStreamingBitrate: maxBitrate,
+            StartTimeTicks: options.startPositionTicks || 0,
+            AudioStreamIndex: options.audioStreamIndex,
+            MediaSourceId: options.mediaSourceId,
+            AutoOpenLiveStream: true
+        };
+
+        // Only include subtitle index for video — sending it for audio causes HTTP 500
+        if (!isAudioItem) {
+            requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
+        }
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
                 Authorization: `MediaBrowser Token="${this.authToken}"`
             },
-            body: JSON.stringify({
-                DeviceProfile: deviceProfile || buildJellyfinProfile(maxBitrate),
-                UserId: options.userId,
-                MaxStreamingBitrate: maxBitrate,
-                StartTimeTicks: options.startPositionTicks || 0,
-                AudioStreamIndex: options.audioStreamIndex,
-                SubtitleStreamIndex: options.subtitleStreamIndex,
-                MediaSourceId: options.mediaSourceId,
-                AutoOpenLiveStream: true
-            })
+            body: JSON.stringify(requestBody)
         });
 
         if (!response.ok) {

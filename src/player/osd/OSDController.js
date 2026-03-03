@@ -43,6 +43,14 @@ export default class OSDController extends Component {
             ...options
         };
 
+        /*
+         * Audio mode: when playing Music, Audiobooks, or Podcasts the OSD
+         * hides subtitle selection and audio-track buttons (video-only features).
+         * Everything else — seekbar, play/pause, skip, rewind, settings, etc.
+         * — works identically for audio and video.
+         */
+        this._isAudio = !!(options.isAudio);
+
         // State
         this._isOsdVisible = false;
         this._autoHideTimer = null;
@@ -284,6 +292,22 @@ export default class OSDController extends Component {
                  this._executeAction(btn.dataset.action);
             }
         });
+
+        /*
+         * Audio mode: hide buttons that only apply to video.
+         * The subtitle and audio-track buttons open selection menus that are
+         * meaningless for Music/Audiobook items (no video streams, no subs).
+         * We remove them from the DOM entirely so they don't clutter the
+         * controls row and can't accidentally receive focus.
+         */
+        if (this._isAudio) {
+            const audioBtn = this._osdEl.querySelector('[data-action="audio"]');
+            const subtitleBtn = this._osdEl.querySelector('[data-action="subtitles"]');
+            audioBtn?.remove();
+            subtitleBtn?.remove();
+            // Mark the OSD so CSS can apply audio-specific tweaks if needed
+            this._osdEl.classList.add('osd-audio-mode');
+        }
 
         // Initial update
         this._updatePlayPauseButton();

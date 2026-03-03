@@ -75,9 +75,27 @@ class I18nManager {
      * @returns {string} Absolute URL to the locale JSON file
      */
     _localeUrl(lang) {
-        // Strip the filename part of the current page URL to get the app root.
-        // e.g. file:///media/.../org.litefin.app/index.html → file:///media/.../org.litefin.app/
-        const base = window.location.href.substring(0, window.location.href.lastIndexOf('/') + 1);
+        /*
+         * WHY origin + pathname instead of href:
+         *
+         * On a hash-router web dev server the full href looks like:
+         *   http://192.168.1.24:8081/#/settings
+         *
+         * Calling lastIndexOf('/') on that hits the slash INSIDE '#/' and the
+         * base becomes 'http://192.168.1.24:8081/#/' — making the locale URL a
+         * fragment (#/locales/...) rather than a real HTTP path, which causes
+         * an immediate XHR 404 / network error.
+         *
+         * window.location.origin + window.location.pathname gives:
+         *   http://192.168.1.24:8081/index.html
+         * which we then strip to:
+         *   http://192.168.1.24:8081/
+         *
+         * For packaged Tizen/WebOS file:// apps pathname is the full path to
+         * index.html — the same lastIndexOf('/') trick works identically.
+         */
+        const pageUrl = window.location.origin + window.location.pathname;
+        const base = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
         return base + 'locales/' + lang + '.json';
     }
 
