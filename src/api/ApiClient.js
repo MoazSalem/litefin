@@ -605,6 +605,50 @@ export class ApiClient {
     }
 
     // ========================================================================
+    // Music Endpoints
+    // ========================================================================
+
+    async getAlbumArtists(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            EnableTotalRecordCount: true
+        };
+
+        return this.get('/Artists/AlbumArtists', { ...defaults, ...params });
+    }
+
+    async getMusicArtists(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            EnableTotalRecordCount: true
+        };
+
+        return this.get('/Artists', { ...defaults, ...params });
+    }
+
+    async getResumeAudio(params = {}) {
+        const defaults = {
+            Limit: 20,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,ParentThumbImageTag',
+            ImageTypeLimit: 1,
+            EnableImageTypes: 'Primary,Backdrop,Thumb',
+            EnableTotalRecordCount: false,
+            MediaTypes: 'Audio' // Only fetch Audio items
+        };
+
+        return this.get(`/Users/${this._userId}/Items/Resume`, { ...defaults, ...params });
+    }
+
+    // ========================================================================
     // Genre Endpoints
     // ========================================================================
 
@@ -619,6 +663,19 @@ export class ApiClient {
         };
 
         return this.get('/Genres', { ...defaults, ...params });
+    }
+
+    async getMusicGenres(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio,ItemCounts',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            EnableTotalRecordCount: false
+        };
+
+        return this.get('/MusicGenres', { ...defaults, ...params });
     }
 
     async getItemFilters(params = {}) {

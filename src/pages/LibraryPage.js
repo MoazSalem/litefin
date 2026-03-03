@@ -222,6 +222,7 @@ class LibraryPage extends Page {
             // 2. Hide loading skeleton, show correct container
             const isHorizontalLayout =
                 this.state.viewType === 'Genres' ||
+                this.state.viewType === 'MusicGenres' ||
                 this.state.viewType === 'Suggestions' ||
                 this.state.viewType === 'Upcoming';
 
@@ -711,6 +712,50 @@ class LibraryPage extends Page {
                 const rows = [];
 
                 const collectionType = this.state.libraryInfo?.CollectionType;
+
+                if (collectionType === 'music') {
+                    // ------------------------------------------------------------------
+                    // Music Suggestions — Recently Added Albums, Recently Played, Favorite Artists
+                    // ------------------------------------------------------------------
+                    const [latest, resume, favorites] = await Promise.all([
+                        api
+                            .getLatestItems(this.state.libraryId, { Limit: 12, IncludeItemTypes: 'MusicAlbum' })
+                            .catch(() => []),
+                        api.getResumeAudio({ Limit: 12 }).catch(() => ({ Items: [] })),
+                        api
+                            .getItems({
+                                ParentId: this.state.libraryId,
+                                IsFavorite: true,
+                                SortBy: 'Random',
+                                Limit: 12,
+                                Recursive: true,
+                                IncludeItemTypes: 'MusicArtist'
+                            })
+                            .catch(() => ({ Items: [] }))
+                    ]);
+
+                    if (latest && latest.length > 0) {
+                        rows.push({ title: i18n.t('HeaderRecentlyAdded'), items: latest });
+                    }
+                    if (resume.Items && resume.Items.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderRecentlyPlayed'),
+                            items: resume.Items,
+                            isLandscape: true, // Show audio items similarly to resume
+                            cardType: 'backdrop',
+                            contextType: 'resume'
+                        });
+                    }
+                    if (favorites.Items && favorites.Items.length > 0) {
+                        rows.push({ title: i18n.t('FavoriteArtists'), items: favorites.Items });
+                    }
+
+                    this.state.items = rows;
+                    this._renderHorizontalRows(this.state.items);
+                    this._updatePaginationUI();
+                    return; // Skip grid render
+                }
+
                 const suggestionTypes = collectionType === 'tvshows' ? 'Series' : 'Movie,Series';
 
                 // ------------------------------------------------------------------
@@ -959,6 +1004,75 @@ class LibraryPage extends Page {
                 params.IncludeItemTypes = 'BoxSet';
                 params.Recursive = true;
                 result = await api.getItems(params);
+            } else if (viewType === 'Albums') {
+                params.IncludeItemTypes = 'MusicAlbum';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'AlbumArtists') {
+                result = await api.getAlbumArtists({
+                    ParentId: this.state.libraryId,
+                    StartIndex: params.StartIndex,
+                    Limit: params.Limit
+                });
+            } else if (viewType === 'Artists') {
+                result = await api.getMusicArtists({
+                    ParentId: this.state.libraryId,
+                    StartIndex: params.StartIndex,
+                    Limit: params.Limit
+                });
+            } else if (viewType === 'Songs') {
+                params.IncludeItemTypes = 'Audio';
+                params.Recursive = true;
+                params.SortBy = 'Album,SortName';
+                result = await api.getItems(params);
+            } else if (viewType === 'Playlists') {
+                params.IncludeItemTypes = 'Playlist';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'MusicGenres') {
+                // Fetch Genres List for Music
+                result = await api.getMusicGenres({
+                    ParentId: this.state.libraryId,
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50
+                });
+
+                const allGenres = result.Items || [];
+
+                const rowPromises = allGenres.map(async (genre) => {
+                    const genreParams = {
+                        ParentId: this.state.libraryId,
+                        GenreIds: genre.Id,
+                        StartIndex: 0,
+                        Limit: 12,
+                        Recursive: true,
+                        IncludeItemTypes: 'MusicAlbum,Audio',
+                        Fields: 'PrimaryImageAspectRatio,ProductionYear',
+                        ImageTypeLimit: 1,
+                        EnableImageTypes: 'Primary,Backdrop,Thumb'
+                    };
+
+                    try {
+                        const itemsResult = await api.getItems(genreParams);
+                        return {
+                            title: genre.Name,
+                            genreId: genre.Id,
+                            isLazy: false,
+                            items: itemsResult.Items || []
+                        };
+                    } catch (err) {
+                        log.warn(`Failed to load items for music genre ${genre.Name}`, err);
+                        return null;
+                    }
+                });
+
+                const loadedRows = (await Promise.all(rowPromises)).filter((r) => r && r.items.length > 0);
+
+                this.state.items = loadedRows;
+                this._renderHorizontalRows(this.state.items);
+                this._updatePaginationUI();
+                return;
             }
 
             this.state.items = result.Items || [];
@@ -1004,7 +1118,10 @@ class LibraryPage extends Page {
         this.$('#pagination-info').textContent = i18n.t('PageNumberXOfY', [currentPage, totalPages || 1]);
 
         // Hide/Show logic for single page or horizontal row views (Genres/Suggestions)
-        const isHorizontalView = this.state.viewType === 'Genres' || this.state.viewType === 'Suggestions';
+        const isHorizontalView =
+            this.state.viewType === 'Genres' ||
+            this.state.viewType === 'MusicGenres' ||
+            this.state.viewType === 'Suggestions';
         const isSinglePage = totalPages <= 1 || isHorizontalView;
 
         // Hide bottom footer entirely if single page or horizontal view
@@ -1085,6 +1202,16 @@ class LibraryPage extends Page {
                 { id: 'Favorites', label: 'Favorites' }, // TODO: Filter logic?
                 { id: 'Collections', label: 'Collections' },
                 { id: 'Genres', label: 'Genres' }
+            ];
+        } else if (collectionType === 'music') {
+            tabs = [
+                { id: 'Albums', label: 'Albums' },
+                { id: 'Suggestions', label: 'Suggestions' },
+                { id: 'AlbumArtists', label: 'AlbumArtists' },
+                { id: 'Artists', label: 'Artists' },
+                { id: 'Playlists', label: 'Playlists' },
+                { id: 'Songs', label: 'Songs' },
+                { id: 'MusicGenres', label: 'Genres' }
             ];
         } else {
             // Generic fallback
@@ -1197,9 +1324,15 @@ class LibraryPage extends Page {
             const viewType = this.state.viewType;
             const isMovieMain = collectionType === 'movies' && viewType === 'Items';
             const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
+            const isMusicMain =
+                collectionType === 'music' &&
+                (viewType === 'Albums' ||
+                    viewType === 'Artists' ||
+                    viewType === 'AlbumArtists' ||
+                    viewType === 'Songs');
             const isEpisodes = viewType === 'Episodes';
             // Do not show any header controls if we are deep linking to a specific genre/studio
-            const shouldShowControls = isMovieMain || isTVMain || isEpisodes || this._isSubView();
+            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || this._isSubView();
 
             const btnReset = this.$('#btn-reset-filters');
             if (btnReset) {
@@ -1321,8 +1454,11 @@ class LibraryPage extends Page {
         const viewType = this.state.viewType;
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';
         const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
+        const isMusicMain =
+            collectionType === 'music' &&
+            (viewType === 'Albums' || viewType === 'Artists' || viewType === 'AlbumArtists' || viewType === 'Songs');
         const isEpisodes = viewType === 'Episodes';
-        const isAlphaVisible = isMovieMain || isTVMain || isEpisodes || this._isSubView();
+        const isAlphaVisible = isMovieMain || isTVMain || isMusicMain || isEpisodes || this._isSubView();
 
         // Update Alpha Picker navigation to point to grid
         if (isAlphaVisible) {
@@ -1449,9 +1585,10 @@ class LibraryPage extends Page {
         // so we navigate straight back to the tabs.
         // NOTE: Genres uses grid layout with focusable headers, so it goes through controls.
         const isHorizontalLayout = this.state.viewType === 'Suggestions' || this.state.viewType === 'Upcoming';
+        const isGenresView = this.state.viewType === 'Genres' || this.state.viewType === 'MusicGenres';
         const nextUpTarget = this._isSubView()
             ? null
-            : isHorizontalLayout || this.state.viewType === 'Genres'
+            : isHorizontalLayout || isGenresView
               ? 'library-tabs'
               : 'library-controls';
 
@@ -1832,6 +1969,20 @@ class LibraryPage extends Page {
             log.debug('Navigating to Studio:', itemId);
             // Navigate to library filtered by this studio
             router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
+            return;
+        }
+
+        // Handle Songs - go straight to player
+        if (this.state.viewType === 'Songs') {
+            log.debug('Navigating to Player for Song:', itemId);
+            router.navigate(`/player/${itemId}`);
+            return;
+        }
+
+        // For Audio/Song items in Suggestions/Playlists/Genres - double check type
+        if (card.dataset.type === 'Audio') {
+            log.debug('Navigating to Player for Audio item:', itemId);
+            router.navigate(`/player/${itemId}`);
             return;
         }
 
@@ -2698,11 +2849,20 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType;
         const viewType = this.state.viewType;
 
-        // Condition: only show for Movies (Items), TV Shows (Items), and Episodes
+        // Condition: only show for Movies (Items), TV Shows (Items), Episodes, and music grid views
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';
         const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
-        const shouldShow = isMovieMain || isTVMain || isEpisodes;
+        // Music grid views (Albums, Artists, AlbumArtists, Songs, Playlists) need controls too
+        // MusicGenres and Suggestions use horizontal rows — they DON'T need controls
+        const isMusicMain =
+            collectionType === 'music' &&
+            (viewType === 'Albums' ||
+                viewType === 'Artists' ||
+                viewType === 'AlbumArtists' ||
+                viewType === 'Songs' ||
+                viewType === 'Playlists');
+        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain;
 
         const isSubView = this._isSubView();
         const isControlsVisible = shouldShow || isSubView;
@@ -2721,7 +2881,12 @@ class LibraryPage extends Page {
         if (tabsContainer && isTabsVisible) {
             let nextTarget = 'library-grid';
             if (isControlsVisible) nextTarget = 'library-controls';
-            else if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming')
+            else if (
+                viewType === 'Genres' ||
+                viewType === 'MusicGenres' ||
+                viewType === 'Suggestions' ||
+                viewType === 'Upcoming'
+            )
                 nextTarget = 'row-0';
 
             const tabsConfig = focusManager.getSectionConfig('library-tabs');
@@ -2741,7 +2906,12 @@ class LibraryPage extends Page {
                 let controlsLeaveDown = 'library-grid';
                 if (isAlphaVisible) {
                     controlsLeaveDown = 'alpha-picker';
-                } else if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
+                } else if (
+                    viewType === 'Genres' ||
+                    viewType === 'MusicGenres' ||
+                    viewType === 'Suggestions' ||
+                    viewType === 'Upcoming'
+                ) {
                     controlsLeaveDown = 'row-0';
                 }
 
@@ -2758,7 +2928,12 @@ class LibraryPage extends Page {
             const alphaConfig = focusManager.getSectionConfig('alpha-picker');
             if (alphaConfig) {
                 let alphaLeaveDown = 'library-grid';
-                if (viewType === 'Genres' || viewType === 'Suggestions' || viewType === 'Upcoming') {
+                if (
+                    viewType === 'Genres' ||
+                    viewType === 'MusicGenres' ||
+                    viewType === 'Suggestions' ||
+                    viewType === 'Upcoming'
+                ) {
                     alphaLeaveDown = 'row-0';
                 }
 
