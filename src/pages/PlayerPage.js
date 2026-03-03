@@ -96,12 +96,6 @@ class PlayerPage extends Page {
                     </div>
                 </div>
 
-                <!-- Audio/Music Visual Overlay (Hidden for Video) -->
-                <div id="audio-visual-overlay" class="audio-visual-overlay hidden">
-                    <div class="audio-backdrop"></div>
-                    <div class="audio-album-art"></div>
-                </div>
-
                 <!-- OSD Overlay (controlled by jellyfin-player-osd.js) -->
                 <div id="osd-overlay" class="player-osd"></div>
 
@@ -636,14 +630,29 @@ class PlayerPage extends Page {
      * Hides the overlay for video items.
      */
     _renderAudioVisuals() {
-        const overlay = this.$('#audio-visual-overlay');
-        if (!overlay) return;
-
         const isAudioItem = this._item?.MediaType === 'Audio' || this._item?.Type === 'AudioBook';
 
+        let overlay = this.$('#audio-visual-overlay');
+
         if (!isAudioItem) {
-            overlay.classList.add('hidden');
+            if (overlay) overlay.remove();
             return;
+        }
+
+        if (!overlay) {
+            overlay = document.createElement('div');
+            overlay.id = 'audio-visual-overlay';
+            overlay.className = 'audio-visual-overlay hidden';
+            overlay.innerHTML = `
+                <div class="audio-backdrop"></div>
+                <div class="audio-album-art"></div>
+            `;
+            const osd = this.$('#osd-overlay');
+            if (osd && osd.parentNode) {
+                osd.parentNode.insertBefore(overlay, osd);
+            } else {
+                this.el.querySelector('.player-page')?.appendChild(overlay);
+            }
         }
 
         // Show the overlay

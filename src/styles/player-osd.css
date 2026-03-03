@@ -51,6 +51,7 @@
     /* Force remove system focus rings */
     -webkit-tap-highlight-color: transparent;
     -webkit-focus-ring-color: transparent;
+    overflow: hidden;
 }
 
 /* New: Main OSD wrapper for header/bottom */
@@ -84,6 +85,7 @@
     bottom: 0;
     pointer-events: none;
     z-index: 1000;
+    overflow: hidden;
 }
 
 .osd-overlays > * {

@@ -3,8 +3,13 @@
  * Player Modals: Chapters & Queue
  * ============================================================================
  * Overlay styles for the two new OSD modals.
- * Both follow the same glass-panel pattern used by the Track Selection menus
- * and the Up Next dialog, with subtle entrance animations.
+ * Updated for Tizen compatibility:
+ * - Uses absolute positioning relative to .osd-overlays.
+ * - Replaces 'inset' with top/left/right/bottom.
+ * - Replaces 'gap' with margins.
+ * - Adds -webkit- prefixes for older TV engines.
+ * - Explicitly sets box-sizing for all elements.
+ * - USES ABSOLUTE POSITIONING FOR PANELS TO PREVENT LAYOUT SHIFTS.
  * ============================================================================
  */
 
@@ -14,21 +19,36 @@
 
 .chapters-modal-overlay,
 .queue-modal-overlay {
-    /* Full screen scrim */
-    position: fixed;
-    inset: 0;
-    display: flex;
-    align-items: stretch;         /* Panel fills full height */
-    justify-content: flex-end;    /* Slide in from the right edge */
+    /* Full screen absolute positioning within .osd-overlays */
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    
+    /* 
+     * IMPORTANT: We use overflow: hidden here to ensure the panel (which 
+     * is translated 100% off screen) does not expand the viewport or 
+     * cause the browser to center the "available" content.
+     */
+    overflow: hidden;
+    
     background: rgba(0, 0, 0, 0.6);
     backdrop-filter: blur(4px);
     -webkit-backdrop-filter: blur(4px);
     z-index: 9999;
-    transform: translateZ(100px);  /* Tizen compositor fix */
+    
+    /* Hardware acceleration */
+    -webkit-transform: translate3d(0, 0, 100px);
+    transform: translate3d(0, 0, 100px);
 
     /* Hidden by default */
     opacity: 0;
     pointer-events: none;
+    -webkit-transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
     transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
@@ -45,11 +65,24 @@
 .chapters-modal,
 .queue-modal {
     /* Side-panel dimensions */
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
     width: 40vw;
     min-width: 480px;
     max-width: 640px;
-    height: 100%;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    
+    /* Internal layout still uses Flexbox */
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
     flex-direction: column;
 
     /* Glass look */
@@ -58,13 +91,16 @@
     box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
 
     /* Spring slide-in from the right */
-    transform: translateX(100%);
+    -webkit-transform: translate3d(100%, 0, 0);
+    transform: translate3d(100%, 0, 0);
+    -webkit-transition: -webkit-transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1);
     transition: transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1);
 }
 
 .chapters-modal-overlay.visible .chapters-modal,
 .queue-modal-overlay.visible .queue-modal {
-    transform: translateX(0);
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
 }
 
 /* ============================================================================
@@ -73,12 +109,29 @@
 
 .chapters-modal__header,
 .queue-modal__header {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: justify;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
+    
     padding: 1.6em 2em 1.2em;
     border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    -webkit-flex-shrink: 0;
     flex-shrink: 0;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+/* Spacing fallback for flex header */
+.chapters-modal__header > * + *,
+.queue-modal__header > * + * {
+    margin-left: 2em;
 }
 
 .chapters-modal__title,
@@ -87,6 +140,7 @@
     font-weight: 700;
     letter-spacing: 0.03em;
     color: #fff;
+    margin: 0;
 }
 
 .chapters-modal__count,
@@ -102,12 +156,17 @@
 
 .chapters-modal__list,
 .queue-modal__list {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
     flex: 1;
     overflow-y: auto;
     overflow-x: hidden;
     padding: 0.6em 0;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 
-    /* Custom thin scrollbar */
+    /* Custom thin scrollbar - mostly for web debug */
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
 }
@@ -130,6 +189,7 @@
     text-align: center;
     opacity: 0.4;
     font-style: italic;
+    color: #fff;
 }
 
 /* ============================================================================
@@ -137,16 +197,27 @@
    ============================================================================ */
 
 .chapter-row {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    gap: 1.1em;
+    
     padding: 0.85em 1.6em;
     cursor: pointer;
-    transition:
-        background 0.15s ease,
-        transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    -webkit-transition: background 0.15s ease, -webkit-transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background 0.15s ease, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
     border-radius: 0;
     position: relative;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+/* Spacing fallbacks instead of gap */
+.chapter-row > * + * {
+    margin-left: 1.25em;
 }
 
 /* Hover/focus highlight */
@@ -156,7 +227,9 @@
 
 .chapter-row.focused {
     background: rgba(0, 164, 220, 0.22);  /* Accent tint */
+    -webkit-transform: scaleX(1.01);
     transform: scaleX(1.01);
+    -webkit-transform-origin: left;
     transform-origin: left;
 }
 
@@ -175,6 +248,7 @@
     position: relative;
     width: 108px;
     height: 60px;
+    -webkit-flex-shrink: 0;
     flex-shrink: 0;
     border-radius: 6px;
     overflow: hidden;
@@ -203,20 +277,40 @@
     height: 8px;
     border-radius: 50%;
     background: var(--osd-accent-color, #00a4dc);
+    -webkit-animation: playing-dot-pulse 1.4s ease-in-out infinite;
     animation: playing-dot-pulse 1.4s ease-in-out infinite;
     box-shadow: 0 0 6px var(--osd-accent-color, #00a4dc);
 }
 
+/* Standard keyframes for Tizen performance */
+@-webkit-keyframes playing-dot-pulse {
+    0%, 100% { opacity: 1; -webkit-transform: scale(1); transform: scale(1); }
+    50%       { opacity: 0.5; -webkit-transform: scale(0.75); transform: scale(0.75); }
+}
+
 @keyframes playing-dot-pulse {
-    0%, 100% { opacity: 1; transform: scale(1); }
-    50%       { opacity: 0.5; transform: scale(0.75); }
+    0%, 100% { opacity: 1; -webkit-transform: scale(1); transform: scale(1); }
+    50%       { opacity: 0.5; -webkit-transform: scale(0.75); transform: scale(0.75); }
 }
 
 .chapter-row__info {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
     flex-direction: column;
-    gap: 0.25em;
+    
     min-width: 0;   /* Allow text truncation */
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
+    flex: 1;
+}
+
+/* Spacing fallbacks instead of gap */
+.chapter-row__info > * + * {
+    margin-top: 0.3em;
 }
 
 .chapter-row__name {
@@ -226,6 +320,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
 }
 
 .chapter-row__time {
@@ -233,6 +328,7 @@
     font-variant-numeric: tabular-nums;
     opacity: 0.5;
     color: #fff;
+    margin: 0;
 }
 
 /* ============================================================================
@@ -240,15 +336,26 @@
    ============================================================================ */
 
 .queue-row {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
-    gap: 1em;
+    
     padding: 0.7em 1.6em;
     cursor: pointer;
-    transition:
-        background 0.15s ease,
-        transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    -webkit-transition: background 0.15s ease, -webkit-transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    transition: background 0.15s ease, transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
     position: relative;
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+/* Spacing fallbacks instead of gap */
+.queue-row > * + * {
+    margin-left: 1.1em;
 }
 
 .queue-row:hover {
@@ -257,7 +364,9 @@
 
 .queue-row.focused {
     background: rgba(0, 164, 220, 0.22);
+    -webkit-transform: scaleX(1.01);
     transform: scaleX(1.01);
+    -webkit-transform-origin: left;
     transform-origin: left;
 }
 
@@ -278,7 +387,9 @@
     font-size: 0.85em;
     font-variant-numeric: tabular-nums;
     opacity: 0.35;
+    -webkit-flex-shrink: 0;
     flex-shrink: 0;
+    color: #fff;
 }
 
 /* Poster thumbnail */
@@ -286,6 +397,7 @@
     position: relative;
     width: 54px;
     height: 76px;
+    -webkit-flex-shrink: 0;
     flex-shrink: 0;
     border-radius: 4px;
     overflow: hidden;
@@ -302,23 +414,39 @@
 /* Animated equaliser overlay when playing */
 .queue-row__playing-indicator {
     position: absolute;
-    inset: 0;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: end;
+    -webkit-align-items: flex-end;
     align-items: flex-end;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
     justify-content: center;
-    gap: 2px;
+    
     padding: 6px 8px;
     background: rgba(0, 0, 0, 0.45);
+    
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 }
 
-/* Three tiny animated bars mimicking an equaliser */
-.queue-row__playing-indicator::before,
-.queue-row__playing-indicator::after,
-.queue-row__thumb-wrap .queue-row__playing-indicator + .queue-row__thumb {
-    content: '';
+/* Spacing fallback for indicator */
+.queue-row__playing-indicator > * + * {
+    margin-left: 2px;
 }
 
 .queue-row__playing-indicator {
+    background: -webkit-linear-gradient(
+        270deg,
+        transparent 50%,
+        rgba(0, 164, 220, 0.55) 100%
+    );
     background: linear-gradient(
         180deg,
         transparent 50%,
@@ -328,11 +456,23 @@
 
 /* Item metadata */
 .queue-row__info {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
     flex-direction: column;
-    gap: 0.25em;
+    
     min-width: 0;
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
     flex: 1;
+}
+
+/* Spacing fallbacks instead of gap */
+.queue-row__info > * + * {
+    margin-top: 0.3em;
 }
 
 .queue-row__name {
@@ -342,6 +482,7 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
 }
 
 .queue-row__subtitle {
@@ -351,4 +492,5 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    margin: 0;
 }
