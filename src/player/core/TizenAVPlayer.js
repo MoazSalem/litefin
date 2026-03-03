@@ -439,36 +439,98 @@ export class TizenAVPlayer {
      */
     _findTizenSubtitleIndex(streamIndex) {
         try {
-            const trackInfo = this._avplay.getTotalTrackInfo();
+            const trackInfo = this._avplay.getTotalTrackInfo() || [];
             const textTracks = trackInfo.filter((t) => t.type === 'TEXT');
 
             if (!this._currentPlayOptions?.mediaSource?.MediaStreams) {
                 return null;
             }
 
-            // Only internal (embedded) subtitles are managed by Tizen,
-            // external subtitles are handled separately by the player
-            const jellyfinSubStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
-                (s) => s.Type === 'Subtitle' && !s.IsExternal
-            );
+            // Only internal (embedded) subtitles that Tizen parses natively as TEXT
+            const jellyfinSubStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter((s) => {
+                if (s.Type !== 'Subtitle' || s.IsExternal) return false;
+                
+                // Exclude complex/image codecs that Tizen AVPlay's demuxer NEVER exposes as TEXT tracks
+                const codec = (s.Codec || '').toLowerCase();
+                const nonTextCodecs = ['ass', 'ssa', 'pgs', 'pgssub', 'vobsub', 'dvdsub', 'dvd_subtitle'];
+                if (nonTextCodecs.includes(codec)) return false;
+                
+                return true;
+            });
 
             const targetStreamIndexInSubList = jellyfinSubStreams.findIndex((s) => s.Index === streamIndex);
+            const jfTrack = jellyfinSubStreams[targetStreamIndexInSubList];
 
-            if (targetStreamIndexInSubList === -1) {
-                // Might be external or not found
+            log.warn('=== AVPLAY SUBTITLE TRACK MAPPING DIAGNOSTICS ===');
+            log.warn(`Requested Jellyfin streamIndex: ${streamIndex}`);
+            log.warn(`Parsed ${jellyfinSubStreams.length} internal text tracks from Jellyfin MediaStreams:`);
+            jellyfinSubStreams.forEach((s, n) => {
+                log.warn(`  [JF Nth: ${n}] Index: ${s.Index}, Lang: ${s.Language || 'None'}, Title: ${s.Title || 'None'}`);
+            });
+
+            log.warn(`Parsed ${textTracks.length} TEXT tracks from AVPlay getTotalTrackInfo():`);
+            textTracks.forEach((t, n) => {
+                log.warn(`  [AVPlay Nth: ${n}] Index: ${t.index}, Lang: ${t.language || 'None'}, Extra: ${t.extra_info || 'None'}`);
+            });
+            log.warn('================================================');
+
+            if (targetStreamIndexInSubList === -1 || !jfTrack) {
                 log.warn('Requested subtitle stream not found in internal list:', streamIndex);
                 return null;
             }
 
+            // Defensive Mapping: Try to find a matching track in Tizen's trackInfo
+            if (textTracks.length > 0) {
+                const jfLang = (jfTrack.Language || '').toLowerCase();
+                const jfTitle = (jfTrack.Title || '').toLowerCase();
+
+                // Parse AVPlay's extra_info which is often a JSON string containing Language/Title
+                const parsedTracks = textTracks.map(t => {
+                    let pLang = (t.language || '').toLowerCase();
+                    let pTitle = '';
+                    if (t.extra_info && typeof t.extra_info === 'string') {
+                        try {
+                            const extra = JSON.parse(t.extra_info);
+                            pLang = String(extra.Language || extra.language || extra.track_lang || pLang).toLowerCase();
+                            pTitle = String(extra.Title || extra.title || extra.Name || extra.name || '').toLowerCase();
+                        } catch (e) {
+                            pTitle = t.extra_info.toLowerCase();
+                        }
+                    }
+                    return { ...t, _pLang: pLang, _pTitle: pTitle };
+                });
+
+                // 1. Language + Title match
+                if (jfLang && jfTitle) {
+                    const strictMatches = parsedTracks.filter(t => t._pLang === jfLang && t._pTitle.includes(jfTitle));
+                    if (strictMatches.length === 1) {
+                        log.debug(`Mapped Jellyfin Subtitle ${streamIndex} via strict match to Tizen index ${strictMatches[0].index}`);
+                        return parseInt(strictMatches[0].index, 10);
+                    }
+                }
+
+                // 2. Language-only match
+                if (jfLang) {
+                    const langMatches = parsedTracks.filter(t => t._pLang === jfLang);
+                    if (langMatches.length === 1) {
+                        log.debug(`Mapped Jellyfin Subtitle ${streamIndex} via unique language match (${jfLang}) to Tizen index ${langMatches[0].index}`);
+                        return parseInt(langMatches[0].index, 10);
+                    }
+                }
+            }
+
+            // Ultimate Fallback: N-th SEQUENCE Mapping
+            // Tizen indices often skip numbers (e.g., 2, 4, 6) or assign arbitrary streams.
+            // The sequence index mapping cleanly pairs the N-th internal Jellyfin subtitle
+            // to the N-th TEXT track parsed by Tizen's demuxer.
             if (textTracks[targetStreamIndexInSubList]) {
                 const tizenIndex = textTracks[targetStreamIndexInSubList].index;
-                log.debug(
-                    `Mapped Jellyfin Subtitle ${streamIndex} (Nth: ${targetStreamIndexInSubList}) to Tizen index ${tizenIndex}`
-                );
+                log.warn(`Defensive mapping failed. Falling back to sequence N-th mapping: Jellyfin ${streamIndex} (Nth: ${targetStreamIndexInSubList}) -> Tizen track index ${tizenIndex}`);
                 return parseInt(tizenIndex, 10);
             }
 
             return null;
+
         } catch (e) {
             log.error('Error mapping subtitle index:', e);
             return null;

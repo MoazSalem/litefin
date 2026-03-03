@@ -1099,23 +1099,18 @@ export class JellyfinPlayer extends EventEmitter {
                     this._backend.setSubtitleStreamIndex(-1);
                 } else {
                     const tracks = this.getSubtitleTracks();
-                    const listIndex = tracks.findIndex((t) => t.Index === index);
-                    if (listIndex !== -1) {
-                        this._backend.setSubtitleStreamIndex(listIndex);
+                    const trackExists = tracks.some((t) => t.Index === index);
+                    if (trackExists) {
+                        this._backend.setSubtitleStreamIndex(index);
                     } else {
                         log.warn('Subtitle StreamID', index, 'not found in backend tracks');
                     }
                 }
             }
-        } else if (delivery === DeliveryMethod.EXTERNAL_TEXT) {
-            // SubtitleManager is handling rendering via DOM — disable backend subs
-            if (this._backend instanceof TizenAVPlayer) {
-                this._backend.setSubtitleStreamIndex(-1);
-            } else {
-                this._backend?.setSubtitleStreamIndex(-1);
-            }
-        } else if (delivery === DeliveryMethod.NONE) {
-            // If we can't render it (or explicitly disabled), ensure backend subs are off
+        } else {
+            // SubtitleManager is handling rendering via DOM (EXTERNAL_TEXT, ASS_CANVAS, PGS_BITMAP)
+            // Or delivery is NONE (subtitles disabled / unsupported format).
+            // Ensure backend embedded subtitles are turned off so they don't double-render.
             if (this._backend instanceof TizenAVPlayer) {
                 this._backend.setSubtitleStreamIndex(-1);
             } else {
