@@ -59,8 +59,8 @@ class FavoritesPage extends Page {
             const userId = typeof api.userId === 'function' ? api.userId() : api._userId;
             if (!userId) throw new Error('User not authenticated');
 
-            // Parallel fetch of all favorite types
-            const [movies, shows, seasons, episodes, people] = await Promise.all([
+            // Parallel fetch of all favorite types, including music
+            const [movies, shows, seasons, episodes, people, artists, albums, songs] = await Promise.all([
                 api.getItems({
                     Filters: 'IsFavorite',
                     IncludeItemTypes: 'Movie',
@@ -100,6 +100,31 @@ class FavoritesPage extends Page {
                     SortOrder: 'Ascending',
                     Limit: 50,
                     Fields: 'PrimaryImageAspectRatio'
+                }),
+                // --- Music Types ---
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'MusicArtist,Artist',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'MusicAlbum',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'Audio',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
                 })
             ]);
 
@@ -109,7 +134,7 @@ class FavoritesPage extends Page {
             if (!container) return;
             container.innerHTML = '';
 
-            // Prepare sections data
+            // Prepare sections data (video, people, then music)
             const sectionsData = [];
             if (movies.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-movie', title: i18n.t('Movies'), items: movies.Items, type: 'movie' });
@@ -136,6 +161,13 @@ class FavoritesPage extends Page {
                 });
             if (people.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-person', title: i18n.t('People'), items: people.Items, type: 'person' });
+            // --- Music sections ---
+            if (artists.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-artist', title: i18n.t('Artists'), items: artists.Items, type: 'square' });
+            if (albums.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-album', title: i18n.t('Albums'), items: albums.Items, type: 'square' });
+            if (songs.TotalRecordCount > 0)
+                sectionsData.push({ id: 'fav-song', title: i18n.t('Songs'), items: songs.Items, type: 'square' });
 
             if (sectionsData.length === 0) {
                 container.innerHTML = `<div class="page-error" style="display:block; position:static; margin:40px;">${i18n.t('NoFavoritesFound')}</div>`;
@@ -223,6 +255,7 @@ class FavoritesPage extends Page {
         // Initialize VirtualCardRow
         virtualRow = new VirtualCardRow(trackContainer, items, {
             isLandscape: type === 'episode',
+            cardType: type, // Pass through for height calculation
             visibleCount: type === 'episode' ? 8 : 12,
             focusSectionId: sectionId,
             renderCard: (item) =>

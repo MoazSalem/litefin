@@ -139,6 +139,9 @@ class SearchPage extends Page {
                             'search-movies-items': 'movies',
                             'search-series-items': 'series',
                             'search-episodes-items': 'episodes',
+                            'search-artists-items': 'artists',
+                            'search-albums-items': 'albums',
+                            'search-songs-items': 'songs',
                             'search-people-items': 'people'
                         };
                         const gridKey = gridKeyMap[sectionId];
@@ -214,7 +217,7 @@ class SearchPage extends Page {
                     e.preventDefault();
                     // Move focus to first row's items - use RAF to ensure DOM is ready
                     requestAnimationFrame(() => {
-                        const sectionOrder = ['movies', 'series', 'episodes', 'people'];
+                        const sectionOrder = ['movies', 'series', 'episodes', 'people', 'artists', 'albums', 'songs'];
                         const firstType = sectionOrder.find((type) => this._grids[type]);
                         if (firstType) {
                             const sectionId = `${this._grids[firstType].id}-items`;
@@ -279,8 +282,8 @@ class SearchPage extends Page {
         try {
             const mediaParams = {
                 Limit: 50,
-                // Removed Person from here as we query it separately
-                IncludeItemTypes: 'Movie,Series,Episode,BoxSet',
+                // Music types included so artists/albums/songs show up in results
+                IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,MusicAlbum,Audio',
                 MediaTypes: null
             };
 
@@ -291,11 +294,19 @@ class SearchPage extends Page {
             log.info(`Searching for "${this._query}"`);
 
             const [mediaResponse, peopleResponse] = await Promise.all([
-                api.search(this._query, mediaParams),
+                api.searchHints(this._query, mediaParams),
                 api.searchPeople(this._query, peopleParams)
             ]);
 
-            const mediaItems = mediaResponse.Items || [];
+            const mediaItems = (mediaResponse.Items || mediaResponse.SearchHints || []).map((item) => ({
+                ...item,
+                Id: item.ItemId || item.Id, // Normalize search hint IDs
+                ImageTags: item.ImageTags || {
+                    Primary: item.PrimaryImageTag
+                },
+                // Ensure Type is correctly set (SearchHints have Type property)
+                Type: item.Type
+            }));
             const peopleItems = peopleResponse.Items || [];
 
             // Combine results
@@ -331,6 +342,10 @@ class SearchPage extends Page {
         // Include both Series and BoxSets (Collections) as "Shows/Collections" or just Series
         const series = this._results.filter((i) => i.Type === 'Series');
         const episodes = this._results.filter((i) => i.Type === 'Episode');
+        // Music types - merge MusicArtist and Artist for better coverage
+        const artists = this._results.filter((i) => i.Type === 'MusicArtist' || i.Type === 'Artist');
+        const albums = this._results.filter((i) => i.Type === 'MusicAlbum');
+        const songs = this._results.filter((i) => i.Type === 'Audio');
         const people = this._results.filter((i) => i.Type === 'Person');
 
         // 1. Movies
@@ -376,7 +391,49 @@ class SearchPage extends Page {
             this._grids.episodes.mount(container);
         }
 
-        // 4. People (Cast/Crew)
+        // 4. Music Artists
+        if (artists.length > 0) {
+            this._grids.artists = new MediaGrid({
+                id: 'search-artists',
+                title: i18n.t('Artists'),
+                items: artists,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-artists-items', card),
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.artists.mount(container);
+        }
+
+        // 5. Music Albums
+        if (albums.length > 0) {
+            this._grids.albums = new MediaGrid({
+                id: 'search-albums',
+                title: i18n.t('Albums'),
+                items: albums,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-albums-items', card),
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.albums.mount(container);
+        }
+
+        // 6. Songs (Audio)
+        if (songs.length > 0) {
+            this._grids.songs = new MediaGrid({
+                id: 'search-songs',
+                title: i18n.t('Songs'),
+                items: songs,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-songs-items', card),
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.songs.mount(container);
+        }
+
+        // 7. People (Cast/Crew)
         if (people.length > 0) {
             this._grids.people = new MediaGrid({
                 id: 'search-people',
@@ -395,7 +452,8 @@ class SearchPage extends Page {
     }
 
     _registerSearchFocus() {
-        const sectionOrder = ['movies', 'series', 'episodes', 'people'];
+        // Must match all rendered grid keys so the focus chain is complete
+        const sectionOrder = ['movies', 'series', 'episodes', 'artists', 'albums', 'songs', 'people'];
         const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
         if (activeTypes.length === 0) return;

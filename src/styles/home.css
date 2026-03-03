@@ -103,6 +103,7 @@
 .media-card.square .card-image {
     /* PADDING HACK for 1:1 Ratio */
     padding-bottom: 100%;
+    height: 0 !important;
 }
 
 .media-card:focus .card-image,

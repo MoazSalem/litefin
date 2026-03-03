@@ -773,7 +773,7 @@ class LibraryPage extends Page {
                                 SortBy: 'Random',
                                 Limit: 12,
                                 Recursive: true,
-                                IncludeItemTypes: 'MusicArtist'
+                                IncludeItemTypes: 'MusicArtist,Artist'
                             })
                             .catch(() => ({ Items: [] })),
                         api.getRecentlyPlayedAudio(this.state.libraryId, 12).catch(() => ({ Items: [] })),
@@ -812,7 +812,7 @@ class LibraryPage extends Page {
                     }
                     if (favorites.Items && favorites.Items.length > 0) {
                         rows.push({
-                            title: i18n.t('FavoriteArtists'),
+                            title: i18n.t('Artists'),
                             items: favorites.Items,
                             cardType: 'square'
                         });

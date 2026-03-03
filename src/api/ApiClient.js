@@ -737,6 +737,26 @@ export class ApiClient {
         return this.get('/Items', { ...defaults, ...params });
     }
 
+    /**
+     * Global search using the specialized Search Hints endpoint.
+     * This matches Jellyfin-web behavior and finds Artists more accurately.
+     * @param {string} query
+     * @param {Object} [params]
+     * @returns {Promise<any>}
+     */
+    async searchHints(query, params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            SearchTerm: query,
+            IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,Artist,MusicAlbum,Audio',
+            Limit: 50,
+            Recursive: true,
+            Fields: 'PrimaryImageAspectRatio'
+        };
+
+        return this.get('/Search/Hints', { ...defaults, ...params });
+    }
+
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
