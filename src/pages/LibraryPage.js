@@ -735,7 +735,11 @@ class LibraryPage extends Page {
                     ]);
 
                     if (latest && latest.length > 0) {
-                        rows.push({ title: i18n.t('HeaderRecentlyAdded'), items: latest });
+                        rows.push({
+                            title: i18n.t('HeaderRecentlyAdded'),
+                            items: latest,
+                            cardType: 'square'
+                        });
                     }
                     if (resume.Items && resume.Items.length > 0) {
                         rows.push({
@@ -747,7 +751,11 @@ class LibraryPage extends Page {
                         });
                     }
                     if (favorites.Items && favorites.Items.length > 0) {
-                        rows.push({ title: i18n.t('FavoriteArtists'), items: favorites.Items });
+                        rows.push({
+                            title: i18n.t('FavoriteArtists'),
+                            items: favorites.Items,
+                            cardType: 'square'
+                        });
                     }
 
                     this.state.items = rows;
@@ -1059,7 +1067,8 @@ class LibraryPage extends Page {
                             title: genre.Name,
                             genreId: genre.Id,
                             isLazy: false,
-                            items: itemsResult.Items || []
+                            items: itemsResult.Items || [],
+                            cardType: 'square'
                         };
                     } catch (err) {
                         log.warn(`Failed to load items for music genre ${genre.Name}`, err);
@@ -1438,7 +1447,9 @@ class LibraryPage extends Page {
                             ? 'episode'
                             : this.state.viewType === 'Networks'
                               ? 'backdrop'
-                              : 'poster',
+                              : this.state.libraryInfo?.CollectionType === 'music'
+                                ? 'square'
+                                : 'poster',
                     contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null // Handle special contexts
                 })
             )
@@ -1668,6 +1679,7 @@ class LibraryPage extends Page {
                 const trackContainer = section.querySelector('.row-items-track');
                 virtualRow = new VirtualCardRow(trackContainer, displayItems, {
                     isLandscape: row.isLandscape || false,
+                    cardType: row.cardType || 'poster',
                     visibleCount: row.isLandscape ? 8 : 12,
                     // Eagerly render the first several cards so the row is navigable
                     // immediately when focused rather than building nodes on first keypress.

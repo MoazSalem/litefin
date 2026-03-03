@@ -159,7 +159,8 @@ class HomePage extends Page {
                         title: i18n.t('LatestFromLibrary', [this._libraries[i].Name]),
                         items: latest,
                         libraryId: this._libraries[i].Id,
-                        type: 'latest'
+                        type: 'latest',
+                        cardType: this._libraries[i].CollectionType === 'music' ? 'square' : 'poster'
                     });
                 }
             });
@@ -305,6 +306,7 @@ class HomePage extends Page {
             const trackContainer = sectionEl.querySelector('.row-items-track');
             const virtualRow = new VirtualCardRow(trackContainer, row.items, {
                 isLandscape: isLandscape,
+                cardType: row.cardType || 'poster',
                 visibleCount: isLandscape ? 8 : 12, // Sliding window size after initial load
                 // Pre-render items at construction time so every row is ready before the
                 // user scrolls to it, eliminating on-demand DOM creation lag.
@@ -314,7 +316,8 @@ class HomePage extends Page {
                 // The sliding window takes over on first navigation and evicts stale nodes.
                 initialWindow: isLandscape ? 5 : row.items.length,
                 focusSectionId: `home-row-${i}`,
-                renderCard: (item) => this._renderMediaCard(item, isLandscape, row.type, row.contextType || row.type)
+                renderCard: (item) =>
+                    this._renderMediaCard(item, isLandscape, row.cardType || row.type, row.contextType || row.type)
             });
             this._virtualRows.push(virtualRow);
 

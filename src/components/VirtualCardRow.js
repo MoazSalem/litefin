@@ -26,6 +26,7 @@ export class VirtualCardRow {
         this._initialWindow = options.initialWindow != null ? options.initialWindow : null;
         this._initialRenderDone = false; // Tracks whether the eager boot render has fired
         this.isLandscape = options.isLandscape || false;
+        this.cardType = options.cardType || 'poster';
         this.focusSectionId = options.focusSectionId;
         this.renderCard = options.renderCard;
 
@@ -62,7 +63,10 @@ export class VirtualCardRow {
             // Emulate .card-image
             const imageRatioDiv = document.createElement('div');
             imageRatioDiv.style.width = '100%';
-            imageRatioDiv.style.paddingBottom = this.isLandscape ? '56.25%' : '150%';
+            let padding = '150%'; // Poster
+            if (this.isLandscape) padding = '56.25%';
+            else if (this.cardType === 'square') padding = '100%';
+            imageRatioDiv.style.paddingBottom = padding;
             imageRatioDiv.style.border = '3px solid transparent';
             dummyDiv.appendChild(imageRatioDiv);
 

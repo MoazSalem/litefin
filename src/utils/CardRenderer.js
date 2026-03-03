@@ -17,7 +17,7 @@ class CardRenderer {
      * @param {Object} item - The Jellyfin item object
      * @param {Object} options - Rendering options
      * @param {boolean} [options.isLandscape=false] - Force landscape layout
-     * @param {string} [options.type='poster'] - 'poster', 'episode', 'episode-primary', 'person', 'season', 'resume'
+     * @param {string} [options.type='poster'] - 'poster', 'landscape', 'square', 'episode', 'episode-primary', 'person', 'season', 'resume'
      * @returns {string} HTML string
      */
     static createCardHtml(item, options = {}) {
@@ -302,12 +302,21 @@ class CardRenderer {
         } else {
             // Movies/Shows - show year and role if available
             const parts = [];
-            if (item.ProductionYear) parts.push(item.ProductionYear);
 
-            // Support both standard Role and _roleName (from MediaGrid mapping)
-            const role = item.Role || item._roleName;
-            if (role) {
-                parts.push(i18n.t('LabelAsRole', [role]));
+            if (item.Type === 'MusicAlbum' || item.Type === 'Audio') {
+                // Music: Prioritize Artist Name
+                const artist = item.AlbumArtist || (item.Artists && item.Artists[0]) || item.Artist;
+                if (artist) parts.push(artist);
+                else if (item.ProductionYear) parts.push(item.ProductionYear);
+            } else {
+                // Movies/Shows/Others
+                if (item.ProductionYear) parts.push(item.ProductionYear);
+
+                // Support both standard Role and _roleName (from MediaGrid mapping)
+                const role = item.Role || item._roleName;
+                if (role) {
+                    parts.push(i18n.t('LabelAsRole', [role]));
+                }
             }
 
             subtitleText = parts.join(' · ');
@@ -315,7 +324,8 @@ class CardRenderer {
 
         // --- 4. HTML Assembly ---
 
-        const cssClass = isLandscape ? 'media-card landscape' : 'media-card';
+        let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
+        if (type === 'square') cssClass = 'media-card square';
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         const imagePart = imageUrl

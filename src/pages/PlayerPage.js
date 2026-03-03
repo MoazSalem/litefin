@@ -96,6 +96,12 @@ class PlayerPage extends Page {
                     </div>
                 </div>
 
+                <!-- Audio/Music Visual Overlay (Hidden for Video) -->
+                <div id="audio-visual-overlay" class="audio-visual-overlay hidden">
+                    <div class="audio-backdrop"></div>
+                    <div class="audio-album-art"></div>
+                </div>
+
                 <!-- OSD Overlay (controlled by jellyfin-player-osd.js) -->
                 <div id="osd-overlay" class="player-osd"></div>
 
@@ -620,6 +626,88 @@ class PlayerPage extends Page {
         pluginManager
             .notifyPlayerStart(this._item, this._player, this._osd)
             .catch((err) => log.error('pluginManager.notifyPlayerStart failed:', err));
+
+        // Render audio visuals if applicable
+        this._renderAudioVisuals();
+    }
+
+    /**
+     * Renders the blurred backdrop and square album art for audio items.
+     * Hides the overlay for video items.
+     */
+    _renderAudioVisuals() {
+        const overlay = this.$('#audio-visual-overlay');
+        if (!overlay) return;
+
+        const isAudioItem = this._item?.MediaType === 'Audio' || this._item?.Type === 'AudioBook';
+
+        if (!isAudioItem) {
+            overlay.classList.add('hidden');
+            return;
+        }
+
+        // Show the overlay
+        overlay.classList.remove('hidden');
+
+        const backdropEl = overlay.querySelector('.audio-backdrop');
+        const artEl = overlay.querySelector('.audio-album-art');
+        const itemId = this._item.Id;
+
+        // Image resolution settings
+        const screenWidth = window.innerWidth || 1920;
+
+        // 1. Fetch Album Art (Square)
+        // Try item Primary, then Album Primary
+        let artUrl = null;
+        if (this._item.ImageTags?.Primary) {
+            artUrl = api.getImageUrl(itemId, 'Primary', {
+                maxWidth: 600,
+                quality: 90,
+                tag: this._item.ImageTags.Primary
+            });
+        } else if (this._item.AlbumId && this._item.AlbumPrimaryImageTag) {
+            artUrl = api.getImageUrl(this._item.AlbumId, 'Primary', {
+                maxWidth: 600,
+                quality: 90,
+                tag: this._item.AlbumPrimaryImageTag
+            });
+        }
+
+        if (artEl) {
+            if (artUrl) {
+                artEl.style.backgroundImage = `url('${artUrl}')`;
+                artEl.style.display = 'block';
+            } else {
+                artEl.style.display = 'none'; // Hide if no art
+            }
+        }
+
+        // 2. Fetch Backdrop (Blurred Background)
+        // Try Backdrop, then fallback to the same Album Art we just found
+        let backdropUrl = null;
+        if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
+            backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
+        } else if (
+            this._item.ParentBackdropImageTags &&
+            this._item.ParentBackdropImageTags.length > 0 &&
+            this._item.ParentBackdropItemId
+        ) {
+            backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
+                maxWidth: screenWidth,
+                quality: 80
+            });
+        } else {
+            backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily
+        }
+
+        if (backdropEl) {
+            if (backdropUrl) {
+                backdropEl.style.backgroundImage = `url('${backdropUrl}')`;
+                backdropEl.style.display = 'block';
+            } else {
+                backdropEl.style.display = 'none';
+            }
+        }
     }
 
     /**
