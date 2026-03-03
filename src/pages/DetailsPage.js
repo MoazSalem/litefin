@@ -25,6 +25,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('DetailsPage');
 
@@ -406,6 +407,18 @@ class DetailsPage extends Page {
             const posterContainer = this.$('#poster');
             posterContainer.innerHTML = '';
 
+            // Determine Aspect Ratio Type
+            let posterType = 'poster';
+            if (item.Type === 'Episode') posterType = 'landscape';
+            if (item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio')
+                posterType = 'square';
+
+            // Apply class for CSS aspect ratio
+            posterContainer.classList.remove('landscape', 'square');
+            if (posterType !== 'poster') {
+                posterContainer.classList.add(posterType);
+            }
+
             if (item.ImageTags && item.ImageTags.Primary) {
                 // FORCE HIGH QUALITY for Details Page
                 // const params = imageService.getParams('poster');
@@ -426,7 +439,9 @@ class DetailsPage extends Page {
                 img.alt = item.Name;
                 posterContainer.appendChild(img);
             } else {
-                // No primary image, resolve immediately
+                // No primary image, show gradient fallback
+                const isLandscape = posterType === 'landscape';
+                posterContainer.innerHTML = CardRenderer.getFallbackHtml(item, isLandscape);
                 onPosterReady();
             }
 

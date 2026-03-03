@@ -717,7 +717,7 @@ class LibraryPage extends Page {
                     // ------------------------------------------------------------------
                     // Music Suggestions — Recently Added Albums, Recently Played, Favorite Artists
                     // ------------------------------------------------------------------
-                    const [latest, resume, favorites] = await Promise.all([
+                    const [latest, resume, favorites, recentlyPlayed, frequentlyPlayed] = await Promise.all([
                         api
                             .getLatestItems(this.state.libraryId, { Limit: 12, IncludeItemTypes: 'MusicAlbum' })
                             .catch(() => []),
@@ -731,7 +731,9 @@ class LibraryPage extends Page {
                                 Recursive: true,
                                 IncludeItemTypes: 'MusicArtist'
                             })
-                            .catch(() => ({ Items: [] }))
+                            .catch(() => ({ Items: [] })),
+                        api.getRecentlyPlayedAudio(this.state.libraryId, 12).catch(() => ({ Items: [] })),
+                        api.getFrequentlyPlayedAudio(this.state.libraryId, 12).catch(() => ({ Items: [] }))
                     ]);
 
                     if (latest && latest.length > 0) {
@@ -741,9 +743,23 @@ class LibraryPage extends Page {
                             cardType: 'square'
                         });
                     }
-                    if (resume.Items && resume.Items.length > 0) {
+                    if (recentlyPlayed.Items && recentlyPlayed.Items.length > 0) {
                         rows.push({
                             title: i18n.t('HeaderRecentlyPlayed'),
+                            items: recentlyPlayed.Items,
+                            cardType: 'square'
+                        });
+                    }
+                    if (frequentlyPlayed.Items && frequentlyPlayed.Items.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderFrequentlyPlayed'),
+                            items: frequentlyPlayed.Items,
+                            cardType: 'square'
+                        });
+                    }
+                    if (resume.Items && resume.Items.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderResume'),
                             items: resume.Items,
                             isLandscape: true, // Show audio items similarly to resume
                             cardType: 'backdrop',
@@ -2046,6 +2062,8 @@ class LibraryPage extends Page {
                 includeItemTypes = 'Series'; // "Only Shows" -> Random Series
             } else if (collectionType === 'movies') {
                 includeItemTypes = 'Movie';
+            } else if (collectionType === 'music') {
+                includeItemTypes = 'Audio,MusicAlbum';
             }
 
             const params = {

@@ -98,15 +98,29 @@
     width: 420px;
     flex-shrink: 0;
     margin-right: 60px;
-    background-color: transparent;
+    background-color: var(--jf-card-bg); /* Use base card bg while loading */
     border-radius: var(--jf-border-radius);
     -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
     position: relative;
+    /* Poster Aspect Ratio (2:3 approx) */
+    height: 0;
+    padding-bottom: 630px; /* 420 * 1.5 */
+}
+
+.hero-poster.landscape {
+    padding-bottom: 236px; /* 16:9 approx */
+}
+
+.hero-poster.square {
+    padding-bottom: 420px; /* 1:1 */
 }
 
 .hero-poster img {
+    position: absolute;
+    top: 0;
+    left: 0;
     width: 100%;
     height: 100%;
     /* Fill container */

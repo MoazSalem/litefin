@@ -246,7 +246,7 @@ class CardRenderer {
 
         // --- 1.5 Premium Fallbacks for Missing Images ---
         if (!imageUrl) {
-            imageInnerHtml = CardRenderer._getFallbackHtml(item, isLandscape);
+            imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
         }
 
         // --- 2. Overlays (Progress & Badges) ---
@@ -350,9 +350,9 @@ class CardRenderer {
 
     /**
      * Helper to load a fallback gradient card with initials
-     * @private
+     * @public
      */
-    static _getFallbackHtml(item, isLandscape) {
+    static getFallbackHtml(item, isLandscape) {
         const name = item.Name || 'Unknown';
 
         // Simple hash to consistently pick a gradient (1-6)

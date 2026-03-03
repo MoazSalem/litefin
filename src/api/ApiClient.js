@@ -486,6 +486,38 @@ export class ApiClient {
     }
 
     /**
+     * Get recently played audio items
+     */
+    async getRecentlyPlayedAudio(parentId, limit = 15) {
+        return this.get(`/Users/${this._userId}/Items`, {
+            ParentId: parentId,
+            IncludeItemTypes: 'Audio',
+            Recursive: true,
+            Filters: 'IsPlayed',
+            SortBy: 'DatePlayed',
+            SortOrder: 'Descending',
+            Limit: limit,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+        });
+    }
+
+    /**
+     * Get frequently played audio items
+     */
+    async getFrequentlyPlayedAudio(parentId, limit = 15) {
+        return this.get(`/Users/${this._userId}/Items`, {
+            ParentId: parentId,
+            IncludeItemTypes: 'Audio',
+            Recursive: true,
+            Filters: 'IsPlayed',
+            SortBy: 'PlayCount',
+            SortOrder: 'Descending',
+            Limit: limit,
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo'
+        });
+    }
+
+    /**
      * Get next up episodes
      */
     async getNextUp(params = {}) {
