@@ -31,16 +31,22 @@ class CardRenderer {
 
         if (type === 'person') {
             // Person Handling (SVG Fallback)
+            // ArtistItems from the Jellyfin API are lightweight stubs that only carry Id + Name.
+            // They have no ImageTags or PrimaryImageTag. The Jellyfin image endpoint does NOT
+            // require a tag to serve an image — the tag is only used for HTTP cache-busting.
+            // So we build the URL from the Id alone, and only fall back to the SVG placeholder
+            // if the item has no Id at all.
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
-            if (primaryTag) {
+            if (primaryTag || itemId) {
                 const params = imageService.getParams('poster');
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    tag: primaryTag
+                    // Only include cache-busting tag if we have a real one
+                    ...(primaryTag ? { tag: primaryTag } : {})
                 });
             } else {
-                // SVG Placeholder
+                // No Id at all — show the generic person silhouette
                 imageInnerHtml = `
                     <div class="person-fallback">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">

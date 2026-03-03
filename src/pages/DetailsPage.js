@@ -167,6 +167,12 @@ class DetailsPage extends Page {
                         <div class="people-row row-items" id="people-row"></div>
                     </section>
 
+                    <!-- Artists (for music/albums) -->
+                    <section class="details-artists media-row hidden" id="artists-section">
+                        <h2 class="row-title" data-i18n="Artists">Artists</h2>
+                        <div class="artists-row row-items" id="artists-row"></div>
+                    </section>
+
                     <!-- Guest Stars (for episodes) -->
                     <section class="details-guest-stars media-row hidden" id="guest-stars-section">
                         <h2 class="row-title" data-i18n="HeaderGuestCast">Guest Stars</h2>
@@ -274,7 +280,7 @@ class DetailsPage extends Page {
         try {
             // 1. Fetch Item (with detailed metadata fields)
             this._item = await api.getItem(this._itemId, {
-                Fields: 'People,Genres,GenreItems,Studios,Tags,MediaStreams,Overview,LibraryId'
+                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,Overview,LibraryId'
             });
             this.title = this._item.Name;
 
@@ -477,8 +483,64 @@ class DetailsPage extends Page {
             this._renderPeople();
         }
 
+        // Load Artists (Music/Albums)
+        await this._loadArtists();
+
         // Load Logo (non-blocking, fire and forget)
         this._loadLogo();
+    }
+
+    async _loadArtists() {
+        if (!['Audio', 'MusicAlbum', 'MusicArtist'].includes(this._item.Type)) return;
+
+        // Combine ArtistItems and Featured Artists from People
+        const artists = [];
+        const seenIds = new Set();
+
+        // 1. Add Main Artists from ArtistItems (these have IDs and Name)
+        if (this._item.ArtistItems) {
+            for (const artist of this._item.ArtistItems) {
+                if (artist.Id && !seenIds.has(artist.Id)) {
+                    artists.push({
+                        ...artist,
+                        Type: 'MusicArtist'
+                    });
+                    seenIds.add(artist.Id);
+                }
+            }
+        }
+
+        // 2. Add Featured Artists from People
+        if (this._item.People) {
+            const featured = this._item.People.filter((p) => p.Role === 'Featured Artist' || p.Type === 'GuestArtist');
+            for (const p of featured) {
+                if (p.Id && !seenIds.has(p.Id)) {
+                    artists.push({
+                        ...p,
+                        Type: 'MusicArtist'
+                    });
+                    seenIds.add(p.Id);
+                }
+            }
+        }
+
+        if (artists.length > 0) {
+            this._renderArtists(artists);
+        }
+    }
+
+    _renderArtists(artists) {
+        this._renderVirtualRow({
+            sectionId: 'artists-section',
+            listId: 'artists-row',
+            items: artists,
+            isLandscape: false,
+            renderCard: (artist) => this._renderMediaCard(artist, false, 'person'),
+            focusSectionName: 'artists-section',
+            onClick: (card) => {
+                if (card.dataset.itemId) router.navigate(`/person/${card.dataset.itemId}`);
+            }
+        });
     }
 
     /**
@@ -498,6 +560,7 @@ class DetailsPage extends Page {
             'details-episodes',
             'more-from-season-section',
             'details-people',
+            'artists-section',
             'guest-stars-section',
             'details-similar'
         ];
@@ -1481,6 +1544,11 @@ class DetailsPage extends Page {
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
+                name: 'artists-section',
+                elementId: '#artists-row',
+                isVisible: () => isNotHidden('#artists-section')
+            },
+            {
                 name: 'guest-stars-section',
                 elementId: '#guest-stars-row',
                 isVisible: () => isNotHidden('#guest-stars-section')
@@ -1510,12 +1578,17 @@ class DetailsPage extends Page {
 
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            {
+                name: 'artists-section',
+                elementId: '#artists-row',
+                isVisible: () => isNotHidden('#artists-section')
+            },
             {
                 name: 'guest-stars-section',
                 elementId: '#guest-stars-row',
                 isVisible: () => isNotHidden('#guest-stars-section')
             },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
