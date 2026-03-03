@@ -771,6 +771,8 @@ class PlayerPage extends Page {
         this._osd.on('exit', () => this._stopAndExit());
         this._osd.on('next', () => this._playNextItem()); // Ensure OSD emits this
         this._osd.on('previous', () => this._playPreviousItem()); // Ensure OSD emits this
+        /* Queue modal: instant skip to a specific index in the play queue. */
+        this._osd.on('playQueueItem', (index) => this._playQueueItemAtIndex(index));
 
         // Initial metadata
         // this._osd.setMetadata(this._item); // passed in options or set here
@@ -832,6 +834,15 @@ class PlayerPage extends Page {
         if (this._isExiting) {
             log.info('Already exiting, skipping duplicate navigation');
             eventBus.emit('player:ended', { item: this._item });
+
+            return;
+        }
+
+        // If an in-progress track switch (next/previous/queue-jump) explicitly
+        // called stop(), the resulting 'ended' event must NOT trigger navigation.
+        // The switching method is responsible for starting the new item.
+        if (this._isSwitching) {
+            log.info('Ignoring ended event during in-progress track switch.');
             return;
         }
 
@@ -1129,6 +1140,83 @@ class PlayerPage extends Page {
         } else {
             log.info('No previous item in queue. Restarting current.');
             this._player.seek(0);
+        }
+    }
+
+    /**
+     * Instantly jump to a specific index in the play queue.
+     * Called when the user selects any row in the QueueModal and presses Enter.
+     *
+     * The queue cursor has already been moved by QueueModal via playQueue.setQueue(),
+     * so here we only need to perform the in-place track switch to start playing
+     * the item at that position.
+     *
+     * @param {number} targetIndex - The new active index in the play queue.
+     */
+    async _playQueueItemAtIndex(targetIndex) {
+        if (this._isSwitching) {
+            log.warn('_playQueueItemAtIndex: already switching, ignoring jump to', targetIndex);
+            return;
+        }
+
+        /* The queue cursor was already set by QueueModal.handleKey('enter'),
+         * so getCurrentItem() already returns the item we want to play. */
+        const targetItem = playQueue.getCurrentItem();
+        if (!targetItem) {
+            log.warn('_playQueueItemAtIndex: no item at index', targetIndex);
+            return;
+        }
+
+        /* If the user selected the already-playing item, just seek back to start. */
+        if (targetItem.Id === this._item?.Id) {
+            log.info('_playQueueItemAtIndex: same item selected — seeking to start.');
+            this._player?.seek(0);
+            return;
+        }
+
+        log.info('_playQueueItemAtIndex: jump to', targetItem.Name, '(index', targetIndex, ')');
+
+        this._isSwitching = true;
+        this._showLoading(true);
+
+        try {
+            /* Capture current position before stopping. */
+            const mediaSource = this._player?.getCurrentMediaSource?.();
+            const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            /* Notify plugins that the previous session ended. */
+            pluginManager.notifyPlayerStop();
+
+            if (this._player?.stop) {
+                await this._player.stop();
+            }
+
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+
+            /* Brief settle delay — same as _playNextItem/_playPreviousItem. */
+            await new Promise((resolve) => setTimeout(resolve, 500));
+
+            /* In-place switch to the target item. */
+            this._item = targetItem;
+            this._resumePosition = 0;
+            this._cachedMediaSource = null;
+            this._hasReportedStart = false;
+            this._lastReportTime = 0;
+
+            if (this._osd) {
+                this._osd.updateItem(targetItem);
+                /* Reset Up Next so the dialog re-triggers for the new item. */
+                this._osd.resetUpNext();
+            }
+
+            await this._startPlayback();
+
+            this._showLoading(false);
+        } catch (error) {
+            log.error('_playQueueItemAtIndex failed:', error);
+            this._showError('Failed to switch to selected item');
+        } finally {
+            this._isSwitching = false;
         }
     }
 

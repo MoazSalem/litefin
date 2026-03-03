@@ -1,0 +1,354 @@
+/**
+ * ============================================================================
+ * Player Modals: Chapters & Queue
+ * ============================================================================
+ * Overlay styles for the two new OSD modals.
+ * Both follow the same glass-panel pattern used by the Track Selection menus
+ * and the Up Next dialog, with subtle entrance animations.
+ * ============================================================================
+ */
+
+/* ============================================================================
+   Shared modal overlay — covers the full screen with a dark translucent backdrop
+   ============================================================================ */
+
+.chapters-modal-overlay,
+.queue-modal-overlay {
+    /* Full screen scrim */
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: stretch;         /* Panel fills full height */
+    justify-content: flex-end;    /* Slide in from the right edge */
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9999;
+    transform: translateZ(100px);  /* Tizen compositor fix */
+
+    /* Hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.chapters-modal-overlay.visible,
+.queue-modal-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+/* ============================================================================
+   Shared panel card
+   ============================================================================ */
+
+.chapters-modal,
+.queue-modal {
+    /* Side-panel dimensions */
+    width: 40vw;
+    min-width: 480px;
+    max-width: 640px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+
+    /* Glass look */
+    background: rgba(10, 10, 18, 0.9);
+    border-left: 1px solid rgba(255, 255, 255, 0.08);
+    box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
+
+    /* Spring slide-in from the right */
+    transform: translateX(100%);
+    transition: transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+
+.chapters-modal-overlay.visible .chapters-modal,
+.queue-modal-overlay.visible .queue-modal {
+    transform: translateX(0);
+}
+
+/* ============================================================================
+   Modal header
+   ============================================================================ */
+
+.chapters-modal__header,
+.queue-modal__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 1.6em 2em 1.2em;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+    flex-shrink: 0;
+}
+
+.chapters-modal__title,
+.queue-modal__title {
+    font-size: 1.5em;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    color: #fff;
+}
+
+.chapters-modal__count,
+.queue-modal__count {
+    font-size: 0.95em;
+    opacity: 0.45;
+    color: #fff;
+}
+
+/* ============================================================================
+   Scrollable list area
+   ============================================================================ */
+
+.chapters-modal__list,
+.queue-modal__list {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.6em 0;
+
+    /* Custom thin scrollbar */
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.chapters-modal__list::-webkit-scrollbar,
+.queue-modal__list::-webkit-scrollbar {
+    width: 4px;
+}
+
+.chapters-modal__list::-webkit-scrollbar-thumb,
+.queue-modal__list::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 2px;
+}
+
+/* Empty state */
+.chapters-modal__empty,
+.queue-modal__empty {
+    padding: 2em;
+    text-align: center;
+    opacity: 0.4;
+    font-style: italic;
+}
+
+/* ============================================================================
+   Chapter rows
+   ============================================================================ */
+
+.chapter-row {
+    display: flex;
+    align-items: center;
+    gap: 1.1em;
+    padding: 0.85em 1.6em;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    border-radius: 0;
+    position: relative;
+}
+
+/* Hover/focus highlight */
+.chapter-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.chapter-row.focused {
+    background: rgba(0, 164, 220, 0.22);  /* Accent tint */
+    transform: scaleX(1.01);
+    transform-origin: left;
+}
+
+/* Active (currently playing) chapter */
+.chapter-row--active {
+    background: rgba(0, 164, 220, 0.1);
+}
+
+.chapter-row--active .chapter-row__name {
+    color: var(--osd-accent-color, #00a4dc);
+    font-weight: 700;
+}
+
+/* Chapter thumbnail */
+.chapter-row__thumb-wrap {
+    position: relative;
+    width: 108px;
+    height: 60px;
+    flex-shrink: 0;
+    border-radius: 6px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.chapter-row__thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+.chapter-row__thumb-placeholder {
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+/* Small pulsing dot indicating the active chapter */
+.chapter-row__playing-dot {
+    position: absolute;
+    bottom: 5px;
+    right: 5px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--osd-accent-color, #00a4dc);
+    animation: playing-dot-pulse 1.4s ease-in-out infinite;
+    box-shadow: 0 0 6px var(--osd-accent-color, #00a4dc);
+}
+
+@keyframes playing-dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.75); }
+}
+
+.chapter-row__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+    min-width: 0;   /* Allow text truncation */
+}
+
+.chapter-row__name {
+    font-size: 1.05em;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.chapter-row__time {
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.5;
+    color: #fff;
+}
+
+/* ============================================================================
+   Queue rows
+   ============================================================================ */
+
+.queue-row {
+    display: flex;
+    align-items: center;
+    gap: 1em;
+    padding: 0.7em 1.6em;
+    cursor: pointer;
+    transition:
+        background 0.15s ease,
+        transform 0.12s cubic-bezier(0.34, 1.56, 0.64, 1);
+    position: relative;
+}
+
+.queue-row:hover {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.queue-row.focused {
+    background: rgba(0, 164, 220, 0.22);
+    transform: scaleX(1.01);
+    transform-origin: left;
+}
+
+/* Currently playing item */
+.queue-row--active {
+    background: rgba(0, 164, 220, 0.1);
+}
+
+.queue-row--active .queue-row__name {
+    color: var(--osd-accent-color, #00a4dc);
+    font-weight: 700;
+}
+
+/* Position badge (1, 2, 3 …) */
+.queue-row__number {
+    width: 2em;
+    text-align: right;
+    font-size: 0.85em;
+    font-variant-numeric: tabular-nums;
+    opacity: 0.35;
+    flex-shrink: 0;
+}
+
+/* Poster thumbnail */
+.queue-row__thumb-wrap {
+    position: relative;
+    width: 54px;
+    height: 76px;
+    flex-shrink: 0;
+    border-radius: 4px;
+    overflow: hidden;
+    background: rgba(255, 255, 255, 0.06);
+}
+
+.queue-row__thumb {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/* Animated equaliser overlay when playing */
+.queue-row__playing-indicator {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    gap: 2px;
+    padding: 6px 8px;
+    background: rgba(0, 0, 0, 0.45);
+}
+
+/* Three tiny animated bars mimicking an equaliser */
+.queue-row__playing-indicator::before,
+.queue-row__playing-indicator::after,
+.queue-row__thumb-wrap .queue-row__playing-indicator + .queue-row__thumb {
+    content: '';
+}
+
+.queue-row__playing-indicator {
+    background: linear-gradient(
+        180deg,
+        transparent 50%,
+        rgba(0, 164, 220, 0.55) 100%
+    );
+}
+
+/* Item metadata */
+.queue-row__info {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25em;
+    min-width: 0;
+    flex: 1;
+}
+
+.queue-row__name {
+    font-size: 1em;
+    font-weight: 600;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.queue-row__subtitle {
+    font-size: 0.82em;
+    opacity: 0.5;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

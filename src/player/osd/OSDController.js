@@ -16,6 +16,8 @@ import QualityMenu from './QualityMenu.js';
 import PlaybackModeMenu from './PlaybackModeMenu.js';
 import RepeatModeMenu from './RepeatModeMenu.js';
 import UpNextDialog from './UpNextDialog.js';
+import ChaptersModal from './ChaptersModal.js';
+import QueueModal from './QueueModal.js';
 
 const log = logger.create('OSDController');
 
@@ -126,6 +128,12 @@ export default class OSDController extends Component {
         // Up Next dialog — persistent overlay card, not modal
         this.upNextDialog = new UpNextDialog(this);
 
+        // Chapters modal — shows all chapters with current chapter highlighted
+        this.chaptersModal = new ChaptersModal(this);
+
+        // Queue modal — shows the full play queue with the current item highlighted
+        this.queueModal = new QueueModal(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -138,7 +146,9 @@ export default class OSDController extends Component {
             this.qualityMenu,
             this.playbackModeMenu,
             this.repeatModeMenu,
-            this.upNextDialog
+            this.upNextDialog,
+            this.chaptersModal,
+            this.queueModal
         ];
     }
 
@@ -255,6 +265,10 @@ export default class OSDController extends Component {
                             <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
+                            <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
+                            <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
+                            <!-- Queue modal button (always available) -->
+                            <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>
@@ -495,17 +509,23 @@ export default class OSDController extends Component {
     _syncChapterButtonState(enabled) {
         const prevChapterBtn = this._osdEl?.querySelector('[data-action="previousChapter"]');
         const nextChapterBtn = this._osdEl?.querySelector('[data-action="nextChapter"]');
+        /* The dedicated chapters-list modal button — only enabled when chapters exist. */
+        const chaptersModalBtn = this._osdEl?.querySelector('[data-action="chapters"]');
 
         if (enabled) {
             prevChapterBtn?.classList.remove('osd-btn-disabled');
             prevChapterBtn?.setAttribute('tabindex', '0');
             nextChapterBtn?.classList.remove('osd-btn-disabled');
             nextChapterBtn?.setAttribute('tabindex', '0');
+            chaptersModalBtn?.classList.remove('osd-btn-disabled');
+            chaptersModalBtn?.setAttribute('tabindex', '0');
         } else {
             prevChapterBtn?.classList.add('osd-btn-disabled');
             prevChapterBtn?.setAttribute('tabindex', '-1');
             nextChapterBtn?.classList.add('osd-btn-disabled');
             nextChapterBtn?.setAttribute('tabindex', '-1');
+            chaptersModalBtn?.classList.add('osd-btn-disabled');
+            chaptersModalBtn?.setAttribute('tabindex', '-1');
         }
     }
 
@@ -1056,9 +1076,13 @@ export default class OSDController extends Component {
                     if (btnIdx !== -1) this.upNextDialog._focusedButton = btnIdx;
                 }
             } else {
-                // Fallback if overlay closed
-                this._currentFocusRow = 0;
-                this._updateFocus();
+                // Fallback if overlay closed, but NOT if a full-screen modal is open
+                // (since modals handle their own internal focus arrays and might not
+                // populate _cachedOverlayRow with buttons).
+                if (!this.isModalOpen) {
+                    this._currentFocusRow = 0;
+                    this._updateFocus();
+                }
             }
         } else if (this._currentFocusRow === 0) {
             const btn = this._cachedHeaderRow[0];
@@ -1083,24 +1107,27 @@ export default class OSDController extends Component {
     }
 
     _executeFocused() {
-        // We rely on the browser's native 'click' event behavior for focused buttons when 'Enter' is pressed.
-        // This avoids double-firing actions (once by us, once by browser).
-        
-        if (this._currentFocusRow === -1) {
-            // Unused btn
-            /* const btn = this._cachedOverlayRow[this._currentFocusIndex]; */
-            // Only trigger click if it's NOT a data-action button (which browser handles?)
-            // Actually, browser handles all focused buttons on Enter.
-            // But let's be safe: if it's a range input, we might need focus.
-            // For buttons, doing nothing is safer.
-        } else if (this._currentFocusRow === 0) {
-            // Header: Back button. Browser handles click.
-        } else if (this._currentFocusRow === 1) {
-            // Controls: Buttons. Browser handles click.
+        try {
+            const focusedEl = document.activeElement;
+            if (focusedEl) {
+                const action = focusedEl.getAttribute('data-action');
+                if (action) {
+                    log.info(`_executeFocused: Explicitly executing action '${action}'`);
+                    this._executeAction(action);
+                    return true;
+                }
+
+                const upNextAction = focusedEl.getAttribute('data-upnext-action');
+                if (upNextAction && this.upNextDialog && this.upNextDialog.isVisible) {
+                    log.info(`_executeFocused: Explicitly executing UpNext action '${upNextAction}'`);
+                    this.upNextDialog._executeAction(upNextAction);
+                    return true;
+                }
+            }
+        } catch (e) {
+            log.error('Error executing focused explicitly:', e);
         }
-        
-        // Return true to indicate we handled the 'logic' of the key (preventing default scrolling etc if needed?)
-        // If we return true here, handleInput returns true.
+
         return true;
     }
 
@@ -1115,6 +1142,21 @@ export default class OSDController extends Component {
     
     _executeAction(action) {
         log.info('Execute Action:', action);
+
+        /* 
+         * DEBOUNCE: On many TVs (Tizen/WebOS), pressing OK triggers both our explicit
+         * remote:select event handler AND the browser's native translated `click`.
+         * This causes opening modals to instantly close.
+         * Ignore rapid duplicate actions dispatched within 200ms.
+         */
+        const now = Date.now();
+        if (action === this._lastActionName && (now - this._lastActionTime) < 200) {
+            log.info(`Ignoring double-fired action: ${action}`);
+            return;
+        }
+        this._lastActionName = action;
+        this._lastActionTime = now;
+
         switch (action) {
             case 'back': this._handleBack(); break;
             case 'exit': 
@@ -1181,8 +1223,17 @@ export default class OSDController extends Component {
                 // Toggle based on current state
                 this.togglePlaybackInfo(!this.playbackInfo.isVisible);
                 break;
+            case 'chapters':
+                /* Open the chapters list modal for the currently playing item. */
+                this.toggleChaptersModal(true);
+                break;
+            case 'queue':
+                /* Open the queue list modal. */
+                this.toggleQueueModal(true);
+                break;
         }
     }
+
 
     async _toggleFavorite() {
         if (!this._api || !this._currentItem) return;
@@ -1483,6 +1534,82 @@ export default class OSDController extends Component {
     // =========================================================================
     // Up Next Dialog management
     // =========================================================================
+
+    /**
+     * Open or close the Chapters list modal.
+     * Follows the same pattern as togglePlaybackInfo().
+     *
+     * @param {boolean} show - True to open, false to close.
+     */
+    toggleChaptersModal(show) {
+        if (show) {
+            /* Gather chapters and current playback position from the player. */
+            const chapters = this._player?.getChapters?.() || [];
+            const currentItem = this._currentItem ?? null;
+            const positionTicks = this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            if (chapters.length === 0) {
+                log.info('toggleChaptersModal: no chapters available, skipping.');
+                return;
+            }
+
+            this.activeMenu = this.chaptersModal;
+            this.chaptersModal.open(chapters, positionTicks, currentItem);
+
+            /* Rebuild cache now that the modal DOM has been injected. */
+            this._cacheFocusableElements();
+
+            /* Move focus to the overlay row where the chapter list lives. */
+            this._currentFocusRow = -1;
+            this._currentFocusIndex = 0;
+            this._updateFocus();
+        } else {
+            if (this.activeMenu === this.chaptersModal) {
+                this.activeMenu = null;
+            }
+            this.chaptersModal.hide();
+            this._cacheFocusableElements();
+
+            /* Restore OSD and return focus to controls. */
+            this.show();
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            this._updateFocus();
+        }
+    }
+
+    /**
+     * Open or close the Queue modal.
+     * Follows the same pattern as togglePlaybackInfo().
+     *
+     * @param {boolean} show - True to open, false to close.
+     */
+    toggleQueueModal(show) {
+        if (show) {
+            this.activeMenu = this.queueModal;
+            this.queueModal.open();
+
+            /* Rebuild cache now that the modal DOM has been injected. */
+            this._cacheFocusableElements();
+
+            this._currentFocusRow = -1;
+            this._currentFocusIndex = 0;
+            this._updateFocus();
+        } else {
+            if (this.activeMenu === this.queueModal) {
+                this.activeMenu = null;
+            }
+            this.queueModal.hide();
+            this._cacheFocusableElements();
+
+            this.show();
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
+            this._updateFocus();
+        }
+    }
 
     /**
      * Show or hide the Up Next dialog.
