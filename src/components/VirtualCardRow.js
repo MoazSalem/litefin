@@ -65,7 +65,7 @@ export class VirtualCardRow {
             imageRatioDiv.style.width = '100%';
             let padding = '150%'; // Poster
             if (this.isLandscape) padding = '56.25%';
-            else if (this.cardType === 'square') padding = '100%';
+            else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
             imageRatioDiv.style.paddingBottom = padding;
             imageRatioDiv.style.border = '3px solid transparent';
             dummyDiv.appendChild(imageRatioDiv);

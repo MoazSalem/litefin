@@ -101,25 +101,42 @@ class PersonPage extends Page {
 
             this._renderPersonInfo();
 
-            // 2. Fetch Works (fast - no People field)
-            const result = await api.getPersonItems(this._personId);
-            this._items = result.Items || [];
+            // 2. Determine if this is a music artist or an actor/person
+            const isArtist = this._person.Type === 'MusicArtist' || this._person.Type === 'Artist';
 
-            // Debug log to verify data
-            log.debug('Loaded items', {
-                total: this._items.length,
-                movies: this._items.filter((i) => i.Type === 'Movie').length,
-                shows: this._items.filter((i) => i.Type === 'Series').length,
-                episodes: this._items.filter((i) => i.Type === 'Episode').length
-            });
+            if (isArtist) {
+                // --- Music Artist Mode: load Albums and Songs ---
+                const [albumsResult, songsResult] = await Promise.all([
+                    api.getArtistAlbums(this._personId),
+                    api.getArtistSongs(this._personId)
+                ]);
 
-            this._renderWorks();
+                log.debug('Loaded artist content', {
+                    albums: albumsResult.Items?.length ?? 0,
+                    songs: songsResult.Items?.length ?? 0
+                });
 
-            // Set background (Person's own, or fallback to best work)
+                this._renderArtistWorks(albumsResult.Items || [], songsResult.Items || []);
+            } else {
+                // --- Actor / Crew Mode: load Movies/Shows/Episodes ---
+                const result = await api.getPersonItems(this._personId);
+                this._items = result.Items || [];
+
+                log.debug('Loaded items', {
+                    total: this._items.length,
+                    movies: this._items.filter((i) => i.Type === 'Movie').length,
+                    shows: this._items.filter((i) => i.Type === 'Series').length,
+                    episodes: this._items.filter((i) => i.Type === 'Episode').length
+                });
+
+                this._renderWorks();
+
+                // Background: Fetch role names and update UI when ready
+                this._loadRolesInBackground();
+            }
+
+            // Set background (Person's own, or fallback to best work for actors)
             this._setSmartBackdrop();
-
-            // 3. Background: Fetch role names and update UI when ready
-            this._loadRolesInBackground();
         } catch (error) {
             log.error('Failed to load', error);
             this.showError('Failed to load person details');
@@ -193,8 +210,10 @@ class PersonPage extends Page {
         const backdropEl = this.$('#person-backdrop');
         if (!backdropEl) return;
 
-        // Use smart backdrop logic from manager
-        const backdropUrl = BackdropManager.getPersonBackdropUrl(this._person, this._items);
+        // Use smart backdrop logic from manager.
+        // In artist mode this._items is not populated, so we pass an empty array
+        // for graceful degradation (the artist's own poster/backdrop will be used if available).
+        const backdropUrl = BackdropManager.getPersonBackdropUrl(this._person, this._items || []);
 
         if (backdropUrl) {
             BackdropManager.applyBackdrop(backdropEl, backdropUrl);
@@ -443,6 +462,127 @@ class PersonPage extends Page {
 
         // Register focus
         this._registerWorkSections();
+    }
+
+    /**
+     * Render Albums and Songs grids for a music artist.
+     * Replaces the Movies/Shows/Episodes layout used for actors.
+     * @param {Object[]} albums - MusicAlbum items from the API
+     * @param {Object[]} songs  - Audio items from the API
+     */
+    _renderArtistWorks(albums, songs) {
+        const worksContainer = this.$('#person-works');
+        worksContainer.innerHTML = '';
+        this._grids = {};
+
+        // 1. Albums grid (square cards — same aspect ratio as the rest of the music UI)
+        if (albums.length > 0) {
+            this._grids.albums = new MediaGrid({
+                id: 'artist-albums',
+                title: i18n.t('Albums'),
+                items: albums,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('artist-albums-items', card),
+                onSeeMore: () => this._registerArtistSections()
+            });
+            this._grids.albums.mount(worksContainer);
+        }
+
+        // 2. Songs grid (square cards)
+        if (songs.length > 0) {
+            this._grids.songs = new MediaGrid({
+                id: 'artist-songs',
+                title: i18n.t('Songs'),
+                items: songs,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('artist-songs-items', card),
+                onSeeMore: () => this._registerArtistSections()
+            });
+            this._grids.songs.mount(worksContainer);
+        }
+
+        // Register focus sections for the music grids
+        this._registerArtistSections();
+    }
+
+    /**
+     * Register focus sections for the artist's Albums and Songs grids.
+     * Mirrors the pattern used by _registerWorkSections for actors.
+     */
+    _registerArtistSections() {
+        const sectionOrder = ['albums', 'songs'];
+        const activeTypes = sectionOrder.filter((type) => this._grids[type]);
+
+        if (activeTypes.length === 0) return;
+
+        const firstType = activeTypes[0];
+
+        // Favorite button row — always at the top
+        const favActionsEl = this.$('#person-fav-actions');
+        if (favActionsEl) {
+            this.registerFocusSection('person-fav-actions', favActionsEl, {
+                orientation: 'horizontal',
+                leaveUp: null,
+                leaveDown: `artist-${firstType}-items`,
+                leaveLeft: 'sidebar',
+                scrollOffsetTop: 50
+            });
+        }
+
+        // Chain each grid section together vertically
+        activeTypes.forEach((type, index) => {
+            const gridComp = this._grids[type];
+            const baseId = gridComp.id; // e.g. 'artist-albums'
+            const gridZone = `${baseId}-items`;
+            const btnZone = `${baseId}-btn-zone`;
+            const btnId = `${baseId}-btn`;
+
+            const btn = this.$(`#${btnId}`);
+            const isButtonVisible = btn && btn.offsetParent !== null;
+
+            const prevType = index > 0 ? activeTypes[index - 1] : null;
+            const nextType = index < activeTypes.length - 1 ? activeTypes[index + 1] : null;
+
+            // UP target: previous grid's button zone or grid zone, or fav actions if first
+            let gridLeaveUp = 'person-fav-actions';
+            if (prevType) {
+                const prevComp = this._grids[prevType];
+                const prevBtn = this.$(`#${prevComp.id}-btn`);
+                gridLeaveUp =
+                    prevBtn && prevBtn.offsetParent !== null ? `${prevComp.id}-btn-zone` : `${prevComp.id}-items`;
+            }
+
+            // DOWN target
+            let gridLeaveDown = null;
+            if (isButtonVisible) {
+                gridLeaveDown = btnZone;
+            } else if (nextType) {
+                gridLeaveDown = `${this._grids[nextType].id}-items`;
+            }
+
+            const gridContainer = this.$(`#${gridZone}`);
+            if (gridContainer) {
+                this.registerFocusSection(gridZone, gridContainer, {
+                    orientation: 'grid',
+                    leaveUp: gridLeaveUp,
+                    leaveDown: gridLeaveDown,
+                    leaveLeft: 'sidebar'
+                });
+            }
+
+            // Register 'See More' button zone if visible
+            const btnContainer = btn?.parentElement;
+            if (isButtonVisible && btnContainer) {
+                this.registerFocusSection(btnZone, btnContainer, {
+                    orientation: 'horizontal',
+                    leaveUp: gridZone,
+                    leaveDown: nextType ? `${this._grids[nextType].id}-items` : null,
+                    leaveLeft: 'sidebar'
+                });
+            }
+        });
     }
 
     _registerWorkSections() {

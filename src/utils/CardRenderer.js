@@ -325,7 +325,8 @@ class CardRenderer {
         // --- 4. HTML Assembly ---
 
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
-        if (type === 'square') cssClass = 'media-card square';
+        // 'artist' is an alias for the square type — same 1:1 aspect ratio card
+        if (type === 'square' || type === 'artist') cssClass = 'media-card square';
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         const imagePart = imageUrl

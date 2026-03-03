@@ -101,15 +101,10 @@ class FavoritesPage extends Page {
                     Limit: 50,
                     Fields: 'PrimaryImageAspectRatio'
                 }),
-                // --- Music Types ---
-                api.getItems({
-                    Filters: 'IsFavorite',
-                    IncludeItemTypes: 'MusicArtist,Artist',
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50,
-                    Fields: 'PrimaryImageAspectRatio,ProductionYear'
-                }),
+                // --- Music Types --- (Note: artists use the dedicated /Artists endpoint
+                // because the /Items endpoint with IsFavorite + MusicArtist filtering
+                // doesn't work properly — /Artists has explicit favorite support)
+                api.getFavoriteArtists(),
                 api.getItems({
                     Filters: 'IsFavorite',
                     IncludeItemTypes: 'MusicAlbum',
@@ -161,9 +156,9 @@ class FavoritesPage extends Page {
                 });
             if (people.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-person', title: i18n.t('People'), items: people.Items, type: 'person' });
-            // --- Music sections ---
+            // --- Music sections --- (type: 'artist' routes to PersonPage, 'square' for card shape)
             if (artists.TotalRecordCount > 0)
-                sectionsData.push({ id: 'fav-artist', title: i18n.t('Artists'), items: artists.Items, type: 'square' });
+                sectionsData.push({ id: 'fav-artist', title: i18n.t('Artists'), items: artists.Items, type: 'artist' });
             if (albums.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-album', title: i18n.t('Albums'), items: albums.Items, type: 'square' });
             if (songs.TotalRecordCount > 0)
@@ -278,7 +273,9 @@ class FavoritesPage extends Page {
                     sectionId: sectionId
                 });
 
-                if (type === 'person') {
+                if (type === 'person' || type === 'artist') {
+                    // Both Persons and Music Artists navigate to the PersonPage
+                    // (artists have their albums/songs shown there)
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
                     router.navigate(`/details/${card.dataset.itemId}`);

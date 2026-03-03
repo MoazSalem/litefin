@@ -2066,6 +2066,14 @@ class LibraryPage extends Page {
             return;
         }
 
+        // Special handling for Persons and Artists: navigate to the unified PersonPage
+        const itemType = card.dataset.type;
+        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist') {
+            log.debug('Navigating to PersonPage:', itemId);
+            router.navigate(`/person/${itemId}`);
+            return;
+        }
+
         // Default: navigate to details page
         router.navigate(`/details/${itemId}`);
     }

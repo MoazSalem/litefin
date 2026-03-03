@@ -545,10 +545,12 @@ class SearchPage extends Page {
             focusSectionId: sectionId
         });
 
-        const itemType = card.dataset.type || 'Movie';
+        const itemType = card.dataset.contextType || card.dataset.type || 'Movie';
         let route = `/details/${card.dataset.itemId}`;
 
-        if (itemType === 'Person') {
+        // Persons AND music artists both open the PersonPage
+        // (PersonPage detects artist type and shows albums/songs instead)
+        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist') {
             route = `/person/${card.dataset.itemId}`;
         }
 

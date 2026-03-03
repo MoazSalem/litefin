@@ -757,6 +757,68 @@ export class ApiClient {
         return this.get('/Search/Hints', { ...defaults, ...params });
     }
 
+    /**
+     * Get favorite artists using the dedicated /Artists endpoint.
+     * The /Items endpoint with IncludeItemTypes=MusicArtist doesn't properly
+     * support the IsFavorite filter. /Artists does.
+     * @param {Object} [params] - Additional query params
+     * @returns {Promise<any>}
+     */
+    async getFavoriteArtists(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Filters: 'IsFavorite',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            Limit: 50,
+            Fields: 'PrimaryImageAspectRatio,ProductionYear'
+        };
+
+        return this.get('/Artists', { ...defaults, ...params });
+    }
+
+    /**
+     * Get all albums for an artist by their ID.
+     * @param {string} artistId - The artist item ID
+     * @param {Object} [params] - Additional query params
+     * @returns {Promise<any>}
+     */
+    async getArtistAlbums(artistId, params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            ArtistIds: artistId,
+            IncludeItemTypes: 'MusicAlbum',
+            SortBy: 'ProductionYear,SortName',
+            SortOrder: 'Descending',
+            Recursive: true,
+            Limit: 100,
+            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists'
+        };
+
+        return this.get('/Items', { ...defaults, ...params });
+    }
+
+    /**
+     * Get all songs for an artist by their ID.
+     * @param {string} artistId - The artist item ID
+     * @param {Object} [params] - Additional query params
+     * @returns {Promise<any>}
+     */
+    async getArtistSongs(artistId, params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            ArtistIds: artistId,
+            IncludeItemTypes: 'Audio',
+            SortBy: 'SortName',
+            SortOrder: 'Ascending',
+            Recursive: true,
+            Limit: 200,
+            Fields: 'PrimaryImageAspectRatio,ProductionYear,AlbumArtist,Artists,RunTimeTicks'
+        };
+
+        return this.get('/Items', { ...defaults, ...params });
+    }
+
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
