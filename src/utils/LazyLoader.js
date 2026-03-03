@@ -87,7 +87,7 @@ class LazyLoader {
                 img.removeAttribute('data-src');
             };
             img.onerror = () => {
-                img.style.display = 'none';
+                this._handleImageError(img);
             };
         });
 
@@ -113,11 +113,42 @@ class LazyLoader {
             img.removeAttribute('data-src');
         };
         img.onerror = () => {
-            img.style.display = 'none';
+            this._handleImageError(img);
         };
 
         if (this.observer) {
             this.observer.unobserve(img);
+        }
+    }
+
+    /**
+     * Handles image load failure by injecting lightweight gradient fallback
+     * @param {HTMLElement} img
+     */
+    _handleImageError(img) {
+        img.style.display = 'none';
+
+        // Extract fallback dataset attached by CardRenderer
+        const parent = img.parentElement;
+        if (parent && parent.classList.contains('card-image')) {
+            // Remove shimmer
+            parent.classList.remove('skeleton-shimmer');
+
+            // Construct and inject fallback if attributes exist
+            const gradNum = img.dataset.fbGrad;
+            const initials = img.dataset.fbInit;
+            const name = img.dataset.fbName;
+
+            if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
+                const fallbackHtml = `
+                    <div class="media-fallback grad-${gradNum}">
+                        <div class="media-fallback-initials">${initials}</div>
+                        <div class="media-fallback-name">${name}</div>
+                    </div>
+                `;
+                // Insert at the beginning so overlays (like progress/badges) render on top
+                parent.insertAdjacentHTML('afterbegin', fallbackHtml);
+            }
         }
     }
 

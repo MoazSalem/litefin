@@ -28,8 +28,8 @@ class CardRenderer {
         const itemId = item.Id;
 
         // --- 1. Image Resolution Strategy ---
-        // Initialize with fallback HTML, which will be layered behind the image if one loads
-        imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        // By default, we expect an image. We DO NOT render the fallback DOM yet to save memory.
+        imageInnerHtml = '';
 
         if (type === 'person') {
             const primaryTag = item.ImageTags?.Primary || item.PrimaryImageTag;
@@ -246,7 +246,9 @@ class CardRenderer {
         }
 
         // --- 1.5 Premium Fallbacks for Missing Images ---
-        // Fallback is already initialized at start of method, no change needed here.
+        if (!imageUrl) {
+            imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        }
 
         // --- 2. Overlays (Progress & Badges) ---
 
@@ -328,8 +330,12 @@ class CardRenderer {
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
+        // Attach fallback data for LazyLoader to use on error
+        const fbData = CardRenderer.getFallbackData(item.Name);
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}"`;
+
         const imagePart = imageUrl
-            ? `${imageInnerHtml}<img src="${placeholder}" data-src="${imageUrl}" alt="${item.Name}" class="lazy" />`
+            ? `${imageInnerHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy" />`
             : imageInnerHtml;
         const finalContextType = contextType || item.Type;
 
@@ -349,29 +355,37 @@ class CardRenderer {
     }
 
     /**
-     * Helper to load a fallback gradient card with initials
+     * Helper to get raw fallback data (for lazy generation on error)
      * @public
      */
-    static getFallbackHtml(item, isLandscape) {
-        const name = item.Name || 'Unknown';
+    static getFallbackData(itemName) {
+        const name = itemName || 'Unknown';
 
-        // Simple hash to consistently pick a gradient (1-6)
         let hash = 0;
         for (let i = 0; i < name.length; i++) {
             hash = name.charCodeAt(i) + ((hash << 5) - hash);
         }
         const gradNum = (Math.abs(hash) % 6) + 1;
 
-        // Get Initials (up to 2 characters)
         const words = name.split(/[\s_-]+/);
         let initials = words[0] ? words[0][0] : '?';
         if (words.length > 1 && words[1]) initials += words[1][0];
         initials = initials.toUpperCase();
 
+        return { name, initials, gradNum };
+    }
+
+    /**
+     * Helper to load a fallback gradient card with initials
+     * @public
+     */
+    static getFallbackHtml(item, isLandscape) {
+        const data = CardRenderer.getFallbackData(item.Name);
+
         return `
-            <div class="media-fallback grad-${gradNum}">
-                <div class="media-fallback-initials">${initials}</div>
-                <div class="media-fallback-name">${name}</div>
+            <div class="media-fallback grad-${data.gradNum}">
+                <div class="media-fallback-initials">${data.initials}</div>
+                <div class="media-fallback-name">${data.name}</div>
             </div>
         `;
     }

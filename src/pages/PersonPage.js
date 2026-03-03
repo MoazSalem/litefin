@@ -267,7 +267,6 @@ class PersonPage extends Page {
 
         // Poster
         const posterContainer = this.$('#person-poster');
-        let imgHtml = '';
         const isArtist = p.Type === 'MusicArtist' || p.Type === 'Artist';
 
         // Add square class if it's a music artist
@@ -281,19 +280,27 @@ class PersonPage extends Page {
 
         const fallbackHtml = CardRenderer.getFallbackHtml(p, false);
 
-        if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
-            const params = imageService.getParams('poster');
-            const url = api.getImageUrl(p.Id, 'Primary', {
-                maxWidth: params.maxWidth,
-                quality: params.quality,
-                ...(p.ImageTags?.Primary ? { tag: p.ImageTags.Primary } : {})
-            });
+        if (posterContainer) {
+            if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
+                const params = imageService.getParams('poster');
+                const url = api.getImageUrl(p.Id, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    ...(p.ImageTags?.Primary ? { tag: p.ImageTags.Primary } : {})
+                });
 
-            imgHtml = `${fallbackHtml}<img src="${url}" alt="${p.Name}" class="loaded" />`;
-        } else {
-            imgHtml = fallbackHtml;
+                posterContainer.innerHTML = `<img src="${url}" alt="${p.Name}" class="loaded" />`;
+                const imgEl = posterContainer.querySelector('img');
+                if (imgEl) {
+                    imgEl.onerror = () => {
+                        imgEl.style.display = 'none';
+                        posterContainer.insertAdjacentHTML('afterbegin', fallbackHtml);
+                    };
+                }
+            } else {
+                posterContainer.innerHTML = fallbackHtml;
+            }
         }
-        if (posterContainer) posterContainer.innerHTML = imgHtml;
 
         // Meta (Born / Death / Place)
         const metaEl = this.$('#person-meta');
