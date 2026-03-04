@@ -115,8 +115,17 @@ class ScrollController {
 
         const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
 
-        // Already at target or instant scroll requested — snap and bail
+        // Already at target or instant scroll requested — snap and bail.
+        // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
+        // If we don't, the RAF loop from a previous smooth scroll fires again
+        // on the very next frame and sets scrollTop back to its old in-progress
+        // target, causing a single-frame jump (the jitter the user sees).
         if (duration <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+            if (this[animIdKey]) {
+                cancelAnimationFrame(this[animIdKey]);
+                this[animIdKey] = null;
+                this[stateKey] = null;
+            }
             if (isVertical) container.scrollTop = targetScroll;
             else container.scrollLeft = targetScroll;
             return;
@@ -353,14 +362,27 @@ class ScrollController {
             // Ideal target: row top sits at the configured offset from viewport top
             let targetScroll = rowTop - padding;
 
-            // Safety: ensure the specific focused element is visible
-            // at the computed scroll position (tall row edge case)
-            const elTop = getCumulativeOffsetTop(element, pageContent);
-            const elBottom = elTop + element.offsetHeight;
+            // Safety check: ensure the specific focused element is actually visible
+            // at the computed scroll position. Handles tall-row edge cases where the
+            // focused item might be below the visible area at the row-aligned position.
+            //
+            // OPTIMIZATION: Skip this check for VirtualCardRow items (detected via
+            // data-virtual-index). Cards managed by VirtualCardRow are ALWAYS within
+            // the visible window — the row guarantees this on every navigation.
+            // The getCumulativeOffsetTop() for a card inside the track always falls
+            // through to the getBoundingClientRect() fallback path (CSS transform on
+            // the track breaks the offsetParent chain), which is scroll-relative and
+            // forces a synchronous layout on every keypress. Skipping it for
+            // virtual cards eliminates 2 forced layout flushes per navigation.
+            const isVirtualCard = element.dataset && element.dataset.virtualIndex !== undefined;
+            if (!isVirtualCard) {
+                const elTop = getCumulativeOffsetTop(element, pageContent);
+                const elBottom = elTop + element.offsetHeight;
 
-            if (elBottom > targetScroll + viewHeight) {
-                // Element too far down — bottom-align instead
-                targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
+                if (elBottom > targetScroll + viewHeight) {
+                    // Element too far down — bottom-align instead
+                    targetScroll = elBottom - viewHeight + ROW_CUTOFF_BUFFER;
+                }
             }
 
             targetScroll = Math.max(0, targetScroll);
@@ -434,24 +456,44 @@ class ScrollController {
 
                     // Use completely hardware-accelerated CSS transform!
                     if (options.instantScroll) {
-                        // Bypass CSS transitions for instant snap
-                        const oldTransition = track.style.transition;
-                        track.style.transition = 'none';
-                        if (isRtl) {
-                            track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                        } else {
-                            track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        // OPTIMIZATION: Parse the current transform to check if we're already
+                        // at the target position. This skips the forced-layout reflow path
+                        // entirely when navigating vertically (the card is already centered).
+                        // track.offsetHeight is a synchronous layout and is expensive on Tizen.
+                        const currentTransform = track.style.transform || '';
+                        const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                        const currentTransformX = match ? parseFloat(match[1]) : 0;
+                        const alreadyCentered = Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
+
+                        if (!alreadyCentered) {
+                            // Bypass CSS transitions for instant snap
+                            const oldTransition = track.style.transition;
+                            track.style.transition = 'none';
+                            if (isRtl) {
+                                track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                            } else {
+                                track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                            }
+                            // Force reflow to apply instantly, then restore transition
+                            /* eslint-disable-next-line no-unused-expressions */
+                            track.offsetHeight;
+                            track.style.transition = oldTransition;
                         }
-                        // Force reflow to apply instantly, then restore
-                        /* eslint-disable-next-line no-unused-expressions */
-                        track.offsetHeight;
-                        track.style.transition = oldTransition;
                     } else {
-                        if (isRtl) {
-                            // In RTL, moving track right reveals further elements on the left
-                            track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                        } else {
-                            track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        // Same position check for the smooth (CSS transition) path.
+                        // .row-items-track has a 150ms CSS transition on transform — writing
+                        // the same value triggers a useless animated "wobble" on every vertical
+                        // row-enter even though the horizontal position hasn't changed at all.
+                        const currentTransform = track.style.transform || '';
+                        const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                        const currentTransformX = match ? parseFloat(match[1]) : 0;
+                        if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
+                            if (isRtl) {
+                                // In RTL, moving track right reveals further elements on the left
+                                track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                            } else {
+                                track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                            }
                         }
                     }
                 } else {

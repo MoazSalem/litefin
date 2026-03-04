@@ -599,10 +599,14 @@ class FocusManager {
                 }
             }
 
+            // Detect rapid navigation: if the user is holding the key down, use instant
+            // scroll for the cross-section transition. Without this, each rapid keypress
+            // restarts the 200ms animation from scratch, causing the scroll to lag far
+            // behind where the user actually is.
+            const isRapidNav = this._prevMoveTime > 0 && this._lastMoveTime - this._prevMoveTime < 200;
+
             // Pass originElement to allow selecting closest target in new section
-            // We NO LONGER force instantScroll for vertical moves, allowing the
-            // ScrollController's easeOutQuad to provide smooth row-to-row transitions.
-            this.setActiveSection(nextSection, true, originElement, { direction });
+            this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: isRapidNav });
         } else if (direction === 'up') {
             // No section to navigate to (at top of page)
             // Still scroll to top to show full backdrop as visual feedback
@@ -718,9 +722,6 @@ class FocusManager {
             return;
         }
 
-        // Whether to skip scroll (passed from _leaveSection for vertical transitions)
-        const skipScroll = !!options.instantScroll;
-
         // 0. Default Focus Selector (config-driven, replaces hardcoded section checks)
         // If a section specifies defaultFocusSelector, always focus that element on entry.
         // Example: sidebar uses '#sidebar-home' to always land on Home.
@@ -742,20 +743,24 @@ class FocusManager {
         if (typeof config.onEnter === 'function') {
             const hookTarget = config.onEnter(fromElement, options);
             if (hookTarget) {
-                this.focusElement(hookTarget, { skipScroll });
+                // Forward instantScroll so the scroll controller respects rapid-nav speed.
+                // Previously this wrongly converted instantScroll into skipScroll,
+                // which is a completely different option — that bug caused every row
+                // transition to always animate at full 200ms regardless of key-hold speed.
+                this.focusElement(hookTarget, { instantScroll: !!options.instantScroll });
                 return;
             }
         }
 
         if (enterTo === 'first' && focusables.length > 0) {
             target = focusables[0];
-            this.focusElement(target, { skipScroll });
+            this.focusElement(target, { instantScroll: !!options.instantScroll });
             return;
         } else if (enterTo === 'active-element' && focusables.length > 0) {
             target =
                 focusables.find((el) => el.classList.contains('active') || el.classList.contains('selected')) ||
                 focusables[0];
-            this.focusElement(target, { skipScroll });
+            this.focusElement(target, { instantScroll: !!options.instantScroll });
             return;
         }
 
@@ -787,8 +792,10 @@ class FocusManager {
             target = focusables[0];
         }
 
-        // Use skipScroll when changing sections vertically (much faster)
-        this.focusElement(target, { skipScroll });
+        // Forward instantScroll speed correctly to the scroll controller.
+        // 'skipScroll' was previously being computed here but was the wrong option —
+        // scrollIntoView uses 'instantScroll' for animation duration, not 'skipScroll'.
+        this.focusElement(target, { instantScroll: !!options.instantScroll });
     }
 
     _activate() {

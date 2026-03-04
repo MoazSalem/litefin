@@ -372,10 +372,9 @@ class HomePage extends Page {
                     const nextNode = virtualRow.handleMove(direction, currentIndex);
 
                     if (nextNode) {
-                        // Manually sync the index immediately to prevent race conditions on rapid key presses.
-                        // This ensures the next 'handleMove' call uses the correct 'currentIndex' before focusin bubbles.
-                        virtualRow.syncIndexFromNode(nextNode);
-
+                        // handleMove() already updated virtualRow.currentIndex internally.
+                        // No need to call syncIndexFromNode again — that would be redundant
+                        // and could cause the focusin event to fire a third sync.
                         focusManager.focusElement(nextNode);
                         return true; // VirtualCardRow handled it
                     }
@@ -386,18 +385,22 @@ class HomePage extends Page {
                     // Instead of spatial X alignment, we restore the row's last focused index.
                     // This prevents rows from shifting and acting like grids.
                     if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
-                        // Ensure window is updated for current index before accessing DOM node
-                        // OPTIMIZATION: Only update the window if the node isn't already in the DOM
-                        // (i.e. the user has scrolled so far that the current index is unmounted).
-                        // Flying past rows during fast vertical scroll should NOT trigger DOM mutations.
+                        // Optimization: check if the node we want is already mounted.
+                        // If it is, return it directly without touching the DOM.
+                        // If not (user had scrolled far to the right and the node was evicted),
+                        // trigger _updateWindow to ensure it's mounted before we try to return it.
                         const existingNode = virtualRow.domNodes.get(virtualRow.currentIndex);
-                        if (!existingNode || !existingNode.isConnected) {
-                            virtualRow._updateWindow(virtualRow.currentIndex);
+                        if (existingNode && existingNode.isConnected) {
+                            // Already in DOM — no mutation needed, safe to return directly
+                            return existingNode;
                         }
+                        // Node not mounted — update window then retrieve the fresh node
+                        virtualRow._updateWindow(virtualRow.currentIndex);
                         return virtualRow.domNodes.get(virtualRow.currentIndex);
                     }
                     return null;
                 },
+
                 onRestoreIndex: (index) => {
                     return virtualRow.focusByIndex(index);
                 }
