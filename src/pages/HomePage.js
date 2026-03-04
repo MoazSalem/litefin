@@ -18,6 +18,7 @@ import { eventBus } from '../core/EventBus.js';
 // AnimationManager removed — CSS .focused class handles card scale via GPU compositor
 
 import { focusManager } from '../ui/FocusManager.js';
+import { scrollController } from '../ui/ScrollController.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
@@ -459,6 +460,24 @@ class HomePage extends Page {
             if (rowsData.length > 0) {
                 // Use requestAnimationFrame to ensure DOM is painted and offsetParent is valid
                 requestAnimationFrame(() => {
+                    // ─── PRE-WARM OFFSET CACHE ────────────────────────────────────
+                    // The very first Down keypress normally triggers a cold `offsetTop`
+                    // walk for row 2 inside ScrollController.getCumulativeOffsetTop().
+                    // On Tizen, reading `offsetTop` on a freshly-rendered layout tree
+                    // forces a full layout flush. We piggyback on the layout flush that
+                    // is already happening in THIS rAF frame (for focus restoration)
+                    // and pre-populate the ScrollController's _offsetCache for every
+                    // row now, so all subsequent key presses are pure cache hits.
+                    const pageContent = container.closest('.page-content');
+                    if (pageContent) {
+                        const mediaRows = container.querySelectorAll('.media-row');
+                        // One batched layout read — all DOM reads, no writes.
+                        // This is safe because the layout is already being computed
+                        // for focus restoration below.
+                        scrollController.prewarmOffsetCache(mediaRows, pageContent);
+                    }
+                    // ─── END PRE-WARM ─────────────────────────────────────────────
+
                     // Check for saved focus to restore (from back navigation)
                     // Fallback to legacy 'home:lastFocusedItemId' if 'home:lastFocusedItem' object doesn't exist yet
                     const lastFocusedObj = state.get('home:lastFocusedItem');

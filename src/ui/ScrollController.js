@@ -43,9 +43,9 @@ const DEFAULT_SCROLL_OFFSET_TOP = 50;
 
 // Threshold (px) — if the row's top is already within this distance of
 // the ideal scroll position, skip scrolling. Prevents micro-jitter when
-// navigating horizontally within the same row or between tightly packed items
-// (e.g. genre header → genre grid within the same .media-row).
-const SCROLL_ALIGN_THRESHOLD = 30;
+// navigating horizontally within the same row, but keep it small so
+// vertical transitions always trigger a smooth scroll.
+const SCROLL_ALIGN_THRESHOLD = 5;
 
 // Buffer (px) around viewport edges for horizontal row visibility detection.
 // Used when scrolling a parent row into view before centering a card.
@@ -573,6 +573,44 @@ class ScrollController {
         // Clear the offsetTop cache so stale row positions don't persist
         // across page navigations (rows on the new page have different offsets).
         this._offsetCache = new WeakMap();
+    }
+
+    /**
+     * Pre-populate the _offsetCache for a list of elements in a single pass.
+     *
+     * Call this once after the page DOM is stable (e.g. inside the initial
+     * requestAnimationFrame after content is rendered). This batches all
+     * offsetTop reads into the layout flush that is already required for
+     * focus restoration, so the reads are essentially free. Every subsequent
+     * keypress that queries getCumulativeOffsetTop for these elements will be
+     * a pure O(1) WeakMap hit with no forced layout at all.
+     *
+     * @param {NodeList|Array} elements - Elements to pre-cache (e.g. all .media-row)
+     * @param {HTMLElement} relativeTo - The scroll container (e.g. .page-content)
+     */
+    prewarmOffsetCache(elements, relativeTo) {
+        if (!relativeTo) return;
+
+        // Batch read all offsetTops — every read forces layout once (the browser
+        // computes the entire layout tree in one shot for the first read, then
+        // serves subsequent reads from the cached layout result).
+        for (let i = 0; i < elements.length; i++) {
+            const el = elements[i];
+            if (!el || this._offsetCache.has(el)) continue; // Skip if already cached
+
+            let top = 0;
+            let current = el;
+
+            while (current && current !== relativeTo && current !== document.body) {
+                top += current.offsetTop || 0;
+                current = current.offsetParent;
+            }
+
+            // Only cache if the chain successfully reached the scroll container
+            if (current === relativeTo) {
+                this._offsetCache.set(el, { container: relativeTo, value: top });
+            }
+        }
     }
 }
 
