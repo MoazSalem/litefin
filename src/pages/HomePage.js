@@ -56,6 +56,8 @@ class HomePage extends Page {
     }
 
     onInit() {
+        this._isMounted = true;
+
         // Safety check: Ensure we are authenticated
         if (!api.isAuthenticated) {
             log.warn('Not authenticated, redirecting to login');
@@ -71,6 +73,7 @@ class HomePage extends Page {
     }
 
     onDestroyed() {
+        this._isMounted = false;
         if (this._clockInterval) {
             clearInterval(this._clockInterval);
         }
@@ -104,18 +107,28 @@ class HomePage extends Page {
 
             // ========================================================
             // OPTIMIZATION: Fetch all data in PARALLEL instead of sequential
+            // with a max-concurrency limiter to avoid blowing up the browser's
+            // connection limit (typically 6 active connections).
             // ========================================================
-            const [resumeItems, nextUp, ...latestResults] = await Promise.all([
-                api.getResumeItems(),
-                api.getNextUp(),
-                // Map libraries to fetch requests
-                ...this._libraries.map((lib) =>
-                    api.getLatestItems(lib.Id).catch((e) => {
-                        log.warn(`Failed to load latest for ${lib.Name}`, e);
-                        return null; // Return null on error, filter later
-                    })
-                )
-            ]);
+
+            // 1. Fire critical top rows immediately — they take priority
+            const [resumeItems, nextUp] = await Promise.all([api.getResumeItems(), api.getNextUp()]);
+
+            if (!this._isMounted) return;
+
+            // 2. Batch library requests with max concurrency of 4
+            const libraryTasks = this._libraries.map((lib) => async () => {
+                try {
+                    return await api.getLatestItems(lib.Id);
+                } catch (e) {
+                    log.warn(`Failed to load latest for ${lib.Name}`, e);
+                    return null;
+                }
+            });
+
+            const latestResults = await this._fetchWithConcurrency(libraryTasks, 4);
+
+            if (!this._isMounted) return;
 
             // Build rows data from parallel results
             const rowsData = [];
@@ -209,6 +222,25 @@ class HomePage extends Page {
         if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
             this.setActiveSection('sidebar');
         }
+    }
+
+    /**
+     * Executes an array of async functions with a maximum concurrency limit.
+     */
+    async _fetchWithConcurrency(tasks, concurrencyMax) {
+        const results = new Array(tasks.length);
+        let currentIndex = 0;
+
+        const worker = async () => {
+            while (currentIndex < tasks.length) {
+                const i = currentIndex++;
+                results[i] = await tasks[i]();
+            }
+        };
+
+        const workers = Array.from({ length: Math.min(concurrencyMax, tasks.length) }, worker);
+        await Promise.all(workers);
+        return results;
     }
 
     /**
@@ -355,7 +387,13 @@ class HomePage extends Page {
                     // This prevents rows from shifting and acting like grids.
                     if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
                         // Ensure window is updated for current index before accessing DOM node
-                        virtualRow._updateWindow(virtualRow.currentIndex);
+                        // OPTIMIZATION: Only update the window if the node isn't already in the DOM
+                        // (i.e. the user has scrolled so far that the current index is unmounted).
+                        // Flying past rows during fast vertical scroll should NOT trigger DOM mutations.
+                        const existingNode = virtualRow.domNodes.get(virtualRow.currentIndex);
+                        if (!existingNode || !existingNode.isConnected) {
+                            virtualRow._updateWindow(virtualRow.currentIndex);
+                        }
                         return virtualRow.domNodes.get(virtualRow.currentIndex);
                     }
                     return null;
@@ -454,6 +492,20 @@ class HomePage extends Page {
                                 this.setActiveSection(`home-row-${rowIndex}`, false);
                                 focusManager.focusElement(savedCard, { instantScroll: true });
                                 restoredFocus = true;
+                            }
+                        } else if (targetRowIndex !== null && this._virtualRows[targetRowIndex]) {
+                            // OPTIMIZATION: Item was virtualized out of the DOM — restore via index lookup in the data array
+                            const vRow = this._virtualRows[targetRowIndex];
+                            // Try matching by Id (string/number agnostic)
+                            const itemIndex = vRow.items.findIndex((i) => String(i.Id) === String(targetId));
+
+                            if (itemIndex !== -1) {
+                                const node = vRow.focusByIndex(itemIndex);
+                                if (node) {
+                                    this.setActiveSection(`home-row-${targetRowIndex}`, false);
+                                    focusManager.focusElement(node, { instantScroll: true });
+                                    restoredFocus = true;
+                                }
                             }
                         }
 
