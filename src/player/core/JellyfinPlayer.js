@@ -1101,7 +1101,16 @@ export class JellyfinPlayer extends EventEmitter {
                     const tracks = this.getSubtitleTracks();
                     const trackExists = tracks.some((t) => t.Index === index);
                     if (trackExists) {
-                        this._backend.setSubtitleStreamIndex(index);
+                        try {
+                            this._backend.setSubtitleStreamIndex(index);
+                        } catch (err) {
+                            if (err.message === 'OUT_OF_BOUNDS_TIZEN_LIMIT') {
+                                log.warn(`Tizen Backend rejected track ${index} (out of bounds). Falling back to EXTERNAL_TEXT rendering.`);
+                                this._subtitleManager.forceExternalTextFallback(index);
+                            } else {
+                                throw err;
+                            }
+                        }
                     } else {
                         log.warn('Subtitle StreamID', index, 'not found in backend tracks');
                     }

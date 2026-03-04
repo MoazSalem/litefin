@@ -281,6 +281,30 @@ export default class SubtitleManager {
         return DeliveryMethod.EXTERNAL_TEXT;
     }
 
+    /**
+     * Forces a fallback to DOM rendering (EXTERNAL_TEXT) for a subtitle track.
+     * This is an escape hatch used when the backend player (e.g. Tizen AVPlay)
+     * realizes it cannot render an embedded format (e.g. because the track
+     * index exceeds a hardcoded limit like AVPlay's 30-text-track maximum).
+     *
+     * @param {number} streamIndex - Jellyfin subtitle stream index
+     */
+    async forceExternalTextFallback(streamIndex) {
+        log.warn(`Forcing EXTERNAL_TEXT fallback for streamIndex: ${streamIndex}`);
+        const track = this._findSubtitleTrack(streamIndex);
+        if (!track) return;
+        
+        // Disable backend processing flags and shift to Text
+        this._primaryTrack = track;
+        this._primaryDelivery = DeliveryMethod.EXTERNAL_TEXT;
+        
+        // Notify host (JellyfinPlayer) that we took over rendering
+        this._onDeliveryChange({ primary: DeliveryMethod.EXTERNAL_TEXT, track });
+        
+        // Fetch HTML/VTT cues instead of relying on the backend
+        await this._fetchAndParseCues(track, 'primary');
+    }
+
     // ========================================================================
     // Time-Based Cue Updates (the "tick" method)
     // ========================================================================
