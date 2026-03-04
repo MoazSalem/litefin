@@ -296,7 +296,11 @@ class Sidebar extends Component {
             item.onclick = () => {
                 const path = item.dataset.path;
                 if (path) {
-                    router.navigate(path);
+                    if (path === '/home') {
+                        router.reset(path);
+                    } else {
+                        router.navigate(path);
+                    }
                 } else if (item.id === 'sidebar-logout') {
                     auth.logout();
                 }

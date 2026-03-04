@@ -170,6 +170,10 @@ class Router {
      * @param {string} path - Path to navigate to
      */
     reset(path) {
+        if (this.getCurrentPath() === path) {
+            this._history = [{ path: path, state: null }];
+            return;
+        }
         this._history = [];
         this.navigate(path, { replace: true });
     }
