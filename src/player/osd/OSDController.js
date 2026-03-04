@@ -1141,19 +1141,26 @@ export default class OSDController extends Component {
     // ===================================
     
     _executeAction(action) {
-        log.info('Execute Action:', action);
+        if (action !== 'fastForward' && action !== 'rewind') {
+            log.info('Execute Action:', action);
+        }
 
         /* 
          * DEBOUNCE: On many TVs (Tizen/WebOS), pressing OK triggers both our explicit
          * remote:select event handler AND the browser's native translated `click`.
          * This causes opening modals to instantly close.
          * Ignore rapid duplicate actions dispatched within 200ms.
+         * OVERRIDE: FastForward and Rewind triggers from D-Pad holds (30fps)
+         * must bypass this to prevent dropped inputs. They have their own debounce.
          */
         const now = Date.now();
-        if (action === this._lastActionName && (now - this._lastActionTime) < 200) {
-            log.info(`Ignoring double-fired action: ${action}`);
-            return;
+        if (action !== 'fastForward' && action !== 'rewind') {
+            if (action === this._lastActionName && (now - this._lastActionTime) < 200) {
+                log.info(`Ignoring double-fired action: ${action}`);
+                return;
+            }
         }
+        
         this._lastActionName = action;
         this._lastActionTime = now;
 
@@ -1263,8 +1270,10 @@ export default class OSDController extends Component {
             this.resetAutoHide();
 
             if (this._seekTargetTicks === null) {
-                this._seekTargetTicks = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
+                const startPos = (this._player.getCurrentPositionTicks && this._player.getCurrentPositionTicks()) || 0;
+                this._seekTargetTicks = startPos;
                 this._seekStartTime = Date.now();
+                log.info(`Seek scrub session started from: ${this._formatTime(startPos)}`);
             }
 
             const seekDuration = (Date.now() - this._seekStartTime) / 1000;
@@ -1288,10 +1297,13 @@ export default class OSDController extends Component {
                 getCurrentPositionTicks: () => this._seekTargetTicks,
                 getDurationTicks: () => duration
             };
-            this._updateTimeDisplay(previewPlayer);
+            this._updateTimeDisplay(previewPlayer, true); // true = skipHeavy
             this._updatePositionSlider(previewPlayer);
             
-             const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
+             // Cache the tooltip to avoid querySelector thrashing at 30fps
+             if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
+             const tooltip = this._cachedTooltipEl;
+
              if (tooltip) {
                  const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
                  const forceHours = duration >= 3600 * 10000000;
@@ -1304,6 +1316,7 @@ export default class OSDController extends Component {
             this._seekDebounceTimer = setTimeout(() => {
                 try {
                     if (this._seekTargetTicks !== null && this._player.seek) {
+                        log.info(`Seek scrub session committed. Jumping to: ${this._formatTime(this._seekTargetTicks, duration >= 3600 * 10000000)}`);
                         this._player.seek(this._seekTargetTicks);
                     }
                 } catch (e) {
@@ -1371,39 +1384,51 @@ export default class OSDController extends Component {
         }
     }
     
-    _updateTimeDisplay(player) {
+    _updateTimeDisplay(player, skipHeavy = false) {
         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
         // If duration is > 1 hour, force hours format to keep display stable
         const forceHours = duration >= 3600 * 10000000;
 
-        const currentEl = this._osdEl.querySelector('#osdCurrentTime');
-        const totalEl = this._osdEl.querySelector('#osdTotalTime');
-
-        if (currentEl) currentEl.textContent = this._formatTime(current, forceHours);
-        if (totalEl) totalEl.textContent = this._formatTime(duration, forceHours);
+        // Cache references to avoid layout thrashing
+        if (!this._osdCurrentTimeEl) this._osdCurrentTimeEl = this._osdEl.querySelector('#osdCurrentTime');
         
-        const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
-        if (endsAtEl && duration > 0 && player.getCurrentPositionTicks) {
+        if (this._osdCurrentTimeEl) {
+            this._osdCurrentTimeEl.textContent = this._formatTime(current, forceHours);
+        }
+
+        // Heavy layout/localization operations
+        // Skip these during 30fps rapid seek scrubbing where the user only looks at the tooltip!
+        if (skipHeavy) return;
+
+        if (!this._osdTotalTimeEl) this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
+        if (this._osdTotalTimeEl) {
+            this._osdTotalTimeEl.textContent = this._formatTime(duration, forceHours);
+        }
+        
+        if (!this._osdEndsAtEl) this._osdEndsAtEl = this._osdEl.querySelector('#osdEndsAt');
+        if (this._osdEndsAtEl && duration > 0 && player.getCurrentPositionTicks) {
             const remainingMs = (duration - current) / 10000;
             const endTime = new Date(Date.now() + remainingMs);
-            endsAtEl.textContent = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
+            this._osdEndsAtEl.textContent = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
         }
     }
 
     _updatePositionSlider(player) {
-        const slider = this._osdEl.querySelector('#osdPositionSlider');
-        if (!slider) return;
+        if (!this._osdPositionSliderEl) this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
+        if (!this._osdPositionSliderEl) return;
 
         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
         const percent = duration > 0 ? (current / duration) * 100 : 0;
-        slider.value = percent;
+        this._osdPositionSliderEl.value = percent;
 
-        const fill = this._osdEl.querySelector('#osdPositionFill');
-        if (fill) fill.style.width = percent + '%';
+        if (!this._osdPositionFillEl) this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
+        if (this._osdPositionFillEl) {
+            this._osdPositionFillEl.style.width = percent + '%';
+        }
     }
     
     _updateClock() {
