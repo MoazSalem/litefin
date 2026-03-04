@@ -1586,17 +1586,17 @@ class DetailsPage extends Page {
 
         const sections = [
             { name: 'details-similar', elementId: '#similar-row', isVisible: () => isNotHidden('#similar-section') },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
-            {
-                name: 'artists-section',
-                elementId: '#artists-row',
-                isVisible: () => isNotHidden('#artists-section')
-            },
             {
                 name: 'guest-stars-section',
                 elementId: '#guest-stars-row',
                 isVisible: () => isNotHidden('#guest-stars-section')
             },
+            {
+                name: 'artists-section',
+                elementId: '#artists-row',
+                isVisible: () => isNotHidden('#artists-section')
+            },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
