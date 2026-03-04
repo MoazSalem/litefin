@@ -147,13 +147,20 @@ export class TizenAVPlayer {
 
         // Reset subtitle offset for new playback session
         this._subtitleOffset = 0;
+        this._hasEmittedPlaying = false;
 
         try {
+            // Track if we were actually active to know if a cleanup sleep is needed
+            const wasActive = this._isPlaying || this._isPrepared;
+
             // Stop any existing playback
             await this._stopInternal();
 
-            // Give Tizen time to cleanup (helps with buffer errors on rapid changes)
-            await new Promise((resolve) => setTimeout(resolve, 200));
+            // Only sleep if we just forcefully stopped an active stream
+            if (wasActive) {
+                // Give Tizen time to cleanup (helps with buffer errors on rapid changes)
+                await new Promise((resolve) => setTimeout(resolve, 200));
+            }
 
             // Open the media
             this._avplay.open(options.url);
@@ -164,10 +171,33 @@ export class TizenAVPlayer {
             // Set up event listeners
             this._setupListeners();
 
+            // Only queue native track selection for DirectPlay.
+            // During Transcode/DirectStream, audio is baked into the HLS output,
+            // so AVPlay only has one muxed audio track — calling setSelectTrack
+            // would either silently fail or cause spurious errors, and it retried
+            // on every onbufferingcomplete invocation (seeking, re-buffers, etc.).
+            const isDirectPlay = options.playMethod === 'DirectPlay';
+
+            // CRITICAL: Set pending indices BEFORE prepareAsync(), not after!
+            // onbufferingcomplete fires DURING prepareAsync phase, which is when
+            // _applyPendingTracks() runs. Setting these after would mean they're
+            // always null when the handler fires, silently dropping initial track selection.
+            if (isDirectPlay && options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+                this._pendingAudioIndex = options.audioStreamIndex;
+            } else {
+                this._pendingAudioIndex = null;
+            }
+
+            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
+                this._pendingSubtitleIndex = options.subtitleStreamIndex;
+            } else {
+                this._pendingSubtitleIndex = null;
+            }
+
             // Prepare asynchronously
             await this._prepareAsync();
 
-            // Start playback
+            // Start playback — must be after prepare
             this._avplay.play();
             this._isPlaying = true;
 
@@ -184,26 +214,6 @@ export class TizenAVPlayer {
                         }
                     }, 500);
                 }
-            }
-
-            // Only queue native track selection for DirectPlay.
-            // During Transcode/DirectStream, audio is baked into the HLS output,
-            // so AVPlay only has one muxed audio track — calling setSelectTrack
-            // would either silently fail or cause spurious errors, and it retried
-            // on every onbufferingcomplete invocation (seeking, re-buffers, etc.).
-            const isDirectPlay = options.playMethod === 'DirectPlay';
-
-            if (isDirectPlay && options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-                this._pendingAudioIndex = options.audioStreamIndex;
-            } else {
-                // Explicitly clear any leftover pending index from a previous session
-                this._pendingAudioIndex = null;
-            }
-
-            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
-                this._pendingSubtitleIndex = options.subtitleStreamIndex;
-            } else {
-                this._pendingSubtitleIndex = null;
             }
 
             // Initialize current indices
@@ -271,15 +281,35 @@ export class TizenAVPlayer {
             onbufferingcomplete: () => {
                 log.debug('Buffering complete');
                 // Only emit playing if we are actually playing (not paused)
-                if (this._isPlaying) {
+                if (this._isPlaying && !this._hasEmittedPlaying) {
+                    this._hasEmittedPlaying = true;
+                    this.onEvent({ type: 'playing' });
+                }
+            },
+            oncurrentplaytime: (time) => {
+                // timeupdate fires as frames are drawn. 
+                // If we haven't emitted 'playing' yet (e.g., started at 0:00 without buffering), do it now!
+                if (this._isPlaying && !this._hasEmittedPlaying && time > 0) {
+                    log.debug('First frame rendered (time > 0), emitting playing');
+                    this._hasEmittedPlaying = true;
                     this.onEvent({ type: 'playing' });
                 }
 
-                // Apply pending track selections once buffering is done
-                // This is the most reliable time to switch tracks on Tizen
-                this._applyPendingTracks();
-            },
-            oncurrentplaytime: (time) => {
+                // AVPlay tracks are definitively fully populated once frames start rendering.
+                // Apply pending tracks now. If they fail (e.g. index out of bounds or missing),
+                // they remain pending. We try for up to 2 seconds of watch time, then drop them
+                // to prevent infinite API polling performance penalties.
+                if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
+                    this._applyPendingTracks();
+                    
+                    if (time > 2000) {
+                        if (this._pendingAudioIndex !== null) log.warn('Pending audio track dropped (timeout)');
+                        if (this._pendingSubtitleIndex !== null) log.warn('Pending subtitle track dropped (timeout)');
+                        this._pendingAudioIndex = null;
+                        this._pendingSubtitleIndex = null;
+                    }
+                }
+
                 // This is called periodically with current time in ms
                 this.onEvent({ type: 'timeupdate', data: { time: this.getCurrentTime() } });
             },
@@ -338,7 +368,6 @@ export class TizenAVPlayer {
             if (tizenAudioIndex !== null) {
                 try {
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
-                    this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                 } catch (e) {
                     log.warn('Failed to apply audio track:', e);
                 }
@@ -358,7 +387,6 @@ export class TizenAVPlayer {
                 if (tizenSubIndex !== null) {
                     try {
                         this._avplay.setSilentSubtitle(false);
-                        this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                         this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                         this._pendingSubtitleIndex = null;
                     } catch (e) {
@@ -545,6 +573,7 @@ export class TizenAVPlayer {
             try {
                 this._avplay.pause();
                 this._isPlaying = false;
+                this._hasEmittedPlaying = false; // Reset so playing fires cleanly on resume
                 this.onEvent({ type: 'pause' });
             } catch (e) {
                 log.error('Pause failed:', e);

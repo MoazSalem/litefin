@@ -377,7 +377,7 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Promise<void>}
      */
     async play(options) {
-        log.info('Play requested:', options);
+        //log.info('Play requested:', options);
         log.info('Backend Type:', this._backendType);
         log.info('Use Tizen Player:', this.useTizenPlayer);
         
@@ -616,7 +616,7 @@ export class JellyfinPlayer extends EventEmitter {
                 audioStreamIndex: this._currentAudioStreamIndex
             });
 
-            log.debug('Stream Info built:', streamInfo);
+            //log.debug('Stream Info built:', streamInfo);
 
             // Save transcoding offset
             this._transcodingOffsetTicks = streamInfo.transcodingOffsetTicks || 0;

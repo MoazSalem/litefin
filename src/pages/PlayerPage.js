@@ -129,8 +129,11 @@ class PlayerPage extends Page {
                 // Apply directly to the loading overlay to ensure visibility
                 const loader = this.el.querySelector('.page-loading');
                 if (loader) {
-                    // Make the main loader background transparent so the backdrop shows through
-                    loader.style.backgroundColor = 'transparent';
+                    // IMPORTANT: Do NOT make the loader background transparent yet.
+                    // Setting it to transparent here would expose the black Tizen hardware plane
+                    // for the entire image fetch duration. Instead keep it solidly dark and
+                    // flip to transparent atomically on the same frame as the backdrop fades in.
+                    loader.style.backgroundColor = '#000';
 
                     // Create a dedicated background layer to fade in independently of the spinner
                     let backdropLayer = loader.querySelector('.loading-backdrop-layer');
@@ -153,10 +156,17 @@ class PlayerPage extends Page {
                     // Preload the image to prevent "half sliced" progressive loading artifact
                     const img = new Image();
                     img.onload = () => {
+                        // Now that the image is ready, transition to transparent bg so the
+                        // backdrop layer shows through cleanly with no visible black gap.
+                        loader.style.backgroundColor = 'transparent';
                         backdropLayer.style.backgroundImage = `linear-gradient(to bottom, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.8) 100%), url('${backdropUrl}')`;
                         requestAnimationFrame(() => {
                             backdropLayer.style.opacity = '1';
                         });
+                    };
+                    img.onerror = () => {
+                        // If the image fails, just keep the solid dark background — better than black flash
+                        log.warn('Backdrop image failed to load, keeping solid loading background');
                     };
                     img.src = backdropUrl;
 
@@ -169,14 +179,16 @@ class PlayerPage extends Page {
             document.body.classList.add('player-active');
             document.documentElement.classList.add('player-active');
 
-            // Preload the selected subtitle font so it's ready before subtitles appear
+            // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
+            const fetchTasks = [api.getItem(itemId)];
             if (fontId) {
-                await FontLoader.loadFont(fontId);
+                fetchTasks.push(FontLoader.loadFont(fontId));
             }
 
-            // Load item details
-            this._item = await api.getItem(itemId);
+            // Load item details (and wait for font if needed)
+            const [itemResult] = await Promise.all(fetchTasks);
+            this._item = itemResult;
             this.title = this._item.Name;
 
             // Initialize Play Queue
@@ -526,11 +538,8 @@ class PlayerPage extends Page {
 
         this._player.on('loadedmetadata', (data) => {
             log.debug('Loaded metadata', data);
-            // If starting from scratch, hide loading now.
-            // This is safer than the immediate _onPlayerReady as backend is prepared.
-            if (!this._resumePosition) {
-                this._showLoading(false);
-            }
+            // We no longer hide the loading screen here to prevent the black flash.
+            // It will be hidden consistently by the 'playing' event once video is actually rendering.
         });
 
         // Manually trigger ready state (removed loading logic from here)
