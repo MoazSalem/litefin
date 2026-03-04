@@ -107,6 +107,15 @@ class HomePage extends Page {
             this._libraries = viewsResponse.Items || [];
 
             // ========================================================
+            // DYNAMIC LIBRARY THUMBNAILS
+            // ========================================================
+            const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
+            if ((thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0) {
+                await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                if (!this._isMounted) return;
+            }
+
+            // ========================================================
             // OPTIMIZATION: Fetch all data in PARALLEL instead of sequential
             // with a max-concurrency limiter to avoid blowing up the browser's
             // connection limit (typically 6 active connections).
@@ -226,6 +235,189 @@ class HomePage extends Page {
     }
 
     /**
+     * Resolves and attaches dynamic backdrop URLs to the library objects.
+     * Overrides the default folder image in CardRenderer.
+     */
+    async _enrichLibrariesWithDynamicThumbs(libraries, mode) {
+        // Fetch all in parallel
+        await Promise.all(
+            libraries.map(async (lib) => {
+                try {
+                    const cacheKey = `libThumb:${lib.Id}`;
+
+                    // 1. Static Mode: Check Cache First
+                    if (mode === 'static') {
+                        const cachedUrl = localStorage.getItem(cacheKey);
+                        if (cachedUrl) {
+                            lib._dynamicThumbUrl = cachedUrl;
+                            return; // Zero network overhead hit
+                        }
+                    }
+
+                    // 2. Fetch a random item from this library.
+                    //    We pick IncludeItemTypes based on library type so we land on the
+                    //    items most likely to have rich artwork (MusicAlbum has album art,
+                    //    BoxSet has a poster, Movies/Series have backdrops).
+                    const includeItemTypes = (() => {
+                        switch (lib.CollectionType) {
+                            case 'music':
+                                return 'MusicAlbum'; // Album art lives on MusicAlbum
+                            case 'boxsets':
+                                return 'BoxSet'; // Top-level boxset items
+                            case 'photos':
+                                return 'Photo';
+                            default:
+                                return 'Movie,Series'; // Both carry backdrops
+                        }
+                    })();
+
+                    const response = await api.getItems({
+                        ParentId: lib.Id,
+                        SortBy: 'Random',
+                        Recursive: true,
+                        Limit: 5, // Up to 5 random picks so we have options if first has no image
+                        Fields: 'BackdropImageTags,ImageTags',
+                        ImageTypeLimit: 1,
+                        IncludeItemTypes: includeItemTypes,
+                        EnableImageTypes: 'Backdrop,Thumb,Primary',
+                        // KEY: Only ask for items that actually have an image stored.
+                        // Without this, Jellyfin happily returns image-less items even
+                        // though EnableImageTypes is set (that only controls which types
+                        // to include in the response payload, not whether items have images).
+                        Filters: 'HasImage'
+                    });
+
+                    if (response?.Items?.length > 0) {
+                        const { maxWidth, quality } = imageService.getParams('backdrop');
+                        let resolvedUrl = null;
+
+                        // Iterate the fetched candidates (up to 5) and stop at the first
+                        // one that has a usable image — random ordering means high variance
+                        for (const item of response.Items) {
+                            if (lib.CollectionType === 'music') {
+                                // Music: album art (Primary) > Thumb > Backdrop
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                } else if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
+                                }
+                            } else if (lib.CollectionType === 'boxsets') {
+                                // Collections: prefer Backdrop, fall back to Primary (poster)
+                                if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
+                                } else if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                }
+                            } else {
+                                // Standard libraries (Movies, Shows): Backdrop > Thumb > Primary
+                                if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                } else if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                }
+                            }
+
+                            // Stop searching once we have a valid URL
+                            if (resolvedUrl) break;
+                        }
+
+                        // Fallback: if the typed candidates still had no usable image tag in the
+                        // response, do a broader fetch without IncludeItemTypes. Still gated by
+                        // HasImage so we are guaranteed incoming items will have something usable.
+                        if (!resolvedUrl) {
+                            log.debug(
+                                `[DynamicThumb] ${lib.Name}: no image in typed candidates, trying broad fallback`
+                            );
+                            const fallbackResponse = await api.getItems({
+                                ParentId: lib.Id,
+                                SortBy: 'Random',
+                                Recursive: true,
+                                Limit: 10,
+                                Fields: 'BackdropImageTags,ImageTags',
+                                ImageTypeLimit: 1,
+                                EnableImageTypes: 'Backdrop,Thumb,Primary',
+                                // No IncludeItemTypes — cast the widest net possible.
+                                // HasImage ensures every item returned has artwork we can use.
+                                Filters: 'HasImage'
+                            });
+
+                            for (const item of fallbackResponse?.Items ?? []) {
+                                // Try every image type in priority order; any readable image is acceptable
+                                if (item.BackdropImageTags?.length > 0) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.BackdropImageTags[0]
+                                    });
+                                } else if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                }
+                                if (resolvedUrl) break;
+                            }
+                        }
+
+                        if (resolvedUrl) {
+                            lib._dynamicThumbUrl = resolvedUrl;
+                            // Cache for future loads in static mode
+                            if (mode === 'static') {
+                                localStorage.setItem(cacheKey, resolvedUrl);
+                            }
+                        }
+                    }
+                } catch (e) {
+                    log.warn(`Failed to fetch dynamic thumb for library ${lib.Name}`, e);
+                }
+            })
+        );
+    }
+
+    /**
      * Executes an array of async functions with a maximum concurrency limit.
      */
     async _fetchWithConcurrency(tasks, concurrencyMax) {
@@ -318,14 +510,18 @@ class HomePage extends Page {
         this._virtualRows = [];
 
         // Build HTML sections and instantiate VirtualCardRows
+        const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
+
         for (let i = 0; i < rowsData.length; i++) {
             const row = rowsData[i];
             const isLandscape = row.type === 'resume' || row.type === 'episode' || row.type === 'library';
+            const isLibraryRow = row.type === 'library';
+            const shouldHideLabels = isLibraryRow && hideLibraryLabels;
 
             // Create section wrapper
             const sectionDoc = document.createElement('div');
             sectionDoc.innerHTML = `
-                <section class="media-row" data-row-index="${i}" data-lazy-row="true">
+                <section class="media-row ${shouldHideLabels ? 'library-no-labels' : ''}" data-row-index="${i}" data-lazy-row="true">
                     <h2 class="row-title">${row.title}</h2>
                     <div class="row-items" id="row-items-${i}">
                         <div class="row-items-track"></div>
@@ -340,6 +536,7 @@ class HomePage extends Page {
             const virtualRow = new VirtualCardRow(trackContainer, row.items, {
                 isLandscape: isLandscape,
                 cardType: row.cardType || 'poster',
+                hideLabels: shouldHideLabels,
                 visibleCount: isLandscape ? 8 : 12, // Sliding window size after initial load
                 // Pre-render items at construction time so every row is ready before the
                 // user scrolls to it, eliminating on-demand DOM creation lag.

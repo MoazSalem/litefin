@@ -77,6 +77,11 @@ class SettingsPage extends Page {
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
             },
             {
+                id: 'home',
+                label: i18n.t('Home') || 'Home',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+            },
+            {
                 id: 'player',
                 label: i18n.t('TitlePlayback'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
@@ -87,6 +92,11 @@ class SettingsPage extends Page {
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>'
             },
             {
+                id: 'plugins',
+                label: i18n.t('Plugins'),
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17" y1="15" x2="9" y2="15"/></svg>'
+            },
+            {
                 id: 'account',
                 label: i18n.t('Account'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
@@ -95,11 +105,6 @@ class SettingsPage extends Page {
                 id: 'about',
                 label: i18n.t('About'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
-            },
-            {
-                id: 'plugins',
-                label: i18n.t('Plugins'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17" y1="15" x2="9" y2="15"/></svg>'
             },
             {
                 id: 'debug',
@@ -148,6 +153,8 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
+            case 'home':
+                return this._renderHomeTab();
             case 'player':
                 return this._renderPlayerTab();
             case 'subtitles':
@@ -232,7 +239,6 @@ class SettingsPage extends Page {
     }
 
     _renderAppearanceTab() {
-        const currentLayout = layoutManager.getLayout();
         const currentTheme = layoutManager.getTheme();
         const availableThemes = layoutManager.getAvailableThemes();
 
@@ -319,23 +325,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Home Screen Section -->
-                <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="HomeScreenCustomization">${i18n.t('HomeScreenCustomization')}</span>
-                        <span class="setting-description" data-i18n="HomeScreenCustomizationDescription">${i18n.t('HomeScreenCustomizationDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
-                                 id="toggle-my-media" 
-                                 tabindex="0"
-                                 aria-label="${i18n.t('ToggleMyMediaAriaLabel')}">
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -355,6 +344,77 @@ class SettingsPage extends Page {
                             ],
                             imageService.getPreset() || 'medium'
                         )}
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render Home tab with layout customizations and library thumbnails
+     */
+    _renderHomeTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="Home">${i18n.t('Home') || 'Home'}</h2>
+
+                <!-- Home Screen Section -->
+                <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeScreenCustomization">${i18n.t('HomeScreenCustomization')}</span>
+                        <span class="setting-description" data-i18n="HomeScreenCustomizationDescription">${i18n.t('HomeScreenCustomizationDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-my-media" 
+                                 tabindex="0"
+                                 aria-label="${i18n.t('ToggleMyMediaAriaLabel')}">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
+                        <span class="setting-description" data-i18n="HideLibraryLabelsDescription">${i18n.t('HideLibraryLabelsDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideLibraryLabels') === 'true' ? 'active' : ''}" 
+                                 id="toggle-library-labels" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LibraryThumbnails">${i18n.t('LibraryThumbnails') || 'Library Thumbnails'}</span>
+                        <span class="setting-description" data-i18n="LibraryThumbnailsDescription">${i18n.t('LibraryThumbnailsDescription') || 'Style of library cards on the home screen'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'library-thumb-mode-select',
+                            [
+                                { value: 'off', label: i18n.t('fromJellyfin') || 'From Jellyfin' },
+                                { value: 'static', label: i18n.t('RandomStatic') || 'Random Backdrop (Static)' },
+                                { value: 'dynamic', label: i18n.t('RandomDynamic') || 'Random Backdrop (Dynamic)' }
+                            ],
+                            storage.getItem('pref:libraryThumbMode') || 'off'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="library-thumb-regenerate-container" style="display: ${storage.getItem('pref:libraryThumbMode') === 'static' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RegenerateThumbnails">${i18n.t('RegenerateThumbnails') || 'Regenerate Thumbnails'}</span>
+                        <span class="setting-description" data-i18n="RegenerateThumbnailsDescription">${i18n.t('RegenerateThumbnailsDescription') || 'Pick new random backdrops for libraries'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-option" id="btn-regenerate-thumbs" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Regenerate">
+                            ${i18n.t('Regenerate') || 'Regenerate'}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -1423,6 +1483,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Hide Library Labels
+        const hideLabelsBtn = this.$('#toggle-library-labels');
+        if (hideLabelsBtn) {
+            hideLabelsBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideLibraryLabels') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideLibraryLabels', newValue);
+                hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Auto-play Next Episode
         const autoNextBtn = this.$('#toggle-auto-next');
         if (autoNextBtn) {
@@ -1451,6 +1522,27 @@ class SettingsPage extends Page {
 
                 // Invalidate focus cache so the newly visible items can be focused
                 focusManager.invalidateCache();
+            });
+        }
+
+        // Regenerate Library Thumbnails
+        const regenerateThumbsBtn = this.$('#btn-regenerate-thumbs');
+        if (regenerateThumbsBtn) {
+            regenerateThumbsBtn.addEventListener('click', () => {
+                regenerateThumbsBtn.disabled = true;
+                regenerateThumbsBtn.textContent = i18n.t('Working') || 'Working...';
+
+                // Clear all library thumb caches in localStorage
+                Object.keys(localStorage).forEach((key) => {
+                    if (key.startsWith('libThumb:')) {
+                        localStorage.removeItem(key);
+                    }
+                });
+
+                // Short delay for visual feedback then navigate home
+                setTimeout(() => {
+                    router.reset('/home');
+                }, 500);
             });
         }
 
@@ -1765,6 +1857,7 @@ class SettingsPage extends Page {
     _bindDropdownEvents() {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
+            'library-thumb-mode-select': { key: 'pref:libraryThumbMode', type: 'local' },
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             layout: { key: 'layout', type: 'local' },
@@ -1824,9 +1917,11 @@ class SettingsPage extends Page {
                     if (settingConfig) {
                         if (id === 'theme-select') {
                             // SPECIAL CASE: Theme changes should be handled by LayoutManager
-                            // It handles persistence (litefin:theme) and DOM updates
                             layoutManager.setTheme(newValue);
-                            // No reload needed!
+                            // Reload to ensure all pseudo-elements and polyfills catch the new theme
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 100);
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
@@ -1838,6 +1933,14 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'layout_direction'
                             ) {
                                 window.location.reload();
+                            }
+
+                            if (settingConfig.key === 'pref:libraryThumbMode') {
+                                const libraryThumbContainer = this.$('#library-thumb-regenerate-container');
+                                if (libraryThumbContainer) {
+                                    libraryThumbContainer.style.display = newValue === 'static' ? '' : 'none';
+                                    focusManager.invalidateCache('settings-content');
+                                }
                             }
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);

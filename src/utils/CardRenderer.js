@@ -10,6 +10,7 @@
 import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
 import { i18n } from './i18n.js';
+import { storage } from './StorageService.js';
 
 class CardRenderer {
     /**
@@ -121,8 +122,19 @@ class CardRenderer {
                     });
                 }
             } else if (type === 'library') {
+                // Dynamic Library Thumbs (from HomePage pre-fetch)
+                if (item._dynamicThumbUrl) {
+                    imageUrl = item._dynamicThumbUrl;
+
+                    // Add modern overlay label and tint directly to the image area
+                    // This provides a premium "streaming service" aesthetic
+                    imageInnerHtml = `
+                        <div class="card-overlay-tint"></div>
+                        <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
+                    `;
+                }
                 // Libraries: Primary -> Thumb -> Backdrop
-                if (item.ImageTags?.Primary) {
+                else if (item.ImageTags?.Primary) {
                     imageUrl = api.getImageUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
@@ -332,12 +344,15 @@ class CardRenderer {
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         // Attach fallback data for LazyLoader to use on error
         const fbData = CardRenderer.getFallbackData(item.Name);
-        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}"`;
+        const hideInitials = type === 'library';
+        const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         const imagePart = imageUrl
             ? `${imageInnerHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy" />`
-            : imageInnerHtml;
+            : CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials });
         const finalContextType = contextType || item.Type;
+
+        const isHiddenLibraryLabel = type === 'library' && storage.getItem('pref:hideLibraryLabels') === 'true';
 
         return `
             <button class="${cssClass}" data-item-id="${itemId}" data-context-type="${finalContextType}" tabindex="0">
@@ -346,10 +361,16 @@ class CardRenderer {
                     ${progressHtml}
                     ${badgeHtml}
                 </div>
+                ${
+                    !isHiddenLibraryLabel
+                        ? `
                 <div class="card-info">
                     <div class="card-title">${titleText}</div>
                     ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
                 </div>
+                `
+                        : ''
+                }
             </button>
         `;
     }
@@ -378,13 +399,18 @@ class CardRenderer {
     /**
      * Helper to load a fallback gradient card with initials
      * @public
+     * @param {Object} item - The item
+     * @param {boolean} isLandscape - Layout mode
+     * @param {Object} [options] - Options
+     * @param {boolean} [options.hideInitials=false] - Whether to hide initials
      */
-    static getFallbackHtml(item, isLandscape) {
+    static getFallbackHtml(item, isLandscape, options = {}) {
         const data = CardRenderer.getFallbackData(item.Name);
+        const hideInitials = options.hideInitials || false;
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
-                <div class="media-fallback-initials">${data.initials}</div>
+                ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
                 <div class="media-fallback-name">${data.name}</div>
             </div>
         `;

@@ -140,15 +140,20 @@ class LazyLoader {
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');
 
+            // Remove any dynamic overlays (tints/labels) that might conflict with the fallback
+            const overlays = parent.querySelectorAll('.card-overlay-tint, .card-overlay-label');
+            overlays.forEach((el) => el.remove());
+
             // Construct and inject fallback if attributes exist
             const gradNum = img.dataset.fbGrad;
             const initials = img.dataset.fbInit;
             const name = img.dataset.fbName;
 
             if (gradNum && initials && name && !parent.querySelector('.media-fallback')) {
+                const hideInitials = img.dataset.fbHideInitials === 'true';
                 const fallbackHtml = `
                     <div class="media-fallback grad-${gradNum}">
-                        <div class="media-fallback-initials">${initials}</div>
+                        ${!hideInitials ? `<div class="media-fallback-initials">${initials}</div>` : ''}
                         <div class="media-fallback-name">${name}</div>
                     </div>
                 `;

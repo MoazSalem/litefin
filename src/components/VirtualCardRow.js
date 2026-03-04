@@ -27,6 +27,7 @@ export class VirtualCardRow {
         this._initialRenderDone = false; // Tracks whether the eager boot render has fired
         this.isLandscape = options.isLandscape || false;
         this.cardType = options.cardType || 'poster';
+        this.hideLabels = options.hideLabels || false;
         this.focusSectionId = options.focusSectionId;
         this.renderCard = options.renderCard;
 
@@ -71,10 +72,12 @@ export class VirtualCardRow {
             dummyDiv.appendChild(imageRatioDiv);
 
             // Emulate .card-info
-            const infoDiv = document.createElement('div');
-            infoDiv.style.padding = '12px 4px 0 4px';
-            infoDiv.innerHTML = `<div style="font-size: 1.2rem; margin: 0;">&nbsp;</div><div style="font-size: 1rem; margin-top: 6px;">&nbsp;</div>`;
-            dummyDiv.appendChild(infoDiv);
+            if (!this.hideLabels) {
+                const infoDiv = document.createElement('div');
+                infoDiv.style.padding = '12px 4px 0 4px';
+                infoDiv.innerHTML = `<div style="font-size: 1.2rem; margin: 0;">&nbsp;</div><div style="font-size: 1rem; margin-top: 6px;">&nbsp;</div>`;
+                dummyDiv.appendChild(infoDiv);
+            }
 
             this.track.appendChild(dummyDiv);
         }
