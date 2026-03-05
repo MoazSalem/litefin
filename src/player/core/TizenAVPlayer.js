@@ -165,6 +165,16 @@ export class TizenAVPlayer {
             // Open the media
             this._avplay.open(options.url);
 
+            try {
+                const isAdaptive = (options.url.indexOf('.m3u8') > -1) || (options.url.indexOf('.mpd') > -1) || (options.playMethod !== 'DirectPlay');
+                if (isAdaptive) {
+                    this._avplay.setStreamingProperty("ADAPTIVE_INFO", "FIXED_MAX_RESOLUTION=3840X2160");
+                    log.debug('Set ADAPTIVE_INFO for 4K streaming');
+                }
+            } catch (e) {
+                log.warn('Failed to set ADAPTIVE_INFO streaming property', e);
+            }
+
             // Set up display
             this._createDisplay();
 
@@ -280,6 +290,7 @@ export class TizenAVPlayer {
             },
             onbufferingcomplete: () => {
                 log.debug('Buffering complete');
+                
                 // Only emit playing if we are actually playing (not paused)
                 if (this._isPlaying && !this._hasEmittedPlaying) {
                     this._hasEmittedPlaying = true;
@@ -393,8 +404,9 @@ export class TizenAVPlayer {
                 const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
                 if (tizenSubIndex !== null) {
                     try {
-                        this._avplay.setSilentSubtitle(false);
                         this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                        this._avplay.setSilentSubtitle(true);
+                        this._avplay.setSilentSubtitle(false);
                         this._pendingSubtitleIndex = null;
                     } catch (e) {
                         log.warn('Failed to apply subtitle track:', e);
@@ -454,9 +466,19 @@ export class TizenAVPlayer {
             }
 
             // Find which N-th audio track this is in Jellyfin MediaSource
-            const jellyfinAudioStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
+            let jellyfinAudioStreams = this._currentPlayOptions.mediaSource.MediaStreams.filter(
                 (s) => s.Type === 'Audio'
             );
+
+            // If Tizen has fewer audio tracks, it usually silently dropped unsupported ones (DTS/TrueHD)
+            if (audioTracks.length > 0 && jellyfinAudioStreams.length > audioTracks.length) {
+                log.debug('Tizen audio track count mismatch, filtering unsupported codecs');
+                jellyfinAudioStreams = jellyfinAudioStreams.filter(s => {
+                    const c = (s.Codec || '').toLowerCase();
+                    return !c.includes('truehd') && !c.includes('dts');
+                });
+            }
+
             const targetStreamIndexInAudioList = jellyfinAudioStreams.findIndex((s) => s.Index === streamIndex);
 
             if (targetStreamIndexInAudioList === -1) {
@@ -752,8 +774,9 @@ export class TizenAVPlayer {
                  */
                 const tizenSubIndex = this._findTizenSubtitleIndex(index);
                 if (tizenSubIndex !== null) {
-                    this._avplay.setSilentSubtitle(false);
                     this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                    this._avplay.setSilentSubtitle(true);
+                    this._avplay.setSilentSubtitle(false);
                     this._currentSubtitleStreamIndex = index;
                     log.debug(`setSubtitleStreamIndex: Jellyfin ${index} → Tizen TEXT ${tizenSubIndex}`);
                 } else {
