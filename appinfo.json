@@ -1,6 +1,6 @@
 {
     "id": "org.litefin.app",
-    "version": "0.8.0",
+    "version": "0.8.3",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",

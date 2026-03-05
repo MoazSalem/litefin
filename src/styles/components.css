@@ -572,6 +572,45 @@ progress.card-progress::-webkit-progress-value {
     flex: 1;
 }
 
+/* Remote Subtitle Results Styling */
+.subtitle-result-btn {
+    height: auto !important;
+    padding-top: 15px !important;
+    padding-bottom: 15px !important;
+}
+
+.subtitle-result-info {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    flex: 1;
+    min-width: 0;
+}
+
+.subtitle-result-info .track-label-text {
+    white-space: normal;
+    text-align: left;
+    line-height: 1.3;
+    margin-bottom: 10px;
+    word-break: break-word;
+}
+
+.subtitle-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.subtitle-result-meta .track-badge {
+    margin-left: 0;
+}
+
+.track-badge.match-badge {
+    background: var(--jf-accent);
+    color: #fff;
+    border-color: var(--jf-accent);
+}
+
 .track-badge {
     display: inline-flex;
     align-items: center;
@@ -599,7 +638,7 @@ progress.card-progress::-webkit-progress-value {
 /* Modal variant compatibility */
 .modal-option-btn span {
     display: flex;
-    align-items: center;
+    align-items: start;
 }
 
 /* ==========================================================================
@@ -765,7 +804,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-meta .track-badge {
-    margin-right: 8px;
+    margin-right: 3px;
     margin-bottom: 4px;
 }
 

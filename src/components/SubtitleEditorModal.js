@@ -32,9 +32,14 @@ class SubtitleEditorModal {
         // ── Fetch required data in parallel ──────────────────────────────────
         let cultures = [];
         try {
-            cultures = await api.getCultures();
+            // Fetch cultures and refresh streams simultaneously to ensure newly downloaded subs appear
+            const [fetchedCultures] = await Promise.all([
+                api.getCultures(),
+                this._reloadSubtitleStreams(itemId, detailsPage)
+            ]);
+            cultures = fetchedCultures || [];
         } catch (e) {
-            log.warn('Failed to load cultures for subtitle search', e);
+            log.warn('Failed to load cultures or refresh streams', e);
         }
 
         // ── Helpers ──────────────────────────────────────────────────────────
@@ -414,17 +419,19 @@ class SubtitleEditorModal {
                           const provider = r.ProviderName || '';
                           const format = (r.Format || '').toUpperCase();
                           const downloads = r.DownloadCount != null ? `↓ ${r.DownloadCount}` : '';
-                          const rating = r.CommunityRating != null ? `★ ${r.CommunityRating.toFixed(1)}` : '';
+                          const frameRate = r.FrameRate ? `FPS: ${r.FrameRate}` : '';
+                          const isPerfectMatch = r.IsHashMatch;
 
                           return `
                     <button class="modal-option-btn subtitle-result-btn" data-id="${r.Id}" tabindex="0">
-                        <span class="track-option-label">
+                        <span class="subtitle-result-info">
                             <span class="track-label-text">${name}</span>
                             <span class="subtitle-result-meta">
+                                ${isPerfectMatch ? `<span class="track-badge match-badge">${i18n.t('PerfectMatch') || 'Perfect match'}</span>` : ''}
                                 ${provider ? `<span class="track-badge">${provider}</span>` : ''}
                                 ${format ? `<span class="track-badge">${format}</span>` : ''}
+                                ${frameRate ? `<span class="track-badge">${frameRate}</span>` : ''}
                                 ${downloads ? `<span class="track-badge">${downloads}</span>` : ''}
-                                ${rating ? `<span class="track-badge">${rating}</span>` : ''}
                             </span>
                         </span>
                         <div class="check-icon">⬇</div>
@@ -468,35 +475,10 @@ class SubtitleEditorModal {
 
                 // Reload item streams and go back to Panel A
                 await this._reloadSubtitleStreams(itemId, detailsPage);
-                focusManager.unregister('subtitle-results-list');
-                focusManager.unregister('subtitle-results-actions');
 
-                renderPanel();
-                _bindResultsFocus(); // will be gone; call Panel A focus binder
-
-                // Re-register Panel A focus
-                const trackList = overlay.querySelector('#subtitle-tracks-list');
-                const searchRow = overlay.querySelector('.subtitle-search-row');
-                const actionsRow = overlay.querySelector('.modal-actions');
-
-                if (trackList)
-                    detailsPage.registerFocusSection('subtitle-editor-tracks', trackList, {
-                        orientation: 'vertical',
-                        leaveDown: 'subtitle-editor-search',
-                        leaveUp: 'subtitle-editor-actions'
-                    });
-                if (searchRow)
-                    detailsPage.registerFocusSection('subtitle-editor-search', searchRow, {
-                        orientation: 'horizontal',
-                        leaveUp: 'subtitle-editor-tracks',
-                        leaveDown: 'subtitle-editor-actions'
-                    });
-                if (actionsRow)
-                    detailsPage.registerFocusSection('subtitle-editor-actions', actionsRow, {
-                        orientation: 'horizontal',
-                        leaveUp: 'subtitle-editor-search'
-                    });
-                focusManager.setActiveSection('subtitle-editor-search');
+                // Go back cleanly handles unregistering Panel B focus, re-rendering Panel A,
+                // and restoring Panel A's back handler.
+                goBack();
             };
         });
 
@@ -552,8 +534,6 @@ class SubtitleEditorModal {
         // ── Focus setup ──────────────────────────────────────────────────────
         const resultsList = overlay.querySelector('#subtitle-results-list');
         const actionsPanel = overlay.querySelector('.modal-actions');
-
-        const _bindResultsFocus = () => {}; // placeholder so download handler can call it safely
 
         if (resultsList) {
             focusManager.register('subtitle-results-list', resultsList, {
