@@ -664,7 +664,7 @@ export class JellyfinPlayer extends EventEmitter {
             const isAudioItemSetup = options.item?.MediaType === 'Audio' ||
                                       options.item?.Type === 'AudioBook';
 
-            if (!isAudioItemSetup && this._currentSubtitleStreamIndex && this._currentSubtitleStreamIndex !== -1) {
+            if (!isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
                 // Initialize the SubtitleManager with the selected subtitle track.
                 // The subtitle index is already included in the server request, so
                 // this call only needs to set up CLIENT-SIDE rendering (fetch external
