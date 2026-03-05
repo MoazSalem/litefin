@@ -388,6 +388,31 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-dim-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BackdropDimmer">${i18n.t('BackdropDimmer') || 'Backdrop dim level'}</span>
+                        <span class="setting-description" data-i18n="BackdropDimmerDescription">${i18n.t('BackdropDimmerDescription') || 'How dark the backdrop screensaver should be'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'backdrop-dimmer-select',
+                            [
+                                { value: '0', label: i18n.t('Off') || 'Off' },
+                                { value: '0.1', label: '10%' },
+                                { value: '0.2', label: '20%' },
+                                { value: '0.3', label: '30%' },
+                                { value: '0.4', label: '40%' },
+                                { value: '0.5', label: '50%' },
+                                { value: '0.6', label: '60%' },
+                                { value: '0.7', label: '70%' },
+                                { value: '0.8', label: '80%' },
+                                { value: '0.9', label: '90%' }
+                            ],
+                            storage.getItem('pref:backdropDimmer') || '0.3'
+                        )}
+                    </div>
+                </div>
+
             </div>
         `;
     }
@@ -1703,13 +1728,14 @@ class SettingsPage extends Page {
                     </div>
                     <input type="range" 
                         id="${id}" 
-                        class="setting-slider focusable" 
+                        class="setting-slider" 
                         min="${min}" 
                         max="${max}" 
                         step="${step}" 
                         value="${value}"
                         data-unit="${unit}"
-                        tabindex="0">
+                        tabindex="0"
+                        data-focusable="true">
                 </div>
                 <span class="slider-value" id="${id}-value">${value}${unit}</span>
             </div>
@@ -1786,7 +1812,8 @@ class SettingsPage extends Page {
                     data-id="${id}" 
                     data-value="${currentValue}"
                     data-options='${JSON.stringify(options).replace(/'/g, '&#39;')}'
-                    tabindex="0">
+                    tabindex="0"
+                    data-focusable="true">
                 <span class="btn-label">${currentLabel}</span>
             </button>
         `;
@@ -1938,7 +1965,8 @@ class SettingsPage extends Page {
             'debug-height-select': { key: 'debug_height', type: 'debug' },
             'debug-position-select': { key: 'debug_position', type: 'debug' },
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
-            'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true }
+            'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
+            'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -1988,6 +2016,14 @@ class SettingsPage extends Page {
                                 const libraryThumbContainer = this.$('#library-thumb-regenerate-container');
                                 if (libraryThumbContainer) {
                                     libraryThumbContainer.style.display = newValue === 'static' ? '' : 'none';
+                                    focusManager.invalidateCache('settings-content');
+                                }
+                            }
+
+                            if (id === 'screensaver-type-select') {
+                                const dimContainer = document.getElementById('screensaver-dim-item');
+                                if (dimContainer) {
+                                    dimContainer.classList.toggle('hidden', newValue === 'logo');
                                     focusManager.invalidateCache('settings-content');
                                 }
                             }

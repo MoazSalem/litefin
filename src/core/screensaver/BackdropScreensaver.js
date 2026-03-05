@@ -28,6 +28,10 @@ export class BackdropScreensaver {
 
         // Configuration
         this._slideDuration = parseInt(storage.getItem('pref:backdropScreensaverInterval'), 10) || 10000;
+
+        // Dim level: 0 = no dimming, 0.8 = very dark (stored as a float string)
+        this._dimLevel = parseFloat(storage.getItem('pref:backdropDimmer'));
+        if (isNaN(this._dimLevel)) this._dimLevel = 0.4; // default: 40% dim
     }
 
     async show() {
@@ -93,6 +97,16 @@ export class BackdropScreensaver {
             this._container.appendChild(this._img1);
             this._container.appendChild(this._img2);
             this._container.appendChild(overlay);
+
+            // Dim layer: a semi-transparent black panel sitting above the images
+            // but below the text overlay, giving the screensaver a darker look.
+            if (this._dimLevel > 0) {
+                const dimLayer = document.createElement('div');
+                dimLayer.className = 'backdrop-screensaver-dim';
+                dimLayer.style.opacity = String(this._dimLevel);
+                this._container.appendChild(dimLayer);
+            }
+
             this._container.appendChild(this._titleElem);
 
             document.body.appendChild(this._container);

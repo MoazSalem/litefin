@@ -260,6 +260,8 @@
     "AutoRecommended": "Auto (Recommended)",
     "AV1Description": "Direct play AV1 content (requires Tizen 5.5+ / 2020+ TV)",
     "Backdrop": "Backdrop",
+    "BackdropDimmer": "Backdrop dim level",
+    "BackdropDimmerDescription": "How dark the backdrop screensaver should be",
     "BackendTizen": "Native (Tizen)",
     "BackendWeb": "Web (Standard)",
     "BackgroundColor": "Background Color",

@@ -262,6 +262,8 @@
     "AutoRecommended": "تلقائي (موصى به)",
     "AV1Description": "تشغيل مباشر لـ AV1 (يتطلب Tizen 5.5+ / موديل 2020+)",
     "Backdrop": "خلفية",
+    "BackdropDimmer": "مستوى تعتيم الخلفية",
+    "BackdropDimmerDescription": "مدى تعتيم خلفية شاشة التوقف",
     "BackendTizen": "تلقائي (Tizen)",
     "BackendWeb": "ويب (قياسي)",
     "BackgroundColor": "لون الخلفية",

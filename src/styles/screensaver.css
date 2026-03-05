@@ -60,6 +60,19 @@ body.screensaver-active {
     opacity: 1;
 }
 
+/* Full-coverage dim layer: placed above images, below the gradient overlay and text.
+   Opacity is set inline from the user's 'Backdrop dim level' preference. */
+.backdrop-screensaver-dim {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: #000;
+    z-index: 1; /* above images (z:0), below overlay/text (z:1+) */
+    pointer-events: none;
+}
+
 .backdrop-screensaver-overlay {
     position: absolute;
     bottom: 0;
@@ -67,7 +80,7 @@ body.screensaver-active {
     width: 100%;
     height: 50%;
     background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
-    z-index: 1;
+    z-index: 2;
 }
 
 .backdrop-screensaver-title {
@@ -75,7 +88,7 @@ body.screensaver-active {
     bottom: 40px;
     left: 40px;
     right: 40px;
-    z-index: 2;
+    z-index: 3;
     color: #fff;
     text-shadow: 0 2px 4px rgba(0,0,0,0.8);
     animation: fadeIn 1s ease-out;

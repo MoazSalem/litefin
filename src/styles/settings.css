@@ -4,6 +4,10 @@
  * ============================================================================
  */
 
+.hidden {
+    display: none !important;
+}
+
 .settings-page {
     display: flex;
     flex-direction: column;
