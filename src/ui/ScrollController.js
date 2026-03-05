@@ -131,7 +131,39 @@ class ScrollController {
             return;
         }
 
-        // Create or update animation state for retargeting
+        // ----------------------------------------------------------------
+        // RETARGETING LOGIC (The "Zeno's Paradox" Fix)
+        // ----------------------------------------------------------------
+        // If an animation is already running for this axis, check if the
+        // new target is exactly the same as the current target.
+        // If it's the same, DO NOT touch the startTime or startScroll. Just
+        // return early and let the existing animation finish organically.
+        // Re-assigning startScroll to the current mid-animation position and
+        // resetting startTime to 'now' causes the velocity to drop to 0 and
+        // the remaining distance to stretch out, creating a slow crawl if
+        // the user rapidly taps keys (e.g. moving horizontally along a row).
+        if (this[stateKey] && this[animIdKey]) {
+            if (Math.abs(this[stateKey].target - targetScroll) < SCROLL_SNAP_THRESHOLD) {
+                // Target is unchanged, do nothing, let existing animation complete
+                return;
+            } else {
+                // The target HAS changed (e.g. the user pressed Down while mid-scroll).
+                // Scale the duration proportionally to the *remaining* distance — otherwise
+                // redirecting to a target that's only 50px away from the current position
+                // would still take the full 200ms, making it feel sluggish.
+                const remainingDistance = Math.abs(targetScroll - currentScroll);
+                const originalDistance = Math.abs(targetScroll - this[stateKey].startScroll) || 1;
+                const scaledDuration = Math.round(duration * Math.min(remainingDistance / originalDistance, 1));
+
+                this[stateKey].startScroll = currentScroll;
+                this[stateKey].target = targetScroll;
+                this[stateKey].startTime = null; // Will reset on next RAF
+                this[stateKey].duration = Math.max(50, scaledDuration); // Enforce 50ms minimum
+                return;
+            }
+        }
+
+        // Create new animation state
         this[stateKey] = {
             container,
             startScroll: currentScroll,
@@ -139,11 +171,6 @@ class ScrollController {
             startTime: null, // Initialized in first RAF frame
             duration
         };
-
-        // If animation already running, it will pick up the new state
-        if (this[animIdKey]) {
-            return;
-        }
 
         // easeOutQuad: fast start, smooth deceleration (t * (2 - t))
         const easeOutQuad = (t) => t * (2 - t);
@@ -437,15 +464,24 @@ class ScrollController {
                     const isRtl = document.documentElement.dir === 'rtl';
 
                     let elementPos;
-                    if (isRtl) {
-                        elementPos = parseInt(element.style.right || '0', 10);
-                    } else {
-                        elementPos = element.offsetLeft;
-                    }
+                    let elementWidth;
+                    const containerWidth = rowItems.clientWidth; // Read early before layout dirts
+                    let trackWidth;
 
-                    const elementWidth = element.offsetWidth;
-                    const containerWidth = rowItems.clientWidth;
-                    const trackWidth = track.scrollWidth;
+                    if (track.__virtualRow) {
+                        const vIndex = parseInt(element.dataset.virtualIndex || '0', 10);
+                        elementPos = track.__virtualRow.getItemPosition(vIndex);
+                        elementWidth = track.__virtualRow.itemWidth;
+                        trackWidth = track.__virtualRow.getTrackWidth();
+                    } else {
+                        if (isRtl) {
+                            elementPos = parseInt(element.style.right || '0', 10);
+                        } else {
+                            elementPos = element.offsetLeft;
+                        }
+                        elementWidth = element.offsetWidth;
+                        trackWidth = track.scrollWidth;
+                    }
 
                     // Ideal scroll to center the card
                     const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
@@ -466,18 +502,23 @@ class ScrollController {
                         const alreadyCentered = Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
 
                         if (!alreadyCentered) {
-                            // Bypass CSS transitions for instant snap
-                            const oldTransition = track.style.transition;
+                            // Bypass CSS transitions for instant snap.
+                            // IMPORTANT: We must NOT read track.offsetHeight here to force a reflow —
+                            // that is a synchronous layout flush that stalls the Tizen compositor on
+                            // every row entry. Instead, toggle transition off, write the transform,
+                            // and restore transition asynchronously on the next frame once the
+                            // browser has committed the no-transition paint.
                             track.style.transition = 'none';
                             if (isRtl) {
                                 track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
                             } else {
                                 track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
                             }
-                            // Force reflow to apply instantly, then restore transition
-                            /* eslint-disable-next-line no-unused-expressions */
-                            track.offsetHeight;
-                            track.style.transition = oldTransition;
+                            // Restore transition property on the next frame (after the browser
+                            // has committed the transform snap) — zero layout reads needed.
+                            requestAnimationFrame(() => {
+                                track.style.transition = '';
+                            });
                         }
                     } else {
                         // Same position check for the smooth (CSS transition) path.

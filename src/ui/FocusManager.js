@@ -557,11 +557,12 @@ class FocusManager {
         while (nextSection && this._sections.has(nextSection) && searchDepth < maxSearchDepth) {
             const nextConfig = this._sections.get(nextSection);
 
-            // Only force-refresh if we haven't already checked this section in this loop
-            const forceRefresh = !checkedSections.has(nextSection);
+            // PERFORMANCE: Never force refresh during skip loops to avoid querySelectorAll
+            // and visibility check overhead per row. Caches are invalidated externally
+            // when needed (e.g. by VirtualCardRow).
             checkedSections.add(nextSection);
 
-            const focusables = this._getFocusables(nextSection, forceRefresh);
+            const focusables = this._getFocusables(nextSection, false);
 
             if (focusables && focusables.length > 0) {
                 // Found a valid section with focusable elements!

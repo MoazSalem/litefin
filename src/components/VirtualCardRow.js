@@ -48,6 +48,10 @@ export class VirtualCardRow {
         this.track.style.display = 'block'; // Inline-flex breaks absolute positioning inside
         this.track.innerHTML = '';
 
+        // Link the instance to the DOM element so ScrollController can access computationally
+        // derived layout values instead of forcing synchronous layout flushes.
+        this.track.__virtualRow = this;
+
         // Inject a hidden dummy element to natively expand the track's height.
         // Since absolute children collapse the parent, this static element prevents
         // the 3px height bug without needing hardcoded pixel guessing.
@@ -60,10 +64,12 @@ export class VirtualCardRow {
             dummyDiv.style.visibility = 'hidden';
             dummyDiv.style.pointerEvents = 'none';
             dummyDiv.style.display = 'inline-block';
+            dummyDiv.style.verticalAlign = 'top'; // CRITICAL: Stop inline-block baseline from adding ~4px to the bottom row
 
             // Emulate .card-image
             const imageRatioDiv = document.createElement('div');
             imageRatioDiv.style.width = '100%';
+            imageRatioDiv.style.height = '0'; // CRITICAL: Match .card-image exactly
             let padding = '150%'; // Poster
             if (this.isLandscape) padding = '56.25%';
             else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
@@ -75,7 +81,8 @@ export class VirtualCardRow {
             if (!this.hideLabels) {
                 const infoDiv = document.createElement('div');
                 infoDiv.style.padding = '12px 4px 0 4px';
-                infoDiv.innerHTML = `<div style="font-size: 1.2rem; margin: 0;">&nbsp;</div><div style="font-size: 1rem; margin-top: 6px;">&nbsp;</div>`;
+                // Use explicit sizes to match the CSS exactly, preventing baseline stretch
+                infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
                 dummyDiv.appendChild(infoDiv);
             }
 
@@ -360,5 +367,24 @@ export class VirtualCardRow {
         if (targetNode && targetNode.dataset && targetNode.dataset.virtualIndex !== undefined) {
             this.currentIndex = parseInt(targetNode.dataset.virtualIndex, 10);
         }
+    }
+
+    /**
+     * Compute the total scrollable width of the track mathematically, without touching the DOM.
+     * Prevents synchronous layout flushes when retrieved by ScrollController.
+     * @returns {number}
+     */
+    getTrackWidth() {
+        return this.totalItems * this.totalItemWidth + 120; // Matches totalWidth calculation in constructor
+    }
+
+    /**
+     * Compute the exact left position of an item relative to the track computationally.
+     * Prevents `element.offsetLeft` forced layouts.
+     * @param {number} index - The absolute physical index of the item
+     * @returns {number}
+     */
+    getItemPosition(index) {
+        return 60 + index * this.totalItemWidth; // Matches leftPos calculation in constructor / _updateWindow
     }
 }
