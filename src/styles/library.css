@@ -880,7 +880,7 @@ html[data-layout-tier="legacy"] .filter-main > * {
 .modal-action-btn:focus,
 .modal-action-btn.focused {
     border-color: var(--jf-action-btn-active-border)!important;
-    transform: scale(1.15);
+    transform: scale(1.10);
     background-color: var(--jf-accent);
     color: white;
     z-index: 10;

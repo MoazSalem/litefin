@@ -853,6 +853,53 @@ export class ApiClient {
     }
 
     // ========================================================================
+    // Subtitle Endpoints
+    // ========================================================================
+
+    /**
+     * Search for remote subtitles on the server's installed provider plugins.
+     * The server aggregates results from all installed subtitle plugins (e.g. OpenSubtitles)
+     * and returns them — the client needs no awareness of which providers are installed.
+     *
+     * GET /Items/{itemId}/RemoteSearch/Subtitles/{language}
+     *
+     * @param {string} itemId   - The Jellyfin item ID
+     * @param {string} language - Three-letter ISO 639-2 language code (e.g. "eng", "fre")
+     * @returns {Promise<Array>} Array of remote subtitle result objects
+     */
+    async searchSubtitles(itemId, language) {
+        return this.get(`/Items/${itemId}/RemoteSearch/Subtitles/${language}`);
+    }
+
+    /**
+     * Trigger a server-side download of a remote subtitle result.
+     * The server downloads the file from the provider and attaches it to the item.
+     *
+     * POST /Items/{itemId}/RemoteSearch/Subtitles/{subtitleId}
+     *
+     * @param {string} itemId      - The Jellyfin item ID
+     * @param {string} subtitleId  - The provider result ID (from searchSubtitles response)
+     * @returns {Promise<null>}
+     */
+    async downloadSubtitle(itemId, subtitleId) {
+        return this.post(`/Items/${itemId}/RemoteSearch/Subtitles/${subtitleId}`);
+    }
+
+    /**
+     * Delete a local subtitle track (external .srt/.ass/etc. files only —
+     * embedded internal subtitle streams cannot be deleted via this endpoint).
+     *
+     * DELETE /Videos/{itemId}/Subtitles/{index}
+     *
+     * @param {string} itemId - The Jellyfin item ID
+     * @param {number} index  - The MediaStream index of the subtitle track
+     * @returns {Promise<null>}
+     */
+    async deleteSubtitle(itemId, index) {
+        return this.delete(`/Videos/${itemId}/Subtitles/${index}`);
+    }
+
+    // ========================================================================
     // Image URLs
     // ========================================================================
 

@@ -443,7 +443,8 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .settings-modal .modal-header {
-    padding: 20px 30px;
+    padding: 10px 30px;
+    margin-bottom: 15px;
     background: rgba(255, 255, 255, 0.02);
 }
 
@@ -599,4 +600,184 @@ progress.card-progress::-webkit-progress-value {
 .modal-option-btn span {
     display: flex;
     align-items: center;
+}
+
+/* ==========================================================================
+   Subtitle Editor Modal Specifics
+   ========================================================================== */
+
+.modal-section-title {
+    padding: 0 20px 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+.subtitle-tracks-list {
+    max-height: 40vh;
+    padding: 0 20px 20px;
+}
+
+.subtitle-empty-notice {
+    padding: 20px;
+    text-align: center;
+    color: var(--jf-text-tertiary);
+    font-size: 1.2rem;
+    font-style: italic;
+}
+
+.subtitle-track-row {
+    display: flex;
+    align-items: center;
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+}
+
+.subtitle-track-label {
+    flex: 1;
+    font-size: 1.25rem;
+    font-weight: 500;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--jf-text-primary);
+}
+
+.subtitle-track-meta {
+    display: flex;
+    align-items: center;
+    margin: 0 20px;
+}
+
+.subtitle-track-meta .track-badge {
+    margin-left: 8px;
+}
+
+.subtitle-delete-btn {
+    height: 48px;
+    padding: 0 20px;
+    margin: 0;
+    background: rgba(220, 53, 69, 0.2);
+    color: #ff6b6b;
+    border-radius: 10px;
+    font-size: 1.1rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 100px;
+}
+
+.subtitle-delete-btn:focus,
+.subtitle-delete-btn.focused,
+.subtitle-delete-btn:hover {
+    background: #dc3545 !important;
+    border-color: #ffb3b3 !important;
+}
+
+.subtitle-track-locked {
+    font-size: 1.5rem;
+    opacity: 0.6;
+    padding: 0;
+    width: 100px;
+    height: 48px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.subtitle-search-row {
+    display: flex;
+    padding: 0 20px 20px;
+}
+
+.subtitle-search-row > * {
+    margin-right: 12px;
+}
+
+.subtitle-search-row > *:last-child {
+    margin-right: 0;
+}
+
+.modal-select {
+    flex: 1;
+    min-width: 0;
+    width: 0; /* Force flexbox to handle the width even if content is wide */
+    appearance: none;
+    -webkit-appearance: none;
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--jf-text-primary);
+    border: 3px solid transparent;
+    border-radius: 12px;
+    padding: 16px 20px;
+    font-size: 1.2rem;
+    cursor: pointer;
+    outline: none;
+}
+
+.modal-select:focus,
+.modal-select.focused {
+    background: rgba(255, 255, 255, 0.1);
+    border-color: var(--jf-accent);
+    transform: scale(1.02);
+}
+
+.modal-select option {
+    background: #1a1a1a;
+    color: white;
+}
+
+#btn-subtitle-search {
+    margin: 0;
+    height: auto;
+    border-radius: 12px;
+}
+
+/* Panel B Results Specifics */
+.subtitle-result-btn {
+    height: auto;
+    min-height: 80px;
+    padding: 16px 20px;
+    display: flex;
+    background: rgba(255, 255, 255, 0.03);
+}
+
+.subtitle-result-btn .track-option-label {
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.subtitle-result-btn .track-option-label > * {
+    margin-bottom: 6px;
+}
+
+.subtitle-result-btn .track-option-label > *:last-child {
+    margin-bottom: 0;
+}
+
+.subtitle-result-meta {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+.subtitle-result-meta .track-badge {
+    margin-right: 8px;
+    margin-bottom: 4px;
+}
+
+.subtitle-result-meta .track-badge {
+    margin-left: 0;
+}
+
+.subtitle-result-btn .check-icon {
+    display: block; /* Always show the download icon */
+    background-image: none; /* override the checkmark */
+    font-size: 1.5rem;
+    line-height: 1;
+    width: auto;
+    height: auto;
 }

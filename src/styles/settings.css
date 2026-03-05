@@ -240,7 +240,7 @@
     background: var(--jf-accent);
     color: white;
     border: 2px solid var(--jf-action-btn-active-border)!important;
-    transform: scale(1.05);
+    transform: scale(1.02);
     will-change: transform;
 }
 

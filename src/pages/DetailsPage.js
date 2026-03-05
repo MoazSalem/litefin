@@ -17,6 +17,7 @@ import { playQueue } from '../core/PlayQueue.js';
 import { imageService } from '../utils/ImageService.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
+import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
@@ -283,6 +284,13 @@ class DetailsPage extends Page {
                 Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,Overview,LibraryId'
             });
             this.title = this._item.Name;
+
+            // Fetch current user policy for permission checks (like subtitle editing)
+            try {
+                this._currentUser = await api.getCurrentUser();
+            } catch (err) {
+                log.warn('Failed to load current user for permissions', err);
+            }
 
             // 2. Render all text content immediately (Metadata, Hero Info)
             this._renderHeroText();
@@ -2128,10 +2136,23 @@ class DetailsPage extends Page {
         overlay.className = 'modal-overlay visible';
         document.body.appendChild(overlay);
 
-        const options = [
-            { id: 'refresh', label: i18n.t('RefreshMetadata') },
-            { id: 'edit-subtitles', label: i18n.t('EditSubtitles') }
-        ];
+        const options = [{ id: 'refresh', label: i18n.t('RefreshMetadata') }];
+
+        // ── Subtitle Editing Permission Check ────────────────────────────────
+        // Based on jellyfin-web canEditSubtitles logic
+        if (this._item && this._currentUser) {
+            const i = this._item;
+            const p = this._currentUser.Policy || {};
+            const isLocal = i.LocationType === 'Offline';
+            const isVirtual = i.LocationType === 'Virtual';
+            const invalidTypes = ['TvChannel', 'Program', 'Timer', 'SeriesTimer', 'UserRootFolder', 'UserView'];
+
+            if (i.MediaType === 'Video' && !isLocal && !isVirtual && !invalidTypes.includes(i.Type)) {
+                if (p.EnableSubtitleManagement || p.IsAdministrator) {
+                    options.push({ id: 'edit-subtitles', label: i18n.t('EditSubtitles') || 'Edit Subtitles' });
+                }
+            }
+        }
 
         const optionsHtml = options
             .map((opt, i) => {
@@ -2171,7 +2192,19 @@ class DetailsPage extends Page {
                 };
                 this._showRefreshMetadataModal(itemId, context);
             } else if (id === 'edit-subtitles') {
-                toast.show('Subtitle editing coming soon!');
+                // Close the More Options menu without restoring focus yet —
+                // the subtitle editor will take ownership of the focus context.
+                _close(false);
+
+                // Pass full transition context so the subtitle editor can chain
+                // Back navigation back to this menu and ultimately the details page.
+                const context = {
+                    prevFocus: this._prevFocus,
+                    prevSection: this._prevSection,
+                    fromMoreOptions: true,
+                    oldOnBack: oldOnBack
+                };
+                SubtitleEditorModal.show(itemId, this, context);
             }
         };
 
@@ -2386,6 +2419,8 @@ class DetailsPage extends Page {
         };
         this.onBack = myOnBack;
     }
+
+    // ============================================================================
 
     _setupFavoriteButton() {
         const actionsContainer = this.$('#actions');
