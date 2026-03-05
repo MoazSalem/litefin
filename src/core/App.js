@@ -116,8 +116,7 @@ class App {
         // 4. Try to restore auth session
         await auth.init();
 
-        // 4.5. Initialize Plugin Manager if user is already authenticated (session restored).
-        // If not authenticated, we do this on the 'auth:login' event instead (see _setupEventHandlers).
+        // 4.5. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
         if (state.get('user:authenticated')) {
             pluginManager
                 .init({
@@ -127,6 +126,11 @@ class App {
                 })
                 .catch((err) => log.error('pluginManager.init failed:', err));
         }
+
+        // Initialize ScreensaverManager (runs on all pages, handles its own auth checks)
+        // Must be initialized after StorageService so it can read delay preferences.
+        const { screensaverManager } = await import('./ScreensaverManager.js');
+        screensaverManager.init();
 
         // Get container element
         if (typeof options.container === 'string') {

@@ -68,6 +68,7 @@ import './styles/player-modals.css'; /* Chapters & Queue modal panels */
 import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';
+import './styles/screensaver.css';
 import './styles/rtl.css'; // Directional overrides
 import './themes/classic/index.js'; // All classic themes
 

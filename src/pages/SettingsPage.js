@@ -23,6 +23,7 @@ import { i18n } from '../utils/i18n.js';
 import { availableLanguages } from '../locales/languages.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('SettingsPage');
 
@@ -346,6 +347,47 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
+
+                <!-- Screensaver Section -->
+                <h3 class="setting-section-title" data-i18n="Screensaver">${i18n.t('Screensaver') || 'Screensaver'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ScreensaverDelay">${i18n.t('ScreensaverDelay') || 'Display time'}</span>
+                        <span class="setting-description" data-i18n="ScreensaverDelayDescription">${i18n.t('ScreensaverDelayDescription') || 'When to display the screensaver while idle'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'screensaver-delay-select',
+                            [
+                                { value: 0, label: i18n.t('Never') || 'Never' },
+                                { value: 60, label: i18n.t('1Minute') || '1 Minute' },
+                                { value: 300, label: i18n.t('5Minutes') || '5 Minutes' },
+                                { value: 600, label: i18n.t('10Minutes') || '10 Minutes' },
+                                { value: 1800, label: i18n.t('30Minutes') || '30 Minutes' }
+                            ],
+                            storage.getItem('pref:screensaverDelay') || 0
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ScreensaverType">${i18n.t('ScreensaverType') || 'Screensaver style'}</span>
+                        <span class="setting-description" data-i18n="ScreensaverTypeDescription">${i18n.t('ScreensaverTypeDescription') || 'Visual style of the screensaver'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'screensaver-type-select',
+                            [
+                                { value: 'backdrop', label: i18n.t('Backdrop') || 'Backdrop' },
+                                { value: 'logo', label: i18n.t('Logo') || 'Logo' }
+                            ],
+                            storage.getItem('pref:screensaverType') || 'backdrop'
+                        )}
+                    </div>
+                </div>
+
             </div>
         `;
     }
@@ -1734,8 +1776,8 @@ class SettingsPage extends Page {
     }
 
     _renderDropdown(id, options, currentValue) {
-        // Find current label
-        const currentOption = options.find((o) => o.value === currentValue) || options[0];
+        // Find current label (using String conversion to match storage strings with number options)
+        const currentOption = options.find((o) => String(o.value) === String(currentValue)) || options[0];
         const currentLabel = currentOption ? i18n.ensureBiDi(currentOption.label) : i18n.t('Select');
 
         // Render as a button that triggers the modal
@@ -1894,7 +1936,9 @@ class SettingsPage extends Page {
             'subtitle-force-text-toggle': { key: 'disableAssStyling', type: 'player' },
             'debug-width-select': { key: 'debug_width', type: 'debug' },
             'debug-height-select': { key: 'debug_height', type: 'debug' },
-            'debug-position-select': { key: 'debug_position', type: 'debug' }
+            'debug-position-select': { key: 'debug_position', type: 'debug' },
+            'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
+            'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -1927,6 +1971,11 @@ class SettingsPage extends Page {
                             layoutManager.setUiFont(newValue);
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
+
+                            if (settingConfig.triggerEvent) {
+                                eventBus.emit(settingConfig.key, newValue);
+                            }
+
                             if (
                                 settingConfig.key === 'layout' ||
                                 settingConfig.key === 'app_language' ||

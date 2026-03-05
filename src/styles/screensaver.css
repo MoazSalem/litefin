@@ -1,0 +1,98 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Screensaver Styles
+ * ============================================================================
+ */
+
+/* Protect the entire viewport from scrolling/interaction while active */
+body.screensaver-active {
+    overflow: hidden !important;
+}
+
+/* ============================================================================
+   Logo Screensaver
+   ============================================================================ */
+.logo-screensaver {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99999;
+    background-color: #000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.logo-screensaver-image {
+    max-width: 40%;
+    max-height: 40%;
+    opacity: 1;
+}
+
+/* ============================================================================
+   Backdrop Screensaver (Slideshow)
+   ============================================================================ */
+.backdrop-screensaver {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 99999;
+    background-color: #000;
+}
+
+.backdrop-screensaver-image {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-size: cover;
+    background-position: center;
+    opacity: 0;
+    transition: opacity 1.5s ease-in-out;
+}
+
+.backdrop-screensaver-image.active {
+    opacity: 1;
+}
+
+.backdrop-screensaver-overlay {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 50%;
+    background: linear-gradient(to top, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0) 100%);
+    z-index: 1;
+}
+
+.backdrop-screensaver-title {
+    position: absolute;
+    bottom: 40px;
+    left: 40px;
+    right: 40px;
+    z-index: 2;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+    animation: fadeIn 1s ease-out;
+}
+
+.screensaver-text-name {
+    font-size: 2.5rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+}
+
+.screensaver-text-tagline {
+    font-size: 1.25rem;
+    opacity: 0.8;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}

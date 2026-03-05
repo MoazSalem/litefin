@@ -105,6 +105,8 @@ class TizenAdapter {
     init() {
         log.info('Initializing...');
 
+        this._lastInputTime = Date.now();
+
         // Register remote control keys
         this._registerKeys();
 
@@ -115,6 +117,21 @@ class TizenAdapter {
         this._getDeviceInfo();
 
         log.info('Initialized');
+    }
+
+    /**
+     * Get idle time in milliseconds
+     * @returns {number} Idle time
+     */
+    get idleTime() {
+        return Date.now() - (this._lastInputTime || Date.now());
+    }
+
+    /**
+     * Report an input interaction (mouse, touch etc from outside)
+     */
+    reportInput() {
+        this._lastInputTime = Date.now();
     }
 
     /**
@@ -162,6 +179,7 @@ class TizenAdapter {
      */
     _setupKeyHandler() {
         document.addEventListener('keydown', (e) => {
+            this._lastInputTime = Date.now();
             const keyCode = e.keyCode;
 
             // Block Tizen's default spatial navigation unless user is typing in an input field.
