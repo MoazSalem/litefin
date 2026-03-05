@@ -49,6 +49,13 @@ class ScreensaverManager {
             this._isVideoPlaying = true;
             this.hide();
         });
+        eventBus.on('player:playing', () => {
+            this._isVideoPlaying = true;
+            this.hide(); // Hide if resumed from pause
+        });
+        eventBus.on('player:paused', () => {
+            this._isVideoPlaying = false; // Allow idle timer to trigger during pause
+        });
         eventBus.on('player:stopped', () => {
             this._isVideoPlaying = false;
         });
