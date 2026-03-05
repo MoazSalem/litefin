@@ -432,6 +432,19 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
+
+                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-hide-text-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BackdropHideText">${i18n.t('BackdropHideText') || 'Hide title and catchphrase'}</span>
+                        <span class="setting-description" data-i18n="BackdropHideTextDescription">${i18n.t('BackdropHideTextDescription') || 'Do not show any text over the backdrop screensaver images'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:backdropHideText') === 'true' ? 'active' : ''}" 
+                                 id="toggle-backdrop-hide-text" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -1569,6 +1582,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Backdrop Hide Text
+        const hideTextBtn = this.$('#toggle-backdrop-hide-text');
+        if (hideTextBtn) {
+            hideTextBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:backdropHideText') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:backdropHideText', newValue);
+                hideTextBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Hide Library Labels
         const hideLabelsBtn = this.$('#toggle-library-labels');
         if (hideLabelsBtn) {
@@ -2042,10 +2066,16 @@ class SettingsPage extends Page {
 
                             if (id === 'screensaver-type-select') {
                                 const dimContainer = document.getElementById('screensaver-dim-item');
+                                const hideTextContainer = document.getElementById('screensaver-hide-text-item');
+                                const isLogo = newValue === 'logo';
+
                                 if (dimContainer) {
-                                    dimContainer.classList.toggle('hidden', newValue === 'logo');
-                                    focusManager.invalidateCache('settings-content');
+                                    dimContainer.classList.toggle('hidden', isLogo);
                                 }
+                                if (hideTextContainer) {
+                                    hideTextContainer.classList.toggle('hidden', isLogo);
+                                }
+                                focusManager.invalidateCache('settings-content');
                             }
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);

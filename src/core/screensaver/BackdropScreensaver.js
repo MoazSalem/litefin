@@ -32,6 +32,9 @@ export class BackdropScreensaver {
         // Dim level: 0 = no dimming, 0.8 = very dark (stored as a float string)
         this._dimLevel = parseFloat(storage.getItem('pref:backdropDimmer'));
         if (isNaN(this._dimLevel)) this._dimLevel = 0.4; // default: 40% dim
+
+        // Hide text option: if true, we don't render titles/taglines
+        this._hideText = storage.getItem('pref:backdropHideText') === 'true';
     }
 
     async show() {
@@ -134,10 +137,14 @@ export class BackdropScreensaver {
                 outgoing.classList.remove('active');
 
                 // Update text
-                this._titleElem.innerHTML = `
-                    <div class="screensaver-text-name">${item.Name}</div>
-                    ${item.Taglines && item.Taglines.length ? `<div class="screensaver-text-tagline">${item.Taglines[0]}</div>` : ''}
-                `;
+                if (this._hideText) {
+                    this._titleElem.innerHTML = '';
+                } else {
+                    this._titleElem.innerHTML = `
+                        <div class="screensaver-text-name">${item.Name}</div>
+                        ${item.Taglines && item.Taglines.length ? `<div class="screensaver-text-tagline">${item.Taglines[0]}</div>` : ''}
+                    `;
+                }
 
                 // Swap active tracker
                 this._activeImg = this._activeImg === 1 ? 2 : 1;

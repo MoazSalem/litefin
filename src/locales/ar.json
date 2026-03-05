@@ -266,6 +266,8 @@
     "Backdrop": "خلفية",
     "BackdropDimmer": "مستوى تعتيم الخلفية",
     "BackdropDimmerDescription": "مدى تعتيم خلفية شاشة التوقف",
+    "BackdropHideText": "إخفاء العنوان والشعار",
+    "BackdropHideTextDescription": "لا تعرض أي نص فوق صور شاشة التوقف.",
     "BackendTizen": "تلقائي (Tizen)",
     "BackendWeb": "ويب (قياسي)",
     "BackgroundColor": "لون الخلفية",

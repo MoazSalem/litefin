@@ -264,6 +264,8 @@
     "Backdrop": "Backdrop",
     "BackdropDimmer": "Backdrop dim level",
     "BackdropDimmerDescription": "How dark the backdrop screensaver should be",
+    "BackdropHideText": "Hide title and catchphrase",
+    "BackdropHideTextDescription": "Do not show any text over the backdrop screensaver images",
     "BackendTizen": "Native (Tizen)",
     "BackendWeb": "Web (Standard)",
     "BackgroundColor": "Background Color",
