@@ -188,7 +188,7 @@ export class TizenAVPlayer {
                 this._pendingAudioIndex = null;
             }
 
-            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
+            if (options.subtitleStreamIndex !== undefined) {
                 this._pendingSubtitleIndex = options.subtitleStreamIndex;
             } else {
                 this._pendingSubtitleIndex = null;
@@ -377,6 +377,13 @@ export class TizenAVPlayer {
         if (this._pendingSubtitleIndex !== null) {
             if (this._pendingSubtitleIndex === -1) {
                 try {
+                    // Workaround for older Tizen: explicitly select a track first before silencing
+                    // otherwise setSilentSubtitle(true) during buffering is ignored.
+                    const trackInfo = this._avplay.getTotalTrackInfo() || [];
+                    const textTracks = trackInfo.filter((t) => t.type === 'TEXT');
+                    if (textTracks.length > 0) {
+                        try { this._avplay.setSelectTrack('TEXT', textTracks[0].index); } catch (e) {}
+                    }
                     this._avplay.setSilentSubtitle(true);
                     this._pendingSubtitleIndex = null;
                 } catch (e) {
@@ -392,6 +399,19 @@ export class TizenAVPlayer {
                     } catch (e) {
                         log.warn('Failed to apply subtitle track:', e);
                     }
+                } else {
+                    log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex}, disabling native subtitles and requesting fallback`);
+                    try { this._avplay.setSilentSubtitle(true); } catch(e){}
+                    
+                    const failedIndex = this._pendingSubtitleIndex;
+                    this._pendingSubtitleIndex = null;
+                    
+                    // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
+                    // This handles initial tracks that exceed Tizen's 30-track limit
+                    this.onEvent({
+                        type: 'subtitlefallback',
+                        data: { index: failedIndex }
+                    });
                 }
             }
         }
@@ -742,8 +762,13 @@ export class TizenAVPlayer {
                 }
             }
         } catch (e) {
-             log.error('Failed to set subtitle track:', e);
-             throw e; // Re-throw so JellyfinPlayer can catch limits and fallback!
+            // OUT_OF_BOUNDS_TIZEN_LIMIT is a handled fallback, not a crash — use WARN, not ERROR
+            if (e && e.message === 'OUT_OF_BOUNDS_TIZEN_LIMIT') {
+                log.warn('Subtitle track exceeds Tizen 30-track limit, requesting external text fallback');
+            } else {
+                log.error('Failed to set subtitle track:', e);
+            }
+            throw e; // Re-throw so JellyfinPlayer can catch limits and fallback!
         }
 
         if (wasPlaying) {

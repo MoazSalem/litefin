@@ -357,6 +357,17 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+        if (event.type === 'subtitlefallback') {
+            log.warn('Backend requested subtitle fallback for index:', event.data.index);
+            if (event.data.index !== undefined && event.data.index !== null) {
+                // Fire and forget, don't block the event handler
+                this._subtitleManager.forceExternalTextFallback(event.data.index).catch(e => {
+                    log.error('Failed to apply subtitle fallback:', e);
+                });
+            }
+            return;
+        }
+
         // Re-emit events from backend
         this.emit(event.type, event.data);
     }
