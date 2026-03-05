@@ -347,6 +347,26 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
+                
+                <!-- Time Section -->
+                <h3 class="setting-section-title" data-i18n="Time">${i18n.t('Time') || 'Time'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelTimeFormat">${i18n.t('LabelTimeFormat') || 'Time Format'}</span>
+                        <span class="setting-description" data-i18n="TimeFormatDescription">${i18n.t('TimeFormatDescription') || 'Choose how the clock and playback end times are displayed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'time-format-select',
+                            [
+                                { value: '12h', label: i18n.t('TimeFormat12h') || '12-hour' },
+                                { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' }
+                            ],
+                            PlayerSettings.get('timeFormat') || '12h'
+                        )}
+                    </div>
+                </div>
 
                 <!-- Screensaver Section -->
                 <h3 class="setting-section-title" data-i18n="Screensaver">${i18n.t('Screensaver') || 'Screensaver'}</h3>
@@ -412,7 +432,6 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
-
             </div>
         `;
     }
@@ -1966,7 +1985,8 @@ class SettingsPage extends Page {
             'debug-position-select': { key: 'debug_position', type: 'debug' },
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
-            'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true }
+            'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
+            'time-format-select': { key: 'timeFormat', type: 'player' }
         };
 
         this.$$('.select-btn').forEach((btn) => {

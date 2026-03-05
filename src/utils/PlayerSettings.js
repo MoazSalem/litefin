@@ -194,7 +194,10 @@ const DEFAULTS = {
     enableNextEpisodeAutoPlay: true,
 
     // Enable cinema mode (dim lights during playback)
-    enableCinemaMode: false
+    enableCinemaMode: false,
+
+    // Time format for clock and playback ('12h', '24h')
+    timeFormat: '12h'
 };
 
 /**

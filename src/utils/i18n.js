@@ -6,6 +6,7 @@
  */
 
 import { logger } from './Logger.js';
+import { PlayerSettings } from './PlayerSettings.js';
 
 const log = logger.create('i18n');
 
@@ -230,19 +231,24 @@ class I18nManager {
     formatLocalTime(date) {
         if (!date || !(date instanceof Date)) return '';
 
-        let hours = date.getHours();
+        const hours = date.getHours();
         const minutes = date.getMinutes();
-        const ampm = hours >= 12 ? this.t('TimePM') : this.t('TimeAM');
-
-        hours = hours % 12;
-        hours = hours ? hours : 12; // The hour '0' should be '12'
-
         const minutesStr = minutes < 10 ? '0' + minutes : minutes;
 
-        // Space before AM/PM for LTR, but maybe no space or different for Arabic?
-        // Usually, in Arabic clocks, the AM/PM indicator "ص/م" follows the time.
-        // We'll use a space for now as it's standard for 12-hour displays.
-        return `${hours}:${minutesStr} ${ampm}`;
+        // Check user preference (default to 12h)
+        const format = PlayerSettings.get('timeFormat') || '12h';
+
+        if (format === '24h') {
+            const hoursStr = hours < 10 ? '0' + hours : hours;
+            return `${hoursStr}:${minutesStr}`;
+        }
+
+        // 12-hour logic
+        let hours12 = hours % 12;
+        hours12 = hours12 ? hours12 : 12; // The hour '0' should be '12'
+        const ampm = hours >= 12 ? this.t('TimePM') : this.t('TimeAM');
+
+        return `${hours12}:${minutesStr} ${ampm}`;
     }
 }
 
