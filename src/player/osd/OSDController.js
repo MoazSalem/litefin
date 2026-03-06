@@ -3,6 +3,7 @@ import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
 import { i18n } from '../../utils/i18n.js';
+import { api } from '../../api/index.js';
 import { ICONS } from './icons.js';
 
 import TrackMenu from './TrackMenu.js';
@@ -37,7 +38,7 @@ export default class OSDController extends Component {
     constructor(player, options = {}) {
         super(options);
         this._player = player;
-        this._api = options.api || window.ApiClient;
+        this._api = options.api || api;
         this._playerPage = options.playerPage;
         this._config = {
             autoHideDelay: 3500,
@@ -545,6 +546,23 @@ export default class OSDController extends Component {
         /* The dedicated chapters-list modal button — only enabled when chapters exist. */
         const chaptersModalBtn = this._osdEl?.querySelector('[data-action="chapters"]');
 
+        // Music files generally do not have chapters, and we want to free up space on the OSD
+        if (this._isAudio) {
+            if (prevChapterBtn) {
+                prevChapterBtn.classList.add('hide');
+                prevChapterBtn.setAttribute('tabindex', '-1');
+            }
+            if (nextChapterBtn) {
+                nextChapterBtn.classList.add('hide');
+                nextChapterBtn.setAttribute('tabindex', '-1');
+            }
+            if (chaptersModalBtn) {
+                chaptersModalBtn.classList.add('hide');
+                chaptersModalBtn.setAttribute('tabindex', '-1');
+            }
+            return;
+        }
+
         if (enabled) {
             prevChapterBtn?.classList.remove('osd-btn-disabled');
             prevChapterBtn?.setAttribute('tabindex', '0');
@@ -816,6 +834,13 @@ export default class OSDController extends Component {
             if (['up', 'down', 'left', 'right', 'enter', 'back'].includes(key)) return true;
         }
 
+        // Special case for LyricsMenu: Since we intentionally leave _currentFocusRow at 1
+        // to keep the "Lyrics" button highlighted, the Row -1 check above won't catch it.
+        // If LyricsModal is active, give it first dibs on all navigational input.
+        if (this.activeMenu === this.lyricsModal && ['up', 'down', 'left', 'right', 'enter', 'back'].includes(key)) {
+            if (this.lyricsModal.handleKey(key)) return true;
+        }
+
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
             this.show();
@@ -833,6 +858,8 @@ export default class OSDController extends Component {
             const menuOwnsElement = !this.activeMenu.$el || (focusedEl && this.activeMenu.$el.contains(focusedEl));
             if (menuOwnsElement && this.activeMenu.handleKey(key)) return true;
         }
+
+
 
         // Internal OSD Nav
         switch (key) {
@@ -1703,6 +1730,8 @@ export default class OSDController extends Component {
             this.activeMenu = this.lyricsModal;
             this.lyricsModal.open(this._playerPage._currentLyrics, positionTicks);
 
+            document.body.classList.add('lyrics-active');
+
             /* Rebuild cache now that the modal DOM has been injected. */
             this._cacheFocusableElements();
 
@@ -1719,6 +1748,7 @@ export default class OSDController extends Component {
                 this.activeMenu = null;
             }
             this.lyricsModal.hide();
+            document.body.classList.remove('lyrics-active');
             this._cacheFocusableElements();
 
             this.show();

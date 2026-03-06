@@ -1049,26 +1049,52 @@
 
 .lyrics-modal {
     position: fixed;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    width: 80vw;
-    height: 80vh;
-    background: rgba(0, 0, 0, 0.85);
-    border-radius: 16px;
-    padding: 24px;
+    top: 0;
+    right: 0;
+    width: 40vw;
+    height: 100vh;
+    background: rgba(10, 10, 15, 0.95);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border-radius: 0;
+    padding: 40px;
     display: flex;
     flex-direction: column;
     z-index: 2000;
-    opacity: 0;
+    transform: translateX(100%);
     pointer-events: none;
-    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+    border-left: 1px solid rgba(255, 255, 255, 0.05);
+    opacity: 0;
 }
 
-.lyrics-modal:not(.hidden) {
+.lyrics-modal.visible {
+    transform: translateX(0);
     opacity: 1;
     pointer-events: all;
-    /* transition overrides for rendering immediately might be needed depending on context */
+}
+
+/* 
+   When lyrics are active, shrink the player components to the left to make room.
+*/
+body.lyrics-active .osd-header,
+body.lyrics-active .osd-controls,
+body.lyrics-active .player-container,
+body.lyrics-active .loading-backdrop-layer {
+    width: 60vw !important;
+}
+
+body.lyrics-active .subtitle-overlay {
+    width: 60vw !important;
+    left: 0 !important;
+}
+
+.osd-header, 
+.osd-controls, 
+.player-container, 
+.loading-backdrop-layer,
+.subtitle-overlay {
+    transition: width 0.4s cubic-bezier(0.25, 1, 0.5, 1), left 0.4s cubic-bezier(0.25, 1, 0.5, 1);
 }
 
 .osd-modal-header {

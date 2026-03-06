@@ -1,5 +1,7 @@
 import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
+import { ICONS } from './icons.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('LyricsModal');
 
@@ -22,19 +24,44 @@ export default class LyricsModal extends Component {
         this._focusableLines = [];
         
         this._isVisible = false;
+        this._isUserScrolling = false;
+        this._userScrollTimeout = null;
+    }
+
+    _handleUserInteraction() {
+        this._isUserScrolling = true;
+        if (this._userScrollTimeout) clearTimeout(this._userScrollTimeout);
+        
+        // Snap back after 3 seconds of inactivity
+        this._userScrollTimeout = setTimeout(() => {
+            this._isUserScrolling = false;
+            
+            if (this._isVisible && this._isDynamic && this._currentLineIndex >= 0) {
+                if (this._focusedIndex >= 0) {
+                    this._focusLine(this._currentLineIndex);
+                } else {
+                    const targetEl = this._focusableLines[this._currentLineIndex];
+                    if (targetEl) this._scrollToElement(targetEl, false);
+                }
+            }
+        }, 3000);
     }
 
     render() {
         this.el = document.createElement('div');
         this.el.id = 'lyrics-modal';
-        this.el.className = 'osd-modal lyrics-modal hidden';
+        this.el.className = 'osd-modal lyrics-modal';
         
         this.el.innerHTML = `
-            <div class="osd-modal-header">
-                <h2>Lyrics</h2>
-                <div class="osd-modal-close">X</div>
+            <div class="osd-offset-header" style="border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; margin-bottom: 10px;">
+                <div class="osd-offset-title-group">
+                    <span class="osd-offset-title">${i18n.t('Lyrics') || 'Lyrics'}</span>
+                </div>
+                <button class="osd-offset-close focusable" data-action="lyrics" tabindex="0">
+                    ${ICONS.close}
+                </button>
             </div>
-            <div class="lyrics-container">
+            <div class="lyrics-container" style="height: calc(100% - 40px); overflow-y: hidden;">
                 <div class="lyrics-content">
                     <div class="lyrics-loading">Loading lyrics...</div>
                 </div>
@@ -63,7 +90,7 @@ export default class LyricsModal extends Component {
         }
 
         this._isVisible = true;
-        this.el.classList.remove('hidden');
+        this.el.classList.add('visible');
         
         this._lyrics = lyrics || [];
         this._isDynamic = this._lyrics.length > 0 && typeof this._lyrics[0].Start !== 'undefined';
@@ -84,7 +111,7 @@ export default class LyricsModal extends Component {
     hide() {
         this._isVisible = false;
         if (this.el) {
-            this.el.classList.add('hidden');
+            this.el.classList.remove('visible');
         }
         this._lyrics = [];
         this._currentLineIndex = -1;
@@ -93,6 +120,10 @@ export default class LyricsModal extends Component {
         if (this._scrollTimeout) {
             clearTimeout(this._scrollTimeout);
         }
+        if (this._userScrollTimeout) {
+            clearTimeout(this._userScrollTimeout);
+        }
+        this._isUserScrolling = false;
     }
 
     /**
@@ -113,7 +144,7 @@ export default class LyricsModal extends Component {
             // Text needs to be escaped
             const text = lyric.Text ? lyric.Text.replace(/</g, '&lt;').replace(/>/g, '&gt;') : '';
             
-            html += `<div class="${classes.join(' ')}" data-index="${index}" id="lyric-line-${index}">`;
+            html += `<div class="${classes.join(' ')}" data-index="${index}" id="lyric-line-${index}" tabindex="-1">`;
             html += text || '&nbsp;'; // Keep empty lines taking up space
             html += `</div>`;
         });
@@ -143,10 +174,14 @@ export default class LyricsModal extends Component {
             this._currentLineIndex = newIndex;
             this._updateLineClasses();
             
-            // When automatically advancing, we also want to move focus if user hasn't manually taken over
-            // For simplicity on TV, we'll keep the focused item locked to the currently playing item
-            // unless they are actively scrolling. 
-            this._focusLine(Math.max(0, newIndex), instant);
+            if (!this._isUserScrolling) {
+                if (this._focusedIndex >= 0) {
+                    this._focusLine(Math.max(0, newIndex), instant);
+                } else {
+                    const targetEl = this._focusableLines[Math.max(0, newIndex)];
+                    if (targetEl) this._scrollToElement(targetEl, instant);
+                }
+            }
         }
     }
 
@@ -174,6 +209,7 @@ export default class LyricsModal extends Component {
         this._focusedIndex = index;
         const targetEl = this._focusableLines[index];
         targetEl.classList.add('focused');
+        targetEl.focus({ preventScroll: true }); // Physically move DOM focus so synthetic clicks hit here
         
         // Scroll into view
         this._scrollToElement(targetEl, instant);
@@ -195,48 +231,117 @@ export default class LyricsModal extends Component {
         });
     }
 
-    /**
-     * Handle d-pad navigation and enter within the modal
-     * @param {string} key - 'up', 'down', 'enter', 'back'
-     * @returns {boolean} - True if handled
-     */
-    handleInput(key) {
+    handleKey(key) {
         if (!this._isVisible) return false;
 
-        if (key === 'back') {
-            this.osdController.toggleLyricsModal(false);
-            return true;
-        }
+        const currentEl = this.osdController._cachedOverlayRow[this.osdController._currentFocusIndex];
+        const isClose = currentEl && currentEl.classList.contains('osd-offset-close');
 
-        if (this._focusableLines.length === 0) return true;
+        switch (key) {
+            case 'left':
+            case 'right':
+                if (isClose && this._focusedIndex === -1) {
+                    // Close button horizontal nav -> return to player header or allow default
+                    this.osdController._currentFocusRow = 0;
+                    this.osdController._currentFocusIndex = 0;
+                    this.osdController.activeMenu = null;
+                    this.osdController.show();
+                    this.osdController._updateFocus();
+                    return true;
+                }
+                return false;
 
-        if (key === 'up') {
-            if (this._focusedIndex > 0) {
-                this._focusLine(this._focusedIndex - 1);
-            }
-            return true;
-        }
-
-        if (key === 'down') {
-            if (this._focusedIndex < this._focusableLines.length - 1) {
-                this._focusLine(this._focusedIndex + 1);
-            }
-            return true;
-        }
-
-        if (key === 'enter' && this._isDynamic) {
-            const targetLyric = this._lyrics[this._focusedIndex];
-            if (targetLyric && typeof targetLyric.Start !== 'undefined') {
-                log.info(`Seeking to lyric at ${targetLyric.Start} ticks`);
-                // Use the main player to seek via OSDController proxy
-                this.osdController._performDebouncedSeek(0); // Clear debounce
-                this.osdController.player().seek(targetLyric.Start);
+            case 'up':
+                if (isClose && this._focusedIndex === -1) return false;
                 
-                // Keep modal open, just seek
-            }
-            return true;
+                if (this._focusableLines.length > 0 && this._focusedIndex >= 0) {
+                    this._handleUserInteraction();
+                    if (this._focusedIndex > 0) {
+                        this._focusLine(this._focusedIndex - 1);
+                    } else if (this._focusedIndex === 0) {
+                        // Move to close button
+                        const idx = this.osdController._cachedOverlayRow.findIndex(el => el.classList.contains('osd-offset-close'));
+                        if (idx !== -1) {
+                            if (this._focusableLines[this._focusedIndex]) {
+                                this._focusableLines[this._focusedIndex].classList.remove('focused');
+                                this._focusableLines[this._focusedIndex].blur(); // Let go of line
+                            }
+                            this._focusedIndex = -1;
+                            this.osdController._currentFocusRow = -1;
+                            this.osdController._currentFocusIndex = idx;
+                            this.osdController._updateFocus();
+                        }
+                    }
+                    return true;
+                }
+                return false;
+
+            case 'down':
+                if (isClose && this._focusedIndex === -1) {
+                    // Move from close button down into the lyrics
+                    if (this._focusableLines.length > 0) {
+                        this._handleUserInteraction();
+                        const targetLine = Math.max(0, this._currentLineIndex);
+                        this._focusLine(targetLine);
+                        if (currentEl) {
+                            currentEl.classList.remove('focused');
+                            // Leaving close button: TV focus engine handles moving it via explicit .focus()
+                            // in _focusLine, but we can call .blur() on the button just to be absolutely sure
+                            currentEl.blur(); 
+                        }
+                    }
+                    return true;
+                }
+                
+                if (this._focusableLines.length > 0 && this._focusedIndex >= 0) {
+                    this._handleUserInteraction();
+                    if (this._focusedIndex < this._focusableLines.length - 1) {
+                        this._focusLine(this._focusedIndex + 1);
+                    } else {
+                        // Reached bottom, go back to player controls
+                        if (this._focusableLines[this._focusedIndex]) {
+                            this._focusableLines[this._focusedIndex].classList.remove('focused');
+                            this._focusableLines[this._focusedIndex].blur();
+                        }
+                        this.osdController._currentFocusRow = 1;
+                        const lyricsIdx = this.osdController._findActionIndex('lyrics');
+                        this.osdController._currentFocusIndex = lyricsIdx !== -1 ? lyricsIdx : 0;
+                        this.osdController.show();
+                        this.osdController._updateFocus();
+                        this._focusedIndex = -1;
+                    }
+                    return true;
+                }
+                return false;
+
+            case 'enter':
+                if (isClose && this._focusedIndex === -1) {
+                    this.osdController.toggleLyricsModal(false);
+                    return true;
+                }
+
+                if (this._isDynamic && this._focusedIndex >= 0) {
+                    const targetLyric = this._lyrics[this._focusedIndex];
+                    if (targetLyric && typeof targetLyric.Start !== 'undefined') {
+                        log.info(`Seeking to lyric at ${targetLyric.Start} ticks`);
+                        // OSDController.player is a getter property, not a function
+                        if (this.osdController.player && this.osdController.player.seek) {
+                            this.osdController.player.seek(targetLyric.Start);
+                        }
+                        
+                        // Treat seeking as resuming locked mode
+                        this._isUserScrolling = false;
+                        if (this._userScrollTimeout) clearTimeout(this._userScrollTimeout);
+                    }
+                    return true;
+                }
+                return false;
+
+            case 'back':
+                this.osdController.toggleLyricsModal(false);
+                return true;
         }
 
-        return true; // We consume all other inputs while modal is open
+        return false;
     }
 }
