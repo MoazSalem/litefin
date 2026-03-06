@@ -1353,12 +1353,17 @@ export default class OSDController extends Component {
 
     _updateState() {
         try {
+            // Always update playback info if active (it has its own visibility check)
             if (this.activeMenu && this.activeMenu === this.playbackInfo) {
                 this.playbackInfo.update();
             }
-            
-            if (this._seekTargetTicks !== null) {
-                // Safety net: if seek state somehow gets stuck (debounce never fired),
+
+            // If OSD is hidden, skip heavy DOM updates (time, slider, clock)
+            if (!this._isOsdVisible && !this.activeMenu) {
+                return;
+            }
+
+            if (this._seekTargetTicks !== null) {                // Safety net: if seek state somehow gets stuck (debounce never fired),
                 // reset after an extended timeout. Normal usage is already handled by
                 // the debounce timer's finally block, so this only fires in edge cases.
                 // 5s was too short — users legitimately hold fast-forward for many seconds.

@@ -1065,6 +1065,18 @@ export class ApiClient {
                 log.info('WebSocket disconnected - user appears offline');
                 this._stopWebSocketKeepalive();
                 eventBus.emit('websocket:disconnected');
+
+                // Attempt to reconnect if we still have credentials and the app is visible
+                if (this._serverUrl && this._accessToken && !document.hidden) {
+                    log.info('Scheduling WebSocket reconnect in 5 seconds...');
+                    if (this._reconnectTimer) clearTimeout(this._reconnectTimer);
+                    this._reconnectTimer = setTimeout(() => {
+                        if (!this.isWebSocketConnected) {
+                            log.info('Attempting to reconnect WebSocket...');
+                            this.openWebSocket();
+                        }
+                    }, 5000);
+                }
             };
 
             // Connection error

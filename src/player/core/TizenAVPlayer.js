@@ -56,6 +56,9 @@ export class TizenAVPlayer {
         // Subtitle offset in seconds (applied via AVPlay's native API)
         this._subtitleOffset = 0;
 
+        // Throttle for timeupdate events
+        this._lastTimeUpdateTicks = 0;
+
         // Check Tizen availability
         this._avplay = window.tizen?.avplay || window.webapis?.avplay || null;
 
@@ -210,6 +213,11 @@ export class TizenAVPlayer {
             // Start playback — must be after prepare
             this._avplay.play();
             this._isPlaying = true;
+            this._playStartTime = Date.now(); // Record when play() was called
+
+            // Apply tracks immediately after play() as some older Tizen versions 
+            // populate track info right after start even before buffering complete
+            this._applyPendingTracks();
 
             // Seek to start position if specified (must be called after play() on HLS to prevent Invalid Operation)
             if (options.playerStartPositionTicks) {
@@ -307,20 +315,21 @@ export class TizenAVPlayer {
             oncurrentplaytime: (time) => {
                 // timeupdate fires as frames are drawn. 
                 // If we haven't emitted 'playing' yet (e.g., started at 0:00 without buffering), do it now!
-                if (this._isPlaying && !this._hasEmittedPlaying && time > 0) {
-                    log.debug('First frame rendered (time > 0), emitting playing');
+                // We use time >= 0 because some older Tizen versions report 0 for a while even when playing.
+                if (this._isPlaying && !this._hasEmittedPlaying && time >= 0) {
+                    log.debug('First frame rendered (time >= 0), emitting playing');
                     this._hasEmittedPlaying = true;
                     this.onEvent({ type: 'playing' });
                 }
 
                 // AVPlay tracks are definitively fully populated once frames start rendering.
                 // Apply pending tracks now. If they fail (e.g. index out of bounds or missing),
-                // they remain pending. We try for up to 2 seconds of watch time, then drop them
-                // to prevent infinite API polling performance penalties.
+                // they remain pending. We try for up to 5 seconds of watch time on older Tizen,
+                // then drop them to prevent infinite API polling performance penalties.
                 if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
                     this._applyPendingTracks();
                     
-                    if (time > 2000) {
+                    if (time > 5000) {
                         if (this._pendingAudioIndex !== null) log.warn('Pending audio track dropped (timeout)');
                         if (this._pendingSubtitleIndex !== null) log.warn('Pending subtitle track dropped (timeout)');
                         this._pendingAudioIndex = null;
@@ -329,7 +338,14 @@ export class TizenAVPlayer {
                 }
 
                 // This is called periodically with current time in ms
-                this.onEvent({ type: 'timeupdate', data: { time: this.getCurrentTime() } });
+                // Throttle to ~250ms to reduce main thread load on slow TVs
+                const currentTime = this.getCurrentTime();
+                const currentTimeTicks = Math.floor(currentTime * 10000000);
+                
+                if (Math.abs(currentTimeTicks - this._lastTimeUpdateTicks) > 2500000) {
+                    this._lastTimeUpdateTicks = currentTimeTicks;
+                    this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
+                }
             },
             onevent: (eventType, eventData) => {
                 log.debug('Event:', eventType, eventData);
@@ -377,6 +393,17 @@ export class TizenAVPlayer {
      * @private
      */
     _applyPendingTracks() {
+        if (!this._avplay || !this._isPrepared) return;
+
+        const trackInfo = this._avplay.getTotalTrackInfo() || [];
+        
+        // If track info is completely empty, older Tizen might still be parsing headers.
+        // Return early to try again on next timeupdate/buffering event.
+        if (trackInfo.length === 0) {
+            log.debug('_applyPendingTracks: No track info available yet, will retry...');
+            return;
+        }
+
         if (this._pendingAudioIndex !== null) {
             const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
             if (tizenAudioIndex !== null) {

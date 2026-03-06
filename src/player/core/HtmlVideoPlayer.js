@@ -54,6 +54,9 @@ export class HtmlVideoPlayer {
 
         // Bound event handlers (for cleanup)
         this._boundHandlers = {};
+
+        // Throttle for timeupdate events
+        this._lastTimeUpdateTicks = 0;
     }
 
     // ========================================================================
@@ -798,7 +801,14 @@ export class HtmlVideoPlayer {
             this._timeUpdated = true;
         }
 
-        this.onEvent({ type: 'timeupdate', data: { time: this.getCurrentTime() } });
+        const currentTime = this.getCurrentTime();
+        const currentTimeTicks = Math.floor(currentTime * 10000000);
+        
+        // Throttle to ~250ms to reduce main thread load on slow TVs
+        if (Math.abs(currentTimeTicks - this._lastTimeUpdateTicks) > 2500000) {
+            this._lastTimeUpdateTicks = currentTimeTicks;
+            this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
+        }
     }
 
     /** @private */

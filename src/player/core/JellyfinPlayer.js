@@ -316,6 +316,11 @@ export class JellyfinPlayer extends EventEmitter {
                  log.info('TranscodeSeek: Initial playback confirmed. Seeking to', target);
                  this.seek(target);
                  
+                 // CRITICAL: Since we suppressed the initial PLAYING event from the backend
+                 // while waiting for time > 0, we must now manually emit it so the UI
+                 // hides its loading spinner.
+                 this.emit(PlayerEvent.PLAYING);
+
                  // Do NOT emit this particular timeupdate as it's likely near 0
                  return;
             }
