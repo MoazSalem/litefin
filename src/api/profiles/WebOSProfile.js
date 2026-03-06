@@ -58,9 +58,9 @@ function getChannelCount() {
 export function getDeviceCapabilities() {
     if (_cachedCapabilities) return _cachedCapabilities;
 
-    let uhd = true;
+    let uhd = false;
     let uhd8K = false;
-    let hdr10 = true;
+    let hdr10 = false;
     let dolbyVision = false; // Will be set by heuristics or deviceInfo
 
     const deviceId = BaseProfile.getFallbackDeviceId('litefin_webos_');
@@ -76,17 +76,16 @@ export function getDeviceCapabilities() {
     // LG disabled DTS support on WebOS 5.0 through 22 (2020-2022 models)
     const dts = !(webosVersion >= 5 && webosVersion < 23);
 
-    if (webosVersion >= 4) {
-        dolbyVision = true; // Assume Dolby Vision Profile 8 support for WebOS 4+ even if not reported
-    }
-
     if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
         window.webOS.deviceInfo((info) => {
             if (info.modelName) modelName = info.modelName;
             if (info.uhd) uhd = info.uhd === 'true';
             if (info['8k']) uhd8K = info['8k'] === 'true';
-            if (info.hdr10) hdr10 = info.hdr10 === 'true';
-            if (info.dolbyVision === 'true') dolbyVision = true;
+            // Only allow HDR/DV if the device is also UHD (safer for 1080p emulators/TVs)
+            if (uhd) {
+                if (info.hdr10) hdr10 = info.hdr10 === 'true';
+                if (info.dolbyVision === 'true') dolbyVision = true;
+            }
         });
     }
 
@@ -192,17 +191,20 @@ export function buildJellyfinProfile(options = {}) {
         return _buildMinimalProfile(caps);
     }
 
-    let maxBitrate = 120000000;
-    if (playbackMode !== 'directPlay' && playbackMode !== 'transcode' && playbackMode !== 'remux') {
-        maxBitrate =
-            manualBitrateOverride ||
-            PlayerSettings.get('maxBitrateInternet') ||
-            (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
+    // Cap bitrate for 1080p devices to prevent buffer stalls on older hardware
+    let maxBitrate =
+        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 120000000 : 40000000);
+    if (!caps.uhd && maxBitrate > 40000000) {
+        maxBitrate = 40000000;
     }
 
     const maxAudioChannels = String(caps.maxAudioChannels);
+    const supportsFmp4Hls = caps.webosVersion >= 4; // WebOS 3.5 (some models) and 4.0+ support fMP4 HLS
 
-    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    if (caps.webosVersion >= 4) {
+        audioCodecs.push('opus');
+    }
     if (caps.ac3) audioCodecs.push('ac3');
     if (caps.eac3) audioCodecs.push('eac3');
     if (enableDts) audioCodecs.push('dts', 'dca');
@@ -304,25 +306,13 @@ export function buildJellyfinProfile(options = {}) {
             Container: 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs,
-            Context: 'Streaming',
-            Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
-        },
-        {
-            Container: 'mp4',
-            Type: 'Video',
-            AudioCodec: transAudioCodecs + ',opus',
             VideoCodec: broadTransVideo,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
             SegmentLength: '3',
-            BreakOnNonKeyFrames: false
+            BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
             Container: 'aac',
@@ -364,6 +354,23 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Static'
         }
     ];
+
+    // Fragments MP4 HLS is theoretically better but MPEG-TS is much more stable across all WebOS versions.
+    // We only offer it as a secondary option if supported.
+    if (supportsFmp4Hls) {
+        transcodingProfiles.push({
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: transAudioCodecs,
+            VideoCodec: broadTransVideo,
+            Context: 'Streaming',
+            Protocol: 'hls',
+            MaxAudioChannels: maxAudioChannels,
+            MinSegments: '1',
+            SegmentLength: '3',
+            BreakOnNonKeyFrames: false
+        });
+    }
 
     const h264Level = caps.uhd ? '51' : '41';
     const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
@@ -416,9 +423,19 @@ export function buildJellyfinProfile(options = {}) {
                 Type: 'Video',
                 Codec: 'hevc',
                 Conditions: [
-                    { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoProfile',
+                        Value: caps.uhd ? 'main|main 10' : 'main',
+                        IsRequired: false
+                    },
                     { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false },
+                    {
+                        Condition: 'LessThanEqual',
+                        Property: 'VideoBitDepth',
+                        Value: caps.uhd ? '10' : '8',
+                        IsRequired: false
+                    },
                     ...hdrCondition
                 ]
             });
@@ -456,6 +473,18 @@ export function buildJellyfinProfile(options = {}) {
                 ]
             });
         }
+
+        // WebOS natively fails to decode FLAC with more than 2 channels
+        codecProfiles.push({
+            Type: 'VideoAudio',
+            Codec: 'flac',
+            Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
+        });
+        codecProfiles.push({
+            Type: 'Audio',
+            Codec: 'flac',
+            Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
+        });
     } else {
         codecProfiles = [
             {
