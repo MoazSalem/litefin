@@ -18,6 +18,7 @@ import RepeatModeMenu from './RepeatModeMenu.js';
 import UpNextDialog from './UpNextDialog.js';
 import ChaptersModal from './ChaptersModal.js';
 import QueueModal from './QueueModal.js';
+import LyricsModal from './LyricsModal.js';
 
 const log = logger.create('OSDController');
 
@@ -37,6 +38,7 @@ export default class OSDController extends Component {
         super(options);
         this._player = player;
         this._api = options.api || window.ApiClient;
+        this._playerPage = options.playerPage;
         this._config = {
             autoHideDelay: 3500,
             seekStepBack: 10,
@@ -134,6 +136,9 @@ export default class OSDController extends Component {
         // Queue modal — shows the full play queue with the current item highlighted
         this.queueModal = new QueueModal(this);
 
+        // Lyrics modal — shows scrolling lyrics for audio items
+        this.lyricsModal = new LyricsModal(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -148,7 +153,8 @@ export default class OSDController extends Component {
             this.repeatModeMenu,
             this.upNextDialog,
             this.chaptersModal,
-            this.queueModal
+            this.queueModal,
+            this.lyricsModal
         ];
     }
 
@@ -260,6 +266,8 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="nextTrack" tabindex="0" id="osdNextBtn">${ICONS.skipNext}</button>
                             <!-- Queue modal button (always available) -->
                             <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
+                            <!-- Lyrics modal button -->
+                            <button class="osd-btn osd-btn-disabled hide" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${ICONS.lyrics}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
                             <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
                         </div>
@@ -321,6 +329,10 @@ export default class OSDController extends Component {
             subtitleBtn?.remove();
             // Mark the OSD so CSS can apply audio-specific tweaks if needed
             this._osdEl.classList.add('osd-audio-mode');
+        } else {
+            // Remove lyrics button entirely for video items
+            const lyricsBtn = this._osdEl.querySelector('#osdLyricsBtn');
+            lyricsBtn?.remove();
         }
 
         // Initial update
@@ -439,6 +451,27 @@ export default class OSDController extends Component {
         // Sync button enabled state and render/clear markers
         this._syncChapterButtonState(hasChapters);
         this._renderChapterMarkers();
+    }
+
+    /**
+     * Enable or disable the lyrics button.
+     * @param {boolean} available 
+     */
+    setLyricsAvailable(available) {
+        if (!this._isAudio) return;
+        const btn = this._osdEl.querySelector('#osdLyricsBtn');
+        if (!btn) return;
+        
+        if (available) {
+            btn.classList.remove('osd-btn-disabled', 'hide');
+            btn.tabIndex = 0;
+        } else {
+            btn.classList.add('osd-btn-disabled', 'hide');
+            btn.tabIndex = -1;
+        }
+        
+        // Re-cache focusable elements since DOM structure changed
+        this._cacheFocusableElements();
     }
 
     _renderChapterMarkers() {
@@ -1155,8 +1188,8 @@ export default class OSDController extends Component {
          */
         const now = Date.now();
         if (action !== 'fastForward' && action !== 'rewind') {
-            if (action === this._lastActionName && (now - this._lastActionTime) < 200) {
-                log.info(`Ignoring double-fired action: ${action}`);
+            if (this._lastActionTime && (now - this._lastActionTime) < 200) {
+                log.info(`Ignoring rapid duplicate action: ${action} (last was: ${this._lastActionName})`);
                 return;
             }
         }
@@ -1237,6 +1270,9 @@ export default class OSDController extends Component {
             case 'queue':
                 /* Open the queue list modal. */
                 this.toggleQueueModal(true);
+                break;
+            case 'lyrics':
+                this.toggleLyricsModal(true);
                 break;
         }
     }
@@ -1642,6 +1678,59 @@ export default class OSDController extends Component {
     }
 
     /**
+     * Open or close the Lyrics modal.
+     * Follows the same pattern as toggleChaptersModal().
+     *
+     * @param {boolean} show - True to open, false to close.
+     */
+    toggleLyricsModal(show) {
+        if (show) {
+            // TOGGLE: If it's already open, close it instead.
+            if (this.activeMenu === this.lyricsModal && this.lyricsModal._isVisible) {
+                this.toggleLyricsModal(false);
+                return;
+            }
+
+            // PlayerPage is responsible for fetching and maintaining lyrics data.
+            // We just ask for the current cached lyrics.
+            if (!this._playerPage || !this._playerPage._currentLyrics) {
+                log.info('toggleLyricsModal: No lyrics available yet.');
+                return;
+            }
+
+            const positionTicks = this._player?.getCurrentPositionTicks?.() ?? 0;
+
+            this.activeMenu = this.lyricsModal;
+            this.lyricsModal.open(this._playerPage._currentLyrics, positionTicks);
+
+            /* Rebuild cache now that the modal DOM has been injected. */
+            this._cacheFocusableElements();
+
+            /* 
+             * Focus Management:
+             * We do NOT reset _currentFocusRow to -1 here. By leaving it at Row 1 (Controls),
+             * the lyrics button STAYS focused while the modal is open. This allows the user
+             * to see what they clicked, and more importantly, ensures that our new 
+             * 'toggle' logic (clicking the same button again) actually works.
+             */
+            this._updateFocus();
+        } else {
+            if (this.activeMenu === this.lyricsModal) {
+                this.activeMenu = null;
+            }
+            this.lyricsModal.hide();
+            this._cacheFocusableElements();
+
+            this.show();
+            this._currentFocusRow = 1;
+            // Ensure focus is restored to the lyrics button specifically
+            const lyricsIdx = this._findActionIndex('lyrics');
+            this._currentFocusIndex = lyricsIdx !== -1 ? lyricsIdx : 0;
+            this._updateFocus();
+        }
+    }
+
+    /**
      * Show or hide the Up Next dialog.
      * Follows the same toggle pattern as togglePlaybackInfo() / toggleSubtitleOffset().
      *
@@ -1886,6 +1975,8 @@ export default class OSDController extends Component {
 
     setMetadata(item) {
         this._currentItem = item;
+        this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
+        
         const titleEl = this._osdEl.querySelector('#osdTitle');
         if (titleEl) titleEl.textContent = this._getFormattedTitle(item);
         this._updateFavoriteButton(item);

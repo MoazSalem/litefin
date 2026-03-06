@@ -119,7 +119,7 @@ export function getDeviceCapabilities() {
         vp8: true,
         ac3: true,
         eac3: true,
-        dts: false,
+        dts: tizenVersion < 4, // Samsung dropped DTS in 2018 (Tizen 4.0)
         truehd: false,
         maxAudioChannels: uhd8K ? 8 : 6
     };
@@ -232,6 +232,11 @@ export function buildJellyfinProfile(options = {}) {
             AudioCodec: audioCodecString
         });
         directPlayProfiles.push({
+            Container: 'asf',
+            Type: 'Video',
+            AudioCodec: audioCodecString
+        });
+        directPlayProfiles.push({
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
@@ -275,7 +280,8 @@ export function buildJellyfinProfile(options = {}) {
         });
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
-            Type: 'Audio'
+            Type: 'Audio',
+            AudioCodec: audioCodecString
         });
     }
 
@@ -294,7 +300,7 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [
         {
-            Container: 'ts',
+            Container: caps.tizenVersion >= 5 ? 'mp4' : 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
             VideoCodec: transVideoCodecs,
@@ -358,7 +364,7 @@ export function buildJellyfinProfile(options = {}) {
         }
     ];
 
-    const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5.5 ? '42' : '41';
+    const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5 ? '52' : caps.tizenVersion >= 4 ? '42' : '41';
     const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
 
     let codecProfiles = [];
@@ -368,12 +374,14 @@ export function buildJellyfinProfile(options = {}) {
             ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
             : [];
 
+        // Samsung TVs can play the HDR10 fallback of Dolby Vision Profile 8/7
+        const hevcVideoRangeTypes = enableHDR ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithSDR' : 'SDR|DOVIWithSDR';
+
         codecProfiles = [
             {
                 Type: 'Video',
                 Codec: 'h264',
                 Conditions: [
-                    { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
                     {
                         Condition: 'EqualsAny',
                         Property: 'VideoProfile',
@@ -405,9 +413,14 @@ export function buildJellyfinProfile(options = {}) {
                 Codec: 'hevc',
                 Conditions: [
                     { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoRangeType',
+                        Value: hevcVideoRangeTypes,
+                        IsRequired: false
+                    },
                     { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false },
-                    ...hdrCondition
+                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false }
                 ]
             });
         }

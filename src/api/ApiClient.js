@@ -640,6 +640,15 @@ export class ApiClient {
     // Music Endpoints
     // ========================================================================
 
+    /**
+     * Get lyrics for an audio item.
+     * @param {string} itemId - The audio item ID
+     * @returns {Promise<any>} Lyrics data
+     */
+    async getLyrics(itemId) {
+        return this.get(`/Audio/${itemId}/Lyrics`);
+    }
+
     async getAlbumArtists(params = {}) {
         const defaults = {
             UserId: this._userId,

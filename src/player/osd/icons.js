@@ -35,6 +35,8 @@ export const ICONS = {
     /* Queue: three lines with a play indicator on the right */
     queue: createIcon('M3 10h11v2H3v-2zm0-4h11v2H3V6zm0 8h7v2H3v-2zm13-1v8l6-4-6-4z'),
 
-    /* viewList: a cleaner "Timeline Ruler" icon for chapters */
-    viewList: createIcon('M4 4v16h1.5V4H4zm4 2h12v2H8V6zm0 5h12v2H8v-2zm0 5h12v2H8v-2z')
+    viewList: createIcon('M4 4v16h1.5V4H4zm4 2h12v2H8V6zm0 5h12v2H8v-2zm0 5h12v2H8v-2z'),
+
+    /* Lyrics: Article/Notes icon */
+    lyrics: createIcon('M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z')
 };

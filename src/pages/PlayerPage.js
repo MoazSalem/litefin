@@ -632,6 +632,26 @@ class PlayerPage extends Page {
 
         // Render audio visuals if applicable
         this._renderAudioVisuals();
+
+        // Fetch lyrics for audio items
+        this._currentLyrics = null;
+        if (item.MediaType === 'Audio' || item.Type === 'AudioBook') {
+            try {
+                const lyricsData = await api.getLyrics(item.Id);
+                if (lyricsData && lyricsData.Lyrics && lyricsData.Lyrics.length > 0) {
+                    this._currentLyrics = lyricsData.Lyrics;
+                    log.info(`Fetched ${this._currentLyrics.length} lines of lyrics.`);
+                    if (this._osd && typeof this._osd.setLyricsAvailable === 'function') {
+                        this._osd.setLyricsAvailable(true);
+                    }
+                }
+            } catch (err) {
+                log.info('No lyrics available or error fetching lyrics: ', err.message);
+                if (this._osd && typeof this._osd.setLyricsAvailable === 'function') {
+                    this._osd.setLyricsAvailable(false);
+                }
+            }
+        }
     }
 
     /**
@@ -782,7 +802,8 @@ class PlayerPage extends Page {
         this._osd = new OSDController(this._player, {
             item: this._item,
             api: api,
-            isAudio: isAudioItem
+            isAudio: isAudioItem,
+            playerPage: this
         });
 
         // Bind events
@@ -1279,6 +1300,11 @@ class PlayerPage extends Page {
         if (this._osd) {
             const duration = this._player?.getDurationTicks?.() || 0;
             this._osd.showUpNextIfNeeded(ticks, duration, this._item);
+
+            // 6. Update lyrics highlighting if modal is open
+            if (this._osd.lyricsModal && this._osd.lyricsModal._isVisible) {
+                this._osd.lyricsModal.updatePosition(ticks, false);
+            }
         }
     }
 

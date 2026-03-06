@@ -1043,3 +1043,114 @@
 }
 
 /* Removed redundant/conflicting container height */
+/* ============================================================================
+   Lyrics Modal Context Menu
+   ============================================================================ */
+
+.lyrics-modal {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 80vw;
+    height: 80vh;
+    background: rgba(0, 0, 0, 0.85);
+    border-radius: 16px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    z-index: 2000;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.lyrics-modal:not(.hidden) {
+    opacity: 1;
+    pointer-events: all;
+    /* transition overrides for rendering immediately might be needed depending on context */
+}
+
+.osd-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-bottom: 2px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+}
+
+.osd-modal-header h2 {
+    font-size: 24px;
+    font-weight: 700;
+    margin: 0;
+    color: var(--jf-text-primary);
+}
+
+.osd-modal-close {
+    font-size: 16px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+.lyrics-container {
+    flex: 1;
+    overflow-y: hidden;
+    position: relative;
+    /* Soft edges for scroll */
+    mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+    -webkit-mask-image: linear-gradient(to bottom, transparent, black 15%, black 85%, transparent);
+}
+
+.lyrics-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 50vh 0; /* Padding allows the first and last line to be scrolled to the center */
+}
+
+.lyric-line {
+    font-size: 36px;
+    font-weight: 700;
+    line-height: 1.6;
+    text-align: center;
+    color: rgba(255, 255, 255, 0.5);
+    transition: all 0.3s ease;
+    transform-origin: center;
+    padding: 8px 16px;
+    margin: 4px 0;
+    border-radius: 12px;
+    white-space: pre-wrap; /* Preserve line breaks from lyric text */
+    max-width: 90%;
+}
+
+.lyric-line.past {
+    color: rgba(255, 255, 255, 0.3);
+    transform: scale(0.95);
+}
+
+.lyric-line.future {
+    color: rgba(255, 255, 255, 0.5);
+}
+
+.lyric-line.current {
+    color: #fff;
+    transform: scale(1.1);
+    text-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+}
+
+.lyric-line.focused {
+    background: rgba(255, 255, 255, 0.15);
+    outline: 2px solid var(--jf-action-btn-active-border);
+}
+
+.lyric-line.current.focused {
+    background: rgba(255, 255, 255, 0.25);
+}
+
+.lyrics-empty, .lyrics-loading {
+    font-size: 24px;
+    color: rgba(255, 255, 255, 0.6);
+    margin-top: auto;
+    margin-bottom: auto;
+}

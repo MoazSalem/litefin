@@ -284,7 +284,8 @@ export function buildJellyfinProfile(options = {}) {
         });
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
-            Type: 'Audio'
+            Type: 'Audio',
+            AudioCodec: audioCodecString
         });
     }
 

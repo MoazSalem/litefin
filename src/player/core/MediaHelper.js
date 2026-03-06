@@ -57,11 +57,12 @@ export const MediaHelper = {
                 url = mediaSource.Path;
             }
         } else {
-            // Transcode: HLS from server.
+            // Transcode: HLS from server or HTTP stream (for audio).
             // Prefer the pre-built TranscodingUrl — it has AudioStreamIndex,
             // SubtitleStreamIndex, codec params, etc. already embedded.
             if (mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
+                isHls = url.includes('.m3u8') || (mediaSource.TranscodingSubProtocol && mediaSource.TranscodingSubProtocol.toLowerCase() === 'hls');
             } else {
                 // Manual HLS URL fallback
                 url = `${serverUrl}/Videos/${itemId}/master.m3u8`;
@@ -72,9 +73,8 @@ export const MediaHelper = {
                 if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;
                 }
+                isHls = true;
             }
-
-            isHls = true;
         }
 
         return {
