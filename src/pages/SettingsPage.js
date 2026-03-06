@@ -1337,7 +1337,7 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Platform">${i18n.t('Platform')}</span>
-                            <span class="identity-value">${platformInfo.isWeb ? 'Web Browser' : platformInfo.isWebOS ? 'LG WebOS' : i18n.t('TizenValue', [caps.tizenVersion])}</span>
+                            <span class="identity-value">${platformInfo.isWeb ? i18n.t('BrowserValue', [caps.browserVersion]) : platformInfo.isWebOS ? i18n.t('WebOSValue', [caps.webosVersion]) : i18n.t('TizenValue', [caps.tizenVersion])}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="Resolution">${i18n.t('Resolution')}</span>

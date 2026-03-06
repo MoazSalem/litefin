@@ -14,16 +14,71 @@ const log = logger.create('WebOSProfile');
 
 let _cachedCapabilities = null;
 
+function getWebOSVersion() {
+    const userAgent = navigator.userAgent.toLowerCase();
+    const match = /(?:chrome|crios|crmo)\/([0-9.]+)/.exec(userAgent);
+    if (!match) return 0;
+
+    const versionMajor = parseInt(match[1].split('.')[0], 10);
+
+    if (versionMajor >= 94) return 23;
+    if (versionMajor >= 87) return 22;
+    if (versionMajor >= 79) return 6;
+    if (versionMajor >= 68) return 5;
+    if (versionMajor >= 53) return 4;
+    if (versionMajor >= 38) return 3;
+    if (versionMajor >= 34) return 2;
+    if (versionMajor >= 26) return 1;
+
+    return 1; // Fallback for very old versions
+}
+
+let _maxChannelCount = null;
+function getChannelCount() {
+    if (_maxChannelCount != null) {
+        return _maxChannelCount;
+    }
+
+    _maxChannelCount = 2; // Default
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext || false;
+        if (AudioContext) {
+            const audioCtx = new AudioContext();
+            _maxChannelCount = audioCtx.destination.maxChannelCount || 2;
+            audioCtx.close();
+        }
+    } catch (e) {
+        log.warn('Failed to detect AudioContext channels:', e);
+    }
+
+    // TVs generally shouldn't report less than 2
+    return Math.max(_maxChannelCount, 2);
+}
+
 export function getDeviceCapabilities() {
     if (_cachedCapabilities) return _cachedCapabilities;
 
     let uhd = true;
     let uhd8K = false;
     let hdr10 = true;
-    let dolbyVision = true;
+    let dolbyVision = false; // Will be set by heuristics or deviceInfo
 
     const deviceId = BaseProfile.getFallbackDeviceId('litefin_webos_');
     let modelName = 'LG WebOS TV';
+
+    const webosVersion = getWebOSVersion();
+    const maxAudioChannels = getChannelCount();
+
+    // Default capabilities based on WebOS version heuristics
+    const hevc = webosVersion >= 3;
+    const av1 = webosVersion >= 5;
+    const vp9 = webosVersion >= 3;
+    // LG disabled DTS support on WebOS 5.0 through 22 (2020-2022 models)
+    const dts = !(webosVersion >= 5 && webosVersion < 23);
+
+    if (webosVersion >= 4) {
+        dolbyVision = true; // Assume Dolby Vision Profile 8 support for WebOS 4+ even if not reported
+    }
 
     if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
         window.webOS.deviceInfo((info) => {
@@ -31,7 +86,7 @@ export function getDeviceCapabilities() {
             if (info.uhd) uhd = info.uhd === 'true';
             if (info['8k']) uhd8K = info['8k'] === 'true';
             if (info.hdr10) hdr10 = info.hdr10 === 'true';
-            if (info.dolbyVision) dolbyVision = info.dolbyVision === 'true';
+            if (info.dolbyVision === 'true') dolbyVision = true;
         });
     }
 
@@ -57,6 +112,7 @@ export function getDeviceCapabilities() {
     _cachedCapabilities = {
         modelName,
         deviceId,
+        webosVersion,
         screenWidth: uhd8K ? 7680 : uhd ? 3840 : 1920,
         screenHeight: uhd8K ? 4320 : uhd ? 2160 : 1080,
         uhd,
@@ -65,15 +121,15 @@ export function getDeviceCapabilities() {
         hdr10Plus: false, // Generally not supported on LG
         hlg: hdr10,
         dolbyVision,
-        hevc: true,
-        av1: true, // Assuming recent WebOS
-        vp9: true,
+        hevc,
+        av1,
+        vp9,
         vp8: true,
         ac3: true,
         eac3: true,
-        dts: false, // Often not supported or disabled on recent LG TVs
+        dts,
         truehd: false,
-        maxAudioChannels: 6
+        maxAudioChannels
     };
 
     log.info('WebOS capabilities:', JSON.stringify(_cachedCapabilities, null, 2));

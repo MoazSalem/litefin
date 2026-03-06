@@ -14,9 +14,34 @@ import { BaseProfile } from './BaseProfile.js';
 const log = logger.create('WebProfile');
 
 let _cachedCapabilities = null;
+let _cachedBrowserVersion = null;
+
+function _getBrowserVersion() {
+    if (_cachedBrowserVersion) return _cachedBrowserVersion;
+
+    const ua = navigator.userAgent;
+    let version = '';
+
+    // Check for Chrome/Chromium
+    const chromeMatch = ua.match(/(?:Chrome|Chromium)\/([0-9]+)/);
+    if (chromeMatch) {
+        version = chromeMatch[1];
+    } else {
+        // Fallback to other browsers if needed, but we mostly care about Chromium
+        const versionMatch = ua.match(/(?:Version|Firefox|Edge|Safari)\/([0-9]+)/);
+        if (versionMatch) {
+            version = versionMatch[1];
+        }
+    }
+
+    _cachedBrowserVersion = version || 'Unknown';
+    return _cachedBrowserVersion;
+}
 
 export function getDeviceCapabilities() {
     if (_cachedCapabilities) return _cachedCapabilities;
+
+    const browserVersion = _getBrowserVersion();
 
     // A modern web browser we assume is capable of standard formats
     let uhd = true;
@@ -69,6 +94,7 @@ export function getDeviceCapabilities() {
     _cachedCapabilities = {
         modelName,
         deviceId,
+        browserVersion,
         screenWidth: window.screen ? window.screen.width : uhd ? 3840 : 1920,
         screenHeight: window.screen ? window.screen.height : uhd ? 2160 : 1080,
         uhd,
