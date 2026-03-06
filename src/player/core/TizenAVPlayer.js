@@ -291,6 +291,13 @@ export class TizenAVPlayer {
             onbufferingcomplete: () => {
                 log.debug('Buffering complete');
                 
+                // Track transition point: Buffer is full but clock hasn't started yet.
+                // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
+                // they remain pending and get picked up by oncurrentplaytime.
+                if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
+                    this._applyPendingTracks();
+                }
+
                 // Only emit playing if we are actually playing (not paused)
                 if (this._isPlaying && !this._hasEmittedPlaying) {
                     this._hasEmittedPlaying = true;
@@ -372,29 +379,27 @@ export class TizenAVPlayer {
     _applyPendingTracks() {
         if (this._pendingAudioIndex !== null) {
             const tizenAudioIndex = this._findTizenAudioIndex(this._pendingAudioIndex);
-            // Always clear the pending index, whether or not we found a valid Tizen track.
-            // Without this, a failed lookup (null return) would leave the index dirty
-            // and retry on every subsequent onbufferingcomplete event.
-            this._pendingAudioIndex = null;
             if (tizenAudioIndex !== null) {
                 try {
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
+                    this._pendingAudioIndex = null;
                 } catch (e) {
                     log.warn('Failed to apply audio track:', e);
+                    this._pendingAudioIndex = null;
                 }
+            } else {
+                const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                if (totalTracks.some(t => t.type === 'AUDIO')) {
+                    log.warn(`Could not map pending audio index ${this._pendingAudioIndex}`);
+                    this._pendingAudioIndex = null;
+                }
+                // Else: AVPlay hasn't parsed audio tracks yet. Remain pending.
             }
         }
 
         if (this._pendingSubtitleIndex !== null) {
             if (this._pendingSubtitleIndex === -1) {
                 try {
-                    // Workaround for older Tizen: explicitly select a track first before silencing
-                    // otherwise setSilentSubtitle(true) during buffering is ignored.
-                    const trackInfo = this._avplay.getTotalTrackInfo() || [];
-                    const textTracks = trackInfo.filter((t) => t.type === 'TEXT');
-                    if (textTracks.length > 0) {
-                        try { this._avplay.setSelectTrack('TEXT', textTracks[0].index); } catch (e) {}
-                    }
                     this._avplay.setSilentSubtitle(true);
                     this._pendingSubtitleIndex = null;
                 } catch (e) {
@@ -410,20 +415,25 @@ export class TizenAVPlayer {
                         this._pendingSubtitleIndex = null;
                     } catch (e) {
                         log.warn('Failed to apply subtitle track:', e);
+                        this._pendingSubtitleIndex = null;
                     }
                 } else {
-                    log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex}, disabling native subtitles and requesting fallback`);
-                    try { this._avplay.setSilentSubtitle(true); } catch(e){}
-                    
-                    const failedIndex = this._pendingSubtitleIndex;
-                    this._pendingSubtitleIndex = null;
-                    
-                    // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
-                    // This handles initial tracks that exceed Tizen's 30-track limit
-                    this.onEvent({
-                        type: 'subtitlefallback',
-                        data: { index: failedIndex }
-                    });
+                    const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                    if (totalTracks.some(t => t.type === 'TEXT')) {
+                        log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex}, disabling native subtitles and requesting fallback`);
+                        try { this._avplay.setSilentSubtitle(true); } catch(e){}
+                        
+                        const failedIndex = this._pendingSubtitleIndex;
+                        this._pendingSubtitleIndex = null;
+                        
+                        // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
+                        // This handles initial tracks that exceed Tizen's 30-track limit
+                        this.onEvent({
+                            type: 'subtitlefallback',
+                            data: { index: failedIndex }
+                        });
+                    }
+                    // Else: AVPlay hasn't parsed text tracks yet. Remain pending.
                 }
             }
         }
