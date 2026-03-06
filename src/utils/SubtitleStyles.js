@@ -201,6 +201,12 @@ export function getTextStyles() {
         case 'poppins':
             styles.push({ className: 'font-poppins' });
             break;
+        case 'roboto':
+            styles.push({ className: 'font-roboto' });
+            break;
+        case 'google':
+            styles.push({ className: 'font-google' });
+            break;
         case 'noto-arabic':
             styles.push({ className: 'font-noto-arabic' });
             break;
@@ -373,6 +379,8 @@ const fontClasses = [
     'font-smallcaps',
     'font-poppins',
     'font-noto-arabic',
+    'font-roboto',
+    'font-google',
     'font-default'
 ];
 
@@ -431,6 +439,10 @@ export default {
                 return 'font-smallcaps';
             case 'poppins':
                 return 'font-poppins';
+            case 'roboto':
+                return 'font-roboto';
+            case 'google':
+                return 'font-google';
             case 'noto-arabic':
                 return 'font-noto-arabic';
             default:
@@ -454,6 +466,10 @@ export default {
                 return 'Cinzel';
             case 'poppins':
                 return 'Poppins';
+            case 'roboto':
+                return 'Roboto';
+            case 'google':
+                return 'Google Sans';
             case 'noto-arabic':
                 return 'Noto Sans Arabic';
             default:

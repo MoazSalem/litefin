@@ -349,6 +349,8 @@
     "Folders": "المجلدات",
     "FontFamily": "نوع الخط",
     "FontFamilyAssDescription": "تجاوز نوع الخط لترجمات ASS/SSA",
+    "FontGoogleSans": "Google Sans",
+    "FontRoboto": "Roboto",
     "FontScaleAss": "مقياس الخط (ASS)",
     "FontScaleAssDescription": "تكبير/تصغير مقياس الخط الرأسي والأفقي",
     "FontWeight": "وزن الخط",

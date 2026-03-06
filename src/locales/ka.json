@@ -349,6 +349,8 @@
     "Folders": "Folders",
     "FontFamily": "Font Family",
     "FontFamilyAssDescription": "Force overrides font for ASS/SSA subs",
+    "FontGoogleSans": "Google Sans",
+    "FontRoboto": "Roboto",
     "FontScaleAss": "Font Scale (ASS)",
     "FontScaleAssDescription": "Vertical/Horizontal scaling booster",
     "FontWeight": "Font Weight",

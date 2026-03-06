@@ -77,6 +77,24 @@
     font-display: swap;
 }
 
+/* Roboto - Google's standard sans-serif */
+@font-face {
+    font-family: Roboto;
+    src: url('../assets/fonts/Roboto.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Google Sans - Premium Google brand font */
+@font-face {
+    font-family: 'Google Sans';
+    src: url('../assets/fonts/Google.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -93,6 +111,14 @@
 
 .font-noto-arabic {
     font-family: 'Noto Sans Arabic', sans-serif;
+}
+
+.font-roboto {
+    font-family: Roboto, sans-serif;
+}
+
+.font-google {
+    font-family: 'Google Sans', sans-serif;
 }
 
 .font-console { font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }

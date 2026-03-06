@@ -36,6 +36,8 @@
 html[data-ui-font="system"] { --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
 html[data-ui-font="poppins"] { --jf-font-family: 'Poppins', sans-serif; }
 html[data-ui-font="noto-arabic"] { --jf-font-family: 'Noto Sans Arabic', sans-serif; }
+html[data-ui-font="roboto"] { --jf-font-family: 'Roboto', sans-serif; }
+html[data-ui-font="google"] { --jf-font-family: 'Google Sans', sans-serif; }
 html[data-ui-font="typewriter"] { --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier; }
 html[data-ui-font="print"] { --jf-font-family: 'Merriweather', serif; }
 html[data-ui-font="console"] { --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }
