@@ -170,7 +170,7 @@ export function buildJellyfinProfile(options = {}) {
     // but we respect the toggle
     const enableHDR = PlayerSettings.get('enableHDR') && caps.hdr10;
 
-    if (PlayerSettings.get('forceTranscode') && playbackMode === 'auto') {
+    if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
     }
 

@@ -886,7 +886,9 @@ export class JellyfinPlayer extends EventEmitter {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
                 startPositionTicks: currentTicks,
-                playbackMode: 'remux', // Force remux mode for the restart
+                // Ensure we use remux mode (at minimum) for track selection on HTML5, 
+                // but preserve transcode mode if it was explicitly selected.
+                playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux',
                 // Only force DirectStream if backend can't switch natively AND the track isn't the default direct play track
                 _forceDirectStream: !(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio && isCustomAudioTrack
             };
@@ -1019,7 +1021,8 @@ export class JellyfinPlayer extends EventEmitter {
             const restartOptions = {
                 ...this._currentPlayOptions,
                 subtitleStreamIndex: index,
-                startPositionTicks: currentTicks
+                startPositionTicks: currentTicks,
+                playbackMode: this._playbackMode
             };
 
             // Persist the new index so that subsequent restarts (e.g. bitrate
@@ -1575,7 +1578,8 @@ export class JellyfinPlayer extends EventEmitter {
         // This is more robust than seeking from 0 for HLS
         const playOptions = {
             ...this._currentPlayOptions,
-            startPositionTicks: currentTicks
+            startPositionTicks: currentTicks,
+            playbackMode: this._playbackMode
         };
 
         // Restart playback
@@ -1641,7 +1645,8 @@ export class JellyfinPlayer extends EventEmitter {
                 const currentTicks = this.getCurrentPositionTicks();
                 const newOptions = {
                     ...this._lastPlayOptions,
-                    startPositionTicks: currentTicks
+                    startPositionTicks: currentTicks,
+                    playbackMode: mode
                 };
                 
                 // Reuse restart logic pattern from setMaxBitrate

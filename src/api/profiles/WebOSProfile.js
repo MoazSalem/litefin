@@ -187,7 +187,7 @@ export function buildJellyfinProfile(options = {}) {
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
 
-    if (PlayerSettings.get('forceTranscode') && playbackMode === 'auto') {
+    if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
     }
 
