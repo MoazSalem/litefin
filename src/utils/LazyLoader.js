@@ -218,6 +218,14 @@ class LazyLoader {
 
         // Observe individual images (vertical grids)
         const images = container.querySelectorAll('img[data-src]');
+
+        // LEGACY FIX: Eagerly load the first 25 images in the container.
+        // This ensures the initial viewport is populated even if IntersectionObserver
+        // fails to fire (common on older Tizen hardware scrollers).
+        for (let i = 0; i < Math.min(images.length, 25); i++) {
+            this.forceLoad(images[i]);
+        }
+
         images.forEach((img) => {
             // Only observe if NOT inside a lazy row (avoid double observation)
             if (!img.closest('[data-lazy-row]')) {

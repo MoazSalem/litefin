@@ -289,9 +289,10 @@ class PersonPage extends Page {
                     ...(p.ImageTags?.Primary ? { tag: p.ImageTags.Primary } : {})
                 });
 
-                posterContainer.innerHTML = `<img src="${url}" alt="${p.Name}" class="loaded" />`;
+                posterContainer.innerHTML = `<img src="${url}" alt="${p.Name}" />`;
                 const imgEl = posterContainer.querySelector('img');
                 if (imgEl) {
+                    imgEl.onload = () => imgEl.classList.add('loaded');
                     imgEl.onerror = () => {
                         imgEl.style.display = 'none';
                         posterContainer.insertAdjacentHTML('afterbegin', fallbackHtml);
