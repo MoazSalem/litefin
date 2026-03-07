@@ -39,6 +39,15 @@ const KEY_DEBOUNCE_MS = 50;
 // Prevents infinite loops if section linking is misconfigured.
 const MAX_SECTION_SKIP_DEPTH = 20;
 
+// Rapid navigation (instant scroll) threshold.
+// If consecutive keypresses are faster than this, we snap to avoid scroll queueing.
+// 200ms was too loose (triggered on manual taps); 150ms is more robust.
+const RAPID_MOVE_THRESHOLD_MS = 150;
+
+// Minimum number of consecutive rapid moves before instant scroll kicks in.
+// Ensures a single fast double-tap doesn't cause a snap.
+const RAPID_MOVE_STREAK_REQUIRED = 2;
+
 class FocusManager {
     constructor() {
         // Registered sections: name -> config
@@ -62,6 +71,7 @@ class FocusManager {
         // Debounce handling - track PREVIOUS move time for rapid navigation detection
         this._lastMoveTime = 0;
         this._prevMoveTime = 0;
+        this._rapidMoveStreak = 0;
 
         // Suspended flag — when true, all key processing is skipped.
         // Used by components that manage their own focus (e.g. PlayerOSD)
@@ -189,9 +199,19 @@ class FocusManager {
         if (now - this._lastMoveTime < KEY_DEBOUNCE_MS) return;
 
         // Track previous move time BEFORE updating current
-        // This allows us to detect rapid key holds (moves < 200ms apart)
+        // This allows us to detect rapid key holds
+        const gap = now - this._lastMoveTime;
+        const isRapidGap = this._lastMoveTime > 0 && gap < RAPID_MOVE_THRESHOLD_MS;
+
         this._prevMoveTime = this._lastMoveTime;
         this._lastMoveTime = now;
+
+        // Update rapid move streak
+        if (isRapidGap) {
+            this._rapidMoveStreak++;
+        } else {
+            this._rapidMoveStreak = 0;
+        }
 
         // SLIDER HANDLING: When a range input is focused, Left/Right keys
         // should adjust the slider value instead of navigating to other elements.
@@ -503,13 +523,12 @@ class FocusManager {
         if (nextElement) {
             // ----------------------------------------------------------------
             // RAPID NAVIGATION MODE
-            // If the user is holding a key (two consecutive keypresses < 200ms
+            // If the user is holding a key (streak of keypresses < 150ms
             // apart), disable the smooth scroll animation and snap instantly.
             // This prevents the scroll queue from building up behind held keys,
             // which causes the page to keep scrolling after the user stops.
-            // The 200ms threshold matches the Tizen key-repeat interval.
             // ----------------------------------------------------------------
-            const isRapidNav = this._prevMoveTime > 0 && this._lastMoveTime - this._prevMoveTime < 200;
+            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
 
             this.focusElement(nextElement, { instantScroll: isRapidNav });
             return;
