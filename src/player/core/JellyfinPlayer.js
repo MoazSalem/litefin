@@ -432,22 +432,38 @@ export class JellyfinPlayer extends EventEmitter {
             const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
             const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
             
-            // PlayerPage always passes the default audio track index. We only need to
-            // force a transcode if the user requested a track that is DIFFERENT from the default.
+            // PlayerPage always passes the requested audio track index. We only need to
+            // force a transcode/remux if the user requested a track that is DIFFERENT from the default
+            // OR if it's not the physical first audio track (since browsers just play the first one in Direct Play).
             let isCustomAudioTrack = false;
-            if (options.audioStreamIndex !== undefined) {
-                // Determine the default track from the pre-fetched item if available
+            let isFirstAudioTrack = true;
+            if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+                // Determine the default and first tracks from the pre-fetched item if available
                 let defaultIndex = undefined;
+                let firstAudioIndex = undefined;
+
                 if (options.item && options.item.MediaSources) {
                     const fallbackSource = options.item.MediaSources[0];
                     const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
-                    if (ms) defaultIndex = ms.DefaultAudioStreamIndex;
+                    if (ms) {
+                        defaultIndex = ms.DefaultAudioStreamIndex;
+                        const audioStreams = (ms.MediaStreams || []).filter(s => s.Type === 'Audio');
+                        if (audioStreams.length > 0) {
+                            firstAudioIndex = audioStreams[0].Index;
+                        }
+                    }
                 }
-                isCustomAudioTrack = (options.audioStreamIndex !== defaultIndex);
+                
+                // Compare indices (cast to number to avoid type mismatches)
+                const reqIndex = Number(options.audioStreamIndex);
+                isCustomAudioTrack = (reqIndex !== Number(defaultIndex));
+                isFirstAudioTrack = (firstAudioIndex !== undefined && reqIndex === Number(firstAudioIndex));
+                
+                log.info(`[AudioSelection] Requested: ${reqIndex}, Default: ${defaultIndex}, First: ${firstAudioIndex}, Custom: ${isCustomAudioTrack}, IsFirst: ${isFirstAudioTrack}`);
             }
 
             const needsDirectStreamForAudio = options._forceDirectStream ||
-                (isHtml5Backend && !supportsNativeAudio && isCustomAudioTrack);
+                (isHtml5Backend && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
             if (needsDirectStreamForAudio) {
                 log.info('HTML5 audio track selection: clearing DirectPlayProfiles to force DirectStream/Transcode');
