@@ -193,8 +193,9 @@ export default class PlaybackInfo extends BaseMenu {
         ]);
 
         if (playMethod !== 'DirectPlay') {
-            const vMethod = (playMethod === 'Remux' || playMethod === 'DirectStream') ? 'direct' : 'transcode';
-            const aMethod = playMethod === 'Remux' ? 'direct' : 'transcode';
+            const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
+            const vMethod = isVideoDirect ? 'direct' : 'transcode';
+            const aMethod = isAudioDirect ? 'direct' : 'transcode';
             
             // Show the limit that triggered transcoding (or the manual override)
             const manualBitrate = this.player.getMaxBitrate(); 
