@@ -991,13 +991,10 @@ html[data-layout-tier="legacy"] .filter-main > * {
 
 /* Horizontal Scroll Container (Upcoming, Suggestions) */
 .row-items {
-    display: flex;
-    overflow-x: auto;
+    display: block; /* Match layout.css stable block layout */
+    overflow: hidden; 
     padding: 10px 0;
-    /* Space for focus ring */
-    scrollbar-width: none;
-    align-items: center;
-    /* Vertical alignment */
+    /* scrollbar-width handled by layout.css */
 }
 
 .media-card {
@@ -1017,4 +1014,20 @@ html[data-layout-tier="legacy"] .filter-main > * {
        transform: translateZ(0) here — it overrides that strategy and promotes
        every row card (could be 30-60+ at once) to its own GPU layer. */
     contain: layout style;
+}
+
+/* --- Library Row Stacking --- */
+.library-rows-container {
+    display: flex;
+    flex-direction: column;
+}
+
+/* --- Legacy Tier Stacking Fix --- */
+html[data-layout-tier="legacy"] .library-rows-container {
+    display: block !important;
+}
+
+html[data-layout-tier="legacy"] .library-row {
+    display: block !important;
+    width: 100% !important;
 }

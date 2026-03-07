@@ -1616,6 +1616,7 @@ class LibraryPage extends Page {
         } else {
             container.innerHTML = '';
             container.style.display = 'flex';
+            container.style.flexDirection = 'column';
         }
 
         if (!container) return;
