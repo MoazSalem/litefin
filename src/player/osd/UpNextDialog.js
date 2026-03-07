@@ -278,15 +278,6 @@ export default class UpNextDialog extends BaseMenu {
                 // Down exits overlay row to Controls
                 return false;
 
-            case 'enter': {
-                if (this._focusedButton === 0) {
-                    this._triggerPlayNow();
-                } else {
-                    this.osd.hideUpNext();
-                }
-                return true;
-            }
-
             case 'back':
                 this.osd.hideUpNext();
                 return true;

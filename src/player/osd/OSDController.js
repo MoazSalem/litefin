@@ -769,8 +769,8 @@ export default class OSDController extends Component {
     _bindKeyEvents() {
         // ENTER
         this.on('key:enter', (e) => {
-            // Do NOT prevent default here. We want the browser to trigger 'click' on focused buttons.
-            this.handleInput('enter');
+            // Conditionally prevent default inside handleInput based on what is focused
+            this.handleInput('enter', e);
         });
 
         // DIRECTIONAL
@@ -822,7 +822,7 @@ export default class OSDController extends Component {
         });
     }
 
-    handleInput(key) {
+    handleInput(key, e) {
         const wasHidden = !this._isOsdVisible;
 
         // Delegate to modal menu first (TrackMenu, SettingsMenu)
@@ -845,6 +845,7 @@ export default class OSDController extends Component {
         if (wasHidden && key === 'enter') {
             this.show();
             this._updateFocus();
+            if (e) e.preventDefault(); // Prevent accidental background click when just revealing OSD
             return true;
         }
 
@@ -867,7 +868,6 @@ export default class OSDController extends Component {
             case 'down': return this._navigate('down');
             case 'left': return this._navigate('left');
             case 'right': return this._navigate('right');
-            case 'enter': return this._executeFocused();
             case 'back': return this._handleBack();
         }
 
@@ -1166,30 +1166,7 @@ export default class OSDController extends Component {
         }
     }
 
-    _executeFocused() {
-        try {
-            const focusedEl = document.activeElement;
-            if (focusedEl) {
-                const action = focusedEl.getAttribute('data-action');
-                if (action) {
-                    log.info(`_executeFocused: Explicitly executing action '${action}'`);
-                    this._executeAction(action);
-                    return true;
-                }
 
-                const upNextAction = focusedEl.getAttribute('data-upnext-action');
-                if (upNextAction && this.upNextDialog && this.upNextDialog.isVisible) {
-                    log.info(`_executeFocused: Explicitly executing UpNext action '${upNextAction}'`);
-                    this.upNextDialog._executeAction(upNextAction);
-                    return true;
-                }
-            }
-        } catch (e) {
-            log.error('Error executing focused explicitly:', e);
-        }
-
-        return true;
-    }
 
     _findActionIndex(action) {
         const controls = this._getControls();
@@ -1390,7 +1367,7 @@ export default class OSDController extends Component {
                     this._seekDebounceTimer = null;
                     if (tooltip) tooltip.classList.remove('visible');
                 }
-            }, 500);
+            }, 800);
 
         } catch (err) {
             // Log the error but do NOT wipe _seekTargetTicks — an error in
@@ -1575,6 +1552,15 @@ export default class OSDController extends Component {
     }
 
     _onPlayerSeek(e) {
+        // Only clear if we aren't currently in the middle of a scrub session.
+        // If we are scrubbing, we want to IGNORE intermediate platform seek events
+        // that might have been triggered by a previous partial commit, otherwise
+        // they will wipe our targetTicks and cause the slider to jump.
+        if (this._seekTargetTicks !== null) {
+            log.info('Ignoring player seek event during active scrub session');
+            return;
+        }
+
         // Clear OSD's internal seek state whenever a seek happens (could be remote or chapter)
         this._clearSeekState();
 

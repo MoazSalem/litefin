@@ -270,11 +270,6 @@ export default class PlaybackInfo extends BaseMenu {
                 this.osd._updateFocus();
                 return true;
             }
-            case 'enter':
-                if (isClose) {
-                    this.osd.togglePlaybackInfo(false);
-                }
-                return true;
             case 'back':
                 this.osd.togglePlaybackInfo(false);
                 return true;
