@@ -252,7 +252,9 @@ class ScrollController {
         if (!element) return null;
 
         // Check for specific scrollable containers used in modals/filters
-        const container = element.closest('.modal-options, .filter-main, .page-content, .settings-sidebar');
+        const container = element.closest(
+            '.modal-options, .filter-main, .page-content, .settings-sidebar, .sidebar-libraries-wrapper'
+        );
 
         return container;
     }

@@ -306,6 +306,18 @@ class Sidebar extends Component {
                 }
             };
         });
+
+        // Sync indicator during scrolling
+        const wrapper = this.el.querySelector('.sidebar-libraries-wrapper');
+        if (wrapper) {
+            wrapper.onscroll = () => {
+                const focused = this.el.querySelector('.sidebar-item.focused');
+                // Only sync if the focused element is actually INSIDE the scrolling wrapper
+                if (focused && wrapper.contains(focused)) {
+                    this._updateIndicator(focused, { instant: true });
+                }
+            };
+        }
     }
 
     _expand(expanded) {
@@ -402,8 +414,10 @@ class Sidebar extends Component {
     /**
      * Update the sliding focus indicator position
      * @param {HTMLElement} [focusedItem] - Optionally pass the focused element
+     * @param {Object} [options] - Update options
+     * @param {boolean} [options.instant] - If true, disable transitions for this update
      */
-    _updateIndicator(focusedItem) {
+    _updateIndicator(focusedItem, options = {}) {
         const indicator = this.el.querySelector('.sidebar-focus-indicator');
         if (!indicator) return;
 
@@ -412,13 +426,14 @@ class Sidebar extends Component {
         if (target) {
             // If we are currently NOT expanded, we want to snap instantly
             const isExpanding = !this.el.classList.contains('expanded');
+            const forceInstant = options.instant || isExpanding;
 
             const sidebarRect = this.el.getBoundingClientRect();
             const targetRect = target.getBoundingClientRect();
             const y = targetRect.top - sidebarRect.top;
 
-            if (isExpanding) {
-                // Force an instant snap while closed
+            if (forceInstant) {
+                // Force an instant snap
                 indicator.style.transition = 'none';
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
