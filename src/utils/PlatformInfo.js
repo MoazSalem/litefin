@@ -37,30 +37,32 @@ class PlatformInfo {
         if (savedPlatform) {
             this._platform = savedPlatform;
             log.info(`Platform restored from cache: ${this._platform}`);
-            return;
-        }
+        } else {
+            // 2. Perform fresh detection
+            log.info('Detecting device platform...');
 
-        // 2. Perform fresh detection
-        log.info('Detecting device platform...');
+            // Tizen check
+            if (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined') {
+                this._platform = 'tizen';
+            }
+            // WebOS check
+            else if (
+                typeof window.webOS !== 'undefined' ||
+                navigator.userAgent.includes('Web0S') ||
+                navigator.userAgent.includes('NetCast')
+            ) {
+                this._platform = 'webos';
+            }
+            // Default
+            else {
+                this._platform = 'web';
+            }
 
-        // Tizen check
-        if (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined') {
-            this._platform = 'tizen';
-        }
-        // WebOS check
-        else if (
-            typeof window.webOS !== 'undefined' ||
-            navigator.userAgent.includes('Web0S') ||
-            navigator.userAgent.includes('NetCast')
-        ) {
-            this._platform = 'webos';
-        }
-        // Default
-        else {
-            this._platform = 'web';
-        }
+            log.info(`Detected platform: ${this._platform}`);
 
-        log.info(`Detected platform: ${this._platform}`);
+            // Cache the result
+            storage.setItem('app_platform', this._platform);
+        }
 
         // -------------------------------------------------------------------
         // Layout Tier Detection — based on Chrome version in the UA string.
@@ -68,6 +70,10 @@ class PlatformInfo {
         //   Tizen 4.0 ships Chrome 56 — both pre-Grid. We stamp this as a
         //   data attribute on <html> so CSS can switch rendering paths without
         //   any runtime JS branching in components.
+        //
+        // CRITICAL: This MUST run even if platform is cached, otherwise
+        // layoutTier stays at default 'modern' on subsequent app launches
+        // on legacy hardware.
         // -------------------------------------------------------------------
         const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
         const chromeVersion = chromeMatch ? parseInt(chromeMatch[1], 10) : 999;
@@ -75,9 +81,6 @@ class PlatformInfo {
         // Chrome 57+ has CSS Grid support; anything below falls back to flex-wrap.
         this._layoutTier = chromeVersion >= 57 ? 'modern' : 'legacy';
         log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
-
-        // Cache the result
-        storage.setItem('app_platform', this._platform);
     }
 
     /** @returns {boolean} True if running on a Samsung Tizen TV */

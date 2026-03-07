@@ -582,10 +582,14 @@ class LibraryPage extends Page {
     async _loadItems() {
         this.setLoading(true);
 
+        // Capture starting viewType to prevent race conditions
+        const capturedViewType = this.state.viewType;
+
         // Show Skeleton instead of spinner
         // Pre-emptive Cleanup: Hide horizontal rows early if switching to grid
         const isHorizontalLayout =
             this.state.viewType === 'Genres' ||
+            this.state.viewType === 'MusicGenres' ||
             this.state.viewType === 'Suggestions' ||
             this.state.viewType === 'Upcoming';
         const rowsContainer = this.$('#library-rows');
@@ -599,11 +603,23 @@ class LibraryPage extends Page {
         const contentContainer = this.$('.library-content');
 
         if (!isHorizontalLayout) {
-            if (rowsContainer) rowsContainer.style.display = 'none';
-            if (grid) grid.style.display = '';
+            if (rowsContainer) {
+                rowsContainer.style.display = 'none';
+                rowsContainer.innerHTML = ''; // Clear stale horizontal rows immediately
+            }
+            if (grid) {
+                grid.style.display = '';
+                grid.innerHTML = ''; // Clear stale grid content
+            }
         } else {
-            if (rowsContainer) rowsContainer.style.display = '';
-            if (grid) grid.style.display = 'none';
+            if (rowsContainer) {
+                rowsContainer.style.display = '';
+                rowsContainer.innerHTML = ''; // Clear for new horizontal load
+            }
+            if (grid) {
+                grid.style.display = 'none';
+                grid.innerHTML = ''; // Clear grid content
+            }
         }
 
         if (contentContainer) {
@@ -818,6 +834,12 @@ class LibraryPage extends Page {
                         });
                     }
 
+                    // Guard: Check if we are still on the same tab
+                    if (this.state.viewType !== capturedViewType) {
+                        log.info('Suggestions fetch finished but user switched tabs. Aborting render.');
+                        return;
+                    }
+
                     this.state.items = rows;
                     this._renderHorizontalRows(this.state.items);
                     this._updatePaginationUI();
@@ -942,18 +964,27 @@ class LibraryPage extends Page {
                     log.warn('Failed to load favorite suggestions', e);
                 }
 
+                // Guard: Check if we are still on the same tab
+                if (this.state.viewType !== capturedViewType) {
+                    log.info('Suggestions fetch finished but user switched tabs. Aborting render.');
+                    return;
+                }
+
                 this.state.items = rows; // Store rows for caching/restoration
                 this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
                 return; // Skip grid render
-            } else if (viewType === 'Genres') {
+            } else if (viewType === 'Genres' || viewType === 'MusicGenres') {
                 // Fetch Genres List
-                result = await api.getGenres({
+                const genreFetchMethod = viewType === 'MusicGenres' ? 'getMusicGenres' : 'getGenres';
+                result = await api[genreFetchMethod]({
                     ParentId: this.state.libraryId,
                     SortBy: 'SortName',
                     SortOrder: 'Ascending',
                     Limit: 50 // Fetch top 50 genres max to keep requests reasonable
                 });
+
+                if (this.state.viewType !== capturedViewType) return;
 
                 const allGenres = result.Items || [];
 
@@ -961,7 +992,13 @@ class LibraryPage extends Page {
                 // We pre-load data so we don't need row-intersections
                 const collectionType = this.state.libraryInfo?.CollectionType;
                 const includeItemTypes =
-                    collectionType === 'tvshows' ? 'Series' : collectionType === 'movies' ? 'Movie' : 'Movie,Series';
+                    collectionType === 'tvshows'
+                        ? 'Series'
+                        : collectionType === 'movies'
+                          ? 'Movie'
+                          : collectionType === 'music'
+                            ? 'MusicAlbum'
+                            : 'Movie,Series';
 
                 const rowPromises = allGenres.map(async (genre) => {
                     const params = {
@@ -992,6 +1029,12 @@ class LibraryPage extends Page {
 
                 const loadedRows = (await Promise.all(rowPromises)).filter((r) => r && r.items.length > 0);
 
+                // Guard: Check if we are still on the same tab
+                if (this.state.viewType !== capturedViewType) {
+                    log.info('Genre rows fetch finished but user switched tabs. Aborting render.');
+                    return;
+                }
+
                 this.state.items = loadedRows; // Store rows for caching/restoration
                 this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
@@ -999,6 +1042,9 @@ class LibraryPage extends Page {
             } else if (viewType === 'Upcoming') {
                 // Fetch upcoming items
                 result = await api.getUpcoming({ ParentId: this.state.libraryId, Limit: 60 });
+
+                if (this.state.viewType !== capturedViewType) return;
+
                 const items = result.Items || [];
 
                 // Sort by date first to ensure correct grouping order
@@ -1055,6 +1101,9 @@ class LibraryPage extends Page {
                 // CRITICAL: Reset totalRecordCount to prevent stale pagination footer
                 this.state.totalRecordCount = 0;
 
+                // Guard: Check if we are still on the same tab
+                if (this.state.viewType !== capturedViewType) return;
+
                 this._renderHorizontalRows(this.state.items);
                 this._updatePaginationUI();
                 return;
@@ -1099,58 +1148,18 @@ class LibraryPage extends Page {
                 params.IncludeItemTypes = 'Playlist';
                 params.Recursive = true;
                 result = await api.getItems(params);
-            } else if (viewType === 'MusicGenres') {
-                // Fetch Genres List for Music
-                result = await api.getMusicGenres({
-                    ParentId: this.state.libraryId,
-                    SortBy: 'SortName',
-                    SortOrder: 'Ascending',
-                    Limit: 50
-                });
-
-                const allGenres = result.Items || [];
-
-                const rowPromises = allGenres.map(async (genre) => {
-                    const genreParams = {
-                        ParentId: this.state.libraryId,
-                        GenreIds: genre.Id,
-                        StartIndex: 0,
-                        Limit: 12,
-                        Recursive: true,
-                        IncludeItemTypes: 'MusicAlbum,Audio',
-                        Fields: 'PrimaryImageAspectRatio,ProductionYear',
-                        ImageTypeLimit: 1,
-                        EnableImageTypes: 'Primary,Backdrop,Thumb'
-                    };
-
-                    try {
-                        const itemsResult = await api.getItems(genreParams);
-                        return {
-                            title: genre.Name,
-                            genreId: genre.Id,
-                            isLazy: false,
-                            items: itemsResult.Items || [],
-                            cardType: 'square'
-                        };
-                    } catch (err) {
-                        log.warn(`Failed to load items for music genre ${genre.Name}`, err);
-                        return null;
-                    }
-                });
-
-                const loadedRows = (await Promise.all(rowPromises)).filter((r) => r && r.items.length > 0);
-
-                this.state.items = loadedRows;
-                this._renderHorizontalRows(this.state.items);
-                this._updatePaginationUI();
-                return;
             }
 
-            this.state.items = result.Items || [];
-            this.state.totalRecordCount = result.TotalRecordCount || 0;
+            // Guard: Check if we are still on the same tab before rendering grid
+            if (this.state.viewType === capturedViewType) {
+                this.state.items = result?.Items || [];
+                this.state.totalRecordCount = result?.TotalRecordCount || 0;
 
-            this._renderGrid(this.state.items);
-            this._updatePaginationUI();
+                this._renderGrid(this.state.items);
+                this._updatePaginationUI();
+            } else {
+                log.info(`Stale grid load for ${capturedViewType} discarded (current: ${this.state.viewType})`);
+            }
         } catch (e) {
             log.error('Failed to load items', e);
             this.$('#library-grid').innerHTML = `<p class="error-msg">${i18n.t('FailedToLoadContent')}</p>`;
@@ -1991,6 +2000,24 @@ class LibraryPage extends Page {
         this.state.viewType = newType;
         this.state.startIndex = 0; // Reset pagination
         this.state.nameStartsWith = null; // Reset Alpha Picker
+
+        // CRITICAL: Clear sub-view parameters when switching top-level tabs
+        // This prevents _isSubView() from erroneously hiding tabs or filtering results
+        const subViewParams = ['genreId', 'studioId', 'personId', 'tagName', 'year'];
+        let hasChanges = false;
+
+        subViewParams.forEach((p) => {
+            if (this.params[p]) {
+                delete this.params[p];
+                hasChanges = true;
+            }
+        });
+
+        // Sync URL to new top-level tab state if we escaped a sub-view
+        if (hasChanges) {
+            log.info(`Cleared sub-view parameters for tab switch: ${newType}`);
+            router.navigate(`/library/${this.state.libraryId}`, { silent: true, replace: true });
+        }
 
         // Update UI Tabs
         this.$('.tab-btn.active')?.classList.remove('active');
