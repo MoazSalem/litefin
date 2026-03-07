@@ -28,6 +28,7 @@ import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { logger } from '../utils/Logger.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
 
 const log = logger.create('Player');
 
@@ -465,6 +466,33 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
 
+            // ================================================================
+            // PHYSICAL REMOTE CONTROL HANDLERS (WebOS/Tizen)
+            // ================================================================
+            // Link physical hardware keys to our existing remote command logic.
+            // Using this.on() ensures these are automatically cleaned up on page destroy.
+
+            this.on('key:play', () => this._onRemotePlay());
+            this.on('key:pause', () => this._onRemotePause());
+            this.on('key:playPause', () => this._onRemotePlayPause());
+            this.on('key:stop', () => this._onRemoteStop());
+            this.on('key:next', () => this._onRemoteNext());
+            this.on('key:previous', () => this._onRemotePrevious());
+
+            this.on('key:rewind', () => {
+                if (this._player) {
+                    log.info('Hardware Remote: Rewind (10s)');
+                    this._player.seekRelative(-10000);
+                }
+            });
+
+            this.on('key:fastForward', () => {
+                if (this._player) {
+                    log.info('Hardware Remote: FastForward (30s)');
+                    this._player.seekRelative(30000);
+                }
+            });
+
             // Start playback
             await this._startPlayback();
 
@@ -613,6 +641,35 @@ class PlayerPage extends Page {
             } else {
                 throw err;
             }
+        }
+
+        // ====================================================================
+        // WebOS Media Session (System Controls & Metadata)
+        // ====================================================================
+        // Update the OS-level media session. This enables the Magic Remote
+        // media controls and provides metadata to the LG system overlay.
+        if (platformInfo.isWebOS) {
+            webosAdapter.updateMediaSession(
+                {
+                    title: item.Name,
+                    artist: item.ProductionYear ? item.ProductionYear.toString() : '',
+                    album: item.SeriesName || 'Litefin',
+                    artworkUrl: api.getImageUrl(item.Id, 'Primary', { maxWidth: 400 })
+                },
+                {
+                    onPlay: () => this._onRemotePlay(),
+                    onPause: () => this._onRemotePause(),
+                    onStop: () => this._onRemoteStop(),
+                    onNext: () => this._onRemoteNext(),
+                    onPrevious: () => this._onRemotePrevious(),
+                    onSeekForward: () => {
+                        if (this._player) this._player.seekRelative(30000);
+                    },
+                    onSeekBackward: () => {
+                        if (this._player) this._player.seekRelative(-10000);
+                    }
+                }
+            );
         }
 
         // Report playback start to server

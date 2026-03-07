@@ -14,6 +14,7 @@ import { api } from '../api/ApiClient.js';
 import { auth } from '../api/index.js';
 import { webSocketHandler } from '../api/WebSocketHandler.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
@@ -61,15 +62,19 @@ class App {
             return;
         }
 
-        // 1. Initialize Tizen adapter (hardware/keys)
-        tizenAdapter.init();
-
-        // 1.5. Initialize StorageService — loads all localStorage into memory
+        // 1. Initialize StorageService — loads all localStorage into memory
         // This MUST happen before any other service reads from storage
         storage.init();
 
-        // 1.6. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
+        // 1.5. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
         platformInfo.init();
+
+        // 1.6. Initialize platform adapters (hardware/keys)
+        if (platformInfo.isWebOS) {
+            webosAdapter.init();
+        } else {
+            tizenAdapter.init();
+        }
 
         // 1.7. Initialize Image Cache — opens IndexedDB for homepage blob caching
         // Non-blocking: runs in background, cache degrades gracefully if unavailable
@@ -373,7 +378,11 @@ class App {
             // We DO NOT end the session on the server here.
             // Calling /Sessions/Logout actively revokes the authentication token.
             // The dashboard Offline status is handled automatically by the WebSocket dropping.
-            tizenAdapter.exit();
+            if (platformInfo.isWebOS) {
+                webosAdapter.exit();
+            } else {
+                tizenAdapter.exit();
+            }
         });
 
         // ================================================================

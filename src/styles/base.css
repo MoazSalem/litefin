@@ -465,3 +465,26 @@ body {
     justify-content: center;
     z-index: 2;
 }
+
+/* ============================================================================
+   Magic Remote Support (WebOS)
+   ============================================================================ */
+
+/* 
+ * By default on TV Platforms we hide the cursor unless the Magic Remote 
+ * (pointer mode) is active. The WebOSAdapter handles toggling this class.
+ */
+body:not(.webos-cursor-active) {
+    cursor: none !important;
+}
+
+/* 
+ * When the Magic Remote cursor is active, we disable component-level
+ * focus scaling/transforms to prevent the 'jumping focus' visual 
+ * artifact as the pointer moves across the screen.
+ */
+body.webos-cursor-active :focus,
+body.webos-cursor-active .focused {
+    transform: none !important;
+    box-shadow: none !important;
+}

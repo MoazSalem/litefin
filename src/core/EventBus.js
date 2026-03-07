@@ -12,9 +12,11 @@
  * ============================================================================
  */
 
-import { logger } from '../utils/Logger.js';
-
-const log = logger.create('EventBus');
+// ----------------------------------------------------------------------------
+// NOTE: We do NOT import Logger here. EventBus is a foundation module that
+// Logger depends on to emit logs. Importing Logger would create a circular
+// dependency and crash the app on startup.
+// ----------------------------------------------------------------------------
 
 class EventBus {
     constructor() {
@@ -89,7 +91,7 @@ class EventBus {
             try {
                 callback.apply(this, args);
             } catch (error) {
-                log.error(`Error in handler for "${event}":`, error);
+                console.error(`[EventBus] Error in handler for "${event}":`, error);
             }
         }
     }
