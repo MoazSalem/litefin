@@ -670,8 +670,8 @@ class SettingsPage extends Page {
                             'player-backend-select',
                             [
                                 { value: 'auto', label: i18n.t('AutoRecommended') },
-                                { value: 'web', label: i18n.t('BackendWeb') },
-                                { value: 'tizen', label: i18n.t('BackendTizen') }
+                                { value: 'html5', label: i18n.t('BackendWeb') },
+                                { value: 'avplay', label: i18n.t('BackendTizen') }
                             ],
                             currentBackend
                         )}
