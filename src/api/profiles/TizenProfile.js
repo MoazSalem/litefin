@@ -307,20 +307,20 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
+            MinSegments: '2',
+            SegmentLength: '4',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: transAudioCodecs + ',opus',
+            AudioCodec: transAudioCodecs,
             VideoCodec: broadTransVideo,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
+            MinSegments: '2',
+            SegmentLength: '4',
             BreakOnNonKeyFrames: false
         },
         {
@@ -365,112 +365,94 @@ export function buildJellyfinProfile(options = {}) {
     ];
 
     const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5 ? '52' : caps.tizenVersion >= 4 ? '42' : '41';
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
+    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '150'; // Standardize to 5.0 fallback for HEVC
 
-    let codecProfiles = [];
+    const hdrCondition = !enableHDR
+        ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
+        : [];
 
-    if (playbackMode !== 'remux') {
-        const hdrCondition = !enableHDR
-            ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
-            : [];
+    // Samsung TVs can play the HDR10 fallback of Dolby Vision Profile 8/7
+    const hevcVideoRangeTypes = enableHDR ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithSDR' : 'SDR|DOVIWithSDR';
 
-        // Samsung TVs can play the HDR10 fallback of Dolby Vision Profile 8/7
-        const hevcVideoRangeTypes = enableHDR ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithSDR' : 'SDR|DOVIWithSDR';
-
-        codecProfiles = [
-            {
-                Type: 'Video',
-                Codec: 'h264',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: 'high|main|baseline|constrained baseline|high 10',
-                        IsRequired: false
-                    },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                    ...hdrCondition
-                ]
-            },
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
-
-        if (enableHEVC) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'hevc',
-                Conditions: [
-                    { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoRangeType',
-                        Value: hevcVideoRangeTypes,
-                        IsRequired: false
-                    },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false }
-                ]
-            });
+    const codecProfiles = [
+        {
+            Type: 'Video',
+            Codec: 'h264',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'high|main|baseline|constrained baseline|high 10',
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
+                ...hdrCondition
+            ]
+        },
+        {
+            Type: 'Audio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: maxAudioChannels,
+                    IsRequired: false
+                }
+            ]
         }
+    ];
 
-        if (enableVP9) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'vp9',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
+    if (enableHEVC) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'hevc',
+            Conditions: [
+                { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false }
+            ]
+        });
+    }
 
-        if (enableAV1) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'av1',
-                Conditions: [
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'VideoBitDepth',
-                        Value: enableHDR ? '10' : '8',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
-    } else {
-        codecProfiles = [
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
+    if (enableVP9) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'vp9',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
+                    IsRequired: false
+                },
+                ...hdrCondition
+            ]
+        });
+    }
+
+    if (enableAV1) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'av1',
+            Conditions: [
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: enableHDR ? '10' : '8',
+                    IsRequired: false
+                },
+                ...hdrCondition
+            ]
+        });
     }
 
     return {

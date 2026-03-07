@@ -162,7 +162,7 @@ export function buildJellyfinProfile(options = {}) {
 
     const caps = getDeviceCapabilities();
 
-    const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
+    const enableHEVC = PlayerSettings.get('enableHEVC');
     const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
     const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
 
@@ -230,6 +230,14 @@ export function buildJellyfinProfile(options = {}) {
             });
         }
 
+        // Add HLS as a DirectPlay profile to encourage the server to Direct Stream (Remux)
+        directPlayProfiles.push({
+            Container: 'hls',
+            Type: 'Video',
+            VideoCodec: generalVideoCodecs.join(','),
+            AudioCodec: audioCodecString
+        });
+
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
@@ -251,6 +259,18 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [
         {
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: transAudioCodecs,
+            VideoCodec: broadTransVideo,
+            Context: 'Streaming',
+            Protocol: 'hls',
+            MaxAudioChannels: maxAudioChannels,
+            MinSegments: '2',
+            SegmentLength: '4',
+            BreakOnNonKeyFrames: playbackMode !== 'remux'
+        },
+        {
             Container: 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
@@ -258,21 +278,9 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
+            MinSegments: '2',
+            SegmentLength: '4',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
-        },
-        {
-            Container: 'mp4',
-            Type: 'Video',
-            AudioCodec: transAudioCodecs + ',opus',
-            VideoCodec: broadTransVideo,
-            Context: 'Streaming',
-            Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
-            BreakOnNonKeyFrames: false
         },
         {
             Container: 'aac',
@@ -300,106 +308,117 @@ export function buildJellyfinProfile(options = {}) {
     ];
 
     // Relaxed levels for HTML5/MSE
-    const h264Level = '120';
+    const h264Level = '51';
     const hevcLevel = '183';
 
-    let codecProfiles = [];
+    const rangeTypes = ['SDR'];
+    if (enableHDR)
+        rangeTypes.push(
+            'HDR10',
+            'HDR10Plus',
+            'HLG',
+            'DOVIWithSDR',
+            'DOVIWithHDR10',
+            'DOVIWithHDR10Plus',
+            'DOVIWithHLG',
+            'DOVIWithEL',
+            'DOVIWithELHDR10Plus',
+            'DOVIInvalid'
+        );
 
-    if (playbackMode !== 'remux') {
-        const hdrCondition = !enableHDR
-            ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
-            : [];
+    const rangeCondition = {
+        Condition: 'EqualsAny',
+        Property: 'VideoRangeType',
+        Value: rangeTypes.join('|'),
+        IsRequired: false
+    };
 
-        codecProfiles = [
-            {
-                Type: 'Video',
-                Codec: 'h264',
-                Conditions: [
-                    { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: 'high|main|baseline|constrained baseline|high 10',
-                        IsRequired: false
-                    },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                    ...hdrCondition
-                ]
-            },
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
+    const bitrateCondition = {
+        Condition: 'LessThanEqual',
+        Property: 'VideoBitrate',
+        Value: maxBitrate.toString(),
+        IsRequired: true
+    };
 
-        if (enableHEVC) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'hevc',
-                Conditions: [
-                    { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false },
-                    ...hdrCondition
-                ]
-            });
+    const codecProfiles = [
+        {
+            Type: 'Video',
+            Codec: 'h264',
+            Conditions: [
+                { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'high|main|baseline|constrained baseline|high 10',
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
+                rangeCondition,
+                bitrateCondition
+            ]
+        },
+        {
+            Type: 'Audio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: maxAudioChannels,
+                    IsRequired: false
+                }
+            ]
         }
+    ];
 
-        if (enableVP9) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'vp9',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
+    if (enableHEVC) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'hevc',
+            Conditions: [
+                { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false },
+                rangeCondition,
+                bitrateCondition
+            ]
+        });
+    }
 
-        if (enableAV1) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'av1',
-                Conditions: [
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'VideoBitDepth',
-                        Value: enableHDR ? '10' : '8',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
-    } else {
-        codecProfiles = [
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
+    if (enableVP9) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'vp9',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
+                    IsRequired: false
+                },
+                rangeCondition,
+                bitrateCondition
+            ]
+        });
+    }
+
+    if (enableAV1) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'av1',
+            Conditions: [
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: enableHDR ? '10' : '8',
+                    IsRequired: false
+                },
+                rangeCondition,
+                bitrateCondition
+            ]
+        });
     }
 
     return {

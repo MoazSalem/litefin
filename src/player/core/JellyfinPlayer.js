@@ -168,6 +168,7 @@ export class JellyfinPlayer extends EventEmitter {
         // "Auto" (null) means Unlimited/Direct Play.
         this._manualBitrate = PlayerSettings.get('maxBitrateInternet') || null;
         this._isRestarting = false; // Flag to suppress stop events during manual quality change
+        this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux')
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
         this._isSeeking = false; // Track seeking state to suppress loading screens during seek
@@ -407,6 +408,8 @@ export class JellyfinPlayer extends EventEmitter {
 
         try {
             log.debug(`Requesting PlaybackInfo from ${this.serverUrl}...`);
+
+            this._playbackMode = options.playbackMode || 'auto';
 
             // Build device profile once (avoids duplicate logs/work)
             const deviceProfile = buildJellyfinProfile({
@@ -883,6 +886,7 @@ export class JellyfinPlayer extends EventEmitter {
                 ...this._currentPlayOptions,
                 audioStreamIndex: index,
                 startPositionTicks: currentTicks,
+                playbackMode: 'remux', // Force remux mode for the restart
                 // Only force DirectStream if backend can't switch natively AND the track isn't the default direct play track
                 _forceDirectStream: !(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio && isCustomAudioTrack
             };

@@ -374,133 +374,115 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     const h264Level = caps.uhd ? '51' : '41';
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '123';
+    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '150'; // Standardize to 5.0 fallback for HEVC
 
-    let codecProfiles = [];
+    const hdrCondition = !enableHDR
+        ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
+        : [];
 
-    if (playbackMode !== 'remux') {
-        const hdrCondition = !enableHDR
-            ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
-            : [];
-
-        // Adding condition for Dolby Vision
-        if (!enableDolbyVision) {
-            hdrCondition.push({ Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false });
-        }
-
-        codecProfiles = [
-            {
-                Type: 'Video',
-                Codec: 'h264',
-                Conditions: [
-                    { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: 'high|main|baseline|constrained baseline|high 10',
-                        IsRequired: false
-                    },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
-                    { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                    ...hdrCondition
-                ]
-            },
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
-
-        if (enableHEVC) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'hevc',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: caps.uhd ? 'main|main 10' : 'main',
-                        IsRequired: false
-                    },
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'VideoBitDepth',
-                        Value: caps.uhd ? '10' : '8',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
-
-        if (enableVP9) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'vp9',
-                Conditions: [
-                    {
-                        Condition: 'EqualsAny',
-                        Property: 'VideoProfile',
-                        Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
-
-        if (enableAV1) {
-            codecProfiles.push({
-                Type: 'Video',
-                Codec: 'av1',
-                Conditions: [
-                    { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'VideoBitDepth',
-                        Value: enableHDR ? '10' : '8',
-                        IsRequired: false
-                    },
-                    ...hdrCondition
-                ]
-            });
-        }
-
-        // WebOS natively fails to decode FLAC with more than 2 channels
-        codecProfiles.push({
-            Type: 'VideoAudio',
-            Codec: 'flac',
-            Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
-        });
-        codecProfiles.push({
-            Type: 'Audio',
-            Codec: 'flac',
-            Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
-        });
-    } else {
-        codecProfiles = [
-            {
-                Type: 'Audio',
-                Conditions: [
-                    {
-                        Condition: 'LessThanEqual',
-                        Property: 'AudioChannels',
-                        Value: maxAudioChannels,
-                        IsRequired: false
-                    }
-                ]
-            }
-        ];
+    // Adding condition for Dolby Vision
+    if (!enableDolbyVision) {
+        hdrCondition.push({ Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false });
     }
+
+    const codecProfiles = [
+        {
+            Type: 'Video',
+            Codec: 'h264',
+            Conditions: [
+                { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: 'high|main|baseline|constrained baseline|high 10',
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
+                { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
+                ...hdrCondition
+            ]
+        },
+        {
+            Type: 'Audio',
+            Conditions: [
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'AudioChannels',
+                    Value: maxAudioChannels,
+                    IsRequired: false
+                }
+            ]
+        }
+    ];
+
+    if (enableHEVC) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'hevc',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: caps.uhd ? 'main|main 10' : 'main',
+                    IsRequired: false
+                },
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: caps.uhd ? '10' : '8',
+                    IsRequired: false
+                },
+                ...hdrCondition
+            ]
+        });
+    }
+
+    if (enableVP9) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'vp9',
+            Conditions: [
+                {
+                    Condition: 'EqualsAny',
+                    Property: 'VideoProfile',
+                    Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
+                    IsRequired: false
+                },
+                ...hdrCondition
+            ]
+        });
+    }
+
+    if (enableAV1) {
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'av1',
+            Conditions: [
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: '15', IsRequired: false },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: enableHDR ? '10' : '8',
+                    IsRequired: false
+                },
+                ...hdrCondition
+            ]
+        });
+    }
+
+    // WebOS natively fails to decode FLAC with more than 2 channels
+    codecProfiles.push({
+        Type: 'VideoAudio',
+        Codec: 'flac',
+        Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
+    });
+    codecProfiles.push({
+        Type: 'Audio',
+        Codec: 'flac',
+        Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
+    });
 
     return {
         Name: `Litefin WebOS${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,

@@ -684,9 +684,9 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="HEVCDescription">${i18n.t('HEVCDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableH265') ? 'active' : ''}" 
+                        <button class="toggle-switch ${PlayerSettings.get('enableHEVC') ? 'active' : ''}" 
                                 id="toggle-enable-hevc" 
-                                data-setting="enableH265"
+                                data-setting="enableHEVC"
                                 tabindex="0">
                         </button>
                     </div>
@@ -712,9 +712,9 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="DolbyVisionDescription">${i18n.t('DolbyVisionDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDV') ? 'active' : ''}" 
+                        <button class="toggle-switch ${PlayerSettings.get('enableDolbyVision') ? 'active' : ''}" 
                                 id="toggle-enable-dv" 
-                                data-setting="enableDV"
+                                data-setting="enableDolbyVision"
                                 tabindex="0">
                         </button>
                     </div>
@@ -756,9 +756,9 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="DTSPassthroughDescription">${i18n.t('DTSPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDTS') ? 'active' : ''}" 
+                        <button class="toggle-switch ${PlayerSettings.get('enableDts') ? 'active' : ''}" 
                                 id="toggle-enable-dts" 
-                                data-setting="enableDTS"
+                                data-setting="enableDts"
                                 tabindex="0">
                         </button>
                     </div>
@@ -770,9 +770,9 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="TrueHDPassthroughDescription">${i18n.t('TrueHDPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableTrueHD') ? 'active' : ''}" 
+                        <button class="toggle-switch ${PlayerSettings.get('enableTrueHd') ? 'active' : ''}" 
                                 id="toggle-enable-truehd" 
-                                data-setting="enableTrueHD"
+                                data-setting="enableTrueHd"
                                 tabindex="0">
                         </button>
                     </div>
