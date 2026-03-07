@@ -314,6 +314,8 @@
     "DirectionLTR": "Left-to-Right",
     "DirectionRTL": "Right-to-Left",
     "DirectPlay": "Direct play",
+    "DirectPlaying": "Direct Playing",
+    "DirectStreaming": "Direct Streaming",
     "Disable": "Disable",
     "DisableAllFilters": "Disable All Filters",
     "DisableAssRendering": "Disable ASS/SSA Rendering",

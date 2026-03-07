@@ -167,7 +167,16 @@ export default class PlaybackInfo extends BaseMenu {
         `;
 
         let html = '';
-        const displayPlayMethod = playMethod === 'DirectStream' ? 'Remuxing' : playMethod;
+        let displayPlayMethod = playMethod;
+        if (playMethod === 'DirectPlay') {
+            displayPlayMethod = i18n.t('DirectPlaying');
+        } else if (playMethod === 'Remux') {
+            displayPlayMethod = i18n.t('Remuxing');
+        } else if (playMethod === 'DirectStream') {
+            displayPlayMethod = i18n.t('DirectStreaming');
+        } else if (playMethod === 'Transcode') {
+            displayPlayMethod = i18n.t('Transcoding');
+        }
         
         html += createSection('', [
             { label: i18n.t('LabelPlayer'), value: playerType },
@@ -184,8 +193,8 @@ export default class PlaybackInfo extends BaseMenu {
         ]);
 
         if (playMethod !== 'DirectPlay') {
-            const vMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
-            const aMethod = playMethod === 'DirectStream' ? 'direct' : 'transcode';
+            const vMethod = (playMethod === 'Remux' || playMethod === 'DirectStream') ? 'direct' : 'transcode';
+            const aMethod = playMethod === 'Remux' ? 'direct' : 'transcode';
             
             // Show the limit that triggered transcoding (or the manual override)
             const manualBitrate = this.player.getMaxBitrate(); 

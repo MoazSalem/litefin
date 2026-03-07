@@ -545,15 +545,13 @@ export class JellyfinPlayer extends EventEmitter {
                     !mediaSource.TranscodingUrl.includes('AudioCodecNotSupported');
 
                 if (hasOnlyDirectPlayError || urlHasOnlyDirectPlayError) {
-                     playMethod = 'DirectStream';
+                     playMethod = 'Remux';
                      
                      // CRITICAL: Update the MediaSource object itself so that
-                     // MediaHelper.getPlayMethod() returns 'DirectStream' for the OSD/UI later.
+                     // MediaHelper.getPlayMethod() returns 'Remux' for the OSD/UI later.
                      mediaSource.SupportsDirectStream = true;
-                     // We should probably also unset SupportsTranscoding to be safe for UI logic
-                     // mediaSource.SupportsTranscoding = false; 
                      
-                     log.info('[PlaybackMode] Inferring DirectStream (Remux) based on DirectPlayError only.');
+                     log.info('[PlaybackMode] Inferring Remux based on DirectPlayError only.');
                 }
             }
             log.info(`[PlaybackMode] Calculated PlayMethod: ${playMethod}`);

@@ -88,17 +88,42 @@ export const MediaHelper = {
     },
 
     /**
-     * Determine play method based on media source
+     * Determine play method based on media source.
+     * Aligned with jellyfin-web/src/components/playback/playmethodhelper.js
+     * 
      * @param {Object} mediaSource
-     * @returns {string} 'DirectPlay', 'DirectStream', or 'Transcode'
+     * @returns {string} 'DirectPlay', 'Remux', 'DirectStream', or 'Transcode'
      */
     getPlayMethod(mediaSource) {
+        const transcodeInfo = mediaSource.TranscodingInfo;
+
+        if (transcodeInfo) {
+            // Logic aligned with jellyfin-web/src/components/playback/playmethodhelper.js
+            // Remux: Both video and audio are being passed through (direct).
+            // DirectStream: Video is direct, but audio is being transcoded.
+            const isVideoDirect = transcodeInfo.IsVideoDirect || !transcodeInfo.VideoCodec;
+            const isAudioDirect = transcodeInfo.IsAudioDirect;
+
+            if (isVideoDirect && isAudioDirect) {
+                return 'Remux';
+            } else if (isVideoDirect) {
+                return 'DirectStream';
+            }
+            return 'Transcode';
+        }
+
+        // If no TranscodingInfo, fall back to server-provided boolean flags
         if (mediaSource.SupportsDirectPlay) {
             return 'DirectPlay';
         }
+        
         if (mediaSource.SupportsDirectStream) {
+            // Technically DirectStream could be Remux or partial transcode.
+            // Jellyfin-web treats DirectStream without TranscodingInfo as DirectPlay 
+            // in some cases, but here we treat it as a technical remux/stream.
             return 'DirectStream';
         }
+        
         return 'Transcode';
     },
 
