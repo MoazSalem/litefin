@@ -185,8 +185,8 @@ export default class OSDController extends Component {
         // Mouse move to show OSD (attached to container)
         if (this._player) {
             this._player.on('mediastreamschange', (e) => this._onMediaStreamsChange(e));
-            this._player.on('play', () => this._updatePlayPauseButton());
-            this._player.on('pause', () => this._updatePlayPauseButton());
+            this._player.on('play', () => this.updatePlayPauseButton());
+            this._player.on('pause', () => this.updatePlayPauseButton());
             this._player.on('chaptersloaded', () => this._updateChapterButtons());
             this._player.on('seek', (e) => this._onPlayerSeek(e));
             // Also update markers when duration becomes available
@@ -337,7 +337,7 @@ export default class OSDController extends Component {
         }
 
         // Initial update
-        this._updatePlayPauseButton();
+        this.updatePlayPauseButton();
 
         return this._osdEl;
     }
@@ -366,6 +366,24 @@ export default class OSDController extends Component {
         this._isOsdVisible = true;
         this.resetAutoHide();
         this._updateNavigationButtons();
+    }
+
+    /**
+     * Shows the OSD and forces focus to the Play/Pause button 
+     * ONLY if the OSD was previously hidden.
+     */
+    showAndFocusPlayPause() {
+        const wasHidden = !this._isOsdVisible;
+        this.show();
+        
+        if (wasHidden) {
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            if (playIdx !== -1) {
+                this._currentFocusIndex = playIdx;
+                this._updateFocus();
+            }
+        }
     }
 
     /**
@@ -791,27 +809,10 @@ export default class OSDController extends Component {
             this.handleInput('right');
         });
 
-        // MEDIA KEYS
-        this.on('key:play', (e) => {
-            e?.preventDefault();
-            this.handleInput('play');
-        });
-        this.on('key:pause', (e) => {
-            e?.preventDefault();
-            this.handleInput('pause'); 
-        });
-        this.on('key:playPause', (e) => {
-            e?.preventDefault();
-            this.handleInput('playPause');
-        });
-        this.on('key:rewind', (e) => {
-            e?.preventDefault();
-            this.handleInput('rewind');
-        });
-        this.on('key:fastForward', (e) => {
-            e?.preventDefault();
-            this.handleInput('fastForward');
-        });
+        // MEDIA KEYS (Play, Pause, stop, etc) are handled by PlayerPage.js
+        // to ensure server reporting is preserved and to avoid double-firing.
+        // The OSD is notified via direct method calls or internal state updates.
+        
         this.on('key:options', (e) => {
             e?.preventDefault();
             this._executeAction('settings');
@@ -883,12 +884,19 @@ export default class OSDController extends Component {
                  this._updateFocus();
              }
 
-             this._executeAction('togglePlay');
+             if (key === 'playPause') {
+                 this._executeAction('togglePlay');
+             } else {
+                 if (this._player.unpause) this._player.unpause();
+                 else if (this._player.play) this._player.play();
+                 this.updatePlayPauseButton();
+             }
              return true;
         }
         if (key === 'pause') {
-            this._player.pause();
-            this._updatePlayPauseButton();
+            this.show();
+            if (this._player.pause) this._player.pause();
+            this.updatePlayPauseButton();
             return true;
         }
         if (key === 'fastForward') {
@@ -1208,7 +1216,7 @@ export default class OSDController extends Component {
                 break;
             case 'togglePlay': 
                 if (this._player.togglePlay) this._player.togglePlay();
-                this._updatePlayPauseButton();
+                this.updatePlayPauseButton();
                 break;
             case 'rewind': {
                 const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack; 
@@ -1376,7 +1384,7 @@ export default class OSDController extends Component {
         }
     }
     
-    _updatePlayPauseButton() {
+    updatePlayPauseButton() {
         const btn = this._osdEl.querySelector('#osdPlayPauseBtn');
         if (!btn) return;
         const isPaused = this._player.isPaused ? this._player.isPaused() : false;
@@ -1423,7 +1431,7 @@ export default class OSDController extends Component {
             if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(this._player);
             }
-            this._updatePlayPauseButton();
+            this.updatePlayPauseButton();
         } catch (e) {
             log.error('Error in OSD update loop:', e);
         }

@@ -226,6 +226,12 @@ class PlayerPage extends Page {
                     this._player.pause();
                     // Report pause state to server
                     this._reportPlaybackProgress('pause');
+
+                    // Show OSD for feedback
+                    if (this._osd) {
+                        this._osd.showAndFocusPlayPause();
+                        this._osd.updatePlayPauseButton();
+                    }
                 }
             };
             eventBus.on('remote:pause', this._onRemotePause);
@@ -241,6 +247,12 @@ class PlayerPage extends Page {
                 }
                 // Report unpause state to server
                 this._reportPlaybackProgress('unpause');
+
+                // Show OSD for feedback
+                if (this._osd) {
+                    this._osd.showAndFocusPlayPause();
+                    this._osd.updatePlayPauseButton();
+                }
             };
             eventBus.on('remote:play', this._onRemotePlay);
 
@@ -255,6 +267,12 @@ class PlayerPage extends Page {
                     this._reportPlaybackProgress('unpause');
                 } else {
                     this._reportPlaybackProgress('pause');
+                }
+
+                // Show OSD for feedback
+                if (this._osd) {
+                    this._osd.showAndFocusPlayPause();
+                    this._osd.updatePlayPauseButton();
                 }
             };
             eventBus.on('remote:playpause', this._onRemotePlayPause);
@@ -483,6 +501,7 @@ class PlayerPage extends Page {
                 if (this._player) {
                     log.info('Hardware Remote: Rewind (10s)');
                     this._player.seekRelative(-10000);
+                    if (this._osd) this._osd.show();
                 }
             });
 
@@ -490,6 +509,7 @@ class PlayerPage extends Page {
                 if (this._player) {
                     log.info('Hardware Remote: FastForward (30s)');
                     this._player.seekRelative(30000);
+                    if (this._osd) this._osd.show();
                 }
             });
 
