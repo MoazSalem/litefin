@@ -123,6 +123,9 @@ export class HtmlVideoPlayer {
             play: this._onPlay.bind(this),
             playing: this._onPlaying.bind(this),
             waiting: this._onWaiting.bind(this),
+            stalled: this._onStalled.bind(this),
+            seeking: this._onSeeking.bind(this),
+            seeked: this._onSeeked.bind(this),
             volumechange: this._onVolumeChange.bind(this),
             loadedmetadata: this._onLoadedMetadata.bind(this)
         };
@@ -860,12 +863,58 @@ export class HtmlVideoPlayer {
             log.info('Playback started');
             this.onEvent({ type: 'playbackstart' });
         }
+        this._clearStallCheck();
         this.onEvent({ type: 'playing' });
     }
 
     /** @private */
     _onWaiting() {
         this.onEvent({ type: 'waiting' });
+        this._startStallCheck();
+    }
+
+    /** @private */
+    _onStalled() {
+        log.warn('Playback stalled');
+        this.onEvent({ type: 'waiting' });
+        this._startStallCheck();
+    }
+
+    /** @private */
+    _onSeeking() {
+        this.onEvent({ type: 'waiting' });
+    }
+
+    /** @private */
+    _onSeeked() {
+        this.onEvent({ type: 'playing' });
+        this._clearStallCheck();
+    }
+
+    /** @private */
+    _startStallCheck() {
+        this._clearStallCheck();
+        
+        // If we stay in waiting/stalled for too long on Tizen, try to kick it
+        this._stallTimer = setTimeout(() => {
+            if (this._videoElement && !this._videoElement.paused && this._started) {
+                log.warn('Playback still stalled after 5s - attempting recovery kick');
+                try {
+                    // Small jump to trigger buffer re-evaluation
+                    this._videoElement.currentTime += 0.01;
+                } catch (e) {
+                    log.error('Stall recovery kick failed:', e);
+                }
+            }
+        }, 5000);
+    }
+
+    /** @private */
+    _clearStallCheck() {
+        if (this._stallTimer) {
+            clearTimeout(this._stallTimer);
+            this._stallTimer = null;
+        }
     }
 
     /** @private */

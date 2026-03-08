@@ -157,8 +157,9 @@ export default class SubtitleManager {
         this._mediaStreams = context.mediaStreams || [];
         this._backendType = context.backendType;
         this._videoElement = context.videoElement || null;
+        this._playMethod = context.playMethod || 'DirectPlay';
 
-        log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}`);
+        log.info(`Media context set: item=${this._itemId}, source=${this._mediaSourceId}, backend=${this._backendType}, playMethod=${this._playMethod}`);
     }
 
     // ========================================================================
@@ -517,12 +518,12 @@ export default class SubtitleManager {
         const isEmbedded = !isExternal;
 
         // Priority 1: Embedded subtitle on Tizen AVPlay backend
-        // AVPlay can natively render embedded text subtitles (SRT, TTML, VTT, etc.)
-        // but often fails with bitmap formats (PGS, VOBSUB).
+        // AVPlay can natively render embedded text subtitles, BUT ONLY if DirectPlaying.
+        // When Transcoding/Remuxing (HLS), native text tracks are unreliable or missing.
         // We restrict this to known text formats to avoid selecting unsupported tracks.
-        if (isEmbedded && this._backendType === 'tizen') {
+        if (isEmbedded && this._backendType === 'tizen' && this._playMethod === 'DirectPlay') {
             if (this._isTextFormat(codec)) {
-                log.debug(`Track "${track.DisplayTitle}" is embedded text + Tizen → EMBEDDED_NATIVE`);
+                log.debug(`Track "${track.DisplayTitle}" is embedded text + Tizen DirectPlay → EMBEDDED_NATIVE`);
                 return DeliveryMethod.EMBEDDED_NATIVE;
             }
         }

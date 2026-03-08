@@ -170,6 +170,7 @@ function _buildMinimalProfile(caps) {
 export function buildJellyfinProfile(options = {}) {
     const manualBitrateOverride = typeof options === 'number' ? options : options.manualBitrate;
     const playbackMode = typeof options === 'object' ? options.playbackMode || 'auto' : 'auto';
+    const isHtml5 = typeof options === 'object' && options.backend === 'html5';
 
     const caps = getDeviceCapabilities();
 
@@ -225,23 +226,21 @@ export function buildJellyfinProfile(options = {}) {
     const directPlayProfiles = [];
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+        // Standard Web formats (MP4, MKV, WebM)
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
             Type: 'Video',
             VideoCodec: generalVideoCodecs.join(','),
             AudioCodec: audioCodecString
         });
-        directPlayProfiles.push({
-            Container: 'asf',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        });
+
         directPlayProfiles.push({
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
             AudioCodec: audioCodecString
         });
+
         if (webmVideoCodecs.length > 0) {
             directPlayProfiles.push({
                 Container: 'webm',
@@ -250,34 +249,53 @@ export function buildJellyfinProfile(options = {}) {
                 AudioCodec: 'vorbis,opus'
             });
         }
+
+        // Add HLS as a DirectPlay profile to encourage the server to Direct Stream (Remux)
+        // for HLS sources, which is much more reliable on HTML5 players.
         directPlayProfiles.push({
-            Container: 'ts,mpegts',
+            Container: 'hls',
             Type: 'Video',
-            VideoCodec: tsVideoCodecs.join(','),
+            VideoCodec: generalVideoCodecs.join(','),
             AudioCodec: audioCodecString
         });
-        directPlayProfiles.push({
-            Container: 'm2ts',
-            Type: 'Video',
-            VideoCodec: m2tsVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'avi',
-            Type: 'Video',
-            VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'wmv,asf',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'mpg,mpeg,flv,3gp,vob,vro',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        });
+
+        // AVPlay handles many legacy containers natively
+        if (!isHtml5) {
+            directPlayProfiles.push({
+                Container: 'asf',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'm2ts',
+                Type: 'Video',
+                VideoCodec: m2tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'avi',
+                Type: 'Video',
+                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'wmv,asf',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'mpg,mpeg,flv,3gp,vob,vro',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+        }
+
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
@@ -303,12 +321,12 @@ export function buildJellyfinProfile(options = {}) {
             Container: caps.tizenVersion >= 5 ? 'mp4' : 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs,
+            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '2',
-            SegmentLength: '4',
+            MinSegments: isHtml5 ? '1' : '2',
+            SegmentLength: isHtml5 ? '2' : '4',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
@@ -319,8 +337,8 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '2',
-            SegmentLength: '4',
+            MinSegments: isHtml5 ? '1' : '2',
+            SegmentLength: isHtml5 ? '2' : '4',
             BreakOnNonKeyFrames: false
         },
         {
@@ -456,7 +474,7 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     return {
-        Name: `Litefin Tizen ${caps.tizenVersion}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
+        Name: `Litefin Tizen ${caps.tizenVersion}${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,

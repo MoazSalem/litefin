@@ -411,30 +411,10 @@ export class JellyfinPlayer extends EventEmitter {
 
             this._playbackMode = options.playbackMode || 'auto';
 
-            // Build device profile once (avoids duplicate logs/work)
-            const deviceProfile = buildJellyfinProfile({
-                 manualBitrate: this._manualBitrate, 
-                 playbackMode: this._playbackMode,
-                 backend: this._backendType
-            });
-
-            // When a specific audio track is requested on the HTML5 backend, we must
-            // prevent the server from responding with DirectPlay.  A static DirectPlay
-            // URL ignores AudioStreamIndex entirely — the server just streams the raw
-            // file and plays whatever track comes first.
-            //
-            // Clearing DirectPlayProfiles in the device profile forces the server to
-            // pick DirectStream or Transcode instead.  Both paths return a TranscodingUrl
-            // that already has AudioStreamIndex baked in, so the correct track plays.
-            //
-            // This applies both to the initial play() call (options.audioStreamIndex
-            // explicitly set) AND to audio-switch restarts (_forceDirectStream flag).
+            // Determine if we need to force a remux for audio tracks on HTML5
             const isHtml5Backend = !(this._backend instanceof TizenAVPlayer);
             const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
             
-            // PlayerPage always passes the requested audio track index. We only need to
-            // force a transcode/remux if the user requested a track that is DIFFERENT from the default
-            // OR if it's not the physical first audio track (since browsers just play the first one in Direct Play).
             let isCustomAudioTrack = false;
             let isFirstAudioTrack = true;
             if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
@@ -465,8 +445,24 @@ export class JellyfinPlayer extends EventEmitter {
             const needsDirectStreamForAudio = options._forceDirectStream ||
                 (isHtml5Backend && !supportsNativeAudio && (isCustomAudioTrack || !isFirstAudioTrack));
 
+            // Determine effective playback mode for profiling
+            let profilePlaybackMode = this._playbackMode;
+            if (needsDirectStreamForAudio && (profilePlaybackMode === 'auto' || profilePlaybackMode === 'directPlay')) {
+                log.info('HTML5 audio track selection: Upgrading profile mode to "remux" to ensure video Direct Stream.');
+                profilePlaybackMode = 'remux';
+            }
+
+            // Build device profile once (avoids duplicate logs/work)
+            const deviceProfile = buildJellyfinProfile({
+                 manualBitrate: this._manualBitrate, 
+                 playbackMode: profilePlaybackMode,
+                 backend: this._backendType
+            });
+            log.info('Built DeviceProfile:', deviceProfile.Name);
+
+            // If we still need to force remux but didn't use the 'remux' mode in profile
+            // (e.g. user set bitrate limits), still clear DirectPlayProfiles as a safeguard.
             if (needsDirectStreamForAudio) {
-                log.info('HTML5 audio track selection: clearing DirectPlayProfiles to force DirectStream/Transcode');
                 deviceProfile.DirectPlayProfiles = [];
             }
 
@@ -551,7 +547,8 @@ export class JellyfinPlayer extends EventEmitter {
             // In "Force Remux" mode, the server might report "Transcode" because it technically
             // falls back to the transcoding pipeline, but if the only reason is "DirectPlayError",
             // it means it's remuxing (copying streams) because we enabled all codecs in DeviceProfile.
-            if (this._playbackMode === 'remux' && playMethod === 'Transcode') {
+            const wasForcedRemux = (this._playbackMode === 'remux' || (typeof profilePlaybackMode !== 'undefined' && profilePlaybackMode === 'remux'));
+            if (wasForcedRemux && playMethod === 'Transcode') {
                 const reasons = mediaSource.TranscodingReasons;
                 const hasOnlyDirectPlayError = reasons === 'DirectPlayError' || 
                     (Array.isArray(reasons) && reasons.length === 1 && reasons[0] === 'DirectPlayError');
@@ -596,7 +593,8 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSourceId: mediaSource.Id,
                 mediaStreams: mediaSource.MediaStreams || [],
                 backendType: backend instanceof TizenAVPlayer ? 'tizen' : 'html5',
-                videoElement: (backend && backend.getVideoElement) ? backend.getVideoElement() : null
+                videoElement: (backend && backend.getVideoElement) ? backend.getVideoElement() : null,
+                playMethod: this._currentPlayMethod
             });
 
             // Initialize current stream indices
