@@ -29,6 +29,12 @@ const DIRECTION_THRESHOLD = 10;
 // misaligned candidates.
 const CROSS_AXIS_WEIGHT = 3.0;
 
+// Minimum overlap (px) required on the cross-axis before elements are
+// considered "aligned" (zeroing the cross-axis penalty).
+// This prevents the 1.05x focus scale (which adds ~7.5px bleed) from
+// tricking the navigator into thinking neighboring rows/columns are aligned.
+const MIN_OVERLAP_THRESHOLD = 20;
+
 class SpatialNavigator {
     // ========================================================================
     // Public API
@@ -146,8 +152,8 @@ class SpatialNavigator {
                 overlap = Math.max(0, right - left);
             }
 
-            // Zero out cross penalty if elements are aligned
-            if (overlap > 0) {
+            // Zero out cross penalty if elements are significantly aligned
+            if (overlap > MIN_OVERLAP_THRESHOLD) {
                 distCross = 0;
             }
 

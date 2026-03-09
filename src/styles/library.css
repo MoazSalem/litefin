@@ -338,6 +338,7 @@
     /* Responsive Grid using mix/max for TV */
     grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
     /* Hits strictly 5 per row at 1080p */
+    grid-gap: 40px 30px; /* Legacy fallback for Tizen 5.0 */
     gap: 40px 30px;
     padding-bottom: 0;
     /* Let footer handle spacing */
@@ -757,6 +758,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     grid-auto-rows: max-content;
     /* Redundant gap removed, using margin on children for Tizen */
+    grid-gap: 12px; /* Legacy fallback */
+    gap: 12px;
     align-content: start;
 }
 
