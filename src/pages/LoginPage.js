@@ -638,17 +638,7 @@ class LoginPage extends Page {
                 }, 100);
             } else {
                 // No public users - go straight to manual entry
-                this._showState(STATE.PASSWORD);
-                this._selectedUser = { Name: '', Id: '' };
-                this.setActiveSection('login-password');
-
-                // Focus password input
-                setTimeout(() => {
-                    if (this._passwordInput) {
-                        this._passwordInput.readOnly = true;
-                        this._passwordInput.focus();
-                    }
-                }, 100);
+                this._goToManualLogin();
             }
         } catch (error) {
             this._showState(STATE.SERVER);
