@@ -254,9 +254,6 @@ export class TizenAVPlayer {
                 log.warn('Failed to apply hardware buffer optimizations:', e.message || e);
             }
 
-            // Set up display
-            this._createDisplay();
-
             // Set up event listeners
             this._setupListeners();
 
@@ -287,6 +284,10 @@ export class TizenAVPlayer {
 
             // Prepare asynchronously
             await this._prepareAsync();
+
+            // Set up display rect only after preparation success
+            // This prevents extra surface initialization delays and startup lag.
+            this._createDisplay();
 
             // Start playback — must be after prepare
             this._avplay.play();
