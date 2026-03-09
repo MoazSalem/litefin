@@ -59,8 +59,10 @@ export class TizenAVPlayer {
         // Throttle for timeupdate events
         this._lastTimeUpdateTicks = 0;
 
-        // Check Tizen availability
-        this._avplay = window.tizen?.avplay || window.webapis?.avplay || null;
+        // Check Tizen availability: prioritize webapis (Samsung Hardware API) over tizen (Universal API)
+        // On most Samsung TVs, webapis.avplay is the direct hardware interface.
+        const avplay = window.webapis?.avplay || window.tizen?.avplay || null;
+        this._avplay = avplay;
 
         if (!this._avplay) {
             log.warn('Tizen AVPlay API not available');
@@ -171,26 +173,85 @@ export class TizenAVPlayer {
             this._avplay.open(options.url);
 
             try {
-                const isAdaptive = (options.url.indexOf('.m3u8') > -1) || (options.url.indexOf('.mpd') > -1) || (options.playMethod !== 'DirectPlay');
-                if (isAdaptive || (options.mediaSource && options.mediaSource.VideoType === '4K')) {
-                    this._avplay.setStreamingProperty("ADAPTIVE_INFO", "FIXED_MAX_RESOLUTION=3840X2160");
-                    log.debug('Set ADAPTIVE_INFO for 4K streaming');
-                    
-                    // Configure time-based buffer thresholds (proper API, works on Tizen 5.0+)
-                    // Initial buffer: accumulate 3 seconds of content before onbufferingcomplete fires
-                    try {
-                        this._avplay.setBufferSize("PLAYER_BUFFER_FOR_PLAY", "PLAYER_BUFFER_SIZE_IN_SECOND", 3);
-                        log.info('Set initial play buffer to 3 seconds');
-                    } catch (e) { log.warn('Failed to set PLAYER_BUFFER_FOR_PLAY:', e); }
+                // Determine if this is a video stream
+                const isVideo = options.mediaSource?.MediaStreams?.some(s => s.Type === 'Video');
 
-                    // Resume buffer: after a stall, accumulate 5 seconds before resuming playback
-                    try {
-                        this._avplay.setBufferSize("PLAYER_BUFFER_FOR_RESUME", "PLAYER_BUFFER_SIZE_IN_SECOND", 5);
-                        log.info('Set resume buffer to 5 seconds');
-                    } catch (e) { log.warn('Failed to set PLAYER_BUFFER_FOR_RESUME:', e); }
+                if (isVideo) {
+                    // 1. ABR Quality Kickstart: Prevent ABR jump stutter by starting at high quality.
+                    // If no bitrate is provided, default to a high value (20Mbps) to ensure hardware
+                    // requests high quality immediately.
+                    const bufferPlaySec = 6;
+                    const bufferResumeSec = 4;
+                    const timeoutSec = 10;
+                    const bitrate = options.mediaSource?.Bitrate || 20000000;
+                    const isDirectPlay = options.playMethod === 'DirectPlay';
+
+                    // 1. ABR Quality Kickstart (HLS/Adaptive Only)
+                    if (!isDirectPlay) {
+                        try {
+                            const props = [
+                                'FIXED_MAX_RESOLUTION=3840X2160',
+                                `START_BITRATE=${bitrate}`,
+                                `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
+                                `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
+                            ].join('|');
+                            this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
+                            log.info(`Hardware ABR Optimized: StartBitrate=${bitrate}`);
+                        } catch (e) {
+                             log.warn('Failed to set hls-specific properties:', e.message || e);
+                        }
+                    }
+
+                    // 2. Hardware-Level Stabilization: Buffering Param Control
+                    // Based on Samsung documentation: setBufferingParam is the primary control.
+                    const _avplay = window.webapis?.avplay || window.tizen?.avplay || this._avplay;
+                    let bufferResult = "None";
+
+                    if (_avplay && typeof _avplay.setBufferingParam === 'function') {
+                        try {
+                            // Initial playback buffer
+                            _avplay.setBufferingParam("PLAYER_BUFFER_FOR_PLAY", "PLAYER_BUFFER_SIZE_IN_SECOND", bufferPlaySec);
+                            
+                            // Rebuffer after stall/seek
+                            _avplay.setBufferingParam("PLAYER_BUFFER_FOR_RESUME", "PLAYER_BUFFER_SIZE_IN_SECOND", bufferResumeSec);
+                            
+                            // Buffering timeout (how long to wait before triggering bufferingcomplete)
+                            if (typeof _avplay.setTimeoutForBuffering === 'function') {
+                                _avplay.setTimeoutForBuffering(timeoutSec);
+                            }
+                            
+                            bufferResult = `Thresholds (${bufferPlaySec}s/${bufferResumeSec}s)`;
+                        } catch (e) {
+                            log.warn(`setBufferingParam failed: ${e.message || e}`);
+                            
+                            // Legacy Fallback Tier 2: setBufferSize (Bytes)
+                            if (typeof _avplay.setBufferSize === 'function') {
+                                try {
+                                    const finalBufferBytes = Math.max(15 * 1024 * 1024, Math.round((bitrate / 8) * bufferPlaySec));
+                                    _avplay.setBufferSize(finalBufferBytes);
+                                    bufferResult = `Bytes (${Math.round(finalBufferBytes / (1024*1024))}MB)`;
+                                } catch (e2) {
+                                    log.warn(`setBufferSize fallback failed: ${e2.message || e2}`);
+                                }
+                            }
+                        }
+                    }
+
+                    // Tier 3: Emergency Property Fallback (Broadest compatibility)
+                    if (bufferResult === "None") {
+                        try {
+                            // Some older firmware only accepts SET_BUFFER_SIZE as a streaming property
+                            this._avplay.setStreamingProperty("SET_BUFFER_SIZE", `${bufferPlaySec}`);
+                            bufferResult = "Property Escape Hatch";
+                        } catch (e) {
+                            log.error('Hardware buffer lock failed:', e.message || e);
+                        }
+                    }
+
+                    log.info(`Hardware Buffer Strategy: ${bufferResult}`);
                 }
             } catch (e) {
-                log.warn('Failed to set streaming properties', e);
+                log.warn('Failed to apply hardware buffer optimizations:', e.message || e);
             }
 
             // Set up display
@@ -325,7 +386,8 @@ export class TizenAVPlayer {
                     this._applyPendingTracks();
                 }
 
-                // Only emit playing if we are actually playing (not paused)
+                // Standard path: Hardware is settled (due to 6s buffer threshold),
+                // so we can finally emit 'playing' and show the first frame.
                 if (this._isPlaying && !this._hasEmittedPlaying) {
                     this._hasEmittedPlaying = true;
                     this.onEvent({ type: 'playing' });
@@ -950,6 +1012,17 @@ export class TizenAVPlayer {
      * Get current time in seconds
      * @returns {number}
      */
+    /**
+     * Emit 'playing' event and update internal state
+     * @private
+     */
+    _emitPlaying() {
+        if (!this._hasEmittedPlaying) {
+            this._hasEmittedPlaying = true;
+            this.onEvent({ type: 'playing' });
+        }
+    }
+
     getCurrentTime() {
         if (!this._avplay || !this._isPrepared) return 0;
 

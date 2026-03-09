@@ -239,11 +239,14 @@ export class HtmlVideoPlayer {
 
             const hls = new Hls({
                 startPosition: (options.playerStartPositionTicks || 0) / 10000000,
-                maxBufferLength: 30,
-                maxMaxBufferLength: 60,
+                maxBufferLength: 60,
+                maxMaxBufferLength: 120,
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
-                fragLoadingTimeOut: 20000
+                fragLoadingTimeOut: 20000,
+                // Increase initial buffer goal for stability (matching Tizen's 6s goal)
+                maxBufferSize: 60 * 1000 * 1000, // 60MB roughly
+                enableWorker: true
             });
 
             // HLS.js events
@@ -904,7 +907,8 @@ export class HtmlVideoPlayer {
     _onSeeked() {
         const video = this._videoElement;
         if (video && !video.paused) {
-            this.onEvent({ type: 'playing' });
+            // Re-use _onPlaying logic for seeked-playing transition
+            this._onPlaying();
         }
         this._clearStallCheck();
     }
