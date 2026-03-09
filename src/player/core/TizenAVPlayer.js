@@ -308,7 +308,9 @@ export class TizenAVPlayer {
         const listener = {
             onbufferingstart: () => {
                 log.debug('Buffering started');
-                this.onEvent({ type: 'waiting' });
+                if (this._isPlaying) {
+                    this.onEvent({ type: 'waiting' });
+                }
             },
             onbufferingprogress: (percent) => {
                 // Buffering progress (0-100)
@@ -733,6 +735,10 @@ export class TizenAVPlayer {
             }
             const positionMs = Math.floor(targetTicks / 10000);
             this._avplay.seekTo(positionMs);
+
+            // Manual timeupdate for paused state (native oncurrentplaytime is only fired when playing)
+            const currentTime = targetTicks / 10000000;
+            this.onEvent({ type: 'timeupdate', data: { time: currentTime } });
         } catch (e) {
             log.error('Seek failed:', e);
         }

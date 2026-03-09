@@ -781,6 +781,7 @@ export class JellyfinPlayer extends EventEmitter {
      */
     seek(positionTicks) {
         this._isSeeking = true;
+        this._seekTargetTicks = positionTicks;
         this._backend?.seek(positionTicks);
         this.emit('seek', { positionTicks });
     }
@@ -1415,8 +1416,14 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {number}
      */
     getCurrentPositionTicks() {
-        // Add offset if we are playing a transcoded segment that starts at 0
-        const backendTicks = Math.round((this._backend?.getCurrentTime() ?? 0) * 10000000);
+        if (this._isSeeking && this._seekTargetTicks !== null) {
+            return this._seekTargetTicks;
+        }
+
+        const backendTime = this._backend?.getCurrentTime ? this._backend.getCurrentTime() : 0;
+        const backendTicks = Math.round(backendTime * 10000000);
+        
+        // Add offset if we are playing a transcoded segment
         const total = backendTicks + this._transcodingOffsetTicks;
         return isNaN(total) ? 0 : total;
     }

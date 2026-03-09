@@ -108,6 +108,7 @@ export default class SubtitleManager {
         this._primaryDelivery = DeliveryMethod.NONE;
         this._primaryCues = [];             // Parsed cue array for text-based rendering
         this._activePrimaryCue = null;      // Currently displayed primary cue
+        this._primaryActiveIndex = -1;      // Cached index for sequential search optimization
         this._primaryOffset = 0;            // User-applied timing offset in seconds
 
         // ====================================================================
@@ -118,6 +119,7 @@ export default class SubtitleManager {
         this._secondaryDelivery = DeliveryMethod.NONE;
         this._secondaryCues = [];
         this._activeSecondaryCue = null;
+        this._secondaryActiveIndex = -1;
         this._secondaryOffset = 0;
 
         log.info('SubtitleManager initialized');
@@ -828,11 +830,51 @@ export default class SubtitleManager {
         // Apply the user's timing offset
         const adjustedTime = currentTimeSeconds - offset;
 
-        // Binary search would be faster for large cue arrays, but linear
-        // scan is fine for typical subtitle file sizes (~500-2000 cues)
-        const activeCue = cues.find(
-            (cue) => adjustedTime >= cue.start && adjustedTime <= cue.end
-        );
+        // =====================================================================
+        // Optimized Stateful Search
+        // =====================================================================
+        // Use the last known index as a starting point. Since playback is
+        // usually sequential, we check the current index first, then the next,
+        // falling back to a full (but still prioritized) search only if the
+        // time has jumped (seeking).
+        // =====================================================================
+        let currentIndex = slot === 'primary' ? this._primaryActiveIndex : this._secondaryActiveIndex;
+        let activeCue = null;
+
+        // 1. Check if the current cached cue is still valid
+        if (currentIndex >= 0 && currentIndex < cues.length) {
+            const cue = cues[currentIndex];
+            if (adjustedTime >= cue.start && adjustedTime <= cue.end) {
+                activeCue = cue;
+            } else if (adjustedTime > cue.end && currentIndex + 1 < cues.length) {
+                // 2. Not in current cue? Check if it's the very next one (common case)
+                const nextCue = cues[currentIndex + 1];
+                if (adjustedTime >= nextCue.start && adjustedTime <= nextCue.end) {
+                    activeCue = nextCue;
+                    currentIndex++;
+                }
+            }
+        }
+
+        // 3. Fallback: Full search if not found by incrementing
+        if (!activeCue) {
+            // Priority search: usually we are moving forward or staying near where we were
+            // If the time jumped backward or significantly forward, we scan.
+            activeCue = cues.find((cue, idx) => {
+                if (adjustedTime >= cue.start && adjustedTime <= cue.end) {
+                    currentIndex = idx;
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        // Update cached index
+        if (slot === 'primary') {
+            this._primaryActiveIndex = currentIndex;
+        } else {
+            this._secondaryActiveIndex = currentIndex;
+        }
 
         // Determine the current "active cue" reference for this slot
         const currentActive = slot === 'primary' ? this._activePrimaryCue : this._activeSecondaryCue;
@@ -862,6 +904,16 @@ export default class SubtitleManager {
 
                 callback({ text: '' });
             }
+            
+            // If we are between cues, keep the last index so we can efficiently find the next one
+            // unless the time is before the start of our current range.
+            if (currentIndex >= 0 && currentIndex < cues.length) {
+               if (adjustedTime < cues[currentIndex].start) {
+                   // Time jumped backward before current cue? Reset to allow search from start next tick.
+                   if (slot === 'primary') this._primaryActiveIndex = -1;
+                   else this._secondaryActiveIndex = -1;
+               }
+            }
         }
     }
 
@@ -880,6 +932,7 @@ export default class SubtitleManager {
         this._primaryDelivery = DeliveryMethod.NONE;
         this._primaryCues = [];
         this._activePrimaryCue = null;
+        this._primaryActiveIndex = -1;
         this._primaryOffset = 0;
 
         // Clear the display if something was showing
@@ -913,6 +966,7 @@ export default class SubtitleManager {
         this._secondaryDelivery = DeliveryMethod.NONE;
         this._secondaryCues = [];
         this._activeSecondaryCue = null;
+        this._secondaryActiveIndex = -1;
         this._secondaryOffset = 0;
 
         // Clear the display if something was showing

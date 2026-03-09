@@ -466,6 +466,9 @@ export class HtmlVideoPlayer {
         if (Math.abs(video.currentTime - targetSeconds) > SEEK_THRESHOLD_MS / 1000) {
             video.currentTime = Math.max(0, targetSeconds);
         }
+
+        // Manual timeupdate for paused state (native event is delayed or absent on many browsers)
+        this.onEvent({ type: 'timeupdate', data: { time: targetSeconds } });
     }
 
     // ========================================================================
@@ -882,12 +885,19 @@ export class HtmlVideoPlayer {
 
     /** @private */
     _onSeeking() {
-        this.onEvent({ type: 'waiting' });
+        const video = this._videoElement;
+        // Only show spinner if we are NOT paused (real buffering during playback)
+        if (video && !video.paused) {
+            this.onEvent({ type: 'waiting' });
+        }
     }
 
     /** @private */
     _onSeeked() {
-        this.onEvent({ type: 'playing' });
+        const video = this._videoElement;
+        if (video && !video.paused) {
+            this.onEvent({ type: 'playing' });
+        }
         this._clearStallCheck();
     }
 

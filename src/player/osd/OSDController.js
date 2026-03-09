@@ -300,43 +300,42 @@ export default class OSDController extends Component {
             <div class="osd-overlays"></div>
         `;
 
-        // Bind slider
-        const slider = this._osdEl.querySelector('#osdPositionSlider');
-        slider.addEventListener('input', (e) => this._handlePositionSliderInput(e));
-        slider.addEventListener('change', (e) => this._handlePositionSliderChange(e));
+        // Cache main elements to avoid redundant querySelector calls in the update loop
+        this._osdMainEl = this._osdEl.querySelector('.osd-main');
+        this._osdCurrentTimeEl = this._osdEl.querySelector('#osdCurrentTime');
+        this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
+        this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
+        this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
+        this._osdClockEl = this._osdEl.querySelector('#osdClock');
+        this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
-        // Bind clicks
+        // Bind slider
+        this._osdPositionSliderEl.addEventListener('input', (e) => this._handlePositionSliderInput(e));
+        this._osdPositionSliderEl.addEventListener('change', (e) => this._handlePositionSliderChange(e));
+
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
             const btn = e.target.closest('[data-action]');
             if (btn) {
                 e.stopPropagation();
-                // If it's a slider check if we should ignore? No, slider doesn't have data-action usually.
-                 this._executeAction(btn.dataset.action);
+                this._executeAction(btn.dataset.action);
             }
         });
 
         /*
          * Audio mode: hide buttons that only apply to video.
-         * The subtitle and audio-track buttons open selection menus that are
-         * meaningless for Music/Audiobook items (no video streams, no subs).
-         * We remove them from the DOM entirely so they don't clutter the
-         * controls row and can't accidentally receive focus.
          */
         if (this._isAudio) {
             const audioBtn = this._osdEl.querySelector('[data-action="audio"]');
             const subtitleBtn = this._osdEl.querySelector('[data-action="subtitles"]');
             audioBtn?.remove();
             subtitleBtn?.remove();
-            // Mark the OSD so CSS can apply audio-specific tweaks if needed
             this._osdEl.classList.add('osd-audio-mode');
         } else {
-            // Remove lyrics button entirely for video items
             const lyricsBtn = this._osdEl.querySelector('#osdLyricsBtn');
             lyricsBtn?.remove();
         }
 
-        // Initial update
         this.updatePlayPauseButton();
 
         return this._osdEl;
@@ -360,10 +359,13 @@ export default class OSDController extends Component {
     }
 
     show() {
-        const main = this._osdEl.querySelector('.osd-main');
-        if (main) main.classList.remove('osd-hidden');
+        if (this._osdMainEl) this._osdMainEl.classList.remove('osd-hidden');
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
+        
+        // Start background polling when OSD becomes visible
+        this._startUpdates();
+        
         this.resetAutoHide();
         this._updateNavigationButtons();
     }
@@ -601,11 +603,17 @@ export default class OSDController extends Component {
     hide() {
         // Don't hide if a modal menu is open
         if (this.isModalOpen) return; 
-        
-        const main = this._osdEl.querySelector('.osd-main');
-        if (main) main.classList.add('osd-hidden');
+        if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+        
+        // Potential timer stop: only stop if no menus or overlays are currently
+        // active and requiring background updates (like PlaybackInfo).
+        if (!this.activeMenu && !this.upNextDialog?.isVisible) {
+            this._stopUpdates();
+        }
+        
+        if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
     }
 
     resetAutoHide() {
@@ -1385,20 +1393,33 @@ export default class OSDController extends Component {
     }
     
     updatePlayPauseButton() {
-        const btn = this._osdEl.querySelector('#osdPlayPauseBtn');
-        if (!btn) return;
-        const isPaused = this._player.isPaused ? this._player.isPaused() : false;
-        btn.innerHTML = isPaused ? ICONS.play : ICONS.pause;
+        if (!this._osdPlayPauseBtnEl || !this._player) return;
+
+        const isPaused = this._player.isPaused();
+        this._osdPlayPauseBtnEl.innerHTML = isPaused ? ICONS.play : ICONS.pause;
+        this._osdPlayPauseBtnEl.className = isPaused ? 'osd-btn osd-btn-play osd-btn-paused' : 'osd-btn osd-btn-play';
     }
 
     _startUpdates() {
+        if (this._updateTimer) return;
+        
+        log.debug('Starting OSD update loop (Interval:', this._config.updateInterval, 'ms)');
         this._updateTimer = setInterval(() => this._updateState(), this._config.updateInterval);
     }
 
     _stopUpdates() {
-        if (this._updateTimer) clearInterval(this._updateTimer);
+        if (!this._updateTimer) return;
+        
+        log.debug('Stopping OSD update loop');
+        clearInterval(this._updateTimer);
+        this._updateTimer = null;
     }
 
+    /**
+     * Main OSD update tick. Handles time/progress updates and 
+     * synchronized state changes.
+     * @private
+     */
     _updateState() {
         try {
             // Always update playback info if active (it has its own visibility check)
@@ -1406,17 +1427,16 @@ export default class OSDController extends Component {
                 this.playbackInfo.update();
             }
 
-            // If OSD is hidden, skip heavy DOM updates (time, slider, clock)
-            if (!this._isOsdVisible && !this.activeMenu) {
+            // Optimization: If OSD is completely hidden (no menus, no overlays),
+            // skip DOM updates. The timer should ideally be stopped, but we guard here too.
+            if (!this._isOsdVisible && !this.activeMenu && !this.upNextDialog?.isVisible) {
                 return;
             }
 
-            if (this._seekTargetTicks !== null) {                // Safety net: if seek state somehow gets stuck (debounce never fired),
-                // reset after an extended timeout. Normal usage is already handled by
-                // the debounce timer's finally block, so this only fires in edge cases.
-                // 5s was too short — users legitimately hold fast-forward for many seconds.
+            // Seek Safety: skip updates while the user is actively scrubbing
+            if (this._seekTargetTicks !== null) {
                 if (this._seekStartTime && (Date.now() - this._seekStartTime > 30000)) {
-                    log.warn('Seek session safety timeout reached (30s). Resetting stuck state.');
+                    log.warn('Seek session safety timeout (30s). Resetting.');
                     this._seekTargetTicks = null;
                     this._seekStartTime = null;
                     const tooltip = this._osdEl.querySelector('#osdSeekTooltip');
@@ -1428,67 +1448,90 @@ export default class OSDController extends Component {
 
             this._updateTimeDisplay(this._player);
             this._updateClock();
+            
             if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(this._player);
             }
+            
             this.updatePlayPauseButton();
         } catch (e) {
             log.error('Error in OSD update loop:', e);
         }
     }
-    
+
+    /**
+     * Update the current/total time strings on the OSD.
+     * @param {Object} player 
+     * @param {boolean} skipHeavy - Skip less critical updates during rapid seeks
+     * @private
+     */
     _updateTimeDisplay(player, skipHeavy = false) {
+        if (!this._osdCurrentTimeEl || !this._osdTotalTimeEl) return;
+
         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
-        // If duration is > 1 hour, force hours format to keep display stable
+        // Force hours if > 1h to prevent layout shifts when jumping between hours
         const forceHours = duration >= 3600 * 10000000;
 
-        // Cache references to avoid layout thrashing
-        if (!this._osdCurrentTimeEl) this._osdCurrentTimeEl = this._osdEl.querySelector('#osdCurrentTime');
-        
-        if (this._osdCurrentTimeEl) {
-            this._osdCurrentTimeEl.textContent = this._formatTime(current, forceHours);
+        // Current time
+        const timeStr = this._formatTime(current, forceHours);
+        if (this._osdCurrentTimeEl.textContent !== timeStr) {
+            this._osdCurrentTimeEl.textContent = timeStr;
         }
 
-        // Heavy layout/localization operations
-        // Skip these during 30fps rapid seek scrubbing where the user only looks at the tooltip!
+        // Total time
+        const totalStr = this._formatTime(duration, forceHours);
+        if (this._osdTotalTimeEl.textContent !== totalStr) {
+            this._osdTotalTimeEl.textContent = totalStr;
+        }
+
+        // Heavy updates (localization/extra elements)
         if (skipHeavy) return;
 
-        if (!this._osdTotalTimeEl) this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
-        if (this._osdTotalTimeEl) {
-            this._osdTotalTimeEl.textContent = this._formatTime(duration, forceHours);
-        }
-        
-        if (!this._osdEndsAtEl) this._osdEndsAtEl = this._osdEl.querySelector('#osdEndsAt');
-        if (this._osdEndsAtEl && duration > 0 && player.getCurrentPositionTicks) {
-            const remainingMs = (duration - current) / 10000;
-            const endTime = new Date(Date.now() + remainingMs);
-            this._osdEndsAtEl.textContent = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
+        // Update "Ends at" time
+        const endsAtEl = this._osdEl.querySelector('#osdEndsAt');
+        if (endsAtEl && duration > 0) {
+            const remaining = duration - current;
+            const endTime = new Date(Date.now() + (remaining / 10000));
+            // Use 24h format or localized string
+            const endStr = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+            if (endsAtEl.textContent !== endStr) {
+                endsAtEl.textContent = endStr;
+            }
         }
     }
 
+    /**
+     * Sync the position slider and fill bar with the player position.
+     * @param {Object} player 
+     * @private
+     */
     _updatePositionSlider(player) {
-        if (!this._osdPositionSliderEl) this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
-        if (!this._osdPositionSliderEl) return;
+        if (!this._osdPositionSliderEl || !this._osdPositionFillEl) return;
 
         const current = player.getCurrentPositionTicks ? player.getCurrentPositionTicks() : 0;
         const duration = player.getDurationTicks ? player.getDurationTicks() : 0;
 
         const percent = duration > 0 ? (current / duration) * 100 : 0;
-        this._osdPositionSliderEl.value = percent;
-
-        if (!this._osdPositionFillEl) this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
-        if (this._osdPositionFillEl) {
+        
+        // Only update DOM if value changed significantly (save paint cycles)
+        const currentVal = parseFloat(this._osdPositionSliderEl.value);
+        if (Math.abs(currentVal - percent) > 0.01) {
+            this._osdPositionSliderEl.value = percent;
             this._osdPositionFillEl.style.width = percent + '%';
         }
     }
-    
+
+    /**
+     * Update the wall clock on the OSD.
+     * @private
+     */
     _updateClock() {
-        const clockEl = this._osdEl.querySelector('#osdClock');
-        if (clockEl) {
-            const now = new Date();
-            clockEl.textContent = i18n.formatLocalTime(now);
+        if (!this._osdClockEl) return;
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (this._osdClockEl.textContent !== timeStr) {
+            this._osdClockEl.textContent = timeStr;
         }
     }
 
