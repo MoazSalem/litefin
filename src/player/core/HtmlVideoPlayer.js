@@ -762,6 +762,14 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Get start position in ticks
+     * @returns {number}
+     */
+    getStartPositionTicks() {
+        return this._currentPlayOptions?.playerStartPositionTicks || 0;
+    }
+
+    /**
      * Check if paused
      * @returns {boolean}
      */

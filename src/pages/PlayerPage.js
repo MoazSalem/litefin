@@ -1534,6 +1534,19 @@ class PlayerPage extends Page {
     _onMediaStreamsChange(data) {
         if (!this._item || !this._player) return;
 
+        // Skip reporting during initial setup (first 2 seconds of play time) to avoid CPU contention.
+        // Tizen hardware is under heavy load during ABR jumps at startup, and building the
+        // full NowPlayingQueue for progress reporting can trigger stutters.
+        const currentTicks = this._player.getCurrentPositionTicks();
+        const startPositionTicks = this._player.getStartPositionTicks?.() || 0;
+        const watchTimeTicks = currentTicks - startPositionTicks;
+
+        if (watchTimeTicks < 20000000) {
+            // 2 seconds
+            log.info('Skipping early progress report during startup stabilization');
+            return;
+        }
+
         log.info('Media streams changed, reporting progress to persist selection');
         const isPaused = this._player.isPaused();
         this._reportPlaybackProgress(isPaused ? 'pause' : 'timeupdate');

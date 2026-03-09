@@ -348,9 +348,11 @@ export class TizenAVPlayer {
                 }
 
                 // timeupdate fires as frames are drawn. 
-                // If we haven't emitted 'playing' yet (e.g., started at 0:00 without buffering), do it now!
+                // We emit 'playing' only after the first frame has rendered (time >= 0).
+                // On some Tizen versions, time might stay at 0 for a moment after buffering complete,
+                // so we gate it on time >= 0 to be definitive.
                 if (this._isPlaying && !this._hasEmittedPlaying && time >= 0) {
-                    log.debug('First frame rendered (time >= 0), emitting playing');
+                    log.debug(`First frame rendered (time ${time}), emitting playing`);
                     this._hasEmittedPlaying = true;
                     this.onEvent({ type: 'playing' });
                 }
@@ -959,6 +961,14 @@ export class TizenAVPlayer {
         } catch (e) {
             return 0;
         }
+    }
+
+    /**
+     * Get start position in ticks
+     * @returns {number}
+     */
+    getStartPositionTicks() {
+        return this._currentPlayOptions?.playerStartPositionTicks || 0;
     }
 
     /**
