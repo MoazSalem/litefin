@@ -36,7 +36,10 @@ export class TizenAVPlayer {
         this._currentPlayOptions = null;
         this._duration = 0;
         this._isPlaying = false;
+        this._isTizenPlaying = false;
+        this._bufferingComplete = false;
         this._isPrepared = false;
+        this._hasEmittedPlaying = false;
 
         // Volume (Tizen stores 0-100)
         this._volume = MediaHelper.getSavedVolume() * 100;
@@ -147,21 +150,25 @@ export class TizenAVPlayer {
 
         log.info('Starting playback');
 
-        this._currentPlayOptions = options;
-        this._currentSrc = options.url;
-
-        // Reset subtitle offset for new playback session
-        this._subtitleOffset = 0;
-        this._hasEmittedPlaying = false;
-        this._firstFrameRendered = false;
-        this._playbackStabilized = false;
-
         try {
             // Track if we were actually active to know if a cleanup sleep is needed
             const wasActive = this._isPlaying || this._isPrepared;
 
             // Stop any existing playback
             await this._stopInternal();
+
+            // Reset state for new playback session:
+            // This MUST happen after _stopInternal() as that reset resets these flags.
+            this._isPlaying = true; // Signal intent to play
+            this._isTizenPlaying = false;
+            this._bufferingComplete = false;
+            this._isPrepared = false;
+            this._hasEmittedPlaying = false;
+            this._firstFrameRendered = false;
+            this._playbackStabilized = false;
+            this._subtitleOffset = 0;
+            this._playStartTime = Date.now();
+            this._currentPlayOptions = options;
 
             // Only sleep if we just forcefully stopped an active stream
             if (wasActive) {
@@ -171,7 +178,7 @@ export class TizenAVPlayer {
 
             // Open the media
             this._avplay.open(options.url);
-
+            this._currentSrc = options.url; // Set currentSrc after open
             try {
                 // Determine if this is a video stream
                 const isVideo = options.mediaSource?.MediaStreams?.some(s => s.Type === 'Video');
@@ -314,32 +321,24 @@ export class TizenAVPlayer {
             await this._prepareAsync();
 
             // Set up display rect only after preparation success
-            // This prevents extra surface initialization delays and startup lag.
             this._createDisplay();
 
-            // A tiny delay avoids internal decoder race conditions on some Tizen models
-            // that might stall if play() is called immediately after preparation.
+            // A tiny delay avoids internal decoder race conditions
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            // Start playback — signal intent, but do NOT call native play() yet.
-            // Native play() is now deferred to onbufferingcomplete to ensure
-            // the hardware buffer is fully locked before the engine starts.
-            this._isPlaying = true;
-            this._playStartTime = Date.now(); // Record when play intent was set
+            // Metadata is now loaded and display is ready.
+            // Check if we can start native playback yet (requires buffering complete).
+            this._checkNativePlay();
 
             // Seek to start position if specified (must be called after play() on HLS to prevent Invalid Operation)
             if (options.playerStartPositionTicks) {
                 const startMs = options.playerStartPositionTicks / 10000;
-                try {
-                    this._avplay.seekTo(startMs);
-                } catch (e) {
-                    log.warn('Seek immediately after play failed, will defer:', e);
-                    setTimeout(() => {
-                        if (this._isPlaying) {
-                            try { this._avplay.seekTo(startMs); } catch (e2) { log.error('Deferred seek failed:', e2); }
-                        }
-                    }, 500);
-                }
+                // Defer seek slightly to ensure the native play() from the gate has processed
+                setTimeout(() => {
+                    if (this._isPlaying) {
+                        try { this._avplay.seekTo(startMs); } catch (e) { log.warn('Initial seek failed:', e); }
+                    }
+                }, 100);
             }
 
             // Initialize current indices
@@ -376,6 +375,8 @@ export class TizenAVPlayer {
                             data: { duration: this._duration / 1000 } 
                         });
                         
+                        // Check if we can start native playback now that preparation is complete
+                        this._checkNativePlay();
                         resolve();
                     },
                     (error) => {
@@ -408,18 +409,11 @@ export class TizenAVPlayer {
             },
             onbufferingcomplete: () => {
                 log.info('Buffering complete (network threshold reached)');
+                this._bufferingComplete = true;
 
                 // Hardware is settled (due to 6s buffer threshold), 
-                // so we can finally start the playback engine.
-                // This prevents TVs from trying to play with an empty buffer.
-                if (this._isPlaying && this._avplay.getState() === 'READY') {
-                    try {
-                        log.info('Buffer locked. Starting hardware playback engine.');
-                        this._avplay.play();
-                    } catch (e) {
-                        log.error('Failed to start playback from buffer handler:', e);
-                    }
-                }
+                // but we only fire if the decoder is also prepared and intent is to play.
+                this._checkNativePlay();
                 
                 // Track transition point: Buffer is full but clock hasn't started yet.
                 // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
@@ -492,6 +486,7 @@ export class TizenAVPlayer {
             onstreamcompleted: () => {
                 log.info('Playback completed');
                 this._isPlaying = false;
+                this._isTizenPlaying = false;
                 this.onEvent({ type: 'ended' });
             },
             onerror: (eventType) => {
@@ -645,6 +640,27 @@ export class TizenAVPlayer {
      */
     _startPositionTracking() {
         // Position tracking handled by native oncurrentplaytime event to avoid jitter
+    }
+
+    /**
+     * Gated native playback start. Requires:
+     * 1. Intent to play (_isPlaying)
+     * 2. Decoder ready (_isPrepared)
+     * 3. Hardware buffer filled (_bufferingComplete)
+     * @private
+     */
+    _checkNativePlay() {
+        if (this._isPlaying && this._isPrepared && this._bufferingComplete && !this._isTizenPlaying) {
+            try {
+                this._avplay.play();
+                this._isTizenPlaying = true;
+                log.info('Native play() executed (Double-Gate Strategy: Prepared & Buffered)');
+            } catch (e) {
+                log.error('Double-Gate play() failed:', e.message || e);
+            }
+        } else if (!this._isTizenPlaying) {
+            log.debug(`Double-Gate pending: Playing=${this._isPlaying}, Prep=${this._isPrepared}, Buff=${this._bufferingComplete}`);
+        }
     }
 
     /**
@@ -832,6 +848,8 @@ export class TizenAVPlayer {
         }
         this._isPrepared = false;
         this._isPlaying = false;
+        this._isTizenPlaying = false;
+        this._bufferingComplete = false;
     }
 
     /**
