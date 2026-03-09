@@ -165,8 +165,8 @@ export class TizenAVPlayer {
 
             // Only sleep if we just forcefully stopped an active stream
             if (wasActive) {
-                // Give Tizen time to cleanup (helps with buffer errors on rapid changes)
-                await new Promise((resolve) => setTimeout(resolve, 200));
+                // Give Tizen adequate time to tear down the previous decoder (True Reset)
+                await new Promise((resolve) => setTimeout(resolve, 100));
             }
 
             // Open the media
@@ -182,21 +182,49 @@ export class TizenAVPlayer {
                     // requests high quality immediately.
                     const bufferPlaySec = 6;
                     const bufferResumeSec = 4;
-                    const timeoutSec = 10;
+                    const timeoutSec = 8;
                     const bitrate = options.mediaSource?.Bitrate || 20000000;
                     const isDirectPlay = options.playMethod === 'DirectPlay';
 
-                    // 1. ABR Quality Kickstart (HLS/Adaptive Only)
+                    // 1. Advanced Property Hints: Accelerate startup & stabilize Wi-Fi
+                    // We use individual try-catch and common key variants for maximum compatibility.
+                    try {
+                        // User's first tip used USER_AGENT (underscore)
+                        this._avplay.setStreamingProperty("USER_AGENT", "JellyfinTizenClient");
+                    } catch (e) {
+                        try {
+                            this._avplay.setStreamingProperty("USERAGENT", "JellyfinTizenClient");
+                        } catch (e2) {
+                            log.warn('Failed to set USER_AGENT/USERAGENT:', e2.message || e2);
+                        }
+                    }
+
+                    try {
+                        // Some TVs prefer BUFFER_SIZE, others SET_BUFFER_SIZE
+                        this._avplay.setStreamingProperty("BUFFER_SIZE", "4194304"); 
+                    } catch (e) {
+                         try {
+                            this._avplay.setStreamingProperty("SET_BUFFER_SIZE", "4194304");
+                         } catch (e2) {
+                            log.warn('Failed to set BUFFER_SIZE/SET_BUFFER_SIZE:', e2.message || e2);
+                         }
+                    }
+                    
+                    // NOTE: SET_MODE_4K is deprecated since Tizen 5.0. 
+                    // It's covered by FIXED_MAX_RESOLUTION in ADAPTIVE_INFO below.
+
+                    // 2. ABR Quality Kickstart (HLS/Adaptive Only)
                     if (!isDirectPlay) {
                         try {
                             const props = [
                                 'FIXED_MAX_RESOLUTION=3840X2160',
-                                `START_BITRATE=${bitrate}`,
+                                'STARTBITRATE=HIGHEST', // Force hardware to skip ramp-up delay
+                                'USER_AGENT=JellyfinTizenClient', // Modern way to set UA in 5.0+
                                 `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
                                 `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
                             ].join('|');
                             this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
-                            log.info(`Hardware ABR Optimized: StartBitrate=${bitrate}`);
+                            log.info('Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin');
                         } catch (e) {
                              log.warn('Failed to set hls-specific properties:', e.message || e);
                         }
@@ -289,14 +317,15 @@ export class TizenAVPlayer {
             // This prevents extra surface initialization delays and startup lag.
             this._createDisplay();
 
-            // Start playback — must be after prepare
-            this._avplay.play();
-            this._isPlaying = true;
-            this._playStartTime = Date.now(); // Record when play() was called
+            // A tiny delay avoids internal decoder race conditions on some Tizen models
+            // that might stall if play() is called immediately after preparation.
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
-            // Apply tracks immediately after play() as some older Tizen versions 
-            // populate track info right after start even before buffering complete
-            this._applyPendingTracks();
+            // Start playback — signal intent, but do NOT call native play() yet.
+            // Native play() is now deferred to onbufferingcomplete to ensure
+            // the hardware buffer is fully locked before the engine starts.
+            this._isPlaying = true;
+            this._playStartTime = Date.now(); // Record when play intent was set
 
             // Seek to start position if specified (must be called after play() on HLS to prevent Invalid Operation)
             if (options.playerStartPositionTicks) {
@@ -337,7 +366,7 @@ export class TizenAVPlayer {
             try {
                 this._avplay.prepareAsync(
                     () => {
-                        log.info('Media prepared');
+                        log.info('Media prepared (decoder ready)');
                         this._isPrepared = true;
                         this._duration = this._avplay.getDuration();
                         
@@ -378,7 +407,19 @@ export class TizenAVPlayer {
                 // Buffering progress (0-100)
             },
             onbufferingcomplete: () => {
-                log.debug('Buffering complete');
+                log.info('Buffering complete (network threshold reached)');
+
+                // Hardware is settled (due to 6s buffer threshold), 
+                // so we can finally start the playback engine.
+                // This prevents TVs from trying to play with an empty buffer.
+                if (this._isPlaying && this._avplay.getState() === 'READY') {
+                    try {
+                        log.info('Buffer locked. Starting hardware playback engine.');
+                        this._avplay.play();
+                    } catch (e) {
+                        log.error('Failed to start playback from buffer handler:', e);
+                    }
+                }
                 
                 // Track transition point: Buffer is full but clock hasn't started yet.
                 // Apply pending tracks now. If they fail (e.g., Tizen needs more time to parse text),
@@ -387,8 +428,7 @@ export class TizenAVPlayer {
                     this._applyPendingTracks();
                 }
 
-                // Standard path: Hardware is settled (due to 6s buffer threshold),
-                // so we can finally emit 'playing' and show the first frame.
+                // Standard path: Emit 'playing' and show the first frame.
                 if (this._isPlaying && !this._hasEmittedPlaying) {
                     this._hasEmittedPlaying = true;
                     this.onEvent({ type: 'playing' });
@@ -510,8 +550,14 @@ export class TizenAVPlayer {
                     this._avplay.setSelectTrack('AUDIO', tizenAudioIndex);
                     this._pendingAudioIndex = null;
                 } catch (e) {
-                    log.warn('Failed to apply audio track:', e);
-                    this._pendingAudioIndex = null;
+                    // If Tizen returns InvalidStateError, the engine isn't ready for track switching.
+                    // Keep the index pending so the oncurrentplaytime loop can retry once stable.
+                    if (e.name === 'InvalidStateError' || e.code === 11) {
+                         log.debug(`Postponing audio track ${tizenAudioIndex} (InvalidStateError)`);
+                    } else {
+                        log.warn('Failed to apply audio track:', e);
+                        this._pendingAudioIndex = null;
+                    }
                 }
             } else {
                 const totalTracks = this._avplay.getTotalTrackInfo() || [];
@@ -551,7 +597,13 @@ export class TizenAVPlayer {
                         log.info(`Early TEXT track ${tizenSubIndex} applied (pending kept for re-apply)`);
                         this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
                     } catch (e) {
-                        log.warn(`Early apply of subtitle track ${tizenSubIndex} failed:`, e);
+                        // If Tizen returns InvalidStateError, keep trying in the loop.
+                        if (e.name === 'InvalidStateError' || e.code === 11) {
+                             log.debug(`Postponing subtitle track ${tizenSubIndex} (InvalidStateError)`);
+                        } else {
+                            log.warn(`Early apply of subtitle track ${tizenSubIndex} failed:`, e);
+                            this._pendingSubtitleIndex = null;
+                        }
                     }
                 } else {
                     const totalTracks = this._avplay.getTotalTrackInfo() || [];
@@ -759,14 +811,23 @@ export class TizenAVPlayer {
      */
     async _stopInternal() {
         if (this._avplay) {
+            // 1. Attempt stop
             try {
                 const state = this._avplay.getState();
                 if (state !== 'NONE' && state !== 'IDLE') {
                     this._avplay.stop();
                 }
+            } catch (e) {
+                log.debug('AVPlay stop failed (possibly already idle):', e.message || e);
+            }
+
+            // 2. Force close (True Reset to NONE state)
+            // This is critical for episode-to-episode transitions to clear 
+            // stale buffers and decoder state.
+            try {
                 this._avplay.close();
             } catch (e) {
-                // Ignore stop errors
+                log.debug('AVPlay close failed:', e.message || e);
             }
         }
         this._isPrepared = false;
