@@ -143,7 +143,7 @@ export class TizenAVPlayer {
             throw new Error('Tizen AVPlay not available');
         }
 
-        log.info('Starting playback:', options.url);
+        log.info('Starting playback');
 
         this._currentPlayOptions = options;
         this._currentSrc = options.url;
@@ -151,6 +151,8 @@ export class TizenAVPlayer {
         // Reset subtitle offset for new playback session
         this._subtitleOffset = 0;
         this._hasEmittedPlaying = false;
+        this._firstFrameRendered = false;
+        this._playbackStabilized = false;
 
         try {
             // Track if we were actually active to know if a cleanup sleep is needed
@@ -170,12 +172,25 @@ export class TizenAVPlayer {
 
             try {
                 const isAdaptive = (options.url.indexOf('.m3u8') > -1) || (options.url.indexOf('.mpd') > -1) || (options.playMethod !== 'DirectPlay');
-                if (isAdaptive) {
+                if (isAdaptive || (options.mediaSource && options.mediaSource.VideoType === '4K')) {
                     this._avplay.setStreamingProperty("ADAPTIVE_INFO", "FIXED_MAX_RESOLUTION=3840X2160");
                     log.debug('Set ADAPTIVE_INFO for 4K streaming');
+                    
+                    // Configure time-based buffer thresholds (proper API, works on Tizen 5.0+)
+                    // Initial buffer: accumulate 3 seconds of content before onbufferingcomplete fires
+                    try {
+                        this._avplay.setBufferSize("PLAYER_BUFFER_FOR_PLAY", "PLAYER_BUFFER_SIZE_IN_SECOND", 3);
+                        log.info('Set initial play buffer to 3 seconds');
+                    } catch (e) { log.warn('Failed to set PLAYER_BUFFER_FOR_PLAY:', e); }
+
+                    // Resume buffer: after a stall, accumulate 5 seconds before resuming playback
+                    try {
+                        this._avplay.setBufferSize("PLAYER_BUFFER_FOR_RESUME", "PLAYER_BUFFER_SIZE_IN_SECOND", 5);
+                        log.info('Set resume buffer to 5 seconds');
+                    } catch (e) { log.warn('Failed to set PLAYER_BUFFER_FOR_RESUME:', e); }
                 }
             } catch (e) {
-                log.warn('Failed to set ADAPTIVE_INFO streaming property', e);
+                log.warn('Failed to set streaming properties', e);
             }
 
             // Set up display
@@ -203,8 +218,10 @@ export class TizenAVPlayer {
 
             if (options.subtitleStreamIndex !== undefined) {
                 this._pendingSubtitleIndex = options.subtitleStreamIndex;
+                this._delayedSubtitleIndex = options.subtitleStreamIndex; // Used for Tizen 5.0 re-apply
             } else {
                 this._pendingSubtitleIndex = null;
+                this._delayedSubtitleIndex = null;
             }
 
             // Prepare asynchronously
@@ -313,9 +330,23 @@ export class TizenAVPlayer {
                 }
             },
             oncurrentplaytime: (time) => {
+                // Track when the first frame has actually rendered (time >= 0).
+                // This is independent of the 'playing' event — onbufferingcomplete may
+                // have already emitted 'playing', but that doesn't mean frames are drawing.
+                // Pending subtitle tracks are gated on this flag to avoid silent no-ops.
+                if (!this._firstFrameRendered && time >= 0) {
+                    this._firstFrameRendered = true;
+                }
+
+                // Track when playback has stabilized (e.g. 1000ms of actual playback).
+                // Used to delay the re-application of subtitles on Tizen 5.0, as
+                // pausing/resuming immediately on the first frame triggers buffering loops.
+                if (!this._playbackStabilized && time >= 1000) {
+                    this._playbackStabilized = true;
+                }
+
                 // timeupdate fires as frames are drawn. 
                 // If we haven't emitted 'playing' yet (e.g., started at 0:00 without buffering), do it now!
-                // We use time >= 0 because some older Tizen versions report 0 for a while even when playing.
                 if (this._isPlaying && !this._hasEmittedPlaying && time >= 0) {
                     log.debug('First frame rendered (time >= 0), emitting playing');
                     this._hasEmittedPlaying = true;
@@ -326,14 +357,15 @@ export class TizenAVPlayer {
                 // Apply pending tracks now. If they fail (e.g. index out of bounds or missing),
                 // they remain pending. We try for up to 5 seconds of watch time on older Tizen,
                 // then drop them to prevent infinite API polling performance penalties.
-                if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
+                if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null || (this._playbackStabilized && this._delayedSubtitleIndex !== null)) {
                     this._applyPendingTracks();
                     
                     if (time > 5000) {
                         if (this._pendingAudioIndex !== null) log.warn('Pending audio track dropped (timeout)');
-                        if (this._pendingSubtitleIndex !== null) log.warn('Pending subtitle track dropped (timeout)');
+                        if (this._pendingSubtitleIndex !== null || this._delayedSubtitleIndex !== null) log.warn('Pending/delayed subtitle track dropped (timeout)');
                         this._pendingAudioIndex = null;
                         this._pendingSubtitleIndex = null;
+                        this._delayedSubtitleIndex = null;
                     }
                 }
 
@@ -424,25 +456,35 @@ export class TizenAVPlayer {
             }
         }
 
+        // Apply subtitle tracks eagerly (works on Tizen 5.5+), but only CLEAR
+        // _pendingSubtitleIndex once the first frame has rendered. This way, on
+        // Tizen 5.0 where setSelectTrack silently no-ops during buffering, the
+        // track gets re-applied from oncurrentplaytime once frames are drawing.
         if (this._pendingSubtitleIndex !== null) {
             if (this._pendingSubtitleIndex === -1) {
                 try {
                     this._avplay.setSilentSubtitle(true);
                     this._pendingSubtitleIndex = null;
+                    this._delayedSubtitleIndex = null;
                 } catch (e) {
                     log.warn('Failed to disable subtitles:', e);
                 }
             } else {
+                // Pre-first-frame: try the raw setSelectTrack. This works on
+                // Tizen 5.5+ where tracks activate during buffering. On Tizen 5.0
+                // it silently no-ops, but _delayedSubtitleIndex stays set so the
+                // post-stabilization path will catch it later.
                 const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
                 if (tizenSubIndex !== null) {
                     try {
+                        log.debug(`Attempting early apply of TEXT track index ${tizenSubIndex}`);
                         this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                         this._avplay.setSilentSubtitle(true);
                         this._avplay.setSilentSubtitle(false);
-                        this._pendingSubtitleIndex = null;
+                        log.info(`Early TEXT track ${tizenSubIndex} applied (pending kept for re-apply)`);
+                        this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
                     } catch (e) {
-                        log.warn('Failed to apply subtitle track:', e);
-                        this._pendingSubtitleIndex = null;
+                        log.warn(`Early apply of subtitle track ${tizenSubIndex} failed:`, e);
                     }
                 } else {
                     const totalTracks = this._avplay.getTotalTrackInfo() || [];
@@ -452,6 +494,7 @@ export class TizenAVPlayer {
                         
                         const failedIndex = this._pendingSubtitleIndex;
                         this._pendingSubtitleIndex = null;
+                        this._delayedSubtitleIndex = null;
                         
                         // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
                         // This handles initial tracks that exceed Tizen's 30-track limit
@@ -462,6 +505,17 @@ export class TizenAVPlayer {
                     }
                     // Else: AVPlay hasn't parsed text tracks yet. Remain pending.
                 }
+            }
+        } else if (this._playbackStabilized && this._delayedSubtitleIndex !== null && this._delayedSubtitleIndex !== -1) {
+            // Post-stabilization: use setSubtitleStreamIndex which includes a
+            // pause/resume cycle. On Tizen 5.0, early setSelectTrack silently failed.
+            const savedIndex = this._delayedSubtitleIndex;
+            this._delayedSubtitleIndex = null;
+            try {
+                log.info(`Re-applying subtitle track ${savedIndex} via setSubtitleStreamIndex (post-stabilization)`);
+                this.setSubtitleStreamIndex(savedIndex);
+            } catch (e) {
+                log.warn(`Post-stabilization subtitle re-apply failed for index ${savedIndex}:`, e);
             }
         }
     }

@@ -158,7 +158,7 @@ export class HtmlVideoPlayer {
      * @param {Object} options - Play options from JellyfinPlayer
      */
     async play(options) {
-        log.info('Starting playback:', options.url);
+        log.info('Starting playback');
 
         this._currentPlayOptions = options;
         this._started = false;
