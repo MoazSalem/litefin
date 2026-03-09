@@ -1063,8 +1063,9 @@ class PlayerPage extends Page {
             // Update OSD title
             if (this._osd) {
                 this._osd.updateItem(nextItem);
-                // Reset Up Next state so the dialog re-triggers for the new episode
+                // Reset Up Next and Lyrics state for the new track
                 this._osd.resetUpNext();
+                this._osd.resetLyrics();
             }
 
             // Restart playback
@@ -1184,6 +1185,9 @@ class PlayerPage extends Page {
 
                     if (this._osd) {
                         this._osd.updateItem(targetItem);
+                        // Reset persistent OSD states
+                        this._osd.resetUpNext();
+                        this._osd.resetLyrics();
                     }
 
                     await this._startPlayback();
@@ -1239,8 +1243,9 @@ class PlayerPage extends Page {
 
                 if (this._osd) {
                     this._osd.updateItem(prevItem);
-                    // Reset Up Next state so the dialog can re-trigger for the new episode
+                    // Reset Up Next and Lyrics state
                     this._osd.resetUpNext();
+                    this._osd.resetLyrics();
                 }
 
                 await this._startPlayback();
@@ -1321,8 +1326,9 @@ class PlayerPage extends Page {
 
             if (this._osd) {
                 this._osd.updateItem(targetItem);
-                /* Reset Up Next so the dialog re-triggers for the new item. */
+                /* Reset OSD states so they trigger fresh for the new item. */
                 this._osd.resetUpNext();
+                this._osd.resetLyrics();
             }
 
             await this._startPlayback();
@@ -1998,11 +2004,19 @@ class PlayerPage extends Page {
         // Clean up OSD (also handled by Component._children cleanup, but explicit is better)
         if (this._osd?.destroy) {
             log.info('Destroying OSD');
+            if (this._osd.resetLyrics) this._osd.resetLyrics();
             this._osd.destroy();
         }
 
-        // Disable Tizen AVPlayer transparency mode
-        document.body.classList.remove('player-active');
+        // Clean up music overlay if it exists
+        const musicOverlay = document.getElementById('audio-visual-overlay');
+        if (musicOverlay) {
+            log.info('Removing music audio-visual overlay');
+            musicOverlay.remove();
+        }
+
+        // Disable Tizen AVPlayer transparency mode and clear state classes
+        document.body.classList.remove('player-active', 'lyrics-active');
         document.documentElement.classList.remove('player-active');
 
         log.info('destroy() complete');

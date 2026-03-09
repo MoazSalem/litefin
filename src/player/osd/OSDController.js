@@ -2005,6 +2005,22 @@ export default class OSDController extends Component {
         }
     }
 
+    /**
+     * Reset Lyrics state entirely.
+     * Called by PlayerPage when a new item starts playing to ensure the 
+     * lyrics modal is closed and the background state is cleared.
+     */
+    resetLyrics() {
+        if (this.lyricsModal && this.lyricsModal._isVisible) {
+            this.lyricsModal.hide();
+            if (this.activeMenu === this.lyricsModal) {
+                this.activeMenu = null;
+            }
+            document.body.classList.remove('lyrics-active');
+            this._cacheFocusableElements();
+        }
+    }
+
     togglePlaybackSpeedMenu(show) {
         if (show) {
             this.settingsMenu.hide();
