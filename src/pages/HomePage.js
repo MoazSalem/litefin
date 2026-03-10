@@ -306,6 +306,15 @@ class HomePage extends Page {
             // ─── Step 3: Build descriptors ────────────────────────────────────
             const descriptors = this._getRowDescriptors();
 
+            // Validate focus target exists in the generated descriptors
+            const lastFocusedObj = state.get('home:lastFocusedItem');
+            if (lastFocusedObj && lastFocusedObj.rowId) {
+                const rowExists = descriptors.some((d) => d.id === lastFocusedObj.rowId);
+                if (!rowExists) {
+                    state.delete('home:lastFocusedItem');
+                }
+            }
+
             if (descriptors.length === 0) {
                 this.showError(i18n.t('NoLibraries'));
                 this.setLoading(false);
@@ -438,6 +447,7 @@ class HomePage extends Page {
                     placeholder.remove();
                 }
                 log.debug(`Row "${descriptor.id}" has no items, removed placeholder.`);
+                this._checkFocusRestoration(descriptor.id, false);
                 return;
             }
 
@@ -446,6 +456,7 @@ class HomePage extends Page {
 
             // Find the placeholder and replace it with a live row
             this._renderRow(descriptor, items);
+            this._checkFocusRestoration(descriptor.id, true);
         } catch (error) {
             log.error(`Failed to load row "${descriptor.id}"`, error);
 
@@ -454,6 +465,7 @@ class HomePage extends Page {
             if (placeholder) {
                 placeholder.remove();
             }
+            this._checkFocusRestoration(descriptor.id, false);
         }
     }
 
@@ -595,9 +607,7 @@ class HomePage extends Page {
         // The very first row to finish rendering should receive focus
         // (unless we're restoring a back-navigation state).
         this._renderedRowCount++;
-        if (!this._focusInitialized) {
-            this._tryInitializeFocus(container);
-        }
+        this._checkFocusRestoration(descriptor.id, true);
 
         log.debug(`Row "${descriptor.id}" rendered at index ${rowIndex} (${items.length} items)`);
     }
@@ -605,6 +615,50 @@ class HomePage extends Page {
     // =========================================================================
     // Focus Initialization (called after first row renders)
     // =========================================================================
+
+    /**
+     * Checks if it's safe to initialize focus based on whether the target row
+     * has finished loading. This solves the race condition where the first rendered
+     * row consumes the back-navigation state before the actual target row has loaded.
+     */
+    _checkFocusRestoration(rowId, success) {
+        if (this._focusInitialized) return;
+
+        const container = this.$('#home-rows');
+        if (!container) return;
+
+        const lastFocusedObj = state.get('home:lastFocusedItem');
+        const legacyLastFocusedId = state.get('home:lastFocusedItemId');
+        const targetRowId = lastFocusedObj ? lastFocusedObj.rowId : null;
+
+        if (targetRowId || legacyLastFocusedId) {
+            // If legacy ID is used without rowId, fallback to any success
+            if (!targetRowId && success) {
+                this._tryInitializeFocus(container);
+                return;
+            }
+
+            if (rowId === targetRowId) {
+                if (success) {
+                    // Our target row just finished rendering!
+                    this._tryInitializeFocus(container);
+                } else {
+                    // Target row failed or was empty. We can't restore to it.
+                    // Clear the state so we fallback to the "first successful row" logic.
+                    state.delete('home:lastFocusedItem');
+
+                    // If any OTHER rows have already rendered successfully, focus one of them now.
+                    const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                    if (firstSection) {
+                        this._tryInitializeFocus(container);
+                    }
+                }
+            }
+        } else if (success) {
+            // No target row, just focus the first successful row
+            this._tryInitializeFocus(container);
+        }
+    }
 
     /**
      * Called after each row renders. On the FIRST successful render, this sets
