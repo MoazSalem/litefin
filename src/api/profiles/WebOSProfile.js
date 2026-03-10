@@ -9,6 +9,7 @@
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { BaseProfile } from './BaseProfile.js';
+import { webosAdapter } from '../../webos/WebOSAdapter.js';
 
 const log = logger.create('WebOSProfile');
 
@@ -33,61 +34,56 @@ function getWebOSVersion() {
     return 1; // Fallback for very old versions
 }
 
-let _maxChannelCount = null;
-function getChannelCount() {
-    if (_maxChannelCount != null) {
-        return _maxChannelCount;
-    }
-
-    _maxChannelCount = 2; // Default
-    try {
-        const AudioContext = window.AudioContext || window.webkitAudioContext || false;
-        if (AudioContext) {
-            const audioCtx = new AudioContext();
-            _maxChannelCount = audioCtx.destination.maxChannelCount || 2;
-            audioCtx.close();
-        }
-    } catch (e) {
-        log.warn('Failed to detect AudioContext channels:', e);
-    }
-
-    // TVs generally shouldn't report less than 2
-    return Math.max(_maxChannelCount, 2);
-}
+// Max audio channels — default to 6 for surround support on TV hardware
+const DEFAULT_MAX_CHANNELS = 6;
 
 export function getDeviceCapabilities() {
     if (_cachedCapabilities) return _cachedCapabilities;
 
-    let uhd = false;
+    // ------------------------------------------------------------------------
+    // Safe Defaults for Smart TVs
+    // Defaulting to UHD and HDR10 support is safer for Smart TVs to avoid
+    // unnecessary transcoding of 4K/HDR content on initial load.
+    // ------------------------------------------------------------------------
+    let uhd = true;
     let uhd8K = false;
-    let hdr10 = false;
-    let dolbyVision = false; // Will be set by heuristics or deviceInfo
+    let hdr10 = true;
+    let dolbyVision = false;
 
     const deviceId = BaseProfile.getFallbackDeviceId('litefin_webos_');
     let modelName = 'LG WebOS TV';
 
     const webosVersion = getWebOSVersion();
-    const maxAudioChannels = getChannelCount();
 
-    // Default capabilities based on WebOS version heuristics
+    // ------------------------------------------------------------------------
+    // Sync Device Info
+    // Check webosAdapter first — it may have already loaded device info
+    // asynchronously during app startup.
+    // ------------------------------------------------------------------------
+    const info = webosAdapter.deviceInfo;
+    if (info) {
+        log.debug('WebOSProfile: Using cached webosAdapter deviceInfo');
+        if (info.modelName) modelName = info.modelName;
+        if (info.uhd) uhd = info.uhd === 'true';
+        if (info['8k']) uhd8K = info['8k'] === 'true';
+        if (uhd) {
+            if (info.hdr10) hdr10 = info.hdr10 === 'true';
+            if (info.dolbyVision === 'true') dolbyVision = true;
+        }
+    } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
+        // Fallback: Fire off the async call for the next profile build
+        window.webOS.deviceInfo((res) => {
+            log.info('WebOSProfile: Async deviceInfo received, clearing cache');
+            clearCapabilitiesCache();
+        });
+    }
+
+    // HEVC supported on most WebOS 3.0+ (2016+) models
     const hevc = webosVersion >= 3;
     const av1 = webosVersion >= 5;
     const vp9 = webosVersion >= 3;
     // LG disabled DTS support on WebOS 5.0 through 22 (2020-2022 models)
     const dts = !(webosVersion >= 5 && webosVersion < 23);
-
-    if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
-        window.webOS.deviceInfo((info) => {
-            if (info.modelName) modelName = info.modelName;
-            if (info.uhd) uhd = info.uhd === 'true';
-            if (info['8k']) uhd8K = info['8k'] === 'true';
-            // Only allow HDR/DV if the device is also UHD (safer for 1080p emulators/TVs)
-            if (uhd) {
-                if (info.hdr10) hdr10 = info.hdr10 === 'true';
-                if (info.dolbyVision === 'true') dolbyVision = true;
-            }
-        });
-    }
 
     const manualRes = PlayerSettings.get('maxResolution');
     if (manualRes && manualRes !== 'auto') {
@@ -108,6 +104,9 @@ export function getDeviceCapabilities() {
         }
     }
 
+    // Default to 6 channels for surround sound support if we have surround codecs
+    const maxAudioChannels = DEFAULT_MAX_CHANNELS;
+
     _cachedCapabilities = {
         modelName,
         deviceId,
@@ -117,7 +116,7 @@ export function getDeviceCapabilities() {
         uhd,
         uhd8K,
         hdr10,
-        hdr10Plus: false, // Generally not supported on LG
+        hdr10Plus: false,
         hlg: hdr10,
         dolbyVision,
         hevc,
@@ -408,8 +407,11 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    const h264Level = caps.uhd ? '51' : '41';
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '150'; // Standardize to 5.0 fallback for HEVC
+    // H.264 High Profile Level 5.1 is standard on almost all WebOS TVs (Safe default: 5.1)
+    const h264Level = '51';
+
+    // HEVC Main 10 Level 5.1 is the baseline for 4K WebOS TVs (Safe default: 5.1/153)
+    const hevcLevel = caps.uhd8K ? '183' : '153';
 
     const hdrCondition = !enableHDR
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
@@ -459,14 +461,14 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: caps.uhd ? 'main|main 10' : 'main',
+                    Value: 'main|main 10',
                     IsRequired: false
                 },
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: caps.uhd ? '10' : '8',
+                    Value: '10',
                     IsRequired: false
                 },
                 ...hdrCondition
@@ -482,7 +484,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
+                    Value: 'profile 0|profile 2',
                     IsRequired: false
                 },
                 ...hdrCondition
