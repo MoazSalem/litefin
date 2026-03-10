@@ -778,13 +778,22 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 14px 20px;
-    margin: 0; /* Override .setting-item */
-    min-height: 60px; /* Tighter than default setting-item */
+    padding: 10px 16px !important; /* Tighter padding for Tizen */
+    margin: 4px 0 !important; /* Override .setting-item margin */
+    min-height: 52px !important; /* Ensure min-height override on Tizen */
     background: rgba(255, 255, 255, 0.05);
     border-radius: 12px;
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, opacity 0.3s ease;
     border: 2px solid transparent;
+    box-sizing: border-box;
+}
+
+.layout-row .setting-label {
+    padding-right: 16px !important; /* Reduce excessive setting-item padding */
+}
+
+.layout-row .setting-name {
+    margin-bottom: 0 !important; /* Compact title for layout rows */
 }
 
 .layout-row-hidden {

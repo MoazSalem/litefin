@@ -657,9 +657,14 @@ class HomePage extends Page {
                     }
                 }
             }
-        } else if (success) {
-            // No target row, just focus the first successful row
-            this._tryInitializeFocus(container);
+        } else {
+            // No target row, we just want to focus the top of the page.
+            // Check if the physical top row in the DOM has finished loading.
+            // (Empty/failed rows are removed, so firstElementChild is always the true top row).
+            const firstRowNode = container.firstElementChild;
+            if (firstRowNode && !firstRowNode.classList.contains('media-row--skeleton')) {
+                this._tryInitializeFocus(container);
+            }
         }
     }
 
