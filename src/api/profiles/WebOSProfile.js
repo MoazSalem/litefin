@@ -177,6 +177,19 @@ export function buildJellyfinProfile(options = {}) {
     const manualBitrateOverride = typeof options === 'number' ? options : options.manualBitrate;
     const playbackMode = typeof options === 'object' ? options.playbackMode || 'auto' : 'auto';
 
+    /*
+     * Backend awareness: 'webos' = native WebOSPlayer (hardware decode via <video>),
+     * 'html5' = fallback HtmlVideoPlayer using Hls.js.
+     *
+     * The two backends have different capabilities:
+     *   webos  - can hardware-decode TS/M2TS/AVI/WMV/legacy containers via the
+     *            native media pipeline. Prefers larger HLS segments for stability.
+     *   html5  - Hls.js can only reliably handle MP4/MKV/WebM. Needs smaller
+     *            segments for faster startup and Hls.js buffer recovery.
+     *
+     * This mirrors the pattern in TizenProfile.js (isHtml5 flag).
+     */
+    const isHtml5 = typeof options === 'object' && options.backend === 'html5';
     const caps = getDeviceCapabilities();
 
     const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
@@ -234,6 +247,7 @@ export function buildJellyfinProfile(options = {}) {
     const directPlayProfiles = [];
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
+        // Standard web containers — available on both backends
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
             Type: 'Video',
@@ -254,34 +268,46 @@ export function buildJellyfinProfile(options = {}) {
                 AudioCodec: 'vorbis,opus'
             });
         }
-        directPlayProfiles.push({
-            Container: 'ts,mpegts',
-            Type: 'Video',
-            VideoCodec: tsVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'm2ts',
-            Type: 'Video',
-            VideoCodec: m2tsVideoCodecs.join(','),
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'avi',
-            Type: 'Video',
-            VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'wmv,asf',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        });
-        directPlayProfiles.push({
-            Container: 'mpg,mpeg,flv,3gp,vob,vro',
-            Type: 'Video',
-            AudioCodec: audioCodecString
-        });
+
+        /*
+         * Extended container support — only the native WebOS backend (WebOSPlayer) can
+         * reliably direct-play these containers. The HTML5 fallback (Hls.js) cannot
+         * handle TS/M2TS/AVI/WMV natively and would fail silently or stall.
+         * By gating these profiles on the native backend, we ensure that a library of
+         * Blu-ray rips (M2TS), DVB recordings (TS), or legacy AVI/WMV files direct-play
+         * on real WebOS hardware rather than triggering an unnecessary transcode.
+         */
+        if (!isHtml5) {
+            directPlayProfiles.push({
+                Container: 'ts,mpegts',
+                Type: 'Video',
+                VideoCodec: tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'm2ts',
+                Type: 'Video',
+                VideoCodec: m2tsVideoCodecs.join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'avi',
+                Type: 'Video',
+                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'wmv,asf',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+            directPlayProfiles.push({
+                Container: 'mpg,mpeg,flv,3gp,vob,vro',
+                Type: 'Video',
+                AudioCodec: audioCodecString
+            });
+        }
+
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
@@ -304,15 +330,24 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [
         {
+            /*
+             * Primary HLS video transcoding profile.
+             *
+             * Segment sizing strategy:
+             *   webos  (native) — larger segments (4s) reduce the number of HTTP round-trips
+             *            and give the hardware decoder more headroom for smooth playback.
+             *   html5  (Hls.js) — smaller segments (2s) enable faster startup and allow
+             *            Hls.js to recover from network blips more quickly.
+             */
             Container: 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: broadTransVideo,
+            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
+            MinSegments: isHtml5 ? '1' : '2',
+            SegmentLength: isHtml5 ? '2' : '4',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
@@ -356,19 +391,19 @@ export function buildJellyfinProfile(options = {}) {
         }
     ];
 
-    // Fragments MP4 HLS is theoretically better but MPEG-TS is much more stable across all WebOS versions.
-    // We only offer it as a secondary option if supported.
+    // fMP4 HLS as a secondary option for devices that support it (WebOS 4+).
+    // Apply the same per-backend segment sizing as the primary TS profile above.
     if (supportsFmp4Hls) {
         transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: broadTransVideo,
+            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '3',
+            MinSegments: isHtml5 ? '1' : '2',
+            SegmentLength: isHtml5 ? '2' : '4',
             BreakOnNonKeyFrames: false
         });
     }
@@ -485,7 +520,7 @@ export function buildJellyfinProfile(options = {}) {
     });
 
     return {
-        Name: `Litefin WebOS${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
+        Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,

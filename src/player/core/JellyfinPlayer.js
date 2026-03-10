@@ -1,8 +1,12 @@
 /**
  * JellyfinPlayer - Main orchestrating class
  *
- * Manages video playback using either HtmlVideoPlayer or TizenAVPlayer backend.
- * Handles media source selection, track switching, and playback state.
+ * Manages video playback using HtmlVideoPlayer, TizenAVPlayer, or WebOSPlayer
+ * backend. Handles media source selection, track switching, and playback state.
+ *
+ * The active backend is exposed through `this._backendType` ('tizen', 'webos', 'html5')
+ * for all platform-specific branching — prefer _backendType string checks over
+ * `instanceof` so that adding new backends never requires touching this class.
  *
  * Integrated directly into litefin — no UMD bundle, no bridge, no standalone
  * @module core/JellyfinPlayer
@@ -10,6 +14,8 @@
 
 import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
+import { WebOSPlayer } from './WebOSPlayer.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
 import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
@@ -137,10 +143,10 @@ export const PlayerEvent = {
 export class JellyfinPlayer extends EventEmitter {
     /**
      * @param {Object} options - Player options
-     * @param {HTMLElement} options.container - Container element for the player
-     * @param {string} options.serverUrl - Jellyfin server URL
-     * @param {string} options.authToken - Authentication token
-     * @param {boolean} [options.useTizenPlayer=false] - Use Tizen native player
+     * @param {HTMLElement} options.container  - Container element for the player
+     * @param {string}      options.serverUrl  - Jellyfin server URL
+     * @param {string}      options.authToken  - Authentication token
+     * @param {boolean}     [options.useTizenPlayer=false] - Use Tizen AVPlay backend
      */
     constructor(options) {
         super();
@@ -217,52 +223,97 @@ export class JellyfinPlayer extends EventEmitter {
     // ========================================================================
 
     /**
-     * Initialize the player backend based on platform
+     * Initialize the player backend based on platform and settings.
+     *
+     * Priority order:
+     *   1. Explicit 'playerBackend' setting ('avplay' / 'html5' / 'webos')
+     *   2. Auto-detect: WebOS platform → WebOSPlayer
+     *   3. Auto-detect: Tizen AVPlay API available → TizenAVPlayer
+     *   4. Fallback: HtmlVideoPlayer
+     *
+     * The resolved backend type is stored in `this._backendType` as a plain
+     * string so other methods can branch on it without instanceof checks.
      * @private
      */
     _initBackend() {
-        // Check for Tizen AVPlay API (can be on tizen or webapis namespace)
+        // Detect Tizen AVPlay API (present on either namespace depending on Tizen version)
         const hasAvPlay = !!(window.tizen?.avplay || window.webapis?.avplay);
         const backendSetting = PlayerSettings.get('playerBackend') || 'auto';
 
         log.info(
-            'Initializing backend. useTizenPlayer:', this.useTizenPlayer,
-            'detected:', hasAvPlay,
-            'setting:', backendSetting
+            'Initializing backend — useTizenPlayer:', this.useTizenPlayer,
+            ' | avplay detected:', hasAvPlay,
+            ' | isWebOS:', platformInfo.isWebOS,
+            ' | setting:', backendSetting
         );
 
-        // Determine which backend to use
-        let useTizen = false;
+        const sharedOptions = {
+            container: this.container,
+            settings:  PlayerSettings,
+            onEvent:   this._handleBackendEvent.bind(this)
+        };
 
+        // ----------------------------------------------------------------
+        // Explicit override: 'avplay' → always try TizenAVPlayer
+        // ----------------------------------------------------------------
         if (backendSetting === 'avplay') {
-            useTizen = true;
             if (!hasAvPlay) {
-                log.warn('Forced Tizen AVPlay, but API not found! Attempting anyway...');
+                log.warn('Forced avplay backend, but AVPlay API not found — attempting anyway');
             }
-        } else if (backendSetting === 'html5') {
-            useTizen = false;
-        } else {
-            // Auto: Use Tizen if requested by config AND available
-            useTizen = this.useTizenPlayer && hasAvPlay; 
+            log.info('Using Tizen AVPlay backend (forced by setting)');
+            this._backendType = 'tizen';
+            this._backend    = new TizenAVPlayer(sharedOptions);
+            return;
         }
 
-        if (useTizen) {
-            log.info('Using Tizen AVPlay backend');
-            this._backendType = 'tizen';
-            this._backend = new TizenAVPlayer({
-                container: this.container,
-                settings: PlayerSettings,
-                onEvent: this._handleBackendEvent.bind(this)
-            });
-        } else {
-            log.info('Using HTML5 Video backend');
+        // ----------------------------------------------------------------
+        // Explicit override: 'html5' → always use HtmlVideoPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'html5') {
+            log.info('Using HTML5 Video backend (forced by setting)');
             this._backendType = 'html5';
-            this._backend = new HtmlVideoPlayer({
-                container: this.container,
-                settings: PlayerSettings,
-                onEvent: this._handleBackendEvent.bind(this)
-            });
+            this._backend    = new HtmlVideoPlayer(sharedOptions);
+            return;
         }
+
+        // ----------------------------------------------------------------
+        // Explicit override: 'webos' → always use WebOSPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'webos') {
+            log.info('Using WebOS backend (forced by setting)');
+            this._backendType = 'webos';
+            this._backend    = new WebOSPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Auto-detect: WebOS platform → use the native WebOS backend.
+        // This gives us hardware-accelerated HLS and track switching
+        // without the complexity of the Luna media service API.
+        // ----------------------------------------------------------------
+        if (platformInfo.isWebOS) {
+            log.info('WebOS platform detected — using WebOS backend');
+            this._backendType = 'webos';
+            this._backend    = new WebOSPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Auto-detect: Tizen with AVPlay available → TizenAVPlayer
+        // ----------------------------------------------------------------
+        if (this.useTizenPlayer && hasAvPlay) {
+            log.info('Using Tizen AVPlay backend (auto-detected)');
+            this._backendType = 'tizen';
+            this._backend    = new TizenAVPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Fallback: stock HTML5 video (desktop browser, Tizen without AVPlay)
+        // ----------------------------------------------------------------
+        log.info('Using HTML5 Video backend (fallback)');
+        this._backendType = 'html5';
+        this._backend    = new HtmlVideoPlayer(sharedOptions);
     }
 
     /**
@@ -274,7 +325,8 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Get the current backend type ('tizen' or 'html5')
+     * Get the current backend type string.
+     * Possible values: 'tizen', 'webos', 'html5'
      * @returns {string}
      */
     get backendType() {
@@ -589,12 +641,15 @@ export class JellyfinPlayer extends EventEmitter {
             // This tells it what item/source we're playing and what backend we're using
             const backend = this._backend || this._videoPlayer;
             this._subtitleManager.setMediaContext({
-                itemId: options.itemId,
+                itemId:       options.itemId,
                 mediaSourceId: mediaSource.Id,
-                mediaStreams: mediaSource.MediaStreams || [],
-                backendType: backend instanceof TizenAVPlayer ? 'tizen' : 'html5',
-                videoElement: (backend && backend.getVideoElement) ? backend.getVideoElement() : null,
-                playMethod: this._currentPlayMethod
+                mediaStreams:  mediaSource.MediaStreams || [],
+                // Use the resolved _backendType string so SubtitleManager knows
+                // whether it should attempt embedded-native subtitle routing
+                // (Tizen only) or always defer to external text/ASS/PGS paths.
+                backendType:   this._backendType,
+                videoElement:  (backend && backend.getVideoElement) ? backend.getVideoElement() : null,
+                playMethod:    this._currentPlayMethod
             });
 
             // Initialize current stream indices
@@ -874,9 +929,11 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
                               this._currentPlayMethod === 'DirectStream';
 
-        // True whenever this backend cannot live-switch audio tracks
+        // True whenever this backend cannot live-switch audio tracks.
+        // WebOS reports true for supportsNativeAudioTracks, so it is treated
+        // like Tizen for DirectPlay: no restart needed for audio switching.
         const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
-        const requiresRestart = isTranscoding || (!(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || (this._backendType !== 'tizen' && !supportsNativeAudio);
 
         log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart}`);
 
@@ -905,7 +962,7 @@ export class JellyfinPlayer extends EventEmitter {
                 // but preserve transcode mode if it was explicitly selected.
                 playbackMode: this._playbackMode === 'transcode' ? 'transcode' : 'remux',
                 // Only force DirectStream if backend can't switch natively AND the track isn't the default direct play track
-                _forceDirectStream: !(this._backend instanceof TizenAVPlayer) && !supportsNativeAudio && isCustomAudioTrack
+                _forceDirectStream: this._backendType !== 'tizen' && !supportsNativeAudio && isCustomAudioTrack
             };
 
             // Persist so future restarts (bitrate change, etc.) carry the right track
@@ -1124,8 +1181,10 @@ export class JellyfinPlayer extends EventEmitter {
                 return;
             }
 
-            // DirectPlay: AVPlay can read embedded subtitle tracks natively
-            if (this._backend instanceof TizenAVPlayer) {
+            // DirectPlay: Tizen AVPlay can read embedded subtitle tracks natively.
+            // WebOS and HTML5 backends do not surface embedded subtitle track APIs
+            // reliably, so they always defer to SubtitleManager external rendering.
+            if (this._backendType === 'tizen') {
                 // Skip explicit backend call during initial playback setup.
                 // TizenAVPlayer natively handles initial track selection via _pendingSubtitleIndex
                 // deferred until the 'onbufferingcomplete' event safely transitions the player.
@@ -1154,13 +1213,10 @@ export class JellyfinPlayer extends EventEmitter {
             }
         } else {
             // SubtitleManager is handling rendering via DOM (EXTERNAL_TEXT, ASS_CANVAS, PGS_BITMAP)
-            // Or delivery is NONE (subtitles disabled / unsupported format).
-            // Ensure backend embedded subtitles are turned off so they don't double-render.
-            if (this._backend instanceof TizenAVPlayer) {
-                this._backend.setSubtitleStreamIndex(-1);
-            } else {
-                this._backend?.setSubtitleStreamIndex(-1);
-            }
+            // or delivery is NONE (subtitles disabled / unsupported format).
+            // Tell the backend to turn off embedded subs so they don't double-render.
+            // All backend types support setSubtitleStreamIndex(-1) to disable.
+            this._backend?.setSubtitleStreamIndex(-1);
         }
 
         this.emit(PlayerEvent.MEDIA_STREAMS_CHANGE, { subtitleStreamIndex: index });
@@ -1301,7 +1357,7 @@ export class JellyfinPlayer extends EventEmitter {
         // To avoid getting stuck in a loop (Next -> Prev Chapter End -> Next -> Prev Chapter End),
         // we look ahead by 3s (slightly more than the 2.5s hack) to see "where we effectively are".
         let lookAhead = 0;
-        if (this._backend instanceof TizenAVPlayer) {
+        if (this._backendType === 'tizen') {
              lookAhead = 30000000; // 3 seconds in ticks
         }
         
@@ -1324,7 +1380,7 @@ export class JellyfinPlayer extends EventEmitter {
         const nextChapter = this._chapters[index + 1];
         if (nextChapter) {
             let seekTarget = nextChapter.StartPositionTicks;
-            if (this._backend instanceof TizenAVPlayer) {
+            if (this._backendType === 'tizen') {
                 // hack: Tizen AVPlay seek subtract 2.5s (25,000,000 ticks) from next chapter until we find what is wrong
                 seekTarget = Math.max(0, seekTarget - 25000000);
                 log.info('TizenAVPlayer: Applying 2.5s offset to next chapter jump');
