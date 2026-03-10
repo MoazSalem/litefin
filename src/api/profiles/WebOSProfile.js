@@ -14,6 +14,73 @@ import { webosAdapter } from '../../webos/WebOSAdapter.js';
 const log = logger.create('WebOSProfile');
 
 let _cachedCapabilities = null;
+let _codecCache = null;
+
+/**
+ * Probes the actual decoder pipeline using both MSE and native
+ * HTML5 <video> canPlayType. This covers both native and HLS playback paths.
+ * @param {string} mime - Mime type string with codec parameters
+ * @returns {boolean}
+ */
+function supportsCodec(mime) {
+    try {
+        let isSupported = false;
+
+        // Check MediaSource (MSE pipeline used by Hls.js)
+        if (typeof window.MediaSource !== 'undefined' && typeof window.MediaSource.isTypeSupported === 'function') {
+            if (window.MediaSource.isTypeSupported(mime)) {
+                isSupported = true;
+            }
+        }
+
+        // Check Native <video> decoder (DirectPlay pipeline)
+        if (!isSupported) {
+            const video = document.createElement('video');
+            isSupported = video.canPlayType(mime) !== '';
+        }
+
+        return isSupported;
+    } catch (e) {
+        return false;
+    }
+}
+
+/**
+ * Returns a cached object of probed codec results.
+ * @returns {Object}
+ */
+function getProbedCodecs() {
+    if (_codecCache) return _codecCache;
+
+    const v = document.createElement('video');
+
+    _codecCache = {
+        // Broaden HEVC detection with multiple variants (fragmented, regular, and generic strings)
+        hevc:
+            supportsCodec('video/mp4; codecs="hev1.1.6.L93.B0"') ||
+            supportsCodec('video/mp4; codecs="hvc1.1.6.L93.B0"') ||
+            supportsCodec('video/mp4; codecs="hvc1"') ||
+            supportsCodec('video/mp4; codecs="hev1"'),
+
+        // Some TVs only support VP9 in WebM, others in MP4
+        vp9: supportsCodec('video/webm; codecs="vp9"') || supportsCodec('video/mp4; codecs="vp09.00.10.08"'),
+
+        // AV1 typically only on WebOS 6+ (O7, G1, C1 etc.)
+        av1: supportsCodec('video/mp4; codecs="av01.0.05M.08"') || supportsCodec('video/webm; codecs="av1"'),
+
+        // Probe for 10-bit HEVC support as a proxy for HDR10 with multiple level/string variants
+        hdr10:
+            supportsCodec('video/mp4; codecs="hev1.2.4.L153.B0"') ||
+            supportsCodec('video/mp4; codecs="hvc1.2.4.L153.B0"') ||
+            supportsCodec('video/mp4; codecs="hev1.2.4.L120.B0"') ||
+            supportsCodec('video/mp4; codecs="hvc1.2.4.L120.B0"'),
+
+        ac3: v.canPlayType('audio/mp4; codecs="ac-3"') !== '',
+        eac3: v.canPlayType('audio/mp4; codecs="ec-3"') !== ''
+    };
+
+    return _codecCache;
+}
 
 function getWebOSVersion() {
     const userAgent = navigator.userAgent.toLowerCase();
@@ -47,7 +114,6 @@ export function getDeviceCapabilities() {
     // ------------------------------------------------------------------------
     let uhd = true;
     let uhd8K = false;
-    let hdr10 = true;
     let dolbyVision = false;
 
     const deviceId = BaseProfile.getFallbackDeviceId('litefin_webos_');
@@ -67,7 +133,6 @@ export function getDeviceCapabilities() {
         if (info.uhd) uhd = info.uhd === 'true';
         if (info['8k']) uhd8K = info['8k'] === 'true';
         if (uhd) {
-            if (info.hdr10) hdr10 = info.hdr10 === 'true';
             if (info.dolbyVision === 'true') dolbyVision = true;
         }
     } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
@@ -78,10 +143,20 @@ export function getDeviceCapabilities() {
         });
     }
 
-    // HEVC supported on most WebOS 3.0+ (2016+) models
-    const hevc = webosVersion >= 3;
-    const av1 = webosVersion >= 5;
-    const vp9 = webosVersion >= 3;
+    const codecs = getProbedCodecs();
+    const hevc = codecs.hevc;
+    const av1 = codecs.av1;
+    const vp9 = codecs.vp9;
+
+    // Use probed HDR10 support, but allow device info to override if present
+    let hdr10 = codecs.hdr10;
+    if (info && info.hdr10) {
+        hdr10 = info.hdr10 === 'true';
+    }
+
+    const ac3 = codecs.ac3;
+    const eac3 = codecs.eac3;
+
     // LG disabled DTS support on WebOS 5.0 through 22 (2020-2022 models)
     const dts = !(webosVersion >= 5 && webosVersion < 23);
 
@@ -104,11 +179,7 @@ export function getDeviceCapabilities() {
         }
     }
 
-    // Default to 6 channels for surround sound support if we have surround codecs.
-    // WebOS handles downmixing or passthrough (to ARC/eARC) internally.
-    const maxAudioChannels = DEFAULT_MAX_CHANNELS;
-
-    _cachedCapabilities = {
+    const caps = {
         modelName,
         deviceId,
         webosVersion,
@@ -124,15 +195,17 @@ export function getDeviceCapabilities() {
         av1,
         vp9,
         vp8: true,
-        ac3: true,
-        eac3: true,
+        ac3,
+        eac3,
         dts,
         truehd: false,
-        maxAudioChannels
+        maxAudioChannels: DEFAULT_MAX_CHANNELS
     };
 
-    log.info('WebOS capabilities:', JSON.stringify(_cachedCapabilities, null, 2));
-    return _cachedCapabilities;
+    log.info('WebOS capabilities:', JSON.stringify(caps, null, 2));
+    _cachedCapabilities = caps;
+
+    return caps;
 }
 
 export function clearCapabilitiesCache() {
@@ -200,13 +273,29 @@ export function buildJellyfinProfile(options = {}) {
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
 
+    log.info('Evaluation flags:', {
+        isHtml5,
+        playbackMode,
+        enableHEVC,
+        enableAV1,
+        enableVP9,
+        enableHDR,
+        enableDolbyVision,
+        enableDts,
+        enableTrueHd
+    });
+
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
     }
 
-    // Cap bitrate for 1080p devices to prevent buffer stalls on older hardware
+    // Cap bitrate for TVs to prevent buffer stalls on high-bitrate remuxes.
+    // 80 Mbps is a safe ceiling for most Smart TV decoders.
     let maxBitrate =
-        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 120000000 : 40000000);
+        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 80000000 : 40000000);
+    if (maxBitrate > 80000000) {
+        maxBitrate = 80000000;
+    }
     if (!caps.uhd && maxBitrate > 40000000) {
         maxBitrate = 40000000;
     }
@@ -240,7 +329,7 @@ export function buildJellyfinProfile(options = {}) {
 
     const tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
     if (enableHEVC) tsVideoCodecs.push('hevc');
-    if (enableAV1) tsVideoCodecs.push('av1');
+    // AV1 in MPEG-TS is not supported on WebOS
 
     const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
 
@@ -293,7 +382,7 @@ export function buildJellyfinProfile(options = {}) {
             directPlayProfiles.push({
                 Container: 'avi',
                 Type: 'Video',
-                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                VideoCodec: 'h264,mpeg2video',
                 AudioCodec: audioCodecString
             });
             directPlayProfiles.push({
@@ -319,14 +408,9 @@ export function buildJellyfinProfile(options = {}) {
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = audioCodecString;
-        const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
-        transVideoCodecs = Array.from(allVideo).join(',');
+        transAudioCodecs = 'copy';
+        transVideoCodecs = 'copy';
     }
-
-    const broadTransVideo = [transVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : '']
-        .filter(Boolean)
-        .join(',');
 
     const transcodingProfiles = [
         {
@@ -342,12 +426,12 @@ export function buildJellyfinProfile(options = {}) {
             Container: 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
+            VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '4',
+            MinSegments: '1',
+            SegmentLength: '2',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
@@ -398,12 +482,12 @@ export function buildJellyfinProfile(options = {}) {
             Container: 'mp4',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
+            VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '4',
+            MinSegments: '1',
+            SegmentLength: '2',
             BreakOnNonKeyFrames: false
         });
     }
@@ -412,7 +496,6 @@ export function buildJellyfinProfile(options = {}) {
     const h264Level = caps.uhd ? '51' : '41';
 
     // HEVC levels: 5.1 for UHD, 4.0 for 1080p (Safe default)
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '120';
 
     const hdrCondition = !enableHDR
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
@@ -465,7 +548,6 @@ export function buildJellyfinProfile(options = {}) {
                     Value: caps.uhd || caps.hdr10 ? 'main|main 10' : 'main',
                     IsRequired: false
                 },
-                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
@@ -532,7 +614,22 @@ export function buildJellyfinProfile(options = {}) {
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),
-        ResponseProfiles: BaseProfile.getResponseProfiles()
+        ResponseProfiles: [
+            {
+                Container: 'mkv',
+                Type: 'Video',
+                Conditions: [
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoCodec',
+                        Value: 'hevc,h264'
+                    }
+                ],
+                Action: 'Remux',
+                ContainerOverride: 'mp4'
+            },
+            ...BaseProfile.getResponseProfiles()
+        ]
     };
 }
 
