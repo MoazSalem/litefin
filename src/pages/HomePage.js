@@ -42,6 +42,7 @@ import { i18n } from '../utils/i18n.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 
 const log = logger.create('HomePage');
 
@@ -253,7 +254,9 @@ class HomePage extends Page {
 
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
-        return descriptors;
+
+        // Apply dynamic user layout sorting and visibility filtering
+        return homeLayoutManager.applyLayout(descriptors);
     }
 
     // =========================================================================

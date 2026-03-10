@@ -753,3 +753,113 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     text-align: center;
     opacity: 0.6;
 }
+
+/* ==========================================================================
+   Home Layout Customization (Apple HIG Inspired)
+   ========================================================================== */
+
+.home-layout-container {
+    width: 100%;
+    margin-top: 16px;
+    padding: 2px; /* For focus ring bleed */
+}
+
+.home-layout-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    padding: 12px;
+    border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+}
+
+.layout-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 20px;
+    margin: 0; /* Override .setting-item */
+    min-height: 60px; /* Tighter than default setting-item */
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, opacity 0.3s ease;
+    border: 2px solid transparent;
+}
+
+.layout-row-hidden {
+    opacity: 0.4;
+    background: transparent;
+    border: 2px dashed rgba(255, 255, 255, 0.1);
+}
+
+.layout-row-title {
+    font-size: 1.2rem;
+    font-weight: 500;
+    color: var(--jf-text-primary);
+    letter-spacing: 0.3px;
+    transition: color 0.2s ease;
+}
+
+.layout-row-hidden .layout-row-title {
+    color: var(--jf-text-secondary);
+    text-decoration: line-through;
+}
+
+.layout-btns {
+    display: flex;
+    gap: 8px;
+}
+
+.layout-row .btn-icon {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.08);
+    border: 2px solid transparent !important;
+    color: var(--jf-text-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, color 0.2s ease;
+    padding: 0;
+}
+
+.layout-row .btn-icon svg {
+    width: 22px;
+    height: 22px;
+    pointer-events: none;
+}
+
+.layout-row .btn-icon:disabled {
+    opacity: 0.2;
+    background: transparent;
+    cursor: default;
+    transform: none !important;
+}
+
+.layout-row .btn-icon:focus,
+.layout-row .btn-icon.focused {
+    background: var(--jf-accent);
+    color: #fff;
+    transform: scale(1.15);
+    border-color: rgba(255, 255, 255, 0.8) !important;
+    outline: none;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    z-index: 2;
+}
+
+/* Specific toggle styling */
+.layout-btn-toggle {
+    margin-left: 8px; /* Extra separation */
+}
+
+.layout-row-hidden .layout-btn-toggle {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+.layout-row-hidden .layout-btn-toggle:focus,
+.layout-row-hidden .layout-btn-toggle.focused {
+    background: var(--jf-accent);
+}
