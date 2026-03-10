@@ -3,6 +3,7 @@ import { ICONS } from './icons.js';
 import { MediaHelper } from '../core/MediaHelper.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { i18n } from '../../utils/i18n.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 /**
  * PlaybackInfo
@@ -104,12 +105,14 @@ export default class PlaybackInfo extends BaseMenu {
         
         // Use actual backend type if available, otherwise fall back to config
         let playerType = i18n.t('Unknown');
-        if (this.player.backendType === 'tizen') {
+        if (this.player.backendType === 'webos' || platformInfo.isWebOS) {
+            playerType = 'WebOS Player';
+        } else if (this.player.backendType === 'tizen') {
             playerType = 'Tizen AVPlayer';
         } else if (this.player.backendType === 'html5') {
-            playerType = 'Html Video Player';
+            playerType = 'Html Player';
         } else {
-            playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Video Player';
+            playerType = this.player.useTizenPlayer ? 'Tizen AVPlayer' : 'Html Player';
         }
 
         const api = this.osd.api;

@@ -104,7 +104,8 @@ export function getDeviceCapabilities() {
         }
     }
 
-    // Default to 6 channels for surround sound support if we have surround codecs
+    // Default to 6 channels for surround sound support if we have surround codecs.
+    // WebOS handles downmixing or passthrough (to ARC/eARC) internally.
     const maxAudioChannels = DEFAULT_MAX_CHANNELS;
 
     _cachedCapabilities = {
@@ -407,11 +408,11 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // H.264 High Profile Level 5.1 is standard on almost all WebOS TVs (Safe default: 5.1)
-    const h264Level = '51';
+    // H.264 levels: 5.1 for UHD, 4.1 for 1080p
+    const h264Level = caps.uhd ? '51' : '41';
 
-    // HEVC Main 10 Level 5.1 is the baseline for 4K WebOS TVs (Safe default: 5.1/153)
-    const hevcLevel = caps.uhd8K ? '183' : '153';
+    // HEVC levels: 5.1 for UHD, 4.0 for 1080p (Safe default)
+    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '120';
 
     const hdrCondition = !enableHDR
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
@@ -461,14 +462,14 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: 'main|main 10',
+                    Value: caps.uhd || caps.hdr10 ? 'main|main 10' : 'main',
                     IsRequired: false
                 },
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: '10',
+                    Value: caps.uhd || caps.hdr10 ? '10' : '8',
                     IsRequired: false
                 },
                 ...hdrCondition
@@ -484,7 +485,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: 'profile 0|profile 2',
+                    Value: caps.uhd || caps.hdr10 ? 'profile 0|profile 2' : 'profile 0',
                     IsRequired: false
                 },
                 ...hdrCondition

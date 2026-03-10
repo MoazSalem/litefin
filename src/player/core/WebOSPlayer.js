@@ -330,11 +330,33 @@ export class WebOSPlayer {
 
     /**
      * Start non-HLS (MP4, MKV, etc.) playback via direct src assignment.
+     * Uses <source> element with type hints for better WebOS hardware decoder steering.
      * @private
      */
     async _playNativeDirect(video, options) {
-        video.src = options.url;
+        // Clear any stale source
+        video.removeAttribute('src');
+        while (video.firstChild) {
+            video.removeChild(video.firstChild);
+        }
+
+        const source = document.createElement('source');
+        source.src = options.url;
+
+        // Provide type hints for the hardware pipeline
+        const url = options.url.toLowerCase();
+        if (url.includes('.mkv') || url.includes('container=mkv')) {
+            source.type = 'video/x-matroska';
+        } else if (url.includes('.mp4') || url.includes('container=mp4')) {
+            source.type = 'video/mp4';
+        } else if (url.includes('.webm') || url.includes('container=webm')) {
+            source.type = 'video/webm';
+        }
+
+        video.appendChild(source);
         video.autoplay = true;
+
+        video.load();
 
         return new Promise((resolve, reject) => {
             const onLoadedMetadata = () => {
