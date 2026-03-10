@@ -31,8 +31,10 @@ class PlatformInfo {
      * Should be called exactly once during App init.
      */
     init() {
-        // 1. Check existing cached platform
-        const savedPlatform = storage.getItem('app_platform');
+        log.info(`Initializing platform detection. UA: ${navigator.userAgent}`);
+        // Force re-detection on every boot to ensure hardware changes/updates are caught
+        // const savedPlatform = storage.getItem('app_platform');
+        const savedPlatform = null;
 
         if (savedPlatform) {
             this._platform = savedPlatform;
@@ -45,12 +47,11 @@ class PlatformInfo {
             if (typeof window.tizen !== 'undefined' || typeof window.webapis?.avplay !== 'undefined') {
                 this._platform = 'tizen';
             }
-            // WebOS check
-            else if (
-                typeof window.webOS !== 'undefined' ||
-                navigator.userAgent.includes('Web0S') ||
-                navigator.userAgent.includes('NetCast')
-            ) {
+            // WebOS check — handle both WebOS (letter O) and Web0S (zero) variants, and NetCast/LG Browser
+            // NOTE: We don't check for window.webOS here because webOSTV.js is included in index.html
+            // and defines the namespace even on standard browsers, causing false positives.
+            // LG TVs reliably include WebOS/NetCast in their UA.
+            else if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
                 this._platform = 'webos';
             }
             // Default

@@ -18,6 +18,8 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { api, ServerUnreachableError } from './ApiClient.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 import { storage } from '../utils/StorageService.js';
 import { buildJellyfinProfile } from './DeviceProfile.js';
 import { logger } from '../utils/Logger.js';
@@ -88,9 +90,15 @@ class AuthManager {
             log.info('Generated new device ID');
         }
 
-        // Get device name - ApiClient handles quoting and sanitization for headers
-        const deviceName = tizenAdapter.getDeviceName();
+        // Get device name from appropriate adapter
+        let deviceName;
+        if (platformInfo.isWebOS) {
+            deviceName = webosAdapter.getDeviceName();
+        } else {
+            deviceName = tizenAdapter.getDeviceName();
+        }
 
+        log.info(`Identification check: platform=${platformInfo.platformString}, deviceName="${deviceName}"`);
         api.setDevice(deviceId, deviceName);
     }
 

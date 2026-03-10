@@ -42,7 +42,7 @@ export class ApiClient {
 
         // Device identification - NO SPACES in any of these values
         this._deviceId = null;
-        this._deviceName = tizenAdapter.getDeviceName();
+        this._deviceName = 'Litefin'; // Default, will be updated by AuthManager.init()
         this._clientName = 'Litefin';
         this._clientVersion = __APP_VERSION__;
 

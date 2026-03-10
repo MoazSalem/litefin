@@ -62,9 +62,11 @@ class WebOSAdapter {
      * @private
      */
     _detectPlatform() {
-        if (typeof window.webOS !== 'undefined' || navigator.userAgent.includes('Web0S')) {
+        const ua = navigator.userAgent;
+        // Rely strictly on hardware UA strings. window.webOS is defined on all platforms via script tag.
+        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(ua)) {
             this._isWebOS = true;
-            log.info('Running on WebOS platform');
+            log.info('Running on WebOS adapter mode');
         }
     }
 
@@ -334,6 +336,25 @@ class WebOSAdapter {
                 window.close();
             }
         }
+    }
+
+    /**
+     * Get device name for server identification
+     * @returns {string} Device name (e.g. "LG Smart TV" or specific model)
+     */
+    getDeviceName() {
+        if (this._isWebOS && this._deviceInfo && this._deviceInfo.modelName) {
+            return this._deviceInfo.modelName;
+        }
+        return this._isWebOS ? 'LG Smart TV' : 'Web Browser';
+    }
+
+    /**
+     * Get device manufacturer
+     * @returns {string} Manufacturer name
+     */
+    getManufacturer() {
+        return this._isWebOS ? 'LG' : 'Generic';
     }
 
     get isWebOS() {
