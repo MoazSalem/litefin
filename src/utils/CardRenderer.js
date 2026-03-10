@@ -46,7 +46,7 @@ class CardRenderer {
             }
         } else if (type === 'episode-primary') {
             // Force Episode Primary Image (for Person Page grid)
-            const params = imageService.getParams('thumb');
+            const params = imageService.getParams('card-backdrop');
             if (item.ImageTags?.Primary) {
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -77,7 +77,13 @@ class CardRenderer {
             }
         } else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
-            const params = imageService.getParams('backdrop');
+            //
+            // PERFORMANCE: Use 'card-backdrop' instead of 'backdrop' for card-sized images.
+            // A landscape card slot is 400px wide — requesting a full 'backdrop' image
+            // (1080px at medium quality) is a 3× scale overshoot that wastes network
+            // bandwidth, JPEG decode time, and GPU texture memory on Tizen hardware.
+            // 'card-backdrop' caps the request at the card's actual rendered size.
+            const params = imageService.getParams('card-backdrop');
 
             if (item.Type === 'Episode') {
                 // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop

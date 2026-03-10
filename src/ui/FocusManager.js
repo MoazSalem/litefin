@@ -207,10 +207,11 @@ class FocusManager {
         this._lastMoveTime = now;
 
         // Update rapid move streak
-        if (isRapidGap) {
+        if (isRapidGap && this._lastMoveDirection === direction) {
             this._rapidMoveStreak++;
         } else {
             this._rapidMoveStreak = 0;
+            this._lastMoveDirection = direction;
         }
 
         // SLIDER HANDLING: When a range input is focused, Left/Right keys
@@ -654,7 +655,7 @@ class FocusManager {
     focusElement(element, options = {}) {
         if (!element) return;
 
-        const defaults = { scroll: true, skipScroll: false };
+        const defaults = { scroll: true, skipScroll: false, instantScroll: false };
         options = { ...defaults, ...options };
 
         // Cleanup old focus FIRST (lightweight)

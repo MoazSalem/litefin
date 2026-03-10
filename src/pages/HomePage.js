@@ -511,8 +511,12 @@ class HomePage extends Page {
             isLandscape,
             cardType: descriptor.cardType || 'poster',
             hideLabels: shouldHideLabels,
-            // Sliding window size after initial boot render
-            visibleCount: isLandscape ? 8 : 12,
+            // Sliding window size after initial boot render.
+            // Landscape rows: 6 cards in the window — ~4.5 fit in the TV viewport, so this gives
+            // about 1 card of lookahead on each side without keeping 8 large decoded backdrop
+            // images in GPU memory simultaneously.
+            // Portrait rows: 12 — narrower cards (240px) pack more per screen, lookahead is cheap.
+            visibleCount: isLandscape ? 6 : 12,
             // Boot render: pre-render first N items before the user scrolls,
             // so the row is ready to receive focus without on-demand DOM creation lag.
             // Landscape rows get 5 (they're wide, so ~5 fill the screen).
@@ -961,7 +965,7 @@ class HomePage extends Page {
                     });
 
                     if (response?.Items?.length > 0) {
-                        const { maxWidth, quality } = imageService.getParams('backdrop');
+                        const { maxWidth, quality } = imageService.getParams('card-backdrop');
                         let resolvedUrl = null;
 
                         // Iterate candidates until we find a usable image URL
