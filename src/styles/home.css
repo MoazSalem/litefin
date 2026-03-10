@@ -162,26 +162,8 @@
     text-overflow: ellipsis;
 }
 
-.progress-bar {
-    position: absolute;
-    bottom: 0;
-    left: 0;
-    right: 0;
-    height: 6px;
-    z-index: 2;
-    border-radius: 0 0 var(--jf-border-radius) var(--jf-border-radius);
-    overflow: hidden;
-}
 
-.progress-bar .progress {
-    position: absolute;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    background: var(--jf-accent);
-}
-
-/* Library Card Overlays */
+/* Media Row Navigation Icons */
 .card-overlay-tint {
     position: absolute;
     top: 0;

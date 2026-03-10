@@ -314,50 +314,8 @@ body.lyrics-active .audio-album-art {
     margin-bottom: 24px;
 }
 
-.progress-bar {
-    height: 6px;
-    background: var(--osd-slider-bg, rgba(255, 255, 255, 0.2));
-    border-radius: 3px;
-    overflow: hidden;
-    cursor: pointer;
-    transition: height 0.2s ease, transform 0.2s ease;
-}
 
-.progress-bar:focus,
-.progress-bar.focused,
-.progress-bar:hover {
-    height: 10px;
-    transform: scaleY(1.2);
-}
-
-.progress-fill {
-    height: 100%;
-    background: var(--jf-accent, #00a4dc);
-    border-radius: 3px;
-    transition: width 0.1s linear;
-    position: relative;
-}
-
-.progress-fill::after {
-    content: '';
-    position: absolute;
-    right: -8px;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 16px;
-    height: 16px;
-    background: #fff;
-    border-radius: 50%;
-    box-shadow: var(--jf-shadow-sm);
-    opacity: 0;
-    transition: opacity 0.2s ease;
-}
-
-.progress-bar:focus .progress-fill::after,
-.progress-bar.focused .progress-fill::after,
-.progress-bar:hover .progress-fill::after {
-    opacity: 1;
-}
+/* Time Display */
 
 /* Time Display */
 .osd-time {
@@ -375,58 +333,13 @@ body.lyrics-active .audio-album-art {
     align-items: center;
 }
 
-.osd-btn {
-    margin-left: 12px;
-    margin-right: 12px;
-}
-
-.osd-btn {
-    width: 56px;
-    height: 56px;
-    border: none;
-    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.15));
-    border-radius: 50%;
-    color: var(--osd-text-color, #fff);
-    cursor: pointer;
-    transition: all 0.2s ease;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.osd-btn:focus,
-.osd-btn.focused,
-.osd-btn:hover {
-    background: var(--jf-button-hover, rgba(255, 255, 255, 0.3));
-    border: 2px solid var(--jf-button-border-focus, #fff);
-    transform: scale(1.1);
-    outline: none;
-    box-shadow: var(--jf-shadow-sm);
-}
-
-.osd-btn:active {
-    transform: scale(0.95);
-}
-
-.osd-btn svg {
-    width: 24px;
-    height: 24px;
-    fill: currentColor;
-}
 
 /* Play/Pause Button (Larger) */
+
+/* Play/Pause Button (Larger) - Specific scale */
 .osd-btn-play {
     width: 72px;
     height: 72px;
-    background: var(--jf-accent, #00a4dc);
-}
-
-.osd-btn-play:focus,
-.osd-btn-play.focused,
-.osd-btn-play:hover {
-    background: var(--jf-accent-hover, #00b4ec);
-    border: 2px solid var(--jf-button-border-focus, #fff);
-    box-shadow: var(--jf-shadow-md);
 }
 
 .osd-btn-play svg {
@@ -490,9 +403,4 @@ body.lyrics-active .audio-album-art {
     .player-page * {
         cursor: none;
     }
-}
-
-.player-page .progress-bar:focus,
-.player-page .progress-bar.focused {
-    border-radius: 5px;
 }

@@ -31,16 +31,6 @@
     transform: translate3d(100%, 0, 0);
 }
 
-[dir="rtl"] .settings-sidebar {
-    border-right: none;
-    border-left: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
-}
-
-[dir="rtl"] .settings-menu-btn .menu-icon {
-    margin-right: 0;
-    margin-left: 16px;
-}
-
 [dir="rtl"] .setting-label {
     padding-right: 0;
     padding-left: 40px;

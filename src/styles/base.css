@@ -139,14 +139,6 @@ body.player-active #sidebar-container {
    Loading Screen
    ============================================================================ */
 
-.loading-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    background-color: var(--jf-background);
-}
 
 .page-loading {
     position: fixed;
@@ -277,44 +269,11 @@ body.app-splash-active .page-loading .loading-spinner {
     }
 }
 
-.skeleton-text {
-    height: 14px;
-    border-radius: 4px;
-    background-color: #2a2a2a;
-    margin-bottom: 8px;
-}
 
 /* ============================================================================
    Welcome Screen (Temporary)
    ============================================================================ */
 
-.welcome-screen {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
-    text-align: center;
-}
-
-.welcome-screen h1 {
-    font-size: 5rem;
-    font-weight: 700;
-    color: var(--jf-accent);
-    margin-bottom: 1rem;
-}
-
-.welcome-screen p {
-    font-size: 1.5rem;
-    color: var(--jf-text-secondary);
-    margin-bottom: 0.5rem;
-}
-
-.welcome-screen .version {
-    font-size: 1rem;
-    color: var(--jf-text-tertiary);
-    margin-top: 2rem;
-}
 
 @import 'sidebar.css';
 @import 'library.css';
@@ -361,10 +320,6 @@ p {
    GPU Acceleration Helpers
    ============================================================================ */
 
-.gpu-accelerated {
-    transform: translateZ(0);
-    will-change: transform;
-}
 
 /* ============================================================================
    Utility Classes
@@ -382,21 +337,6 @@ p {
     display: flex;
 }
 
-.flex-col {
-    flex-direction: column;
-}
-
-.items-center {
-    align-items: center;
-}
-
-.justify-center {
-    justify-content: center;
-}
-
-.justify-between {
-    justify-content: space-between;
-}
 
 .text-center {
     text-align: center;
