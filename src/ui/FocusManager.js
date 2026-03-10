@@ -619,11 +619,19 @@ class FocusManager {
                 }
             }
 
-            // Detect rapid navigation: if the user is holding the key down, use instant
-            // scroll for the cross-section transition. Without this, each rapid keypress
-            // restarts the 200ms animation from scratch, causing the scroll to lag far
-            // behind where the user actually is.
-            const isRapidNav = this._prevMoveTime > 0 && this._lastMoveTime - this._prevMoveTime < 200;
+            // Detect rapid navigation: use the SAME streak-based check as _move() so
+            // that single deliberate D-pad presses always get the smooth 200ms animation.
+            //
+            // The old check (gap < 200ms between last 2 presses) fired on virtually every
+            // cross-section transition, because a horizontal nav press followed by a
+            // vertical exit press is naturally within 200ms — making rows always snap
+            // instead of slide, regardless of intent.
+            //
+            // The streak check requires RAPID_MOVE_STREAK_REQUIRED (2) consecutive fast
+            // presses before enabling instant scroll, which only triggers when the user
+            // is genuinely holding the key — producing the correct snapping behaviour
+            // for held keys and smooth animation for single taps.
+            const isRapidNav = this._rapidMoveStreak >= RAPID_MOVE_STREAK_REQUIRED;
 
             // Pass originElement to allow selecting closest target in new section
             this.setActiveSection(nextSection, true, originElement, { direction, instantScroll: isRapidNav });

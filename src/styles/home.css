@@ -14,6 +14,24 @@
     padding: 40px 0 80px 0;
 }
 
+/* =========================================================================
+   Skeleton Row — shown while row data is loading.
+   Rendered immediately on page open for an instant visual response.
+   The `.media-row--skeleton` modifier is removed when the real data
+   replaces the placeholder via _renderRow().
+   ========================================================================= */
+.media-row--skeleton {
+    /* Prevent skeleton from participating in the layout offset cache —
+       its height may differ slightly from the real row before data loads. */
+    pointer-events: none;
+}
+
+/* Skeleton rows fade out naturally when replaced (the real row fades in) */
+.media-row--skeleton .row-title {
+    /* Dim the title slightly to signal "loading" state */
+    opacity: 0.5;
+}
+
 .media-row {
     margin-bottom: 32px;
     /* GPU layer for the row itself — enables composited scrolling of the parent */
