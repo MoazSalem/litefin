@@ -350,8 +350,17 @@ export class SubtitleParser {
      * @private
      */
     static _cleanText(text) {
-        // Keep basic HTML formatting tags that are commonly used in subtitles
-        // Remove potentially dangerous tags but keep <b>, <i>, <u>, <br>
-        return text;
+        if (!text) return '';
+
+        /**
+         * 1. Remove ASS/SSA style tags: {...}
+         * These often appear in SRT/VTT files that were converted from ASS or
+         * when the server delivers transcoded text that still contains styling bits.
+         * Example: "{\an8}Hello" -> "Hello"
+         * 
+         * The regex /\{[^\}]*\}/g is performant as it avoids backtracking issues
+         * by matching any character that is NOT a closing brace.
+         */
+        return text.replace(/\{[^}]*\}/g, '');
     }
 }

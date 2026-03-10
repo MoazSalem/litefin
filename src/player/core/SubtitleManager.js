@@ -355,6 +355,11 @@ export default class SubtitleManager {
         // Only handle if primary delivery is embedded native
         if (this._primaryDelivery !== DeliveryMethod.EMBEDDED_NATIVE) return;
 
+        // Clean text if present
+        if (data && data.text) {
+            data.text = SubtitleParser._cleanText(data.text);
+        }
+
         // Pass through to the primary cue callback
         this._onPrimaryCue(data);
     }
