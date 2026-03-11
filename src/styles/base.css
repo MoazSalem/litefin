@@ -30,6 +30,16 @@
     --jf-action-btn-active-bg: #ffffff;
     --jf-action-btn-active-border: #ffffff;
     --jf-action-btn-active-color: #101010;
+
+    /* Global Rounded Corner Defaults (Setting-controlled) */
+    --jf-border-radius: 0px;
+    --jf-border-radius-lg: 0px;
+}
+
+/* Global Rounded Corners (Apple HIG style) */
+html[data-rounded-corners="true"] {
+    --jf-border-radius: 12px;
+    --jf-border-radius-lg: 16px;
 }
 
 /* Custom UI Font Overrides */
@@ -117,6 +127,22 @@ body.player-active #sidebar-container {
 }
 
 /* Custom focus indicator for TV navigation is handled per-component for rounded corners */
+.media-card,
+.grid-card,
+.result-card,
+.media-card .card-image,
+.person-row .person-card,
+.person-dot {
+    border-radius: var(--jf-border-radius);
+    overflow: hidden; /* Ensure images/content respect the radius */
+}
+
+/* Ensure fallbacks and overlays also get rounded */
+.media-fallback,
+.card-overlay-tint,
+.skeleton-image {
+    border-radius: var(--jf-border-radius);
+}
 .focusable:focus,
 .focusable.focused,
 [tabindex]:focus,

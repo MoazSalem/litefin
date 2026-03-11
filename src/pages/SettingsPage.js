@@ -330,6 +330,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
+                        <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
+                                id="toggle-rounded-corners" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -1600,6 +1613,16 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Rounded Corners
+        const roundedCornersBtn = this.$('#toggle-rounded-corners');
+        if (roundedCornersBtn) {
+            roundedCornersBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getRoundedCorners();
+                layoutManager.setRoundedCorners(newValue);
+                roundedCornersBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Hide Library Labels
         const hideLabelsBtn = this.$('#toggle-library-labels');
         if (hideLabelsBtn) {
@@ -2533,10 +2556,10 @@ class SettingsPage extends Page {
                         const candidates = Array.from(row.querySelectorAll(focusSelector)).filter(
                             (el) => el.tabIndex !== -1 && !el.disabled && el.offsetParent !== null
                         );
-                        
+
                         // Use SpatialNavigator to see if there's anything to the left within the SAME row
                         const nextInRow = spatialNavigator.findNext(currentElement, candidates, 'left');
-                        
+
                         // If nothing is to the left in this row, immediately escape to the sidebar
                         if (!nextInRow) {
                             focusManager._leaveSection('left');
@@ -2545,7 +2568,7 @@ class SettingsPage extends Page {
                     } else {
                         // If not in a setting-item (fallback), just escape
                         focusManager._leaveSection('left');
-                        return true; 
+                        return true;
                     }
                 }
                 return false;

@@ -61,12 +61,6 @@
 
 
     /* ========================================================================
-       Border Radius - Apple's rounded corners
-       ======================================================================== */
-    --jf-border-radius: 10px;
-    --jf-border-radius-lg: 16px;
-
-    /* ========================================================================
        Transitions - Apple's smooth feel
        ======================================================================== */
     --jf-transition-normal: 350ms cubic-bezier(0.25, 0.1, 0.25, 1);
@@ -80,24 +74,8 @@
     --jf-action-btn-active-color: #000000;
 }
 
-/* Apple TV specific styles */
-[data-theme="appletv"] .media-card,
-[data-theme="appletv"] .grid-card,
-[data-theme="appletv"] .result-card {
-    border-radius: 10px;
-}
-
 [data-theme="appletv"] .media-card:focus,
 [data-theme="appletv"] .grid-card:focus,
 [data-theme="appletv"] .result-card:focus {
     transform: scale(1.08) translateZ(0);
-}
-
-[data-theme="appletv"] .btn {
-    border-radius: 10px;
-}
-
-[data-theme="appletv"] .text-input,
-[data-theme="appletv"] .search-input {
-    border-radius: 10px;
 }

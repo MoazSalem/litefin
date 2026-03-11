@@ -48,6 +48,9 @@ class LayoutManager {
 
         // Current font
         this._uiFont = 'default';
+
+        // Rounded corners setting
+        this._roundedCorners = true;
     }
 
     /**
@@ -58,10 +61,12 @@ class LayoutManager {
         const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
         const savedTheme = storage.getItem('litefin:theme') || 'purplehaze';
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
+        const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
 
         this.setLayout(savedLayout, false);
         this.setTheme(savedTheme, false);
         this.setUiFont(savedUiFont, false);
+        this.setRoundedCorners(savedRoundedCorners, false);
 
         /*
          * Stamp the CSS layout tier onto <html> so stylesheet rules can branch
@@ -211,6 +216,37 @@ class LayoutManager {
         }
 
         log.info(`UI Font set to "${font}"`);
+    }
+
+    /**
+     * Get rounded corners setting
+     * @returns {boolean} True if rounded corners enabled
+     */
+    getRoundedCorners() {
+        return this._roundedCorners;
+    }
+
+    /**
+     * Set rounded corners setting
+     * @param {boolean} enabled - True to enable
+     * @param {boolean} [save=true] - Save to localStorage
+     */
+    setRoundedCorners(enabled, save = true) {
+        const oldVal = this._roundedCorners;
+        this._roundedCorners = enabled;
+
+        // Update HTML attribute
+        document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
+
+        // Save preference
+        if (save) {
+            storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
+        }
+
+        if (oldVal !== enabled) {
+            log.info(`Rounded corners set to ${enabled}`);
+            eventBus.emit('roundedCorners:changed', { enabled });
+        }
     }
 
     /**

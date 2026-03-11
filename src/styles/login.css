@@ -132,7 +132,7 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     box-sizing: border-box;
     /* Apple-style subtle shadows and simplified transparency for Tizen */
     background: rgba(255, 255, 255, 0.12);
@@ -298,7 +298,7 @@ body.app-splash-active .loading-section .loading-spinner {
     font-size: 0.75rem;
     background: var(--jf-accent-light);
     padding: 2px 8px;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
 }
 
 /* Users grid */
@@ -325,7 +325,7 @@ body.app-splash-active .loading-section .loading-spinner {
     height: 170px;
     background: var(--jf-surface);
     border: none;
-    border-radius: 12px; /* Slightly smaller radius for smaller card */
+    border-radius: var(--jf-border-radius); /* Slightly smaller radius for smaller card */
     cursor: pointer;
     overflow: hidden; /* Image fills the card */
     padding: 0;

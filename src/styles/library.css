@@ -541,7 +541,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
 .library-modal {
     background-color: #1a1a1a;
     border: 1px solid rgba(255, 255, 255, 0.1);
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     padding: 24px;
     width: 400px;
     width: 500px;
@@ -722,8 +722,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     font-size: 1.25rem;
     cursor: pointer;
     border-left: 6px solid transparent;
-    border-radius: 8px;
-    -webkit-border-radius: 8px;
+    border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
     /* Standardize corners */
@@ -880,8 +880,8 @@ html[data-layout-tier="legacy"] .filter-main > * {
     margin-left: 20px;
     /* Increased margin for Tizen flex gap fallback */
     border: 2px solid var(--jf-action-btn-border)!important;
-    border-radius: 8px;
-    -webkit-border-radius: 8px;
+    border-radius: var(--jf-border-radius);
+    -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
     font-size: 1.1rem;

@@ -1145,7 +1145,7 @@ body.lyrics-active .subtitle-overlay {
     transform-origin: center;
     padding: 8px 16px;
     margin: 4px 0;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     white-space: pre-wrap; /* Preserve line breaks from lyric text */
     max-width: 90%;
 }

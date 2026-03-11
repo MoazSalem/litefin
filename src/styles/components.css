@@ -671,7 +671,7 @@ progress.card-progress::-webkit-progress-value {
     display: flex;
     align-items: center;
     background: rgba(255, 255, 255, 0.04);
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     padding: 16px 20px;
     margin-bottom: 12px;
 }
@@ -702,7 +702,7 @@ progress.card-progress::-webkit-progress-value {
     margin: 0;
     background: rgba(220, 53, 69, 0.2);
     color: #ff6b6b;
-    border-radius: 10px;
+    border-radius: var(--jf-border-radius);
     font-size: 1.1rem;
     font-weight: 600;
     display: flex;
@@ -751,7 +751,7 @@ progress.card-progress::-webkit-progress-value {
     background: rgba(255, 255, 255, 0.05);
     color: var(--jf-text-primary);
     border: 3px solid transparent;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     padding: 16px 20px;
     font-size: 1.2rem;
     cursor: pointer;
@@ -773,7 +773,7 @@ progress.card-progress::-webkit-progress-value {
 #btn-subtitle-search {
     margin: 0;
     height: auto;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
 }
 
 /* Panel B Results Specifics */

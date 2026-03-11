@@ -54,7 +54,7 @@
     /* Extra bold for TV prominence */
     color: var(--jf-text-primary);
     padding: 6px 16px;
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius);
     display: inline-flex;
     align-items: center;
     cursor: pointer;
