@@ -29,6 +29,7 @@ class MediaGrid extends Component {
         this.type = config.type || 'poster'; // 'poster', 'episode', 'episode-primary'
         this.contextType = config.contextType || null;
         this.isLandscape = config.isLandscape || false;
+        this.gridClass = config.gridClass || '';
 
         // State
         this.expanded = false;
@@ -48,7 +49,7 @@ class MediaGrid extends Component {
         const btnId = `${this.id}-btn`;
 
         // landscape-grid class?
-        const gridClass = this.isLandscape ? 'person-grid landscape-grid' : 'person-grid';
+        const gridClass = this.gridClass || (this.isLandscape ? 'person-grid landscape-grid' : 'person-grid');
 
         return `
             <div id="${this.id}" class="media-row">

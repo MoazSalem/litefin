@@ -169,6 +169,12 @@ class DetailsPage extends Page {
                         <div class="people-row row-items" id="people-row"></div>
                     </section>
 
+                    <!-- Songs (for albums) -->
+                    <section class="details-songs media-row hidden" id="songs-section">
+                        <h2 class="row-title songs-title" data-i18n="Songs">Songs</h2>
+                        <div class="songs-list" id="songs-list"></div>
+                    </section>
+
                     <!-- Artists (for music/albums) -->
                     <section class="details-artists media-row hidden" id="artists-section">
                         <h2 class="row-title" data-i18n="Artists">Artists</h2>
@@ -484,6 +490,8 @@ class DetailsPage extends Page {
             await Promise.all([this._loadMoreFromSeason(), this._loadGuestStars()]);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
+        } else if (this._item.Type === 'MusicAlbum') {
+            await this._loadAlbumSongs();
         }
 
         // Render people if available
@@ -494,6 +502,10 @@ class DetailsPage extends Page {
 
         // Load Artists (Music/Albums)
         await this._loadArtists();
+
+        // Already loaded via conditional above if MusicAlbum,
+        // but this ensures fallback or shared logic consistency
+        // await this._loadAlbumSongs();
 
         // Load Logo (non-blocking, fire and forget)
         this._loadLogo();
@@ -538,6 +550,74 @@ class DetailsPage extends Page {
         }
     }
 
+    async _loadAlbumSongs() {
+        if (this._item.Type !== 'MusicAlbum') return;
+
+        try {
+            const response = await api.getItems({
+                ParentId: this._itemId,
+                IncludeItemTypes: 'Audio',
+                Recursive: true,
+                Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks',
+                SortBy: 'ParentIndexNumber,IndexNumber,SortName'
+            });
+
+            const songs = response.Items || [];
+            if (songs.length > 0) {
+                this._renderAlbumSongs(songs);
+            }
+        } catch (error) {
+            log.warn('Failed to load album songs', error);
+        }
+    }
+
+    _renderAlbumSongs(songs) {
+        const container = this.$('#songs-list');
+        const section = this.$('#songs-section');
+        if (!section || !container) return;
+
+        section.classList.remove('hidden');
+
+        this._songsGrid = new MediaGrid({
+            id: 'album-songs-grid',
+            items: songs,
+            type: 'square', // Square posters as requested
+            contextType: 'album-grid',
+            limit: 1000,
+            isLandscape: false, // Not landscape
+            onClick: (card) => {
+                const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                if (card.dataset.itemId) {
+                    state.set(stateKey, {
+                        itemId: card.dataset.itemId,
+                        sectionId: 'details-songs'
+                    });
+                    // Start playback directly for songs?
+                    // Or navigate to song details?
+                    // Jellyfin usually plays. Litefin usually navigates.
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            }
+        });
+
+        container.innerHTML = this._songsGrid.render();
+        this._songsGrid.onMounted();
+
+        // Register focus section
+        const upwardLink = this._getPreviousVisibleSection('details-songs')?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection('details-songs');
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection('details-songs', container, {
+            orientation: 'grid',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar'
+        });
+
+        this._updateLeaveDown(upwardLink, 'details-songs');
+    }
+
     _renderArtists(artists) {
         if (!artists || artists.length === 0) return;
 
@@ -574,6 +654,7 @@ class DetailsPage extends Page {
             'details-next-up',
             'details-seasons',
             'details-episodes',
+            'details-songs',
             'more-from-season-section',
             'details-people',
             'artists-section',
@@ -1555,6 +1636,11 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#episodes-section')
             },
             {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
+            },
+            {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
@@ -1615,6 +1701,11 @@ class DetailsPage extends Page {
                 name: 'details-episodes',
                 elementId: '#episodes-list',
                 isVisible: () => isNotHidden('#episodes-section')
+            },
+            {
+                name: 'details-songs',
+                elementId: '#songs-list',
+                isVisible: () => isNotHidden('#songs-section')
             },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },

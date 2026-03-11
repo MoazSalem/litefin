@@ -691,17 +691,13 @@
 /* Person Page Grids */
 .person-grid {
     display: flex;
-    /* Changed from Grid to Flex Wrap for max compatibility */
     flex-wrap: wrap;
     padding: 16px 60px 0px 60px;
     width: 100%;
     margin: 0;
     box-sizing: border-box;
-    /* REDUNDANT: Container level */
-    /* transform: translateZ(0); */
 }
 
-/* Ensure grid items don't stretch weirdly */
 .person-grid .media-card {
     /* Manual sizing instead of grid */
     width: calc(20% - 26px) !important;
@@ -713,7 +709,6 @@
     min-width: 0 !important;
 }
 
-/* FIX: Aspect Ratio for Lazy Loading (Prevent Scroll Jump) */
 .person-grid .card-image {
     width: 100%;
     height: 360px; /* Fixed height fallback for Tizen (approx 2:3 portrait) */
@@ -743,6 +738,17 @@
 
 .person-grid.landscape-grid .media-card:nth-child(3n) {
     margin-right: 0 !important;
+}
+
+.person-grid.landscape-grid .media-card:nth-child(5n) {
+    margin-right: 24px !important;
+}
+
+/* Reset media-card margin for first item on row titles if needed */
+.songs-title {
+    margin-bottom: 30px;
+    padding-left: 60px;
+    font-size: 2.2rem;
 }
 
 /* Person Page Actions (Favorite) */
