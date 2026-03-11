@@ -167,6 +167,7 @@ export class TizenAVPlayer {
             this._firstFrameRendered = false;
             this._playbackStabilized = false;
             this._firstFrameTimeMs = 0;
+            this._pendingSeekMs = null;
             this._subtitleOffset = 0;
             this._playStartTime = Date.now();
             this._currentPlayOptions = options;
@@ -329,20 +330,39 @@ export class TizenAVPlayer {
             // A tiny delay avoids internal decoder race conditions
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            // Metadata is now loaded and display is ready.
+            // Seek to start position BEFORE native play starts.
+            // AVPlay supports seekTo in the READY state (after prepareAsync).
+            // Seeking here ensures the decoder starts buffering from the correct
+            // position, rather than buffering from 0 and then doing a disruptive
+            // post-play seek that snaps to an unpredictable keyframe.
+            if (options.playerStartPositionTicks) {
+                let startMs = options.playerStartPositionTicks / 10000;
+
+                // Keyframe Compensation: AVPlay Direct Play seeking can only land
+                // on keyframes (I-frames). Keyframe intervals vary (2-10s) and the
+                // seek always snaps FORWARD to the next keyframe, causing the user
+                // to skip past where they stopped. Subtracting a rewind buffer
+                // ensures the keyframe snap lands near or just before the original
+                // stop position — the same approach Netflix and Prime Video use.
+                const isDirectPlay = options.playMethod === 'DirectPlay';
+                if (isDirectPlay) {
+                    const KEYFRAME_REWIND_MS = 10000; // 10 seconds compensates for up to 10s GOP
+                    startMs = Math.max(0, startMs - KEYFRAME_REWIND_MS);
+                }
+
+                try {
+                    log.info(`Initial seek to ${startMs}ms (before native play, DirectPlay rewind: ${isDirectPlay})`);
+                    this._avplay.seekTo(startMs);
+                } catch (e) {
+                    log.warn('Pre-play seek failed, will retry after play:', e);
+                    // Fallback: try seeking after play starts
+                    this._pendingSeekMs = startMs;
+                }
+            }
+
+            // Metadata is now loaded, display is ready, and seek position is set.
             // Check if we can start native playback yet (requires buffering complete).
             this._checkNativePlay();
-
-            // Seek to start position if specified (must be called after play() on HLS to prevent Invalid Operation)
-            if (options.playerStartPositionTicks) {
-                const startMs = options.playerStartPositionTicks / 10000;
-                // Defer seek slightly to ensure the native play() from the gate has processed
-                setTimeout(() => {
-                    if (this._isPlaying) {
-                        try { this._avplay.seekTo(startMs); } catch (e) { log.warn('Initial seek failed:', e); }
-                    }
-                }, 100);
-            }
 
             // Initialize current indices
             this._currentAudioStreamIndex = options.audioStreamIndex;
@@ -439,6 +459,18 @@ export class TizenAVPlayer {
                 if (!this._firstFrameRendered && time >= 0) {
                     this._firstFrameRendered = true;
                     this._firstFrameTimeMs = Date.now();
+
+                    // Fallback: if the pre-play seekTo failed, retry now that playback has started
+                    if (this._pendingSeekMs !== null) {
+                        const seekMs = this._pendingSeekMs;
+                        this._pendingSeekMs = null;
+                        try {
+                            log.info(`Fallback seek to ${seekMs}ms (post first frame)`);
+                            this._avplay.seekTo(seekMs);
+                        } catch (e) {
+                            log.warn('Fallback seek also failed:', e);
+                        }
+                    }
                 }
 
                 // Track when playback has stabilized (e.g. 1000ms of actual playback).
