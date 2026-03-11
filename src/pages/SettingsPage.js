@@ -13,6 +13,7 @@ import { getDeviceCapabilities, clearCapabilitiesCache } from '../api/DeviceProf
 import { router } from '../core/Router.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { spatialNavigator } from '../ui/SpatialNavigator.js';
 import { imageService } from '../utils/ImageService.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
 import FontLoader from '../utils/FontLoader.js';
@@ -2520,7 +2521,35 @@ class SettingsPage extends Page {
             orientation: 'grid',
             leaveLeft: 'settings-sidebar',
             leaveRight: null,
-            enterTo: 'last-focused'
+            enterTo: 'last-focused',
+            onMove: (direction, currentElement) => {
+                // To prevent the "diagonal trap" where pressing left from a right-aligned setting control
+                // jumps to a control in the row above/below instead of escaping to the sidebar:
+                if (direction === 'left' && currentElement) {
+                    const row = currentElement.closest('.setting-item');
+                    if (row) {
+                        // Find all focusable elements in THIS specific row
+                        const focusSelector = 'a, button, input, select, [tabindex]:not([tabindex="-1"])';
+                        const candidates = Array.from(row.querySelectorAll(focusSelector)).filter(
+                            (el) => el.tabIndex !== -1 && !el.disabled && el.offsetParent !== null
+                        );
+                        
+                        // Use SpatialNavigator to see if there's anything to the left within the SAME row
+                        const nextInRow = spatialNavigator.findNext(currentElement, candidates, 'left');
+                        
+                        // If nothing is to the left in this row, immediately escape to the sidebar
+                        if (!nextInRow) {
+                            focusManager._leaveSection('left');
+                            return true; // Handled
+                        }
+                    } else {
+                        // If not in a setting-item (fallback), just escape
+                        focusManager._leaveSection('left');
+                        return true; 
+                    }
+                }
+                return false;
+            }
         });
     }
 
