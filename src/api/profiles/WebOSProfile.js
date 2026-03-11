@@ -501,10 +501,10 @@ export function buildJellyfinProfile(options = {}) {
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
         : [];
 
-    // Adding condition for Dolby Vision
-    if (!enableDolbyVision) {
-        hdrCondition.push({ Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false });
-    }
+    // We no longer strictly ban DOVI if enableDolbyVision is false because DOVI Profile 7/8
+    // contains an HDR10 baselayer that most HDR10 TVs can play natively.
+    // If the file is strictly Profile 5, it will play with wrong colors, but
+    // transcoding 4K HEVC Profile 5 usually requires significant server power anyway.
 
     const codecProfiles = [
         {

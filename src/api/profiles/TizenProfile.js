@@ -390,7 +390,9 @@ export function buildJellyfinProfile(options = {}) {
         : [];
 
     // Samsung TVs can play the HDR10 fallback of Dolby Vision Profile 8/7
-    const hevcVideoRangeTypes = enableHDR ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithSDR' : 'SDR|DOVIWithSDR';
+    const hevcVideoRangeTypes = enableHDR
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHLG|DOVIWithSDR'
+        : 'SDR|DOVIWithSDR';
 
     const codecProfiles = [
         {
