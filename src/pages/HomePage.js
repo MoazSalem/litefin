@@ -795,7 +795,15 @@ class HomePage extends Page {
             if (ctxType === 'library') {
                 router.navigate(`/library/${card.dataset.itemId}`);
             } else {
-                router.navigate(`/details/${card.dataset.itemId}`);
+                // Special handling for Persons and Artists: navigate to the unified PersonPage
+                const itemType = card.dataset.type;
+                if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                    log.info('Navigating to PersonPage:', card.dataset.itemId);
+                    router.navigate(`/person/${card.dataset.itemId}`);
+                } else {
+                    log.info('Navigating to item details:', card.dataset.itemId);
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
             }
         });
 

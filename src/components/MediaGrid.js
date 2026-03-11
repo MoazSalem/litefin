@@ -96,7 +96,14 @@ class MediaGrid extends Component {
                     if (this.onClick) {
                         this.onClick(card);
                     } else if (card.dataset.itemId) {
-                        router.navigate(`/details/${card.dataset.itemId}`);
+                        const itemType = card.dataset.type;
+                        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                            log.debug('Navigating to PersonPage:', card.dataset.itemId);
+                            router.navigate(`/person/${card.dataset.itemId}`);
+                        } else {
+                            log.debug('Navigating to item details:', card.dataset.itemId);
+                            router.navigate(`/details/${card.dataset.itemId}`);
+                        }
                     }
                 }
             });

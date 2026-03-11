@@ -477,6 +477,14 @@ class LibraryPage extends Page {
                     return;
                 }
 
+                // Special handling for Persons and Artists: navigate to the unified PersonPage
+                const itemType = mediaCard.dataset.type;
+                if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                    log.info('Navigating to PersonPage:', itemId);
+                    router.navigate(`/person/${itemId}`);
+                    return;
+                }
+
                 // Default: navigate to item details
                 log.info('Navigating to item details:', itemId);
                 router.navigate(`/details/${itemId}`);
@@ -2096,7 +2104,7 @@ class LibraryPage extends Page {
 
         // Special handling for Persons and Artists: navigate to the unified PersonPage
         const itemType = card.dataset.type;
-        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist') {
+        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
             log.debug('Navigating to PersonPage:', itemId);
             router.navigate(`/person/${itemId}`);
             return;

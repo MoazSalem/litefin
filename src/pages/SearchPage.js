@@ -550,7 +550,7 @@ class SearchPage extends Page {
 
         // Persons AND music artists both open the PersonPage
         // (PersonPage detects artist type and shows albums/songs instead)
-        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist') {
+        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
             route = `/person/${card.dataset.itemId}`;
         }
 
