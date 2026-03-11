@@ -706,7 +706,9 @@ export class JellyfinPlayer extends EventEmitter {
 
             // Save transcoding offset
             this._transcodingOffsetTicks = streamInfo.transcodingOffsetTicks || 0;
-            log.info('Transcoding offset:', this._transcodingOffsetTicks);
+            if (this._transcodingOffsetTicks > 0) {
+                log.info('Transcoding offset:', this._transcodingOffsetTicks);
+            }
 
             // Start playback on backend
             log.info('Initializing backend playback...');

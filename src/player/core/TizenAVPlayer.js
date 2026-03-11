@@ -166,6 +166,7 @@ export class TizenAVPlayer {
             this._hasEmittedPlaying = false;
             this._firstFrameRendered = false;
             this._playbackStabilized = false;
+            this._firstFrameTimeMs = 0;
             this._subtitleOffset = 0;
             this._playStartTime = Date.now();
             this._currentPlayOptions = options;
@@ -206,15 +207,17 @@ export class TizenAVPlayer {
                         }
                     }
 
-                    try {
-                        // Some TVs prefer BUFFER_SIZE, others SET_BUFFER_SIZE
-                        this._avplay.setStreamingProperty("BUFFER_SIZE", "4194304"); 
-                    } catch (e) {
-                         try {
-                            this._avplay.setStreamingProperty("SET_BUFFER_SIZE", "4194304");
-                         } catch (e2) {
-                            log.warn('Failed to set BUFFER_SIZE/SET_BUFFER_SIZE:', e2.message || e2);
-                         }
+                    if (!isDirectPlay) {
+                        try {
+                            // Some TVs prefer BUFFER_SIZE, others SET_BUFFER_SIZE
+                            this._avplay.setStreamingProperty("BUFFER_SIZE", "4194304"); 
+                        } catch (e) {
+                             try {
+                                this._avplay.setStreamingProperty("SET_BUFFER_SIZE", "4194304");
+                             } catch (e2) {
+                                log.warn('Failed to set BUFFER_SIZE/SET_BUFFER_SIZE:', e2.message || e2);
+                             }
+                        }
                     }
                     
                     // NOTE: SET_MODE_4K is deprecated since Tizen 5.0. 
@@ -273,7 +276,7 @@ export class TizenAVPlayer {
                     }
 
                     // Tier 3: Emergency Property Fallback (Broadest compatibility)
-                    if (bufferResult === "None") {
+                    if (bufferResult === "None" && !isDirectPlay) {
                         try {
                             // Some older firmware only accepts SET_BUFFER_SIZE as a streaming property
                             this._avplay.setStreamingProperty("SET_BUFFER_SIZE", `${bufferPlaySec}`);
@@ -309,7 +312,7 @@ export class TizenAVPlayer {
                 this._pendingAudioIndex = null;
             }
 
-            if (options.subtitleStreamIndex !== undefined) {
+            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
                 this._pendingSubtitleIndex = options.subtitleStreamIndex;
                 this._delayedSubtitleIndex = options.subtitleStreamIndex; // Used for Tizen 5.0 re-apply
             } else {
@@ -435,12 +438,14 @@ export class TizenAVPlayer {
                 // Pending subtitle tracks are gated on this flag to avoid silent no-ops.
                 if (!this._firstFrameRendered && time >= 0) {
                     this._firstFrameRendered = true;
+                    this._firstFrameTimeMs = Date.now();
                 }
 
                 // Track when playback has stabilized (e.g. 1000ms of actual playback).
                 // Used to delay the re-application of subtitles on Tizen 5.0, as
                 // pausing/resuming immediately on the first frame triggers buffering loops.
-                if (!this._playbackStabilized && time >= 1000) {
+                // We base this on real time watched, not absolute media time (which could resume >1000ms).
+                if (!this._playbackStabilized && this._firstFrameTimeMs && (Date.now() - this._firstFrameTimeMs >= 1000)) {
                     this._playbackStabilized = true;
                 }
 
@@ -461,12 +466,30 @@ export class TizenAVPlayer {
                 if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null || (this._playbackStabilized && this._delayedSubtitleIndex !== null)) {
                     this._applyPendingTracks();
                     
-                    if (time > 5000) {
-                        if (this._pendingAudioIndex !== null) log.warn('Pending audio track dropped (timeout)');
-                        if (this._pendingSubtitleIndex !== null || this._delayedSubtitleIndex !== null) log.warn('Pending/delayed subtitle track dropped (timeout)');
-                        this._pendingAudioIndex = null;
-                        this._pendingSubtitleIndex = null;
-                        this._delayedSubtitleIndex = null;
+                    if (this._firstFrameTimeMs && (Date.now() - this._firstFrameTimeMs > 5000)) {
+                        if (this._pendingAudioIndex !== null) {
+                            log.warn('Pending audio track dropped (timeout)');
+                            this._pendingAudioIndex = null;
+                        }
+                        if (this._pendingSubtitleIndex !== null || this._delayedSubtitleIndex !== null) {
+                            log.warn('Pending/delayed subtitle track dropped (timeout), requesting external fallback');
+                            
+                            // Capture the index before we null it out
+                            const failedSubIndex = this._pendingSubtitleIndex !== null ? this._pendingSubtitleIndex : this._delayedSubtitleIndex;
+                            
+                            this._pendingSubtitleIndex = null;
+                            this._delayedSubtitleIndex = null;
+                            
+                            // Since Tizen failed to map or load the hardware track after 5 seconds,
+                            // immediately notify the player logic so it can fetch the subtitle via API 
+                            // and render it in HTML (perfect fallback for unsupported formats or bugs)
+                            if (failedSubIndex !== null && failedSubIndex !== -1) {
+                                this.onEvent({
+                                    type: 'subtitlefallback',
+                                    data: { index: failedSubIndex }
+                                });
+                            }
+                        }
                     }
                 }
 
@@ -596,14 +619,26 @@ export class TizenAVPlayer {
                         if (e.name === 'InvalidStateError' || e.code === 11) {
                              log.debug(`Postponing subtitle track ${tizenSubIndex} (InvalidStateError)`);
                         } else {
-                            log.warn(`Early apply of subtitle track ${tizenSubIndex} failed:`, e);
-                            this._pendingSubtitleIndex = null;
+                            log.warn(`Early apply of subtitle track ${tizenSubIndex} failed (will retry after stabilization):`, e);
+                            // Do NOT clear _pendingSubtitleIndex. Let it stay pending so that 
+                            // the post-stabilization retry logic can attempt setSubtitleStreamIndex
+                            // once the decoder is fully ready.
                         }
                     }
                 } else {
                     const totalTracks = this._avplay.getTotalTrackInfo() || [];
-                    if (totalTracks.some(t => t.type === 'TEXT')) {
-                        log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex}, disabling native subtitles and requesting fallback`);
+                    const textTracks = totalTracks.filter(t => t.type === 'TEXT');
+                    
+                    // We only want to declare a HARD MISS (out of bounds) if the player
+                    // has definitively parsed a significant number of tracks or if we've 
+                    // reached the 5 second timeout (handled outside this function).
+                    // Tizen parse limit is 30. If we have >0 tracks but haven't found ours yet, 
+                    // Tizen might still be parsing tracks 2, 3, 4, etc.
+                    // We will only fail early if we hit the hard 30 track limit and our 
+                    // requested track still isn't there. Otherwise, we let the oncurrentplaytime
+                    // timeout logic handle the 5-second drop.
+                    if (textTracks.length >= 30) {
+                        log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex} within Tizen 30-track limit, disabling native subtitles and requesting fallback`);
                         try { this._avplay.setSilentSubtitle(true); } catch(e){}
                         
                         const failedIndex = this._pendingSubtitleIndex;
@@ -617,7 +652,7 @@ export class TizenAVPlayer {
                             data: { index: failedIndex }
                         });
                     }
-                    // Else: AVPlay hasn't parsed text tracks yet. Remain pending.
+                    // Else: AVPlay hasn't parsed text tracks up to our index yet. Remain pending.
                 }
             }
         } else if (this._playbackStabilized && this._delayedSubtitleIndex !== null && this._delayedSubtitleIndex !== -1) {
@@ -981,6 +1016,13 @@ export class TizenAVPlayer {
      */
     setSubtitleStreamIndex(index) {
         if (!this._avplay) return;
+
+        // If not DirectPlay, AVPlay Native player has no embedded subtitles to switch to.
+        // The SubtitleManager handles external/burn-in logic.
+        if (this._currentPlayOptions && this._currentPlayOptions.playMethod !== 'DirectPlay') {
+            this._currentSubtitleStreamIndex = index;
+            return Promise.resolve();
+        }
 
         // Workaround: Pause/Resume to force subtitle refresh on track change
         // Tizen AVPlay doesn't always update the current cue immediately when switching tracks
