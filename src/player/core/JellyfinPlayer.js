@@ -593,6 +593,19 @@ export class JellyfinPlayer extends EventEmitter {
             if (mediaSource.TranscodingInfo) {
                 log.info(`[PlaybackMode] IsDirectStream: ${mediaSource.TranscodingInfo.IsVideoDirect ? 'Yes' : 'No'}`);
             }
+
+            // ================================================================
+            // DEBUG: Log video stream properties to diagnose transcoding decisions
+            // This helps identify exactly which CodecProfile condition fails.
+            // ================================================================
+            const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
+            if (videoStream) {
+                log.info(`[PlaybackMode] VideoStream: Codec=${videoStream.Codec}, Profile=${videoStream.Profile}, Level=${videoStream.Level}, BitDepth=${videoStream.BitDepth}, RangeType=${videoStream.VideoRangeType}, Width=${videoStream.Width}x${videoStream.Height}`);
+            }
+            if (mediaSource.TranscodingUrl) {
+                log.info(`[PlaybackMode] TranscodingUrl: ${mediaSource.TranscodingUrl}`);
+            }
+            log.info(`[PlaybackMode] SupportsDirectPlay=${mediaSource.SupportsDirectPlay}, SupportsDirectStream=${mediaSource.SupportsDirectStream}`);
             // MediaHelper also derives PlayMethod, let's check that
             let playMethod = MediaHelper.getPlayMethod(mediaSource);
 

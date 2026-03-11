@@ -389,9 +389,11 @@ export function buildJellyfinProfile(options = {}) {
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
         : [];
 
-    // Samsung TVs can play the HDR10 fallback of Dolby Vision Profile 8/7
+    // Samsung TVs can play the HDR10/HDR10+ fallback of Dolby Vision Profile 7/8.
+    // DOVIWithHDR10Plus is a distinct type from DOVIWithHDR10 and must be listed separately —
+    // Jellyfin reports these based on the actual base layer of the encode, not just the DV type.
     const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHLG|DOVIWithSDR'
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR'
         : 'SDR|DOVIWithSDR';
 
     const codecProfiles = [
