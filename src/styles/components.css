@@ -820,3 +820,165 @@ progress.card-progress::-webkit-progress-value {
     width: auto;
     height: auto;
 }
+/* ==========================================================================
+   Media Info Modal Specifics
+   ========================================================================== */
+
+.media-info-modal {
+    width: 800px;
+}
+
+.media-info-scrollable {
+    max-height: 60vh;
+    padding: 20px 40px !important; /* Added 20px top/bottom to prevent scale clipping */
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch; 
+}
+
+.media-info-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 60px;
+    color: var(--jf-text-secondary);
+}
+
+.media-info-loading .loading-spinner-small {
+    margin-right: 16px;
+}
+
+.media-info-source-title {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--jf-accent);
+    margin: 30px 0 15px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    padding-bottom: 8px;
+}
+
+.media-info-section {
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 24px;
+}
+
+.media-info-stream {
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 16px;
+    margin-bottom: 24px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    overflow: hidden;
+}
+
+.media-info-stream-header {
+    background: rgba(255, 255, 255, 0.03);
+    padding: 16px 24px;
+    display: flex;
+    align-items: center;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.media-info-stream-header .stream-type-badge {
+    margin-right: 16px;
+}
+
+.stream-type-badge {
+    padding: 4px 10px;
+    border-radius: 6px;
+    font-size: 0.8rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    background: rgba(255, 255, 255, 0.1);
+}
+
+.stream-type-badge.video { background: #007aff; color: white; }
+.stream-type-badge.audio { background: #34c759; color: white; }
+.stream-type-badge.subtitle { background: #ff9500; color: white; }
+
+.stream-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+}
+
+.media-info-grid {
+    padding: 16px 24px;
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+}
+
+.media-info-grid .media-info-row:nth-child(even) {
+    margin-left: 12px;
+}
+
+.media-info-grid .media-info-row:nth-child(odd) {
+    margin-right: 12px;
+}
+
+.media-info-grid .media-info-row {
+    margin-bottom: 12px;
+}
+
+/* Fallback for Tizen 3/4 (Legacy browser) */
+html[data-layout-tier="legacy"] .media-info-grid {
+    display: flex;
+    flex-wrap: wrap;
+}
+
+html[data-layout-tier="legacy"] .media-info-row {
+    width: 45%;
+    margin-right: 5%;
+}
+
+.media-info-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.media-info-row:last-child {
+    border-bottom: none;
+}
+
+.info-label {
+    font-size: 1rem;
+    color: var(--jf-text-secondary);
+    font-weight: 500;
+}
+
+.info-value {
+    font-size: 1.05rem;
+    color: var(--jf-text-primary);
+    font-weight: 600;
+    text-align: right;
+}
+
+.media-info-content-track {
+    outline: none;
+    padding-bottom: 40px; /* Buffer for scrolling */
+}
+
+/* Card Focus Styles */
+.media-info-focusable {
+    outline: none;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.media-info-focusable:focus,
+.media-info-focusable.focused {
+    background: rgba(255, 255, 255, 0.08) !important;
+    border-color: var(--jf-accent) !important;
+    transform: scale(1.02);
+    z-index: 10;
+}
+
+.media-info-focusable:focus .media-info-source-title,
+.media-info-focusable.focused .media-info-source-title {
+    color: white;
+}
+

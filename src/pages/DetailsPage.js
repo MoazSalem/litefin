@@ -19,6 +19,7 @@ import { imageService } from '../utils/ImageService.js';
 import FavoriteButton from '../components/FavoriteButton.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
+import MediaInfoModal from '../components/MediaInfoModal.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -2136,7 +2137,13 @@ class DetailsPage extends Page {
         overlay.className = 'modal-overlay visible';
         document.body.appendChild(overlay);
 
-        const options = [{ id: 'refresh', label: i18n.t('RefreshMetadata') }];
+        const options = [];
+
+        if (this._item?.MediaSources?.length > 0) {
+            options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
+        }
+
+        options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') });
 
         // ── Subtitle Editing Permission Check ────────────────────────────────
         // Based on jellyfin-web canEditSubtitles logic
@@ -2191,6 +2198,15 @@ class DetailsPage extends Page {
                     oldOnBack: oldOnBack // Pass the parent handler down
                 };
                 this._showRefreshMetadataModal(itemId, context);
+            } else if (id === 'media-info') {
+                _close(false);
+                const context = {
+                    prevFocus: this._prevFocus,
+                    prevSection: this._prevSection,
+                    fromMoreOptions: true,
+                    oldOnBack: oldOnBack
+                };
+                MediaInfoModal.show(itemId, this, context);
             } else if (id === 'edit-subtitles') {
                 // Close the More Options menu without restoring focus yet —
                 // the subtitle editor will take ownership of the focus context.
