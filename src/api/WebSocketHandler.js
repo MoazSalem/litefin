@@ -78,6 +78,19 @@ class WebSocketHandler {
                 break;
 
             // ================================================================
+            // SyncPlay Commands — playback from synced group
+            // Re-emitted to eventBus so SyncPlayManager can react independently
+            // of any specific page being active (SyncPlay can survive page nav).
+            // ================================================================
+            case 'SyncPlayCommand':
+                eventBus.emit('syncplay:command', msg.Data);
+                break;
+
+            case 'SyncPlayGroupUpdate':
+                eventBus.emit('syncplay:groupupdate', msg.Data);
+                break;
+
+            // ================================================================
             // Unhandled message types - log for debugging
             // ================================================================
             default: {

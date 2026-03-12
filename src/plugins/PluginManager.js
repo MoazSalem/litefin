@@ -51,6 +51,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'skip-intro',
         load: () => import('./installed/skip-intro/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // SyncPlay — synchronized multi-client playback
+    // No server dependency — built into Jellyfin v10.8+
+    // -------------------------------------------------------------------------
+    {
+        id: 'syncplay',
+        load: () => import('./installed/syncplay/index.js')
     }
 ];
 

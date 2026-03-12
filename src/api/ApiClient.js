@@ -993,6 +993,115 @@ export class ApiClient {
     }
 
     // ========================================================================
+    // SyncPlay Endpoints
+    // ========================================================================
+    //
+    // SyncPlay allows multiple clients to synchronize playback in a group.
+    // The server acts as the clock authority — clients ping it for time offsets
+    // and receive commands over WebSocket (SyncPlayCommand / SyncPlayGroupUpdate).
+    //
+    // Endpoint reference: /SyncPlay/* (Jellyfin API v10.8+)
+    // ========================================================================
+
+    /**
+     * Fetch the server's current UTC time for SyncPlay clock synchronisation.
+     *
+     * Endpoint: GET /GetUTCTime
+     * Returns a UtcTimeResponse body with:
+     *   - RequestReceptionTime  : ISO8601 timestamp of when the server received our request
+     *   - ResponseTransmissionTime : ISO8601 timestamp of when the server sent its response
+     *
+     * Confirmed from the official jellyfin-apiclient-python source:
+     *   SyncPlayAPIMixin.utc_time() calls send_request(server_address, "GetUTCTime")
+     * and reads response_obj["RequestReceptionTime"] / response_obj["ResponseTransmissionTime"].
+     *
+     * @returns {Promise<{RequestReceptionTime: string, ResponseTransmissionTime: string}>}
+     */
+    async getServerTime() {
+        return this.get('/GetUTCTime');
+    }
+
+    /**
+     * Create a new SyncPlay group.
+     * POST /SyncPlay/New
+     * @param {Object} [body] - Optional group creation parameters
+     */
+    async syncPlayNew(body = {}) {
+        return this.post('/SyncPlay/New', body);
+    }
+
+    /**
+     * Join an existing SyncPlay group.
+     * POST /SyncPlay/Join
+     * @param {Object} body - Must include { GroupId: string }
+     */
+    async syncPlayJoin(body) {
+        return this.post('/SyncPlay/Join', body);
+    }
+
+    /**
+     * Leave the current SyncPlay group.
+     * POST /SyncPlay/Leave
+     */
+    async syncPlayLeave() {
+        return this.post('/SyncPlay/Leave', {});
+    }
+
+    /**
+     * Get a list of all available SyncPlay groups on the server.
+     * GET /SyncPlay/List
+     * @returns {Promise<Array>} Array of group info objects
+     */
+    async syncPlayList() {
+        return this.get('/SyncPlay/List');
+    }
+
+    /**
+     * Send a time-sync ping to the server.
+     * The server echoes back with RequestReceptionTime and ResponseTransmissionTime
+     * so the client can compute its clock offset.
+     *
+     * POST /SyncPlay/Ping
+     * @param {string} pingTime - ISO8601 timestamp of when the ping was sent
+     */
+    async syncPlayPing(pingTime) {
+        return this.post('/SyncPlay/Ping', { When: pingTime });
+    }
+
+    /**
+     * Notify the server that this client is buffering (not yet ready to play).
+     * Other group members will be asked to wait.
+     *
+     * POST /SyncPlay/Buffering
+     * @param {Object} body - { When, PositionTicks, IsPlaying, PlaylistItemId }
+     */
+    async syncPlayBuffering(body) {
+        return this.post('/SyncPlay/Buffering', body);
+    }
+
+    /**
+     * Notify the server that this client is ready to play after buffering.
+     *
+     * POST /SyncPlay/Ready
+     * @param {Object} body - { When, PositionTicks, IsPlaying, PlaylistItemId }
+     */
+    async syncPlayReady(body) {
+        return this.post('/SyncPlay/Ready', body);
+    }
+
+    /**
+     * Skip waiting for buffering clients (group leader action).
+     * Tells the server to proceed with playback even if some clients are still
+     * buffering — useful when a slow client is holding up the whole group.
+     *
+     * POST /SyncPlay/IgnoreWait
+     * @param {Object} body - { IgnoreWait: boolean }
+     */
+    async syncPlayIgnoreWait(body) {
+        return this.post('/SyncPlay/IgnoreWait', body);
+    }
+
+    // ========================================================================
     // Favorites Endpoints
     // ========================================================================
 

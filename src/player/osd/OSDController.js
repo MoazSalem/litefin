@@ -292,6 +292,8 @@ export default class OSDController extends Component {
                             <button class="osd-btn" id="osdFavoriteBtn" data-action="favorite" tabindex="0">${ICONS.favorite}</button>
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
+                            <!-- SyncPlay group management — only the icon; menu opens on click -->
+                            <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">${ICONS.sync}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>
@@ -1320,6 +1322,14 @@ export default class OSDController extends Component {
                 break;
             case 'lyrics':
                 this.toggleLyricsModal(true);
+                break;
+            case 'syncplay':
+                // Lazy-import to avoid loading the group menu CSS on every startup
+                // Opens the SyncPlay group management modal overlay
+                import('../../core/syncplay/SyncPlayGroupMenu.js').then(({ SyncPlayGroupMenu }) => {
+                    const menu = new SyncPlayGroupMenu();
+                    menu.open();
+                }).catch(err => log.error('Failed to open SyncPlayGroupMenu:', err));
                 break;
         }
     }
