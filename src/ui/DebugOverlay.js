@@ -157,6 +157,8 @@ class DebugOverlay {
                 this._createElements();
             }
             this.show();
+            // Ensure theme is applied to new elements
+            this.refreshTheme();
         } else {
             this.hide();
         }
@@ -185,7 +187,7 @@ class DebugOverlay {
             z-index: 99999;
             padding: 10px;
             pointer-events: none;
-            border: 1px solid #444;
+            border: 1px solid var(--jf-accent, #444);
             display: none;
             text-align: left;
             line-height: 1.4;
@@ -197,13 +199,14 @@ class DebugOverlay {
 
         const header = document.createElement('div');
         header.style.cssText = `
-            border-bottom: 1px solid #444;
+            border-bottom: 1px solid var(--jf-accent, #444);
             margin-bottom: 5px;
+            padding-bottom: 5px;
             font-weight: bold;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            color: #fff;
+            color: var(--jf-accent, #fff);
         `;
         header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v${__APP_VERSION__}</span>`;
         this._overlay.appendChild(header);
@@ -244,6 +247,25 @@ class DebugOverlay {
 
         if (this._position.includes('left')) this._overlay.style.left = margin;
         else this._overlay.style.right = margin;
+    }
+
+    /**
+     * Refresh the theme-related styles of the overlay
+     */
+    refreshTheme() {
+        if (!this._overlay) return;
+
+        // Force colors from CSS variables
+        this._overlay.style.borderColor = 'var(--jf-accent)';
+        
+        const header = this._overlay.querySelector('div');
+        if (header) {
+            header.style.color = 'var(--jf-accent)';
+            header.style.borderBottomColor = 'var(--jf-accent)';
+        }
+
+        // We don't re-flush old logs just for the color change as that would be expensive,
+        // but new logs will pick up the new theme color immediately.
     }
 
     /**
@@ -340,7 +362,7 @@ class DebugOverlay {
             // Color coding
             if (entry.level === LogLevel.ERROR) line.style.color = '#ff5555';
             else if (entry.level === LogLevel.WARN) line.style.color = '#ffaa00';
-            else if (entry.level === LogLevel.DEBUG) line.style.color = '#aa55ff';
+            else if (entry.level === LogLevel.DEBUG) line.style.color = 'var(--jf-accent, #aa55ff)';
 
             // Stringify args carefully
             const textArgs = entry.args.map((arg) => {

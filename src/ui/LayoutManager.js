@@ -19,6 +19,8 @@ import { platformInfo } from '../utils/PlatformInfo.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { themeUtils } from '../utils/ThemeUtils.js';
 
+import { debugOverlay } from './DebugOverlay.js';
+
 const log = logger.create('LayoutManager');
 
 // Layout constants
@@ -238,6 +240,11 @@ class LayoutManager {
 
         // Polyfill update for legacy Tizen
         cssVarsPolyfill.update();
+
+        // Sync Debug Overlay colors
+        if (debugOverlay) {
+            debugOverlay.refreshTheme();
+        }
     }
 
     /**

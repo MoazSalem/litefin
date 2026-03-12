@@ -32,7 +32,7 @@ class LibraryPage extends Page {
             // Query Params
             sortBy: 'SortName',
             sortOrder: 'Ascending',
-            filters: [], // ['IsUnplayed', 'IsFavorite', etc.]
+            filters: {}, // E.g. { IsUnplayed: true, Genres: 'Action,Comedy' }
             nameStartsWith: null, // For Alpha Picker
 
             // Pagination
@@ -523,7 +523,7 @@ class LibraryPage extends Page {
             viewType: this.state.viewType,
             sortBy: this.state.sortBy,
             sortOrder: this.state.sortOrder,
-            filters: [...this.state.filters], // Clone array
+            filters: { ...this.state.filters }, // Clone object
             nameStartsWith: this.state.nameStartsWith,
             startIndex: this.state.startIndex,
             limit: this.state.limit
@@ -543,7 +543,7 @@ class LibraryPage extends Page {
             viewType: savedState.viewType || this.state.viewType,
             sortBy: savedState.sortBy || this.state.sortBy,
             sortOrder: savedState.sortOrder || this.state.sortOrder,
-            filters: savedState.filters || [],
+            filters: savedState.filters || {},
             nameStartsWith: savedState.nameStartsWith || null,
             startIndex: savedState.startIndex || 0,
             limit: savedState.limit || this.state.limit

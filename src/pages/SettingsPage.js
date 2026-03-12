@@ -1735,8 +1735,15 @@ class SettingsPage extends Page {
 
         // Color Selection
         this.$$('.color-option').forEach((btn) => {
+            const color = btn.dataset.color;
+            const fillEl = btn.querySelector('.color-option-fill');
+            
+            // CSP-Safe styling: apply color via JS DOM API instead of inline HTML string style
+            if (fillEl && color) {
+                fillEl.style.backgroundColor = color;
+            }
+
             btn.addEventListener('click', () => {
-                const color = btn.dataset.color;
                 layoutManager.setThemeColor(color);
 
                 // Update UI state
@@ -2067,12 +2074,13 @@ class SettingsPage extends Page {
         return colors
             .map(
                 (c) => `
-            <button class="color-option ${currentColor === c.hex ? 'active' : ''}" 
-                    style="background-color: ${c.hex}; --option-color: ${c.hex}"
-                    data-color="${c.hex}"
-                    title="${c.name}"
-                    tabindex="0">
-            </button>
+            <div class="color-option ${currentColor === c.hex ? 'active' : ''}" 
+                 data-color="${c.hex}"
+                 title="${c.name}"
+                 tabindex="0"
+                 data-focusable="true">
+                 <div class="color-option-fill"></div>
+            </div>
         `
             )
             .join('');
