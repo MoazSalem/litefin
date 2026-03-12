@@ -5,6 +5,7 @@ import { playQueue } from '../../core/PlayQueue.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
 import { ICONS } from './icons.js';
+import { TrickplayManager } from './TrickplayManager.js';
 
 import TrackMenu from './TrackMenu.js';
 import SettingsMenu from './SettingsMenu.js';
@@ -104,6 +105,16 @@ export default class OSDController extends Component {
 
         // Bindings
         this._onMouseMove = this._onMouseMove.bind(this);
+
+        /*
+         * TrickplayManager — handles sprite-sheet thumbnail math for seek previews.
+         * Initialised eagerly so it's always available; actual data is loaded
+         * lazily in setMetadata() once we have the item and mediaSource.
+         */
+        this._trickplay = new TrickplayManager();
+
+        /* Cached media source ID set by PlayerPage after playback starts */
+        this._currentMediaSourceId = null;
     }
 
     _handleQueueUpdate() {
@@ -232,6 +243,9 @@ export default class OSDController extends Component {
         if (this.container) {
             this.container.removeEventListener('mousemove', this._onMouseMove);
         }
+
+        /* Clean up trickplay state to release image references and settings cache */
+        this._trickplay.destroy();
     }
 
     render() {
@@ -286,7 +300,12 @@ export default class OSDController extends Component {
                     <div class="osd-slider-row">
                         <span class="osd-time osd-time-current" id="osdCurrentTime">00:00</span>
                         <div class="osd-slider-container">
-                            <div class="osd-seek-tooltip" id="osdSeekTooltip"></div>
+                            <div class="osd-seek-tooltip" id="osdSeekTooltip">
+                                <!-- Trickplay thumbnail (hidden when not available) -->
+                                <div class="osd-trickplay-thumb" id="osdTrickplayThumb"></div>
+                                <!-- Time / speed indicator text -->
+                                <span class="osd-seek-tooltip-text" id="osdSeekTooltipText"></span>
+                            </div>
                             <div class="osd-chapter-markers" id="osdChapterMarkers"></div>
                             <div class="osd-slider-track">
                                 <div class="osd-slider-fill" id="osdPositionFill"></div>
@@ -308,6 +327,10 @@ export default class OSDController extends Component {
         this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
         this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
+
+        /* Cache trickplay tooltip sub-elements to avoid repeated queries during seek */
+        this._cachedThumbEl    = this._osdEl.querySelector('#osdTrickplayThumb');
+        this._cachedTooltipTextEl = this._osdEl.querySelector('#osdSeekTooltipText');
 
         // Bind slider
         this._osdPositionSliderEl.addEventListener('input', (e) => this._handlePositionSliderInput(e));
@@ -1363,10 +1386,22 @@ export default class OSDController extends Component {
              if (tooltip) {
                  const speedIndicator = speedMultiplier > 1 ? ` (${speedMultiplier}x)` : '';
                  const forceHours = duration >= 3600 * 10000000;
-                 tooltip.textContent = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
+                 const timeText = this._formatTime(this._seekTargetTicks, forceHours) + speedIndicator;
+
+                 /* Update the text span (always shown) */
+                 if (this._cachedTooltipTextEl) {
+                     this._cachedTooltipTextEl.textContent = timeText;
+                 } else {
+                     /* Fallback: element without child structure (shouldn't happen) */
+                     tooltip.textContent = timeText;
+                 }
+
                  tooltip.classList.add('visible');
                  const percent = duration > 0 ? (this._seekTargetTicks / duration) * 100 : 0;
                  tooltip.style.left = percent + '%';
+
+                 /* Update trickplay thumbnail (only if enabled and data is available) */
+                 this._updateTrickplayTooltip(this._seekTargetTicks);
              }
 
             this._seekDebounceTimer = setTimeout(() => {
@@ -1382,6 +1417,9 @@ export default class OSDController extends Component {
                     this._seekStartTime = null;
                     this._seekDebounceTimer = null;
                     if (tooltip) tooltip.classList.remove('visible');
+
+                    /* Hide trickplay thumbnail when seek session ends */
+                    this._hideTrickplayThumb();
                 }
             }, 800);
 
@@ -2056,6 +2094,27 @@ export default class OSDController extends Component {
         }
     }
 
+    /**
+     * Provide the resolved media source ID so TrickplayManager can look up
+     * the correct resolution map inside item.Trickplay.
+     *
+     * Called by PlayerPage after PLAYBACK_START, once the server has chosen
+     * the actual media source (which may differ from the originally requested one).
+     *
+     * @param {string} mediaSourceId
+     */
+    setMediaSourceId(mediaSourceId) {
+        this._currentMediaSourceId = mediaSourceId;
+
+        /* Re-initialise trickplay now that we have both the item and the source ID.
+           This is a no-op if the item isn't set yet — setMetadata will pick it up. */
+        if (this._currentItem && mediaSourceId) {
+            const serverUrl = this._player?.serverUrl || '';
+            const authToken = this._player?.authToken || '';
+            this._trickplay.init(this._currentItem, mediaSourceId, serverUrl, authToken);
+        }
+    }
+
     setMetadata(item) {
         this._currentItem = item;
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
@@ -2064,6 +2123,17 @@ export default class OSDController extends Component {
         if (titleEl) titleEl.textContent = this._getFormattedTitle(item);
         this._updateFavoriteButton(item);
         this._updateNavigationButtons();
+
+        /*
+         * Initialise (or reset) trickplay for the new item.
+         * mediaSourceId may be null here if PlayerPage hasn't called setMediaSourceId yet —
+         * in that case TrickplayManager.init() will bail out gracefully, and a subsequent
+         * setMediaSourceId() call will re-initialise it once the source is known.
+         */
+        const mediaSourceId = this._currentMediaSourceId || null;
+        const serverUrl     = this._player?.serverUrl  || '';
+        const authToken     = this._player?.authToken  || '';
+        this._trickplay.init(item, mediaSourceId, serverUrl, authToken);
     }
 
     updateItem(item) {
@@ -2100,5 +2170,71 @@ export default class OSDController extends Component {
             btn.classList.remove('active');
         }
         btn.style.color = '';
+    }
+
+    // -------------------------------------------------------------------------
+    // Trickplay Thumbnail Helpers
+    // -------------------------------------------------------------------------
+
+    /**
+     * Calculate the correct sprite-sheet tile for the given position and apply
+     * it to the cached thumbnail div using CSS background properties.
+     *
+     * This must be as lightweight as possible — it's called on every seek tick
+     * (up to ~30fps when the user holds the D-pad).
+     *
+     * @param {number} positionTicks
+     * @private
+     */
+    _updateTrickplayTooltip(positionTicks) {
+        /* Fast exit: no thumbnail element or trickplay not ready */
+        if (!this._cachedThumbEl || !this._trickplay.isEnabled()) {
+            this._hideTrickplayThumb();
+            return;
+        }
+
+        const thumb = this._trickplay.getThumbnail(positionTicks);
+        if (!thumb) {
+            this._hideTrickplayThumb();
+            return;
+        }
+
+        const el = this._cachedThumbEl;
+
+        /*
+         * Apply CSS background shorthand to show the correct tile.
+         *
+         * background-size MUST match the full sprite sheet dimensions so the
+         * browser doesn't scale the image before calculating the offset.
+         *   e.g. for a 10×10 grid of 320×180 frames: 3200px 1800px
+         *
+         * background-position is a negative pixel offset to shift the sheet
+         * so only the target tile is visible within the element's fixed w/h.
+         */
+        el.style.backgroundImage    = `url(${thumb.url})`;
+        el.style.backgroundSize     = `${thumb.spriteWidth}px ${thumb.spriteHeight}px`;
+        el.style.backgroundPosition = `${thumb.backgroundX}px ${thumb.backgroundY}px`;
+        el.style.backgroundRepeat   = 'no-repeat';
+        el.style.width              = `${thumb.thumbWidth}px`;
+        el.style.height             = `${thumb.thumbHeight}px`;
+        el.style.display            = 'block';
+
+        /* Switch tooltip to flex layout so thumb sits above the time text */
+        if (this._cachedTooltipEl) {
+            this._cachedTooltipEl.classList.add('has-trickplay');
+        }
+    }
+
+    /**
+     * Hide the trickplay thumbnail div and reset the tooltip layout.
+     * @private
+     */
+    _hideTrickplayThumb() {
+        if (this._cachedThumbEl) {
+            this._cachedThumbEl.style.display = 'none';
+        }
+        if (this._cachedTooltipEl) {
+            this._cachedTooltipEl.classList.remove('has-trickplay');
+        }
     }
 }

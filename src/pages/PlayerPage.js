@@ -182,7 +182,7 @@ class PlayerPage extends Page {
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
-            const fetchTasks = [api.getItem(itemId)];
+            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay' })];
             if (fontId) {
                 fetchTasks.push(FontLoader.loadFont(fontId));
             }
@@ -899,6 +899,13 @@ class PlayerPage extends Page {
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
+        if (this._player) {
+            const resolvedSource = this._player.getCurrentMediaSource?.();
+            if (resolvedSource?.Id) {
+                this._osd.setMediaSourceId(resolvedSource.Id);
+            }
+        }
+
         log.info('OSD initialized');
     }
 
@@ -928,6 +935,19 @@ class PlayerPage extends Page {
         if (!this._hasReportedStart) {
             this._reportPlaybackStart();
             this._hasReportedStart = true;
+
+            /*
+             * Thread the resolved media source ID to the OSD so TrickplayManager
+             * can look up the correct trickplay data. We do this here (not in
+             * _startPlayback) because the player finalises the source ID only
+             * once actual playback begins, especially during adaptive streaming.
+             */
+            if (this._osd) {
+                const resolvedSource = this._player?.getCurrentMediaSource?.();
+                if (resolvedSource?.Id) {
+                    this._osd.setMediaSourceId(resolvedSource.Id);
+                }
+            }
         } else {
             // Send 'unpause' event when resuming from pause
             this._reportPlaybackProgress('unpause');

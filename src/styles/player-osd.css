@@ -416,11 +416,57 @@
     visibility: hidden;
     transition: opacity 0.15s ease;
     z-index: 200;
+    /* Flex layout lets the thumbnail stack above the time text */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
 }
 
 .osd-seek-tooltip.visible {
     opacity: 1;
     visibility: visible;
+}
+
+/*
+ * When a trickplay thumbnail is showing, loosen the fixed width constraint
+ * so the thumbnail (which JS sets to its tile pixel width) determines the size.
+ */
+.osd-seek-tooltip.has-trickplay {
+    /* Let content size the box; JS will set exact thumb dimensions */
+    white-space: nowrap;
+    padding: 8px 8px 12px;
+    /* Anchor tooltip so the bottom edge sits above the seekbar */
+    top: auto;
+    bottom: calc(100% + 12px);
+}
+
+/*
+ * Trickplay thumbnail div.
+ * Width/height and background-* properties are all set dynamically by
+ * OSDController._updateTrickplayTooltip() using the tile math from
+ * TrickplayManager.getThumbnail(). The element is hidden by default so
+ * there is zero visual impact when trickplay is disabled or absent.
+ */
+.osd-trickplay-thumb {
+    /* Start hidden — JS shows it once we have a valid tile */
+    display: none;
+    /* Rounded corners so the sprite sheet looks presentable */
+    border-radius: 6px;
+    overflow: hidden;
+    /* Avoid stretching when JS hasn't set exact dimensions yet */
+    flex-shrink: 0;
+    /* GPU acceleration for the rapid background-position updates */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    will-change: background-position, background-image;
+}
+
+/* Time/speed-indicator text inside the tooltip */
+.osd-seek-tooltip-text {
+    /* Takes up the full width of the tooltip; centers the text naturally */
+    display: block;
+    text-align: center;
 }
 
 /* Standardize Interaction Layer - Thin and self-centering */

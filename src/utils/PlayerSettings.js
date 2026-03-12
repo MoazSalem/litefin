@@ -193,6 +193,10 @@ const DEFAULTS = {
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
 
+    // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
+    // Disable to skip all trickplay calculations and image fetches entirely.
+    enableTrickplay: true,
+
     // Enable cinema mode (dim lights during playback)
     enableCinemaMode: false,
 

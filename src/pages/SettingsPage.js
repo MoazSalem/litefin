@@ -686,6 +686,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableTrickplay">${i18n.t('EnableTrickplay') || 'Thumbnail Preview'}</span>
+                        <span class="setting-description" data-i18n="EnableTrickplayDescription">${i18n.t('EnableTrickplayDescription') || 'Show video frame previews when scrubbing through a video'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableTrickplay') ? 'active' : ''}" 
+                                id="toggle-trickplay" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="PlaybackCompatibility">${i18n.t('PlaybackCompatibility')}</h3>
 
                 <div class="setting-item">
@@ -1654,6 +1667,18 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableNextEpisodeAutoPlay', newValue);
                 autoNextBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Trickplay Thumbnail Previews
+        // Simple on/off — no cache invalidation needed (purely a UI rendering preference)
+        const trickplayBtn = this.$('#toggle-trickplay');
+        if (trickplayBtn) {
+            trickplayBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableTrickplay');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableTrickplay', newValue);
+                trickplayBtn.classList.toggle('active', newValue);
             });
         }
 

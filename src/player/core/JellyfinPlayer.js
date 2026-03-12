@@ -550,7 +550,7 @@ export class JellyfinPlayer extends EventEmitter {
                     // 3. Fallback: Fetch item details to get chapters
                     log.info('Chapters missing. Fetching item details...');
                     try {
-                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters' });
+                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay' });
                         if (itemDetails && itemDetails.Chapters) {
                             chapters = itemDetails.Chapters;
                             log.info('Chapters fetched from API:', chapters.length);
