@@ -177,6 +177,7 @@ export class JellyfinPlayer extends EventEmitter {
         this._playbackMode = 'auto'; // Current playback mode ('auto', 'directPlay', 'transcode', 'remux')
         this._transcodingOffsetTicks = 0; // Offset for transcoded streams that start at 0
         this._pendingTranscodeSeekTicks = null; // Target position for initial transcode seek
+        this._pendingStartPositionTicks = null; // Target position before first frame
         this._isSeeking = false; // Track seeking state to suppress loading screens during seek
 
         // Secondary subtitle stream index (kept here for OSD queries)
@@ -355,6 +356,12 @@ export class JellyfinPlayer extends EventEmitter {
             event.type === PlayerEvent.PLAYING || 
             (event.type === PlayerEvent.TIME_UPDATE && this._isSeeking)) {
             this._isSeeking = false;
+        }
+
+        // Clear pending start position once we have legitimate forward movement
+        if (event.type === PlayerEvent.PLAYING || 
+            (event.type === PlayerEvent.TIME_UPDATE && event.data?.time > 0)) {
+            this._pendingStartPositionTicks = null;
         }
 
         // Intercept events if we are waiting for the initial Transcode Seek
@@ -691,6 +698,9 @@ export class JellyfinPlayer extends EventEmitter {
             const originalStartPositionTicks = options.startPositionTicks || 0;
             let effectiveStartPositionTicks = originalStartPositionTicks;
             let isTranscodeSeek = false;
+
+            // Save the intended start position for the UI before the backend initializes
+            this._pendingStartPositionTicks = originalStartPositionTicks > 0 ? originalStartPositionTicks : null;
 
             // User Request: When transcoding or remuxing, start playback at 0, 
             // and after it's loaded seek to the resume location if it exists
@@ -1494,6 +1504,13 @@ export class JellyfinPlayer extends EventEmitter {
         const backendTime = this._backend?.getCurrentTime ? this._backend.getCurrentTime() : 0;
         const backendTicks = Math.round(backendTime * 10000000);
         
+        // If playback hasn't fully started yet (time is 0), but we requested a specific
+        // start position, return it so the UI (OSD) shows the correct time immediately
+        // instead of flashing 00:00.
+        if (backendTicks === 0 && this._pendingStartPositionTicks) {
+            return this._pendingStartPositionTicks;
+        }
+
         // Add offset if we are playing a transcoded segment
         const total = backendTicks + this._transcodingOffsetTicks;
         return isNaN(total) ? 0 : total;

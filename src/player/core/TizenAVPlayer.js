@@ -313,9 +313,30 @@ export class TizenAVPlayer {
                 this._pendingAudioIndex = null;
             }
 
-            if (isDirectPlay && options.subtitleStreamIndex !== undefined) {
-                this._pendingSubtitleIndex = options.subtitleStreamIndex;
-                this._delayedSubtitleIndex = options.subtitleStreamIndex; // Used for Tizen 5.0 re-apply
+            if (isDirectPlay && options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null && options.subtitleStreamIndex !== -1) {
+                const playability = this._getSubtitlePlayability(options.subtitleStreamIndex);
+                
+                if (playability === 'EXTERNAL') {
+                    // HTML Subtitle manager handles this. Tell native player to disable its own subs.
+                    this._pendingSubtitleIndex = -1;
+                    this._delayedSubtitleIndex = -1;
+                } else if (playability === 'INTERNAL_BITMAP') {
+                    // Tizen cannot render bitmap subs natively. Fast-fail instantly without polling
+                    // to trigger the HTML SubtitleManager to extract and render them.
+                    this.onEvent({
+                        type: 'subtitlefallback',
+                        data: { index: options.subtitleStreamIndex }
+                    });
+                    this._pendingSubtitleIndex = -1;
+                    this._delayedSubtitleIndex = -1;
+                } else {
+                    // It's a supported internal text subtitle. Poll natively.
+                    this._pendingSubtitleIndex = options.subtitleStreamIndex;
+                    this._delayedSubtitleIndex = options.subtitleStreamIndex; // Used for Tizen 5.0 re-apply
+                }
+            } else if (isDirectPlay && options.subtitleStreamIndex === -1) {
+                this._pendingSubtitleIndex = -1;
+                this._delayedSubtitleIndex = -1;
             } else {
                 this._pendingSubtitleIndex = null;
                 this._delayedSubtitleIndex = null;
@@ -445,11 +466,11 @@ export class TizenAVPlayer {
                     this._applyPendingTracks();
                 }
 
-                // Standard path: Emit 'playing' and show the first frame.
-                if (this._isPlaying && !this._hasEmittedPlaying) {
-                    this._hasEmittedPlaying = true;
-                    this.onEvent({ type: 'playing' });
-                }
+                // Note: We deliberately DO NOT emit 'playing' here.
+                // Buffering complete means the network buffer is full (e.g. 6s downloaded),
+                // but the hardware decoder still needs time to render the first frame.
+                // Emitting here causes the UI loading spinner to vanish 2-3s before video appears.
+                // Instead, the 'playing' event is deferred to oncurrentplaytime (when time >= 0).
             },
             oncurrentplaytime: (time) => {
                 // Track when the first frame has actually rendered (time >= 0).
@@ -496,7 +517,15 @@ export class TizenAVPlayer {
                 // they remain pending. We try for up to 5 seconds of watch time on older Tizen,
                 // then drop them to prevent infinite API polling performance penalties.
                 if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null || (this._playbackStabilized && this._delayedSubtitleIndex !== null)) {
-                    this._applyPendingTracks();
+                    
+                    // Throttle track parsing check to every 500ms. Since oncurrentplaytime fires
+                    // almost continuously, spamming getTotalTrackInfo() synchronously locks
+                    // the TV's JavaScript thread and freezes the video frame for 5 seconds.
+                    const now = Date.now();
+                    if (!this._lastTrackPollTime || now - this._lastTrackPollTime > 500) {
+                        this._lastTrackPollTime = now;
+                        this._applyPendingTracks();
+                    }
                     
                     if (this._firstFrameTimeMs && (Date.now() - this._firstFrameTimeMs > 5000)) {
                         if (this._pendingAudioIndex !== null) {
@@ -795,6 +824,26 @@ export class TizenAVPlayer {
     }
 
     /**
+     * Determines the native playability class of a subtitle stream.
+     * @private
+     * @param {number} streamIndex - Jellyfin Subtitle StreamIndex
+     * @returns {string} 'EXTERNAL', 'INTERNAL_BITMAP', 'INTERNAL_TEXT', or 'UNKNOWN'
+     */
+    _getSubtitlePlayability(streamIndex) {
+        if (!this._currentPlayOptions?.mediaSource?.MediaStreams) return 'UNKNOWN';
+        const stream = this._currentPlayOptions.mediaSource.MediaStreams.find(s => s.Index === streamIndex);
+        if (!stream) return 'UNKNOWN';
+
+        if (stream.IsExternal) return 'EXTERNAL';
+
+        const codec = (stream.Codec || '').toLowerCase();
+        const isBitmap = codec === 'pgs' || codec === 'pgssub' || codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle';
+        
+        if (isBitmap) return 'INTERNAL_BITMAP';
+        return 'INTERNAL_TEXT';
+    }
+
+    /**
      * Find Tizen internal subtitle track index for a given Jellyfin StreamIndex
      * @private
      * @param {number} streamIndex - Jellyfin Subtitle StreamIndex
@@ -917,6 +966,7 @@ export class TizenAVPlayer {
         this._isPlaying = false;
         this._isTizenPlaying = false;
         this._bufferingComplete = false;
+        this._lastTrackPollTime = 0;
     }
 
     /**
@@ -1078,6 +1128,24 @@ export class TizenAVPlayer {
                 this._avplay.setSilentSubtitle(true);
                 this._currentSubtitleStreamIndex = index;
             } else {
+                const playability = this._getSubtitlePlayability(index);
+                
+                if (playability === 'EXTERNAL') {
+                    // External subtitles handled via HTML, disable native.
+                    this._avplay.setSilentSubtitle(true);
+                    this._currentSubtitleStreamIndex = index;
+                    return;
+                } else if (playability === 'INTERNAL_BITMAP') {
+                    // Unsupported natively. Fast-fail to trigger fallback.
+                    this._avplay.setSilentSubtitle(true);
+                    this._currentSubtitleStreamIndex = index;
+                    this.onEvent({
+                        type: 'subtitlefallback',
+                        data: { index: index }
+                    });
+                    return;
+                }
+
                 /*
                  * IMPORTANT: `index` here is a Jellyfin stream index (e.g. 3, 5, 7),
                  * NOT a 0-based Tizen array position. Using it directly as textTracks[index]

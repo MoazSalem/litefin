@@ -389,6 +389,10 @@ export default class OSDController extends Component {
         // Start background polling when OSD becomes visible
         this._startUpdates();
         
+        // Force an immediate layout update so the slider and time text don't
+        // visually jump from 00:00 to the actual position on the next 500ms tick.
+        this._updateState();
+        
         this.resetAutoHide();
         this._updateNavigationButtons();
     }
