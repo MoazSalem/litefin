@@ -26,7 +26,7 @@
     /* Solid-ish background (blur removed for Tizen performance) */
     background: rgba(12, 12, 18, 0.92);
     border: 1px solid rgba(255, 255, 255, 0.15);
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
 
     /* Layout: the top content area (thumbnail + info) sits above the actions bar */
     display: flex;
@@ -132,7 +132,7 @@
     font-size: 0.7em;
     font-weight: bold;
     padding: 2px 5px;
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     line-height: 1.4;
     letter-spacing: 0.02em;
     /* Blur removed for Tizen compatibility */
@@ -165,7 +165,7 @@
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.12em;
-    color: var(--osd-accent-color, #00a4dc);
+    color: var(--jf-accent);
     opacity: 0.9;
     margin-bottom: 0.3em;
     white-space: nowrap;
@@ -221,7 +221,7 @@
     font-weight: 700;
     color: #f5c518;
     border: 1px solid rgba(255, 255, 255, 0.35);
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     padding: 1px 6px;
     letter-spacing: 0.04em;
     white-space: nowrap;
@@ -285,13 +285,13 @@
 
 /* "Play Now" — accent-colored primary action */
 .upnext-btn-play {
-    background: var(--osd-accent-color, #00a4dc);
-    color: #fff;
+    background: var(--jf-accent);
+    color: var(--jf-primary-btn-color);
     border: 2px solid var(--jf-action-btn-border)!important;
 }
 
 .upnext-btn-play:hover {
-    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 80%, white 20%);
+    background: color-mix(in srgb, var(--jf-accent) 80%, white 20%);
 }
 
 /* "Hide" — muted ghost button */
@@ -322,8 +322,9 @@
 
 .upnext-btn-play.focused,
 .upnext-btn-play:focus {
-    background: color-mix(in srgb, var(--osd-accent-color, #00a4dc) 80%, white 20%) !important;
-    border: 2px solid var(--jf-action-btn-active-border) !important;
+    background: var(--jf-accent) !important;
+    border-color: var(--jf-button-border-focus) !important;
+    color: var(--jf-primary-btn-color) !important;
 }
 
 .upnext-btn-hide.focused,

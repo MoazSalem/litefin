@@ -10,10 +10,10 @@
 
 :root {
     --osd-text-color: var(--jf-text-primary, #fff);
-    --osd-accent-color: var(--jf-accent, #00a4dc);
+    --osd-accent-color: var(--jf-accent);
     --osd-gradient-dark: rgba(0, 0, 0, 0.75);
     --osd-slider-bg: rgba(255, 255, 255, 0.3);
-    --osd-slider-progress: var(--jf-accent, #00a4dc);
+    --osd-slider-progress: var(--jf-accent);
     --osd-btn-hover: var(--jf-button-hover, rgba(255, 255, 255, 0.1));
 }
 
@@ -250,8 +250,9 @@
 
 .osd-btn:focus,
 .osd-btn.focused {
-    background: var(--osd-accent-color);
-    color: var(--jf-text-primary, #fff) !important;
+    background: var(--jf-accent) !important;
+    border-color: var(--jf-button-border-focus) !important;
+    color: var(--jf-primary-btn-color) !important;
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.15);
@@ -265,9 +266,9 @@
 
 .osd-btn.active:focus,
 .osd-btn.active.focused {
-    background: #fff !important;
+    background: var(--jf-primary-btn-color) !important;
     color: var(--osd-accent-color) !important;
-    border-color: #fff !important;
+    border-color: var(--jf-primary-btn-color) !important;
 }
 
 /* Pulse Animation Trigger */
@@ -305,7 +306,7 @@
 .osd-back-btn.focused {
     border: 2px solid var(--jf-action-btn-active-border) !important;
     background: var(--osd-accent-color);
-    color: var(--jf-text-primary, #fff);
+    color: var(--jf-primary-btn-color);
     outline: none !important;
 }
 
@@ -332,8 +333,7 @@
 .osd-btn-play:focus,
 .osd-btn-play.focused {
     background: var(--osd-accent-color);
-    color: var(--jf-text-primary, #fff);
-    outline: none !important;
+    color: var(--jf-primary-btn-color) !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
 }
 
@@ -464,7 +464,7 @@
     width: 100%;
     height: 8px !important;
     background: var(--osd-slider-bg, rgba(255, 255, 255, 0.3));
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     pointer-events: none;
     z-index: 1;
     overflow: hidden; /* Mask the fill's corners at 0/100% */
@@ -524,14 +524,14 @@
 .osd-offset-slider::-webkit-slider-thumb {
     width: 8px !important;
     height: 8px !important;
-    border-radius: 3px !important;
+    border-radius: var(--jf-border-radius) !important;
 }
 
 /* Settings Thumbs (6px Track) */
 .menu-slider .osd-slider::-webkit-slider-thumb {
     width: 6px !important;
     height: 6px !important;
-    border-radius: 3px !important;
+    border-radius: var(--jf-border-radius) !important;
 }
 
 /* FOCUSED STATES - Expand symmetrically using negative margins */
@@ -544,7 +544,7 @@
 .osd-offset-slider:focus::-webkit-slider-thumb {
     width: 10px !important;
     height: 28px !important;
-    border-radius: 5px !important;
+    border-radius: var(--jf-border-radius) !important;
     margin-top: -10px !important;
     background: #fff !important;
 }
@@ -554,7 +554,7 @@
 .track-option.focused .menu-slider .osd-slider::-webkit-slider-thumb {
     width: 10px !important;
     height: 24px !important;
-    border-radius: 5px !important;
+    border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important;
     background: #fff !important;
 }
@@ -566,7 +566,7 @@
 .osd-offset-slider:focus::-moz-range-thumb {
     width: 10px;
     height: 28px;
-    border-radius: 5px;
+    border-radius: var(--jf-border-radius);
     border: none;
 }
 
@@ -668,6 +668,7 @@
 
 .track-option.focused {
     background: var(--osd-accent-color);
+    color: var(--jf-primary-btn-color, #ffffff);
 }
 
 .track-option-check {
@@ -794,7 +795,7 @@
 .osd-slider-container.menu-slider .osd-slider-track {
     background: rgba(255, 255, 255, 0.2);
     height: 6px !important;
-    border-radius: 3px;
+    border-radius: var(--jf-border-radius);
     top: 50% !important;
     transform: translateY(-50%) !important;
     overflow: hidden;
@@ -843,7 +844,7 @@
     width: 420px;
     max-height: calc(100vh - 300px);
     background: rgba(0, 0, 0, 0.65);
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     padding: 15px;
     border: 1px solid rgba(255, 255, 255, 0.1);
     color: #fff;
@@ -948,7 +949,7 @@
     width: 480px; /* Reduced width for compact layout */
     background: rgba(0, 0, 0, .65);
     border: 1px solid hsla(0, 0%, 100%, .1);
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
     padding: 20px 24px;
     color: #fff;
     display: flex;

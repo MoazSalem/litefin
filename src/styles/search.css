@@ -34,7 +34,7 @@
     /* Match nav button bg */
     border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     /* Match nav button border */
-    border-radius: 36px;
+    border-radius: var(--jf-border-radius-lg);
     /* Half of 72px */
     /* Rounded full */
     color: var(--jf-text-primary);

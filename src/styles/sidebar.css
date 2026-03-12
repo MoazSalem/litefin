@@ -11,7 +11,7 @@
     --sidebar-transition: width 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
 
     /* Logo Colors */
-    --jf-logo-fill: var(--jf-accent, #00a4dc);
+    --jf-logo-fill: var(--jf-accent);
 }
 
 .sidebar {
@@ -166,22 +166,27 @@
 .sidebar-item:focus,
 .sidebar-item.focused {
     background: transparent;
-    color: white;
+    color: var(--jf-primary-btn-color);
 }
 
 .sidebar-item.active {
     color: var(--jf-accent);
 }
 
+.sidebar-item.active .item-icon {
+    color: var(--jf-accent);
+}
+
 .sidebar-item.active:focus,
 .sidebar-item.active.focused {
-    color: white;
+    color: var(--jf-primary-btn-color);
 }
 
 /* Update icon background to match item state when focused */
 .sidebar-item:focus .item-icon,
 .sidebar-item.focused .item-icon {
     background: transparent; /* Indicator handles the background */
+    color: inherit;
 }
 
 /* Icon Container - Fixed width for alignment */

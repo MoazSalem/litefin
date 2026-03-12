@@ -224,7 +224,7 @@
     /* Slightly larger pop */
     background: var(--jf-accent) !important;
     border-color: var(--jf-button-border-focus) !important;
-    color: white !important;
+    color: var(--jf-primary-btn-color) !important;
     outline: none;
 }
 

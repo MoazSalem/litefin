@@ -83,15 +83,15 @@
 }
 
 .settings-menu-btn.active {
-    background: rgba(255, 255, 255, 0.1);
-    color: var(--jf-text-primary);
+    background: rgba(var(--jf-accent-rgb), 0.15);
+    color: var(--jf-accent);
     font-weight: 600;
 }
 
 .settings-menu-btn:focus,
 .settings-menu-btn.focused {
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
     outline: none !important;
     transform: scale(1.05);
     will-change: transform;
@@ -133,7 +133,7 @@
     padding: 24px 24px;
     min-height: 80px;
     transition: background-color 0.2s ease;
-    border-radius: 8px;
+    border-radius: var(--jf-border-radius);
     margin: 8px 0;
     border: 1px solid transparent;
 }
@@ -179,8 +179,8 @@
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
     border: 2px solid var(--jf-action-btn-border)!important;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     min-width: 100px;
@@ -200,7 +200,7 @@
 
 .btn-option.active {
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
     border-color: var(--jf-button-border-focus);
     /* Subtle white inner border */
 }
@@ -222,8 +222,8 @@
     font-size: 1.1rem;
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
     border: 2px solid var(--jf-action-btn-border)!important;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     min-width: 200px;
@@ -238,7 +238,7 @@
 .select-btn:focus,
 .select-btn.focused {
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -277,7 +277,7 @@
     right: 0;
     background: var(--jf-background-alt, rgba(20, 20, 20, 0.95));
     border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius-lg);
     padding: 8px;
     display: none;
     flex-direction: column;
@@ -298,7 +298,7 @@
     color: var(--jf-text-secondary);
     background: transparent;
     border: 2px solid var(--jf-action-btn-border)!important;
-    border-radius: 8px;
+    border-radius: var(--jf-border-radius);
     text-align: left;
     cursor: pointer;
     margin-bottom: 4px;
@@ -327,7 +327,7 @@
 
 .select-option:focus.selected,
 .select-option.focused.selected {
-    color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
     background: var(--jf-accent);
 }
 
@@ -392,7 +392,7 @@
     color: var(--jf-text-secondary);
     background: var(--jf-background-alt, rgba(0, 0, 0, 0.3));
     padding: 8px 16px;
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
 }
 
 .setting-actions.centered {
@@ -404,7 +404,7 @@
 .switch-user-btn {
     margin-top: 10px;
     padding: 16px 48px;
-    border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
@@ -423,7 +423,7 @@
 .about-card {
     background: rgba(255, 255, 255, 0.05);
     padding: 40px;
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     text-align: center;
     margin-top: 20px;
     margin-bottom: 60px;
@@ -597,7 +597,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     transform: translateY(-50%) !important;
     height: 6px !important;
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
+    border-radius: var(--jf-border-radius);
     pointer-events: none;
     z-index: 1;
     overflow: hidden;
@@ -659,7 +659,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
 .setting-slider.focused::-webkit-slider-thumb {
     width: 10px !important;
     height: 24px !important;
-    border-radius: 5px !important;
+    border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important; /* (6 - 24) / 2 */
     background: #fff !important;
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
@@ -695,7 +695,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     color: var(--jf-text-secondary);
     background: rgba(255, 255, 255, 0.07);
     padding: 2px 8px;
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
     margin-left: 0.5em;
     vertical-align: middle;
     letter-spacing: 0.3px;
@@ -709,7 +709,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     text-transform: uppercase;
     letter-spacing: 0.8px;
     padding: 3px 10px;
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
     margin-left: 0.6em;
     vertical-align: middle;
 }
@@ -742,7 +742,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     font-size: 0.9em;
     background: rgba(255, 255, 255, 0.08);
     padding: 1px 6px;
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
 }
 
 /* Empty-state message when no plugins are installed */
@@ -769,7 +769,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     flex-direction: column;
     gap: 8px;
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     padding: 12px;
     border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
 }
@@ -782,7 +782,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     margin: 4px 0 !important; /* Override .setting-item margin */
     min-height: 52px !important; /* Ensure min-height override on Tizen */
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 12px;
+    border-radius: var(--jf-border-radius-lg);
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, opacity 0.3s ease;
     border: 2px solid transparent;
     box-sizing: border-box;
@@ -851,9 +851,9 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
 .layout-row .btn-icon:focus,
 .layout-row .btn-icon.focused {
     background: var(--jf-accent);
-    color: #fff;
+    color: var(--jf-primary-btn-color);
     transform: scale(1.15);
-    border-color: rgba(255, 255, 255, 0.8) !important;
+    border-color: var(--jf-button-border-focus) !important;
     outline: none;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
     z-index: 2;
@@ -871,4 +871,62 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
 .layout-row-hidden .layout-btn-toggle:focus,
 .layout-row-hidden .layout-btn-toggle.focused {
     background: var(--jf-accent);
+}
+
+/* ==========================================================================
+   Theme Color Selection
+   ========================================================================== */
+
+.theme-color-grid {
+    display: grid;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 15px;
+    justify-items: end;
+    max-width: 600px;
+}
+
+.color-option {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    background-color: var(--option-color);
+    cursor: pointer;
+    transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+    padding: 0;
+    position: relative;
+    outline: none;
+    background-clip: padding-box;
+}
+
+.color-option:focus,
+.color-option.focused {
+    transform: scale(1.3);
+    border-color: #fff;
+    box-shadow: 0 0 15px var(--option-color);
+    z-index: 10;
+}
+
+.color-option.active::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 12px;
+    height: 12px;
+    background-color: var(--jf-primary-btn-color);
+    border-radius: 50%;
+    box-shadow: 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Legacy layout support */
+html[data-layout-tier="legacy"] .theme-color-grid {
+    display: block;
+    text-align: right;
+}
+
+html[data-layout-tier="legacy"] .color-option {
+    display: inline-block;
+    margin: 5px;
 }

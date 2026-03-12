@@ -28,7 +28,7 @@
     animation: offlineFadeIn 0.8s cubic-bezier(0.23, 1, 0.32, 1);
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(255, 255, 255, 0.05);
-    border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
 }
 
 .offline-icon {
@@ -71,7 +71,7 @@
     height: 80px;
     font-size: 1.5rem;
     font-weight: 600;
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
     margin: 0 12px; /* Use margins for spacing (Tizen 4 compatibility) */
     display: flex;
     align-items: center;
@@ -98,8 +98,8 @@
 
 .offline-actions .btn-primary:focus,
 .offline-actions .btn-primary.focused {
-    background: var(--jf-accent-hover);
-    border-color: white;
+    background: var(--jf-accent);
+    color: var(--jf-primary-btn-color);
 }
 
 .offline-actions .btn-secondary:focus,

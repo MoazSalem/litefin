@@ -28,12 +28,12 @@
     --jf-action-btn-border: rgba(255, 255, 255, 0.20);
     --jf-action-btn-color: #ffffff;
     --jf-action-btn-active-bg: #ffffff;
-    --jf-action-btn-active-border: #ffffff;
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
     --jf-action-btn-active-color: #101010;
 
     /* Global Rounded Corner Defaults (Setting-controlled) */
-    --jf-border-radius: 0px;
-    --jf-border-radius-lg: 0px;
+    --jf-border-radius: 4px;
+    --jf-border-radius-lg: 4px;
 }
 
 /* Global Rounded Corners (Apple HIG style) */
@@ -421,9 +421,9 @@ body {
     min-width: 40px;
     height: 40px;
     padding: 0 8px;
-    border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
     background-color: var(--jf-accent);
-    color: white;
+    color: var(--jf-accent-content-color);
     font-size: 1.1rem;
     font-weight: 700;
     display: flex;

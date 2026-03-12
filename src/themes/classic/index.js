@@ -8,10 +8,8 @@
  * ============================================================================
  */
 
-// Import all classic themes
-import './dark.css';
-import './light.css';
-import './blueradiance.css';
-import './purplehaze.css';
-import './wmc.css';
-import './appletv.css';
+// Import all theme modes
+import './classic-dark.css';
+import './classic-light.css';
+import './black.css';
+import './tinted.css';

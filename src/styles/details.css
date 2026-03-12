@@ -240,7 +240,7 @@
 .meta-badge {
     background: rgba(255, 255, 255, 0.15);
     padding: 4px 10px;
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     font-weight: 600;
     font-size: 1.2rem;
     color: #e0e0e0;
@@ -286,8 +286,8 @@
 /* Standardize buttons with border */
 .details-actions .btn {
     height: 72px;
-    border-radius: 36px;
-    -webkit-border-radius: 36px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     display: flex;
@@ -317,7 +317,7 @@
 .resume-btn.focused {
     transform: scale(1.05);
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color);
     border-color: var(--jf-button-border-focus);
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
@@ -388,7 +388,7 @@
 .btn-icon.focused {
     transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
     background: var(--jf-accent);
-    color: white !important;
+    color: var(--jf-primary-btn-color) !important;
     border-color: var(--jf-button-border-focus) !important;
     outline: none !important;
 }
@@ -400,9 +400,9 @@
  */
 .btn-icon.active:focus,
 .btn-icon.active.focused {
-    background: #fff !important;
+    background: var(--jf-primary-btn-color) !important;
     color: var(--jf-accent) !important;
-    border-color: #fff !important;
+    border-color: var(--jf-primary-btn-color) !important;
 }
 
 /* 
@@ -495,8 +495,8 @@
     margin-top: 4px;
     margin-bottom: 4px;
     padding: 6px 10px;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     background: rgba(255, 255, 255, 0.05);
     border: 2px solid rgba(255, 255, 255, 0.1) !important;
     background-clip: padding-box;
@@ -517,7 +517,7 @@
 .meta-chip:focus,
 .meta-chip.focused {
     background-color: var(--jf-accent) !important;
-    color: white !important;
+    color: var(--jf-primary-btn-color) !important;
     border-color: var(--jf-button-border-focus) !important;
     transform: scale(1.1);
     opacity: 1;
@@ -542,8 +542,8 @@
 .see-more-btn {
     background: rgba(40, 40, 40, 0.8);
     border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 25px;
-    -webkit-border-radius: 25px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     color: var(--jf-text-primary);
@@ -562,7 +562,7 @@
 .see-more-btn.focused {
     background: var(--jf-accent);
     border-color: var(--jf-button-border-focus);
-    color: white;
+    color: var(--jf-primary-btn-color);
     outline: none !important;
     transform: scale(1.05);
 }
@@ -763,8 +763,8 @@
 
 .btn-icon-text {
     height: 56px;
-    border-radius: 28px;
-    -webkit-border-radius: 28px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     overflow: hidden;
     background-clip: padding-box;
@@ -793,7 +793,7 @@
 .btn-icon-text:focus,
 .btn-icon-text.focused {
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
     border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
     outline: none !important;

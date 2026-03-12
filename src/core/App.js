@@ -262,9 +262,6 @@ class App {
         if (!state.has('app:layout')) {
             state.set('app:layout', 'classic'); // 'classic' or 'modern'
         }
-        if (!state.has('app:theme')) {
-            state.set('app:theme', 'purplehaze');
-        }
 
         // User state - only set defaults if not already set by auth.init()
         if (!state.has('user:authenticated')) {
@@ -621,23 +618,6 @@ class App {
         }
     }
 
-    /**
-     * Get current theme
-     * @returns {string} Theme name
-     */
-    getTheme() {
-        return state.get('app:theme', 'purplehaze');
-    }
-
-    /**
-     * Set theme
-     * @param {string} theme - Theme name
-     */
-    setTheme(theme) {
-        state.set('app:theme', theme);
-        document.documentElement.setAttribute('data-theme', theme);
-        eventBus.emit('app:themeChanged', theme);
-    }
 }
 
 // Export singleton instance

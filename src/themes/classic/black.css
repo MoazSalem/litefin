@@ -1,0 +1,66 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Black Mode (Apple TV inspired)
+ * ============================================================================
+ */
+
+[data-theme-mode="black"] {
+    --jf-background: #000000;
+    --jf-background-alt: #080808;
+    --jf-card-bg: #101010;
+    --jf-card-bg-hover: #151515;
+    --jf-overlay-bg: rgba(0, 0, 0, 0.95);
+
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: #999999;
+    --jf-text-tertiary: #666666;
+    --jf-text-disabled: #444444;
+
+    --jf-success: #4caf50;
+    --jf-warning: #ff9800;
+    --jf-error: #f44336;
+    --jf-info: #2196f3;
+
+    --jf-border: #222222;
+    --jf-border-light: #2a2a2a;
+    --jf-divider: #181818;
+
+    --jf-navbar-bg: rgba(0, 0, 0, 0.95);
+    --jf-input-bg: #181818;
+    --jf-input-border: #222222;
+    --jf-button-bg: #222222;
+    --jf-button-hover: #2a2a2a;
+    --jf-switch-bg: rgba(255, 255, 255, 0.1);
+    --jf-switch-handle: var(--jf-accent-content-color, #ffffff);
+
+    --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
+    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.6);
+    --jf-shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.8);
+
+    --jf-scrollbar: #333333;
+    --jf-scrollbar-hover: #555555;
+
+    --jf-spacing-xs: 4px;
+    --jf-spacing-sm: 8px;
+    --jf-spacing-md: 16px;
+    --jf-spacing-lg: 24px;
+    --jf-spacing-xl: 32px;
+
+    --jf-transition-fast: 150ms ease-out;
+    --jf-transition-normal: 250ms ease-out;
+    --jf-transition-slow: 400ms ease-out;
+
+    --jf-button-border-focus: #ffffff;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(255, 255, 255, 0.1);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.2);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}

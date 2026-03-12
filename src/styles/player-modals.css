@@ -179,7 +179,7 @@
 .chapters-modal__list::-webkit-scrollbar-thumb,
 .queue-modal__list::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 2px;
+    border-radius: var(--jf-border-radius);
 }
 
 /* Empty state */
@@ -235,11 +235,11 @@
 
 /* Active (currently playing) chapter */
 .chapter-row--active {
-    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.12);
+    background: rgba(var(--jf-accent-rgb), 0.12);
 }
 
 .chapter-row--active .chapter-row__name {
-    color: var(--osd-accent-color, #00a4dc);
+    color: var(--jf-accent);
     font-weight: 700;
 }
 
@@ -250,7 +250,7 @@
     height: 60px;
     -webkit-flex-shrink: 0;
     flex-shrink: 0;
-    border-radius: 6px;
+    border-radius: var(--jf-border-radius);
     overflow: hidden;
     background: rgba(255, 255, 255, 0.04);
 }
@@ -295,10 +295,10 @@
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--osd-accent-color, #00a4dc);
+    background: var(--jf-accent);
     -webkit-animation: playing-dot-pulse 1.4s ease-in-out infinite;
     animation: playing-dot-pulse 1.4s ease-in-out infinite;
-    box-shadow: 0 0 6px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.8);
+    box-shadow: 0 0 6px rgba(var(--jf-accent-rgb), 0.8);
 }
 
 /* Standard keyframes for Tizen performance */
@@ -382,7 +382,7 @@
 }
 
 .queue-row.focused {
-    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.3);
+    background: rgba(var(--jf-accent-rgb), 0.3);
     -webkit-transform: scaleX(1.01);
     transform: scaleX(1.01);
     -webkit-transform-origin: left;
@@ -391,11 +391,11 @@
 
 /* Currently playing item */
 .queue-row--active {
-    background: rgba(var(--jf-accent-rgb, 0, 164, 220), 0.12);
+    background: rgba(var(--jf-accent-rgb), 0.12);
 }
 
 .queue-row--active .queue-row__name {
-    color: var(--osd-accent-color, #00a4dc);
+    color: var(--jf-accent);
     font-weight: 700;
 }
 
@@ -418,7 +418,7 @@
     height: 60px;
     -webkit-flex-shrink: 0;
     flex-shrink: 0;
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     overflow: hidden;
     background: rgba(255, 255, 255, 0.04);
 }
@@ -464,12 +464,12 @@
     background: -webkit-linear-gradient(
         270deg,
         transparent 50%,
-        rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6) 100%
+        rgba(var(--jf-accent-rgb), 0.6) 100%
     );
     background: linear-gradient(
         180deg,
         transparent 50%,
-        rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6) 100%
+        rgba(var(--jf-accent-rgb), 0.6) 100%
     );
 }
 

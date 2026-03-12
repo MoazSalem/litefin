@@ -242,8 +242,6 @@ class SettingsPage extends Page {
     }
 
     _renderAppearanceTab() {
-        const currentTheme = layoutManager.getTheme();
-        const availableThemes = layoutManager.getAvailableThemes();
 
         return `
             <div class="settings-tab-content">
@@ -289,18 +287,32 @@ class SettingsPage extends Page {
             
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</span>
-                        <span class="setting-description" data-i18n="ColorThemeDescription">${i18n.t('ColorThemeDescription')}</span>
+                        <span class="setting-name" data-i18n="ThemeMode">${i18n.t('ThemeMode') || 'Theme Mode'}</span>
+                        <span class="setting-description" data-i18n="ThemeModeDescription">${i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.'}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'theme-select',
-                            availableThemes.map((t) => ({
-                                value: t,
-                                label: this._getThemeDisplayName(t)
-                            })),
-                            currentTheme
+                            'theme-mode-select',
+                            [
+                                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+                                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+                                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+                                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
+                            ],
+                            layoutManager.getThemeMode()
                         )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeColor">${i18n.t('ThemeColor') || 'Theme Color'}</span>
+                        <span class="setting-description" data-i18n="ThemeColorDescription">${i18n.t('ThemeColorDescription') || 'Choose your primary accent color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <div class="theme-color-grid">
+                            ${this._renderColorOptions()}
+                        </div>
                     </div>
                 </div>
 
@@ -1721,6 +1733,18 @@ class SettingsPage extends Page {
             router.reset('/login');
         });
 
+        // Color Selection
+        this.$$('.color-option').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                const color = btn.dataset.color;
+                layoutManager.setThemeColor(color);
+
+                // Update UI state
+                this.$$('.color-option').forEach((b) => b.classList.remove('active'));
+                btn.classList.add('active');
+            });
+        });
+
         // Initialize Custom Dropdowns
         this._bindDropdownEvents();
 
@@ -1996,6 +2020,64 @@ class SettingsPage extends Page {
         this._prevSection = null;
     }
 
+    /**
+     * Render the color selection grid
+     */
+    _renderColorOptions() {
+        const colors = [
+            // Row 1: Primary Swatches
+            { name: 'Jellyfin Blue', hex: '#00a4dc' },
+            { name: 'Litefin Blue', hex: '#007aff' },
+            { name: 'Indigo', hex: '#5856d6' },
+            { name: 'Royal Blue', hex: '#2962ff' },
+            { name: 'Deep Purple', hex: '#6200ea' },
+            { name: 'Lavender', hex: '#af52de' },
+            { name: 'Purple Haze', hex: '#9d50bb' },
+            { name: 'Magenta', hex: '#d500f9' },
+            { name: 'Pink', hex: '#ff2d55' },
+            { name: 'Rose', hex: '#ff007f' },
+
+            // Row 2: Vibrant Palette
+            { name: 'Red', hex: '#f44336' },
+            { name: 'Orange', hex: '#ff9800' },
+            { name: 'Amber', hex: '#ffc107' },
+            { name: 'Yellow', hex: '#ffeb3b' },
+            { name: 'Lime', hex: '#c6ff00' },
+            { name: 'Green', hex: '#4caf50' },
+            { name: 'Emerald', hex: '#00c853' },
+            { name: 'Mint', hex: '#00c7be' },
+            { name: 'Teal', hex: '#009688' },
+            { name: 'Cyan', hex: '#00bcd4' },
+
+            // Row 3: Sophisticated & Classic
+            { name: 'Sky', hex: '#03a9f4' },
+            { name: 'Ocean', hex: '#0077be' },
+            { name: 'Slate', hex: '#607d8b' },
+            { name: 'Graphite', hex: '#3a3a3c' },
+            { name: 'Silver', hex: '#9e9e9e' },
+            { name: 'Coffee', hex: '#795548' },
+            { name: 'Brown', hex: '#a2845e' },
+            { name: 'Copper', hex: '#b87333' },
+            { name: 'Gold', hex: '#d4af37' },
+            { name: 'White', hex: '#ffffff' }
+        ];
+
+        const currentColor = layoutManager.getThemeColor();
+
+        return colors
+            .map(
+                (c) => `
+            <button class="color-option ${currentColor === c.hex ? 'active' : ''}" 
+                    style="--option-color: ${c.hex}"
+                    data-color="${c.hex}"
+                    title="${c.name}"
+                    tabindex="0">
+            </button>
+        `
+            )
+            .join('');
+    }
+
     _bindDropdownEvents() {
         // Use a map to handle setting IDs to storage keys/methods easily
         const settingsMap = {
@@ -2003,7 +2085,7 @@ class SettingsPage extends Page {
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             layout: { key: 'layout', type: 'local' },
-            'theme-select': { key: 'theme', type: 'local' },
+            'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
@@ -2061,13 +2143,8 @@ class SettingsPage extends Page {
 
                     // Save Setting based on type
                     if (settingConfig) {
-                        if (id === 'theme-select') {
-                            // SPECIAL CASE: Theme changes should be handled by LayoutManager
-                            layoutManager.setTheme(newValue);
-                            // Reload to ensure all pseudo-elements and polyfills catch the new theme
-                            setTimeout(() => {
-                                window.location.reload();
-                            }, 100);
+                        if (id === 'theme-mode-select') {
+                            layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);

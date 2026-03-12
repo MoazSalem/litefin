@@ -1,0 +1,64 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Tinted Mode
+ * ============================================================================
+ * Variables for the tinted mode are dynamically injected by LayoutManager.js
+ * This file contains base styles and fallbacks specific to tinted surfaces.
+ * ============================================================================
+ */
+
+[data-theme-mode="tinted"] {
+    --jf-overlay-bg: rgba(0, 0, 0, 0.8);
+
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: rgba(255, 255, 255, 0.7);
+    --jf-text-tertiary: rgba(255, 255, 255, 0.5);
+    --jf-text-disabled: rgba(255, 255, 255, 0.3);
+
+    --jf-success: #4caf50;
+    --jf-warning: #ff9800;
+    --jf-error: #f44336;
+    --jf-info: #2196f3;
+
+    --jf-input-bg: rgba(255, 255, 255, 0.1);
+    --jf-input-border: rgba(255, 255, 255, 0.2);
+    --jf-button-bg: rgba(255, 255, 255, 0.15);
+    --jf-button-hover: rgba(255, 255, 255, 0.25);
+    --jf-switch-bg: rgba(255, 255, 255, 0.2);
+    --jf-switch-handle: var(--jf-accent-content-color, #ffffff);
+
+    --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.3);
+    --jf-shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --jf-shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
+
+    --jf-scrollbar: rgba(255, 255, 255, 0.2);
+    --jf-scrollbar-hover: rgba(255, 255, 255, 0.4);
+
+    --jf-button-border-focus: #ffffff;
+
+    /* Action Buttons */
+    --jf-action-btn-bg: rgba(255, 255, 255, 0.1);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.2);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary Buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+[data-theme-mode="tinted"] .page::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: radial-gradient(ellipse at top right,
+            var(--jf-accent-light) 0%,
+            transparent 70%);
+    pointer-events: none;
+    z-index: -1;
+}

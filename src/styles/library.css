@@ -80,8 +80,8 @@
     margin: 0 10px 10px 10px;
     /* Spacing for Tizen */
     padding: 12px 28px;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
@@ -98,9 +98,8 @@
 }
 
 .tab-btn.active {
-    background-color: #ffffff;
-    /* Match Play btn in details */
-    color: #000000;
+    background-color: var(--jf-accent);
+    color: var(--jf-primary-btn-color);
 }
 
 /* Unified Focus Styles - Preserving Roundness */
@@ -114,7 +113,7 @@
 .empty-state-btn.focused {
     outline: none !important;
     background-color: var(--jf-accent) !important;
-    color: #ffffff !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
     transform: scale(1.08);
     z-index: 10;
     border: 2px solid var(--jf-action-btn-active-border)!important;
@@ -132,8 +131,8 @@
 .pagination-btn.focused,
 .empty-state-btn:focus,
 .empty-state-btn.focused {
-    border-radius: 40px !important;
-    -webkit-border-radius: 40px !important;
+    border-radius: var(--jf-border-radius-lg) !important;
+    -webkit-border-radius: var(--jf-border-radius-lg) !important;
     overflow: hidden !important;
 }
 
@@ -161,8 +160,8 @@
     display: flex;
     align-items: center;
     padding: 12px 18px;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
@@ -305,8 +304,8 @@
     color: white;
     border: 2px solid var(--jf-action-btn-border)!important;
     padding: 18px 48px;
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     font-size: 22px;
@@ -319,13 +318,13 @@
 .empty-state-btn:focus,
 .empty-state-btn.focused {
     background-color: var(--jf-accent) !important;
-    color: #ffffff !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
     transform: scale(1.1);
     outline: none !important;
     overflow: hidden !important;
     /* Force Tizen 4 layer repaint to respect radius */
-    border-radius: 40px !important;
-    -webkit-border-radius: 40px !important;
+    border-radius: var(--jf-border-radius-lg) !important;
+    -webkit-border-radius: var(--jf-border-radius-lg) !important;
     -webkit-mask-image: -webkit-radial-gradient(white, black);
     mask-image: radial-gradient(white, black);
 }
@@ -439,8 +438,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     flex-wrap: wrap;
     justify-content: center;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: 40px;
-    -webkit-border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     padding: 8px 24px;
@@ -455,8 +454,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     cursor: pointer;
     padding: 8px 12px;
     text-align: center;
-    border-radius: 50%;
-    -webkit-border-radius: 50%;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     width: 44px;
@@ -480,7 +479,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
 .alpha-btn.focused {
     outline: none !important;
     /* Remove square focus */
-    color: var(--text-primary) !important;
+    color: var(--jf-primary-btn-color, #ffffff) !important;
     background-color: var(--jf-accent) !important;
     transform: scale(1.2);
     border-radius: 50% !important;
@@ -504,8 +503,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     background-color: rgba(60, 60, 60, 0.8);
     color: var(--text-primary);
     border: 2px solid rgba(255, 255, 255, 0.3);
-    border-radius: 60px;
-    -webkit-border-radius: 60px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     /* Larger Pill */
@@ -548,7 +547,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     /* Wider for TV */
     max-width: 90%;
     max-height: 80vh;
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     z-index: 10001;
     /* Above overlay */
     display: flex;
@@ -595,7 +594,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     padding: 20px;
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid rgba(255, 255, 255, 0.2);
-    border-radius: 40px;
+    border-radius: var(--jf-border-radius-lg);
     color: var(--text-primary);
     font-size: 18px;
     font-weight: 600;
@@ -619,7 +618,7 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
 
 .skeleton-line {
     background-color: rgba(255, 255, 255, 0.08);
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
 }
 
 .skeleton-line.title {
@@ -663,8 +662,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
 .library-modal {
     background: var(--jf-background-alt, #151515);
     background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
-    border-radius: 16px;
-    -webkit-border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     display: flex;
@@ -735,8 +734,8 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
 .filter-category-btn:focus,
 .filter-category-btn.focused {
     background: var(--jf-accent);
-    color: white;
-    border-left-color: white;
+    color: var(--jf-primary-btn-color, #ffffff);
+    border-left-color: var(--jf-primary-btn-color, #ffffff);
     padding-left: 45px;
     outline: none;
     will-change: transform;
@@ -791,7 +790,7 @@ html[data-layout-tier="legacy"] .filter-main > * {
 .filter-main::-webkit-scrollbar-thumb,
 .sort-column .modal-options::-webkit-scrollbar-thumb {
     background: rgba(255, 255, 255, 0.2);
-    border-radius: 3px;
+    border-radius: var(--jf-border-radius);
 }
 
 /* Option Buttons (Radio/Checkbox) */
@@ -820,13 +819,13 @@ html[data-layout-tier="legacy"] .filter-main > * {
 }
 
 .checkbox-box {
-    border-radius: 6px;
+    border-radius: var(--jf-border-radius-lg);
 }
 
 .modal-option-btn.selected .radio-icon,
 .modal-option-btn.selected .checkbox-box {
-    border-color: #ffffff;
-    color: #ffffff;
+    border-color: var(--jf-accent);
+    color: var(--jf-accent);
 }
 
 .modal-option-btn.selected .radio-icon::after {
@@ -926,7 +925,7 @@ html[data-layout-tier="legacy"] .filter-main > * {
 .modal-action-btn.clear.focused,
 .modal-action-btn.close.focused {
     background-color: rgba(255, 255, 255, 0.2);
-    color: white;
+    color: var(--jf-primary-btn-color);
 }
 
 /* Sort Modal Specifics */

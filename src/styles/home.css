@@ -73,7 +73,7 @@
     /* NO per-card GPU layers by default — creating a compositor layer for every
        card on the page (50-100+) exhausts Tizen VRAM and slows the GPU compositor.
        The parent .media-row already has translateZ(0) which batches the whole row
-       into a single composited layer. Individual cards ride that layer "for free". */
+       composited layer. Individual cards ride that layer "for free". */
 }
 
 /* Landscape styling for "Continue Watching" & "Next Up" */
@@ -141,6 +141,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
+    border-radius: var(--jf-border-radius);
     z-index: 1;
 
     /* No per-image will-change — the browser handles image decode/paint natively.
@@ -189,6 +190,7 @@
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.35);
+    border-radius: var(--jf-border-radius);
     z-index: 2;
     transition: background-color 0.2s ease;
 }

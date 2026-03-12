@@ -19,7 +19,7 @@
 
 .btn-primary {
     background: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color);
     margin: 0px;
     margin-left: 8px;
 }
@@ -29,7 +29,7 @@
     background: var(--jf-accent-hover);
     border-color: var(--jf-button-border-focus);
     outline: none;
-    color: #FFF;
+    color: var(--jf-primary-btn-color);
     transform: scale(1.05);
 }
 
@@ -74,6 +74,7 @@
 .nav-btn:focus,
 .nav-btn.focused {
     background: var(--jf-accent);
+    color: var(--jf-primary-btn-color);
     outline: none;
     border-color: var(--jf-button-border-focus);
 }
@@ -269,7 +270,7 @@ progress.card-progress::-webkit-progress-value {
     border: 1px solid #ff6b6b;
     padding: 1rem;
     margin: 1rem;
-    border-radius: 8px;
+    border-radius: var(--jf-border-radius);
     text-align: center;
     font-size: 1.1rem;
 }
@@ -423,8 +424,8 @@ progress.card-progress::-webkit-progress-value {
 .settings-modal {
     background: var(--jf-background-alt, #151515);
     background-image: linear-gradient(135deg, rgba(255, 255, 255, 0.02) 0%, transparent 100%);
-    border-radius: 20px;
-    -webkit-border-radius: 20px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     border: 1px solid rgba(255, 255, 255, 0.1);
@@ -473,8 +474,8 @@ progress.card-progress::-webkit-progress-value {
     margin-bottom: 12px;
     border: 3px solid transparent;
     /* Layout stability */
-    border-radius: 16px;
-    -webkit-border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
     color: var(--jf-text-primary);
@@ -504,7 +505,7 @@ progress.card-progress::-webkit-progress-value {
 .modal-option-btn:focus,
 .modal-option-btn.focused {
     background: var(--jf-accent) !important; /* Force priority over .selected */
-    color: white !important;
+    color: var(--jf-primary-btn-color) !important;
     /* Subtle white inner border */
     outline: none;
     transform: scale(1.03);
@@ -536,7 +537,7 @@ progress.card-progress::-webkit-progress-value {
 
 .modal-action-btn {
     padding: 12px 32px;
-    border-radius: 30px;
+    border-radius: var(--jf-border-radius-lg);
     background: rgba(255, 255, 255, 0.1);
     color: white;
     border: none;
@@ -549,6 +550,7 @@ progress.card-progress::-webkit-progress-value {
 .modal-action-btn:hover,
 .modal-action-btn.focused {
     background: var(--jf-accent);
+    color: var(--jf-primary-btn-color, #ffffff);
     outline: none;
     transform: scale(1.05);
 }
@@ -557,8 +559,8 @@ progress.card-progress::-webkit-progress-value {
 .modal-close-btn:focus,
 .modal-close-btn.focused {
     background: var(--jf-accent) !important;
-    color: white !important;
-    border-color: white !important;
+    color: var(--jf-primary-btn-color) !important;
+    border-color: var(--jf-primary-btn-color) !important;
     transform: scale(1.01) !important;
     outline: none !important;
 }
@@ -607,7 +609,7 @@ progress.card-progress::-webkit-progress-value {
 
 .track-badge.match-badge {
     background: var(--jf-accent);
-    color: #fff;
+    color: var(--jf-primary-btn-color, #ffffff);
     border-color: var(--jf-accent);
 }
 
@@ -617,7 +619,7 @@ progress.card-progress::-webkit-progress-value {
     justify-content: center;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 4px;
+    border-radius: var(--jf-border-radius);
     padding: 2px 6px;
     font-size: 0.85rem;
     font-weight: 700;
@@ -626,6 +628,17 @@ progress.card-progress::-webkit-progress-value {
     text-transform: uppercase;
     flex-shrink: 0;
     line-height: 1;
+}
+
+/* Response to focused parents with accent backgrounds */
+.modal-option-btn.focused .track-badge,
+.modal-option-btn:focus .track-badge,
+.subtitle-result-btn.focused .track-badge,
+.subtitle-result-btn:focus .track-badge,
+.track-option.focused .track-badge,
+.track-option:focus .track-badge {
+    color: var(--jf-primary-btn-color);
+    border-color: var(--jf-primary-btn-color);
 }
 
 .track-label-text {
@@ -858,14 +871,14 @@ progress.card-progress::-webkit-progress-value {
 
 .media-info-section {
     background: rgba(255, 255, 255, 0.03);
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     padding: 20px;
     margin-bottom: 24px;
 }
 
 .media-info-stream {
     background: rgba(255, 255, 255, 0.04);
-    border-radius: 16px;
+    border-radius: var(--jf-border-radius-lg);
     margin-bottom: 24px;
     border: 1px solid rgba(255, 255, 255, 0.05);
     overflow: hidden;
@@ -885,7 +898,7 @@ progress.card-progress::-webkit-progress-value {
 
 .stream-type-badge {
     padding: 4px 10px;
-    border-radius: 6px;
+    border-radius: var(--jf-border-radius);
     font-size: 0.8rem;
     font-weight: 800;
     text-transform: uppercase;

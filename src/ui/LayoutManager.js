@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
+import { themeUtils } from '../utils/ThemeUtils.js';
 
 const log = logger.create('LayoutManager');
 
@@ -26,11 +27,16 @@ const LAYOUT = {
     MODERN: 'modern'
 };
 
-// Theme constants per layout
-const THEMES = {
-    [LAYOUT.CLASSIC]: ['dark', 'light', 'blueradiance', 'purplehaze', 'wmc', 'appletv'],
-    [LAYOUT.MODERN]: ['dark', 'light']
+// Theme Mode constants
+const THEME_MODES = {
+    CLASSIC_DARK: 'classic-dark',
+    CLASSIC_LIGHT: 'classic-light',
+    BLACK: 'black',
+    TINTED: 'tinted'
 };
+
+// Default Theme Color (Lavender)
+const DEFAULT_THEME_COLOR = '#af52de';
 
 class LayoutManager {
     constructor() {
@@ -43,14 +49,20 @@ class LayoutManager {
         // Current layout
         this._layout = LAYOUT.CLASSIC;
 
-        // Current theme (initialized in init() or constructor fallback)
-        this._theme = 'purplehaze';
+        // Current theme mode
+        this._themeMode = THEME_MODES.TINTED;
+
+        // Current theme color (HEX)
+        this._themeColor = DEFAULT_THEME_COLOR;
 
         // Current font
         this._uiFont = 'default';
 
         // Rounded corners setting
         this._roundedCorners = true;
+
+        // Internal style element for dynamic variables
+        this._dynamicStyleEl = null;
     }
 
     /**
@@ -59,43 +71,37 @@ class LayoutManager {
     init() {
         // Load saved preferences
         const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
-        const savedTheme = storage.getItem('litefin:theme') || 'purplehaze';
+        
+        // Load saved theme mode
+        const savedThemeMode = storage.getItem('litefin:themeMode');
+        let initialMode = THEME_MODES.TINTED;
+
+        if (savedThemeMode && Object.values(THEME_MODES).includes(savedThemeMode)) {
+            initialMode = savedThemeMode;
+        }
+
+        log.info(`Loading theme: savedMode="${savedThemeMode}" -> initialMode="${initialMode}"`);
+        
+        const savedThemeColor = storage.getItem('litefin:themeColor') || this._themeColor;
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
 
         this.setLayout(savedLayout, false);
-        this.setTheme(savedTheme, false);
+        this.setThemeMode(initialMode, false);
+        this.setThemeColor(savedThemeColor, false);
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
 
-        /*
-         * Stamp the CSS layout tier onto <html> so stylesheet rules can branch
-         * between CSS Grid (modern) and flex-wrap (legacy) using attribute
-         * selectors: html[data-layout-tier="legacy"] { ... }
-         *
-         * PlatformInfo must be initialized BEFORE LayoutManager.init() for
-         * this to reflect the detected Chrome version; otherwise it defaults
-         * to 'modern' (safe fallback — grid works on anything Chrome 57+).
-         */
+        // Stamp the tier
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
 
         log.info(
-            `Initialized with layout="${this._layout}", theme="${this._theme}", uiFont="${this._uiFont}", tier="${platformInfo.layoutTier}"`
+            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`
         );
     }
 
     /**
-     * Get current layout
-     * @returns {string} 'classic' or 'modern'
-     */
-    getLayout() {
-        return this._layout;
-    }
-
-    /**
      * Set the current layout
-     * @param {string} layout - 'classic' or 'modern'
-     * @param {boolean} [save=true] - Save to localStorage
      */
     setLayout(layout, save = true) {
         if (layout !== LAYOUT.CLASSIC && layout !== LAYOUT.MODERN) {
@@ -106,25 +112,13 @@ class LayoutManager {
         const oldLayout = this._layout;
         this._layout = layout;
 
-        // Update HTML attribute for CSS
         document.documentElement.setAttribute('data-layout', layout);
-
-        // Update state
         state.set('app:layout', layout, true);
 
-        // Validate theme for new layout
-        // Only validate if theme is already initialized to avoid reset during boot
-        if (this._theme && !this.getAvailableThemes().includes(this._theme)) {
-            // Reset to dark if current theme not available
-            this.setTheme('dark', save);
-        }
-
-        // Save preference
         if (save) {
             storage.setItem('litefin:layout', layout);
         }
 
-        // Emit event for components to update
         if (oldLayout !== layout) {
             log.info(`Layout changed from "${oldLayout}" to "${layout}"`);
             eventBus.emit('layout:changed', { layout, previousLayout: oldLayout });
@@ -132,209 +126,166 @@ class LayoutManager {
     }
 
     /**
-     * Toggle between layouts
+     * Set the Theme Mode
+     * @param {string} mode Theme mode constant
+     * @param {boolean} [save=true] 
      */
-    toggleLayout() {
-        const newLayout = this._layout === LAYOUT.CLASSIC ? LAYOUT.MODERN : LAYOUT.CLASSIC;
-        this.setLayout(newLayout);
-    }
-
-    /**
-     * Get current theme
-     * @returns {string} Theme name
-     */
-    getTheme() {
-        return this._theme;
-    }
-
-    /**
-     * Set the current theme
-     * @param {string} theme - Theme name
-     * @param {boolean} [save=true] - Save to localStorage
-     */
-    setTheme(theme, save = true) {
-        const availableThemes = this.getAvailableThemes();
-
-        if (!availableThemes.includes(theme)) {
-            log.warn(`Theme "${theme}" not available for layout "${this._layout}"`);
+    setThemeMode(mode, save = true) {
+        if (!Object.values(THEME_MODES).includes(mode)) {
+            log.warn(`Invalid theme mode "${mode}"`);
             return;
         }
 
-        const oldTheme = this._theme;
-        this._theme = theme;
+        const oldMode = this._themeMode;
+        this._themeMode = mode;
 
-        // Update HTML attribute for CSS
-        document.documentElement.setAttribute('data-theme', theme);
+        document.documentElement.setAttribute('data-theme-mode', mode);
 
-        /*
-         * Re-apply the CSS vars polyfill so it picks up the new theme's
-         * custom property values. On Chrome 49+ (Tizen 4.0+) this is a no-op
-         * because platformInfo.layoutTier !== 'legacy'.
-         */
-        cssVarsPolyfill.update();
+        // Apply dynamic styles
+        this._applyDynamicTheme();
 
-        // Update state
-        state.set('app:theme', theme, true);
-
-        // Save preference
+        state.set('app:themeMode', mode, true);
+        
         if (save) {
-            storage.setItem('litefin:theme', theme);
+            storage.setItem('litefin:themeMode', mode);
+            // Legacy theme key update for compatibility where needed
+            storage.setItem('litefin:theme', mode);
         }
 
-        if (oldTheme !== theme) {
-            log.info(`Theme changed from "${oldTheme}" to "${theme}"`);
-            eventBus.emit('theme:changed', { theme, previousTheme: oldTheme });
+        if (oldMode !== mode) {
+            log.info(`Theme mode changed to "${mode}"`);
+            eventBus.emit('themeMode:changed', { mode, previousMode: oldMode });
         }
     }
 
     /**
-     * Get current UI font
-     * @returns {string} Font name
+     * Set the Theme Color
+     * @param {string} color Hex color string
+     * @param {boolean} [save=true] 
      */
-    getUiFont() {
-        return this._uiFont;
+    setThemeColor(color, save = true) {
+        if (!color.startsWith('#')) {
+            log.warn(`Invalid hex color "${color}"`);
+            return;
+        }
+
+        const oldColor = this._themeColor;
+        this._themeColor = color;
+
+        // Apply dynamic styles
+        this._applyDynamicTheme();
+
+        state.set('app:themeColor', color, true);
+
+        if (save) {
+            storage.setItem('litefin:themeColor', color);
+        }
+
+        if (oldColor !== color) {
+            log.info(`Theme color changed to "${color}"`);
+            eventBus.emit('themeColor:changed', { color, previousColor: oldColor });
+        }
     }
 
     /**
-     * Set the current UI font
-     * @param {string} font - Font name
-     * @param {boolean} [save=true] - Save to localStorage
+     * Internal method to calculate and inject dynamic CSS variables
      */
+    _applyDynamicTheme() {
+        const root = document.documentElement;
+        const accents = themeUtils.getAccentVariants(this._themeColor);
+        
+        // 1. Apply core accent variables directly to element style
+        // This ensures they override any static CSS or index.html boot styles
+        root.style.setProperty('--jf-accent', accents.accent);
+        root.style.setProperty('--jf-accent-rgb', accents.accentRgb);
+        root.style.setProperty('--jf-accent-hover', accents.accentHover);
+        root.style.setProperty('--jf-accent-active', accents.accentActive);
+        root.style.setProperty('--jf-accent-light', accents.accentLight);
+        const contrastColor = themeUtils.getContrastColor(this._themeColor);
+        root.style.setProperty('--jf-accent-content-color', contrastColor);
+        root.style.setProperty('--jf-primary-btn-color', contrastColor);
+        root.style.setProperty('--jf-switch-handle', contrastColor);
+        root.style.setProperty('--jf-action-btn-active-border', contrastColor);
+        root.style.setProperty('--jf-button-border-focus', contrastColor);
+        root.style.setProperty('--jf-focus-border-color', accents.accent);
+
+        // 2. Clear or apply tinted background variables
+        if (this._themeMode === THEME_MODES.TINTED) {
+            const tints = themeUtils.getTintedColors(this._themeColor);
+            root.style.setProperty('--jf-background', tints.background);
+            root.style.setProperty('--jf-background-alt', tints.backgroundAlt);
+            root.style.setProperty('--jf-surface', tints.surface);
+            root.style.setProperty('--jf-card-bg', tints.cardBg);
+            root.style.setProperty('--jf-card-bg-hover', tints.cardBgHover);
+            root.style.setProperty('--jf-divider', tints.divider);
+            root.style.setProperty('--jf-navbar-bg', tints.background);
+        } else {
+            // Remove tinted variables so theme CSS can take over
+            root.style.removeProperty('--jf-background');
+            root.style.removeProperty('--jf-background-alt');
+            root.style.removeProperty('--jf-surface');
+            root.style.removeProperty('--jf-card-bg');
+            root.style.removeProperty('--jf-card-bg-hover');
+            root.style.removeProperty('--jf-divider');
+            root.style.removeProperty('--jf-navbar-bg');
+        }
+
+        // Clean up legacy style element if it exists from previous versions
+        if (this._dynamicStyleEl) {
+            this._dynamicStyleEl.remove();
+            this._dynamicStyleEl = null;
+        }
+
+        // Polyfill update for legacy Tizen
+        cssVarsPolyfill.update();
+    }
+
+    /**
+     * Get current theme mode (for UI display etc)
+     */
+    getThemeMode() { return this._themeMode; }
+
+    /**
+     * Get current theme color
+     */
+    getThemeColor() { return this._themeColor; }
+
+    // Font and Rounded Corners helpers (Existing logic maintained)
+    getUiFont() { return this._uiFont; }
     setUiFont(font, save = true) {
         this._uiFont = font;
-
-        // Update HTML attribute for CSS
-        if (font && font !== 'default') {
-            document.documentElement.setAttribute('data-ui-font', font);
-        } else {
-            document.documentElement.removeAttribute('data-ui-font');
-        }
-
-        // Save preference
-        if (save) {
-            storage.setItem('litefin:uiFont', font);
-        }
-
-        log.info(`UI Font set to "${font}"`);
+        if (font && font !== 'default') document.documentElement.setAttribute('data-ui-font', font);
+        else document.documentElement.removeAttribute('data-ui-font');
+        if (save) storage.setItem('litefin:uiFont', font);
     }
 
-    /**
-     * Get rounded corners setting
-     * @returns {boolean} True if rounded corners enabled
-     */
-    getRoundedCorners() {
-        return this._roundedCorners;
-    }
-
-    /**
-     * Set rounded corners setting
-     * @param {boolean} enabled - True to enable
-     * @param {boolean} [save=true] - Save to localStorage
-     */
+    getRoundedCorners() { return this._roundedCorners; }
     setRoundedCorners(enabled, save = true) {
-        const oldVal = this._roundedCorners;
         this._roundedCorners = enabled;
-
-        // Update HTML attribute
         document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
-
-        // Save preference
-        if (save) {
-            storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
-        }
-
-        if (oldVal !== enabled) {
-            log.info(`Rounded corners set to ${enabled}`);
-            eventBus.emit('roundedCorners:changed', { enabled });
-        }
+        if (save) storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
+        eventBus.emit('roundedCorners:changed', { enabled });
     }
 
-    /**
-     * Get available themes for current layout
-     * @returns {string[]} Array of theme names
-     */
-    getAvailableThemes() {
-        return THEMES[this._layout] || THEMES[LAYOUT.CLASSIC];
-    }
-
-    /**
-     * Register a component for a specific layout
-     * @param {string} name - Component name
-     * @param {Function} ClassicComponent - Classic layout component class
-     * @param {Function} [ModernComponent] - Modern layout component class (optional)
-     */
+    // Component registration (Existing logic maintained)
     registerComponent(name, ClassicComponent, ModernComponent = null) {
         this._components[LAYOUT.CLASSIC].set(name, ClassicComponent);
-
-        if (ModernComponent) {
-            this._components[LAYOUT.MODERN].set(name, ModernComponent);
-        } else {
-            // Fall back to classic if modern not provided
-            this._components[LAYOUT.MODERN].set(name, ClassicComponent);
-        }
-
-        log.debug(`Registered component "${name}"`);
+        this._components[LAYOUT.MODERN].set(name, ModernComponent || ClassicComponent);
     }
 
-    /**
-     * Get a component class for the current layout
-     * @param {string} name - Component name
-     * @returns {Function|null} Component class
-     */
     getComponent(name) {
         const layoutComponents = this._components[this._layout];
-
-        if (layoutComponents.has(name)) {
-            return layoutComponents.get(name);
-        }
-
-        // Fallback to classic
-        if (this._components[LAYOUT.CLASSIC].has(name)) {
-            return this._components[LAYOUT.CLASSIC].get(name);
-        }
-
-        log.warn(`Component "${name}" not found`);
-        return null;
+        return layoutComponents.get(name) || this._components[LAYOUT.CLASSIC].get(name) || null;
     }
 
-    /**
-     * Check if current layout is classic
-     * @returns {boolean} True if classic layout
-     */
-    isClassic() {
-        return this._layout === LAYOUT.CLASSIC;
-    }
-
-    /**
-     * Check if current layout is modern
-     * @returns {boolean} True if modern layout
-     */
-    isModern() {
-        return this._layout === LAYOUT.MODERN;
-    }
-
-    /**
-     * Get layout-specific CSS class prefix
-     * @returns {string} CSS class prefix
-     */
-    getClassPrefix() {
-        return this._layout === LAYOUT.MODERN ? 'modern' : 'classic';
-    }
-
-    /**
-     * Apply layout-specific class to element
-     * @param {HTMLElement} element - Element to style
-     * @param {string} baseClass - Base class name
-     */
+    isClassic() { return this._layout === LAYOUT.CLASSIC; }
+    isModern() { return this._layout === LAYOUT.MODERN; }
+    getClassPrefix() { return this._layout === LAYOUT.MODERN ? 'modern' : 'classic'; }
     applyLayoutClass(element, baseClass) {
         element.className = `${baseClass} ${this.getClassPrefix()}-${baseClass}`;
     }
 }
 
-// Export singleton instance
 export const layoutManager = new LayoutManager();
-
-// Export constants
-export { LAYOUT, THEMES };
-
+export { LAYOUT, THEME_MODES };
 export default LayoutManager;
