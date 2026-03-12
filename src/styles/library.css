@@ -727,8 +727,14 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     background-clip: padding-box;
     /* Standardize corners */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-left-color 0.18s ease, padding 0.18s ease;
-    /* will-change on :focus only — only ~5 filter categories exist but still
-       no reason to hold GPU layers for all of them permanently. */
+    flex-shrink: 0; /* Prevent squashing in flex containers */
+}
+
+.filter-category-btn.active {
+    background: rgba(255, 255, 255, 0.05);
+    color: var(--jf-text-primary);
+    border-left-color: var(--jf-accent);
+    font-weight: 600;
 }
 
 .filter-category-btn:focus,
@@ -739,13 +745,6 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     padding-left: 45px;
     outline: none;
     will-change: transform;
-}
-
-.filter-category-btn.active {
-    background: rgba(255, 255, 255, 0.05);
-    color: var(--jf-text-primary);
-    border-left-color: var(--jf-accent);
-    font-weight: 600;
 }
 
 /* Main Content Panel */

@@ -639,7 +639,7 @@
     height: 236px; /* 16:9 approx for standard detail widths, prevents collapse on Tizen */
     flex-shrink: 0;
     margin-right: 0;
-    border-radius: 0;
+    border-radius: calc(var(--jf-border-radius) - 4px);
     overflow: hidden;
     position: relative;
 }

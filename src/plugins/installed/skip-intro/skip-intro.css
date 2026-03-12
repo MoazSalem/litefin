@@ -92,7 +92,7 @@
 
     /* Pill shape */
     padding: 0.6em 1.4em;
-    border-radius: 100px;
+    border-radius: var(--jf-border-radius-lg);
 
     /* Solid background (blur removed for Tizen performance) */
     background: rgba(12, 12, 18, 0.92);
@@ -123,7 +123,7 @@
     background: var(--osd-accent-color) !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
     outline: none !important;
-    color: #fff !important;
+    color: var(--jf-primary-btn-color) !important;
 }
 
 /* ============================= Label & Arrow ============================ */

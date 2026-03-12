@@ -408,8 +408,8 @@
     font-variant-numeric: tabular-nums;
     padding: 9.6px 19.2px;
     /* 8px * 1.2, 16px * 1.2 */
-    border-radius: 9.6px;
-    /* 8px * 1.2 */
+    border-radius: var(--jf-border-radius-lg);
+    /* Standardized dynamic radius */
     white-space: nowrap;
     pointer-events: none;
     opacity: 0;
@@ -478,6 +478,7 @@
     background: var(--osd-accent-color);
     width: 0%;
     /* border-radius removed to ensure it touches the thumb seamlessly */
+    box-shadow: 2px 0 0 var(--osd-accent-color); /* Bridge gap to thumb center */
     pointer-events: none;
     transition: width 0.1s ease-out;
 }
@@ -649,8 +650,8 @@
     align-items: center;
     padding: 0.96em 1.44em;
     /* 0.8em * 1.2, 1.2em * 1.2 */
-    border-radius: 9.6px;
-    /* 8px * 1.2 */
+    border-radius: var(--jf-border-radius-lg);
+    /* Standardized dynamic radius */
     background: transparent;
     border: none;
     color: var(--osd-text-color);
@@ -893,6 +894,7 @@
 .playback-info-close:focus,
 .playback-info-close.focused {
     background: var(--osd-accent-color);
+    color: var(--jf-primary-btn-color) !important;
     outline: none;
     border: 2px solid var(--jf-action-btn-active-border)!important;
 }
@@ -1038,6 +1040,7 @@
 .osd-offset-close:focus,
 .osd-offset-close.focused {
     background: var(--osd-accent-color);
+    color: var(--jf-primary-btn-color) !important;
     transform: scale(1.1);
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;

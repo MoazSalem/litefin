@@ -141,7 +141,7 @@
     width: 100%;
     height: 100%;
     object-fit: cover;
-    border-radius: var(--jf-border-radius);
+    border-radius: calc(var(--jf-border-radius) - 3px);
     z-index: 1;
 
     /* No per-image will-change — the browser handles image decode/paint natively.
@@ -190,7 +190,7 @@
     width: 100%;
     height: 100%;
     background: rgba(0, 0, 0, 0.35);
-    border-radius: var(--jf-border-radius);
+    border-radius: calc(var(--jf-border-radius) - 3px);
     z-index: 2;
     transition: background-color 0.2s ease;
 }

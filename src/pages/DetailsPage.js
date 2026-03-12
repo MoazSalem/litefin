@@ -2108,11 +2108,13 @@ class DetailsPage extends Page {
 
                 return `
                 <button class="modal-option-btn ${isSelected ? 'selected' : ''}" data-index="${track.Index}" tabindex="0">
+                    <div class="check-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+                    </div>
                     <span class="track-option-label">
                         <span class="track-label-text">${label}</span>
                         ${metadataHtml}
                     </span>
-                    <div class="check-icon"></div>
                 </button>
             `;
             })

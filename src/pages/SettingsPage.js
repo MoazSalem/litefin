@@ -2068,7 +2068,7 @@ class SettingsPage extends Page {
             .map(
                 (c) => `
             <button class="color-option ${currentColor === c.hex ? 'active' : ''}" 
-                    style="--option-color: ${c.hex}"
+                    style="background-color: ${c.hex}; --option-color: ${c.hex}"
                     data-color="${c.hex}"
                     title="${c.name}"
                     tabindex="0">

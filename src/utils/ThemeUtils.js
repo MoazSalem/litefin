@@ -9,32 +9,34 @@
 export const themeUtils = {
     /**
      * Convert HEX to RGB
-     * @param {string} hex 
+     * @param {string} hex
      * @returns {object|null} {r, g, b}
      */
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-            r: parseInt(result[1], 16),
-            g: parseInt(result[2], 16),
-            b: parseInt(result[3], 16)
-        } : null;
+        return result
+            ? {
+                  r: parseInt(result[1], 16),
+                  g: parseInt(result[2], 16),
+                  b: parseInt(result[3], 16)
+              }
+            : null;
     },
 
     /**
      * Convert RGB to HEX
-     * @param {number} r 
-     * @param {number} g 
-     * @param {number} b 
+     * @param {number} r
+     * @param {number} g
+     * @param {number} b
      * @returns {string}
      */
     rgbToHex(r, g, b) {
-        return "#" + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
+        return '#' + ((1 << 24) + (r << 16) + (g << 8) + b).toString(16).slice(1);
     },
 
     /**
      * Convert HEX to HSL
-     * @param {string} hex 
+     * @param {string} hex
      * @returns {object} {h, s, l}
      */
     hexToHsl(hex) {
@@ -43,7 +45,8 @@ export const themeUtils = {
         g /= 255;
         b /= 255;
 
-        const max = Math.max(r, g, b), min = Math.min(r, g, b);
+        const max = Math.max(r, g, b),
+            min = Math.min(r, g, b);
         let h, s;
         const l = (max + min) / 2;
 
@@ -53,9 +56,15 @@ export const themeUtils = {
             const d = max - min;
             s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
             switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
+                case r:
+                    h = (g - b) / d + (g < b ? 6 : 0);
+                    break;
+                case g:
+                    h = (b - r) / d + 2;
+                    break;
+                case b:
+                    h = (r - g) / d + 4;
+                    break;
             }
             h /= 6;
         }
@@ -65,9 +74,9 @@ export const themeUtils = {
 
     /**
      * Convert HSL to HEX
-     * @param {number} h 
-     * @param {number} s 
-     * @param {number} l 
+     * @param {number} h
+     * @param {number} s
+     * @param {number} l
      * @returns {string}
      */
     hslToHex(h, s, l) {
@@ -99,7 +108,7 @@ export const themeUtils = {
 
     /**
      * Create accent color variants based on a base hex color
-     * @param {string} hex 
+     * @param {string} hex
      * @returns {object}
      */
     getAccentVariants(hex) {
@@ -117,30 +126,30 @@ export const themeUtils = {
 
     /**
      * Generate complementary background colors for a tinted theme
-     * @param {string} hex 
+     * @param {string} hex
      * @returns {object}
      */
     getTintedColors(hex) {
         const hsl = this.hexToHsl(hex);
-        
+
         // Improved tinted background heuristic based on original Purple Haze/Blue Radiance
         // We allow more saturation (up to 45% of accent's saturation) and slightly higher lightness
         const bgH = hsl.h;
-        const bgS = Math.max(20, Math.min(hsl.s * 0.45, 45)); 
-        
+        const bgS = Math.max(20, Math.min(hsl.s * 0.45, 45));
+
         return {
-            background: this.hslToHex(bgH, bgS, 7),      // Base background
-            backgroundAlt: this.hslToHex(bgH, bgS, 11),  // Sidebar/Navbar
-            surface: this.hslToHex(bgH, bgS, 15),       // Surface elements
-            cardBg: this.hslToHex(bgH, bgS, 19),        // Cards
-            cardBgHover: this.hslToHex(bgH, bgS, 26),   // Hover states
-            divider: this.hslToHex(bgH, bgS, 22)        // Borders
+            background: this.hslToHex(bgH, bgS, 7), // Base background
+            backgroundAlt: this.hslToHex(bgH, bgS, 11), // Sidebar/Navbar
+            surface: this.hslToHex(bgH, bgS, 15), // Surface elements
+            cardBg: this.hslToHex(bgH, bgS, 19), // Cards
+            cardBgHover: this.hslToHex(bgH, bgS, 26), // Hover states
+            divider: this.hslToHex(bgH, bgS, 22) // Borders
         };
     },
 
     /**
      * Determine best contrast color (black or white) for a given background hex
-     * @param {string} hex 
+     * @param {string} hex
      * @returns {string} #ffffff or #000000
      */
     getContrastColor(hex) {
@@ -159,10 +168,20 @@ export const themeUtils = {
         const b = normalize(rgb.b);
 
         const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-        
+
+        const hsl = this.hexToHsl(hex);
+
         // Threshold adjusted from 0.179 to 0.4 to be less "aggressive".
-        // This ensures vibrant colors like Lavender (#af52de) keep white text,
-        // while extremely bright colors like Yellow/White still get black text.
-        return luminance > 0.4 ? '#000000' : '#ffffff';
+        // This ensures vibrant colors like Lavender (#af52de) keep light text,
+        // while extremely bright colors like Yellow/White still get dark text.
+        if (luminance > 0.4) {
+            // Background is bright - need dark text
+            // Aggressive Dark: High saturation, very low lightness for deep color bleed
+            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.4, 90), 12);
+        } else {
+            // Background is dark - need light text
+            // Aggressive Light: High saturation, lowered lightness for maximum "glow"
+            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.1, 80), 90);
+        }
     }
 };

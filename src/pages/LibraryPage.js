@@ -2846,7 +2846,8 @@ class LibraryPage extends Page {
             leaveRight: 'filter-items',
             leaveLeft: 'filter-actions',
             leaveDown: 'filter-actions',
-            selector: '.filter-category-btn'
+            selector: '.filter-category-btn',
+            scroll: true // Enable automatic scrolling for TV navigation
         });
 
         this.registerFocusSection('filter-actions', overlay.querySelector('.modal-actions'), {

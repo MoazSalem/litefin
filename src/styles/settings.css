@@ -610,6 +610,7 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     height: 100%;
     background: var(--jf-accent);
     width: 0%; /* Set via JS */
+    box-shadow: 2px 0 0 var(--jf-accent); /* Bridge gap to thumb center */
     pointer-events: none;
     transition: width 0.1s ease-out;
 }
@@ -897,6 +898,8 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     position: relative;
     outline: none;
     background-clip: padding-box;
+    -webkit-appearance: none;
+    appearance: none;
 }
 
 .color-option:focus,
