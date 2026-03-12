@@ -303,43 +303,38 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+    // Tizen AVPlay frequently crashes or fails to prepareAsync when attempting to play
+    // HLS Fragmented MP4 (fMP4) streams that contain AC3 or EAC3 audio tracks.
+    // To ensure stable playback when audio MUST be transcoded (e.g. from DTS),
+    // we restrict the transcoding audio codec exclusively to AAC, which is fully supported.
+    // However, for DirectStream (progressive mp4 Remux), we safely allow native AC3/EAC3 capability.
+    let transAudioCodecs = 'aac';
+    let directAudioCodecs = 'aac,ac3,eac3,mp3';
+
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = audioCodecString;
+        directAudioCodecs = audioCodecString;
+
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
         transVideoCodecs = Array.from(allVideo).join(',');
+        directVideoCodecs = transVideoCodecs;
     }
-
-    const broadTransVideo = [transVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : '']
-        .filter(Boolean)
-        .join(',');
 
     const transcodingProfiles = [
         {
-            Container: caps.tizenVersion >= 5 ? 'mp4' : 'ts',
+            Container: 'ts',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: isHtml5 ? broadTransVideo : transVideoCodecs,
+            VideoCodec: transVideoCodecs, // ts container only safely supports h264/hevc
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '4',
+            SegmentLength: isHtml5 ? '2' : '6',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
-        },
-        {
-            Container: 'mp4',
-            Type: 'Video',
-            AudioCodec: transAudioCodecs,
-            VideoCodec: broadTransVideo,
-            Context: 'Streaming',
-            Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
-            MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '4',
-            BreakOnNonKeyFrames: false
         },
         {
             Container: 'aac',
@@ -358,28 +353,24 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'http'
         },
         {
-            Container: 'opus',
+            Container: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
             Type: 'Audio',
-            AudioCodec: 'opus',
+            AudioCodec: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
             Context: 'Streaming',
             Protocol: 'http'
         },
         {
-            Container: 'mkv',
-            Type: 'Video',
-            AudioCodec: audioCodecString,
-            VideoCodec: mkvVideoCodecs.join(','),
-            Context: 'Static',
-            CopyTimestamps: true,
-            MaxAudioChannels: maxAudioChannels
-        },
-        {
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: 'aac,ac3',
-            VideoCodec: 'h264',
-            Context: 'Static'
+            AudioCodec: transAudioCodecs,
+            VideoCodec: transVideoCodecs,
+            Context: 'Streaming',
+            Protocol: 'http'
         }
+        // Removed MKV and MP4 Static containers from TranscodingProfiles
+        // to force the server to always use HLS (segmented) streaming
+        // instead of progressive HTTP streams for transcodes,
+        // which Tizen AVPlay cannot reliably parse.
     ];
 
     const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5 ? '52' : caps.tizenVersion >= 4 ? '42' : '41';
@@ -425,6 +416,23 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
+    // Explicitly force transcoding of DTS/TrueHD tracks if the user
+    // has disabled passthrough for them.
+    if (!enableDts) {
+        codecProfiles.push({
+            Type: 'Audio',
+            Codec: 'dts,dca,dts-hd,dts-ma,dts-x',
+            Conditions: [{ Condition: 'Equals', Property: 'IsSecondaryAudio', Value: 'false', IsRequired: false }]
+        });
+    }
+    if (!enableTrueHd) {
+        codecProfiles.push({
+            Type: 'Audio',
+            Codec: 'truehd',
+            Conditions: [{ Condition: 'Equals', Property: 'IsSecondaryAudio', Value: 'false', IsRequired: false }]
+        });
+    }
 
     if (enableHEVC) {
         codecProfiles.push({
@@ -477,13 +485,28 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
+    // DirectStreamProfiles governs what containers Jellyfin is allowed to use when copying
+    // the video stream while transcoding the audio stream. If not provided, Jellyfin guesses
+    // based on DirectPlayProfiles (e.g. outputting a progressive MKV HTTP stream), which
+    // crashes Tizen AVPlay. We force DirectStream progressive remuxes into stable MP4 containers.
+    const directStreamProfiles = [
+        {
+            Container: 'mp4',
+            Type: 'Video',
+            VideoCodec: [directVideoCodecs, enableAV1 ? 'av1' : '', enableVP9 ? 'vp9' : ''].filter(Boolean).join(','),
+            AudioCodec: directAudioCodecs
+        }
+    ];
+
     return {
         Name: `Litefin Tizen ${caps.tizenVersion}${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: maxBitrate,
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,
         MusicStreamingTranscodingBitrate: 384000,
+        EnableSubtitlesInManifest: true,
         DirectPlayProfiles: directPlayProfiles,
+        DirectStreamProfiles: directStreamProfiles,
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),

@@ -221,21 +221,27 @@ export class TizenAVPlayer {
                         }
                     }
                     
-                    // NOTE: SET_MODE_4K is deprecated since Tizen 5.0. 
-                    // It's covered by FIXED_MAX_RESOLUTION in ADAPTIVE_INFO below.
+                    // 2. Legacy 4K Mode (Required for some older Tizen TVs to accept 4K HLS)
+                    if (!isDirectPlay && (options.mediaSource?.Bitrate > 20000000 || options.mediaSource?.Width > 1920)) {
+                        try {
+                            this._avplay.setStreamingProperty("SET_MODE_4K", "TRUE");
+                        } catch (e) {
+                            log.warn('Failed to set SET_MODE_4K:', e.message || e);
+                        }
+                    }
 
-                    // 2. ABR Quality Kickstart (HLS/Adaptive Only)
+                    // 3. ABR Quality Kickstart (HLS/Adaptive Only)
                     if (!isDirectPlay) {
                         try {
                             const props = [
-                                'FIXED_MAX_RESOLUTION=3840X2160',
+                                'FIXED_MAX_RESOLUTION=3840x2160', // Correctly cased 'x' per modern Tizen docs, though 'X' works on some.
                                 'STARTBITRATE=HIGHEST', // Force hardware to skip ramp-up delay
                                 'USER_AGENT=JellyfinTizenClient', // Modern way to set UA in 5.0+
                                 `INITIAL_BUFFER_DURATION=${bufferPlaySec * 1000}`,
                                 `RESUME_BUFFER_DURATION=${bufferResumeSec * 1000}`
                             ].join('|');
                             this._avplay.setStreamingProperty("ADAPTIVE_INFO", props);
-                            log.info('Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin');
+                            log.info('Hardware ABR Optimized: STARTBITRATE=HIGHEST, UA=Jellyfin, FIXED_MAX_RESOLUTION=3840x2160');
                         } catch (e) {
                              log.warn('Failed to set hls-specific properties:', e.message || e);
                         }
@@ -340,6 +346,10 @@ export class TizenAVPlayer {
             } else {
                 this._pendingSubtitleIndex = null;
                 this._delayedSubtitleIndex = null;
+            }
+            // Ensure HLS playlist exists before preparing AVPlay (prevents "Unknown Error" crash on 404)
+            if (options.url && options.url.includes('.m3u8')) {
+                await this._pollHlsPlaylist(options.url);
             }
 
             // Prepare asynchronously
@@ -1224,6 +1234,48 @@ export class TizenAVPlayer {
             // setSubtitlePosition may fail if not in PLAYING/PAUSED state
             log.warn('Failed to apply subtitle offset:', e);
         }
+    }
+
+    /**
+     * Polls the HLS playlist URL until it returns HTTP 200 with content.
+     * Prevents Tizen AVPlay from crashing with 'Unknown error' if
+     * prepareAsync() is called before the server builds the manifest.
+     * @param {string} url - The HLS playlist URL
+     * @returns {Promise<void>}
+     * @private
+     */
+    async _pollHlsPlaylist(url) {
+        if (!url || !url.includes('.m3u8')) return;
+
+        const maxRetries = 30; // 15 seconds total (500ms * 30)
+        const delayMs = 500;
+        
+        log.info(`[HLS Polling] Waiting for playlist generation: ${url}`);
+
+        for (let i = 0; i < maxRetries; i++) {
+            // Stop polling if the player was destroyed or playback was cancelled
+            if (!this._isPlaying) {
+                log.info('[HLS Polling] Playback cancelled during polling.');
+                return;
+            }
+
+            try {
+                const response = await fetch(url, { method: 'GET' });
+                if (response.ok) {
+                    const text = await response.text();
+                    if (text && text.includes('#EXTM3U')) {
+                        log.info(`[HLS Polling] Playlist ready after ${i * delayMs}ms.`);
+                        return; // Playlist is ready!
+                    }
+                }
+            } catch (e) {
+                // Ignore fetch errors (server might still be refusing connections or 404ing)
+            }
+
+            await new Promise(resolve => setTimeout(resolve, delayMs));
+        }
+
+        log.warn(`[HLS Polling] Timed out waiting for playlist after ${maxRetries * delayMs}ms. Proceeding anyway.`);
     }
 
     // ========================================================================

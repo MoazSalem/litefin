@@ -1617,7 +1617,8 @@ export class JellyfinPlayer extends EventEmitter {
             UserId: options.userId,
             MaxStreamingBitrate: maxBitrate,
             StartTimeTicks: options.startPositionTicks || 0,
-            AutoOpenLiveStream: true
+            AutoOpenLiveStream: true,
+            EnableDirectStream: this.useTizenPlayer ? false : true
         };
 
         if (options.mediaSourceId) {
