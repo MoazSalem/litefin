@@ -224,7 +224,16 @@ class HomePage extends Page {
             contextType: 'nextUp',
             fetchFn: async () => {
                 const res = await api.getNextUp();
-                return res?.Items?.length > 0 ? res.Items : null;
+                if (!res?.Items?.length) return null;
+
+                // Filter out items that have playback progress, as they should 
+                // only appear in the "Continue Watching" row to avoid duplication.
+                const filtered = res.Items.filter(item => {
+                    const position = item.UserData?.PlaybackPositionTicks || 0;
+                    return position === 0;
+                });
+
+                return filtered.length > 0 ? filtered : null;
             }
         });
 

@@ -1230,3 +1230,115 @@ body.lyrics-active .subtitle-overlay {
     margin-top: auto;
     margin-bottom: auto;
 }
+
+/* ============================================================================
+   SyncPlay Notification Overlay (Apple-Style)
+   ============================================================================ */
+
+.osd-syncplay-notification {
+    position: absolute;
+    top: 15%; /* Positioned nicely in the upper visual center */
+    left: 50%;
+    transform: translateX(-50%);
+    pointer-events: none;
+    z-index: 2000;
+    
+    /* Center its own contents */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.osd-syncplay-notification-glass {
+    /* Sleek Apple-style frosted glass */
+    background: rgba(30, 30, 30, 0.45);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 20px;
+    
+    padding: 16px 32px 16px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 
+                inset 0 1px 0 rgba(255, 255, 255, 0.2);
+    color: #fff;
+    
+    /* Animation origin */
+    transform-origin: center;
+}
+
+.osd-syncplay-notification-icon {
+    width: 42px;
+    height: 42px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--jf-accent);
+}
+
+.osd-syncplay-notification-icon svg {
+    width: 100%;
+    height: 100%;
+    fill: currentColor;
+    filter: drop-shadow(0 0 8px rgba(var(--jf-accent-rgb, 0, 164, 220), 0.6));
+}
+
+.osd-syncplay-notification-text {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+.osd-syncplay-notification-primary {
+    font-size: 24px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    line-height: 1.2;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.osd-syncplay-notification-secondary {
+    font-size: 16px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.7);
+    line-height: 1.2;
+    margin-top: 4px;
+}
+
+/* 
+ * Visibility States and Animations
+ */
+.osd-syncplay-hidden .osd-syncplay-notification-glass {
+    opacity: 0;
+    transform: scale(0.85) translateY(-20px);
+    transition: opacity 0.3s ease, transform 0.4s cubic-bezier(0.3, 0, 0, 1);
+}
+
+.osd-syncplay-visible .osd-syncplay-notification-glass {
+    /* CSS Spring: overshoot and settle */
+    animation: syncplay-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@keyframes syncplay-pop {
+    0% {
+        opacity: 0;
+        transform: scale(0.8) translateY(-30px);
+    }
+    100% {
+        opacity: 1;
+        transform: scale(1) translateY(0);
+    }
+}
+
+/* Special modifiers based on the data-action attribute */
+.osd-syncplay-notification[data-action="buffering"] .osd-syncplay-notification-icon svg {
+    animation: syncplay-spin 2s linear infinite;
+}
+
+@keyframes syncplay-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}

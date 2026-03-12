@@ -283,11 +283,11 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-/* "Play Now" — accent-colored primary action */
+/* "Play Now" — Inverted Mode (White BG, Blue Text) */
 .upnext-btn-play {
-    background: var(--jf-accent);
-    color: var(--jf-primary-btn-color);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-primary-btn-color);
+    color: var(--jf-accent);
+    border: 2px solid var(--jf-primary-btn-color) !important;
 }
 
 .upnext-btn-play:hover {

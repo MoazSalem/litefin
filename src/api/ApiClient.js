@@ -1089,6 +1089,39 @@ export class ApiClient {
         return this.post('/SyncPlay/Ready', body);
     }
 
+    // ========================================================================
+    // SyncPlay Host Controls
+    // ========================================================================
+
+    async syncPlayPlay(options = {}) {
+        return this.post('/SyncPlay/Play', { body: JSON.stringify(options) });
+    }
+
+    async syncPlayUnpause(options = {}) {
+        // In fully conforming 10.7+ servers, Unpause is preferred for resuming from Pause
+        return this.post('/SyncPlay/Unpause', { body: JSON.stringify(options) });
+    }
+
+    async syncPlayPause(options = {}) {
+        return this.post('/SyncPlay/Pause', { body: JSON.stringify(options) });
+    }
+
+    async syncPlaySeek(positionTicks) {
+        return this.post('/SyncPlay/Seek', { body: JSON.stringify({ PositionTicks: positionTicks }) });
+    }
+
+    async syncPlayStop(options = {}) {
+        return this.post('/SyncPlay/Stop', { body: JSON.stringify(options) });
+    }
+
+    async syncPlayNext() {
+        return this.post('/SyncPlay/NextItem');
+    }
+
+    async syncPlayPrevious() {
+        return this.post('/SyncPlay/PreviousItem');
+    }
+
     /**
      * Skip waiting for buffering clients (group leader action).
      * Tells the server to proceed with playback even if some clients are still

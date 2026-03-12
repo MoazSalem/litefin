@@ -78,7 +78,7 @@ export class SyncPlayManager {
          * Re-created whenever the player changes.
          * @type {SyncPlayPlaybackCore|null}
          */
-        this._playbackCore = null;
+        this._playbackCoreInstance = null;
 
         /**
          * The playlist item ID of the item the group is currently playing.
@@ -167,11 +167,12 @@ export class SyncPlayManager {
 
         this._player = player;
 
-        // Build a fresh playback core for the new player
-        this._playbackCore = new SyncPlayPlaybackCore({
-            timeSync: syncPlayTimeSync,
-            player:   this._player
-        });
+        // Clear the old playback core instance so it is rebuilt on demand
+        // by the getter, which safely injects the performProgrammaticSeek wrapper.
+        if (this._playbackCoreInstance) {
+            this._playbackCoreInstance.stopTracking();
+            this._playbackCoreInstance = null;
+        }
 
         // Wire up player events only if we're in a group
         if (this._isEnabled) {
@@ -190,8 +191,8 @@ export class SyncPlayManager {
         log.info('SyncPlayManager: player stopped');
         this._unwirePlayerEvents();
 
-        if (this._playbackCore) {
-            this._playbackCore.stopTracking();
+        if (this._playbackCoreInstance) {
+            this._playbackCoreInstance.stopTracking();
         }
 
         this._player = null;
@@ -279,46 +280,59 @@ export class SyncPlayManager {
 
         log.debug('SyncPlayCommand:', data.Command, data);
 
-        switch (data.Command) {
-            // ----------------------------------------------------------------
-            // Playback state commands
-            // ----------------------------------------------------------------
+        // Prevent our own player's reactions to this remote command
+        // from being broadcast back to the server as a local action.
+        this._ignoreLocalEventsAction = true;
 
-            case 'Play':
-            case 'Unpause':
-                this._handlePlayCommand(data);
-                break;
+        try {
+            switch (data.Command) {
+                // ----------------------------------------------------------------
+                // Playback state commands
+                // ----------------------------------------------------------------
 
-            case 'Pause':
-                this._handlePauseCommand(data);
-                break;
+                case 'Play':
+                case 'Unpause':
+                    this._handlePlayCommand(data);
+                    break;
 
-            case 'Stop':
-                this._handleStopCommand();
-                break;
+                case 'Pause':
+                    this._handlePauseCommand(data);
+                    break;
 
-            case 'Seek':
-                this._handleSeekCommand(data);
-                break;
+                case 'Stop':
+                    this._handleStopCommand();
+                    break;
 
-            // ----------------------------------------------------------------
-            // Buffering coordination commands
-            // ----------------------------------------------------------------
+                case 'Seek':
+                    this._handleSeekCommand(data);
+                    break;
 
-            case 'WaitForNextItem':
-            case 'WaitForContainerReady':
-                // Server is asking us to hold — if we're already playing,
-                // pause and send a buffering report to signal we're waiting.
-                this._handleWaitCommand(data);
-                break;
+                // ----------------------------------------------------------------
+                // Buffering coordination commands
+                // ----------------------------------------------------------------
 
-            case 'SetPlaylistItem':
-                // Server wants us to switch to a specific playlist slot
-                this._handleSetPlaylistItemCommand(data);
-                break;
+                case 'WaitForNextItem':
+                case 'WaitForContainerReady':
+                    // Server is asking us to hold — if we're already playing,
+                    // pause and send a buffering report to signal we're waiting.
+                    this._handleWaitCommand(data);
+                    break;
 
-            default:
-                log.debug('Unhandled SyncPlayCommand:', data.Command);
+                case 'SetPlaylistItem':
+                    // Server wants us to switch to a specific playlist slot
+                    this._handleSetPlaylistItemCommand(data);
+                    break;
+
+                default:
+                    log.debug('Unhandled SyncPlayCommand:', data.Command);
+            }
+        } finally {
+            // Restore normal event processing. We use a short timeout because
+            // the player's 'play'/'pause' events fire asynchronously after we call
+            // this._player.pause() / play().
+            setTimeout(() => {
+                this._ignoreLocalEventsAction = false;
+            }, 500);
         }
     }
 
@@ -430,8 +444,50 @@ export class SyncPlayManager {
     }
 
     // ========================================================================
+    // Host Action Guarding
+    // ========================================================================
+
+    /**
+     * Perform a player seek programmatically without triggering local host action broadcasts.
+     * This is used for drift correction and incoming server commands.
+     * @private
+     */
+    _programmaticSeek(positionTicks) {
+        if (!this._player) return;
+
+        // Temporarily suppress the _onSeek handler so it doesn't think the user
+        // manually scrubbed the timeline and broadcast an echo to the server.
+        this._ignoreLocalEventsAction = true;
+        try {
+            this._player.seek(positionTicks);
+        } finally {
+            // setTimeout ensures the suppression outlives the synchronous 'seek'
+            // event, and briefly covers async event bubbles if any.
+            setTimeout(() => {
+                this._ignoreLocalEventsAction = false;
+            }, 500);
+        }
+    }
+
+    // ========================================================================
     // Private — Playback Command Implementations
     // ========================================================================
+
+    /**
+     * Provide the SyncPlayPlaybackCore instance, creating it if needed.
+     * @private
+     */
+    get _playbackCore() {
+        if (!this._playbackCoreInstance && this._player) {
+            this._playbackCoreInstance = new SyncPlayPlaybackCore({
+                timeSync: syncPlayTimeSync,
+                player: this._player,
+                // Provide our guarded seek method so drift corrections don't trigger local action echoes
+                performProgrammaticSeek: (ticks) => this._programmaticSeek(ticks)
+            });
+        }
+        return this._playbackCoreInstance;
+    }
 
     /**
      * Handle Play / Unpause commands from the server.
@@ -477,7 +533,7 @@ export class SyncPlayManager {
         });
 
         // Seek to expected position and start playing
-        this._player.seek(Math.max(0, expectedTicks));
+        this._programmaticSeek(Math.max(0, expectedTicks));
         this._player.unpause();
 
         // Start drift correction
@@ -507,7 +563,7 @@ export class SyncPlayManager {
         // Pause the player and snap to the correct position
         this._player.pause();
         if (positionTicks > 0) {
-            this._player.seek(positionTicks);
+            this._programmaticSeek(positionTicks);
         }
     }
 
@@ -563,7 +619,7 @@ export class SyncPlayManager {
         this._player.pause();
 
         // ── Step 3: seek to the target position ───────────────────────────────
-        this._player.seek(positionTicks);
+        this._programmaticSeek(positionTicks);
 
         // ── Steps 4–6: wait until the player has finished buffering the new ───
         // position, then pause (we were unpaused by the seek internally on some
@@ -719,8 +775,12 @@ export class SyncPlayManager {
     // Private — Player Event Wiring
     // ========================================================================
 
+    // ========================================================================
+    // Player Events Wiring
+    // ========================================================================
+
     /**
-     * Wire the player's timeupdate, waiting, and playing events to our handlers.
+     * Wire the player's events to our handlers.
      * @private
      */
     _wirePlayerEvents() {
@@ -728,6 +788,10 @@ export class SyncPlayManager {
 
         // Remove any stale handlers first
         this._unwirePlayerEvents();
+
+        // --------------------------------------------------------------------
+        // Drift Correction & Buffering Reporting
+        // --------------------------------------------------------------------
 
         // Time update → check for drift
         this._onTimeUpdate = (positionTicks) => {
@@ -750,10 +814,55 @@ export class SyncPlayManager {
                 this._isBuffering = false;
                 this._reportBuffering(true); // isPlaying = true again
             }
+
+            // Propagate local play events (iff not triggered by a SyncPlayCommand)
+            if (!this._ignoreLocalEventsAction) {
+                this._reportLocalAction('Unpause');
+            }
         };
         this._player.on('playing', this._onPlaying);
 
+        // --------------------------------------------------------------------
+        // Host Action Propagation (Local user pressed pause/seek)
+        // --------------------------------------------------------------------
+
+        this._onPause = () => {
+            if (!this._ignoreLocalEventsAction && !this._isBuffering) {
+                this._reportLocalAction('Pause');
+            }
+        };
+        this._player.on('pause', this._onPause);
+
+        this._onSeek = () => {
+            if (!this._ignoreLocalEventsAction) {
+                const ticks = this._player.getCurrentPositionTicks?.() ?? 0;
+                log.info(`SyncPlay: local seek detected at ${Math.round(ticks / TICKS_PER_MS)}ms, broadcasting to group...`);
+                api.syncPlaySeek(ticks).catch(err => log.error('Failed to broadcast seek:', err));
+            }
+        };
+        this._player.on('seek', this._onSeek);
+
         log.debug('Player events wired for SyncPlay');
+    }
+
+    /**
+     * Helper to broadcast a local play/pause state change to the server.
+     * @private
+     */
+    _reportLocalAction(action) {
+        log.info(`SyncPlay: local ${action} detected, broadcasting to group...`);
+        const payload = {
+            When: new Date().toISOString(),
+            PositionTicks: this._player?.getCurrentPositionTicks?.() ?? 0,
+            IsPlaying: action === 'Unpause',
+            PlaylistItemId: this._currentPlaylistItemId || undefined
+        };
+
+        if (action === 'Unpause') {
+            api.syncPlayUnpause(payload).catch(err => log.error('Failed to broadcast play:', err));
+        } else if (action === 'Pause') {
+            api.syncPlayPause(payload).catch(err => log.error('Failed to broadcast pause:', err));
+        }
     }
 
     /**
@@ -774,6 +883,14 @@ export class SyncPlayManager {
         if (this._onPlaying) {
             this._player.off('playing', this._onPlaying);
             this._onPlaying = null;
+        }
+        if (this._onPause) {
+            this._player.off('pause', this._onPause);
+            this._onPause = null;
+        }
+        if (this._onSeek) {
+            this._player.off('seek', this._onSeek);
+            this._onSeek = null;
         }
     }
 
@@ -860,3 +977,7 @@ export class SyncPlayManager {
 
 // Singleton exported for the plugin and UI to share
 export const syncPlayManager = new SyncPlayManager();
+
+// Explicitly expose to window to bypass Webpack 5 TDZ issues with dynamic module getter evaluation 
+// in certain circular import topologies involving the UI layer.
+window.__syncPlayManager = syncPlayManager;

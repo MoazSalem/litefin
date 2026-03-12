@@ -482,7 +482,6 @@ html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n
     color: var(--jf-primary-btn-color, #ffffff) !important;
     background-color: var(--jf-accent) !important;
     transform: scale(1.2);
-    border-radius: 50% !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
     /* Promote only the one focused button to its own compositor layer */
     will-change: transform;

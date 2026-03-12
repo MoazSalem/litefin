@@ -21,9 +21,15 @@
  */
 
 import { api } from '../../api/index.js';
-import { syncPlayManager } from './SyncPlayManager.js';
 import { eventBus } from '../EventBus.js';
 import { logger } from '../../utils/Logger.js';
+import { focusManager } from '../../ui/FocusManager.js';
+import BaseMenu from '../../player/osd/BaseMenu.js';
+import { ICONS } from '../../player/osd/icons.js';
+
+function getSyncPlayManager() {
+    return window.__syncPlayManager;
+}
 
 const log = logger.create('SyncPlayGroupMenu');
 
@@ -39,28 +45,29 @@ const CSS = `
     display: flex;
     align-items: center;
     justify-content: center;
-    background: rgba(0,0,0,0.6);
-    backdrop-filter: blur(12px);
-    -webkit-backdrop-filter: blur(12px);
+    background: rgba(0,0,0,0.4);
+    backdrop-filter: blur(25px);
+    -webkit-backdrop-filter: blur(25px);
     opacity: 0;
-    transition: opacity 0.25s ease;
+    transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
 }
 .syncplay-overlay.visible {
     opacity: 1;
 }
 .syncplay-panel {
-    background: rgba(255,255,255,0.06);
-    border: 1px solid rgba(255,255,255,0.12);
-    border-radius: 20px;
-    padding: 36px;
-    min-width: 480px;
-    max-width: 680px;
+    background: var(--jf-background-alt, rgba(40, 40, 40, 0.75));
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.15));
+    border-radius: var(--jf-border-radius-lg, 28px);
+    padding: 40px;
+    min-width: 520px;
+    max-width: 720px;
     width: 90%;
-    color: #fff;
-    box-shadow: 0 24px 80px rgba(0,0,0,0.5);
-    transform: scale(0.96) translateY(8px);
-    transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1),
-                opacity 0.25s ease;
+    color: var(--jf-text-primary, #fff);
+    box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+    transform: scale(0.9) translateY(20px);
+    transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                opacity 0.4s ease;
     opacity: 0;
 }
 .syncplay-overlay.visible .syncplay-panel {
@@ -70,144 +77,172 @@ const CSS = `
 .syncplay-header {
     display: flex;
     align-items: center;
-    gap: 12px;
-    margin-bottom: 28px;
+    gap: 16px;
+    margin-bottom: 32px;
 }
 .syncplay-icon {
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     flex-shrink: 0;
-    opacity: 0.9;
 }
 .syncplay-title {
-    font-size: 22px;
-    font-weight: 600;
-    letter-spacing: -0.3px;
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--jf-text-primary, #fff);
 }
 .syncplay-subtitle {
-    font-size: 13px;
-    color: rgba(255,255,255,0.5);
-    margin-top: 2px;
+    font-size: 14px;
+    color: var(--jf-text-secondary, rgba(255,255,255,0.6));
+    margin-top: 4px;
 }
 .syncplay-status-badge {
     display: inline-flex;
     align-items: center;
-    gap: 6px;
-    background: rgba(52, 199, 89, 0.18);
-    border: 1px solid rgba(52, 199, 89, 0.35);
+    gap: 8px;
+    background: rgba(50, 215, 75, 0.12);
+    border: 1px solid rgba(50, 215, 75, 0.2);
     border-radius: 20px;
-    padding: 5px 12px;
-    font-size: 13px;
-    color: #34C759;
-    margin-bottom: 20px;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #32D74B;
+    margin-bottom: 24px;
 }
 .syncplay-status-badge.inactive {
-    background: rgba(255,255,255,0.07);
-    border-color: rgba(255,255,255,0.12);
-    color: rgba(255,255,255,0.5);
+    background: var(--jf-action-btn-bg, rgba(255,255,255,0.06));
+    border-color: var(--jf-action-btn-border, rgba(255,255,255,0.1));
+    color: var(--jf-text-secondary, rgba(255,255,255,0.5));
 }
 .syncplay-status-dot {
-    width: 7px;
-    height: 7px;
+    width: 8px;
+    height: 8px;
     border-radius: 50%;
     background: currentColor;
 }
 .syncplay-status-dot.pulse {
-    animation: syncplay-pulse 1.5s ease-in-out infinite;
+    box-shadow: 0 0 8px currentColor;
+    animation: syncplay-pulse 2s ease-in-out infinite;
 }
 @keyframes syncplay-pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.3; }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(1.1); }
 }
 .syncplay-group-list {
     list-style: none;
-    margin: 0 0 20px;
+    margin: 0 0 28px;
     padding: 0;
-    max-height: 260px;
+    max-height: 320px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 10px;
 }
 .syncplay-group-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 18px;
-    background: rgba(255,255,255,0.05);
-    border: 1px solid rgba(255,255,255,0.08);
-    border-radius: 12px;
+    padding: 16px 20px;
+    background: var(--jf-action-btn-bg, rgba(255,255,255,0.04));
+    border: 1px solid var(--jf-action-btn-border, rgba(255,255,255,0.08));
+    border-radius: var(--jf-border-radius, 16px);
     cursor: pointer;
-    transition: background 0.15s, border-color 0.15s, transform 0.12s;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     outline: none;
 }
-.syncplay-group-item:hover,
-.syncplay-group-item:focus {
-    background: rgba(255,255,255,0.10);
-    border-color: rgba(255,255,255,0.20);
-    transform: translateX(3px);
-}
+.syncplay-group-item:focus,
 .syncplay-group-item.focused {
-    border-color: rgba(10, 132, 255, 0.6);
-    background: rgba(10, 132, 255, 0.12);
+    background: var(--jf-action-btn-active-bg, #fff);
+    border-color: var(--jf-action-btn-active-border, #fff);
+    transform: scale(1.02);
+    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+}
+.syncplay-group-item:focus .syncplay-group-name,
+.syncplay-group-item.focused .syncplay-group-name {
+    color: var(--jf-action-btn-active-color, #000);
+}
+.syncplay-group-item:focus .syncplay-group-members,
+.syncplay-group-item.focused .syncplay-group-members {
+    color: var(--jf-text-secondary, rgba(0,0,0,0.5));
+    opacity: 0.7;
+}
+.syncplay-group-item:focus .syncplay-group-join-btn,
+.syncplay-group-item.focused .syncplay-group-join-btn {
+    color: var(--jf-accent, #007AFF);
 }
 .syncplay-group-name {
-    font-size: 15px;
-    font-weight: 500;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--jf-text-primary, #fff);
 }
 .syncplay-group-members {
-    font-size: 12px;
-    color: rgba(255,255,255,0.45);
+    font-size: 13px;
+    color: var(--jf-text-secondary, rgba(255,255,255,0.5));
     margin-top: 2px;
 }
 .syncplay-group-join-btn {
-    font-size: 13px;
-    color: #0A84FF;
-    font-weight: 600;
+    font-size: 14px;
+    color: var(--jf-accent, #0A84FF);
+    font-weight: 700;
 }
 .syncplay-empty {
     text-align: center;
-    padding: 32px;
-    color: rgba(255,255,255,0.35);
-    font-size: 14px;
+    padding: 40px;
+    color: var(--jf-text-secondary, rgba(255,255,255,0.4));
+    font-size: 15px;
+    background: var(--jf-action-btn-bg, rgba(255,255,255,0.02));
+    border-radius: var(--jf-border-radius, 16px);
+    margin-bottom: 28px;
 }
 .syncplay-actions {
     display: flex;
-    gap: 10px;
+    gap: 12px;
 }
 .syncplay-btn {
     flex: 1;
-    padding: 14px;
-    border-radius: 12px;
+    padding: 16px;
+    border-radius: var(--jf-border-radius, 16px);
     border: none;
-    font-size: 15px;
-    font-weight: 600;
+    font-size: 16px;
+    font-weight: 700;
     cursor: pointer;
-    transition: transform 0.12s, opacity 0.12s;
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     outline: none;
-}
-.syncplay-btn:focus,
-.syncplay-btn:hover {
-    transform: scale(1.03);
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 .syncplay-btn-primary {
-    background: #0A84FF;
-    color: #fff;
+    background: var(--jf-primary-btn-color, #fff);
+    color: var(--jf-accent, #007AFF);
 }
 .syncplay-btn-secondary {
-    background: rgba(255,255,255,0.10);
-    color: #fff;
+    background: var(--jf-action-btn-bg, rgba(255,255,255,0.1));
+    color: var(--jf-text-primary, #fff);
 }
 .syncplay-btn-danger {
-    background: rgba(255,59,48, 0.18);
-    border: 1px solid rgba(255,59,48,0.35);
-    color: #FF3B30;
+    background: rgba(255, 69, 58, 0.15);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    color: #FF453A;
+}
+.syncplay-btn:focus,
+.syncplay-btn.focused {
+    background: var(--jf-action-btn-active-bg, #fff);
+    color: var(--jf-action-btn-active-color, #000);
+    transform: scale(1.05);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+}
+.syncplay-btn-danger:focus,
+.syncplay-btn-danger.focused {
+    background: #FF453A;
+    border-color: #FF453A;
+    color: #fff;
 }
 .syncplay-loading {
     text-align: center;
-    padding: 40px;
-    color: rgba(255,255,255,0.5);
-    font-size: 14px;
+    padding: 48px;
+    color: var(--jf-text-secondary, rgba(255,255,255,0.5));
+    font-size: 15px;
 }
 `;
 
@@ -226,16 +261,17 @@ function _injectCSS() {
 // SyncPlayGroupMenu Class
 // ============================================================================
 
-export class SyncPlayGroupMenu {
-    constructor() {
+export class SyncPlayGroupMenu extends BaseMenu {
+    constructor(osdController) {
+        super(osdController);
+        
         /** @type {HTMLElement|null} */
         this._overlay = null;
 
         /** Whether the menu is currently open. @type {boolean} */
-        this._isOpen = false;
+        this.isVisible = false;
 
         /** Handler reference for keyboard/remote navigation. */
-        this._onKeyDown = null;
         this._onSyncPlayEnabled  = null;
         this._onSyncPlayDisabled = null;
     }
@@ -249,29 +285,37 @@ export class SyncPlayGroupMenu {
      * Fetches the current group list, renders the panel, and animates it in.
      */
     async open() {
-        if (this._isOpen) return;
-        this._isOpen = true;
+        if (this.isVisible) return;
+        this.isVisible = true;
 
         _injectCSS();
         this._buildDOM();
         document.body.appendChild(this._overlay);
 
-        // Animate in (next frame so transition fires)
+        // Animate in
         requestAnimationFrame(() => {
             requestAnimationFrame(() => {
                 this._overlay.classList.add('visible');
             });
         });
 
-        // Set up event listeners
-        this._onKeyDown = (e) => this._handleKeyDown(e);
-        document.addEventListener('keydown', this._onKeyDown);
+        // Set up Focus Trap for TV remote
+        focusManager.pushTrap(this._overlay.querySelector('.syncplay-panel'));
 
-        // Live-update the status badge when SyncPlay state changes
+        // Register as the active menu in OSD to intercept keys
+        if (this.osd) {
+            this.osd.activeMenu = this;
+            this.osd._cacheFocusableElements(); // Force OSD to recognize new trap elements if needed
+        }
+
+        // Live-update status
         this._onSyncPlayEnabled  = () => this._refreshStatus();
         this._onSyncPlayDisabled = () => this._refreshStatus();
         eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
         eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
+
+        // Initialize status (badge and buttons)
+        this._refreshStatus();
 
         // Load group list
         await this._loadGroups();
@@ -281,21 +325,27 @@ export class SyncPlayGroupMenu {
      * Close and destroy the menu.
      */
     close() {
-        if (!this._isOpen) return;
-        this._isOpen = false;
+        if (!this.isVisible) return;
+        this.isVisible = false;
 
-        document.removeEventListener('keydown', this._onKeyDown);
+        // Release focus trap
+        focusManager.popTrap();
+
+        if (this.osd && this.osd.activeMenu === this) {
+            this.osd.activeMenu = null;
+            this.osd._cacheFocusableElements();
+        }
         eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
         eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
-        // Animate out then remove from DOM
+        // Animate out
         this._overlay.classList.remove('visible');
         setTimeout(() => {
             if (this._overlay && this._overlay.parentNode) {
                 this._overlay.parentNode.removeChild(this._overlay);
             }
             this._overlay = null;
-        }, 300);
+        }, 400); // Wait for longer spring-like transition
     }
 
     // ========================================================================
@@ -309,45 +359,46 @@ export class SyncPlayGroupMenu {
     _buildDOM() {
         this._overlay = document.createElement('div');
         this._overlay.className = 'syncplay-overlay';
+        // To prevent ReferenceError in _renderStatusBadge, ensure CSS is requested
+        let initialBadge = `
+            <div class="syncplay-status-badge inactive">
+                <div class="syncplay-status-dot"></div>
+                Loading...
+            </div>
+        `;
+        if (getSyncPlayManager()) {
+            initialBadge = this._renderStatusBadge();
+        }
+
         this._overlay.innerHTML = `
             <div class="syncplay-panel">
                 <div class="syncplay-header">
-                    <!-- SyncPlay icon (two overlapping circles = sync) -->
-                    <svg class="syncplay-icon" viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg">
-                        <circle cx="12" cy="18" r="8" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
-                        <circle cx="24" cy="18" r="8" stroke="rgba(255,255,255,0.7)" stroke-width="2"/>
-                        <path d="M16 14l5 4-5 4" stroke="#0A84FF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-                    </svg>
+                    <!-- SyncPlay icon (groups) -->
+                    <div class="syncplay-icon">
+                        ${ICONS.group}
+                    </div>
                     <div>
                         <div class="syncplay-title">SyncPlay</div>
                         <div class="syncplay-subtitle">Watch together, in perfect sync</div>
                     </div>
                 </div>
 
-                ${this._renderStatusBadge()}
+                ${initialBadge}
 
                 <div id="syncplay-group-container">
                     <div class="syncplay-loading">Loading groups…</div>
                 </div>
 
-                <div class="syncplay-actions">
-                    ${syncPlayManager.isEnabled
-                        ? `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">Leave Group</button>`
-                        : `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">Create Group</button>`
-                    }
+                <div class="syncplay-actions" id="syncplay-actions-container">
+                    <!-- Buttons are populated dynamically by _refreshStatus -->
                     <button class="syncplay-btn syncplay-btn-secondary focusable" id="syncplay-close-btn">Close</button>
                 </div>
             </div>
         `;
 
-        // Wire action buttons
-        const createBtn = this._overlay.querySelector('#syncplay-create-btn');
-        const leaveBtn  = this._overlay.querySelector('#syncplay-leave-btn');
-        const closeBtn  = this._overlay.querySelector('#syncplay-close-btn');
-
-        if (createBtn) createBtn.addEventListener('click', () => this._createGroup());
-        if (leaveBtn)  leaveBtn.addEventListener('click',  () => this._leaveGroup());
-        if (closeBtn)  closeBtn.addEventListener('click',  () => this.close());
+        // Wire static close button
+        const closeBtn = this._overlay.querySelector('#syncplay-close-btn');
+        if (closeBtn) closeBtn.addEventListener('click', () => this.close());
 
         // Close on backdrop click
         this._overlay.addEventListener('click', (e) => {
@@ -360,8 +411,19 @@ export class SyncPlayGroupMenu {
      * @private
      */
     _renderStatusBadge() {
-        const isActive = syncPlayManager.isEnabled;
-        const groupName = syncPlayManager.groupInfo?.GroupId || 'Not in a group';
+        const manager = getSyncPlayManager();
+        if (!manager) {
+            return `
+                <div class="syncplay-status-badge inactive">
+                    <div class="syncplay-status-dot"></div>
+                    Loading...
+                </div>
+            `;
+        }
+
+        const isActive = manager.isEnabled;
+        const info = manager.groupInfo;
+        const groupName = info?.Data?.GroupName || info?.GroupName || info?.GroupId || 'Not in a group';
 
         return `
             <div class="syncplay-status-badge ${isActive ? '' : 'inactive'}">
@@ -371,12 +433,11 @@ export class SyncPlayGroupMenu {
         `;
     }
 
-    /**
-     * Re-render the status badge after SyncPlay state changes.
-     * @private
-     */
     _refreshStatus() {
         if (!this._overlay) return;
+
+        const manager = getSyncPlayManager();
+        if (!manager) return;
 
         // Replace the badge in-place
         const badge = this._overlay.querySelector('.syncplay-status-badge');
@@ -387,15 +448,34 @@ export class SyncPlayGroupMenu {
         // Swap the action button (leave ↔ create)
         const actions = this._overlay.querySelector('.syncplay-actions');
         if (actions) {
-            const btn = actions.querySelector('#syncplay-create-btn, #syncplay-leave-btn');
-            if (syncPlayManager.isEnabled) {
-                if (btn) btn.outerHTML = `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">Leave Group</button>`;
-                actions.querySelector('#syncplay-leave-btn')?.addEventListener('click', () => this._leaveGroup());
+            const oldBtn = actions.querySelector('#syncplay-create-btn, #syncplay-leave-btn');
+            const wasFocused = oldBtn === document.activeElement || oldBtn?.classList.contains('focused');
+            
+            if (manager.isEnabled) {
+                const html = `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">Leave Group</button>`;
+                if (oldBtn) oldBtn.outerHTML = html;
+                else actions.insertAdjacentHTML('afterbegin', html);
+                
+                const leaveBtn = actions.querySelector('#syncplay-leave-btn');
+                if (leaveBtn) {
+                    leaveBtn.addEventListener('click', () => this._leaveGroup());
+                    if (wasFocused) focusManager.focusElement(leaveBtn);
+                }
             } else {
-                if (btn) btn.outerHTML = `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">Create Group</button>`;
-                actions.querySelector('#syncplay-create-btn')?.addEventListener('click', () => this._createGroup());
+                const html = `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">Create Group</button>`;
+                if (oldBtn) oldBtn.outerHTML = html;
+                else actions.insertAdjacentHTML('afterbegin', html);
+                
+                const createBtn = actions.querySelector('#syncplay-create-btn');
+                if (createBtn) {
+                    createBtn.addEventListener('click', () => this._createGroup());
+                    if (wasFocused) focusManager.focusElement(createBtn);
+                }
             }
         }
+        
+        // Ensure FocusManager knows the DOM changed
+        focusManager.invalidateCache('__trap__');
     }
 
     // ========================================================================
@@ -465,6 +545,19 @@ export class SyncPlayGroupMenu {
 
         container.innerHTML = '';
         container.appendChild(ul);
+        
+        // Focus the first group or the Close button if no groups
+        requestAnimationFrame(() => {
+            const firstGroup = ul.querySelector('.syncplay-group-item');
+            if (firstGroup) {
+                focusManager.focusElement(firstGroup);
+            } else {
+                const closeBtn = this._overlay.querySelector('#syncplay-close-btn');
+                if (closeBtn) focusManager.focusElement(closeBtn);
+            }
+        });
+        
+        focusManager.invalidateCache('__trap__');
     }
 
     // ========================================================================
@@ -474,7 +567,8 @@ export class SyncPlayGroupMenu {
     /** @private */
     async _createGroup() {
         try {
-            await syncPlayManager.createGroup();
+            const manager = getSyncPlayManager();
+            if (manager) await manager.createGroup();
             // The server will emit a GroupUpdate via WebSocket → plugin handles it
             this.close();
         } catch (err) {
@@ -485,7 +579,8 @@ export class SyncPlayGroupMenu {
     /** @private */
     async _joinGroup(groupId) {
         try {
-            await syncPlayManager.joinGroup(groupId);
+            const manager = getSyncPlayManager();
+            if (manager) await manager.joinGroup(groupId);
             this.close();
         } catch (err) {
             log.error('Join group failed:', err);
@@ -495,7 +590,8 @@ export class SyncPlayGroupMenu {
     /** @private */
     async _leaveGroup() {
         try {
-            await syncPlayManager.leaveGroup();
+            const manager = getSyncPlayManager();
+            if (manager) await manager.leaveGroup();
             this.close();
         } catch (err) {
             log.error('Leave group failed:', err);
@@ -503,19 +599,26 @@ export class SyncPlayGroupMenu {
     }
 
     // ========================================================================
-    // Private — Keyboard / Remote Navigation
+    // OSD BaseMenu Methods
     // ========================================================================
 
-    /**
-     * @private
-     * @param {KeyboardEvent} e
-     */
-    _handleKeyDown(e) {
-        if (!this._isOpen) return;
-
-        if (e.key === 'Escape' || e.key === 'Backspace') {
-            e.preventDefault();
+    handleKey(key) {
+        // Since OSDController intercepts all arrow keys and routes them to activeMenu,
+        // we must route them back to FocusManager to navigate inside our trap.
+        if (['up', 'down', 'left', 'right'].includes(key)) {
+            focusManager._handleKey(key);
+            return true; // We handled it, don't let OSD navigate the background
+        } else if (key === 'enter') {
+            const activeEl = document.activeElement;
+            if (activeEl && this._overlay.contains(activeEl)) {
+                activeEl.click();
+            }
+            return true;
+        } else if (key === 'back') {
             this.close();
+            return true;
         }
+
+        return false;
     }
 }

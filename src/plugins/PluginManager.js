@@ -33,6 +33,7 @@ import { logger } from '../utils/Logger.js';
 import { serverPluginClient } from './ServerPluginClient.js';
 import PluginAPI from './PluginAPI.js';
 import PluginWidgetHost from './PluginWidgetHost.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('PluginManager');
 
@@ -324,6 +325,16 @@ class PluginManager {
     }
 
     /**
+     * Check if a plugin is currently enabled.
+     * @param {string} pluginId
+     * @returns {boolean}
+     */
+    isEnabled(pluginId) {
+        const entry = this._plugins.get(pluginId);
+        return !!(entry && entry.enabled);
+    }
+
+    /**
      * Get all currently loaded plugin IDs.
      * @returns {string[]}
      */
@@ -395,6 +406,7 @@ class PluginManager {
             try {
                 await entry.plugin.init(entry.api);
                 log.info(`Plugin '${pluginId}' re-enabled by user`);
+                eventBus.emit(`${pluginId}:enabled`);
             } catch (err) {
                 log.error(`Plugin '${pluginId}' init() threw during re-enable:`, err);
                 entry.enabled = false;
@@ -420,6 +432,7 @@ class PluginManager {
             }
 
             log.info(`Plugin '${pluginId}' disabled by user`);
+            eventBus.emit(`${pluginId}:disabled`);
         }
     }
 

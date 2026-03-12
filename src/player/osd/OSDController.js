@@ -21,6 +21,7 @@ import UpNextDialog from './UpNextDialog.js';
 import ChaptersModal from './ChaptersModal.js';
 import QueueModal from './QueueModal.js';
 import LyricsModal from './LyricsModal.js';
+import SyncPlayNotification from './SyncPlayNotification.js';
 
 const log = logger.create('OSDController');
 
@@ -91,10 +92,17 @@ export default class OSDController extends Component {
         this._upNextShown = false;
         this._upNextHiddenByUser = false;
 
-        // Ensure playQueue updates visually
         this._boundHandleQueueUpdate = this._handleQueueUpdate.bind(this);
+        this._boundHandleSyncPlayNotification = this._handleSyncPlayNotification.bind(this);
+        this._boundSyncPlayButtonState = this._syncPlayButtonState.bind(this);
+
         import('../../core/EventBus.js').then(({ eventBus }) => {
             eventBus.on('playqueue:updated', this._boundHandleQueueUpdate);
+            eventBus.on('syncplay:command', this._boundHandleSyncPlayNotification);
+            eventBus.on('syncplay:groupupdate', this._boundHandleSyncPlayNotification);
+            // Listen to plugin state changes for the button
+            eventBus.on('syncplay:enabled', this._boundSyncPlayButtonState);
+            eventBus.on('syncplay:disabled', this._boundSyncPlayButtonState);
         });
 
         this._initMenus();
@@ -124,6 +132,76 @@ export default class OSDController extends Component {
         }
     }
 
+    _handleSyncPlayNotification(...args) {
+        if (!this.syncPlayNotification) return;
+
+        // EventBus might pass (eventName, data) or just (data) depending on its API
+        const data = args.length > 1 ? args[1] : args[0];
+        if (!data) return;
+
+        let action = null;
+        let primaryStr = '';
+        let secondaryStr = 'SyncPlay';
+        let duration = 3000;
+
+        if (data.Command) {
+            const cmd = data.Command.toLowerCase();
+            if (cmd === 'unpause' || cmd === 'play') {
+                action = 'play';
+                primaryStr = i18n.t('Play');
+            } else if (cmd === 'pause') {
+                action = 'pause';
+                primaryStr = i18n.t('Pause');
+            } else if (cmd === 'seek') {
+                action = 'seek';
+                primaryStr = i18n.t('Seek');
+            } else if (cmd === 'stop') {
+                action = 'stop';
+                primaryStr = i18n.t('Stop');
+            }
+        } else if (data.Type) {
+            if (data.Type === 'StateUpdate' && data.State === 'Waiting' && data.Reason === 'Buffering') {
+                action = 'buffering';
+                primaryStr = i18n.t('Buffering');
+                secondaryStr = i18n.t('SyncPlay Waiting');
+                duration = 0; // Keep showing until another action replaces it or we start playing
+            } else if (data.Type === 'UserJoined') {
+                action = 'join';
+                primaryStr = i18n.t('Joined Group');
+            } else if (data.Type === 'UserLeft') {
+                action = 'leave';
+                primaryStr = i18n.t('Left Group');
+            } else if (data.Type === 'GroupLeft') {
+                action = 'leave';
+                primaryStr = i18n.t('Left Group');
+                secondaryStr = i18n.t('Disconnected');
+            }
+        }
+
+        if (action) {
+            this.syncPlayNotification.show(action, primaryStr, secondaryStr, duration);
+        }
+    }
+
+    _syncPlayButtonState() {
+        if (!this._osdEl) return;
+        
+        import('../../plugins/PluginManager.js').then(({ pluginManager }) => {
+            const btn = this._osdEl.querySelector('#osdSyncPlayBtn');
+            if (!btn) return;
+            
+            if (pluginManager.isEnabled('syncplay')) {
+                btn.classList.remove('hidden');
+                btn.setAttribute('tabindex', '0');
+            } else {
+                btn.classList.add('hidden');
+                btn.setAttribute('tabindex', '-1');
+            }
+            
+            this._cacheFocusableElements();
+        });
+    }
+
     _initMenus() {
         this.audioMenu = new TrackMenu(this, 'audio');
         this.subtitleMenu = new TrackMenu(this, 'subtitle');
@@ -151,6 +229,9 @@ export default class OSDController extends Component {
         // Lyrics modal — shows scrolling lyrics for audio items
         this.lyricsModal = new LyricsModal(this);
 
+        // SyncPlay notification overlay
+        this.syncPlayNotification = new SyncPlayNotification(this);
+
         this.menus = [
             this.audioMenu,
             this.subtitleMenu,
@@ -166,7 +247,8 @@ export default class OSDController extends Component {
             this.upNextDialog,
             this.chaptersModal,
             this.queueModal,
-            this.lyricsModal
+            this.lyricsModal,
+            this.syncPlayNotification
         ];
     }
 
@@ -223,9 +305,16 @@ export default class OSDController extends Component {
         this._stopUpdates();
         if (this._updateTimer) clearInterval(this._updateTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
-        
         import('../../core/EventBus.js').then(({ eventBus }) => {
             eventBus.off('playqueue:updated', this._boundHandleQueueUpdate);
+            if (this._boundSyncPlayButtonState) {
+                eventBus.off('syncplay:enabled', this._boundSyncPlayButtonState);
+                eventBus.off('syncplay:disabled', this._boundSyncPlayButtonState);
+            }
+            if (this._boundHandleSyncPlayNotification) {
+                eventBus.off('syncplay:command', this._boundHandleSyncPlayNotification);
+                eventBus.off('syncplay:groupupdate', this._boundHandleSyncPlayNotification);
+            }
         });
 
         this.menus.forEach(menu => menu.hide?.());
@@ -282,7 +371,7 @@ export default class OSDController extends Component {
                             <!-- Queue modal button (always available) -->
                             <button class="osd-btn" data-action="queue" id="osdQueueBtn" tabindex="0" aria-label="Queue">${ICONS.queue}</button>
                             <!-- Lyrics modal button -->
-                            <button class="osd-btn osd-btn-disabled hide" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${ICONS.lyrics}</button>
+                            <button class="osd-btn osd-btn-disabled hidden" data-action="lyrics" id="osdLyricsBtn" tabindex="-1" aria-label="Lyrics">${ICONS.lyrics}</button>
                             <!-- Chapters modal button (hidden initially; revealed when chapters exist) -->
                             <button class="osd-btn osd-btn-disabled" data-action="chapters" id="osdChaptersBtn" tabindex="-1" aria-label="Chapters">${ICONS.viewList}</button>
                         </div>
@@ -293,7 +382,7 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
-                            <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">${ICONS.sync}</button>
+                            <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">${ICONS.group}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>
@@ -357,9 +446,22 @@ export default class OSDController extends Component {
             subtitleBtn?.remove();
             this._osdEl.classList.add('osd-audio-mode');
         } else {
+            this._osdEl.classList.add('osd-video-mode');
             const lyricsBtn = this._osdEl.querySelector('#osdLyricsBtn');
             lyricsBtn?.remove();
         }
+
+        // Initial setup for SyncPlay button visibility
+        import('../../plugins/PluginManager.js').then(({ pluginManager }) => {
+            if (!pluginManager.isEnabled('syncplay')) {
+                const btn = this._osdEl.querySelector('#osdSyncPlayBtn');
+                if (btn) {
+                    btn.classList.add('hidden');
+                    btn.setAttribute('tabindex', '-1');
+                    this._cacheFocusableElements();
+                }
+            }
+        });
 
         this.updatePlayPauseButton();
 
@@ -598,15 +700,15 @@ export default class OSDController extends Component {
         // Music files generally do not have chapters, and we want to free up space on the OSD
         if (this._isAudio) {
             if (prevChapterBtn) {
-                prevChapterBtn.classList.add('hide');
+                prevChapterBtn.classList.add('hidden');
                 prevChapterBtn.setAttribute('tabindex', '-1');
             }
             if (nextChapterBtn) {
-                nextChapterBtn.classList.add('hide');
+                nextChapterBtn.classList.add('hidden');
                 nextChapterBtn.setAttribute('tabindex', '-1');
             }
             if (chaptersModalBtn) {
-                chaptersModalBtn.classList.add('hide');
+                chaptersModalBtn.classList.add('hidden');
                 chaptersModalBtn.setAttribute('tabindex', '-1');
             }
             return;
@@ -1327,7 +1429,7 @@ export default class OSDController extends Component {
                 // Lazy-import to avoid loading the group menu CSS on every startup
                 // Opens the SyncPlay group management modal overlay
                 import('../../core/syncplay/SyncPlayGroupMenu.js').then(({ SyncPlayGroupMenu }) => {
-                    const menu = new SyncPlayGroupMenu();
+                    const menu = new SyncPlayGroupMenu(this);
                     menu.open();
                 }).catch(err => log.error('Failed to open SyncPlayGroupMenu:', err));
                 break;

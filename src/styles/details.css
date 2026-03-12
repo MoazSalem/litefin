@@ -302,13 +302,12 @@
 }
 
 
-/* Primary Play Button (Swapped) */
-/* Unified Primary Play/Resume Buttons */
+/* Primary Play/Resume Buttons - Inverted Mode (White BG, Blue Text) */
 .play-btn,
 .resume-btn {
-    background: var(--jf-primary-btn-bg);
-    color: var(--jf-primary-btn-color);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    background: var(--jf-primary-btn-color);
+    color: var(--jf-accent);
+    border: 2px solid var(--jf-primary-btn-color) !important;
 }
 
 .play-btn:focus,
@@ -320,7 +319,7 @@
     color: var(--jf-primary-btn-color);
     border-color: var(--jf-button-border-focus);
     outline: none !important;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border: 2px solid var(--jf-button-border-focus) !important;
 }
 
 /* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */
@@ -377,10 +376,10 @@
 
 /* Active State (Heart Filled / Checked) */
 .btn-icon.active {
-    /* Updated: Matches Play Normal State */
-    background: var(--jf-action-btn-active-bg);
-    color: var(--jf-action-btn-active-color);
-    border-color: var(--jf-action-btn-active-border) !important;
+    /* Inverted Mode (White BG, Blue Icon) */
+    background: var(--jf-primary-btn-color);
+    color: var(--jf-accent);
+    border-color: var(--jf-primary-btn-color) !important;
 }
 
 /* Focus State (Unified) */
@@ -395,14 +394,14 @@
 
 /* 
  * Active + Focused State: 
- * When a toggled button (like Watched) is focused, we need to show it's "On".
- * We use a brighter/white background or a specific border to differentiate.
+ * All buttons revert to standard app focus (Blue background, White text).
  */
 .btn-icon.active:focus,
 .btn-icon.active.focused {
-    background: var(--jf-primary-btn-color) !important;
-    color: var(--jf-accent) !important;
-    border-color: var(--jf-primary-btn-color) !important;
+    background: var(--jf-accent) !important;
+    color: var(--jf-primary-btn-color) !important;
+    border-color: var(--jf-button-border-focus) !important;
+    transform: scale(1.15);
 }
 
 /* 

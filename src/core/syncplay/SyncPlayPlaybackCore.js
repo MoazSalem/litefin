@@ -67,10 +67,11 @@ const TICKS_PER_MS = 10000;
 export class SyncPlayPlaybackCore {
     /**
      * @param {object} options
-     * @param {object} options.timeSync     - SyncPlayTimeSync instance
-     * @param {object} options.player       - JellyfinPlayer instance
+     * @param {object} options.timeSync                - SyncPlayTimeSync instance
+     * @param {object} options.player                  - JellyfinPlayer instance
+     * @param {Function} [options.performProgrammaticSeek] - Optional guarded seek wrapper to prevent event echo
      */
-    constructor({ timeSync, player }) {
+    constructor({ timeSync, player, performProgrammaticSeek }) {
         /**
          * Reference to the time-sync module for toLocal() conversions.
          */
@@ -80,6 +81,11 @@ export class SyncPlayPlaybackCore {
          * Reference to the active JellyfinPlayer.
          */
         this._player = player;
+
+        /**
+         * Wrapper function to perform non-user seeks.
+         */
+        this._performProgrammaticSeek = performProgrammaticSeek || null;
 
         /**
          * Whether we are tracking and correcting drift.
@@ -244,7 +250,9 @@ export class SyncPlayPlaybackCore {
         // Restore normal speed first in case we were in SpeedToSync
         this._restoreNormalSpeed();
 
-        if (this._player) {
+        if (this._performProgrammaticSeek) {
+            this._performProgrammaticSeek(targetTicks);
+        } else if (this._player) {
             this._player.seek(targetTicks);
         }
 

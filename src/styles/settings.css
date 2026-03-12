@@ -83,7 +83,8 @@
 }
 
 .settings-menu-btn.active {
-    background: rgba(var(--jf-accent-rgb), 0.15);
+    /* Inverted Mode (White BG, Blue Text) */
+    background: var(--jf-primary-btn-color, #ffffff);
     color: var(--jf-accent);
     font-weight: 600;
 }
