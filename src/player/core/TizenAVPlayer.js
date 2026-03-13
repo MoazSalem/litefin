@@ -428,7 +428,27 @@ export class TizenAVPlayer {
                             type: 'loadedmetadata', 
                             data: { duration: this._duration / 1000 } 
                         });
-                        
+
+                        // ================================================================
+                        // IMPROVEMENT A: Eager one-shot track mapping in READY state.
+                        //
+                        // The recommended production flow (Plex/Emby style) is:
+                        //   open → prepareAsync → getTotalTrackInfo → play
+                        //
+                        // On Tizen 4.x/5.5+, track info is fully populated right after
+                        // prepare, before play() is ever called.  Attempting a track switch
+                        // in the READY state here means subtitle/audio selection fires
+                        // instantly instead of waiting for the first oncurrentplaytime tick.
+                        //
+                        // On older Tizen (2.4–3.x) this call returns empty arrays, so it
+                        // does nothing and the existing oncurrentplaytime polling loop is
+                        // still the safety net.  No harm done either way.
+                        // ================================================================
+                        if (this._pendingAudioIndex !== null || this._pendingSubtitleIndex !== null) {
+                            log.debug('prepareAsync: attempting eager pre-play track selection');
+                            this._applyPendingTracks();
+                        }
+
                         // Check if we can start native playback now that preparation is complete
                         this._checkNativePlay();
                         resolve();
@@ -672,58 +692,91 @@ export class TizenAVPlayer {
                     log.warn('Failed to disable subtitles:', e);
                 }
             } else {
-                // Pre-first-frame: try the raw setSelectTrack. This works on
-                // Tizen 5.5+ where tracks activate during buffering. On Tizen 5.0
-                // it silently no-ops, but _delayedSubtitleIndex stays set so the
-                // post-stabilization path will catch it later.
-                const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
-                if (tizenSubIndex !== null) {
-                    try {
-                        log.debug(`Attempting early apply of TEXT track index ${tizenSubIndex}`);
-                        this._avplay.setSelectTrack('TEXT', tizenSubIndex);
-                        this._avplay.setSilentSubtitle(true);
-                        this._avplay.setSilentSubtitle(false);
-                        log.info(`Early TEXT track ${tizenSubIndex} applied (pending kept for re-apply)`);
-                        this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
-                    } catch (e) {
-                        // If Tizen returns InvalidStateError, keep trying in the loop.
-                        if (e.name === 'InvalidStateError' || e.code === 11) {
-                             log.debug(`Postponing subtitle track ${tizenSubIndex} (InvalidStateError)`);
-                        } else {
-                            log.warn(`Early apply of subtitle track ${tizenSubIndex} failed (will retry after stabilization):`, e);
-                            // Do NOT clear _pendingSubtitleIndex. Let it stay pending so that 
-                            // the post-stabilization retry logic can attempt setSubtitleStreamIndex
-                            // once the decoder is fully ready.
-                        }
-                    }
+                // ================================================================
+                // IMPROVEMENT C: PLAYING state gate before setSelectTrack.
+                //
+                // Some Tizen firmwares (especially 2.4–3.0, and some 4.x units)
+                // silently ignore setSelectTrack('TEXT', ...) if the player is in
+                // anything other than the PLAYING state at the moment of the call.
+                //
+                // This function is called from both onbufferingcomplete (state=READY)
+                // and oncurrentplaytime (state=PLAYING).  We attempt the switch only
+                // when we're verified PLAYING; otherwise we leave _pendingSubtitleIndex
+                // set so the oncurrentplaytime loop retries on the next tick.
+                //
+                // Exception: if we are in READY state and the eager pre-play path
+                // (Improvement A) is running, we still try — on modern Tizen that works.
+                // We detect READY by checking !this._isTizenPlaying.
+                // ================================================================
+                let avplayState = 'UNKNOWN';
+                try { avplayState = this._avplay.getState(); } catch (_) {}
+
+                // Allow attempt from READY state (pre-play Improvement A path)
+                // or from PLAYING state (normal oncurrentplaytime path).
+                // Bail out from PAUSED — the pause/resume cycle in setSubtitleStreamIndex
+                // already handles that scenario via _delayedSubtitleIndex.
+                const isReadyOrPlaying = avplayState === 'PLAYING' || avplayState === 'READY';
+
+                if (!isReadyOrPlaying) {
+                    log.debug(`Subtitle track selection deferred — AVPlay state is '${avplayState}', not READY/PLAYING`);
+                    // Leave _pendingSubtitleIndex set for the next oncurrentplaytime retry.
                 } else {
-                    const totalTracks = this._avplay.getTotalTrackInfo() || [];
-                    const textTracks = totalTracks.filter(t => t.type === 'TEXT');
-                    
-                    // We only want to declare a HARD MISS (out of bounds) if the player
-                    // has definitively parsed a significant number of tracks or if we've 
-                    // reached the 5 second timeout (handled outside this function).
-                    // Tizen parse limit is 30. If we have >0 tracks but haven't found ours yet, 
-                    // Tizen might still be parsing tracks 2, 3, 4, etc.
-                    // We will only fail early if we hit the hard 30 track limit and our 
-                    // requested track still isn't there. Otherwise, we let the oncurrentplaytime
-                    // timeout logic handle the 5-second drop.
-                    if (textTracks.length >= 30) {
-                        log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex} within Tizen 30-track limit, disabling native subtitles and requesting fallback`);
-                        try { this._avplay.setSilentSubtitle(true); } catch(e){}
+                    // Pre-first-frame: try the raw setSelectTrack. This works on
+                    // Tizen 5.5+ where tracks activate during READY/buffering. On Tizen 5.0
+                    // it silently no-ops, but _delayedSubtitleIndex stays set so the
+                    // post-stabilization path will catch it later.
+                    const tizenSubIndex = this._findTizenSubtitleIndex(this._pendingSubtitleIndex);
+                    if (tizenSubIndex !== null) {
+                        try {
+                            log.debug(`Attempting${avplayState === 'READY' ? ' (eager READY-state)' : ''} apply of TEXT track index ${tizenSubIndex}`);
+                            this._avplay.setSelectTrack('TEXT', tizenSubIndex);
+                            this._avplay.setSilentSubtitle(true);
+                            this._avplay.setSilentSubtitle(false);
+                            log.info(`TEXT track ${tizenSubIndex} applied in ${avplayState} state (pending kept for re-apply)`);
+                            this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
+                        } catch (e) {
+                            // If Tizen returns InvalidStateError, keep trying in the loop.
+                            if (e.name === 'InvalidStateError' || e.code === 11) {
+                                 log.debug(`Postponing subtitle track ${tizenSubIndex} (InvalidStateError)`);
+                            } else {
+                                log.warn(`Apply of subtitle track ${tizenSubIndex} failed (will retry after stabilization):`, e);
+                                // Do NOT clear _pendingSubtitleIndex. Let it stay pending so that
+                                // the post-stabilization retry logic can attempt setSubtitleStreamIndex
+                                // once the decoder is fully ready.
+                            }
+                        }
+                    } else {
+                        // _findTizenSubtitleIndex returned null — either the requested track
+                        // doesn't exist in Tizen's TEXT list yet, or we've hit the hard limit.
+                        // Check if we have definitively hit the 30-track ceiling.
+                        const totalTracks = this._avplay.getTotalTrackInfo() || [];
+                        const textTracks = totalTracks.filter(t => t.type === 'TEXT');
                         
-                        const failedIndex = this._pendingSubtitleIndex;
-                        this._pendingSubtitleIndex = null;
-                        this._delayedSubtitleIndex = null;
-                        
-                        // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
-                        // This handles initial tracks that exceed Tizen's 30-track limit
-                        this.onEvent({
-                            type: 'subtitlefallback',
-                            data: { index: failedIndex }
-                        });
+                        // We only want to declare a HARD MISS (out of bounds) if the player
+                        // has definitively parsed a significant number of tracks or if we've
+                        // reached the 5 second timeout (handled outside this function).
+                        // Tizen parse limit is 30. If we have >0 tracks but haven't found ours yet,
+                        // Tizen might still be parsing tracks 2, 3, 4, etc.
+                        // We will only fail early if we hit the hard 30 track limit and our
+                        // requested track still isn't there. Otherwise, we let the oncurrentplaytime
+                        // timeout logic handle the 5-second drop.
+                        if (textTracks.length >= 30) {
+                            log.warn(`Could not map pending subtitle index ${this._pendingSubtitleIndex} within Tizen 30-track limit, disabling native subtitles and requesting fallback`);
+                            try { this._avplay.setSilentSubtitle(true); } catch(e){}
+                            
+                            const failedIndex = this._pendingSubtitleIndex;
+                            this._pendingSubtitleIndex = null;
+                            this._delayedSubtitleIndex = null;
+                            
+                            // Emit event back to JellyfinPlayer to trigger forceExternalTextFallback
+                            // This handles initial tracks that exceed Tizen's 30-track limit
+                            this.onEvent({
+                                type: 'subtitlefallback',
+                                data: { index: failedIndex }
+                            });
+                        }
+                        // Else: AVPlay hasn't parsed text tracks up to our index yet. Remain pending.
                     }
-                    // Else: AVPlay hasn't parsed text tracks up to our index yet. Remain pending.
                 }
             }
         } else if (this._playbackStabilized && this._delayedSubtitleIndex !== null && this._delayedSubtitleIndex !== -1) {
@@ -761,6 +814,30 @@ export class TizenAVPlayer {
                 this._avplay.play();
                 this._isTizenPlaying = true;
                 log.info('Native play() executed (Double-Gate Strategy: Prepared & Buffered)');
+
+                // ================================================================
+                // IMPROVEMENT D: Proactively silence AVPlay's auto-track behavior.
+                //
+                // Many Tizen firmwares automatically enable the first internal TEXT
+                // track the moment play() succeeds, regardless of any pending track
+                // selection.  This causes the wrong subtitle to flash on screen for
+                // 1–2 seconds while _applyPendingTracks() races to correct it.
+                //
+                // The fix: immediately mute all subtitles right after play() starts,
+                // before any cue events fire.  _applyPendingTracks() will then:
+                //   • unmute nothing  → if the user wanted subtitles OFF (-1)
+                //   • select + unmute → if a specific track is pending
+                //
+                // This is safe even when _pendingSubtitleIndex is null (no subtitle
+                // was requested) because setSilentSubtitle(true) is idempotent.
+                // ================================================================
+                try {
+                    this._avplay.setSilentSubtitle(true);
+                    log.debug('Proactive subtitle silence applied immediately after play()');
+                } catch (silenceErr) {
+                    // Non-fatal — older firmware may throw in early PLAYING phase.
+                    log.warn('Proactive setSilentSubtitle(true) failed (non-fatal):', silenceErr.message || silenceErr);
+                }
             } catch (e) {
                 log.error('Double-Gate play() failed:', e.message || e);
             }
