@@ -9,8 +9,14 @@
 
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { detectTizenVersion } from '../../api/profiles/TizenProfile.js';
 
 const log = logger.create('TizenAVPlayer');
+
+// Cache the Tizen firmware version once at module load.
+// Used to gate hardware-specific workarounds (e.g. subtitle pause/resume cycle
+// is only needed on Tizen 2.4–3.x; Tizen 4.0+ handles it natively).
+const TIZEN_VERSION = detectTizenVersion();
 
 // ============================================================================
 // TizenAVPlayer Class
@@ -1193,20 +1199,37 @@ export class TizenAVPlayer {
             return Promise.resolve();
         }
 
-        // Workaround: Pause/Resume to force subtitle refresh on track change
-        // Tizen AVPlay doesn't always update the current cue immediately when switching tracks
+        // ================================================================
+        // Conditional pause/resume for old Tizen firmware.
+        //
+        // Samsung docs confirm setSelectTrack('TEXT') can be called directly
+        // in the PLAYING state on Tizen 4.0+ (2018+).  However, on Tizen 2.4
+        // and 3.0 (2015–2017 TVs), the decoder sometimes doesn't refresh the
+        // active cue without a brief pause/resume cycle.
+        //
+        // On Tizen 4.0+ we skip the pause entirely to avoid an audible audio
+        // hitch that the cycle causes.  The setSilentSubtitle toggle already
+        // handles cue refresh on modern firmware.
+        //
+        // Note: Our config.xml requires Tizen 4.0+, so the < 4.0 path only
+        // activates if someone sideloads onto an older TV.
+        // ================================================================
+        const needsPauseForSubSwitch = TIZEN_VERSION < 4;
         let wasPlaying = false;
-        try {
-            wasPlaying = this._isPlaying && this._avplay.getState() === 'PLAYING';
-            if (wasPlaying) {
-                 try {
-                    this._avplay.pause();
-                 } catch (e) {
-                    log.warn('Pause for subtitle switch failed:', e);
-                 }
+
+        if (needsPauseForSubSwitch) {
+            try {
+                wasPlaying = this._isPlaying && this._avplay.getState() === 'PLAYING';
+                if (wasPlaying) {
+                    try {
+                        this._avplay.pause();
+                    } catch (e) {
+                        log.warn('Pause for subtitle switch failed:', e);
+                    }
+                }
+            } catch (stateErr) {
+                log.warn('Could not verify playing state for subtitle switch:', stateErr);
             }
-        } catch (stateErr) {
-             log.warn('Could not verify playing state for subtitle switch:', stateErr);
         }
 
         try {
@@ -1264,14 +1287,14 @@ export class TizenAVPlayer {
             throw e; // Re-throw so JellyfinPlayer can catch limits and fallback!
         }
 
-        if (wasPlaying) {
-             try {
-                 this._avplay.play();
-             } catch (e) {
-                 log.warn('Resume after subtitle switch failed:', e);
-             }
+        // Resume playback if we paused for the old-Tizen workaround
+        if (needsPauseForSubSwitch && wasPlaying) {
+            try {
+                this._avplay.play();
+            } catch (e) {
+                log.warn('Resume after subtitle switch failed:', e);
+            }
         }
-
     }
 
     /**
