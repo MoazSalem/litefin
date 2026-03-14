@@ -49,7 +49,7 @@ For the easiest installation on Samsung Tizen TVs, it is recommended to use the 
 
 If Litefin is useful to you, please consider supporting the development:
 
-- [**Sponsor this project on GitHub**](https://github.com/sponsors/Moaz)
+- [**Sponsor this project on GitHub**](https://github.com/sponsors/MoazSalem)
 
 ## License
 
