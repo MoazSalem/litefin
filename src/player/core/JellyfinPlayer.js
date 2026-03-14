@@ -422,13 +422,44 @@ export class JellyfinPlayer extends EventEmitter {
             return;
         }
 
+
         if (event.type === 'subtitlefallback') {
             log.warn('Backend requested subtitle fallback for index:', event.data.index);
             if (event.data.index !== undefined && event.data.index !== null) {
-                // Fire and forget, don't block the event handler
-                this._subtitleManager.forceExternalTextFallback(event.data.index).catch(e => {
-                    log.error('Failed to apply subtitle fallback:', e);
-                });
+                // ================================================================
+                // Guard: Only escalate to external text fallback if SubtitleManager
+                // is NOT already managing this track via a specialised canvas renderer.
+                //
+                // When SubtitleManager chose PGS_BITMAP or ASS_CANVAS for the primary
+                // track, it has already set up a PGSRenderer/ASSRenderer that is
+                // actively fetching and rendering the subtitle.  Calling
+                // forceExternalTextFallback() here would:
+                //   1. Try to fetch the subtitle as .vtt (Jellyfin cannot convert PGS
+                //      bitmaps to text → returns empty cues or garbage).
+                //   2. Mark delivery as EXTERNAL_TEXT, which kills the canvas tick
+                //      path and leaves the subtitle invisible.
+                //
+                // The backend fires subtitlefallback only to signal that IT cannot
+                // render the track natively (e.g. PGS on AVPlay DirectPlay).  If
+                // SubtitleManager is already covering it, we honour that and do nothing.
+                // ================================================================
+                const delivery = this._subtitleManager.getPrimaryDelivery();
+                const primaryTrack = this._subtitleManager.getPrimaryTrack();
+                const alreadyManaged = primaryTrack?.Index === event.data.index && (
+                    delivery === 'pgs_bitmap' ||
+                    delivery === 'ass_canvas'
+                );
+
+                if (alreadyManaged) {
+                    log.info(`Subtitle fallback skipped for index ${event.data.index} — SubtitleManager already handling via ${delivery}`);
+                } else {
+                    // EMBEDDED_NATIVE delivery failed on the backend, or SubtitleManager
+                    // hadn't set up any renderer for this track yet. Try fetching it as
+                    // an external text subtitle (VTT) from the Jellyfin API.
+                    this._subtitleManager.forceExternalTextFallback(event.data.index).catch(e => {
+                        log.error('Failed to apply subtitle fallback:', e);
+                    });
+                }
             }
             return;
         }

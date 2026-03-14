@@ -30,7 +30,25 @@ export class BaseProfile {
             { Format: 'vtt', Method: 'Hls' }
         ];
 
-        const bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'Embed';
+        // ====================================================================
+        // Bitmap subtitle delivery method:
+        //
+        // 'External' → Jellyfin serves the raw .sup/.vobsub file via the
+        //   /Subtitles/{index}/Stream.sup endpoint. Our PGSRenderer fetches
+        //   this directly and renders it as a canvas overlay, completely
+        //   independent of the video pipeline. This is the correct mode when
+        //   the client can handle PGS itself.
+        //
+        // 'Embed' → Jellyfin tries to mux the bitmap subtitle track into the
+        //   output container. For HLS/TS transcodes this is IMPOSSIBLE, so
+        //   the server falls back to burning the subtitles into the video
+        //   frames (hard-encoding), which forces a full video transcode even
+        //   if the video would otherwise DirectPlay or DirectStream.
+        //
+        // 'Encode' → explicit burn-in: always encode into video frames.
+        //   Only used when the user has turned on Subtitle Burn-In.
+        // ====================================================================
+        const bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'External';
 
         const bitmapSubtitleProfiles = [
             { Format: 'pgs', Method: bitmapSubtitleMethod },

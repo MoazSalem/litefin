@@ -333,13 +333,19 @@ export class TizenAVPlayer {
                     this._pendingSubtitleIndex = -1;
                     this._delayedSubtitleIndex = -1;
                 } else if (playability === 'INTERNAL_BITMAP') {
-                    // Tizen cannot render bitmap subs natively. Fast-fail instantly without polling
-                    // to trigger the HTML SubtitleManager to extract and render them.
-                    this.onEvent({
-                        type: 'subtitlefallback',
-                        data: { index: options.subtitleStreamIndex }
-                    });
-                    this._pendingSubtitleIndex = -1;
+                    // Bitmap subtitle (PGS, VobSub): Tizen AVPlay CANNOT render these natively,
+                    // but SubtitleManager already knows this and has chosen PGS_BITMAP delivery
+                    // (via _determineDeliveryMethod). It will set up PGSRenderer and fetch the
+                    // .sup file independently from the Jellyfin API.
+                    //
+                    // We do NOT emit subtitlefallback here — that would race against the async
+                    // setSubtitleStreamIndex() call in JellyfinPlayer, calling forceExternalTextFallback()
+                    // on an empty SubtitleManager state and overwriting the PGSRenderer setup with
+                    // a broken EXTERNAL_TEXT/VTT fetch (Jellyfin cannot convert PGS bitmaps to text).
+                    //
+                    // All we need to do is silence AVPlay's own subtitle rendering so it doesn't
+                    // attempt to display the raw PGS data as garbage text.
+                    this._pendingSubtitleIndex = -1;   // → _applyPendingTracks will call setSilentSubtitle(true)
                     this._delayedSubtitleIndex = -1;
                 } else {
                     // It's a supported internal text subtitle. Poll natively.

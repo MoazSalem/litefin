@@ -662,19 +662,7 @@ export default class SubtitleManager {
         if (!this._itemId || !this._mediaSourceId) return;
 
         try {
-            // Lazy init renderer
-            if (!this._pgsRenderer) {
-                this._pgsRenderer = new PGSRenderer({
-                    track,
-                    container: this._container,
-                    videoElement: this._videoElement,
-                    // Initial offset
-                    timeOffset: this._primaryOffset
-                });
-            }
-
             // Build the subtitle URL (PGS/.sup)
-            // We use the 'stream' endpoint with .sup extension
             // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.sup
             const url = MediaHelper.getSubtitleUrl(
                 track,
@@ -686,20 +674,16 @@ export default class SubtitleManager {
             );
 
             log.info(`Loading PGS subtitle from: ${url}`);
-            
-            // The renderer handles fetching via libpgs
-            // But wait, libpgs takes a URL or buffer.
-            // Our PGSRenderer constructor took the URL but we didn't update it here if reusing renderer?
-            // Actually we destroy/recreate renderers on context switch, but not necessarily on track switch
-            // if we stayed in same context.
-            // But above lazy init logic only creates if generic _pgsRenderer is null.
-            // If we switch from one PGS track to another, we need to update it.
-            
-            // Simpler: Just destroy and recreate if it exists to be safe and clean
+
+            // Destroy any existing renderer before creating a new one.
+            // We always recreate here because the track (and therefore the URL
+            // and internal state) may have changed — reusing the old renderer
+            // would display stale data from the previous track.
             if (this._pgsRenderer) {
                 this._pgsRenderer.destroy();
+                this._pgsRenderer = null;
             }
-            
+
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
