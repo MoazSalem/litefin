@@ -2240,6 +2240,13 @@ class DetailsPage extends Page {
 
         const options = [];
 
+        // Episode/Song Shortcuts: Parent Navigation (Should be the first option)
+        if (this._item?.Type === 'Episode' && this._item.SeriesId) {
+            options.push({ id: 'go-to-series', label: i18n.t('GoToSeries') });
+        } else if (this._item?.Type === 'Audio' && this._item.AlbumId) {
+            options.push({ id: 'go-to-album', label: i18n.t('GoToAlbum') });
+        }
+
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
         }
@@ -2287,7 +2294,12 @@ class DetailsPage extends Page {
         `;
 
         const onSelect = (id) => {
-            if (id === 'refresh') {
+            if (id === 'go-to-series' || id === 'go-to-album') {
+                _close(false);
+                const parentId = id === 'go-to-series' ? this._item.SeriesId : this._item.AlbumId;
+                log.info(`Navigating to parent details (${id === 'go-to-series' ? 'Series' : 'Album'}) ID:`, parentId);
+                router.navigate(`/details/${parentId}`);
+            } else if (id === 'refresh') {
                 // Close current modal without restoring focus (since we are opening another)
                 _close(false);
 

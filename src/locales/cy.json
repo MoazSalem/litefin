@@ -143,6 +143,7 @@
     "ButtonApply": "Apply",
     "ButtonClear": "Clear",
     "EndsAtValue": "Ends at {0}",
+    "GoToSeries": "Go to Series",
     "HeaderConnectToServer": "Connect to Server",
     "HeaderGuestCast": "Guest Stars",
     "HeaderLatestMedia": "Recently Added Media",
