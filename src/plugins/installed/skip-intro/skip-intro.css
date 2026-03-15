@@ -94,12 +94,12 @@
     padding: 0.6em 1.4em;
     border-radius: var(--jf-border-radius-lg);
 
-    /* Solid background (blur removed for Tizen performance) */
-    background: rgba(12, 12, 18, 0.92);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    /* Inverted Mode (White BG, Blue Text) */
+    background: var(--jf-primary-btn-color, #ffffff);
+    color: var(--jf-accent);
+    border: 2px solid var(--jf-primary-btn-color) !important;
 
     /* Typography */
-    color: #ffffff;
     font-size: 1.3em;
     font-weight: 600;
     letter-spacing: 0.02em;

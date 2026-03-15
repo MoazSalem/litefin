@@ -110,25 +110,27 @@ class Toast {
                 display: flex !important;
                 -webkit-align-items: center !important;
                 align-items: center !important;
-                gap: 12px;
+                gap: 16px !important;
                 padding: 16px 24px !important;
-                background: #1a1a1a !important;
-                border-radius: 12px !important;
-                border: 2px solid rgba(255, 255, 255, 0.3) !important;
-                box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
-                color: #ffffff !important;
-                font-size: 16px !important;
+                background: var(--jf-overlay-bg, rgba(20, 20, 20, 0.8)) !important;
+                backdrop-filter: blur(20px) !important;
+                -webkit-backdrop-filter: blur(20px) !important;
+                border-radius: var(--jf-border-radius-lg, 16px) !important;
+                border: 1px solid rgba(255, 255, 255, 0.15) !important;
+                box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
+                color: var(--jf-text-primary, #ffffff) !important;
+                font-size: 1.1rem !important;
                 font-weight: 500 !important;
                 line-height: 1.4 !important;
-                max-width: 400px !important;
-                min-width: 200px !important;
+                max-width: 500px !important;
+                min-width: 260px !important;
                 pointer-events: auto !important;
                 opacity: 1 !important;
                 visibility: visible !important;
                 -webkit-transform: translateX(0) !important;
                 transform: translateX(0) !important;
-                -webkit-animation: toast-slide-in 0.3s ease-out !important;
-                animation: toast-slide-in 0.3s ease-out !important;
+                -webkit-animation: toast-slide-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+                animation: toast-slide-in 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
             }
 
             /* Slide in from left */
@@ -238,18 +240,20 @@ class Toast {
         toastEl.style.cssText = `
             display: flex !important;
             align-items: center !important;
-            gap: 12px;
+            gap: 16px !important;
             padding: 16px 24px !important;
-            background: #1a1a1a !important;
-            border-radius: 12px !important;
-            border: 2px solid rgba(255, 255, 255, 0.3) !important;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important;
-            color: #ffffff !important;
-            font-size: 16px !important;
+            background: var(--jf-overlay-bg, rgba(20, 20, 20, 0.8)) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
+            border-radius: var(--jf-border-radius-lg, 16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.15) !important;
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.6) !important;
+            color: var(--jf-text-primary, #ffffff) !important;
+            font-size: 1.1rem !important;
             font-weight: 500 !important;
             line-height: 1.4 !important;
-            max-width: 400px !important;
-            min-width: 200px !important;
+            max-width: 500px !important;
+            min-width: 260px !important;
             pointer-events: auto !important;
             opacity: 1 !important;
             visibility: visible !important;
