@@ -108,6 +108,14 @@ export class SyncPlayManager {
          */
         this._lastBufferingReportMs = 0;
 
+        /**
+         * Timer ID for a scheduled Pause or Play command (from the server's `When` field).
+         * When a new command arrives, the old one is cancelled via _clearScheduledCommand()
+         * before the new one is scheduled, matching jellyfin-web's clearScheduledCommand().
+         * @type {ReturnType<typeof setTimeout>|null}
+         */
+        this._scheduledCommandTimer = null;
+
         // ====================================================================
         // Event handler references (saved so we can .off() them on destroy)
         // ====================================================================
@@ -538,6 +546,18 @@ export class SyncPlayManager {
         }
     }
 
+    /**
+     * Cancels any pending scheduled playback command (Pause or Play).
+     * Matches jellyfin-web PlaybackCore.clearScheduledCommand().
+     * @private
+     */
+    _clearScheduledCommand() {
+        if (this._scheduledCommandTimer !== null) {
+            clearTimeout(this._scheduledCommandTimer);
+            this._scheduledCommandTimer = null;
+        }
+    }
+
     // ========================================================================
     // Private — Playback Command Implementations
     // ========================================================================
@@ -560,7 +580,12 @@ export class SyncPlayManager {
 
     /**
      * Handle Play / Unpause commands from the server.
-     * Convert the server-time anchor to a local seek position and unpause.
+     *
+     * Matches jellyfin-web's scheduleUnpause():
+     *   - If the play time (When) is in the FUTURE: seek to positionTicks,
+     *     schedule the actual unpause() for exactly then.
+     *   - If the play time is NOW or IN THE PAST: immediately unpause and
+     *     seek to the estimated current position (compensating for how late we are).
      * @private
      */
     _handlePlayCommand(data) {
@@ -569,7 +594,9 @@ export class SyncPlayManager {
             return;
         }
 
-        // Extract timing anchor from the command
+        // Cancel any pending scheduled command (another Pause/Play arrived)
+        this._clearScheduledCommand();
+
         const positionTicks = data.PositionTicks ?? 0;
         const whenMs        = this._parseServerTime(data.When);
 
@@ -578,50 +605,84 @@ export class SyncPlayManager {
             return;
         }
 
-        // Convert the server-time anchor to local time
-        // This tells us: at local clock = anchorLocalMs, media should be at positionTicks
-        const anchorLocalMs = syncPlayTimeSync.toLocal(whenMs);
+        // Convert server play-time to local clock
+        const playAtLocalMs = syncPlayTimeSync.toLocal(whenMs);
+        const nowMs         = Date.now();
 
-        // How much time has elapsed since the anchor?
-        const elapsedMs = Date.now() - anchorLocalMs;
+        // Update playback anchor for drift correction (regardless of schedule)
+        this._playbackCore?.setAnchor({ positionTicks, whenMs, isPlaying: true });
 
-        // Expected current position (ticks) = anchor + elapsed
-        const expectedTicks = positionTicks + (elapsedMs * TICKS_PER_MS);
+        if (playAtLocalMs > nowMs) {
+            // ── Future play: pre-seek to the start position a touch early,
+            //    then fire the actual unpause() at exactly the right moment.
+            const delayMs = playAtLocalMs - nowMs;
 
-        log.info(
-            `SyncPlay Play: pos=${Math.round(positionTicks / TICKS_PER_MS)}ms → ` +
-            `expected=${Math.round(expectedTicks / TICKS_PER_MS)}ms ` +
-            `(elapsed: ${Math.round(elapsedMs)}ms)`
-        );
+            log.info(`SyncPlay Play: scheduled in ${Math.round(delayMs)}ms at tick=${Math.round(positionTicks / TICKS_PER_MS)}ms`);
 
-        // Update playback anchor for continuous drift correction
-        this._playbackCore?.setAnchor({
-            positionTicks,
-            whenMs,
-            isPlaying: true
-        });
+            this._programmaticSeek(positionTicks);
 
-        // Seek to expected position and start playing
-        this._programmaticSeek(Math.max(0, expectedTicks));
-        this._player.unpause();
+            this._scheduledCommandTimer = setTimeout(() => {
+                this._scheduledCommandTimer = null;
 
-        // Start drift correction
-        this._playbackCore?.startTracking();
+                log.debug('SyncPlay Play: executing scheduled unpause');
+
+                // Mask so our _onPlaying listener doesn't re-intercept this
+                this._ignoreLocalEventsAction = true;
+                try {
+                    this._player.unpause();
+                } finally {
+                    setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+                }
+
+                this._playbackCore?.startTracking();
+            }, delayMs);
+
+        } else {
+            // ── Immediate (or late) play: figure out where we should be *now*
+            //    by extrapolating from the server's anchor.
+            const lateMs       = nowMs - playAtLocalMs;
+            const currentTicks = positionTicks + (lateMs * TICKS_PER_MS);
+
+            log.info(
+                `SyncPlay Play: executing now (${Math.round(lateMs)}ms late), ` +
+                `seeking to ${Math.round(currentTicks / TICKS_PER_MS)}ms`
+            );
+
+            this._programmaticSeek(Math.max(0, currentTicks));
+
+            // Mask so our _onPlaying listener doesn't re-intercept this
+            this._ignoreLocalEventsAction = true;
+            try {
+                this._player.unpause();
+            } finally {
+                setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+            }
+
+            this._playbackCore?.startTracking();
+        }
     }
 
     /**
      * Handle Pause commands from the server.
+     *
+     * Matches jellyfin-web's schedulePause():
+     *   - Schedule the actual pause() at exactly `When`.
+     *   - After the player fires its own 'pause' event, snap to positionTicks.
+     *     This prevents a visible jump before the pause is committed.
      * @private
      */
     _handlePauseCommand(data) {
         if (!this._player) return;
+
+        // Cancel any pending scheduled command
+        this._clearScheduledCommand();
 
         const positionTicks = data.PositionTicks ?? 0;
         const whenMs        = this._parseServerTime(data.When);
 
         log.info(`SyncPlay Pause at ${Math.round(positionTicks / TICKS_PER_MS)}ms`);
 
-        // Stop drift correction first
+        // Stop drift correction — anchor is now stale
         this._playbackCore?.stopTracking();
 
         // Update anchor (frozen — isPlaying:false stops drift accumulation)
@@ -629,10 +690,44 @@ export class SyncPlayManager {
             this._playbackCore?.setAnchor({ positionTicks, whenMs, isPlaying: false });
         }
 
-        // Pause the player and snap to the correct position
-        this._player.pause();
-        if (positionTicks > 0) {
-            this._programmaticSeek(positionTicks);
+        /**
+         * The actual pause action: pause the player, then wait for the player's
+         * own 'pause' event to fire. Only AFTER it fires do we seek to the
+         * server's requested position. This prevents a frame-jump where the
+         * video snaps to the new position before the player has stopped rendering.
+         */
+        const doPause = () => {
+            // Listen for the pause event once, then seek to correct tick
+            const onPause = () => {
+                this._player.off('pause', onPause);
+
+                // Snap to the server's canonical position on pause
+                if (positionTicks > 0) {
+                    this._programmaticSeek(positionTicks);
+                }
+            };
+
+            this._player.on('pause', onPause);
+
+            // Suppress the _onPause local-action echo since this is server-side
+            this._ignoreLocalEventsAction = true;
+            this._player.pause();
+            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+        };
+
+        const pauseAtLocalMs = whenMs !== null ? syncPlayTimeSync.toLocal(whenMs) : Date.now();
+        const nowMs = Date.now();
+
+        if (pauseAtLocalMs > nowMs) {
+            const delayMs = pauseAtLocalMs - nowMs;
+            log.debug(`SyncPlay Pause: scheduled in ${Math.round(delayMs)}ms`);
+
+            this._scheduledCommandTimer = setTimeout(() => {
+                this._scheduledCommandTimer = null;
+                doPause();
+            }, delayMs);
+        } else {
+            doPause();
         }
     }
 
@@ -691,24 +786,24 @@ export class SyncPlayManager {
         this._programmaticSeek(positionTicks);
 
         // ── Steps 4–6: wait until the player has finished buffering the new ───
-        // position, then pause (we were unpaused by the seek internally on some
-        // backends) and report Ready. The server will send a Play command once
-        // all group members have reported Ready.
+        // position, then pause and report Ready. The server will send a Play
+        // command once all group members have reported Ready.
         //
-        // We listen for the 'playing' event which fires once AVPlay (or HTML5)
-        // has buffered and started rendering the new position. We then
-        // immediately pause again to hold until the group Play command arrives.
-        const timeout = 10000; // 10s max — don't hang forever if the event never fires
+        // We listen for the 'timeupdate' event which fires once the player
+        // has successfully seeked and the new time is registered. Waiting for
+        // 'playing' is dangerous because if the player was already paused,
+        // it will just fire 'seeked' and 'timeupdate', but never 'playing'!
+        const timeout = 6000; // 6s max — don't hang forever if the event never fires
         let settled = false;
 
-        const onPlaying = () => {
+        const onTimeUpdate = () => {
             if (settled) return;
             settled = true;
 
             // Remove the listener immediately to avoid it firing again
-            this._player.off('playing', onPlaying);
+            this._player.off('timeupdate', onTimeUpdate);
 
-            log.debug('SyncPlay Seek: player ready after seek — pausing and reporting ready to server');
+            log.debug('SyncPlay Seek: player registered new time after seek — pausing and reporting ready to server');
 
             // Pause straight away — we must NOT start playing yet
             this._player.pause();
@@ -718,9 +813,9 @@ export class SyncPlayManager {
         };
 
         // Attach as a regular listener (JellyfinPlayer has no .once() API)
-        this._player.on('playing', onPlaying);
+        this._player.on('timeupdate', onTimeUpdate);
 
-        // Safety timeout: if the 'playing' event never arrives (e.g. the seek
+        // Safety timeout: if the event never arrives (e.g. the seek
         // failed silently), still report ready after a fallback delay so we
         // don't block the entire group indefinitely.
         setTimeout(() => {
@@ -728,9 +823,9 @@ export class SyncPlayManager {
             settled = true;
 
             // Clean up the dangling listener
-            this._player.off('playing', onPlaying);
+            this._player.off('timeupdate', onTimeUpdate);
 
-            log.warn('SyncPlay Seek: timed out waiting for playing event after seek — force-reporting ready');
+            log.warn('SyncPlay Seek: timed out waiting for timeupdate event after seek — force-reporting ready');
             this._player.pause();
             this._reportBuffering(/* isPlaying= */ true);
         }, timeout);
@@ -878,14 +973,17 @@ export class SyncPlayManager {
         };
         this._player.on('waiting', this._onWaiting);
 
-        // Player resumed after buffer → signal ready
+        // Player resumed/started playing
         this._onPlaying = () => {
+            // When buffering resolves and player resumes, clear buffering state
             if (this._isBuffering) {
                 this._isBuffering = false;
                 this._reportBuffering(true); // isPlaying = true again
             }
 
-            // Propagate local play events (iff not triggered by a SyncPlayCommand)
+            // Propagate local play events (iff not triggered by a SyncPlayCommand),
+            // but DON'T intercept the play — just tell the server.
+            // The server will respond with a Play command to re-sync the group.
             if (!this._ignoreLocalEventsAction) {
                 this._reportLocalAction('Unpause');
             }
@@ -907,7 +1005,18 @@ export class SyncPlayManager {
             if (!this._ignoreLocalEventsAction) {
                 const ticks = this._player.getCurrentPositionTicks?.() ?? 0;
                 log.info(`SyncPlay: local seek detected at ${Math.round(ticks / TICKS_PER_MS)}ms, broadcasting to group...`);
+
+                // We must mask local events immediately following a user seek.
+                // The player will fire 'waiting' as it loads new segments, and if
+                // we report isPlaying:false to the server now, it will think the
+                // user manually paused, leaving the group parked after the seek!
+                this._ignoreLocalEventsAction = true;
+                
                 api.syncPlaySeek(ticks).catch(err => log.error('Failed to broadcast seek:', err));
+
+                setTimeout(() => {
+                    this._ignoreLocalEventsAction = false;
+                }, 1000); // Give the player a second to settle
             }
         };
         this._player.on('seek', this._onSeek);

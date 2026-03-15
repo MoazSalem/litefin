@@ -1099,19 +1099,19 @@ export class ApiClient {
 
     async syncPlayUnpause(options = {}) {
         // In fully conforming 10.7+ servers, Unpause is preferred for resuming from Pause
-        return this.post('/SyncPlay/Unpause', { body: JSON.stringify(options) });
+        return this.post('/SyncPlay/Unpause', options);
     }
 
     async syncPlayPause(options = {}) {
-        return this.post('/SyncPlay/Pause', { body: JSON.stringify(options) });
+        return this.post('/SyncPlay/Pause', options);
     }
 
     async syncPlaySeek(positionTicks) {
-        return this.post('/SyncPlay/Seek', { body: JSON.stringify({ PositionTicks: positionTicks }) });
+        return this.post('/SyncPlay/Seek', { PositionTicks: positionTicks });
     }
 
     async syncPlayStop(options = {}) {
-        return this.post('/SyncPlay/Stop', { body: JSON.stringify(options) });
+        return this.post('/SyncPlay/Stop', options);
     }
 
     async syncPlayNext() {
