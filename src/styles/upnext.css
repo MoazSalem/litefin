@@ -21,7 +21,7 @@
     left: auto;
 
     /* Tizen TV safe-area clearance */
-    max-width: min(480px, 42vw);
+    max-width: min(30em, 42vw);
 
     /* Solid-ish background (blur removed for Tizen performance) */
     background: rgba(12, 12, 18, 0.92);
@@ -38,8 +38,8 @@
     overflow: hidden;
 
     /* GPU acceleration — critical for smooth Tizen animations */
-    transform: translateZ(0) translateY(12px);
-    -webkit-transform: translateZ(0) translateY(12px);
+    transform: translateZ(0) translateY(0.75em);
+    -webkit-transform: translateZ(0) translateY(0.75em);
     will-change: transform, opacity;
 
     /* Hidden by default — transition driven by .visible class */
@@ -103,8 +103,8 @@
 .upnext-thumbnail-wrap {
     position: relative;
     flex-shrink: 0;
-    width: 120px;
-    height: 68px; /* 16:9 */
+    width: 7.5em;
+    height: 4.25em; /* 16:9 */
     border-radius: var(--jf-border-radius);
     overflow: hidden;
     background: rgba(255, 255, 255, 0.06);
@@ -125,13 +125,13 @@
 /* Episode badge (e.g. "S2E5") overlaid on thumbnail */
 .upnext-badge {
     position: absolute;
-    bottom: 4px;
-    right: 4px;
+    bottom: 0.25em;
+    right: 0.25em;
     background: rgba(0, 0, 0, 0.7);
     color: #fff;
     font-size: 0.7em;
     font-weight: bold;
-    padding: 2px 5px;
+    padding: 0.125em 0.3125em;
     border-radius: var(--jf-border-radius);
     line-height: 1.4;
     letter-spacing: 0.02em;
@@ -220,9 +220,9 @@
     font-size: 0.7em;
     font-weight: 700;
     color: #f5c518;
-    border: 1px solid rgba(255, 255, 255, 0.35);
+    border: 0.0625em solid rgba(255, 255, 255, 0.35);
     border-radius: var(--jf-border-radius);
-    padding: 1px 6px;
+    padding: 0.0625em 0.375em;
     letter-spacing: 0.04em;
     white-space: nowrap;
     flex-shrink: 0;
@@ -287,7 +287,7 @@
 .upnext-btn-play {
     background: var(--jf-primary-btn-color);
     color: var(--jf-accent);
-    border: 2px solid var(--jf-primary-btn-color) !important;
+    border: 0.125em solid var(--jf-primary-btn-color) !important;
 }
 
 .upnext-btn-play:hover {
@@ -298,7 +298,7 @@
 .upnext-btn-hide {
     background: rgba(255, 255, 255, 0.10);
     color: rgba(255, 255, 255, 0.80);
-    border: 2px solid var(--jf-action-btn-border)!important;
+    border: 0.125em solid var(--jf-action-btn-border)!important;
 }
 
 .upnext-btn-hide:hover {
@@ -316,7 +316,7 @@
 .upnext-btn.focused,
 .upnext-btn:focus {
     outline: none;
-    border: 2px solid var(--jf-action-btn-active-border) !important;
+    border: 0.125em solid var(--jf-action-btn-active-border) !important;
     transform: scale(1.05);
 }
 
@@ -331,7 +331,7 @@
 .upnext-btn-hide:focus {
     background: rgba(255, 255, 255, 0.22) !important;
     color: #fff !important;
-    border: 2px solid var(--jf-action-btn-active-border) !important;
+    border: 0.125em solid var(--jf-action-btn-active-border) !important;
 }
 
 /* ============================================================================
@@ -342,7 +342,7 @@
  * On very small screens (unlikely on Tizen TV but good practice),
  * reduce the thumbnail size so the card doesn't overflow.
  */
-@media (max-width: 600px) {
+@media (max-width: 37.5em) {
     .upnext-dialog {
         max-width: 90vw;
         right: 1.2em;
@@ -353,7 +353,18 @@
     }
 
     .upnext-thumbnail-wrap {
-        width: 88px;
-        height: 50px;
+        width: 5.5em;
+        height: 3.125em;
+    }
+}
+
+/* 4K Scaling Strategy:
+   On Tizen 4K displays (typically 1920 logical px but rendering at 4K), 
+   the base font size of 16px can feel too small for OSD cards.
+   We bump the dialog's local font-size to 24px (1.5x) to ensure legibility.
+*/
+@media (min-width: 2500px) {
+    .upnext-dialog {
+        font-size: 24px;
     }
 }
