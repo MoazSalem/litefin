@@ -1,0 +1,28 @@
+changelog:
+    exclude:
+        labels:
+            - ignore
+        authors:
+            - octocat
+    categories:
+        - title: Features
+          labels:
+              - enhancement
+              - feature
+        - title: Bug Fixes
+          labels:
+              - bug
+              - fix
+        - title: Refactoring & Maintenance
+          labels:
+              - refactor
+              - chore
+        - title: Documentation
+          labels:
+              - documentation
+        - title: Testing
+          labels:
+              - testing
+
+# Note: This file helps GitHub "Generate release notes" button to categorize your PRs.
+# To include the "Which Version to Use" guide, you can copy-paste from .github/RELEASE_NOTES_FOOTER.md
