@@ -423,7 +423,7 @@ export class SyncPlayGroupMenu extends BaseMenu {
 
         const isActive = manager.isEnabled;
         const info = manager.groupInfo;
-        const groupName = info?.Data?.GroupName || info?.GroupName || info?.GroupId || 'Not in a group';
+        const groupName = manager.groupName || info?.Data?.GroupName || info?.GroupName || info?.GroupId || 'Not in a group';
 
         return `
             <div class="syncplay-status-badge ${isActive ? '' : 'inactive'}">
@@ -506,6 +506,18 @@ export class SyncPlayGroupMenu extends BaseMenu {
      * @param {Array} groups
      */
     _renderGroupList(container, groups) {
+        const manager = getSyncPlayManager();
+
+        // -----------------------------------------------------------------
+        // If the user is already in a group, hide the group list entirely.
+        // There is no point showing other groups when you are already in one,
+        // and you must leave your current group to join another.
+        // -----------------------------------------------------------------
+        if (manager?.isEnabled) {
+            container.innerHTML = `<div class="syncplay-empty">You are currently in a SyncPlay group.<br>Leave your group to join another.</div>`;
+            return;
+        }
+
         if (groups.length === 0) {
             container.innerHTML = `<div class="syncplay-empty">No groups found — create one to get started.</div>`;
             return;

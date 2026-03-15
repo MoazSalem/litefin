@@ -67,6 +67,15 @@ export class SyncPlayManager {
         this._groupInfo = null;
 
         /**
+         * Human-readable group name — e.g. "Alice's Group".
+         * The Jellyfin WebSocket GroupJoined event only carries GroupId, so we
+         * store the name ourselves at the point of create/join and clear it
+         * when we leave, so the badge always has something legible to show.
+         * @type {string|null}
+         */
+        this._groupName = null;
+
+        /**
          * The current JellyfinPlayer instance.
          * Updated every time notifyPlayerStart() is called by the plugin.
          * @type {object|null}
@@ -204,12 +213,41 @@ export class SyncPlayManager {
 
     /**
      * Create a new SyncPlay group.
+     *
+     * We match jellyfin-web's behavior by fetching the current user's display
+     * name and sending it as part of the group creation body so the server
+     * names the group "Username's Group" instead of falling back to the UUID.
+     *
      * @returns {Promise<void>}
      */
     async createGroup() {
         try {
             log.info('Creating SyncPlay group...');
-            await api.syncPlayNew();
+
+            // -----------------------------------------------------------------
+            // Build a human-readable group name: "Username's Group"
+            // Gracefully fall back to a generic label if the user fetch fails.
+            // -----------------------------------------------------------------
+            let groupName = 'My Group';
+            try {
+                const user = await api.getCurrentUser();
+                if (user?.Name) {
+                    // Apostrophe possessive — matches the jellyfin-web locale key
+                    // "SyncPlayGroupDefaultTitle" which resolves to "{0}'s Group"
+                    groupName = `${user.Name}'s Group`;
+                }
+            } catch (userErr) {
+                log.warn('Could not fetch user name for group creation, using default:', userErr);
+            }
+
+            log.info(`Creating SyncPlay group with name: "${groupName}"`);
+
+            // Store the name locally so the status badge can display it —
+            // the GroupJoined WebSocket event only carries GroupId, not GroupName.
+            this._groupName = groupName;
+
+            await api.syncPlayNew({ GroupName: groupName });
+
             // Server will send a SyncPlayGroupUpdate once the group is created
         } catch (err) {
             log.error('Failed to create SyncPlay group:', err);
@@ -219,12 +257,34 @@ export class SyncPlayManager {
 
     /**
      * Join an existing SyncPlay group.
+     *
+     * Before actually sending the join request we fetch the group list so we
+     * can record the human-readable GroupName locally. The WebSocket response
+     * that follows (GroupJoined) only contains the GroupId, so without this
+     * step the badge would show the UUID.
+     *
      * @param {string} groupId - The group ID (from syncPlayList())
      * @returns {Promise<void>}
      */
     async joinGroup(groupId) {
         try {
             log.info('Joining SyncPlay group:', groupId);
+
+            // ----------------------------------------------------------------
+            // Opportunistically look up the group name from the server list
+            // before joining — the GroupJoined WebSocket event won't include it.
+            // ----------------------------------------------------------------
+            try {
+                const groups = await api.syncPlayList();
+                const target = groups?.find(g => g.GroupId === groupId);
+                if (target?.GroupName) {
+                    this._groupName = target.GroupName;
+                    log.debug(`SyncPlay: resolved group name "${this._groupName}" for ${groupId}`);
+                }
+            } catch (listErr) {
+                log.warn('Could not fetch group list for name resolution:', listErr);
+            }
+
             await api.syncPlayJoin({ GroupId: groupId });
             // Server will respond with a SyncPlayGroupUpdate
         } catch (err) {
@@ -262,6 +322,15 @@ export class SyncPlayManager {
      */
     get groupInfo() {
         return this._groupInfo;
+    }
+
+    /**
+     * Human-readable name of the current group (e.g. "Alice's Group").
+     * Set at create/join time since the WebSocket event only carries GroupId.
+     * @returns {string|null}
+     */
+    get groupName() {
+        return this._groupName;
     }
 
     // ========================================================================
@@ -758,10 +827,11 @@ export class SyncPlayManager {
 
         log.info('SyncPlay disabled');
 
-        this._isEnabled           = false;
-        this._groupInfo           = null;
+        this._isEnabled             = false;
+        this._groupInfo             = null;
+        this._groupName             = null;  // Clear the stored human-readable name
         this._currentPlaylistItemId = null;
-        this._isBuffering         = false;
+        this._isBuffering           = false;
 
         this._playbackCore?.stopTracking();
         this._unwirePlayerEvents();
