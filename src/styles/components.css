@@ -634,6 +634,33 @@ progress.card-progress::-webkit-progress-value {
     line-height: 1;
 }
 
+/* Language Completeness Badge */
+.lang-badge {
+    margin-left: auto;
+    margin-right: 15px; /* Spacing before check-icon */
+    font-variant-numeric: tabular-nums;
+    width: 50px;
+}
+
+.lang-badge.badge-warning {
+    background: rgba(255, 159, 10, 0.15);
+    color: #ff9f0a;
+    border-color: rgba(255, 159, 10, 0.3);
+}
+
+.lang-badge.badge-danger {
+    background: rgba(255, 59, 48, 0.15);
+    color: #ff3b30;
+    border-color: rgba(255, 59, 48, 0.3);
+}
+
+.lang-badge.badge-success {
+    background: rgba(52, 199, 89, 0.15);
+    color: #34c759;
+    border-color: rgba(52, 199, 89, 0.3);
+}
+
+
 /* Response to focused parents with accent backgrounds */
 .modal-option-btn.focused .track-badge,
 .modal-option-btn:focus .track-badge,
