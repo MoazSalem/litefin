@@ -24,8 +24,10 @@ import { api } from '../../api/index.js';
 import { eventBus } from '../EventBus.js';
 import { logger } from '../../utils/Logger.js';
 import { focusManager } from '../../ui/FocusManager.js';
-import BaseMenu from '../../player/osd/BaseMenu.js';
 import { ICONS } from '../../player/osd/icons.js';
+
+// Note: no longer imports BaseMenu — SyncPlayGroupMenu is now a fully
+// standalone overlay that can be opened from any context (sidebar, OSD, etc.)
 
 function getSyncPlayManager() {
     return window.__syncPlayManager;
@@ -130,45 +132,46 @@ const CSS = `
 }
 .syncplay-group-list {
     list-style: none;
-    margin: 0 0 28px;
-    padding: 0;
+    margin: 0 -10px 28px; /* Negative margin to let scrollbar stay at edge */
+    padding: 10px; /* Padding for items to scale into without clipping */
     max-height: 320px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
-    gap: 10px;
+    gap: 12px;
 }
 .syncplay-group-item {
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 16px 20px;
-    background: var(--jf-action-btn-bg, rgba(255,255,255,0.04));
-    border: 1px solid var(--jf-action-btn-border, rgba(255,255,255,0.08));
-    border-radius: var(--jf-border-radius, 16px);
+    padding: 18px 24px;
+    background: var(--jf-action-btn-bg, rgba(255,255,255,0.06));
+    border: 1px solid var(--jf-action-btn-border, rgba(255,255,255,0.12));
+    border-radius: var(--jf-border-radius-lg, 24px);
     cursor: pointer;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     outline: none;
+    box-sizing: border-box;
 }
 .syncplay-group-item:focus,
 .syncplay-group-item.focused {
-    background: var(--jf-action-btn-active-bg, #fff);
-    border-color: var(--jf-action-btn-active-border, #fff);
-    transform: scale(1.02);
-    box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+    background: var(--jf-accent, #007AFF);
+    border-color: var(--jf-button-border-focus, #fff);
+    transform: scale(1.03);
+    box-shadow: 0 12px 32px rgba(0,0,0,0.5);
 }
 .syncplay-group-item:focus .syncplay-group-name,
 .syncplay-group-item.focused .syncplay-group-name {
-    color: var(--jf-action-btn-active-color, #000);
+    color: var(--jf-primary-btn-color, #fff);
 }
 .syncplay-group-item:focus .syncplay-group-members,
 .syncplay-group-item.focused .syncplay-group-members {
-    color: var(--jf-text-secondary, rgba(0,0,0,0.5));
-    opacity: 0.7;
+    color: var(--jf-primary-btn-color, #fff);
+    opacity: 0.8;
 }
 .syncplay-group-item:focus .syncplay-group-join-btn,
 .syncplay-group-item.focused .syncplay-group-join-btn {
-    color: var(--jf-accent, #007AFF);
+    color: var(--jf-primary-btn-color, #fff);
 }
 .syncplay-group-name {
     font-size: 16px;
@@ -261,19 +264,37 @@ function _injectCSS() {
 // SyncPlayGroupMenu Class
 // ============================================================================
 
-export class SyncPlayGroupMenu extends BaseMenu {
-    constructor(osdController) {
-        super(osdController);
-        
+export class SyncPlayGroupMenu {
+    /**
+     * @param {object} [osdController] - Optional OSD controller reference.
+     *   When provided (opening from within the player), the menu registers
+     *   itself as the OSD's active menu so key events route correctly.
+     *   When omitted (opening from Sidebar), the menu handles keys directly
+     *   via its global keydown listener.
+     */
+    constructor(osdController = null) {
+        /** Optional reference to the OSD controller (player context). */
+        this.osd = osdController;
+
         /** @type {HTMLElement|null} */
         this._overlay = null;
 
         /** Whether the menu is currently open. @type {boolean} */
         this.isVisible = false;
 
+        /** Bound keydown handler so we can remove it on close. */
+        this._onKeyDown = null;
+
         /** Handler reference for keyboard/remote navigation. */
         this._onSyncPlayEnabled  = null;
         this._onSyncPlayDisabled = null;
+
+        /**
+         * Marks this as a modal overlay so OSDController's _handleBack() treats
+         * it as a full-screen takeover and doesn't pass through to the player.
+         * Previously inherited from BaseMenu; now set explicitly.
+         */
+        this.isModal = true;
     }
 
     // ========================================================================
@@ -299,16 +320,34 @@ export class SyncPlayGroupMenu extends BaseMenu {
             });
         });
 
-        // Set up Focus Trap for TV remote
+        // Set up Focus Trap for TV remote navigation inside the panel
         focusManager.pushTrap(this._overlay.querySelector('.syncplay-panel'));
 
-        // Register as the active menu in OSD to intercept keys
+        // Register as the active menu in OSD (player context) or install
+        // a global keydown listener (sidebar / non-player context)
         if (this.osd) {
             this.osd.activeMenu = this;
-            this.osd._cacheFocusableElements(); // Force OSD to recognize new trap elements if needed
+            this.osd._cacheFocusableElements();
+        } else {
+            // No OSD — handle keyboard navigation ourselves so TV remote
+            // arrow keys and Back still work from the sidebar
+            this._onKeyDown = (e) => {
+                const key = e.key.toLowerCase();
+                if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright'].includes(key)) {
+                    e.preventDefault();
+                    focusManager._handleKey(key.replace('arrow', ''));
+                } else if (key === 'enter' || key === ' ') {
+                    const active = document.activeElement;
+                    if (active && this._overlay?.contains(active)) active.click();
+                } else if (key === 'escape' || key === 'backspace' || key === 'goback') {
+                    e.preventDefault();
+                    this.close();
+                }
+            };
+            document.addEventListener('keydown', this._onKeyDown);
         }
 
-        // Live-update status
+        // Live-update status badge when group membership changes
         this._onSyncPlayEnabled  = () => this._refreshStatus();
         this._onSyncPlayDisabled = () => this._refreshStatus();
         eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
@@ -331,21 +370,27 @@ export class SyncPlayGroupMenu extends BaseMenu {
         // Release focus trap
         focusManager.popTrap();
 
+        // De-register from whichever context we were registered with
         if (this.osd && this.osd.activeMenu === this) {
             this.osd.activeMenu = null;
             this.osd._cacheFocusableElements();
         }
+        if (this._onKeyDown) {
+            document.removeEventListener('keydown', this._onKeyDown);
+            this._onKeyDown = null;
+        }
+
         eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
         eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
-        // Animate out
+        // Animate out, then detach from DOM
         this._overlay.classList.remove('visible');
         setTimeout(() => {
             if (this._overlay && this._overlay.parentNode) {
                 this._overlay.parentNode.removeChild(this._overlay);
             }
             this._overlay = null;
-        }, 400); // Wait for longer spring-like transition
+        }, 400);
     }
 
     // ========================================================================
@@ -611,18 +656,24 @@ export class SyncPlayGroupMenu extends BaseMenu {
     }
 
     // ========================================================================
-    // OSD BaseMenu Methods
+    // OSD BaseMenu Compatibility — called by OSDController when this is the activeMenu
     // ========================================================================
 
+    /**
+     * Called by OSDController to route key events through us when we are
+     * the active menu inside the player. Arrows are forwarded to FocusManager
+     * so TV remote navigation works inside the panel.
+     * @param {string} key - Normalised key name ('up' | 'down' | ... | 'back' | 'enter')
+     * @returns {boolean} true if the key was handled and OSD should stop processing it
+     */
     handleKey(key) {
-        // Since OSDController intercepts all arrow keys and routes them to activeMenu,
-        // we must route them back to FocusManager to navigate inside our trap.
+        // Route directional keys back to FocusManager so the focus trap works
         if (['up', 'down', 'left', 'right'].includes(key)) {
             focusManager._handleKey(key);
-            return true; // We handled it, don't let OSD navigate the background
+            return true;
         } else if (key === 'enter') {
             const activeEl = document.activeElement;
-            if (activeEl && this._overlay.contains(activeEl)) {
+            if (activeEl && this._overlay?.contains(activeEl)) {
                 activeEl.click();
             }
             return true;
@@ -634,3 +685,14 @@ export class SyncPlayGroupMenu extends BaseMenu {
         return false;
     }
 }
+
+// ============================================================================
+// Global singleton — importable anywhere without constructing a new instance
+// ============================================================================
+
+/**
+ * A shared SyncPlayGroupMenu instance.
+ * Open it from the Sidebar with `syncPlayGroupMenu.open()`.
+ * Open it from the OSD with `syncPlayGroupMenu.osd = osdController; syncPlayGroupMenu.open()`.
+ */
+export const syncPlayGroupMenu = new SyncPlayGroupMenu();

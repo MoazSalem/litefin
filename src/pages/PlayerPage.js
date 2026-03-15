@@ -119,6 +119,7 @@ class PlayerPage extends Page {
 
         const itemId = this.params.id;
         const resume = this.params.resume === 'true';
+        const startPositionTicks = this.params.startPositionTicks ? parseInt(this.params.startPositionTicks, 10) : null;
 
         try {
             // Show loading
@@ -203,7 +204,11 @@ class PlayerPage extends Page {
             state.set('player:contextId', null);
 
             // Calculate resume position if needed
-            if (resume && this._item.UserData?.PlaybackPositionTicks) {
+            if (startPositionTicks !== null && !isNaN(startPositionTicks)) {
+                // If an explicit position was passed via URL (e.g. from SyncPlay)
+                this._resumePosition = startPositionTicks;
+            } else if (resume && this._item.UserData?.PlaybackPositionTicks) {
+                // Otherwise fallback to UserData if resume was requested
                 this._resumePosition = this._item.UserData.PlaybackPositionTicks;
             }
 

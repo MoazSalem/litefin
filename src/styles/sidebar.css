@@ -325,3 +325,70 @@
 
 /* Page Pushing */
 /* This is controlled by LayoutManager or Base CSS usually, but we define the width var here */
+
+/* ============================================================================
+   SyncPlay Sidebar Button
+   ============================================================================
+   The SyncPlay button lives above the user profile. When the user is in a
+   group, a pulsing green dot appears top-right of the icon and the label
+   changes to the group name. The button itself gets a subtle green accent.
+   ============================================================================ */
+
+/*
+ * The icon container needs relative positioning so we can absolutely
+ * place the status dot inside it without affecting the layout.
+ */
+.sidebar-syncplay-icon-wrap {
+    position: relative;
+}
+
+/*
+ * The pulsing activity dot — hidden by default, shown with .visible
+ * class when SyncPlay is active. Positioned in the top-right corner
+ * of the icon area, matching the style of the SyncPlayGroupMenu badge dot.
+ */
+.sidebar-syncplay-dot {
+    position: absolute;
+    top: 16px;
+    right: 22px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #32D74B; /* Apple green */
+    border: 2px solid var(--sidebar-bg, #101010); /* Knockout border to sit above bg */
+    opacity: 0;
+    transform: scale(0);
+    transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    pointer-events: none;
+}
+
+/* Dot becomes visible when a group is active */
+.sidebar-syncplay-dot.visible {
+    opacity: 1;
+    transform: scale(1);
+    animation: sidebar-syncplay-pulse 2s ease-in-out infinite;
+}
+
+@keyframes sidebar-syncplay-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.5); }
+    50%       { box-shadow: 0 0 0 5px rgba(50, 215, 75, 0); }
+}
+
+/* Active state: tint the icon and label green to indicate live session */
+.sidebar-item.sidebar-syncplay-btn.syncplay-active {
+    color: #32D74B;
+}
+
+.sidebar-item.sidebar-syncplay-btn.syncplay-active:focus,
+.sidebar-item.sidebar-syncplay-btn.syncplay-active.focused {
+    /* Keep the standard focus inversion but keep the dot visible */
+    color: var(--jf-primary-btn-color);
+}
+
+/* The group name label should truncate cleanly if the name is very long */
+.sidebar-syncplay-label {
+    max-width: 200px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

@@ -19,6 +19,7 @@
 
 import { syncPlayManager } from '../../../core/syncplay/SyncPlayManager.js';
 import { eventBus } from '../../../core/EventBus.js';
+import { router } from '../../../core/Router.js';
 import { logger } from '../../../utils/Logger.js';
 
 const log = logger.create('SyncPlayPlugin');
@@ -61,10 +62,47 @@ const syncPlayPlugin = {
         // for 'syncplay:command' and 'syncplay:groupupdate'.
         syncPlayManager.init();
 
-        // Listen for the event emitted by SyncPlayManager when the server
-        // signals a playlist item change mid-stream. We re-emit as remote:play
-        // so PlayerPage.js can handle the item switch via its existing
-        // _handleRemoteQueueUpdate() pipeline.
+        // ----------------------------------------------------------------
+        // App-level playback start (joining from sidebar or outside player).
+        //
+        // When the user joins a SyncPlay group from the home screen or any
+        // non-player page, the server sends a PlayQueue update that reveals
+        // what the group is currently watching. SyncPlayManager emits
+        // 'syncplay:startplayback' and we navigate to the player here.
+        // ----------------------------------------------------------------
+        this._onStartPlayback = ({ itemId, startPositionTicks, playlistItemId }) => {
+            log.info(
+                `SyncPlay: starting playback for item ${itemId} ` +
+                `at ${Math.round(startPositionTicks / 10000)}ms`
+            );
+
+            // Check if we are already playing this exact item — if so, just
+            // let the sync machinery take over without re-launching the player.
+            const currentPath = router.getCurrentPath();
+            const alreadyOnItem = currentPath.startsWith('/player/') &&
+                                  currentPath.includes(itemId);
+
+            if (alreadyOnItem) {
+                log.info('SyncPlay: already playing this item — skipping navigation');
+                return;
+            }
+
+            // Navigate to the player.
+            // Player route is registered as /player/:id/:resume, so we pass /false for resume.
+            // We pass the start position and syncplay flag as query params so PlayerPage
+            // can read them from `this.params` and seek to the right point before
+            // SyncPlay sync takes over.
+            router.navigate(`/player/${itemId}/false?startPositionTicks=${startPositionTicks}&syncplay=1`, {
+                state: {
+                    playlistItemId
+                }
+            });
+        };
+        eventBus.on('syncplay:startplayback', this._onStartPlayback);
+
+        // ----------------------------------------------------------------
+        // Mid-session queue item switch (handled by the player already).
+        // ----------------------------------------------------------------
         this._onSwitchItem = ({ item, index }) => {
             log.info('SyncPlay: switching to item', item?.Name || item?.Id, 'at index', index);
             eventBus.emit('remote:queueupdate', {
@@ -131,6 +169,10 @@ const syncPlayPlugin = {
 
         syncPlayManager.destroy();
 
+        if (this._onStartPlayback) {
+            eventBus.off('syncplay:startplayback', this._onStartPlayback);
+            this._onStartPlayback = null;
+        }
         if (this._onSwitchItem) {
             eventBus.off('syncplay:switchitem', this._onSwitchItem);
             this._onSwitchItem = null;

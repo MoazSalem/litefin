@@ -199,7 +199,9 @@ class Router {
      * @private
      */
     _onHashChange() {
-        const path = this.getCurrentPath();
+        // Extract query string if present
+        const fullPath = this.getCurrentPath();
+        const [path, queryString] = fullPath.split('?');
 
         // Clear expected navigation tracking (used to detect unexpected hash changes)
         this._lastNavigatePath = null;
@@ -211,11 +213,19 @@ class Router {
             const match = path.match(route.regex);
 
             if (match) {
-                // Extract params
+                // Extract route params (e.g., /player/:id)
                 const params = {};
                 route.paramNames.forEach((name, index) => {
                     params[name] = match[index + 1];
                 });
+
+                // Extract and merge query parameters (e.g., ?startPositionTicks=...)
+                if (queryString) {
+                    const searchParams = new URLSearchParams(queryString);
+                    for (const [key, value] of searchParams.entries()) {
+                        params[key] = value;
+                    }
+                }
 
                 // Capture state from current page before destroying
                 // This saves focus, scroll, and page-specific state
@@ -241,9 +251,9 @@ class Router {
                     this._isBackNavigation = false;
                 } else {
                     const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
-                    if (path !== topPath) {
+                    if (fullPath !== topPath) {
                         // Only push if path is different from top of history
-                        this._history.push({ path: path, state: null });
+                        this._history.push({ path: fullPath, state: null });
                         if (this._history.length > this._maxHistory) {
                             this._history.shift();
                         }
@@ -266,11 +276,11 @@ class Router {
                 }
 
                 // Update state
-                state.set('router:currentPath', path);
+                state.set('router:currentPath', fullPath);
                 state.set('router:currentParams', params);
 
                 // Emit navigation event
-                eventBus.emit('router:navigate', { path, params });
+                eventBus.emit('router:navigate', { path: fullPath, params });
 
                 return;
             }

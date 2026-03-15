@@ -116,6 +116,15 @@ export class SyncPlayManager {
          */
         this._scheduledCommandTimer = null;
 
+        /**
+         * Set to true after joinGroup() or createGroup() until we process the
+         * first PlayQueue update. Allows us to trigger app-level navigation
+         * to start playing the group's current item when joining from outside
+         * the player — without re-navigating every time the queue changes.
+         * @type {boolean}
+         */
+        this._pendingPlaybackStart = false;
+
         // ====================================================================
         // Event handler references (saved so we can .off() them on destroy)
         // ====================================================================
@@ -292,6 +301,10 @@ export class SyncPlayManager {
             } catch (listErr) {
                 log.warn('Could not fetch group list for name resolution:', listErr);
             }
+
+            // Flag: the next PlayQueue update we receive should trigger
+            // app-level navigation to the group's current item
+            this._pendingPlaybackStart = true;
 
             await api.syncPlayJoin({ GroupId: groupId });
             // Server will respond with a SyncPlayGroupUpdate
@@ -496,11 +509,73 @@ export class SyncPlayManager {
                 break;
 
             // ----------------------------------------------------------------
-            // Queue update — the server has changed what's in the group queue
+            // Queue update — the server sends 'PlayQueue' when we first join
+            // a group (with their full playlist) and whenever the queue changes.
+            //
+            // Data shape (from Jellyfin server):
+            // {
+            //   Type: 'PlayQueue',
+            //   Data: {
+            //     Playlist:        [{ ItemId: '...', PlaylistItemId: '...' }, ...],
+            //     PlayingItemIndex: 0,
+            //     StartPositionTicks: 12345678,
+            //     ShuffleMode: 'Sorted',
+            //     RepeatMode: 'RepeatNone',
+            //   }
+            // }
+            // ----------------------------------------------------------------
+            case 'PlayQueue': {
+                const queueData = data.Data || data;
+                const playlist  = queueData.Playlist || [];
+                const idx       = queueData.PlayingItemIndex ?? 0;
+                const current   = playlist[idx];
+
+                // Detect if the Server just switched the actively playing item
+                const isNewItem = current?.PlaylistItemId && this._currentPlaylistItemId !== current.PlaylistItemId;
+
+                if (current) {
+                    // Track the current playlist item for command validation
+                    this._currentPlaylistItemId = current.PlaylistItemId || null;
+                }
+
+                // ----------------------------------------------------------
+                // App-level launch: Navigate to the player if:
+                // 1. We JUST joined a group (_pendingPlaybackStart === true)
+                // 2. OR someone else in the group picks a new item to play (isNewItem === true)
+                // ----------------------------------------------------------
+                if ((this._pendingPlaybackStart || isNewItem) && current?.ItemId) {
+                    this._pendingPlaybackStart = false;
+
+                    const itemId        = current.ItemId;
+                    const startTicks    = queueData.StartPositionTicks ?? 0;
+                    const playlistItemId = current.PlaylistItemId || null;
+
+                    log.info(
+                        `SyncPlay PlayQueue: launching playback for item ${itemId} ` +
+                        `at ${Math.round(startTicks / 10000)}ms (PlaylistItemId: ${playlistItemId})`
+                    );
+
+                    eventBus.emit('syncplay:startplayback', {
+                        itemId,
+                        startPositionTicks: startTicks,
+                        playlistItemId
+                    });
+                } else {
+                    // Mid-session queue update (e.g. item enqueued) — no navigation needed
+                    log.debug(`SyncPlay PlayQueue: updated, playing item index=${idx}, itemId=${current?.ItemId}`);
+                    this._pendingPlaybackStart = false;
+                    eventBus.emit('syncplay:queueupdated', queueData);
+                }
+
+                break;
+            }
+
+            // ----------------------------------------------------------------
+            // Legacy 'Queue' type (unused in practice, kept for safety)
             // ----------------------------------------------------------------
             case 'Queue':
                 if (data.Queue?.Playlist) {
-                    this._applyQueueUpdate(data.Queue);
+                    log.debug('SyncPlay legacy Queue update received');
                 }
                 break;
 

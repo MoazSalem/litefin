@@ -14,6 +14,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
 
 const log = logger.create('Sidebar');
 
@@ -53,6 +54,22 @@ class Sidebar extends Component {
                     </div>
                     <span class="logo-text">Litefin</span>
                 </div>
+
+                <!-- SyncPlay Button (above user profile) -->
+                <button class="sidebar-item sidebar-syncplay-btn" id="sidebar-syncplay" tabindex="0">
+                    <div class="item-icon sidebar-syncplay-icon-wrap">
+                        <!-- User Provided Icon (3 people) -->
+                        <svg class="icon-outline" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
+                            <path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/>
+                        </svg>
+                        <svg class="icon-filled" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
+                            <path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/>
+                        </svg>
+                        <!-- Pulsing dot — visible only when in a group -->
+                        <span class="sidebar-syncplay-dot" id="sidebar-syncplay-dot"></span>
+                    </div>
+                    <span class="item-text sidebar-syncplay-label" id="sidebar-syncplay-label">SyncPlay</span>
+                </button>
 
                 <!-- User Profile -->
                 <button class="sidebar-item user-profile-btn" id="sidebar-user" tabindex="0">
@@ -154,6 +171,12 @@ class Sidebar extends Component {
         eventBus.on('auth:logout', this._onAuthChange.bind(this));
         eventBus.on('auth:restored', this._onAuthChange.bind(this));
 
+        // Listen for SyncPlay state changes to update the sidebar button
+        this._onSyncPlayEnabled  = () => this._updateSyncPlayBtn(true);
+        this._onSyncPlayDisabled = () => this._updateSyncPlayBtn(false);
+        eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
+        eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
+
         // Register focus
         focusManager.register('sidebar', this.el, {
             orientation: 'vertical',
@@ -216,6 +239,10 @@ class Sidebar extends Component {
         eventBus.off('auth:login', this._onAuthChange.bind(this));
         eventBus.off('auth:logout', this._onAuthChange.bind(this));
         eventBus.off('auth:restored', this._onAuthChange.bind(this));
+
+        // Remove SyncPlay listeners
+        if (this._onSyncPlayEnabled)  eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
+        if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
     }
 
     /**
@@ -303,6 +330,9 @@ class Sidebar extends Component {
                     }
                 } else if (item.id === 'sidebar-logout') {
                     auth.logout();
+                } else if (item.id === 'sidebar-syncplay') {
+                    // Open the SyncPlay group menu overlay (works from any screen)
+                    syncPlayGroupMenu.open();
                 }
             };
         });
@@ -390,6 +420,44 @@ class Sidebar extends Component {
     _getUserName() {
         const user = auth.getCurrentUser();
         return user && user.Name ? user.Name : i18n.t('LabelUsername');
+    }
+
+    /**
+     * Update the SyncPlay button's visual state.
+     *
+     * When `active` is true (we joined a group):
+     *   - The button gets the CSS class `syncplay-active` for an accent glow.
+     *   - A pulsing green dot appears inside the icon area.
+     *   - The label changes to the current group name (or "In Group").
+     *
+     * When `active` is false (we left the group or are not in one):
+     *   - All of the above are cleared back to the default "SyncPlay" state.
+     *
+     * @param {boolean} active - Whether SyncPlay is currently enabled
+     * @private
+     */
+    _updateSyncPlayBtn(active) {
+        const btn   = this.el.querySelector('#sidebar-syncplay');
+        const dot   = this.el.querySelector('#sidebar-syncplay-dot');
+        const label = this.el.querySelector('#sidebar-syncplay-label');
+        if (!btn) return;
+
+        btn.classList.toggle('syncplay-active', active);
+
+        if (dot) {
+            dot.classList.toggle('visible', active);
+        }
+
+        if (label) {
+            if (active) {
+                // Try to get the human-readable group name from SyncPlayManager
+                const manager = window.__syncPlayManager;
+                const groupName = manager?.groupName || 'In Group';
+                label.textContent = groupName;
+            } else {
+                label.textContent = 'SyncPlay';
+            }
+        }
     }
 
     _onNavigate({ path }) {
