@@ -165,7 +165,7 @@ export class TizenAVPlayer {
 
             // Reset state for new playback session:
             // This MUST happen after _stopInternal() as that reset resets these flags.
-            this._isPlaying = true; // Signal intent to play
+            this._isPlaying = options.autoPlay !== false; // Signal intent to play
             this._isTizenPlaying = false;
             this._bufferingComplete = false;
             this._isPrepared = false;
@@ -1025,14 +1025,10 @@ export class TizenAVPlayer {
      * Resume playback
      */
     unpause() {
-        if (this._avplay && !this._isPlaying && this._isPrepared) {
-            try {
-                this._avplay.play();
-                this._isPlaying = true;
-                this.onEvent({ type: 'play' });
-            } catch (e) {
-                log.error('Resume failed:', e);
-            }
+        if (this._avplay && !this._isPlaying) {
+            this._isPlaying = true;
+            this.onEvent({ type: 'play' });
+            this._checkNativePlay();
         }
     }
 

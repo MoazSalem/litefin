@@ -125,6 +125,13 @@ export class SyncPlayManager {
          */
         this._pendingPlaybackStart = false;
 
+        /**
+         * Tracks the last known group state (Waiting, Playing, Paused) from the server.
+         * Used to correctly initialize the player's play/pause state when it first loads.
+         * @type {string|null}
+         */
+        this._lastGroupState = null;
+
         // ====================================================================
         // Event handler references (saved so we can .off() them on destroy)
         // ====================================================================
@@ -156,6 +163,19 @@ export class SyncPlayManager {
 
         this._onSyncPlayGroupUpdate = (data) => this._handleGroupUpdate(data);
         eventBus.on('syncplay:groupupdate', this._onSyncPlayGroupUpdate);
+    }
+
+    /**
+     * Determines if the player should auto-play upon launch.
+     * Returns false if we are in a SyncPlay group so that the player stays paused
+     * until the server issues an explicit 'Play' command.
+     * @returns {boolean}
+     */
+    wantsAutoPlay() {
+        if (!this._isEnabled) return true;
+        // In a SyncPlay group, playback is ALWAYS orchestrated by the server.
+        // We must launch paused and wait for the 'Play' command.
+        return false;
     }
 
     /**
@@ -200,9 +220,58 @@ export class SyncPlayManager {
             this._playbackCoreInstance = null;
         }
 
+        // Force the player to match the current known group state immediately
+        if (this._lastGroupState === 'Waiting' || this._lastGroupState === 'Paused') {
+            log.info(`SyncPlayManager: applying initial group state (${this._lastGroupState}) to new player`);
+            
+            // Mask the 'pause' event so we don't echo this back to the server
+            // as if the local user manually paused right as the video loaded
+            this._ignoreLocalEventsAction = true;
+            this._player.pause();
+            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+        }
+
         // Wire up player events only if we're in a group
         if (this._isEnabled) {
             this._wirePlayerEvents();
+
+            // ----------------------------------------------------------------
+            // SyncPlay Buffer Handshake (autoPlay=false)
+            //
+            // Since we launch with autoPlay:false, the native 'waiting' → 'playing'
+            // events will not fire automatically. The host keeps the group paused
+            // until it receives a Ready report from every member.
+            //
+            // By the time setPlayer() is called, JellyfinPlayer.play() has already
+            // resolved (meaning Tizen prepareAsync() or HTML5 canplay has completed).
+            // This means the player is ALREADY fully loaded and ready to play!
+            // We just need to tell the server.
+            // ----------------------------------------------------------------
+            const positionTicks = this._player.getCurrentPositionTicks?.() ?? 0;
+            const playlistItemId = this._currentPlaylistItemId || undefined;
+
+            // Phase 1: tell the server we are buffering/loading
+            api.syncPlayBuffering({
+                When:          new Date().toISOString(),
+                PositionTicks: positionTicks,
+                IsPlaying:     false,
+                PlaylistItemId: playlistItemId,
+            }).catch(err => log.warn('SyncPlay initial buffering report failed:', err));
+
+            // Phase 2: 600ms later declare ourselves ready — safely clearing the
+            // 500ms throttle window of BUFFERING_REPORT_THROTTLE_MS
+            setTimeout(() => {
+                this._lastBufferingReportMs = 0; // Reset throttle
+
+                api.syncPlayReady({
+                    When:          new Date().toISOString(),
+                    PositionTicks: this._player.getCurrentPositionTicks?.() ?? 0,
+                    IsPlaying:     true,
+                    PlaylistItemId: playlistItemId,
+                }).catch(err => log.warn('SyncPlay initial ready report failed:', err));
+
+                log.info('SyncPlayManager: sent BufferReady to server (autoPlay=false launch)');
+            }, 600);
         }
 
         log.info('SyncPlayManager: player updated');
@@ -464,6 +533,8 @@ export class SyncPlayManager {
 
                 const state  = data.Data?.State;
                 const reason = data.Data?.Reason;
+
+                this._lastGroupState = state;
 
                 log.info(`SyncPlay StateUpdate: state=${state} reason=${reason}`);
 

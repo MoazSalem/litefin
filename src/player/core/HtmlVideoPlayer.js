@@ -271,22 +271,27 @@ export class HtmlVideoPlayer {
                     }
                 }
 
-                video.play().then(resolve).catch((err) => {
-                    if (err.name === 'NotAllowedError') {
-                        // Browser blocked unmuted autoplay (no prior user gesture).
-                        // Mute, retry, and queue an unmute on the next user interaction.
-                        // Any keypress or click qualifies as a gesture — this is transparent to the user.
-                        log.warn('Autoplay blocked — retrying muted (remote launch).');
-                        video.muted = true;
-                        video.play().then(() => {
-                            // Schedule unmute as soon as the user presses any key or clicks
-                            this._scheduleUnmuteOnInteraction(video);
-                            resolve();
-                        }).catch(reject);
-                    } else {
-                        reject(err);
-                    }
-                });
+                if (options.autoPlay === false) {
+                    log.info('HLS.js path: Skipping initial play() due to autoPlay=false');
+                    resolve();
+                } else {
+                    video.play().then(resolve).catch((err) => {
+                        if (err.name === 'NotAllowedError') {
+                            // Browser blocked unmuted autoplay (no prior user gesture).
+                            // Mute, retry, and queue an unmute on the next user interaction.
+                            // Any keypress or click qualifies as a gesture — this is transparent to the user.
+                            log.warn('Autoplay blocked — retrying muted (remote launch).');
+                            video.muted = true;
+                            video.play().then(() => {
+                                // Schedule unmute as soon as the user presses any key or clicks
+                                this._scheduleUnmuteOnInteraction(video);
+                                resolve();
+                            }).catch(reject);
+                        } else {
+                            reject(err);
+                        }
+                    });
+                }
             });
 
             hls.on(Hls.Events.ERROR, (event, data) => {
@@ -346,7 +351,7 @@ export class HtmlVideoPlayer {
         }
 
         video.src = options.url;
-        video.autoplay = true;
+        video.autoplay = options.autoPlay !== false;
 
         // Seek if starting from position
         if (options.playerStartPositionTicks) {
@@ -372,19 +377,26 @@ export class HtmlVideoPlayer {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onError);
 
-                // Attempt unmuted playback.
-                video.play().then(resolve).catch((err) => {
-                    if (err.name === 'NotAllowedError') {
-                        log.warn('Autoplay blocked — retrying muted (remote launch).');
-                        video.muted = true;
-                        video.play().then(() => {
-                            this._scheduleUnmuteOnInteraction(video);
-                            resolve();
-                        }).catch(reject);
-                    } else {
-                        reject(err);
-                    }
-                });
+                if (options.autoPlay === false) {
+                    log.info('Native path: Skipping initial play() due to autoPlay=false');
+                    // Explicitly ensure paused since 'autoplay' attr was set to false
+                    video.pause();
+                    resolve();
+                } else {
+                    // Attempt unmuted playback.
+                    video.play().then(resolve).catch((err) => {
+                        if (err.name === 'NotAllowedError') {
+                            log.warn('Autoplay blocked — retrying muted (remote launch).');
+                            video.muted = true;
+                            video.play().then(() => {
+                                this._scheduleUnmuteOnInteraction(video);
+                                resolve();
+                            }).catch(reject);
+                        } else {
+                            reject(err);
+                        }
+                    });
+                }
             };
 
             const onError = () => {

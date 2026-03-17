@@ -786,7 +786,8 @@ export class JellyfinPlayer extends EventEmitter {
                 // Tell the backend what play method was negotiated — critical so
                 // TizenAVPlayer knows NOT to apply native track selection when
                 // the server is transcoding (audio is baked into the HLS stream).
-                playMethod: playMethod
+                playMethod: playMethod,
+                autoPlay: options.autoPlay
             });
             log.info('Backend play() promise resolved');
 

@@ -29,6 +29,7 @@ import { logger } from '../utils/Logger.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
 
 const log = logger.create('Player');
 
@@ -648,7 +649,8 @@ class PlayerPage extends Page {
                 startPositionTicks: this._resumePosition,
                 mediaSourceId: mediaSource?.Id,
                 audioStreamIndex: savedAudioIndex,
-                subtitleStreamIndex: savedSubtitleIndex
+                subtitleStreamIndex: savedSubtitleIndex,
+                autoPlay: syncPlayManager.wantsAutoPlay()
             });
         } catch (err) {
             if (err.name === 'NotAllowedError') {
@@ -661,7 +663,8 @@ class PlayerPage extends Page {
                     startPositionTicks: this._resumePosition,
                     mediaSourceId: mediaSource?.Id,
                     audioStreamIndex: savedAudioIndex,
-                    subtitleStreamIndex: savedSubtitleIndex
+                    subtitleStreamIndex: savedSubtitleIndex,
+                    autoPlay: syncPlayManager.wantsAutoPlay()
                 });
             } else {
                 throw err;
