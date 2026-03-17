@@ -446,6 +446,29 @@ class App {
 
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
+
+            // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
+            // Instead, we command the server to start playback of the new item. The server
+            // will broadcast a PlayQueue update to everyone (including us), which triggers the actual navigation.
+            if (window.__syncPlayManager && window.__syncPlayManager.isEnabled) {
+                log.info('SyncPlay is active. Sending SetNewQueue command instead of local launch.');
+                try {
+                    let startPosition = 0;
+                    if (resume && itemToPlay.UserData?.PlaybackPositionTicks) {
+                        startPosition = itemToPlay.UserData.PlaybackPositionTicks;
+                    }
+                    await api.post('/SyncPlay/SetNewQueue', {
+                        ItemIds: [itemToPlay.Id],
+                        PlayingQueue: [itemToPlay.Id],
+                        PlayingItemPosition: 0,
+                        StartPositionTicks: startPosition
+                    });
+                } catch (err) {
+                    log.error('Failed to send SetNewQueue to SyncPlay:', err);
+                }
+                return;
+            }
+
             router.navigate(`/player/${itemToPlay.Id}/${resumeParam}`);
         });
 
