@@ -458,7 +458,6 @@ class App {
                         startPosition = itemToPlay.UserData.PlaybackPositionTicks;
                     }
                     await api.post('/SyncPlay/SetNewQueue', {
-                        ItemIds: [itemToPlay.Id],
                         PlayingQueue: [itemToPlay.Id],
                         PlayingItemPosition: 0,
                         StartPositionTicks: startPosition

@@ -1861,13 +1861,41 @@ class PlayerPage extends Page {
                 return;
             }
 
-            // 2. Build report body - stick to core fields to avoid 400 errors
+            // 2. Build report body
             const data = {
                 ItemId: this._item.Id,
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
-                PositionTicks: positionTicks
+                PositionTicks: positionTicks,
+                
+                VolumeLevel: this._player?.getVolume?.() ?? 100,
+                IsMuted: this._player?.isMuted?.() ?? false,
+                IsPaused: true,
+                PlaybackRate: this._player?.getPlaybackSpeed?.() ?? 1,
+                SubtitleStreamIndex: this._player?.getCurrentSubtitleStreamIndex?.() ?? -1,
+                SecondarySubtitleStreamIndex: this._player?.getCurrentSecondarySubtitleStreamIndex?.() ?? -1,
+                AudioStreamIndex: this._player?.getCurrentAudioStreamIndex?.() ?? -1,
+                RepeatMode: 'RepeatNone',
+                ShuffleMode: 'Sorted',
+                CanSeek: true,
+                BufferedRanges: [],
+                PlayMethod: this._player?._currentPlayMethod || 'DirectPlay'
             };
+
+            // 2.5 Inject SyncPlay tracking fields if active
+            const spm = window.__syncPlayManager;
+            if (spm && spm.isEnabled) {
+                if (spm._currentPlaylistItemId) {
+                    data.PlaylistItemId = spm._currentPlaylistItemId;
+                }
+                const queue = spm.currentPlayQueue;
+                if (queue && queue.Playlist && queue.Playlist.length > 0) {
+                    data.NowPlayingQueue = queue.Playlist.map(item => ({
+                        Id: item.ItemId,
+                        PlaylistItemId: item.PlaylistItemId
+                    }));
+                }
+            }
 
             // 3. Send report
             if (isSync) {

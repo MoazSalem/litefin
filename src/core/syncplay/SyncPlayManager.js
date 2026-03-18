@@ -97,6 +97,13 @@ export class SyncPlayManager {
         this._currentPlaylistItemId = null;
 
         /**
+         * The current playlist returned by the server.
+         * Used to populate the NowPlayingQueue field in Stopped requests.
+         * @type {object|null}
+         */
+        this._currentPlayQueue = null;
+
+        /**
          * Tracks whether THIS client is currently buffering (reported to server).
          * @type {boolean}
          */
@@ -423,6 +430,14 @@ export class SyncPlayManager {
         return this._groupName;
     }
 
+    /**
+     * Get the current play queue containing the playlist.
+     * @returns {object|null}
+     */
+    get currentPlayQueue() {
+        return this._currentPlayQueue;
+    }
+
     // ========================================================================
     // Private — WebSocket Command Handlers
     // ========================================================================
@@ -569,12 +584,13 @@ export class SyncPlayManager {
             }
 
             // ----------------------------------------------------------------
-            // Client left the group (always us in litefin's case, as we handle
-            // Leave manually via leaveGroup() → _disableInternal())
+            // Client left the group or server reported user is not in a group
+            // (e.g. session timeout or dropped by server)
             // ----------------------------------------------------------------
             case 'GroupLeft':
+            case 'NotInGroup':
                 if (this._isEnabled) {
-                    log.info('SyncPlay: left group (server notification)');
+                    log.info(`SyncPlay: left group (${data.Type} server notification)`);
                     this._disableInternal();
                 }
                 break;
@@ -597,6 +613,10 @@ export class SyncPlayManager {
             // ----------------------------------------------------------------
             case 'PlayQueue': {
                 const queueData = data.Data || data;
+                
+                // Track the current playlist queue so it can be sent in playback reports
+                this._currentPlayQueue = queueData;
+                
                 const playlist  = queueData.Playlist || [];
                 const idx       = queueData.PlayingItemIndex ?? 0;
                 const current   = playlist[idx];
