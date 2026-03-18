@@ -190,9 +190,23 @@ export default class OSDController extends Component {
             const btn = this._osdEl.querySelector('#osdSyncPlayBtn');
             if (!btn) return;
             
-            if (pluginManager.isEnabled('syncplay')) {
+            const isInstalled = pluginManager.isEnabled('syncplay');
+            
+            if (isInstalled) {
                 btn.classList.remove('hidden');
                 btn.setAttribute('tabindex', '0');
+                
+                // Check if actively in a group
+                const syncPlayActive = window.__syncPlayManager && window.__syncPlayManager.isEnabled;
+                btn.classList.toggle('syncplay-active', syncPlayActive);
+                
+                // Update icon content (Filled variant when in a group)
+                btn.innerHTML = `
+                    <div class="osd-syncplay-icon-wrap">
+                        ${syncPlayActive ? ICONS.groupFilled : ICONS.group}
+                        <span class="osd-syncplay-dot ${syncPlayActive ? 'visible' : ''}" id="osdSyncPlayDot"></span>
+                    </div>
+                `;
             } else {
                 btn.classList.add('hidden');
                 btn.setAttribute('tabindex', '-1');
@@ -382,7 +396,12 @@ export default class OSDController extends Component {
                             <button class="osd-btn" data-action="subtitles" tabindex="0">${ICONS.closedCaption}</button>
                             <button class="osd-btn" data-action="audio" tabindex="0">${ICONS.audiotrack}</button>
                             <!-- SyncPlay group management — only the icon; menu opens on click -->
-                            <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">${ICONS.group}</button>
+                            <button class="osd-btn" id="osdSyncPlayBtn" data-action="syncplay" tabindex="0" aria-label="SyncPlay">
+                                <div class="osd-syncplay-icon-wrap">
+                                    ${ICONS.group}
+                                    <span class="osd-syncplay-dot" id="osdSyncPlayDot"></span>
+                                </div>
+                            </button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>

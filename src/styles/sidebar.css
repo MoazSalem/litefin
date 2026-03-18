@@ -217,11 +217,13 @@
     display: none;
 }
 
-.sidebar-item.active .item-icon .icon-outline {
+.sidebar-item.active .item-icon .icon-outline,
+.sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-outline {
     display: none;
 }
 
-.sidebar-item.active .item-icon .icon-filled {
+.sidebar-item.active .item-icon .icon-filled,
+.sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-filled {
     display: block;
 }
 

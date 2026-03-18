@@ -420,7 +420,7 @@ export class SyncPlayGroupMenu {
                 <div class="syncplay-header">
                     <!-- SyncPlay icon (groups) -->
                     <div class="syncplay-icon">
-                        ${ICONS.group}
+                        ${(getSyncPlayManager()?.isEnabled) ? ICONS.groupFilled : ICONS.group}
                     </div>
                     <div>
                         <div class="syncplay-title">SyncPlay</div>
@@ -488,6 +488,12 @@ export class SyncPlayGroupMenu {
         const badge = this._overlay.querySelector('.syncplay-status-badge');
         if (badge) {
             badge.outerHTML = this._renderStatusBadge();
+        }
+
+        // Update the header icon
+        const iconContainer = this._overlay.querySelector('.syncplay-icon');
+        if (iconContainer) {
+            iconContainer.innerHTML = manager.isEnabled ? ICONS.groupFilled : ICONS.group;
         }
 
         // Swap the action button (leave ↔ create)
