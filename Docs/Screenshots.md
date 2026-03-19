@@ -8,6 +8,10 @@ Litefin features a clean, premium interface designed specifically for the 10-foo
 
 ![Home Screen](./Previews/1.png)
 
+### Sidebar Menu
+
+![Settings Page](./Previews/6.png)
+
 ### Media Details Screen
 
 ![Library Page](./Previews/2.png)
