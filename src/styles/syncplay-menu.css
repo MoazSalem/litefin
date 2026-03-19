@@ -1,0 +1,358 @@
+/**
+ * ============================================================================
+ * SyncPlay Group Menu — Static Styles
+ * ============================================================================
+ * Previously dynamically injected via _injectCSS() inside SyncPlayGroupMenu.js.
+ * Moved here as a static CSS import so it is bundled at build time and unaffected
+ * by Tizen CSP rules that block runtime <style> tag injection.
+ *
+ * Tizen compatibility notes:
+ * - No 'inset' shorthand (uses explicit top/left/right/bottom)
+ * - No 'backdrop-filter' (removed — unsupported on Chrome 69)
+ * - 'gap' replaced with margin-based spacing for flex gaps
+ * - '-webkit-' prefixes added for transform / flex
+ * ============================================================================
+ */
+
+/* ============================================================================
+   Full-screen backdrop overlay
+   ============================================================================ */
+
+.syncplay-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 9000;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    /* Darker backdrop — backdrop-filter is unsupported on Chrome 69 */
+    background: rgba(0, 0, 0, 0.8);
+    opacity: 0;
+    -webkit-transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition: opacity 0.4s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.syncplay-overlay.visible {
+    opacity: 1;
+}
+
+/* ============================================================================
+   Centre panel / card
+   ============================================================================ */
+
+.syncplay-panel {
+    background: var(--jf-background-alt, rgba(40, 40, 40, 0.95));
+    background-image: -webkit-linear-gradient(top, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 100%);
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.15));
+    border-radius: var(--jf-border-radius-lg, 28px);
+    padding: 40px;
+    min-width: 520px;
+    max-width: 720px;
+    width: 90%;
+    color: var(--jf-text-primary, #fff);
+    box-shadow: 0 40px 100px rgba(0, 0, 0, 0.6);
+    -webkit-transform: scale(0.9) translateY(20px);
+    transform: scale(0.9) translateY(20px);
+    -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                        opacity 0.4s ease;
+    transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+                opacity 0.4s ease;
+    opacity: 0;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+.syncplay-overlay.visible .syncplay-panel {
+    -webkit-transform: scale(1) translateY(0);
+    transform: scale(1) translateY(0);
+    opacity: 1;
+}
+
+/* ============================================================================
+   Header row (icon + title)
+   ============================================================================ */
+
+.syncplay-header {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    margin-bottom: 32px;
+}
+
+/* gap: 16px fallback */
+.syncplay-header > * + * {
+    margin-left: 16px;
+}
+
+.syncplay-icon {
+    width: 44px;
+    height: 44px;
+    -webkit-flex-shrink: 0;
+    flex-shrink: 0;
+}
+
+.syncplay-title {
+    font-size: 26px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    color: var(--jf-text-primary, #fff);
+}
+
+.syncplay-subtitle {
+    font-size: 14px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
+    margin-top: 4px;
+}
+
+/* ============================================================================
+   Status badge ("In group — GroupName" / "Not in a group")
+   ============================================================================ */
+
+.syncplay-status-badge {
+    display: -webkit-inline-box;
+    display: -webkit-inline-flex;
+    display: inline-flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    background: rgba(50, 215, 75, 0.12);
+    border: 1px solid rgba(50, 215, 75, 0.2);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 14px;
+    font-weight: 500;
+    color: #32D74B;
+    margin-bottom: 24px;
+}
+
+/* gap: 8px fallback for badge dot + label */
+.syncplay-status-badge > * + * {
+    margin-left: 8px;
+}
+
+.syncplay-status-badge.inactive {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.06));
+    border-color: var(--jf-action-btn-border, rgba(255, 255, 255, 0.1));
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.5));
+}
+
+.syncplay-status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: currentColor;
+    margin-right: 6px;
+}
+
+.syncplay-status-dot.pulse {
+    box-shadow: 0 0 8px currentColor;
+    -webkit-animation: syncplay-pulse 2s ease-in-out infinite;
+    animation: syncplay-pulse 2s ease-in-out infinite;
+}
+
+@-webkit-keyframes syncplay-pulse {
+    0%, 100% { opacity: 1; -webkit-transform: scale(1); transform: scale(1); }
+    50%       { opacity: 0.5; -webkit-transform: scale(1.1); transform: scale(1.1); }
+}
+
+@keyframes syncplay-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(1.1); }
+}
+
+/* ============================================================================
+   Group list
+   ============================================================================ */
+
+.syncplay-group-list {
+    list-style: none;
+    /* Negative margin so scroll indicator aligns with edge */
+    margin: 0 -10px 28px;
+    padding: 10px;
+    max-height: 320px;
+    overflow-y: auto;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+}
+
+/* gap: 12px fallback */
+.syncplay-group-list > * + * {
+    margin-top: 12px;
+}
+
+/* Individual group row */
+.syncplay-group-item {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-box-pack: justify;
+    -webkit-justify-content: space-between;
+    justify-content: space-between;
+    padding: 18px 24px;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.06));
+    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.12));
+    border-radius: var(--jf-border-radius-lg, 24px);
+    cursor: pointer;
+    -webkit-transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    outline: none;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+.syncplay-group-item:focus,
+.syncplay-group-item.focused {
+    background: var(--jf-accent, #007AFF);
+    border-color: var(--jf-button-border-focus, #fff);
+    -webkit-transform: scale(1.03);
+    transform: scale(1.03);
+}
+
+.syncplay-group-item:focus .syncplay-group-name,
+.syncplay-group-item.focused .syncplay-group-name {
+    color: var(--jf-primary-btn-color, #fff);
+}
+
+.syncplay-group-item:focus .syncplay-group-members,
+.syncplay-group-item.focused .syncplay-group-members {
+    color: var(--jf-primary-btn-color, #fff);
+    opacity: 0.8;
+}
+
+.syncplay-group-item:focus .syncplay-group-join-btn,
+.syncplay-group-item.focused .syncplay-group-join-btn {
+    color: var(--jf-primary-btn-color, #fff);
+}
+
+.syncplay-group-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--jf-text-primary, #fff);
+}
+
+.syncplay-group-members {
+    font-size: 13px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.5));
+    margin-top: 2px;
+}
+
+.syncplay-group-join-btn {
+    font-size: 14px;
+    color: var(--jf-accent, #0A84FF);
+    font-weight: 700;
+}
+
+/* Empty state */
+.syncplay-empty {
+    text-align: center;
+    padding: 40px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.4));
+    font-size: 15px;
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.02));
+    border-radius: var(--jf-border-radius, 16px);
+    margin-bottom: 28px;
+}
+
+/* ============================================================================
+   Action buttons at the bottom
+   ============================================================================ */
+
+.syncplay-actions {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+}
+
+/* gap: 12px fallback */
+.syncplay-actions > * + * {
+    margin-left: 12px;
+}
+
+.syncplay-btn {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
+    flex: 1;
+    padding: 16px;
+    border-radius: var(--jf-border-radius, 16px);
+    border: none;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    -webkit-transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    outline: none;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-box-pack: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+.syncplay-btn-primary {
+    background: var(--jf-primary-btn-color, #fff);
+    color: var(--jf-accent, #007AFF);
+}
+
+.syncplay-btn-secondary {
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.1));
+    color: var(--jf-text-primary, #fff);
+}
+
+.syncplay-btn-danger {
+    background: rgba(255, 69, 58, 0.15);
+    border: 1px solid rgba(255, 69, 58, 0.3);
+    color: #FF453A;
+}
+
+.syncplay-btn:focus,
+.syncplay-btn.focused {
+    background: var(--jf-action-btn-active-bg, #fff);
+    color: var(--jf-action-btn-active-color, #000);
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
+}
+
+.syncplay-btn-danger:focus,
+.syncplay-btn-danger.focused {
+    background: #FF453A;
+    border-color: #FF453A;
+    color: #fff;
+}
+
+/* ============================================================================
+   Loading state
+   ============================================================================ */
+
+.syncplay-loading {
+    text-align: center;
+    padding: 48px;
+    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.5));
+    font-size: 15px;
+}

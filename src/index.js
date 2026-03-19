@@ -65,6 +65,7 @@ import './styles/search.css';
 import './styles/player-osd.css';
 import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */
+import './styles/syncplay-menu.css';  /* SyncPlay group-selection overlay */
 import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';

@@ -18,6 +18,7 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
+import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -289,6 +290,12 @@ class App {
     _setupEventHandlers() {
         // Handle back button / return key
         eventBus.on('key:back', () => {
+            // 1. Check for standalone global overlays
+            if (syncPlayGroupMenu && syncPlayGroupMenu.isVisible) {
+                syncPlayGroupMenu.close();
+                return;
+            }
+
             const currentPage = router.getCurrentPage();
 
             // 1. Try page-specific back handler
