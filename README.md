@@ -1,11 +1,11 @@
 <h1 align="center">Litefin</h1>
 <h3 align="center">A High-Performance, Native Jellyfin Client for Samsung Tizen and LG web-OS TVs</h3>
 
-[![GitHub release (latest by date)](https://img.shields.io/github/v/release/Moaz/litefin?color=blue&label=version&style=flat-square)](https://github.com/Moaz/litefin/releases)
-[![GitHub all releases](https://img.shields.io/github/downloads/Moaz/litefin/total?color=blue&style=flat-square)](https://github.com/Moaz/litefin/releases)
-[![GitHub Repo stars](https://img.shields.io/github/stars/Moaz/litefin?color=blue&style=flat-square)](https://github.com/Moaz/litefin/stargazers)
-[![GitHub license](https://img.shields.io/github/license/Moaz/litefin?color=blue&style=flat-square)](https://github.com/Moaz/litefin/blob/main/LICENSE)
-[![GitHub issues](https://img.shields.io/github/issues/Moaz/litefin?color=blue&style=flat-square)](https://github.com/Moaz/litefin/issues)
+[![GitHub release (latest by date)](https://img.shields.io/github/v/release/MoazSalem/litefin?color=blue&label=version&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
+[![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
+[![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/stargazers)
+[![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/main/LICENSE)
+[![GitHub issues](https://img.shields.io/github/issues/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/issues)
 
 ![Litefin Banner](./Docs/Previews/banner.png)
 
