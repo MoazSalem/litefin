@@ -235,7 +235,7 @@ export class SyncPlayManager {
             // as if the local user manually paused right as the video loaded
             this._ignoreLocalEventsAction = true;
             this._player.pause();
-            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
         }
 
         // Wire up player events only if we're in a group
@@ -568,11 +568,38 @@ export class SyncPlayManager {
                     /*
                      * Group is playing — the explicit SyncPlayCommand 'Unpause'/'Play'
                      * carries the timing anchor and will handle the actual unpause +
-                     * position correction. We just log here to avoid double-processing.
-                     * If somehow we missed the SyncPlayCommand, the drift corrector
-                     * in PlaybackCore will eventually re-align us.
+                     * position correction. If we missed it or it wasn't sent (like after Ready),
+                     * we should unpause natively to ensure we don't get stuck.
                      */
-                    log.debug('SyncPlay StateUpdate: group is playing — awaiting explicit Play command for timing');
+                    log.debug('SyncPlay StateUpdate: group is playing — awaiting explicit Play command for timing or unpausing natively if none arrives.');
+
+                    if (this._player && this._player.isPaused && this._player.isPaused()) {
+                        log.info('SyncPlay StateUpdate: group transitioned to playing but player is paused. Unpausing natively.');
+                        this._ignoreLocalEventsAction = true;
+                        try {
+                            if (this._player.unpause) {
+                                this._player.unpause();
+                            } else if (this._player.togglePlay) {
+                                this._player.togglePlay();
+                            } else if (this._player.play) {
+                                this._player.play();
+                            }
+                        } catch(e) {
+                            log.error('SyncPlay StateUpdate playback start failed', e);
+                        } finally {
+                            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+                        }
+
+                        // Ensure we have a valid anchor to track against since we didn't get a SyncPlayCommand
+                        const posTicks = this._player.getCurrentPositionTicks ? this._player.getCurrentPositionTicks() : 0;
+                        
+                        this._playbackCore?.setAnchor({
+                            positionTicks: posTicks,
+                            whenMs: syncPlayTimeSync.toServer(Date.now()),
+                            isPlaying: true
+                        });
+                        this._playbackCore?.startTracking();
+                    }
                 } else if (state === 'Paused') {
                     // Explicit paused state (no timing handshake needed)
                     if (this._player) {
@@ -797,7 +824,7 @@ export class SyncPlayManager {
                 try {
                     this._player.unpause();
                 } finally {
-                    setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+                    setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
                 }
 
                 this._playbackCore?.startTracking();
@@ -821,7 +848,7 @@ export class SyncPlayManager {
             try {
                 this._player.unpause();
             } finally {
-                setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+                setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
             }
 
             this._playbackCore?.startTracking();
@@ -878,7 +905,7 @@ export class SyncPlayManager {
             // Suppress the _onPause local-action echo since this is server-side
             this._ignoreLocalEventsAction = true;
             this._player.pause();
-            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 500);
+            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
         };
 
         const pauseAtLocalMs = whenMs !== null ? syncPlayTimeSync.toLocal(whenMs) : Date.now();

@@ -1436,7 +1436,10 @@ export class TizenAVPlayer {
         if (!this._avplay) return true;
 
         try {
-            return this._avplay.getState() === 'PAUSED';
+            const state = this._avplay.getState();
+            // In Tizen AVPlay, state can be NONE, IDLE, READY, PLAYING, PAUSED
+            // If it's not PLAYING, we consider it logically paused for UI tracking
+            return state !== 'PLAYING';
         } catch (e) {
             return !this._isPlaying;
         }

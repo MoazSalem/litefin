@@ -776,7 +776,7 @@ export class JellyfinPlayer extends EventEmitter {
                 this.emit(PlayerEvent.WAITING);
             }
 
-            await this._backend.play({
+            const backendOptions = {
                 ...streamInfo,
                 item: this._currentItem,
                 mediaSource,
@@ -788,11 +788,13 @@ export class JellyfinPlayer extends EventEmitter {
                 // the server is transcoding (audio is baked into the HLS stream).
                 playMethod: playMethod,
                 autoPlay: options.autoPlay
-            });
+            };
+
+            await this._backend.play(backendOptions);
             log.info('Backend play() promise resolved');
 
             this._isPlaying = true;
-            this._isPaused = false;
+            this._isPaused = options.autoPlay === false;
 
             this.emit(PlayerEvent.PLAYBACK_START, {
                 item: this._currentItem,
