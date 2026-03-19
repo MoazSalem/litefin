@@ -139,15 +139,30 @@ export class SyncPlayManager {
          */
         this._lastGroupState = null;
 
+        /**
+         * Set to true when we send our initial ready report to the server
+         * (the buffering → ready handshake inside setPlayer). While this is true,
+         * the StateUpdate:Playing handler will NOT fire the native unpause fallback,
+         * because the StateUpdate we receive at that point only confirms that WE
+         * are ready — the other clients may still be buffering. We must wait for the
+         * explicit SyncPlayCommand (Unpause/Play) which comes only after ALL clients
+         * have reported ready.
+         * Cleared as soon as any SyncPlayCommand arrives.
+         * @type {boolean}
+         */
+
         // ====================================================================
         // Event handler references (saved so we can .off() them on destroy)
         // ====================================================================
 
-        this._onSyncPlayCommand     = null;
+        this._onSyncPlayCommand = null;
         this._onSyncPlayGroupUpdate = null;
-        this._onTimeUpdate          = null;
-        this._onWaiting             = null;
-        this._onPlaying             = null;
+        this._onTimeUpdate = null;
+        this._onWaiting = null;
+        this._onPlaying = null;
+        this._onPlay = null;
+        this._onPause = null;
+        this._onSeek = null;
     }
 
     // ========================================================================
@@ -194,13 +209,13 @@ export class SyncPlayManager {
 
         if (this._isEnabled) {
             // Leave the group silently — don't await since we may be shutting down
-            api.syncPlayLeave().catch(err => log.warn('Leave failed on destroy:', err));
+            api.syncPlayLeave().catch((err) => log.warn('Leave failed on destroy:', err));
         }
 
         this._disableInternal();
 
         // Unsubscribe from all eventBus events
-        if (this._onSyncPlayCommand)     eventBus.off('syncplay:command',     this._onSyncPlayCommand);
+        if (this._onSyncPlayCommand) eventBus.off('syncplay:command', this._onSyncPlayCommand);
         if (this._onSyncPlayGroupUpdate) eventBus.off('syncplay:groupupdate', this._onSyncPlayGroupUpdate);
     }
 
@@ -230,12 +245,14 @@ export class SyncPlayManager {
         // Force the player to match the current known group state immediately
         if (this._lastGroupState === 'Waiting' || this._lastGroupState === 'Paused') {
             log.info(`SyncPlayManager: applying initial group state (${this._lastGroupState}) to new player`);
-            
+
             // Mask the 'pause' event so we don't echo this back to the server
             // as if the local user manually paused right as the video loaded
             this._ignoreLocalEventsAction = true;
             this._player.pause();
-            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+            setTimeout(() => {
+                this._ignoreLocalEventsAction = false;
+            }, 2500);
         }
 
         // Wire up player events only if we're in a group
@@ -257,25 +274,32 @@ export class SyncPlayManager {
             const positionTicks = this._player.getCurrentPositionTicks?.() ?? 0;
             const playlistItemId = this._currentPlaylistItemId || undefined;
 
-            // Phase 1: tell the server we are buffering/loading
+            // Phase 1: tell the server we are buffering/loading.
+            // We report our actual position (after AVPlay's natural keyframe snap).
+            // DO NOT subtract a fake offset here — the Jellyfin server uses the
+            // reported position to compute the Unpause 'When' timestamp, so lying
+            // by -10s causes it to schedule our start 10 seconds in the future,
+            // leaving the loading screen frozen while the other client plays.
+            // Drift correction (SkipToSync / SpeedToSync) handles any small offset.
             api.syncPlayBuffering({
-                When:          new Date().toISOString(),
+                When: new Date().toISOString(),
                 PositionTicks: positionTicks,
-                IsPlaying:     false,
-                PlaylistItemId: playlistItemId,
-            }).catch(err => log.warn('SyncPlay initial buffering report failed:', err));
+                IsPlaying: false,
+                PlaylistItemId: playlistItemId
+            }).catch((err) => log.warn('SyncPlay initial buffering report failed:', err));
 
             // Phase 2: 600ms later declare ourselves ready — safely clearing the
             // 500ms throttle window of BUFFERING_REPORT_THROTTLE_MS
             setTimeout(() => {
                 this._lastBufferingReportMs = 0; // Reset throttle
+                this._isBuffering = false; // We are declaring ourselves ready
 
                 api.syncPlayReady({
-                    When:          new Date().toISOString(),
+                    When: new Date().toISOString(),
                     PositionTicks: this._player.getCurrentPositionTicks?.() ?? 0,
-                    IsPlaying:     true,
-                    PlaylistItemId: playlistItemId,
-                }).catch(err => log.warn('SyncPlay initial ready report failed:', err));
+                    IsPlaying: true,
+                    PlaylistItemId: playlistItemId
+                }).catch((err) => log.warn('SyncPlay initial ready report failed:', err));
 
                 log.info('SyncPlayManager: sent BufferReady to server (autoPlay=false launch)');
             }, 600);
@@ -369,7 +393,7 @@ export class SyncPlayManager {
             // ----------------------------------------------------------------
             try {
                 const groups = await api.syncPlayList();
-                const target = groups?.find(g => g.GroupId === groupId);
+                const target = groups?.find((g) => g.GroupId === groupId);
                 if (target?.GroupName) {
                     this._groupName = target.GroupName;
                     log.debug(`SyncPlay: resolved group name "${this._groupName}" for ${groupId}`);
@@ -501,12 +525,13 @@ export class SyncPlayManager {
                     log.debug('Unhandled SyncPlayCommand:', data.Command);
             }
         } finally {
-            // Restore normal event processing. We use a short timeout because
-            // the player's 'play'/'pause' events fire asynchronously after we call
-            // this._player.pause() / play().
+            // Restore normal event processing. We use an extended timeout here because
+            // Tizen's native 'playing' event can fire 1-3 seconds after we call play()
+            // (hardware seek + buffer cycle). A short window would allow the delayed
+            // event to pass through and be mistaken for a user-initiated unpause.
             setTimeout(() => {
                 this._ignoreLocalEventsAction = false;
-            }, 500);
+            }, 3000);
         }
     }
 
@@ -546,7 +571,7 @@ export class SyncPlayManager {
                 // Re-enable (in case we rejoined or need a group info refresh)
                 this._enableInternal(data);
 
-                const state  = data.Data?.State;
+                const state = data.Data?.State;
                 const reason = data.Data?.Reason;
 
                 this._lastGroupState = state;
@@ -561,20 +586,46 @@ export class SyncPlayManager {
                      */
                     if (this._player) {
                         this._playbackCore?.stopTracking();
-                        this._player.pause();
+                        
+                        this._ignoreLocalEventsAction = true;
+                        try {
+                            this._player.pause();
+                        } finally {
+                            setTimeout(() => {
+                                this._ignoreLocalEventsAction = false;
+                            }, 2500);
+                        }
                         log.info(`SyncPlay StateUpdate: pausing player (reason: ${reason})`);
                     }
                 } else if (state === 'Playing') {
                     /*
                      * Group is playing — the explicit SyncPlayCommand 'Unpause'/'Play'
                      * carries the timing anchor and will handle the actual unpause +
-                     * position correction. If we missed it or it wasn't sent (like after Ready),
-                     * we should unpause natively to ensure we don't get stuck.
+                     * position correction.
+                     *
+                     * IMPORTANT: Only fall back to a native unpause here if we have NOT
+                     * already received an explicit SyncPlayCommand with a scheduled timer.
+                     * If a timer is active, that command will handle everything — firing
+                     * both paths simultaneously causes a race: the native unpause triggers
+                     * Tizen buffering, the server sees Waiting, pauses the group, and then
+                     * the scheduled unpause fires on a now-Waiting player with no way out.
                      */
-                    log.debug('SyncPlay StateUpdate: group is playing — awaiting explicit Play command for timing or unpausing natively if none arrives.');
+                    log.debug(
+                        'SyncPlay StateUpdate: group is playing — awaiting explicit Play command for timing or unpausing natively if none arrives.'
+                    );
 
-                    if (this._player && this._player.isPaused && this._player.isPaused()) {
-                        log.info('SyncPlay StateUpdate: group transitioned to playing but player is paused. Unpausing natively.');
+                    if (
+                        this._player &&
+                        this._player.isPaused &&
+                        this._player.isPaused() &&
+                        !this._scheduledCommandTimer
+                    ) {
+                        log.info(
+                            'SyncPlay StateUpdate: group transitioned to playing but player is paused (and no scheduled command). Unpausing natively.'
+                        );
+                        this._ignoreNextPlayingEcho = true;
+                        
+                        // Wrap unpause intent in suppression to prevent play event echo
                         this._ignoreLocalEventsAction = true;
                         try {
                             if (this._player.unpause) {
@@ -584,27 +635,41 @@ export class SyncPlayManager {
                             } else if (this._player.play) {
                                 this._player.play();
                             }
-                        } catch(e) {
+                        } catch (e) {
                             log.error('SyncPlay StateUpdate playback start failed', e);
                         } finally {
-                            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+                            this._ignoreLocalEventsAction = false;
                         }
 
                         // Ensure we have a valid anchor to track against since we didn't get a SyncPlayCommand
-                        const posTicks = this._player.getCurrentPositionTicks ? this._player.getCurrentPositionTicks() : 0;
-                        
+                        const posTicks = this._player.getCurrentPositionTicks
+                            ? this._player.getCurrentPositionTicks()
+                            : 0;
+
                         this._playbackCore?.setAnchor({
                             positionTicks: posTicks,
                             whenMs: syncPlayTimeSync.toServer(Date.now()),
                             isPlaying: true
                         });
                         this._playbackCore?.startTracking();
+                    } else if (this._scheduledCommandTimer) {
+                        log.debug(
+                            'SyncPlay StateUpdate: explicit Play/Unpause command already scheduled — skipping native unpause to avoid race condition.'
+                        );
                     }
                 } else if (state === 'Paused') {
                     // Explicit paused state (no timing handshake needed)
                     if (this._player) {
                         this._playbackCore?.stopTracking();
-                        this._player.pause();
+                        
+                        this._ignoreLocalEventsAction = true;
+                        try {
+                            this._player.pause();
+                        } finally {
+                            setTimeout(() => {
+                                this._ignoreLocalEventsAction = false;
+                            }, 2500);
+                        }
                     }
                 }
                 break;
@@ -640,13 +705,13 @@ export class SyncPlayManager {
             // ----------------------------------------------------------------
             case 'PlayQueue': {
                 const queueData = data.Data || data;
-                
+
                 // Track the current playlist queue so it can be sent in playback reports
                 this._currentPlayQueue = queueData;
-                
-                const playlist  = queueData.Playlist || [];
-                const idx       = queueData.PlayingItemIndex ?? 0;
-                const current   = playlist[idx];
+
+                const playlist = queueData.Playlist || [];
+                const idx = queueData.PlayingItemIndex ?? 0;
+                const current = playlist[idx];
 
                 // Detect if the Server just switched the actively playing item
                 const isNewItem = current?.PlaylistItemId && this._currentPlaylistItemId !== current.PlaylistItemId;
@@ -664,13 +729,13 @@ export class SyncPlayManager {
                 if ((this._pendingPlaybackStart || isNewItem) && current?.ItemId) {
                     this._pendingPlaybackStart = false;
 
-                    const itemId        = current.ItemId;
-                    const startTicks    = queueData.StartPositionTicks ?? 0;
+                    const itemId = current.ItemId;
+                    const startTicks = queueData.StartPositionTicks ?? 0;
                     const playlistItemId = current.PlaylistItemId || null;
 
                     log.info(
                         `SyncPlay PlayQueue: launching playback for item ${itemId} ` +
-                        `at ${Math.round(startTicks / 10000)}ms (PlaylistItemId: ${playlistItemId})`
+                            `at ${Math.round(startTicks / 10000)}ms (PlaylistItemId: ${playlistItemId})`
                     );
 
                     eventBus.emit('syncplay:startplayback', {
@@ -729,13 +794,14 @@ export class SyncPlayManager {
         // manually scrubbed the timeline and broadcast an echo to the server.
         this._ignoreLocalEventsAction = true;
         try {
-            this._player.seek(positionTicks);
+            this._player.seek(positionTicks, { suppressWaitingEvent: true });
         } finally {
-            // setTimeout ensures the suppression outlives the synchronous 'seek'
-            // event, and briefly covers async event bubbles if any.
+            // TizenAVPlayer can take 1-3 seconds to complete a seek + buffer cycle.
+            // If we reset this flag too early, the delayed 'playing' event leaks
+            // through and gets broadcast as a spurious Unpause to the entire group.
             setTimeout(() => {
                 this._ignoreLocalEventsAction = false;
-            }, 500);
+            }, 3000);
         }
     }
 
@@ -791,7 +857,7 @@ export class SyncPlayManager {
         this._clearScheduledCommand();
 
         const positionTicks = data.PositionTicks ?? 0;
-        const whenMs        = this._parseServerTime(data.When);
+        const whenMs = this._parseServerTime(data.When);
 
         if (whenMs === null) {
             log.warn('Play command missing When field');
@@ -800,7 +866,7 @@ export class SyncPlayManager {
 
         // Convert server play-time to local clock
         const playAtLocalMs = syncPlayTimeSync.toLocal(whenMs);
-        const nowMs         = Date.now();
+        const nowMs = Date.now();
 
         // Update playback anchor for drift correction (regardless of schedule)
         this._playbackCore?.setAnchor({ positionTicks, whenMs, isPlaying: true });
@@ -810,46 +876,62 @@ export class SyncPlayManager {
             //    then fire the actual unpause() at exactly the right moment.
             const delayMs = playAtLocalMs - nowMs;
 
-            log.info(`SyncPlay Play: scheduled in ${Math.round(delayMs)}ms at tick=${Math.round(positionTicks / TICKS_PER_MS)}ms`);
+            log.info(
+                `SyncPlay Play: scheduled in ${Math.round(delayMs)}ms at tick=${Math.round(positionTicks / TICKS_PER_MS)}ms`
+            );
 
-            this._programmaticSeek(positionTicks);
+            const currentPosTicks = this._player.getCurrentPositionTicks ? this._player.getCurrentPositionTicks() : 0;
+            const diffMs = Math.abs(currentPosTicks - positionTicks) / TICKS_PER_MS;
+            if (diffMs > 2000) {
+                this._programmaticSeek(positionTicks);
+            }
 
             this._scheduledCommandTimer = setTimeout(() => {
                 this._scheduledCommandTimer = null;
 
                 log.debug('SyncPlay Play: executing scheduled unpause');
 
-                // Mask so our _onPlaying listener doesn't re-intercept this
-                this._ignoreLocalEventsAction = true;
-                try {
-                    this._player.unpause();
-                } finally {
-                    setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+                // Flag the next 'playing' event so it doesn't bounce back as a
+                // user-initiated unpause action if the player had to buffer.
+                // We do NOT use _ignoreLocalEventsAction here because if the player
+                // needs to buffer, we WANT it to emit a 'waiting' event so the
+                // server knows we are buffering!
+                if (this._player && this._player.isPaused && this._player.isPaused()) {
+                    this._ignoreNextPlayingEcho = true;
                 }
+                
+                // Wrap unpause intent in suppression to prevent play event echo
+                this._ignoreLocalEventsAction = true;
+                this._player.unpause();
+                this._ignoreLocalEventsAction = false;
 
                 this._playbackCore?.startTracking();
             }, delayMs);
-
         } else {
             // ── Immediate (or late) play: figure out where we should be *now*
             //    by extrapolating from the server's anchor.
-            const lateMs       = nowMs - playAtLocalMs;
-            const currentTicks = positionTicks + (lateMs * TICKS_PER_MS);
+            const lateMs = nowMs - playAtLocalMs;
+            const currentTicks = positionTicks + lateMs * TICKS_PER_MS;
+
+            const currentPosTicks = this._player.getCurrentPositionTicks ? this._player.getCurrentPositionTicks() : 0;
+            const diffMs = Math.abs(currentPosTicks - currentTicks) / TICKS_PER_MS;
 
             log.info(
-                `SyncPlay Play: executing now (${Math.round(lateMs)}ms late), ` +
-                `seeking to ${Math.round(currentTicks / TICKS_PER_MS)}ms`
+                `SyncPlay Play: executing now (${Math.round(lateMs)}ms late), target is ${Math.round(currentTicks / TICKS_PER_MS)}ms, diff is ${Math.round(diffMs)}ms`
             );
 
-            this._programmaticSeek(Math.max(0, currentTicks));
-
-            // Mask so our _onPlaying listener doesn't re-intercept this
-            this._ignoreLocalEventsAction = true;
-            try {
-                this._player.unpause();
-            } finally {
-                setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+            if (diffMs > 2000) {
+                this._programmaticSeek(Math.max(0, currentTicks));
             }
+
+            if (diffMs > 2000 || (this._player && this._player.isPaused && this._player.isPaused())) {
+                this._ignoreNextPlayingEcho = true;
+            }
+            
+            // Wrap unpause intent in suppression to prevent play event echo
+            this._ignoreLocalEventsAction = true;
+            this._player.unpause();
+            this._ignoreLocalEventsAction = false;
 
             this._playbackCore?.startTracking();
         }
@@ -871,7 +953,7 @@ export class SyncPlayManager {
         this._clearScheduledCommand();
 
         const positionTicks = data.PositionTicks ?? 0;
-        const whenMs        = this._parseServerTime(data.When);
+        const whenMs = this._parseServerTime(data.When);
 
         log.info(`SyncPlay Pause at ${Math.round(positionTicks / TICKS_PER_MS)}ms`);
 
@@ -905,7 +987,9 @@ export class SyncPlayManager {
             // Suppress the _onPause local-action echo since this is server-side
             this._ignoreLocalEventsAction = true;
             this._player.pause();
-            setTimeout(() => { this._ignoreLocalEventsAction = false; }, 2500);
+            setTimeout(() => {
+                this._ignoreLocalEventsAction = false;
+            }, 2500);
         };
 
         const pauseAtLocalMs = whenMs !== null ? syncPlayTimeSync.toLocal(whenMs) : Date.now();
@@ -1058,8 +1142,8 @@ export class SyncPlayManager {
         this._currentPlaylistItemId = playlistItemId;
 
         // Find the item in the current queue
-        const queue   = playQueue.getQueue();
-        const itemIdx = queue.findIndex(i => i.PlaylistItemId === playlistItemId);
+        const queue = playQueue.getQueue();
+        const itemIdx = queue.findIndex((i) => i.PlaylistItemId === playlistItemId);
 
         if (itemIdx === -1) {
             log.warn('SetPlaylistItem: item not found in queue:', playlistItemId);
@@ -1071,7 +1155,7 @@ export class SyncPlayManager {
         // Emit a remote:play-like event so PlayerPage can handle the switch.
         // Rather than reimplementing playback here we piggyback on existing infra.
         eventBus.emit('syncplay:switchitem', {
-            item:  newItem,
+            item: newItem,
             index: itemIdx
         });
     }
@@ -1088,8 +1172,8 @@ export class SyncPlayManager {
     _enableInternal(groupInfo) {
         const wasEnabled = this._isEnabled;
 
-        this._isEnabled  = true;
-        this._groupInfo  = groupInfo;
+        this._isEnabled = true;
+        this._groupInfo = groupInfo;
 
         if (!wasEnabled) {
             // Start clock synchronization
@@ -1115,11 +1199,11 @@ export class SyncPlayManager {
 
         log.info('SyncPlay disabled');
 
-        this._isEnabled             = false;
-        this._groupInfo             = null;
-        this._groupName             = null;  // Clear the stored human-readable name
+        this._isEnabled = false;
+        this._groupInfo = null;
+        this._groupName = null; // Clear the stored human-readable name
         this._currentPlaylistItemId = null;
-        this._isBuffering           = false;
+        this._isBuffering = false;
 
         this._playbackCore?.stopTracking();
         this._unwirePlayerEvents();
@@ -1158,30 +1242,43 @@ export class SyncPlayManager {
         this._player.on('timeupdate', this._onTimeUpdate);
 
         // Player started buffering → tell the server to wait for us
+        // But NOT if we are responding to a server command or doing a programmatic
+        // drift-correction seek (SkipToSync). In those cases, the server already
+        // knows what's happening or we're just syncing naturally.
         this._onWaiting = () => {
-            if (!this._isBuffering) {
+            if (!this._ignoreLocalEventsAction && !this._isBuffering) {
                 this._isBuffering = true;
                 this._reportBuffering(false); // isPlaying = false while buffering
             }
         };
         this._player.on('waiting', this._onWaiting);
 
-        // Player resumed/started playing
+        // Player resumed/started playing (state change)
         this._onPlaying = () => {
             // When buffering resolves and player resumes, clear buffering state
             if (this._isBuffering) {
                 this._isBuffering = false;
-                this._reportBuffering(true); // isPlaying = true again
-            }
+                
+                 // If it was a group-initiated command that caused us to buffer,
+                // we should still clear the ignore token now that we are actually playing.
+                if (this._ignoreNextPlayingEcho) {
+                    log.debug('SyncPlay: _onPlaying caught commanded resume, clearing echo token');
+                    this._ignoreNextPlayingEcho = false;
+                }
 
-            // Propagate local play events (iff not triggered by a SyncPlayCommand),
-            // but DON'T intercept the play — just tell the server.
-            // The server will respond with a Play command to re-sync the group.
-            if (!this._ignoreLocalEventsAction) {
-                this._reportLocalAction('Unpause');
+                this._reportBuffering(true); // report ready (buffering=true)
             }
         };
         this._player.on('playing', this._onPlaying);
+
+        // Local Play Intent (user clicked Play/Unpause)
+        this._onPlay = () => {
+            // Iff NOT triggered by a SyncPlayCommand
+            if (!this._ignoreLocalEventsAction) {
+                 this._reportLocalAction('Unpause');
+            }
+        };
+        this._player.on('play', this._onPlay);
 
         // --------------------------------------------------------------------
         // Host Action Propagation (Local user pressed pause/seek)
@@ -1196,20 +1293,16 @@ export class SyncPlayManager {
 
         this._onSeek = () => {
             if (!this._ignoreLocalEventsAction) {
-                const ticks = this._player.getCurrentPositionTicks?.() ?? 0;
-                log.info(`SyncPlay: local seek detected at ${Math.round(ticks / TICKS_PER_MS)}ms, broadcasting to group...`);
+                const ticks = this._player.getCurrentPositionTicks?.() ?? Math.round(this._player.getCurrentPosition() * 10000);
+                log.info(
+                    `SyncPlay: local seek detected at ${Math.round(ticks / TICKS_PER_MS)}ms, broadcasting to group...`
+                );
 
-                // We must mask local events immediately following a user seek.
-                // The player will fire 'waiting' as it loads new segments, and if
-                // we report isPlaying:false to the server now, it will think the
-                // user manually paused, leaving the group parked after the seek!
-                this._ignoreLocalEventsAction = true;
-                
-                api.syncPlaySeek(ticks).catch(err => log.error('Failed to broadcast seek:', err));
-
-                setTimeout(() => {
-                    this._ignoreLocalEventsAction = false;
-                }, 1000); // Give the player a second to settle
+                // Send the seek event. We deliberately do NOT suppress local actions here anymore.
+                // Tizen will immediately emit 'waiting' after a seek, which is intercepted
+                // by _onWaiting, sending syncPlayBuffering() to the server. This correctly
+                // puts the group into a Waiting state until we finish buffering the seek.
+                api.syncPlaySeek(ticks).catch((err) => log.error('Failed to broadcast seek:', err));
             }
         };
         this._player.on('seek', this._onSeek);
@@ -1231,9 +1324,9 @@ export class SyncPlayManager {
         };
 
         if (action === 'Unpause') {
-            api.syncPlayUnpause(payload).catch(err => log.error('Failed to broadcast play:', err));
+            api.syncPlayUnpause(payload).catch((err) => log.error('Failed to broadcast play:', err));
         } else if (action === 'Pause') {
-            api.syncPlayPause(payload).catch(err => log.error('Failed to broadcast pause:', err));
+            api.syncPlayPause(payload).catch((err) => log.error('Failed to broadcast pause:', err));
         }
     }
 
@@ -1255,6 +1348,10 @@ export class SyncPlayManager {
         if (this._onPlaying) {
             this._player.off('playing', this._onPlaying);
             this._onPlaying = null;
+        }
+        if (this._onPlay) {
+            this._player.off('play', this._onPlay);
+            this._onPlay = null;
         }
         if (this._onPause) {
             this._player.off('pause', this._onPause);
@@ -1284,23 +1381,23 @@ export class SyncPlayManager {
 
         if (!this._player) return;
 
-        const positionTicks     = this._player.getCurrentPositionTicks?.() ?? 0;
+        const positionTicks = this._player.getCurrentPositionTicks?.() ?? 0;
         const currentLocalTimeMs = Date.now();
 
         const payload = {
             // ISO8601 — the server uses this to compute clock-adjusted triggers
-            When:             new Date(currentLocalTimeMs).toISOString(),
-            PositionTicks:    positionTicks,
-            IsPlaying:        isPlaying,
-            PlaylistItemId:   this._currentPlaylistItemId || undefined
+            When: new Date(currentLocalTimeMs).toISOString(),
+            PositionTicks: positionTicks,
+            IsPlaying: isPlaying,
+            PlaylistItemId: this._currentPlaylistItemId || undefined
         };
 
         if (isPlaying) {
             log.debug('SyncPlay: reporting ready (isPlaying=true)');
-            api.syncPlayReady(payload).catch(err => log.warn('syncPlayReady failed:', err));
+            api.syncPlayReady(payload).catch((err) => log.warn('syncPlayReady failed:', err));
         } else {
             log.debug('SyncPlay: reporting buffering (isPlaying=false)');
-            api.syncPlayBuffering(payload).catch(err => log.warn('syncPlayBuffering failed:', err));
+            api.syncPlayBuffering(payload).catch((err) => log.warn('syncPlayBuffering failed:', err));
         }
     }
 
@@ -1350,6 +1447,6 @@ export class SyncPlayManager {
 // Singleton exported for the plugin and UI to share
 export const syncPlayManager = new SyncPlayManager();
 
-// Explicitly expose to window to bypass Webpack 5 TDZ issues with dynamic module getter evaluation 
+// Explicitly expose to window to bypass Webpack 5 TDZ issues with dynamic module getter evaluation
 // in certain circular import topologies involving the UI layer.
 window.__syncPlayManager = syncPlayManager;

@@ -841,6 +841,7 @@ export class JellyfinPlayer extends EventEmitter {
      * Resume playback
      */
     unpause() {
+        this.emit(PlayerEvent.PLAY);
         this._backend?.unpause();
         // State update and event emission handled by _handleBackendEvent
     }
@@ -892,11 +893,13 @@ export class JellyfinPlayer extends EventEmitter {
     /**
      * Seek to position
      * @param {number} positionTicks - Position in ticks (1 tick = 100 nanoseconds)
+     * @param {Object} [options] - Additional options
+     * @param {boolean} [options.suppressWaitingEvent] - Don't emit 'waiting' during this seek's buffer phase
      */
-    seek(positionTicks) {
+    seek(positionTicks, options = {}) {
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
-        this._backend?.seek(positionTicks);
+        this._backend?.seek(positionTicks, options);
         this.emit('seek', { positionTicks });
     }
 

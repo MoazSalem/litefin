@@ -68,6 +68,13 @@ export class TizenAVPlayer {
         // Throttle for timeupdate events
         this._lastTimeUpdateTicks = 0;
 
+        // When pause() is called while AVPlay is mid-seek or mid-buffer, the native
+        // avplay.pause() call would throw PLAYER_ERROR_INVALID_OPERATION. Instead,
+        // we set this flag and apply the native pause the next time _checkNativePlay()
+        // is called (which happens when buffering completes). This prevents AVPlay from
+        // secretly resuming playback after a SyncPlay-triggered seek+handshake.
+        this._pendingPause = false;
+
         // Check Tizen availability: prioritize webapis (Samsung Hardware API) over tizen (Universal API)
         // On most Samsung TVs, webapis.avplay is the direct hardware interface.
         const avplay = window.webapis?.avplay || window.tizen?.avplay || null;
@@ -379,26 +386,19 @@ export class TizenAVPlayer {
             // position, rather than buffering from 0 and then doing a disruptive
             // post-play seek that snaps to an unpredictable keyframe.
             if (options.playerStartPositionTicks) {
-                let startMs = options.playerStartPositionTicks / 10000;
+                const startMs = options.playerStartPositionTicks / 10000;
 
-                // Keyframe Compensation: AVPlay Direct Play seeking can only land
-                // on keyframes (I-frames). Keyframe intervals vary (2-10s) and the
-                // seek always snaps FORWARD to the next keyframe, causing the user
-                // to skip past where they stopped. Subtracting a rewind buffer
-                // ensures the keyframe snap lands near or just before the original
-                // stop position — the same approach Netflix and Prime Video use.
-                const isDirectPlay = options.playMethod === 'DirectPlay';
-                if (isDirectPlay) {
-                    const KEYFRAME_REWIND_MS = 10000; // 10 seconds compensates for up to 10s GOP
-                    startMs = Math.max(0, startMs - KEYFRAME_REWIND_MS);
-                }
-
+                // Seek to the exact requested position. AVPlay will snap to the
+                // nearest keyframe before the target, which is a small natural offset
+                // that SyncPlay's drift correction handles automatically.
+                // The old -10s KEYFRAME_REWIND_MS hack made things worse — we were
+                // seeking 10s early and then reporting that fake position to SyncPlay,
+                // causing the group to wait 10s for Tizen to catch up.
                 try {
-                    log.info(`Initial seek to ${startMs}ms (before native play, DirectPlay rewind: ${isDirectPlay})`);
+                    log.info(`Initial seek to ${startMs}ms (before native play)`);
                     this._avplay.seekTo(startMs);
                 } catch (e) {
                     log.warn('Pre-play seek failed, will retry after play:', e);
-                    // Fallback: try seeking after play starts
                     this._pendingSeekMs = startMs;
                 }
             }
@@ -486,7 +486,8 @@ export class TizenAVPlayer {
         const listener = {
             onbufferingstart: () => {
                 log.debug('Buffering started');
-                if (this._isPlaying) {
+                this._hasEmittedPlaying = false; // Reset so 'playing' fires again upon resume
+                if (this._isPlaying && !this._suppressWaitingEvent) {
                     this.onEvent({ type: 'waiting' });
                 }
             },
@@ -821,6 +822,29 @@ export class TizenAVPlayer {
      * @private
      */
     _checkNativePlay() {
+        // ── Deferred Pause: apply any pending pause BEFORE we potentially start playing.
+        //
+        // When pause() is called while AVPlay is mid-seek or mid-buffer (returning
+        // a non-PLAYING state), we couldn't call avplay.pause() immediately.
+        // After the seek/buffer completes, _checkNativePlay() is called again via
+        // onbufferingcomplete. At that point, if _pendingPause is set, we apply the
+        // native pause now that AVPlay is back in a stable state — preventing it from
+        // sneaking back into playback while SyncPlay thinks we're paused.
+        if (this._pendingPause && this._avplay && this._isPrepared) {
+            try {
+                const state = this._avplay.getState();
+                if (state === 'PLAYING') {
+                    this._avplay.pause();
+                    this._pendingPause = false;
+                    log.info('_checkNativePlay(): applied deferred pause (post-seek/buffer)');
+                }
+            } catch (e) {
+                log.warn('Deferred pause failed (will retry):', e.message || e);
+            }
+            // Don't proceed with play — we still want to be paused
+            return;
+        }
+
         if (this._isPlaying && this._isPrepared && this._bufferingComplete && !this._isTizenPlaying) {
             try {
                 this._avplay.play();
@@ -1009,26 +1033,77 @@ export class TizenAVPlayer {
      * Pause playback
      */
     pause() {
-        if (this._avplay && this._isPlaying) {
-            try {
+        if (!this._avplay) return;
+
+        // Always update the logical play intent so higher layers (JellyfinPlayer,
+        // SyncPlayManager) see the player as paused, regardless of AVPlay's current
+        // internal state.
+        const wasPlaying = this._isPlaying;
+        this._isPlaying = false;
+        this._isTizenPlaying = false;
+        this._hasEmittedPlaying = false;
+
+        if (!wasPlaying) return; // Already considered paused — nothing to do
+
+        // Only call native pausing if AVPlay is actually in a PLAYING state.
+        // During a seek or buffering phase, AVPlay is NOT in PLAYING state and
+        // calling avplay.pause() throws PLAYER_ERROR_INVALID_OPERATION (code 15).
+        // If we can't pause now, set _pendingPause so _checkNativePlay() will
+        // apply the pause once AVPlay re-enters a stable PLAYING state post-seek.
+        // Without this, AVPlay would secretly resume playing after the seek,
+        // even though SyncPlay's state machine says we should be paused.
+        try {
+            const state = this._avplay.getState();
+            if (state === 'PLAYING') {
                 this._avplay.pause();
-                this._isPlaying = false;
-                this._hasEmittedPlaying = false; // Reset so playing fires cleanly on resume
-                this.onEvent({ type: 'pause' });
-            } catch (e) {
-                log.error('Pause failed:', e);
+                this._pendingPause = false; // Applied successfully — no deferral needed
+            } else {
+                // Non-playing state: defer the native pause
+                this._pendingPause = true;
+                log.debug(`pause(): AVPlay state is '${state}' — deferring native pause until post-seek/buffer`);
             }
+        } catch (e) {
+            // If getState() itself throws, set pending as a fallback.
+            this._pendingPause = true;
+            log.warn('pause(): getState() failed — deferring native pause:', e.message || e);
         }
+
+        this.onEvent({ type: 'pause' });
     }
 
     /**
-     * Resume playback
+     * Resume playback.
+     *
+     * Two cases we handle here:
+     *   1. Normal start: _isPlaying was false (normal pause → resume).
+     *      We flip _isPlaying and let _checkNativePlay() do the gate-check.
+     *   2. Post-seek resume: _isPlaying was already true (we were playing when
+     *      a SyncPlay seek came in, which paused us mid-play). In this case
+     *      _checkNativePlay() would bail because _isTizenPlaying is still true.
+     *      We handle this by directly calling avplay.play() if the state demands it.
      */
     unpause() {
-        if (this._avplay && !this._isPlaying) {
+        if (!this._avplay) return;
+
+        // Cancel any deferred pause — we want to play now.
+        this._pendingPause = false;
+
+        if (!this._isPlaying) {
+            // Standard unpause path: was fully paused, go through the double-gate.
             this._isPlaying = true;
             this.onEvent({ type: 'play' });
             this._checkNativePlay();
+        } else if (this._isPrepared) {
+            // Post-seek path: _isPlaying is already true (intent was never cleared)
+            // but Tizen may have stalled. Directly resume native playback.
+            try {
+                this._avplay.play();
+                this._isTizenPlaying = true;
+                log.info('unpause(): direct avplay.play() after mid-play seek resume');
+                this.onEvent({ type: 'play' });
+            } catch (e) {
+                log.error('unpause(): failed to resume after seek:', e);
+            }
         }
     }
 
@@ -1080,17 +1155,44 @@ export class TizenAVPlayer {
     /**
      * Seek to position
      * @param {number} positionTicks - Position in ticks
+     * @param {Object} [options] - Additional options
+     * @param {boolean} [options.suppressWaitingEvent] - Don't emit 'waiting' while buffering this seek
      */
-    seek(positionTicks) {
+    seek(positionTicks, options = {}) {
         if (!this._avplay || !this._isPrepared) return;
 
         try {
+            if (options.suppressWaitingEvent) {
+                this._suppressWaitingEvent = true;
+                
+                // Clear the suppression flag after a safe timeout, or it will be
+                // cleared naturally by onbufferingcomplete / oncurrentplaytime
+                if (this._suppressWaitingTimeout) clearTimeout(this._suppressWaitingTimeout);
+                this._suppressWaitingTimeout = setTimeout(() => {
+                    this._suppressWaitingEvent = false;
+                }, 3000);
+            }
+
             let targetTicks = positionTicks;
             if (this._currentPlayOptions?.transcodingOffsetTicks) {
                 targetTicks = Math.max(0, positionTicks - this._currentPlayOptions.transcodingOffsetTicks);
             }
             const positionMs = Math.floor(targetTicks / 10000);
             this._avplay.seekTo(positionMs);
+
+            // After seekTo(), AVPlay resumes buffering from the new position.
+            // If we were in PLAYING state when the seek was requested (e.g. during
+            // SyncPlay drift correction or a mid-play seek), AVPlay internally
+            // re-enters a READY/buffering phase, which means a subsequent avplay.play()
+            // IS needed. Reset _isTizenPlaying so unpause() -> _checkNativePlay()
+            // (or the direct path) works correctly after the seek.
+            if (this._isTizenPlaying) {
+                this._isTizenPlaying = false;
+                log.debug('seek(): reset _isTizenPlaying for post-seek resume');
+            }
+
+            // Emit a seek event so SyncPlayManager can react (e.g. broadcast to group, suppress echo).
+            this.onEvent({ type: 'seek' });
 
             // Manual timeupdate for paused state (native oncurrentplaytime is only fired when playing)
             const currentTime = targetTicks / 10000000;
