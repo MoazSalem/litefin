@@ -1551,6 +1551,7 @@ export default class OSDController extends Component {
                     this._seekTargetTicks = null;
                     this._seekStartTime = null;
                     this._seekDebounceTimer = null;
+                    this._isDraggingSeekbar = false;
                     if (tooltip) tooltip.classList.remove('visible');
 
                     /* Hide trickplay thumbnail when seek session ends */
