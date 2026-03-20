@@ -26,17 +26,20 @@ function supportsCodec(mime) {
     try {
         let isSupported = false;
 
-        // Check MediaSource (MSE pipeline used by Hls.js)
-        if (typeof window.MediaSource !== 'undefined' && typeof window.MediaSource.isTypeSupported === 'function') {
+        // Check Native <video> decoder FIRST (DirectPlay pipeline uses this)
+        const video = document.createElement('video');
+        isSupported = video.canPlayType(mime) !== '';
+
+        // Check MediaSource as fallback (MSE pipeline used by Hls.js)
+        // Some older WebOS versions return false in MSE even when Native succeeds
+        if (
+            !isSupported &&
+            typeof window.MediaSource !== 'undefined' &&
+            typeof window.MediaSource.isTypeSupported === 'function'
+        ) {
             if (window.MediaSource.isTypeSupported(mime)) {
                 isSupported = true;
             }
-        }
-
-        // Check Native <video> decoder (DirectPlay pipeline)
-        if (!isSupported) {
-            const video = document.createElement('video');
-            isSupported = video.canPlayType(mime) !== '';
         }
 
         return isSupported;
@@ -109,10 +112,10 @@ export function getDeviceCapabilities() {
 
     // ------------------------------------------------------------------------
     // Safe Defaults for Smart TVs
-    // Defaulting to UHD and HDR10 support is safer for Smart TVs to avoid
-    // unnecessary transcoding of 4K/HDR content on initial load.
     // ------------------------------------------------------------------------
-    let uhd = true;
+    // Conservatively determine 4K screens based on viewport if the OS hasn't reported it yet.
+    // Assuming uhd = true globally causes 1080p TVs to fail on playback bounds.
+    let uhd = window.screen.width >= 3840 || window.innerHeight >= 2160;
     let uhd8K = false;
     let dolbyVision = false;
 
@@ -123,8 +126,6 @@ export function getDeviceCapabilities() {
 
     // ------------------------------------------------------------------------
     // Sync Device Info
-    // Check webosAdapter first — it may have already loaded device info
-    // asynchronously during app startup.
     // ------------------------------------------------------------------------
     const info = webosAdapter.deviceInfo;
     if (info) {
@@ -136,7 +137,6 @@ export function getDeviceCapabilities() {
             if (info.dolbyVision === 'true') dolbyVision = true;
         }
     } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
-        // Fallback: Fire off the async call for the next profile build
         window.webOS.deviceInfo((res) => {
             log.info('WebOSProfile: Async deviceInfo received, clearing cache');
             clearCapabilitiesCache();
@@ -144,21 +144,33 @@ export function getDeviceCapabilities() {
     }
 
     const codecs = getProbedCodecs();
-    const hevc = codecs.hevc;
-    const av1 = codecs.av1;
-    const vp9 = codecs.vp9;
 
-    // Use probed HDR10 support, but allow device info to override if present
-    let hdr10 = codecs.hdr10;
-    if (info && info.hdr10) {
-        hdr10 = info.hdr10 === 'true';
+    // HEVC: Always trust TV to support HEVC unless explicitly denied by device info
+    let hevc = true;
+    if (info && info.hevc) {
+        hevc = info.hevc === 'true';
     }
+
+    // HDR10: Rely strictly on device info since MSE probing fails identically for 10-bit color
+    let hdr10 = false;
+    if (info) {
+        hdr10 = info.hdr10 === 'true' || info.hdr === 'true';
+    } else {
+        hdr10 = !!uhd || codecs.hdr10;
+    }
+
+    // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
+    // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
+    const vp9 = true;
+    const av1 = webosVersion >= 6;
 
     const ac3 = codecs.ac3;
     const eac3 = codecs.eac3;
 
-    // LG disabled DTS support on WebOS 5.0 through 22 (2020-2022 models)
-    const dts = !(webosVersion >= 5 && webosVersion < 23);
+    // LG disabled DTS decode support on WebOS 5.0 through 22, however, TVs can
+    // still pass-through DTS over eARC. Delegate this capability directly to the user's
+    // settings toggle, rather than hardcoding it to true or false.
+    const dts = PlayerSettings.get('enableDts') === true;
 
     const manualRes = PlayerSettings.get('maxResolution');
     if (manualRes && manualRes !== 'auto') {
@@ -301,7 +313,7 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     const maxAudioChannels = String(caps.maxAudioChannels);
-    const supportsFmp4Hls = caps.webosVersion >= 4; // WebOS 3.5 (some models) and 4.0+ support fMP4 HLS
+    const supportsFmp4Hls = caps.webosVersion >= 6; // WebOS 4/5 frequently stutter on fMP4 chunks
 
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
@@ -405,7 +417,9 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    // HLS + HEVC chunks are notoriously unstable on WebOS decoders. 
+    // Always force the server to defensively transcode strictly into H.264.
+    let transVideoCodecs = 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -495,12 +509,6 @@ export function buildJellyfinProfile(options = {}) {
     // H.264 levels: 5.1 for UHD, 4.1 for 1080p
     const h264Level = caps.uhd ? '51' : '41';
 
-    // HEVC levels: 5.1 for UHD, 4.0 for 1080p (Safe default)
-
-    const hdrCondition = !enableHDR
-        ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
-        : [];
-
     // We no longer strictly ban DOVI if enableDolbyVision is false because DOVI Profile 7/8
     // contains an HDR10 baselayer that most HDR10 TVs can play natively.
     // If the file is strictly Profile 5, it will play with wrong colors, but
@@ -511,17 +519,7 @@ export function buildJellyfinProfile(options = {}) {
             Type: 'Video',
             Codec: 'h264',
             Conditions: [
-                { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
-                {
-                    Condition: 'EqualsAny',
-                    Property: 'VideoProfile',
-                    Value: 'high|main|baseline|constrained baseline|high 10',
-                    IsRequired: false
-                },
-                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
-                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
-                { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                ...hdrCondition
+                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }
             ]
         },
         {
@@ -553,8 +551,7 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoBitDepth',
                     Value: caps.uhd || caps.hdr10 ? '10' : '8',
                     IsRequired: false
-                },
-                ...hdrCondition
+                }
             ]
         });
     }
@@ -569,8 +566,7 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoProfile',
                     Value: caps.uhd || caps.hdr10 ? 'profile 0|profile 2' : 'profile 0',
                     IsRequired: false
-                },
-                ...hdrCondition
+                }
             ]
         });
     }
@@ -586,8 +582,7 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoBitDepth',
                     Value: enableHDR ? '10' : '8',
                     IsRequired: false
-                },
-                ...hdrCondition
+                }
             ]
         });
     }
@@ -622,7 +617,7 @@ export function buildJellyfinProfile(options = {}) {
                     {
                         Condition: 'EqualsAny',
                         Property: 'VideoCodec',
-                        Value: 'hevc,h264'
+                        Value: 'h264'
                     }
                 ],
                 Action: 'Remux',
