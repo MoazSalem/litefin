@@ -1,6 +1,7 @@
 import Component from '../../core/Component.js';
 import { ICONS } from './icons.js';
 import { logger } from '../../utils/Logger.js';
+import { i18n } from '../../utils/i18n.js';
 
 const log = logger.create('SyncPlayNotification');
 
@@ -39,8 +40,8 @@ export default class SyncPlayNotification extends Component {
                     ${ICONS.group}
                 </div>
                 <div class="osd-syncplay-notification-text">
-                    <div class="osd-syncplay-notification-primary" id="syncPlayNotifPrimary">Action</div>
-                    <div class="osd-syncplay-notification-secondary" id="syncPlayNotifSecondary">User</div>
+                    <div class="osd-syncplay-notification-primary" id="syncPlayNotifPrimary">${i18n.t('SyncPlay')}</div>
+                    <div class="osd-syncplay-notification-secondary" id="syncPlayNotifSecondary">${i18n.t('SyncPlay')}</div>
                 </div>
             </div>
         `;

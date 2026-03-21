@@ -490,3 +490,29 @@
 [dir="rtl"] .overview-text {
     unicode-bidi: isolate;
 }
+
+/* ================== SYNCPLAY MENU ================== */
+[dir="rtl"] .syncplay-header > * + * {
+    margin-left: 0;
+    margin-right: 16px;
+}
+
+[dir="rtl"] .syncplay-status-badge > * + * {
+    margin-left: 0;
+    margin-right: 8px;
+}
+
+[dir="rtl"] .syncplay-status-dot {
+    margin-right: 0;
+    margin-left: 6px;
+}
+
+[dir="rtl"] .syncplay-actions > * + * {
+    margin-left: 0;
+    margin-right: 12px;
+}
+
+/* ================== SYNCPLAY NOTIFICATIONS ================== */
+[dir="rtl"] .osd-syncplay-notification-glass {
+    padding: 16px 24px 16px 32px;
+}

@@ -25,6 +25,7 @@ import { eventBus } from '../EventBus.js';
 import { logger } from '../../utils/Logger.js';
 import { focusManager } from '../../ui/FocusManager.js';
 import { ICONS } from '../../player/osd/icons.js';
+import { i18n } from '../../utils/i18n.js';
 
 // Note: no longer imports BaseMenu — SyncPlayGroupMenu is now a fully
 // standalone overlay that can be opened from any context (sidebar, OSD, etc.)
@@ -189,7 +190,7 @@ export class SyncPlayGroupMenu {
         let initialBadge = `
             <div class="syncplay-status-badge inactive">
                 <div class="syncplay-status-dot"></div>
-                Loading...
+                ${i18n.t('Loading')}
             </div>
         `;
         if (getSyncPlayManager()) {
@@ -204,20 +205,20 @@ export class SyncPlayGroupMenu {
                         ${(getSyncPlayManager()?.isEnabled) ? ICONS.groupFilled : ICONS.group}
                     </div>
                     <div>
-                        <div class="syncplay-title">SyncPlay</div>
-                        <div class="syncplay-subtitle">Watch together, in perfect sync</div>
+                        <div class="syncplay-title">${i18n.t('SyncPlay')}</div>
+                        <div class="syncplay-subtitle">${i18n.t('SyncPlaySubtitle')}</div>
                     </div>
                 </div>
 
                 ${initialBadge}
 
                 <div id="syncplay-group-container">
-                    <div class="syncplay-loading">Loading groups…</div>
+                    <div class="syncplay-loading">${i18n.t('SyncPlayLoadingGroups')}</div>
                 </div>
 
                 <div class="syncplay-actions" id="syncplay-actions-container">
                     <!-- Buttons are populated dynamically by _refreshStatus -->
-                    <button class="syncplay-btn syncplay-btn-secondary focusable" id="syncplay-close-btn">Close</button>
+                    <button class="syncplay-btn syncplay-btn-secondary focusable" id="syncplay-close-btn">${i18n.t('ButtonClose')}</button>
                 </div>
             </div>
         `;
@@ -242,22 +243,22 @@ export class SyncPlayGroupMenu {
             return `
                 <div class="syncplay-status-badge inactive">
                     <div class="syncplay-status-dot"></div>
-                    Loading...
+                    ${i18n.t('Loading')}
                 </div>
             `;
         }
 
         const isActive = manager.isEnabled;
         const info = manager.groupInfo;
-        const groupName = manager.groupName || info?.Data?.GroupName || info?.GroupName || info?.GroupId || 'Not in a group';
+        const groupName = manager.groupName || info?.Data?.GroupName || info?.GroupName || info?.GroupId || i18n.t('SyncPlayNotInGroup');
 
         return `
             <div class="syncplay-status-badge ${isActive ? '' : 'inactive'}">
                 <div class="syncplay-status-dot ${isActive ? 'pulse' : ''}"></div>
-                ${isActive ? `In group — ${groupName}` : 'Not in a group'}
+                ${isActive ? i18n.t('SyncPlayInGroup', groupName) : i18n.t('SyncPlayNotInGroup')}
             </div>
         `;
-    }
+}
 
     _refreshStatus() {
         if (!this._overlay) return;
@@ -284,7 +285,7 @@ export class SyncPlayGroupMenu {
             const wasFocused = oldBtn === document.activeElement || oldBtn?.classList.contains('focused');
             
             if (manager.isEnabled) {
-                const html = `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">Leave Group</button>`;
+                const html = `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">${i18n.t('SyncPlayLeave')}</button>`;
                 if (oldBtn) oldBtn.outerHTML = html;
                 else actions.insertAdjacentHTML('afterbegin', html);
                 
@@ -294,7 +295,7 @@ export class SyncPlayGroupMenu {
                     if (wasFocused) focusManager.focusElement(leaveBtn);
                 }
             } else {
-                const html = `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">Create Group</button>`;
+                const html = `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">${i18n.t('SyncPlayCreate')}</button>`;
                 if (oldBtn) oldBtn.outerHTML = html;
                 else actions.insertAdjacentHTML('afterbegin', html);
                 
@@ -327,7 +328,7 @@ export class SyncPlayGroupMenu {
             this._renderGroupList(container, groups || []);
         } catch (err) {
             log.warn('Failed to load groups:', err);
-            container.innerHTML = `<div class="syncplay-empty">Could not load groups. Check your connection.</div>`;
+            container.innerHTML = `<div class="syncplay-empty">${i18n.t('SyncPlayLoadError')}</div>`;
         }
     }
 
@@ -346,12 +347,12 @@ export class SyncPlayGroupMenu {
         // and you must leave your current group to join another.
         // -----------------------------------------------------------------
         if (manager?.isEnabled) {
-            container.innerHTML = `<div class="syncplay-empty">You are currently in a SyncPlay group.<br>Leave your group to join another.</div>`;
+            container.innerHTML = `<div class="syncplay-empty">${i18n.t('SyncPlayAlreadyInGroupDesc')}</div>`;
             return;
         }
 
         if (groups.length === 0) {
-            container.innerHTML = `<div class="syncplay-empty">No groups found — create one to get started.</div>`;
+            container.innerHTML = `<div class="syncplay-empty">${i18n.t('SyncPlayNoGroups')}</div>`;
             return;
         }
 
@@ -366,14 +367,16 @@ export class SyncPlayGroupMenu {
 
             // Member count
             const memberCount = group.Participants?.length ?? 0;
-            const memberLabel = memberCount === 1 ? '1 member' : `${memberCount} members`;
+            const memberLabel = memberCount === 1 
+                ? i18n.t('SyncPlayMemberCountOne') 
+                : i18n.t('SyncPlayMemberCountMany', memberCount);
 
             li.innerHTML = `
                 <div>
                     <div class="syncplay-group-name">${group.GroupName || group.GroupId}</div>
                     <div class="syncplay-group-members">${memberLabel}</div>
                 </div>
-                <div class="syncplay-group-join-btn">Join →</div>
+                <div class="syncplay-group-join-btn">${i18n.t('SyncPlayJoin')} →</div>
             `;
 
             li.addEventListener('click', () => this._joinGroup(group.GroupId));

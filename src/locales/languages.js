@@ -3,7 +3,7 @@ export const availableLanguages = [
     {
         "value": "en-us",
         "label": "English",
-        "completeness": 0
+        "completeness": 100.0
     },
     {
         "value": "ab",
