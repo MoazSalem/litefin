@@ -1966,15 +1966,16 @@ class SettingsPage extends Page {
                 <div class="modal-options">
                     ${options
                         .map((opt) => {
-                            const isPartial = opt.completeness !== undefined && opt.completeness < 85;
-                            const percentage = opt.completeness !== undefined ? Math.floor(opt.completeness) : 0;
                             let badge = '';
-                            if (percentage === 0) {
-                                badge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
-                            } else if (isPartial) {
-                                badge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
-                            } else {
-                                badge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                            if (opt.completeness !== undefined) {
+                                const percentage = Math.floor(opt.completeness);
+                                if (percentage === 0) {
+                                    badge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
+                                } else if (percentage < 85) {
+                                    badge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
+                                } else {
+                                    badge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                                }
                             }
                             return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
