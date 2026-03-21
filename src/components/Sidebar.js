@@ -296,7 +296,7 @@ class Sidebar extends Component {
                 // Then handle expansion
                 if (hasFocus) {
                     this._expand(true);
-                } else if (!this.el.matches(':hover')) {
+                } else {
                     this._expand(false);
                 }
             });
