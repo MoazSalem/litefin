@@ -417,7 +417,7 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    // HLS + HEVC chunks are notoriously unstable on WebOS decoders. 
+    // HLS + HEVC chunks are notoriously unstable on WebOS decoders.
     // Always force the server to defensively transcode strictly into H.264.
     let transVideoCodecs = 'h264';
 
@@ -518,9 +518,7 @@ export function buildJellyfinProfile(options = {}) {
         {
             Type: 'Video',
             Codec: 'h264',
-            Conditions: [
-                { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }
-            ]
+            Conditions: [{ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }]
         },
         {
             Type: 'Audio',

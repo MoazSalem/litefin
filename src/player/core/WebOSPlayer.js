@@ -340,20 +340,11 @@ export class WebOSPlayer {
             video.removeChild(video.firstChild);
         }
 
-        const source = document.createElement('source');
-        source.src = options.url;
-
-        // Provide type hints for the hardware pipeline
-        const url = options.url.toLowerCase();
-        if (url.includes('.mkv') || url.includes('container=mkv')) {
-            source.type = 'video/x-matroska';
-        } else if (url.includes('.mp4') || url.includes('container=mp4')) {
-            source.type = 'video/mp4';
-        } else if (url.includes('.webm') || url.includes('container=webm')) {
-            source.type = 'video/webm';
-        }
-
-        video.appendChild(source);
+        // Assign directly to video.src. WebOS hardware media pipeline will
+        // probe the container automatically. Using <source> elements with
+        // MIME types like 'video/x-matroska' causes the Chromium layer to
+        // silently reject the source before the media pipeline sees it.
+        video.src = options.url;
         video.autoplay = true;
 
         video.load();
