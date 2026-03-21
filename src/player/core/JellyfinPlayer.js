@@ -1649,14 +1649,84 @@ export class JellyfinPlayer extends EventEmitter {
                             (options.item?.Type === 'AudioBook') ||
                             (options.item?.Type === 'PodcastEpisode');
 
+        // Deep clone the device profile so we can mutilate it to trick the server without affecting future calls
+        const clonedProfile = JSON.parse(JSON.stringify(deviceProfile || buildJellyfinProfile(maxBitrate)));
+
         const requestBody = {
-            DeviceProfile: deviceProfile || buildJellyfinProfile(maxBitrate),
+            DeviceProfile: clonedProfile,
             UserId: options.userId,
             MaxStreamingBitrate: maxBitrate,
             StartTimeTicks: options.startPositionTicks || 0,
             AutoOpenLiveStream: true,
-            EnableDirectStream: this.useTizenPlayer ? false : true
+            // Default to true for both, let server profiles decide unless strictly overridden below
+            EnableDirectPlay: true,
+            EnableDirectStream: true
         };
+
+        // Strict Playback Mode Enforcement
+        const forceTranscodeSetting = PlayerSettings.get('forceTranscode');
+        const currentMode = forceTranscodeSetting ? 'transcode' : this._playbackMode;
+
+        switch (currentMode) {
+            case 'directPlay':
+                requestBody.EnableDirectPlay = true;
+                requestBody.EnableDirectStream = false;
+                requestBody.EnableTranscoding = false;
+                requestBody.AllowVideoStreamCopy = false;
+                requestBody.AllowAudioStreamCopy = false;
+                
+                // Nuclear option: tell the server we can parse everything natively
+                requestBody.DeviceProfile.DirectPlayProfiles = [{
+                    Container: 'm4v,3gp,ts,mpegts,mov,xvid,vob,mkv,wmv,asf,ogm,ogv,m2v,avi,mpg,mpeg,mp4,webm,wtv,dvr-ms,m2ts,rmvb,mxf',
+                    AudioCodec: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                    VideoCodec: 'h264,h265,hevc,vp8,vp9,mpeg1video,mpeg2video,mpeg4,wmv2,wmv3,vcl,theora,vc1,mpeg,h263,msmpeg4,av1',
+                    Type: 'Video'
+                }, {
+                    Container: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                    AudioCodec: 'aac,mp3,mpa,wav,wma,wv,flac,ogg,oga,vorbis,ac3,eac3,dts,dtshd,opus,truehd,alac',
+                    Type: 'Audio'
+                }];
+                // Clear any transcoding/direct stream profiles and ALL codec limits
+                requestBody.DeviceProfile.TranscodingProfiles = [];
+                requestBody.DeviceProfile.DirectStreamProfiles = [];
+                requestBody.DeviceProfile.CodecProfiles = [];
+                requestBody.DeviceProfile.ContainerProfiles = [];
+                
+                log.info('PlaybackInfo API Override: Enforcing STRICT Direct Play (Safeguarded DeviceProfile)');
+                break;
+            case 'remux':
+                requestBody.EnableDirectPlay = false;
+                requestBody.EnableDirectStream = true;
+                // EnableTranscoding must be true for Jellyfin to process a Remux stream
+                requestBody.EnableTranscoding = true;
+                requestBody.AllowVideoStreamCopy = true;
+                requestBody.AllowAudioStreamCopy = true;
+                
+                // Clear ALL codec limits to prevent "VideoBitDepthNotSupported" etc which block generic remux
+                requestBody.DeviceProfile.CodecProfiles = [];
+                requestBody.DeviceProfile.ContainerProfiles = [];
+                requestBody.DeviceProfile.DirectPlayProfiles = [];
+
+                log.info('PlaybackInfo API Override: Enforcing STRICT Remuxing (Safeguarded DeviceProfile)');
+                break;
+            case 'transcode':
+                requestBody.EnableDirectPlay = false;
+                requestBody.EnableDirectStream = false;
+                requestBody.EnableTranscoding = true;
+                requestBody.AllowVideoStreamCopy = false;
+                requestBody.AllowAudioStreamCopy = false;
+
+                // Force server to drop standard formats so it transcodes
+                requestBody.DeviceProfile.DirectPlayProfiles = [];
+                requestBody.DeviceProfile.DirectStreamProfiles = [];
+
+                log.info('PlaybackInfo API Override: Enforcing STRICT Transcoding (No stream copying)');
+                break;
+            case 'auto':
+            default:
+                // Keep defaults, Server and DeviceProfile make the decision
+                break;
+        }
 
         if (options.mediaSourceId) {
             requestBody.MediaSourceId = options.mediaSourceId;

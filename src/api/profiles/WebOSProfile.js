@@ -543,13 +543,13 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: caps.uhd || caps.hdr10 ? 'main|main 10' : 'main',
+                    Value: caps.uhd || caps.hdr10 ? 'main|main 10' : 'main|main 10',
                     IsRequired: false
                 },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: caps.uhd || caps.hdr10 ? '10' : '8',
+                    Value: '10',
                     IsRequired: false
                 }
             ]
@@ -564,7 +564,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: caps.uhd || caps.hdr10 ? 'profile 0|profile 2' : 'profile 0',
+                    Value: caps.uhd || caps.hdr10 ? 'profile 0|profile 2' : 'profile 0|profile 2',
                     IsRequired: false
                 }
             ]
@@ -580,7 +580,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: enableHDR ? '10' : '8',
+                    Value: '10',
                     IsRequired: false
                 }
             ]
