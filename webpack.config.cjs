@@ -160,7 +160,7 @@ const normalConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
+                test: /\.m?js$/,
                 exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
@@ -197,6 +197,7 @@ const normalConfig = {
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
+    target: ['web', 'es5'],
     mode: 'production',
     entry: ['url-search-params-polyfill', './src/index.js'],
 
@@ -214,8 +215,8 @@ const legacyConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|hls\.js|libpgs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
@@ -251,6 +252,7 @@ const legacyConfig = {
 // ============================================================================
 const ultraLegacyConfig = {
     name: 'ultra-legacy',
+    target: ['web', 'es5'],
     mode: 'production',
     entry: ['whatwg-fetch', 'url-search-params-polyfill', './src/index.js'],
 
@@ -268,8 +270,8 @@ const ultraLegacyConfig = {
     module: {
         rules: [
             {
-                test: /\.js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill)[\\/])/,
+                test: /\.m?js$/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|hls\.js|libpgs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
