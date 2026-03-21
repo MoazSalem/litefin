@@ -277,7 +277,13 @@ export function buildJellyfinProfile(options = {}) {
     const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
     const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
     const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
-    const enableHDR = PlayerSettings.get('enableHDR');
+    
+    // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
+    let enableHDR = PlayerSettings.get('enableHDR');
+    if (localStorage.getItem('player:enableHDR') === null) {
+        enableHDR = caps.hdr10;
+    }
+    
     const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
@@ -538,13 +544,13 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: caps.uhd || caps.hdr10 ? 'main|main 10' : 'main|main 10',
+                    Value: enableHDR ? 'main|main 10' : 'main',
                     IsRequired: false
                 },
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: '10',
+                    Value: enableHDR ? '10' : '8',
                     IsRequired: false
                 }
             ]
@@ -559,7 +565,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
-                    Value: caps.uhd || caps.hdr10 ? 'profile 0|profile 2' : 'profile 0|profile 2',
+                    Value: enableHDR ? 'profile 0|profile 2' : 'profile 0',
                     IsRequired: false
                 }
             ]
@@ -575,7 +581,7 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'VideoBitDepth',
-                    Value: '10',
+                    Value: enableHDR ? '10' : '8',
                     IsRequired: false
                 }
             ]

@@ -741,11 +741,29 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="HDRDescription">${i18n.t('HDRDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableHDR') ? 'active' : ''}" 
-                                id="toggle-enable-hdr" 
-                                data-setting="enableHDR"
-                                tabindex="0">
-                        </button>
+                        ${(() => {
+                            // Hybrid dynamic default for HDR
+                            let isHdrOn = PlayerSettings.get('enableHDR');
+                            if (localStorage.getItem('player:enableHDR') === null) {
+                                // First launch: Base the toggle state entirely on hardware capabilities
+                                // If running on WebOS/Tizen, default OFF if it's an SDR 1080p display
+                                try {
+                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform 
+                                    // but we can just require DeviceProfile generically if we were importing it.
+                                    // To be safer without circular imports in SettingsPage, we inspect window width.
+                                    isHdrOn = window.screen.width >= 3840;
+                                } catch (e) {
+                                    isHdrOn = true;
+                                }
+                            }
+                            return `
+                                <button class="toggle-switch ${isHdrOn ? 'active' : ''}" 
+                                        id="toggle-enable-hdr" 
+                                        data-setting="enableHDR"
+                                        tabindex="0">
+                                </button>
+                            `;
+                        })()}
                     </div>
                 </div>
 

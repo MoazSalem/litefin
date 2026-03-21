@@ -166,9 +166,13 @@ export function buildJellyfinProfile(options = {}) {
     const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
     const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
 
-    // HDR isn't generally handled smoothly in web browsers to external displays without OS help,
-    // but we respect the toggle
-    const enableHDR = PlayerSettings.get('enableHDR') && caps.hdr10;
+    // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
+    let enableHDR = PlayerSettings.get('enableHDR');
+    if (localStorage.getItem('player:enableHDR') === null) {
+        // HDR isn't handled perfectly in all browsers, but many 4K screens/OSs handle tone mapping.
+        // We'll stick to caps.hdr10 default (which is usually false for Web) but allow full user override.
+        enableHDR = !!caps.hdr10;
+    }
 
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
@@ -345,16 +349,7 @@ export function buildJellyfinProfile(options = {}) {
             Type: 'Video',
             Codec: 'h264',
             Conditions: [
-                { Condition: 'NotEquals', Property: 'IsAnamorphic', Value: 'true', IsRequired: false },
-                {
-                    Condition: 'EqualsAny',
-                    Property: 'VideoProfile',
-                    Value: 'high|main|baseline|constrained baseline|high 10',
-                    IsRequired: false
-                },
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
-                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
-                { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
                 rangeCondition,
                 bitrateCondition
             ]
@@ -377,9 +372,13 @@ export function buildJellyfinProfile(options = {}) {
             Type: 'Video',
             Codec: 'hevc',
             Conditions: [
-                { Condition: 'EqualsAny', Property: 'VideoProfile', Value: 'main|main 10', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: hevcLevel, IsRequired: false },
-                { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '10', IsRequired: false },
+                {
+                    Condition: 'LessThanEqual',
+                    Property: 'VideoBitDepth',
+                    Value: enableHDR ? '10' : '8',
+                    IsRequired: false
+                },
                 rangeCondition,
                 bitrateCondition
             ]
