@@ -151,13 +151,10 @@ export function getDeviceCapabilities() {
         hevc = info.hevc === 'true';
     }
 
-    // HDR10: Rely strictly on device info since MSE probing fails identically for 10-bit color
-    let hdr10 = false;
-    if (info) {
-        hdr10 = info.hdr10 === 'true' || info.hdr === 'true';
-    } else {
-        hdr10 = !!uhd || codecs.hdr10;
-    }
+    // HDR10: Rely strictly on the UHD detection. MSE probing natively fails across WebOS 
+    // and device info strings are too inconsistent. If it's a 4K WebOS TV, it handles HDR10.
+    // If not, it safely falls back to internal SDR tone-mapping automatically.
+    const hdr10 = uhd;
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
@@ -280,7 +277,7 @@ export function buildJellyfinProfile(options = {}) {
     const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
     const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
     const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
-    const enableHDR = PlayerSettings.get('enableHDR') && caps.hdr10;
+    const enableHDR = PlayerSettings.get('enableHDR');
     const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
