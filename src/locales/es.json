@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "No mostrar ningún texto sobre las imágenes del protector de pantalla de fondo",
     "BackendTizen": "Nativo de Tizen (Avplay)",
     "BackendWeb": "Web (Reproductor HTML5)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Color de fondo",
     "BackgroundColorDescription": "Color de fondo de los subtítulos",
     "BackgroundOpacity": "Opacidad del fondo",

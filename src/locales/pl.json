@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Nie wyświetlaj żadnego tekstu na obrazach wygaszacza ekranu",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Kolor tła",
     "BackgroundColorDescription": "Kolor tła napisów",
     "BackgroundOpacity": "Przezroczystość tła",

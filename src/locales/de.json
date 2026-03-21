@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Keinen Text über den Bildern des Bildschirmschoners anzeigen",
     "BackendTizen": "Tizen Nativ (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Hintergrundfarbe",
     "BackgroundColorDescription": "Hintergrundfarbe der Untertitel",
     "BackgroundOpacity": "Hintergrund-Deckkraft",

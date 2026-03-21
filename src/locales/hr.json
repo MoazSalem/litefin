@@ -251,6 +251,7 @@
     "BackdropHideTextDescription": "Ne prikazuj tekst preko slika čuvara zaslona s pozadinom",
     "BackendTizen": "Tizen izvorni (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Boja pozadine",
     "BackgroundColorDescription": "Boja pozadine titlova",
     "BackgroundOpacity": "Neprozirnost pozadine",

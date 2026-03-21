@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "不要在背景幕屏幕保护程序图像上显示任何文本",
     "BackendTizen": "Tizen 原生 (Avplay)",
     "BackendWeb": "Web (HTML5 播放器)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "背景颜色",
     "BackgroundColorDescription": "字幕背景颜色",
     "BackgroundOpacity": "背景不透明度",

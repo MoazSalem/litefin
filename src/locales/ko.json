@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "배경 화면 보호기 이미지 위에 텍스트를 표시하지 않습니다",
     "BackendTizen": "Tizen 네이티브 (Avplay)",
     "BackendWeb": "웹 (HTML5 플레이어)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "배경색",
     "BackgroundColorDescription": "자막 배경색",
     "BackgroundOpacity": "배경 불투명도",

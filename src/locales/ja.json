@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "背景スクリーンセーバーの画像の上にテキストを表示しない",
     "BackendTizen": "Tizenネイティブ (Avplay)",
     "BackendWeb": "Web (HTML5プレイヤー)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "背景色",
     "BackgroundColorDescription": "字幕の背景色",
     "BackgroundOpacity": "背景の不透明度",

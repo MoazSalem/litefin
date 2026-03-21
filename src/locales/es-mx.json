@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Do not show any text over the backdrop screensaver images",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Background Color",
     "BackgroundColorDescription": "Subtitle background color",
     "BackgroundOpacity": "Background Opacity",

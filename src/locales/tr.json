@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Arka plan ekran koruyucu resimlerinin üzerinde herhangi bir metin gösterme",
     "BackendTizen": "Tizen Yerel (Avplay)",
     "BackendWeb": "Web (HTML5 Oynatıcı)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Arka Plan Rengi",
     "BackgroundColorDescription": "Altyazı arka plan rengi",
     "BackgroundOpacity": "Arka Plan Opaklığı",

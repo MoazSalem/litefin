@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Non mostrare alcun testo sopra le immagini dello sfondo del salvaschermo",
     "BackendTizen": "Tizen Nativo (Avplay)",
     "BackendWeb": "Web (Lettore HTML5)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Colore di Sfondo",
     "BackgroundColorDescription": "Colore di sfondo dei sottotitoli",
     "BackgroundOpacity": "Opacità Sfondo",

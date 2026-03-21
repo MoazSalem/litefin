@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Visa ingen text över bakgrundsbilderna i skärmsläckaren",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Webb (HTML5-spelare)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Bakgrundsfärg",
     "BackgroundColorDescription": "Bakgrundsfärg för undertexter",
     "BackgroundOpacity": "Bakgrundens opacitet",

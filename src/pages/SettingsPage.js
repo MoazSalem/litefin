@@ -706,15 +706,18 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="PlayerBackendDescription">${i18n.t('PlayerBackendDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        ${this._renderDropdown(
-                            'player-backend-select',
-                            [
+                        ${(() => {
+                            const options = [
                                 { value: 'auto', label: i18n.t('AutoRecommended') },
-                                { value: 'html5', label: i18n.t('BackendWeb') },
-                                { value: 'avplay', label: i18n.t('BackendTizen') }
-                            ],
-                            currentBackend
-                        )}
+                                { value: 'html5', label: i18n.t('BackendWeb') }
+                            ];
+                            if (platformInfo.isTizen) {
+                                options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
+                            } else if (platformInfo.isWebOS) {
+                                options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
+                            }
+                            return this._renderDropdown('player-backend-select', options, currentBackend);
+                        })()}
                     </div>
                 </div>
 

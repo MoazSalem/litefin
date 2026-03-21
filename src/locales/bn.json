@@ -251,6 +251,7 @@
     "BackdropHideTextDescription": "ব্যাকড্রপ স্ক্রিনসেভার ছবির উপর কোনো টেক্সট দেখাবেন না",
     "BackendTizen": "টিজেন নেটিভ (Avplay)",
     "BackendWeb": "ওয়েব (HTML5 প্লেয়ার)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "ব্যাকগ্রাউন্ড কালার",
     "BackgroundColorDescription": "সাবটাইটেল ব্যাকগ্রাউন্ড কালার",
     "BackgroundOpacity": "ব্যাকগ্রাউন্ড অপাসিটি",

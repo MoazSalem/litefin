@@ -249,6 +249,7 @@
     "BackdropHideTextDescription": "Không hiển thị bất kỳ văn bản nào trên phông nền trình bảo vệ màn hình",
     "BackendTizen": "Tizen Bản địa (Avplay)",
     "BackendWeb": "Web (Trình phát HTML5)",
+    "BackendWebOS": "LG Native (webOS Player)",
     "BackgroundColor": "Màu nền",
     "BackgroundColorDescription": "Màu nền phụ đề",
     "BackgroundOpacity": "Độ mờ nền",
