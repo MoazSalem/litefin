@@ -30,6 +30,30 @@ jobs:
       - name: Build all packages
         run: npm run package
 
+      - name: Generate Homebrew Manifest
+        id: manifest
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          IPK_FILE="Litefin-${VERSION}-legacy-webos.ipk"
+          SHA256=$(sha256sum "$IPK_FILE" | cut -d ' ' -f 1)
+          
+          cat <<EOF > manifest.json
+          {
+            "id": "org.litefin.app",
+            "version": "$VERSION",
+            "type": "web",
+            "title": "Litefin",
+            "appDescription": "Native Jellyfin client for WebOS",
+            "iconUri": "https://raw.githubusercontent.com/MoazSalem/litefin/development/icon-130.png",
+            "sourceUrl": "https://github.com/MoazSalem/litefin",
+            "rootRequired": false,
+            "ipkUrl": "$IPK_FILE",
+            "ipkHash": {
+              "sha256": "$SHA256"
+            }
+          }
+          EOF
+
       - name: Read Release Footer
         id: footer
         run: |
@@ -47,5 +71,6 @@ jobs:
           files: |
             *.wgt
             *.ipk
+            manifest.json
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
