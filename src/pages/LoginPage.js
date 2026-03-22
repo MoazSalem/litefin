@@ -848,7 +848,7 @@ class LoginPage extends Page {
         if (this._state === STATE.QUICK_CONNECT) {
             // Cancel the polling loop and return to the user list
             this._cancelQuickConnect();
-            return;
+            return true;
         } else if (this._state === STATE.PASSWORD) {
             if (this._users.length > 0) {
                 this._showState(STATE.USERS);
@@ -859,9 +859,8 @@ class LoginPage extends Page {
                     const firstCard = this._usersGrid.querySelector('.user-card');
                     if (firstCard) firstCard.focus();
                 }, 100);
-                this.setActiveSection('login-server');
-                setTimeout(() => this._serverInput.focus(), 100);
             }
+            return true;
         } else if (this._state === STATE.SERVER) {
             // Exit app if back is pressed on server screen
             if (typeof tizen !== 'undefined') {
@@ -873,16 +872,17 @@ class LoginPage extends Page {
             } else {
                 log.info('App exit (simulated)');
             }
+            return true;
         } else if (this._state === STATE.USERS) {
             this._showState(STATE.SERVER);
             this.setActiveSection('login-server');
-            this.setActiveSection('login-server');
             this._serverInput.focus();
+            return true;
         } else if (this._state === STATE.MANUAL) {
             // Prevent going back if autoredirected (no users found)
             if (this._isManualLoginAutoRedirect) {
                 log.info('Manual Login: Back suppressed (AutoRedirect mode)');
-                return;
+                return true;
             }
 
             this._showState(STATE.USERS);
@@ -890,7 +890,9 @@ class LoginPage extends Page {
             setTimeout(() => {
                 this.$('.manual-login-btn')?.focus();
             }, 100);
+            return true;
         }
+        return false;
     }
 
     _showState(newState) {
@@ -931,7 +933,7 @@ class LoginPage extends Page {
     }
 
     onBack() {
-        this._goBack();
+        return this._goBack();
     }
 
     // ========================================================================
