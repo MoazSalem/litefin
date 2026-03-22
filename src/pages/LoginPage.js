@@ -53,6 +53,8 @@ class LoginPage extends Page {
         this._quickConnectSecret = null; // Secret returned by /QuickConnect/Initiate
         this._quickConnectPollTimer = null; // setInterval handle for status polling
         this._quickConnectPollCount = 0; // How many polls have been made so far
+
+        this._isManualLoginAutoRedirect = false; // Whether we reached manual login because users were hidden
     }
 
     destroy() {
@@ -179,6 +181,9 @@ class LoginPage extends Page {
                             <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0" data-i18n="ButtonSignIn">
                                 Sign In
                             </button>
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0" data-i18n="QuickConnect">
+                                Quick Connect
+                            </button>
                             <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
                                 Back
                             </button>
@@ -218,7 +223,7 @@ class LoginPage extends Page {
                     <!-- Quick Connect -->
                     <div class="login-section quick-connect-section hidden" data-section="quick-connect">
                         <h2 data-i18n="QuickConnect">Quick Connect</h2>
-                        <p class="quick-connect-instructions" data-i18n="QuickConnectInstructions">
+                        <p class="quick-connect-instructions" data-i18n="QuickConnectDescription">
                             Open your Jellyfin app or web UI on another device, go to
                             Dashboard → Quick Connect, and enter this code:
                         </p>
@@ -311,8 +316,10 @@ class LoginPage extends Page {
         // Login button
         this.$('.login-btn')?.addEventListener('click', () => this._login());
 
-        // Quick Connect button (on the users screen)
-        this.$('.quick-connect-btn')?.addEventListener('click', () => this._startQuickConnect());
+        // Quick Connect buttons (on users screen and manual screen)
+        this.$$('.quick-connect-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._startQuickConnect());
+        });
 
         // Manual Login buttons
         this.$('.manual-login-btn')?.addEventListener('click', () => this._goToManualLogin());
@@ -530,8 +537,8 @@ class LoginPage extends Page {
                     if (firstCard) focusManager.focusElement(firstCard);
                 }, 100);
             } else {
-                // No public users - show manual login
-                this._goToManualLogin();
+                // No public users - show manual login with auto-redirect flag
+                this._goToManualLogin(true);
             }
         } catch (error) {
             // Connection failed - show server selection
@@ -638,7 +645,7 @@ class LoginPage extends Page {
                 }, 100);
             } else {
                 // No public users - go straight to manual entry
-                this._goToManualLogin();
+                this._goToManualLogin(true);
             }
         } catch (error) {
             this._showState(STATE.SERVER);
@@ -776,12 +783,28 @@ class LoginPage extends Page {
         }
     }
 
-    _goToManualLogin() {
+    _goToManualLogin(isAutoRedirect = false) {
+        log.info(`Going to Manual Login. AutoRedirect=${isAutoRedirect}`);
+        this._isManualLoginAutoRedirect = isAutoRedirect;
+
         this._manualUsername.value = '';
         this._manualPassword.value = '';
+
+        // Back button and Quick Connect button visibility based on auto-redirect (as requested)
+        const backBtn = this.$('.manual-section .back-btn');
+        if (backBtn) {
+            backBtn.style.display = isAutoRedirect ? 'none' : '';
+        }
+
+        const qcBtn = this.$('.manual-section .quick-connect-btn');
+        if (qcBtn) {
+            qcBtn.style.display = isAutoRedirect ? '' : 'none';
+        }
+
         this._showState(STATE.MANUAL);
         this.setActiveSection('login-manual');
-        this.setActiveSection('login-manual');
+        focusManager.invalidateCache('login-manual');
+
         setTimeout(() => {
             if (this._manualUsername) {
                 this._manualUsername.readOnly = true;
@@ -856,6 +879,12 @@ class LoginPage extends Page {
             this.setActiveSection('login-server');
             this._serverInput.focus();
         } else if (this._state === STATE.MANUAL) {
+            // Prevent going back if autoredirected (no users found)
+            if (this._isManualLoginAutoRedirect) {
+                log.info('Manual Login: Back suppressed (AutoRedirect mode)');
+                return;
+            }
+
             this._showState(STATE.USERS);
             this.setActiveSection('login-users');
             setTimeout(() => {
@@ -1161,14 +1190,20 @@ class LoginPage extends Page {
         this._quickConnectSecret = null;
         this._quickConnectPollCount = 0;
 
-        // Return to user selection if we're still on the Quick Connect screen
+        // Return to manual or user selection based on how we got here
         if (this._state === STATE.QUICK_CONNECT) {
-            this._showState(STATE.USERS);
-            this.setActiveSection('login-users');
+            if (this._isManualLoginAutoRedirect) {
+                this._showState(STATE.MANUAL);
+                this.setActiveSection('login-manual');
+            } else {
+                this._showState(STATE.USERS);
+                this.setActiveSection('login-users');
+            }
 
             // Refocus the Quick Connect button so the user can try again
             setTimeout(() => {
-                const qcBtn = this.$('.quick-connect-btn');
+                const activeSection = this.$(`[data-section="${this._state}"]`);
+                const qcBtn = activeSection?.querySelector('.quick-connect-btn');
                 if (qcBtn) qcBtn.focus();
             }, 100);
         }
