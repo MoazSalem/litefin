@@ -1,0 +1,16 @@
+diff --git a/node_modules/core-js/internals/define-global-property.js b/node_modules/core-js/internals/define-global-property.js
+index 96fd4a2..5b435cc 100644
+--- a/node_modules/core-js/internals/define-global-property.js
++++ b/node_modules/core-js/internals/define-global-property.js
+@@ -8,6 +8,10 @@ module.exports = function (key, value) {
+   try {
+     defineProperty(globalThis, key, { value: value, configurable: true, writable: true });
+   } catch (error) {
+-    globalThis[key] = value;
++    try {
++      globalThis[key] = value;
++    } catch (e) {
++      // Ignore: Attempted to assign to readonly property
++    }
+   } return value;
+ };
