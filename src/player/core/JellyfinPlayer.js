@@ -358,39 +358,60 @@ export class JellyfinPlayer extends EventEmitter {
             this._isSeeking = false;
         }
 
-        // Clear pending start position once we have legitimate forward movement
-        if (event.type === PlayerEvent.PLAYING || 
-            (event.type === PlayerEvent.TIME_UPDATE && event.data?.time > 0)) {
-            this._pendingStartPositionTicks = null;
-        }
-
         // Intercept events if we are waiting for the initial Transcode Seek
         if (this._pendingTranscodeSeekTicks !== null) {
-            
             // If we receive a TIME_UPDATE with a valid time > 0, we know playback has really started
             // and it's safe to perform our seek.
             if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time > 0) {
                  const target = this._pendingTranscodeSeekTicks;
-                 this._pendingTranscodeSeekTicks = null; // Clear flag FIRST to allow subsequent events
+                 this._pendingTranscodeSeekTicks = null; // Clear flag FIRST
                  
                  log.info('TranscodeSeek: Initial playback confirmed. Seeking to', target);
                  this.seek(target);
                  
-                 // CRITICAL: Since we suppressed the initial PLAYING event from the backend
-                 // while waiting for time > 0, we must now manually emit it so the UI
-                 // hides its loading spinner.
-                 this.emit(PlayerEvent.PLAYING);
-
-                 // Do NOT emit this particular timeupdate as it's likely near 0
+                 // Transfer responsibility to the native resume validation block
+                 // so the UI loading spinner stays up until the seek completes
+                 this._pendingStartPositionTicks = target;
+                 this._resumeWaitStartTime = Date.now();
                  return;
             }
             
-            // Suppress PLAYING and TIME_UPDATE events while waiting to seek
-            // This keeps the UI in a "loading" state (spinner) until the seek is triggered
+            // Suppress PLAYING and TIME_UPDATE events while waiting to trigger the transcode seek
             if (event.type === PlayerEvent.PLAY || 
                 event.type === PlayerEvent.PLAYING || 
                 event.type === PlayerEvent.TIME_UPDATE) {
-                // log.debug('Suppressing event during TranscodeSeek:', event.type);
+                return;
+            }
+        }
+
+        // Intercept events if we are waiting for a native client-side Resume Seek to complete
+        // This prevents the UI from hiding the loading spinner and flashing the 0:00 frame
+        // before the player has actually jumped to the resume position.
+        if (this._pendingStartPositionTicks !== null) {
+            const targetSec = this._pendingStartPositionTicks / 10000000;
+            const currentTime = event.data?.time || 0;
+
+            if (event.type === PlayerEvent.TIME_UPDATE && currentTime > 0) {
+                // Check if we have arrived near our target resume position
+                if (Math.abs(currentTime - targetSec) < 10 || currentTime >= targetSec) {
+                    this._pendingStartPositionTicks = null;
+                    log.info(`Resume verified at ${currentTime}s. Dismissing loading screen.`);
+                    this.emit(PlayerEvent.PLAYING);
+                    // allow timeupdate to proceed below
+                } else if (Date.now() - (this._resumeWaitStartTime || 0) > 15000) {
+                    // Fallback: 15 seconds have passed, seek likely failed or is taking too long.
+                    // Release the spinner so we don't hold the UI hostage forever.
+                    this._pendingStartPositionTicks = null;
+                    log.warn(`Resume fallback: 15s timeout reached. Playing at ${currentTime}s but expected ${targetSec}s. Dismissing screen.`);
+                    this.emit(PlayerEvent.PLAYING);
+                } else {
+                    // Still waiting to reach target time. Suppress early timeupdates.
+                    return;
+                }
+            } else if (event.type === PlayerEvent.PLAY || 
+                       event.type === PlayerEvent.PLAYING || 
+                       event.type === PlayerEvent.TIME_UPDATE) {
+                // Suppress events while the buffer is jumping
                 return;
             }
         }
@@ -730,7 +751,7 @@ export class JellyfinPlayer extends EventEmitter {
             let effectiveStartPositionTicks = originalStartPositionTicks;
             let isTranscodeSeek = false;
 
-            // Save the intended start position for the UI before the backend initializes
+            // Save the intended start position for the UI before the backend initializes.
             this._pendingStartPositionTicks = originalStartPositionTicks > 0 ? originalStartPositionTicks : null;
 
             // User Request: When transcoding or remuxing, start playback at 0, 
@@ -739,6 +760,12 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
                 effectiveStartPositionTicks = 0;
                 isTranscodeSeek = true;
+                
+                // Do not apply early resume validation yet. We will transfer it once the TranscodeSeek triggers.
+                this._pendingStartPositionTicks = null;
+            } else if (this._pendingStartPositionTicks) {
+                // For native client-side seeking, start the 15-second wall-clock timeout immediately
+                this._resumeWaitStartTime = Date.now();
             }
 
             // Build stream URL
