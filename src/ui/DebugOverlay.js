@@ -74,7 +74,7 @@ class DebugOverlay {
 
         // Background buffer for log upload (always active)
         this._uploadBuffer = [];
-        this._maxBufferLines = 1000;
+        this._maxBufferLines = 10000;
     }
 
     /**
