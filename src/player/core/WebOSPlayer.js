@@ -303,17 +303,15 @@ export class WebOSPlayer {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onLoadError);
 
-                // Set the initial position if resuming
-                if (options.playerStartPositionTicks) {
-                    video.currentTime = options.playerStartPositionTicks / 10000000;
-                }
-
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
                 video.play()
-                    .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, resolve, reject));
+                    .then(() => {
+                        this._applyRobustResume(video, options.playerStartPositionTicks);
+                        resolve();
+                    })
+                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
             };
 
             const onLoadError = () => {
@@ -360,15 +358,15 @@ export class WebOSPlayer {
                 video.removeEventListener('error', onError);
 
                 if (options.playerStartPositionTicks) {
-                    const startSec = options.playerStartPositionTicks / 10000000;
-                    if (video.duration >= startSec || !MediaHelper.isValidDuration(video.duration)) {
-                        video.currentTime = startSec;
-                    }
+                    // Pre-seek logic disabled here; robust resume will handle it
                 }
 
                 video.play()
-                    .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, resolve, reject));
+                    .then(() => {
+                        this._applyRobustResume(video, options.playerStartPositionTicks);
+                        resolve();
+                    })
+                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
             };
 
             const onError = () => {
@@ -407,8 +405,14 @@ export class WebOSPlayer {
                 this._applyInitialTracks(options, hls);
                 video.play()
                     .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, resolve, reject));
+                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
             });
+
+            if (options.playerStartPositionTicks) {
+                hls.once(Hls.Events.LEVEL_LOADED, () => {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                });
+            }
 
             hls.on(Hls.Events.ERROR, (event, data) => {
                 // Swallow non-fatal buffer stalls — they typically self-recover
@@ -483,12 +487,13 @@ export class WebOSPlayer {
      * then schedule an unmute once the user physically interacts with the TV.
      * @private
      */
-    _handleAutoplayError(err, video, resolve, reject) {
+    _handleAutoplayError(err, video, options, resolve, reject) {
         if (err.name === 'NotAllowedError') {
             log.warn('WebOSPlayer: Autoplay blocked — retrying muted (remote launch)');
             video.muted = true;
             video.play()
                 .then(() => {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
                     this._scheduleUnmuteOnInteraction(video);
                     resolve();
                 })
@@ -496,6 +501,72 @@ export class WebOSPlayer {
         } else {
             reject(err);
         }
+    }
+
+    /**
+     * Apply a verified seek using a retry loop.
+     * WebOS 4 often discards `currentTime` changes made during early buffering,
+     * causing playbacks to snap back to 0. This method waits for the video
+     * to be seekable, attempts the seek, and then re-applies it if the video
+     * snaps back when 'playing' fires.
+     * @private
+     * @param {HTMLVideoElement} video
+     * @param {number} ticks - Jellyfin position ticks
+     */
+    _applyRobustResume(video, ticks) {
+        if (!ticks) return;
+        const resumeSeconds = ticks / 10000000;
+
+        if (resumeSeconds < 5) return;
+
+        // Safety guard: do not seek beyond the end
+        if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
+            log.warn('WebOSPlayer: Resume position near end of video, ignoring', resumeSeconds);
+            return;
+        }
+
+        log.info('WebOSPlayer: Applying robust resume to', resumeSeconds, 's');
+
+        const seekWithRetry = (time, attempts = 5) => {
+            let tries = 0;
+            const attempt = () => {
+                tries++;
+                try {
+                    video.currentTime = time;
+                } catch (e) {}
+
+                setTimeout(() => {
+                    if (Math.abs(video.currentTime - time) < 2) {
+                        log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                    } else if (tries < attempts) {
+                        log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                        attempt();
+                    } else {
+                        log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    }
+                }, 500);
+            };
+            attempt();
+        };
+
+        const tryApply = () => {
+            // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
+            if (video.readyState >= 3 && video.seekable.length > 0) {
+                seekWithRetry(resumeSeconds);
+            } else {
+                setTimeout(tryApply, 300);
+            }
+        };
+
+        tryApply();
+
+        const onPlaying = () => {
+            if (Math.abs(video.currentTime - resumeSeconds) > 5) {
+                log.info('WebOSPlayer: Detected snap-back, re-applying seek');
+                seekWithRetry(resumeSeconds);
+            }
+        };
+        video.addEventListener('playing', onPlaying, { once: true });
     }
 
     /**
