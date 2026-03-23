@@ -27,9 +27,8 @@
     -webkit-overflow-scrolling: touch;
     transform: translateZ(0);
     will-change: scroll-position;
-
-    display: flex;
-    flex-direction: column;
+    
+    display: block; /* Standard block layout eliminates Tizen 5.0 collapsing bugs */
 }
 
 /* --- Header Section --- */
@@ -220,9 +219,6 @@
     /* Normal flow inside scroll container */
     position: relative;
     padding: 20px 50px 40px 50px;
-    /* Reduced from 60px to gain space for 6-card grid */
-    flex: 1;
-    /* Pushes footer down */
     display: flex;
     flex-direction: column;
 }
