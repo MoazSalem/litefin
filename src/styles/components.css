@@ -1106,3 +1106,40 @@ html[data-layout-tier="legacy"] .media-info-row {
 .trailer-option:hover .trailer-option-sublabel {
     color: rgba(255, 255, 255, 0.75) !important;
 }
+
+/* ============================================================================
+   Phase 2: Remote Trailer Fullscreen OSD
+   ============================================================================ */
+.trailer-player-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 99999;
+}
+
+.trailer-iframe-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind OSD */
+}
+
+/* Trailer iframe overrides to remove any inherited margins */
+.trailer-iframe-container iframe {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Make sure the OSD overlays the iframe correctly */
+.trailer-osd {
+    z-index: 10; 
+}

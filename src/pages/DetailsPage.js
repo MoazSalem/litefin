@@ -2673,14 +2673,13 @@ class DetailsPage extends Page {
     }
 
     /**
-     * Phase 2 placeholder — will open the iframe overlay TrailerPlayer.
-     * Implemented in the next phase; stub kept here so TrailerDialog callbacks
-     * and the smart-dispatch in _onTrailerClick always have a callable target.
+     * Opens the iframe overlay TrailerPlayer for remote trailers.
      */
     _showRemoteTrailerPlayer() {
-        // Phase 2: dynamically import TrailerPlayer and call TrailerPlayer.show(...)
-        log.info('Remote trailer player not yet implemented (Phase 2).');
-        toast.show(i18n.t('ComingSoon') || 'Coming soon.');
+        // Run Phase 2 overlay manually bypassing router
+        import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
+            TrailerPlayer.show(this._item.RemoteTrailers, this);
+        });
     }
 
     // ============================================================================
