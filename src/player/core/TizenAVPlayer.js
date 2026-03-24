@@ -509,11 +509,15 @@ export class TizenAVPlayer {
                     this._applyPendingTracks();
                 }
 
-                // Note: We deliberately DO NOT emit 'playing' here.
-                // Buffering complete means the network buffer is full (e.g. 6s downloaded),
-                // but the hardware decoder still needs time to render the first frame.
-                // Emitting here causes the UI loading spinner to vanish 2-3s before video appears.
-                // Instead, the 'playing' event is deferred to oncurrentplaytime (when time >= 0).
+                // If the player was already natively playing (e.g. stalled for network buffer),
+                // it natively auto-resumes once buffering is complete. We must emit 'playing' 
+                // immediately here to prevent the UI loader from lingering while audio resumes.
+                if (this._isPlaying && this._isTizenPlaying) {
+                    this._emitPlaying();
+                }
+
+                // Note: If playback hasn't started natively yet, _checkNativePlay() handles 
+                // calling play() and emitting the initial 'playing' event.
             },
             oncurrentplaytime: (time) => {
                 // Track when the first frame has actually rendered (time >= 0).
@@ -874,6 +878,12 @@ export class TizenAVPlayer {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
                     log.warn('Proactive setSilentSubtitle(true) failed (non-fatal):', silenceErr.message || silenceErr);
                 }
+
+                // Emit 'playing' immediately after play() executes. Since Tizen's 
+                // oncurrentplaytime loop only ticks every 500ms, waiting for the first 
+                // tick causes audio to leak for half a second behind the loading screen.
+                this._emitPlaying();
+
             } catch (e) {
                 log.error('Double-Gate play() failed:', e.message || e);
             }
@@ -1100,7 +1110,7 @@ export class TizenAVPlayer {
                 this._avplay.play();
                 this._isTizenPlaying = true;
                 log.info('unpause(): direct avplay.play() after mid-play seek resume');
-                this.onEvent({ type: 'play' });
+                this._emitPlaying();
             } catch (e) {
                 log.error('unpause(): failed to resume after seek:', e);
             }
