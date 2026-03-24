@@ -634,10 +634,10 @@ export default class OSDController extends Component {
         if (!btn) return;
         
         if (available) {
-            btn.classList.remove('osd-btn-disabled', 'hide');
+            btn.classList.remove('osd-btn-disabled', 'hidden');
             btn.tabIndex = 0;
         } else {
-            btn.classList.add('osd-btn-disabled', 'hide');
+            btn.classList.add('osd-btn-disabled', 'hidden');
             btn.tabIndex = -1;
         }
         
