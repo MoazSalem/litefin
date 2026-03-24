@@ -570,6 +570,20 @@ export class ApiClient {
         return this.get(`/Users/${this._userId}/Items/${itemId}`, params);
     }
 
+    /**
+     * Get local trailers for an item.
+     *
+     * Jellyfin stores locally-managed trailers as full BaseItemDto objects,
+     * each with their own Id — so they can be played directly through the
+     * normal JellyfinPlayer.play({ itemId }) pipeline without any special casing.
+     *
+     * @param {string} itemId - The parent item's ID
+     * @returns {Promise<BaseItemDto[]>} Array of trailer items (may be empty)
+     */
+    async getLocalTrailers(itemId) {
+        return this.get(`/Users/${this._userId}/Items/${itemId}/LocalTrailers`);
+    }
+
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,
