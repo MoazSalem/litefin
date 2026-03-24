@@ -136,12 +136,17 @@ class Logger {
         if (this._disabledModules.has(moduleName)) return;
 
         // 4. Emit to EventBus (for DebugOverlay or other listeners)
-        // We do NOT stringify here. Let the consumer decide if they need to pay that cost.
+        // We evaluate errors to strings (stack or message) so JSON.stringify doesn't make them {}
         eventBus.emit('logger:log', {
             level,
             module: moduleName,
             timestamp: Date.now(),
-            args
+            args: args.map((arg) => {
+                if (arg instanceof Error) {
+                    return arg.stack || arg.message || String(arg);
+                }
+                return arg;
+            })
         });
 
         // 5. Output to native console (if enabled)
