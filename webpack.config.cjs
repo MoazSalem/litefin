@@ -160,7 +160,7 @@ const normalConfig = {
     module: {
         rules: [
             {
-                test: /\.m?js$/,
+                test: /\.js$/,
                 exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
@@ -197,7 +197,6 @@ const normalConfig = {
 // ============================================================================
 const legacyConfig = {
     name: 'legacy',
-    target: ['web', 'es5'],
     mode: 'production',
     entry: ['url-search-params-polyfill', './src/index.js'],
 
@@ -215,8 +214,8 @@ const legacyConfig = {
     module: {
         rules: [
             {
-                test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|hls\.js|libpgs)[\\/])/,
+                test: /\.js$/,
+                exclude: /node_modules[\\/](?!(screenfull)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {
