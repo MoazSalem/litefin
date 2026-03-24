@@ -309,12 +309,21 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // Tizen AVPlay frequently crashes or fails to prepareAsync when attempting to play
-    // HLS Fragmented MP4 (fMP4) streams that contain AC3 or EAC3 audio tracks.
-    // To ensure stable playback when audio MUST be transcoded (e.g. from DTS),
-    // we restrict the transcoding audio codec exclusively to AAC, which is fully supported.
-    // However, for DirectStream (progressive mp4 Remux), we safely allow native AC3/EAC3 capability.
-    let transAudioCodecs = 'aac';
+    // Tizen 5.0 hardware CANNOT decode multichannel (5.1+) AAC inside MPEG-TS HLS segments —
+    // it fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT mid-stream.
+    //
+    // CRITICAL: Listing multiple codecs (e.g. 'aac,ac3,eac3') does NOT let us control which one
+    // Jellyfin picks — Jellyfin has its own internal codec priority list and will ALWAYS choose
+    // AAC first because it's the "standard" HLS audio codec in its encoder logic, regardless of
+    // our ordering.
+    //
+    // The ONLY reliable fix is to exclude AAC from the transcode profile entirely, leaving
+    // Jellyfin with no choice but AC3/EAC3. Samsung hardware decodes both natively in HLS/TS
+    // containers — this is exactly what broadcast STBs have always used.
+    //
+    // Note: AAC remains available for DirectPlay and DirectStream (mp4 Remux) scenarios;
+    // this restriction only applies to active server-side HLS transcodes.
+    let transAudioCodecs = 'ac3,eac3';
     let directAudioCodecs = 'aac,ac3,eac3,mp3';
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
@@ -422,6 +431,28 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
+    // CodecProfile for AAC: limit to stereo channels for DirectPlay qualification.
+    // This tells Jellyfin: "only DirectPlay an AAC source if it has ≤2 channels".
+    // On Tizen < 6, multichannel AAC in HLS/TS crashes AVPlay, so we exclude those from
+    // DirectPlay. Tizen 6+ uses fMP4 which handles 5.1 AAC reliably.
+    //
+    // NOTE: This does NOT control the output channel count of transcodes — that is governed
+    // solely by MaxAudioChannels in the TranscodingProfile, which we've already set correctly.
+    // This CodecProfile only affects DirectPlay/DirectStream path decisions.
+    codecProfiles.push({
+        Type: 'Audio',
+        Codec: 'aac',
+        Conditions: [
+            {
+                Condition: 'LessThanEqual',
+                Property: 'AudioChannels',
+                // Permit DirectPlay of AAC only if channel count is within safe limits.
+                Value: caps.tizenVersion >= 6 ? maxAudioChannels : '2',
+                IsRequired: false
+            }
+        ]
+    });
 
     // Explicitly force transcoding of DTS/TrueHD tracks if the user
     // has disabled passthrough for them.
