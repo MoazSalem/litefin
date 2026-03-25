@@ -398,8 +398,13 @@ export function buildJellyfinProfile(options = {}) {
     // Samsung TVs can play the HDR10/HDR10+ fallback of Dolby Vision Profile 7/8.
     // DOVIWithHDR10Plus is a distinct type from DOVIWithHDR10 and must be listed separately —
     // Jellyfin reports these based on the actual base layer of the encode, not just the DV type.
+    // Full Dolby Vision subtype list — each mode is a distinct value Jellyfin reports.
+    // DOVIWithEL = DV with Enhancement Layer (EL-only profile, common in remuxes).
+    // DOVIWithELHDR10Plus = DV EL + HDR10+ base (the type that triggered the transcode here).
+    // Omitting any of these causes VideoRangeTypeNotSupported → unnecessary full video transcode.
+    // WebProfile.js already includes both: keep Tizen in sync.
     const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR'
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus'
         : 'SDR|DOVIWithSDR';
 
     const codecProfiles = [
