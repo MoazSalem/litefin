@@ -155,9 +155,15 @@ export const MediaHelper = {
      * @returns {string} Subtitle URL
      */
     getSubtitleUrl(track, serverUrl, itemId, mediaSourceId, authToken, format = 'vtt') {
-        // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.{format}
+        // Canonical Jellyfin API path:
+        // /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/0/Stream.{format}
+        //                                                          ↑ start-position offset, always 0 for full-file subtitle fetches.
+        //
+        // The server's own DeliveryUrl includes this segment — omitting it causes
+        // some server versions or proxy configs to 404, especially for .sup (PGS) fetches
+        // that don't go through the standard subtitle transcode pipeline.
         const streamIndex = track.Index;
-        let url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${streamIndex}/Stream.${format}`;
+        let url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${streamIndex}/0/Stream.${format}`;
         url += `?api_key=${encodeURIComponent(authToken)}`;
         return url;
     },

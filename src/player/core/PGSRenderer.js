@@ -43,6 +43,32 @@ class PGSRenderer {
     _init() {
         log.info(`Initializing PGS renderer for track "${this.track.DisplayTitle}"`);
 
+        // ====================================================================
+        // Renderer mode selection
+        //
+        // libpgs supports three modes: 'worker' (OffscreenCanvas), 
+        // 'workerWithoutOffscreenCanvas', and 'mainThread'.
+        //
+        // On Tizen and WebOS, the worker-based modes silently fail because:
+        //   1. The libpgs worker file ('libpgs.worker.js') is not bundled into
+        //      the webpack output as a separate asset — it's not being copied
+        //      or emitted by any webpack rule.
+        //   2. new Worker(workerUrl) 404s silently; all subsequent postMessage()
+        //      calls go into a dead worker and the subtitle canvas stays blank.
+        //
+        // 'mainThread' mode bypasses the Web Worker entirely — libpgs parses 
+        // the .sup file and renders PGS bitmaps directly on the main thread.
+        // This is slightly less performant but works reliably on all TV platforms.
+        // ====================================================================
+        const isTizen = typeof tizen !== 'undefined' ||
+            navigator.userAgent.indexOf('SMART-TV') >= 0 ||
+            navigator.userAgent.indexOf('Tizen') >= 0;
+        const isWebOS = navigator.userAgent.indexOf('Web0S') >= 0 ||
+            navigator.userAgent.indexOf('WebOS') >= 0;
+
+        // Force main thread rendering on TV platforms where the worker approach fails
+        const rendererMode = (isTizen || isWebOS) ? 'mainThread' : undefined; // undefined = auto-detect
+
         // Create a wrapper for the canvas to ensure correct positioning
         this._canvasWrapper = document.createElement('div');
         this._canvasWrapper.className = 'pgs-subtitle-wrapper';
@@ -54,7 +80,7 @@ class PGSRenderer {
         this._canvasWrapper.style.pointerEvents = 'none';
         this._canvasWrapper.style.zIndex = '200'; // Above video, below OSD
 
-        // libpgs expects a canvas element if we want to manaul control it
+        // libpgs expects a canvas element if we want to manually control it
         this._canvas = document.createElement('canvas');
         this._canvas.style.width = '100%';
         this._canvas.style.height = '100%';
@@ -63,14 +89,17 @@ class PGSRenderer {
         this._canvasWrapper.appendChild(this._canvas);
         this._container.appendChild(this._canvasWrapper);
 
-        // Config object for libpgs
+        // Config object for libpgs — note: workerUrl is omitted for mainThread mode
         const config = {
-            video: this._video, // Can be null/undefined for AVPlay, libpgs handles it if we provide canvas
+            video: this._video, // null for AVPlay; libpgs is OK without a video element
             canvas: this._canvas,
             subUrl: this._url,
-            workerUrl: 'js/libpgs.worker.js', // Copied to js/ by webpack
-            timeOffset: this._timeOffset
+            timeOffset: this._timeOffset,
+            // Mode override: TV platforms use main thread to avoid dead-worker 404 issues
+            ...(rendererMode ? { mode: rendererMode } : { workerUrl: 'js/libpgs.worker.js' })
         };
+
+        log.debug(`PGS renderer mode: ${rendererMode || 'auto-detect (non-TV)'}`);
 
         try {
             this._renderer = new PgsRenderer(config);
