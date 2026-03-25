@@ -35,6 +35,13 @@ const DEFAULTS = {
     // Enable TrueHD passthrough (requires hardware support)
     enableTrueHd: false,
 
+    // Allow FLAC audio in video containers (MKV, MP4, etc.) to DirectPlay.
+    // Disabled by default: FLAC demuxing inside video containers causes a ~2s
+    // A/V sync drift on Tizen hardware (the audio buffer diverges from the video
+    // PTS). FLAC audio-only files (.flac containers) are NOT affected by this
+    // setting — those always DirectPlay regardless.
+    enableFlacInVideo: false,
+
     // Audio normalization mode ('Off', 'TrackGain', 'AlbumGain')
     audioNormalization: 'Off',
 

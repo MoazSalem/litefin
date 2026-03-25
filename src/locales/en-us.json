@@ -351,6 +351,8 @@
     "ErrorLoadingMediaInfo": "Failed to load media specs.",
     "External": "External",
     "ExtraLarge": "Extra Large",
+    "FLACPassthrough": "FLAC in Video Passthrough",
+    "FLACPassthroughDescription": "Allow FLAC audio tracks in video files to play directly. Disable if you hear audio/video sync issues (~2s delay). Does not affect FLAC music files.",
     "FailedToLoadContent": "Failed to load content",
     "FailedToLoadDetails": "Failed to load details",
     "FHD": "FHD",

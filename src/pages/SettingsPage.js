@@ -839,6 +839,22 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                ${platformInfo.isTizen ? `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="FLACPassthrough">${i18n.t('FLACPassthrough') || 'FLAC in Video Passthrough'}</span>
+                        <span class="setting-description" data-i18n="FLACPassthroughDescription">${i18n.t('FLACPassthroughDescription') || 'Allow FLAC audio tracks in video files to play directly. Disable if you hear audio/video sync issues (~2s delay). Does not affect FLAC music files.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableFlacInVideo') ? 'active' : ''}" 
+                                id="toggle-enable-flac-in-video" 
+                                data-setting="enableFlacInVideo"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ForceTranscode">${i18n.t('ForceTranscode')}</span>

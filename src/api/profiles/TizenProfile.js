@@ -201,14 +201,36 @@ export function buildJellyfinProfile(options = {}) {
 
     const maxAudioChannels = String(caps.maxAudioChannels);
 
-    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
-    if (caps.ac3) audioCodecs.push('ac3');
-    if (caps.eac3) audioCodecs.push('eac3');
-    if (caps.tizenVersion >= 6.5) audioCodecs.push('ac4');
-    if (enableDts) audioCodecs.push('dts', 'dca');
-    if (enableTrueHd) audioCodecs.push('truehd');
+    // enableFlacInVideo: when false (default), FLAC is NOT included in the video
+    // DirectPlay audio codec list. This forces Jellyfin to transcode FLAC tracks
+    // in video containers to AC3, which AVPlay buffers correctly and without the
+    // ~2s A/V sync drift that FLAC+video container demuxing causes on Tizen hardware.
+    //
+    // IMPORTANT: Music (audio-only) files are always kept as-is — the musicAudioCodecString
+    // always contains FLAC so .flac containers DirectPlay regardless of this setting.
+    const enableFlacInVideo = PlayerSettings.get('enableFlacInVideo');
 
-    const audioCodecString = audioCodecs.join(',');
+    // Base codec list shared by all audio contexts
+    const baseAudioCodecs = ['aac', 'mp3', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    if (caps.ac3) baseAudioCodecs.push('ac3');
+    if (caps.eac3) baseAudioCodecs.push('eac3');
+    if (caps.tizenVersion >= 6.5) baseAudioCodecs.push('ac4');
+    if (enableDts) baseAudioCodecs.push('dts', 'dca');
+    if (enableTrueHd) baseAudioCodecs.push('truehd');
+
+    // Video audio: conditionally includes FLAC based on setting
+    const videoAudioCodecs = enableFlacInVideo
+        ? ['flac', ...baseAudioCodecs]
+        : [...baseAudioCodecs];  // FLAC excluded → server transcodes to AC3
+
+    const videoAudioCodecString = videoAudioCodecs.join(',');
+
+    // Music audio: FLAC always included — audio-only containers have no sync issue
+    const musicAudioCodecString = ['flac', ...baseAudioCodecs].join(',');
+
+    // Legacy alias used by remux/transcode path and codec profile conditions
+    const audioCodecString = musicAudioCodecString;
+
 
     const generalVideoCodecs = ['h264', 'mpeg2video', 'vc1'];
     if (enableHEVC) generalVideoCodecs.push('hevc');
@@ -233,18 +255,19 @@ export function buildJellyfinProfile(options = {}) {
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
         // Standard Web formats (MP4, MKV, WebM)
+        // Video DirectPlay: audioCodec string excludes FLAC by default (see enableFlacInVideo)
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
             Type: 'Video',
             VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         directPlayProfiles.push({
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         if (webmVideoCodecs.length > 0) {
@@ -262,7 +285,7 @@ export function buildJellyfinProfile(options = {}) {
             Container: 'hls',
             Type: 'Video',
             VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         // AVPlay handles many legacy containers natively
@@ -270,42 +293,44 @@ export function buildJellyfinProfile(options = {}) {
             directPlayProfiles.push({
                 Container: 'asf',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'ts,mpegts',
                 Type: 'Video',
                 VideoCodec: tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'm2ts',
                 Type: 'Video',
                 VideoCodec: m2tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'avi',
                 Type: 'Video',
                 VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'wmv,asf',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'mpg,mpeg,flv,3gp,vob,vro',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
         }
 
+        // Music/audio-only files: FLAC always allowed regardless of enableFlacInVideo.
+        // Audio-only containers don't have the video-sync drift issue.
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
-            AudioCodec: audioCodecString
+            AudioCodec: musicAudioCodecString
         });
     }
 
