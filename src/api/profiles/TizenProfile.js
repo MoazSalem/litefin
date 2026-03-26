@@ -408,7 +408,21 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? '1' : '2',
             SegmentLength: isHtml5 ? '2' : '6',
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
+            // BreakOnNonKeyFrames=True with video copy mode causes Tizen AVPlay to crash:
+            // FFmpeg cannot cut at non-IDR boundaries when copying, so it cuts at the nearest
+            // keyframe AFTER the target duration. The declared #EXTINF value in the playlist
+            // then mismatches the actual segment content length — Tizen 5.0's HLS parser is
+            // strict about this and fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT.
+            // Setting false ensures FFmpeg only cuts at real IDR frames, producing honest
+            // #EXTINF values that AVPlay can parse cleanly.
+            // HTML5 (MSE-based) handles irregular segments fine, so keep original there.
+            BreakOnNonKeyFrames: isHtml5 ? (playbackMode !== 'remux') : false,
+            // VBR AAC in MPEG-TS uses LATM framing (stream type 0x11 in the PMT).
+            // Tizen 5.0 AVPlay's HLS parser expects standard ADTS framing (0x0F) and
+            // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
+            // Setting this to false forces CBR AAC with ADTS framing on AVPlay.
+            // HTML5/MSE players handle LATM fine, so keep VBR enabled there.
+            EnableAudioVbrEncoding: isHtml5
         },
         {
             Container: 'aac',
@@ -480,6 +494,13 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
+                // Tizen AVPlay HLS parser does NOT support interlaced H264 streams (1080i).
+                // FFmpeg with -c:v copy passes the interlaced flag through to the TS segments,
+                // and AVPlay immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it detects
+                // the interlaced scan type in the H264 SPS. HLS streams must be progressive.
+                // IsRequired: true forces Jellyfin to transcode (not copy) interlaced content,
+                // at which point FFmpeg applies bwdif deinterlacing to produce clean progressive output.
+                { Condition: 'Equals', Property: 'IsInterlaced', Value: 'false', IsRequired: true },
                 ...hdrCondition
             ]
         },

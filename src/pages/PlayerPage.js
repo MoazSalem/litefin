@@ -1426,9 +1426,10 @@ class PlayerPage extends Page {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState();
 
-            // Cache mediaSource for later use in stop reporting
-            // (player clears internal state after stop, so we need this)
+            // Cache mediaSource and play method for later use in stop reporting.
+            // (player clears internal state after stop, so we grab these while they're live)
             this._cachedMediaSource = mediaSource;
+            this._cachedPlayMethod = this._player?._currentPlayMethod || 'DirectPlay';
 
             const info = {
                 ItemId: this._item.Id,
@@ -1706,7 +1707,9 @@ class PlayerPage extends Page {
             IsMuted: Boolean(this._player?.isMuted?.()),
 
             // Playback method (DirectPlay, DirectStream, Transcode)
-            PlayMethod: mediaSource?.PlayMethod || 'DirectPlay',
+            // NOTE: mediaSource.PlayMethod does NOT exist in the Jellyfin API response —
+            // PlayMethod is a client-derived value stored in JellyfinPlayer._currentPlayMethod.
+            PlayMethod: this._player?._currentPlayMethod || 'DirectPlay',
 
             // Seeking capability
             CanSeek: Boolean(mediaSource?.RunTimeTicks > 0),
@@ -1879,7 +1882,9 @@ class PlayerPage extends Page {
                 ShuffleMode: 'Sorted',
                 CanSeek: true,
                 BufferedRanges: [],
-                PlayMethod: this._player?._currentPlayMethod || 'DirectPlay'
+                // Use cached play method — player.stop() may clear _currentPlayMethod
+                // before this report fires, so we capture it in _reportPlaybackStart.
+                PlayMethod: this._cachedPlayMethod || this._player?._currentPlayMethod || 'DirectPlay'
             };
 
             // 2.5 Inject SyncPlay tracking fields if active
