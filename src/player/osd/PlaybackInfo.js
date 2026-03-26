@@ -157,6 +157,12 @@ export default class PlaybackInfo extends BaseMenu {
             }
         }
 
+        // Frame rate — prefer AverageFrameRate; fall back to RealFrameRate
+        const frameRateRaw = videoStream?.AverageFrameRate || videoStream?.RealFrameRate;
+        const frameRateDisplay = frameRateRaw
+            ? parseFloat(frameRateRaw).toFixed(3) + ' fps'
+            : i18n.t('None');
+
         const createSection = (title, fields) => `
             <div class="pi-section">
                 ${title ? `<div class="pi-section-title">${title}</div>` : ''}
@@ -191,24 +197,42 @@ export default class PlaybackInfo extends BaseMenu {
         html += createSection(i18n.t('LabelVideoInfo'), [
             { label: i18n.t('LabelPlayerDimensions'), value: playerDimensions },
             { label: i18n.t('LabelVideoResolution'), value: videoRes },
+            { label: i18n.t('LabelFrameRate'), value: frameRateDisplay },
             { label: i18n.t('LabelDroppedFrames'), value: droppedFrames },
             { label: i18n.t('LabelCorruptedFrames'), value: corruptedFrames }
         ]);
 
         if (playMethod !== 'DirectPlay') {
             const { isVideoDirect, isAudioDirect } = MediaHelper.getTranscodeStatus(mediaSource);
-            const vMethod = isVideoDirect ? 'direct' : 'transcode';
-            const aMethod = isAudioDirect ? 'direct' : 'transcode';
-            
-            // Show the limit that triggered transcoding (or the manual override)
-            const manualBitrate = this.player.getMaxBitrate(); 
+
+            // Parse output codec and bitrate from the TranscodingUrl query string.
+            // The server always includes these params, so we use them to show what
+            // the stream is actually being transcoded TO (e.g. DTS → AAC @ 256 kbps).
+            const transUrl = mediaSource?.TranscodingUrl || '';
+            const outVideoCodec  = (transUrl.match(/[?&]VideoCodec=([^&]+)/) || [])[1]?.split(',')[0]?.toUpperCase();
+            const outAudioCodec  = (transUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1]?.split(',')[0]?.toUpperCase();
+            const outAudioBpsRaw = parseFloat((transUrl.match(/[?&]AudioBitrate=([^&]+)/) || [])[1]);
+            const outAudioBps    = outAudioBpsRaw ? (outAudioBpsRaw / 1000).toFixed(0) + ' kbps' : null;
+
+            // Build human-readable codec strings: "SRC (copy)" or "SRC → OUT @ BITRATE"
+            const srcVideo = videoStream?.Codec?.toUpperCase() || i18n.t('None');
+            const srcAudio = activeAudioStream?.Codec?.toUpperCase() || i18n.t('None');
+            const vCodecLabel = isVideoDirect
+                ? `${srcVideo} (copy)`
+                : `${srcVideo} → ${outVideoCodec || '?'}`;
+            const aCodecLabel = isAudioDirect
+                ? `${srcAudio} (copy)`
+                : `${srcAudio} → ${outAudioCodec || '?'}${outAudioBps ? ' @ ' + outAudioBps : ''}`;
+
+            // Show the bitrate cap that triggered transcoding (or manual user override)
+            const manualBitrate = this.player.getMaxBitrate();
             const globalBitrate = PlayerSettings.get('maxBitrateInternet');
             const effectiveLimit = manualBitrate || globalBitrate;
             const limitDisplay = effectiveLimit ? (effectiveLimit / 1000000).toFixed(1) + ' Mbps' : i18n.t('Unlimited');
 
-            html += createSection(i18n.t('LabelTranscodingInfo'), [ // Reusing TrackIndex format if it fits, or just title
-                { label: i18n.t('LabelVideoCodec'), value: `${videoStream?.Codec?.toUpperCase() || i18n.t('None')} (${vMethod})` },
-                { label: i18n.t('LabelAudioCodec'), value: `${activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')} (${aMethod})` },
+            html += createSection(i18n.t('LabelTranscodingInfo'), [
+                { label: i18n.t('LabelVideoCodec'), value: vCodecLabel },
+                { label: i18n.t('LabelAudioCodec'), value: aCodecLabel },
                 { label: i18n.t('LabelRemoteClientBitrateLimit'), value: limitDisplay }
             ]);
         }

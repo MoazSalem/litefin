@@ -113,26 +113,76 @@ export const MediaHelper = {
     },
 
     /**
-     * Get granular transcode status for video and audio
-     * @param {Object} mediaSource 
-     * @returns {Object} { isVideoDirect, isAudioDirect }
+     * Get granular transcode status for video and audio.
+     *
+     * Jellyfin's `TranscodingInfo` is only present on MediaSource objects received
+     * via the session WebSocket hub — it is NOT included in the PlaybackInfo API
+     * response. When it's absent, we fall back to parsing the `TranscodeReasons`
+     * query parameter from the TranscodingUrl, which IS always present.
+     *
+     * @param {Object} mediaSource
+     * @returns {{ isVideoDirect: boolean, isAudioDirect: boolean }}
      */
     getTranscodeStatus(mediaSource) {
         const transcodeInfo = mediaSource.TranscodingInfo;
-        
-        if (!transcodeInfo) {
-            const isDirect = !!mediaSource.SupportsDirectPlay || !!mediaSource.SupportsDirectStream;
+
+        // Prefer server-provided TranscodingInfo when available (session hub updates)
+        if (transcodeInfo) {
             return {
-                isVideoDirect: isDirect,
-                isAudioDirect: isDirect
+                isVideoDirect: !!(transcodeInfo.IsVideoDirect || !transcodeInfo.VideoCodec),
+                isAudioDirect: !!transcodeInfo.IsAudioDirect
             };
         }
 
+        // No TranscodingUrl at all → DirectPlay (original file served directly)
+        const transcodeUrl = mediaSource.TranscodingUrl;
+        if (!transcodeUrl) {
+            return { isVideoDirect: true, isAudioDirect: true };
+        }
+
+        // Parse TranscodeReasons from the URL — Jellyfin always includes this
+        // when transcoding is required.
+        const reasonsMatch = transcodeUrl.match(/[?&]TranscodeReasons=([^&]+)/);
+        if (!reasonsMatch) {
+            // URL exists but no reason listed → conservatively assume full transcode
+            return { isVideoDirect: false, isAudioDirect: false };
+        }
+
+        const reasonList = decodeURIComponent(reasonsMatch[1]).split(',').map(r => r.trim());
+
+        // These reasons require the VIDEO track to be re-encoded.
+        // If any of these are present, video is NOT directly copied.
+        const VIDEO_REASONS = new Set([
+            'VideoCodecNotSupported',
+            'VideoProfileNotSupported',
+            'VideoLevelNotSupported',
+            'VideoChannelNotSupported',
+            'VideoResolutionNotSupported',
+            'AnamorphicVideoNotSupported',
+            // Subtitle burn-in forces a video encode pass
+            'SubtitleCodecNotSupported',
+            'UnknownVideoStreamInfo'
+        ]);
+
+        // These reasons only affect the AUDIO track — video can still be copied.
+        const AUDIO_ONLY_REASONS = new Set([
+            'AudioCodecNotSupported',
+            'AudioChannelsNotSupported',
+            'AudioBitrateNotSupported',
+            'AudioSampleRateNotSupported',
+            'AudioBitDepthNotSupported',
+            'AudioProfileNotSupported'
+        ]);
+
+        const hasVideoReason   = reasonList.some(r => VIDEO_REASONS.has(r));
+        const hasAudioReason   = reasonList.some(r => AUDIO_ONLY_REASONS.has(r));
+
         return {
-            isVideoDirect: !!(transcodeInfo.IsVideoDirect || !transcodeInfo.VideoCodec),
-            isAudioDirect: !!transcodeInfo.IsAudioDirect
+            isVideoDirect: !hasVideoReason,
+            isAudioDirect: !hasAudioReason
         };
     },
+
 
     /**
      * Check if media source uses HLS

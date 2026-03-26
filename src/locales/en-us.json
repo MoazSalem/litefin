@@ -106,6 +106,7 @@
     "LabelVideoInfo": "Video Info",
     "LabelVideoRangeType": "Video range type",
     "LabelVideoResolution": "Video resolution",
+    "LabelFrameRate": "Frame rate",
     "Large": "Large",
     "Larger": "Larger",
     "LatestFromLibrary": "Recently Added in {0}",
