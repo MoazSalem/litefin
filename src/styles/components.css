@@ -1040,9 +1040,17 @@ html[data-layout-tier="legacy"] .media-info-row {
 /* Trim padding on the options column — only 2 options, no scrolling needed */
 .trailer-dialog-options {
     padding: 12px 20px !important;
-    gap: 10px;
     display: flex;
     flex-direction: column;
+}
+
+/* Fallback for flex gap on older Tizen */
+.trailer-dialog-options > * {
+    margin-bottom: 10px;
+}
+
+.trailer-dialog-options > *:last-child {
+    margin-bottom: 0;
 }
 
 /*
@@ -1053,7 +1061,6 @@ html[data-layout-tier="legacy"] .media-info-row {
     height: auto !important;
     min-height: 90px;
     padding: 20px 24px !important;
-    gap: 20px;
 }
 
 /* Icon wrapper — fixed square, accent-tinted background to match brand */
@@ -1068,6 +1075,7 @@ html[data-layout-tier="legacy"] .media-info-row {
     color: var(--jf-accent);
     flex-shrink: 0;
     transition: background 0.18s ease, color 0.18s ease;
+    margin-right: 20px; /* Fallback for gap */
 }
 
 /* On focus/hover the icon surface follows the accent button color */
@@ -1083,7 +1091,6 @@ html[data-layout-tier="legacy"] .media-info-row {
     display: flex !important;
     flex-direction: column !important;
     align-items: flex-start !important;
-    gap: 4px;
 }
 
 .trailer-option-label {
@@ -1091,6 +1098,7 @@ html[data-layout-tier="legacy"] .media-info-row {
     font-weight: 600;
     color: var(--jf-text-primary);
     line-height: 1.2;
+    margin-bottom: 4px; /* Fallback for gap */
 }
 
 .trailer-option-sublabel {

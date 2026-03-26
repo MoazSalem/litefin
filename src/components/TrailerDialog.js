@@ -135,7 +135,7 @@ class TrailerDialog {
         // ================================================================
 
         const _onSelect = (id) => {
-            _close(false); // Close without restoring focus — player navigation takes over
+            _close(true); // Close AND restore focus so the remote player captures the right caller
 
             if (id === 'local') {
                 log.info('User chose: Play Local Trailer');
