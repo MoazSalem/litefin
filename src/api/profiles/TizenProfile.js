@@ -334,24 +334,57 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // Tizen 5.0 hardware CANNOT decode multichannel (5.1+) AAC inside MPEG-TS HLS segments —
-    // it fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT mid-stream.
+    // =========================================================================
+    // HLS Transcode Audio Configuration (Version-Gated)
     //
-    // CRITICAL: Listing multiple codecs (e.g. 'aac,ac3,eac3') does NOT let us control which one
-    // Jellyfin picks — Jellyfin has its own internal codec priority list and will ALWAYS choose
-    // AAC first because it's the "standard" HLS audio codec in its encoder logic, regardless of
-    // our ordering.
+    // There are two completely separate audio decoder paths on Samsung TVs:
+    //   1. Hardware passthrough (for local/DLNA/progressive HTTP files) — supports AC3, DTS, etc.
+    //   2. AVPlay HLS media extractor (for HLS streams) — this is more restrictive.
     //
-    // The ONLY reliable fix is to exclude AAC from the transcode profile entirely, leaving
-    // Jellyfin with no choice but AC3/EAC3. Samsung hardware decodes both natively in HLS/TS
-    // containers — this is exactly what broadcast STBs have always used.
+    // Tizen 5.x (2019-2020 TVs):
+    //   AVPlay's HLS parser only accepts AAC in MPEG-TS segments. AC3/EAC3 in the TS
+    //   container causes PLAYER_ERROR_NOT_SUPPORTED_FORMAT during buffering — the same
+    //   crash we saw with multichannel AAC. The ONLY safe option for HLS transcodes
+    //   on Tizen 5.x is stereo AAC (2 channels), which is universally reliable.
     //
-    // Note: AAC remains available for DirectPlay and DirectStream (mp4 Remux) scenarios;
-    // this restriction only applies to active server-side HLS transcodes.
-    let transAudioCodecs = 'ac3,eac3';
+    // Tizen 6+ (2021+ TVs):
+    //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
+    //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
+    // =========================================================================
+    let transAudioCodecs;
+    let transMaxAudioChannels;
+
+    if (caps.tizenVersion >= 6) {
+        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use full surround sound
+        transAudioCodecs = 'ac3,eac3';
+        transMaxAudioChannels = maxAudioChannels;
+    } else {
+        // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
+        // multichannel AAC in TS also crashes AVPlay on Tizen 5.0.
+        transAudioCodecs = 'aac';
+        transMaxAudioChannels = '2';
+    }
+
     let directAudioCodecs = 'aac,ac3,eac3,mp3';
 
-    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+
+    // =========================================================================
+    // Transcode codec selection
+    //
+    // transVideoCodecs determines which input video codecs Jellyfin is ALLOWED
+    // to "copy" (pass-through, no re-encode) into the output HLS segments.
+    //
+    // MPEG-TS can natively carry H264, HEVC, MPEG-2 Video, and VC1 — so listing
+    // all of these lets Jellyfin copy any of them while only transcoding the audio.
+    //
+    // VP9 and AV1 are intentionally EXCLUDED: they cannot be muxed into MPEG-TS.
+    // When a VP9/AV1 file has an incompatible audio codec, the video must be
+    // re-encoded to H264 regardless — no way around it with an HLS/TS container.
+    // =========================================================================
+    const tsCompatibleVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
+    if (enableHEVC) tsCompatibleVideoCodecs.push('hevc');
+
+    let transVideoCodecs = tsCompatibleVideoCodecs.join(',');
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
@@ -371,7 +404,8 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: transVideoCodecs, // ts container only safely supports h264/hevc
             Context: 'Streaming',
             Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
+            // Tizen 5.x: capped at 2 (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
+            MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? '1' : '2',
             SegmentLength: isHtml5 ? '2' : '6',
             BreakOnNonKeyFrames: playbackMode !== 'remux'
