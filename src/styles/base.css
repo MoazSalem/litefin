@@ -432,6 +432,22 @@ body {
     z-index: 2;
 }
 
+.played-badge {
+    position: absolute;
+    bottom: 12px;
+    right: 12px;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--jf-border-radius-lg);
+    background-color: var(--jf-accent);
+    color: var(--jf-accent-content-color);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 2;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
 /* ============================================================================
    Magic Remote Support (WebOS)
    ============================================================================ */
