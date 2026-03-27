@@ -363,6 +363,52 @@ class WebOSAdapter {
     get deviceInfo() {
         return this._deviceInfo;
     }
+
+    /**
+     * Launch the native YouTube application on LG WebOS TVs and navigate
+     * directly to the specified video.
+     *
+     * Uses the WebOS Application Manager Luna service to launch the YouTube
+     * Leanback app (`youtube.leanback.v4`) with the video ID passed as a
+     * parameter. If the launch fails, falls back to opening a browser tab.
+     *
+     * @param {string} videoId - The YouTube video ID (e.g. "dQw4w9WgXcQ")
+     */
+    launchYouTube(videoId) {
+        if (!videoId) return;
+
+        /* ── Browser / dev fallback ─────────────────────────────────────── */
+        if (!this._isWebOS) {
+            log.info('launchYouTube: not on WebOS, opening browser tab');
+            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+            return;
+        }
+
+        try {
+            log.info(`launchYouTube: launching YouTube app for videoId=${videoId}`);
+
+            /* `com.webos.applicationManager/launch` is the standard Luna service
+               used to start any installed app on WebOS. The YouTube Leanback app
+               accepts a `videoId` param in its launch params object. */
+            window.webOS.service.request('luna://com.webos.applicationManager', {
+                method: 'launch',
+                parameters: {
+                    id: 'youtube.leanback.v4',
+                    params: { videoId }
+                },
+                onSuccess: () => log.info('launchYouTube: YouTube app launched successfully'),
+                onFailure: (err) => {
+                    /* App not installed or service call failed — open browser as
+                       last-resort fallback so the user still sees the video. */
+                    log.warn('launchYouTube: launch failed, falling back to browser', err);
+                    window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+                }
+            });
+        } catch (e) {
+            log.error('launchYouTube: unexpected error', e);
+            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+        }
+    }
 }
 
 export const webosAdapter = new WebOSAdapter();

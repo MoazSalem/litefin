@@ -425,6 +425,72 @@ class TizenAdapter {
             }
         });
     }
+
+    /**
+     * Launch the native YouTube application on Samsung Tizen TVs and navigate
+     * directly to the specified video.
+     *
+     * Tries known YouTube App IDs first. If the launch fails (app not installed, 
+     * or running in browser dev mode), falls back to opening the standard 
+     * YouTube URL in a browser tab.
+     *
+     * @param {string} videoId - The YouTube video ID (e.g. "dQw4w9WgXcQ")
+     */
+    launchYouTube(videoId) {
+        if (!videoId) return;
+
+        /* ── Browser / dev fallback ─────────────────────────────────────── */
+        if (!this._isTizen) {
+            log.info('launchYouTube: not on Tizen, opening browser tab');
+            window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+            return;
+        }
+
+        log.info(`launchYouTube: launching YouTube app for videoId=${videoId}`);
+
+        /* The ApplicationControl pairs an operation with a URI.
+           Passing the standard HTTPS URL to the explicit App ID ensures the
+           app parses the video ID correctly on all Tizen versions. */
+        const appControl = new tizen.ApplicationControl(
+            'http://tizen.org/appcontrol/operation/view',
+            `https://www.youtube.com/watch?v=${videoId}`
+        );
+
+        // Sequence of app IDs to try. 
+        // 111299001912 is standard Smart TV YouTube.
+        // 9Ur5IzDKqV.TizenYouTube is an alternate reported on some sets.
+        const appIds = ['111299001912', '9Ur5IzDKqV.TizenYouTube'];
+        let currentTry = 0;
+
+        const tryNextApp = () => {
+            if (currentTry >= appIds.length) {
+                // All known explicit App IDs failed.
+                log.warn('launchYouTube: all explicit app IDs failed, falling back to browser');
+                window.open(`https://www.youtube.com/watch?v=${videoId}`, '_blank');
+                return;
+            }
+
+            const appId = appIds[currentTry];
+            currentTry++;
+
+            try {
+                tizen.application.launchAppControl(
+                    appControl,
+                    appId,
+                    () => log.info(`launchYouTube: successfully launched app ${appId}`),
+                    (err) => {
+                        log.warn(`launchYouTube: failed to launch ${appId}`, err);
+                        tryNextApp();
+                    }
+                );
+            } catch (e) {
+                log.warn(`launchYouTube: exception launching ${appId}`, e);
+                tryNextApp();
+            }
+        };
+
+        tryNextApp();
+    }
 }
 
 // Export singleton instance

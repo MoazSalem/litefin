@@ -2,7 +2,8 @@ import Component from '../core/Component.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { ICONS } from '../player/osd/icons.js'; // Borrowing native OSD icons
-
+import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
 /**
  * TrailerPlayer
  * Displays a fullscreen iframe to play remote trailers (mostly YouTube),
@@ -37,6 +38,34 @@ export class TrailerPlayer extends Component {
         const player = new TrailerPlayer(trailers, parentPage);
         player.mount(document.body);
         return player;
+    }
+
+    static launchExternal(trailers, parentPage) {
+        if (!trailers || !trailers.length) return;
+        
+        const url = trailers[0].Url || '';
+        let ytId = null;
+        
+        const yt = url.match(/[?&]v=([^&]+)/);
+        if (yt) {
+            ytId = yt[1];
+        } else {
+            const ytShort = url.match(/youtu\.be\/([^?]+)/);
+            if (ytShort) ytId = ytShort[1];
+        }
+        
+        if (ytId) {
+            if (tizenAdapter.isTizen()) {
+                tizenAdapter.launchYouTube(ytId);
+            } else if (webosAdapter.isWebOS) {
+                webosAdapter.launchYouTube(ytId);
+            } else {
+                window.open(`https://www.youtube.com/watch?v=${ytId}`, '_blank');
+            }
+        } else {
+            // Fallback for non-YouTube URLs
+            this.show(trailers, parentPage);
+        }
     }
 
     render() {

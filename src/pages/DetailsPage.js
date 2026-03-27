@@ -2678,7 +2678,7 @@ class DetailsPage extends Page {
     _showRemoteTrailerPlayer() {
         // Run Phase 2 overlay manually bypassing router
         import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
-            TrailerPlayer.show(this._item.RemoteTrailers, this);
+            TrailerPlayer.launchExternal(this._item.RemoteTrailers, this);
         });
     }
 
