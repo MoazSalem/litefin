@@ -158,7 +158,12 @@ export const MediaHelper = {
             'VideoLevelNotSupported',
             'VideoChannelNotSupported',
             'VideoResolutionNotSupported',
+            'VideoBitDepthNotSupported',
+            'VideoFramerateNotSupported',
+            'VideoBitrateNotSupported',
+            'RefFramesNotSupported',
             'AnamorphicVideoNotSupported',
+            'InterlacedVideoNotSupported',
             // Subtitle burn-in forces a video encode pass
             'SubtitleCodecNotSupported',
             'UnknownVideoStreamInfo'

@@ -1699,6 +1699,14 @@ class PlayerPage extends Page {
                 ? manualPositionTicks
                 : this._player?.getCurrentPositionTicks?.() || 0;
 
+        // 'Remux' is our internal label for a container-only remux; the Jellyfin server
+        // PlayMethod enum has no 'Remux' value and returns HTTP 400 if we send it.
+        // Map it to 'DirectStream' which is the closest server-side equivalent.
+        // We also check this._cachedPlayMethod because this._player._currentPlayMethod
+        // may be cleared during track switching or when stopped.
+        const rawPlayMethod = this._player?._currentPlayMethod || this._cachedPlayMethod || 'DirectPlay';
+        const serverPlayMethod = rawPlayMethod === 'Remux' ? 'DirectStream' : rawPlayMethod;
+
         // Build base state
         const state = {
             // Core position and volume - cast strictly to integers to avoid server 400s
@@ -1709,7 +1717,7 @@ class PlayerPage extends Page {
             // Playback method (DirectPlay, DirectStream, Transcode)
             // NOTE: mediaSource.PlayMethod does NOT exist in the Jellyfin API response —
             // PlayMethod is a client-derived value stored in JellyfinPlayer._currentPlayMethod.
-            PlayMethod: this._player?._currentPlayMethod || 'DirectPlay',
+            PlayMethod: serverPlayMethod,
 
             // Seeking capability
             CanSeek: Boolean(mediaSource?.RunTimeTicks > 0),

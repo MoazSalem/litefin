@@ -1015,8 +1015,16 @@ export class JellyfinPlayer extends EventEmitter {
         // =====================================================================
         // Determine whether we need to restart playback to apply the audio change.
         // =====================================================================
+        // True whenever the audio codec is baked into the server's HLS output and
+        // cannot be switched without a full PlaybackInfo restart + re-profile.
+        //
+        // 'Remux' must be included here: in Remux sessions, audio runs through the
+        // server's HLS transcoding pipeline too (even if video is copied). Falling
+        // through to the native AVPlay setSelectTrack path would bypass the
+        // enableFlacInVideo gate and let FLAC play directly → 2s sync issue.
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
-                              this._currentPlayMethod === 'DirectStream';
+                              this._currentPlayMethod === 'DirectStream' ||
+                              this._currentPlayMethod === 'Remux';
 
         // True whenever this backend cannot live-switch audio tracks.
         // WebOS reports true for supportsNativeAudioTracks, so it is treated
