@@ -506,11 +506,14 @@ export default class OSDController extends Component {
 
     show() {
         /*
-         * Capture whether the OSD was hidden BEFORE we flip the flag.
-         * This is used by _applyFocusRestoreMode() to decide whether a
-         * focus-restore transition should occur.
+         * Cancel the pending focus-reset timer (timeout mode) if the user
+         * returns to the OSD before the 10-second deadline.
+         * Focus stays wherever they left it — the timer firing early would be wrong.
          */
-        const wasHidden = !this._isOsdVisible;
+        if (!this._isOsdVisible && this._focusResetTimer) {
+            clearTimeout(this._focusResetTimer);
+            this._focusResetTimer = null;
+        }
 
         if (this._osdMainEl) this._osdMainEl.classList.remove('osd-hidden');
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
@@ -525,13 +528,6 @@ export default class OSDController extends Component {
 
         this.resetAutoHide();
         this._updateNavigationButtons();
-
-        /*
-         * Apply the user's preferred focus restore mode.
-         * This is a no-op when wasHidden is false (e.g. resetAutoHide calls)
-         * and also a no-op when mode is 'remember' (default).
-         */
-        this._applyFocusRestoreMode(wasHidden);
     }
 
     /**
@@ -771,13 +767,6 @@ export default class OSDController extends Component {
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
 
-        /*
-         * Stamp the hide time so that '_applyFocusRestoreMode' can calculate
-         * how long the OSD was hidden before the next reveal.
-         * Used by the 'timeout' focus-restore mode.
-         */
-        this._hiddenAt = Date.now();
-
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
         if (!this.activeMenu && !this.upNextDialog?.isVisible) {
@@ -785,55 +774,63 @@ export default class OSDController extends Component {
         }
 
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
-    }
 
-    /**
-     * Applies the user-configured OSD focus restore behaviour whenever
-     * the OSD transitions from hidden → visible.
-     *
-     * Modes (controlled by PlayerSettings 'osdFocusRestoreMode'):
-     *  • 'remember' — do nothing; focus stays on whatever button it was last on.
-     *  • 'timeout'  — if the OSD was hidden for ≥ 10 s, snap to Play/Pause;
-     *                 otherwise keep the last position.
-     *  • 'always'   — always snap to Play/Pause on every reveal.
-     *
-     * This function is a no-op when `wasHidden` is false (OSD was already
-     * visible, e.g. resetAutoHide ticking over), so it is safe to call
-     * unconditionally from show().
-     *
-     * @param {boolean} wasHidden  True when the OSD was not visible before show() ran.
-     * @private
-     */
-    _applyFocusRestoreMode(wasHidden) {
-        // Only applies on transitions from hidden → visible
-        if (!wasHidden) return;
+        /*
+         * FOCUS RESTORE — pre-park focus based on user preference.
+         *
+         * The root problem: on Tizen (and some WebOS) runtimes, pressing OK/Enter
+         * while the OSD is hidden generates a ghost click on the DOM-focused element
+         * (whatever was last focused before the OSD hid). There is no reliable way
+         * to swallow this click after the fact — blur(), e.preventDefault() and
+         * capture-phase listeners all arrive too late or are ignored by the platform.
+         *
+         * The only reliable fix is to ensure the DOM-focused element is ALREADY
+         * Play/Pause by the time the user presses OK. Then the ghost click just
+         * toggles play/pause, which is the correct and expected behaviour.
+         *
+         *   'always'  → park focus immediately on hide.
+         *   'timeout' → park focus after 10 s via a standalone one-shot timer
+         *               (outside the update loop — _stopUpdates() above is unaffected).
+         *               show() cancels this timer if the user returns early.
+         *   'remember'→ leave focus wherever it is (original behaviour).
+         */
+
+        // Cancel any previous pending timer before possibly starting a new one
+        if (this._focusResetTimer) {
+            clearTimeout(this._focusResetTimer);
+            this._focusResetTimer = null;
+        }
 
         const mode = PlayerSettings.get('osdFocusRestoreMode') || 'remember';
 
-        let shouldResetToPlayPause = false;
-
         if (mode === 'always') {
-            // Always land on Play/Pause, no matter how short the hide was
-            shouldResetToPlayPause = true;
+            // Park immediately — next OK press ghost-click hits Play/Pause
+            this._resetFocusToPlayPause();
         } else if (mode === 'timeout') {
-            /*
-             * Only reset if the OSD was hidden for at least 10 seconds.
-             * _hiddenAt is stamped in hide() just before _isOsdVisible goes false.
-             * If somehow _hiddenAt is not set yet (e.g. on the very first show
-             * before any hide), treat it as 0 age so we skip the reset.
-             */
-            const hiddenForMs = this._hiddenAt ? (Date.now() - this._hiddenAt) : 0;
-            shouldResetToPlayPause = hiddenForMs >= 10_000;
+            // Park after 10 s. One-shot timer, cancelled by show() if OSD reveals early.
+            this._focusResetTimer = setTimeout(() => {
+                this._focusResetTimer = null;
+                this._resetFocusToPlayPause();
+            }, 10_000);
         }
-        // 'remember' → shouldResetToPlayPause stays false
+        // 'remember' → do nothing, focus stays on the last button
+    }
 
-        if (shouldResetToPlayPause) {
-            // Move internal tracker to Controls row → Play/Pause, then repaint
-            this._currentFocusRow = 1;
-            const playIdx = this._findActionIndex('togglePlay');
-            if (playIdx !== -1) this._currentFocusIndex = playIdx;
-            this._updateFocus();
-        }
+    /**
+     * Moves focus state to the Play/Pause button and updates the DOM.
+     *
+     * Called by hide() for 'always' mode, and by the timeout timer for
+     * 'timeout' mode. Safe to call while the OSD is hidden — _updateFocus()
+     * will move DOM focus (via btn.focus()) to Play/Pause so that any
+     * subsequent OK/Enter ghost click fires on the correct element.
+     *
+     * @private
+     */
+    _resetFocusToPlayPause() {
+        this._currentFocusRow = 1;
+        const playIdx = this._findActionIndex('togglePlay');
+        if (playIdx !== -1) this._currentFocusIndex = playIdx;
+        this._updateFocus();
     }
 
     resetAutoHide() {
@@ -1072,9 +1069,16 @@ export default class OSDController extends Component {
 
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
+            /*
+             * The ghost click from this OK press fires on whatever holds DOM focus
+             * right now. hide() already pre-parked focus on Play/Pause for 'always'
+             * and 'timeout' (after 10 s) modes, so the ghost click hits the correct
+             * button. For 'remember' mode, focus stayed on the last button — same
+             * as the original behaviour before this feature was added.
+             */
+            if (e) e.preventDefault();
             this.show();
             this._updateFocus();
-            if (e) e.preventDefault(); // Prevent accidental background click when just revealing OSD
             return true;
         }
 
