@@ -505,19 +505,33 @@ export default class OSDController extends Component {
     }
 
     show() {
+        /*
+         * Capture whether the OSD was hidden BEFORE we flip the flag.
+         * This is used by _applyFocusRestoreMode() to decide whether a
+         * focus-restore transition should occur.
+         */
+        const wasHidden = !this._isOsdVisible;
+
         if (this._osdMainEl) this._osdMainEl.classList.remove('osd-hidden');
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
-        
+
         // Start background polling when OSD becomes visible
         this._startUpdates();
-        
+
         // Force an immediate layout update so the slider and time text don't
         // visually jump from 00:00 to the actual position on the next 500ms tick.
         this._updateState();
-        
+
         this.resetAutoHide();
         this._updateNavigationButtons();
+
+        /*
+         * Apply the user's preferred focus restore mode.
+         * This is a no-op when wasHidden is false (e.g. resetAutoHide calls)
+         * and also a no-op when mode is 'remember' (default).
+         */
+        this._applyFocusRestoreMode(wasHidden);
     }
 
     /**
@@ -752,18 +766,74 @@ export default class OSDController extends Component {
 
     hide() {
         // Don't hide if a modal menu is open
-        if (this.isModalOpen) return; 
+        if (this.isModalOpen) return;
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
-        
+
+        /*
+         * Stamp the hide time so that '_applyFocusRestoreMode' can calculate
+         * how long the OSD was hidden before the next reveal.
+         * Used by the 'timeout' focus-restore mode.
+         */
+        this._hiddenAt = Date.now();
+
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
         if (!this.activeMenu && !this.upNextDialog?.isVisible) {
             this._stopUpdates();
         }
-        
+
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+    }
+
+    /**
+     * Applies the user-configured OSD focus restore behaviour whenever
+     * the OSD transitions from hidden → visible.
+     *
+     * Modes (controlled by PlayerSettings 'osdFocusRestoreMode'):
+     *  • 'remember' — do nothing; focus stays on whatever button it was last on.
+     *  • 'timeout'  — if the OSD was hidden for ≥ 10 s, snap to Play/Pause;
+     *                 otherwise keep the last position.
+     *  • 'always'   — always snap to Play/Pause on every reveal.
+     *
+     * This function is a no-op when `wasHidden` is false (OSD was already
+     * visible, e.g. resetAutoHide ticking over), so it is safe to call
+     * unconditionally from show().
+     *
+     * @param {boolean} wasHidden  True when the OSD was not visible before show() ran.
+     * @private
+     */
+    _applyFocusRestoreMode(wasHidden) {
+        // Only applies on transitions from hidden → visible
+        if (!wasHidden) return;
+
+        const mode = PlayerSettings.get('osdFocusRestoreMode') || 'remember';
+
+        let shouldResetToPlayPause = false;
+
+        if (mode === 'always') {
+            // Always land on Play/Pause, no matter how short the hide was
+            shouldResetToPlayPause = true;
+        } else if (mode === 'timeout') {
+            /*
+             * Only reset if the OSD was hidden for at least 10 seconds.
+             * _hiddenAt is stamped in hide() just before _isOsdVisible goes false.
+             * If somehow _hiddenAt is not set yet (e.g. on the very first show
+             * before any hide), treat it as 0 age so we skip the reset.
+             */
+            const hiddenForMs = this._hiddenAt ? (Date.now() - this._hiddenAt) : 0;
+            shouldResetToPlayPause = hiddenForMs >= 10_000;
+        }
+        // 'remember' → shouldResetToPlayPause stays false
+
+        if (shouldResetToPlayPause) {
+            // Move internal tracker to Controls row → Play/Pause, then repaint
+            this._currentFocusRow = 1;
+            const playIdx = this._findActionIndex('togglePlay');
+            if (playIdx !== -1) this._currentFocusIndex = playIdx;
+            this._updateFocus();
+        }
     }
 
     resetAutoHide() {

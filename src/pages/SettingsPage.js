@@ -711,6 +711,27 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
+                        <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-focus-mode-select',
+                            [
+                                /* Keep the last button the user navigated to — the legacy behaviour */
+                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
+                                /* Reset to Play/Pause only if idle for ≥ 10 s */
+                                { value: 'timeout',  label: i18n.t('OsdFocusTimeout')  || 'Return to Play/Pause after 10 s' },
+                                /* Always snap to Play/Pause on every OSD reveal */
+                                { value: 'always',   label: i18n.t('OsdFocusAlways')   || 'Always return to Play/Pause' }
+                            ],
+                            PlayerSettings.get('osdFocusRestoreMode') || 'remember'
+                        )}
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="PlaybackCompatibility">${i18n.t('PlaybackCompatibility')}</h3>
 
                 <div class="setting-item">
@@ -2238,7 +2259,12 @@ class SettingsPage extends Page {
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
             'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
-            'time-format-select': { key: 'timeFormat', type: 'player' }
+            'time-format-select': { key: 'timeFormat', type: 'player' },
+            /*
+             * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
+             * every time the OSD transitions from hidden to visible. No extra handler needed.
+             */
+            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' }
         };
 
         this.$$('.select-btn').forEach((btn) => {

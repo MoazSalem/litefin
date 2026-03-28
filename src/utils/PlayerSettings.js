@@ -208,7 +208,20 @@ const DEFAULTS = {
     enableCinemaMode: false,
 
     // Time format for clock and playback ('12h', '24h')
-    timeFormat: '12h'
+    timeFormat: '12h',
+
+    /*
+     * OSD Focus Restore Mode
+     * Controls where the remote cursor lands when the OSD is revealed
+     * after having been auto-hidden.
+     *
+     *   'remember' — Stay on the last button the user was on (legacy behaviour).
+     *   'timeout'  — If the OSD was hidden for ≥ 10 seconds, jump to Play/Pause;
+     *                otherwise stay on the last button.
+     *   'always'   — Always land on Play/Pause whenever the OSD re-appears,
+     *                no matter how short the hide was.
+     */
+    osdFocusRestoreMode: 'remember'
 };
 
 /**
