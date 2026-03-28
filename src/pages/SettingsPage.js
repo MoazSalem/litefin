@@ -505,6 +505,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideWatchedContentFromLatestMedia">${i18n.t('HideWatchedContentFromLatestMedia') || 'Hide played from Recently Added'}</span>
+                        <span class="setting-description" data-i18n="HideWatchedContentFromLatestMediaDescription">${i18n.t('HideWatchedContentFromLatestMediaDescription') || 'Hide watched content from Recently Added Media.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hidePlayedInLatest') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-played-latest" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LibraryThumbnails">${i18n.t('LibraryThumbnails') || 'Library Thumbnails'}</span>
                         <span class="setting-description" data-i18n="LibraryThumbnailsDescription">${i18n.t('LibraryThumbnailsDescription') || 'Style of library cards on the home screen'}</span>
                     </div>
@@ -1692,6 +1705,29 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Hide Played in Latest
+        const hidePlayedLatestBtn = this.$('#toggle-hide-played-latest');
+        if (hidePlayedLatestBtn) {
+            hidePlayedLatestBtn.addEventListener('click', async () => {
+                const isHidden = storage.getItem('pref:hidePlayedInLatest') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hidePlayedInLatest', newValue);
+                hidePlayedLatestBtn.classList.toggle('active', newValue);
+
+                // Sync preference with Jellyfin server so it's applied securely
+                try {
+                    const user = await api.getCurrentUser();
+                    if (user && user.Configuration) {
+                        user.Configuration.HidePlayedInLatest = newValue;
+                        await api.updateUserConfiguration(user.Configuration);
+                        log.info(`Synced HidePlayedInLatest (${newValue}) to server`);
+                    }
+                } catch (e) {
+                    log.error('Failed to sync HidePlayedInLatest to server', e);
+                }
             });
         }
 

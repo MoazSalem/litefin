@@ -392,6 +392,8 @@
     "HEVCDescription": "Direct play HEVC content (supported on all Tizen 4+ TVs)",
     "HideLibraryLabels": "Hide Library Labels",
     "HideLibraryLabelsDescription": "Hide the text label beneath library cards on the home screen",
+    "HideWatchedContentFromLatestMedia": "Hide played from Recently Added",
+    "HideWatchedContentFromLatestMediaDescription": "Hide watched content from Recently Added Media",
     "High": "High",
     "HomeScreen": "Home Screen",
     "HomeScreenCustomization": "Home Screen Customization",

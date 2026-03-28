@@ -421,6 +421,13 @@ export class ApiClient {
     }
 
     /**
+     * Update user configuration
+     */
+    async updateUserConfiguration(configuration) {
+        return this.post(`/Users/${this._userId}/Configuration`, configuration);
+    }
+
+    /**
      * Get user's library views
      */
     async getUserViews() {

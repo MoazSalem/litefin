@@ -240,6 +240,8 @@ class HomePage extends Page {
         // ── Priority 2: Latest per library ───────────────────────────────────
         // Each library gets its own descriptor so they can render independently
         // as they resolve, rather than waiting for all libraries to finish.
+        const hidePlayedInLatest = storage.getItem('pref:hidePlayedInLatest') === 'true';
+
         for (const lib of this._libraries) {
             descriptors.push({
                 id: `latest-${lib.Id}`,
@@ -251,7 +253,8 @@ class HomePage extends Page {
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
-                        const items = await api.getLatestItems(lib.Id);
+                        const params = hidePlayedInLatest ? { Filters: 'IsUnplayed' } : {};
+                        const items = await api.getLatestItems(lib.Id, params);
                         return items?.length > 0 ? items : null;
                     } catch (e) {
                         log.warn(`Failed to load latest for ${lib.Name}`, e);
