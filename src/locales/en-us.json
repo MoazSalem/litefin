@@ -655,5 +655,16 @@
     "Working": "Working...",
     "YearLabel": "Year: {0}",
     "Yes": "Yes",
-    "Zoom": "Zoom"
+    "Zoom": "Zoom",
+    "StorageManagement": "Storage Management",
+    "LocalStorageUsage": "localStorage Usage",
+    "Calculating": "Calculating...",
+    "ClearImageCache": "Clear Image Cache",
+    "ClearImageCacheDescription": "Removes cached library thumbnail URLs. Safe — does not affect settings or auth.",
+    "ClearDebugFilters": "Clear Debug Filter History",
+    "ClearDebugFiltersDescription": "Removes stored filter settings for deleted or renamed modules.",
+    "ClearAllCaches": "Clear All Caches",
+    "ClearAllCachesDescription": "Removes all non-essential cached data. Will not sign you out.",
+    "AlreadyEmpty": "Already empty",
+    "Done": "Done ✓"
 }

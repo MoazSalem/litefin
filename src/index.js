@@ -85,6 +85,19 @@ async function bootstrap() {
         container: '#app'
     });
 
+    /*
+     * Deferred housekeeping: prune stale debug_filter_* localStorage keys.
+     *
+     * By the time app.init() resolves, every module has been statically
+     * imported and called logger.create(), so _registeredModules is complete.
+     * We defer via setTimeout so the initial route render (home/login) is
+     * not blocked by this housekeeping pass — it runs invisibly in the
+     * background a few seconds after startup.
+     */
+    setTimeout(() => {
+        logger.pruneOrphanFilters();
+    }, 3000);
+
     log.info('Bootstrap entry complete');
 }
 

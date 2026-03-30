@@ -206,6 +206,49 @@ class Logger {
         }
         localStorage.setItem(`debug_filter_${moduleName}`, enabled);
     }
+
+    /**
+     * Prune stale debug_filter_* keys from localStorage.
+     *
+     * Called once after the app has fully initialized and all modules have
+     * called logger.create(). Any persisted filter key whose module name is
+     * NOT in the currently registered set is considered orphaned — it was left
+     * behind by an old or renamed module — and is removed.
+     *
+     * This runs against raw localStorage (not StorageService) because Logger
+     * initializes before StorageService to avoid circular dependency.
+     *
+     * @param {Set<string>|string[]} [knownModules] - Optional explicit module
+     *   list. Defaults to the set collected via logger.create() calls.
+     */
+    pruneOrphanFilters(knownModules) {
+        // Default to the modules registered during this session
+        const valid = new Set(knownModules || this._registeredModules);
+
+        let pruned = 0;
+        // Snapshot keys first — modifying localStorage while iterating it
+        // has undefined behaviour across browsers/Tizen's WebKit fork
+        const allKeys = [];
+        for (let i = 0; i < localStorage.length; i++) {
+            allKeys.push(localStorage.key(i));
+        }
+
+        for (const key of allKeys) {
+            if (!key || !key.startsWith('debug_filter_')) continue;
+            const moduleName = key.replace('debug_filter_', '');
+            if (!valid.has(moduleName)) {
+                // Stale key — no live module claims this name
+                localStorage.removeItem(key);
+                // Also evict from the in-memory disabled set just in case
+                this._disabledModules.delete(moduleName);
+                pruned++;
+            }
+        }
+
+        if (pruned > 0) {
+            console.info(`[Logger] pruneOrphanFilters: removed ${pruned} stale debug_filter_* key(s)`);
+        }
+    }
 }
 
 export const logger = new Logger();
