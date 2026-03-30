@@ -266,23 +266,40 @@ export const MediaHelper = {
         }
 
         // ====================================================================
-        // Internal tracks: use the server-provided DeliveryUrl.
-        // The server guarantees this path is correct for the track's codec,
-        // start-position offset, and media source — we must not second-guess it.
+        // Internal tracks: prefer the server-provided DeliveryUrl.
+        // The server bakes in the correct path segment, format extension, and
+        // start-position offset — we trust it over any manual construction.
+        //
+        // HOWEVER: for embedded subtitle tracks during Direct Play, the server
+        // does NOT populate DeliveryUrl because the subtitle profile Method is
+        // 'Embed' (the player is supposed to read it from the container).
+        // When we want to render PGS ourselves (client-side, via libpgs) we
+        // still need to fetch the raw stream from the server, so we fall back
+        // to the standard Jellyfin subtitle API path:
+        //   /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/0/Stream.{codec}
         // ====================================================================
-        const deliveryPath = track.DeliveryUrl || '';
+        let deliveryPath = track.DeliveryUrl;
 
-        // Ensure it's a fully-qualified URL (DeliveryUrl is usually a root-relative path)
+        if (!deliveryPath) {
+            // Build the URL manually from the track's own index and the known
+            // media source — this matches the Jellyfin server's subtitle route.
+            const codec  = (track.Codec || 'pgssub').toLowerCase();
+            const format_  = format || codec;            // honour caller's override
+            deliveryPath = `/Videos/${itemId}/${mediaSourceId}/Subtitles/${track.Index}/0/Stream.${format_}`;
+            const sep = '?';
+            return `${serverUrl}${deliveryPath}${sep}api_key=${encodeURIComponent(authToken)}`;
+        }
+
+        // Ensure it's a fully-qualified URL (DeliveryUrl is usually root-relative)
         let url = deliveryPath.startsWith('http')
             ? deliveryPath
             : `${serverUrl}${deliveryPath}`;
 
         // If the caller wants a specific format (e.g. 'vtt' for text conversion),
-        // swap the extension — jellyfin-web does: url.replace('.vtt', format).
-        // We broaden this to replace whatever extension is currently in the URL.
+        // swap the extension — mirrors jellyfin-web's url.replace('.vtt', format).
         if (format) {
             url = url.replace(/\.\w+(?=\?)/, `.${format}`)  // before query string
-                     .replace(/\.\w+$/, `.${format}`);     // or at end of string
+                     .replace(/\.\w+$/, `.${format}`);      // or at end of string
         }
 
         // Append auth token (DeliveryUrl itself usually omits it)

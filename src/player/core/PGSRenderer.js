@@ -111,47 +111,51 @@ class PGSRenderer {
             this._renderer = new PgsRenderer(config);
             log.debug('PgsRenderer instance created');
 
-            if (this._subBuffer) {
-                // Buffer was pre-fetched by SubtitleManager — load it directly.
-                // This is the preferred path: we control the fetch, catch errors ourselves.
+            // ================================================================
+            // Post-load dedup-reset guard  (applies to BOTH loading paths)
+            //
+            // loadFromUrl() and loadFromBuffer() are both async internally.
+            // ticks() start arriving before the file is fully parsed, so
+            // updateTimestamps is still empty.  getIndexFromTimestamps returns
+            // -1, renderAtIndex sets previousTimestampIndex = -1, and when
+            // real timestamps finally arrive:
+            //   • libpgs's default onTimestampsUpdated calls renderAtVideoTimestamp()
+            //     which needs this.video — null on Tizen → complete no-op.
+            //   • subsequent ticks at a time before the first subtitle also map
+            //     to -1 → dedup guard fires → no render ever.
+            //
+            // Fix: replace the default callback with one that directly resets
+            // previousTimestampIndex to NaN (NaN !== any number, so the dedup
+            // guard always passes on the next call) then re-renders at the
+            // last-known playback position.  This happens once after load and
+            // is harmless for subsequent onTimestampsUpdated calls (partial-
+            // progress updates during URL streaming) because we always re-
+            // render at current time regardless.
+            // ================================================================
+            this._renderer.implementation.onTimestampsUpdated = () => {
+                this._isBufferLoaded = true;
+                if (this._lastTickTime !== null && !this._isDestroyed) {
+                    log.debug(`Timestamps updated — re-rendering at t=${this._lastTickTime.toFixed(2)}s (dedup reset)`);
+                    // TypeScript 'private' is erased at runtime — safe to set directly.
+                    this._renderer.implementation.previousTimestampIndex = NaN;
+                    this._renderer.renderAtTimestamp(this._lastTickTime + this._timeOffset);
+                }
+            };
+
+            if (this._url) {
+                // Primary path: pass the URL to libpgs — it streams the file
+                // progressively (StreamBinaryReader on modern Chromium, falling back
+                // to ArrayBinaryReader) without holding the entire file in JS heap.
+                // SubtitleManager already validated the URL via HEAD before getting here.
+                log.debug(`Loading PGS from URL (streaming): ${this._url}`);
+                this._renderer.loadFromUrl(this._url);
+            } else if (this._subBuffer) {
+                // Fallback path: pre-fetched ArrayBuffer (kept for compatibility
+                // in case the caller already has the buffer in memory).
                 log.debug(`Loading PGS from pre-fetched buffer (${this._subBuffer.byteLength.toLocaleString()} bytes)`);
                 this._renderer.loadFromBuffer(this._subBuffer);
-
-                // ============================================================
-                // Post-load re-render guard
-                //
-                // loadFromBuffer() is async internally — it calls pgs.loadFromBuffer
-                // and only invokes setUpdateTimestamps() in a .then() callback.
-                // Meanwhile, tick() calls are already flowing. With updateTimestamps
-                // still empty, getIndexFromTimestamps always returns -1, and the dedup
-                // guard in renderAtIndex sets previousTimestampIndex = -1. When the
-                // buffer finishes parsing, if the current playback time maps to index
-                // -1 (i.e. before the first subtitle), the dedup guard fires and no
-                // render ever occurs — the subtitle stays blank forever.
-                //
-                // Fix: hook into onTimestampsUpdated (fired once buffer is parsed) and
-                // force a re-render at the last known playback time.  This breaks the
-                // stale -1 lock so the renderer starts showing frames on the next tick.
-                // ============================================================
-                this._renderer.implementation.onTimestampsUpdated = () => {
-                    this._isBufferLoaded = true;
-                    if (this._lastTickTime !== null && !this._isDestroyed) {
-                        log.debug(`Buffer parsed — forcing re-render at last known time ${this._lastTickTime.toFixed(2)}s to break dedup lock`);
-                        // TypeScript 'private' is erased at runtime — directly reset the
-                        // previousTimestampIndex so the dedup guard in renderAtIndex lets
-                        // through the next renderAtTimestamp() call unconditionally.
-                        // Uses NaN because NaN !== any number, so the guard always fires.
-                        this._renderer.implementation.previousTimestampIndex = NaN;
-                        this._renderer.renderAtTimestamp(this._lastTickTime + this._timeOffset);
-                    }
-                };
-            } else if (this._url) {
-                // Fallback: no pre-fetched buffer (e.g. legacy / non-TV path).
-                // libpgs will do its own internal fetch — errors won't surface here.
-                log.debug(`Loading PGS from URL (fallback): ${this._url}`);
-                this._renderer.loadFromUrl(this._url);
             } else {
-                log.error('PGSRenderer: no subBuffer or subUrl provided — subtitle will not render');
+                log.error('PGSRenderer: no subUrl or subBuffer provided — subtitle will not render');
             }
         } catch (e) {
             log.error('Failed to create PgsRenderer:', e);

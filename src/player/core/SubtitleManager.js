@@ -677,8 +677,8 @@ export default class SubtitleManager {
         try {
             // Build the subtitle URL — use the server-provided DeliveryUrl directly,
             // just as jellyfin-web does in getTextTrackUrl(track, item) with no format
-            // override.  The server bakes the correct extension (.sup for PGS) plus
-            // the start-position segment into DeliveryUrl; we must not override it.
+            // override.  The server bakes the correct extension plus the start-position
+            // segment into DeliveryUrl; we must not override it.
             const url = MediaHelper.getSubtitleUrl(
                 track,
                 this._serverUrl,
@@ -688,17 +688,33 @@ export default class SubtitleManager {
                 // No format arg → uses track.DeliveryUrl as-is
             );
 
-            log.info(`Fetching PGS subtitle binary from: ${url}`);
-
-            // Fetch the .pgs file with full error propagation — unlike libpgs's internal
-            // loadFromUrl(), this throws on network errors so we can log and bail out.
-            const response = await fetch(url);
-            if (!response.ok) {
-                throw new Error(`Server returned HTTP ${response.status} for .pgs: ${url}`);
+            // ================================================================
+            // URL validation via a zero-cost range request
+            //
+            // Jellyfin's subtitle endpoint does not support HEAD (405), so we
+            // use a Range GET to fetch only the first byte.  This confirms the
+            // URL is reachable without pulling the entire file into memory.
+            // A 206 Partial Content or 200 OK both mean the server is happy.
+            // ================================================================
+            log.info(`Validating PGS subtitle URL: ${url}`);
+            const probeResponse = await fetch(url, {
+                headers: { Range: 'bytes=0-0' }
+            });
+            // 206 = range served, 200 = server ignored range but responded OK
+            if (!probeResponse.ok) {
+                throw new Error(`Server returned HTTP ${probeResponse.status} for PGS subtitle: ${url}`);
             }
 
-            const pgsBuffer = await response.arrayBuffer();
-            log.info(`PGS stream fetched OK — ${pgsBuffer.byteLength.toLocaleString()} bytes for track "${track.DisplayTitle}"`);
+            // Log the full content-length if the server exposed it
+            const contentRange  = probeResponse.headers.get('content-range');   // e.g. "bytes 0-0/126877696"
+            const contentLength = probeResponse.headers.get('content-length');
+            const totalBytes    = contentRange
+                ? parseInt(contentRange.split('/')[1], 10)
+                : parseInt(contentLength || '0', 10);
+            const sizeLabel = totalBytes
+                ? `${(totalBytes / 1024 / 1024).toFixed(1)} MB`
+                : 'unknown size';
+            log.info(`PGS URL validated OK (${sizeLabel}) — handing to renderer: "${track.DisplayTitle}"`);
 
             // Destroy any existing renderer before creating a new one.
             if (this._pgsRenderer) {
@@ -706,13 +722,13 @@ export default class SubtitleManager {
                 this._pgsRenderer = null;
             }
 
-            // Pass the pre-fetched ArrayBuffer so PGSRenderer calls loadFromBuffer()
-            // instead of relying on libpgs's internal fetch which silently fails on Tizen.
+            // Pass the URL directly — PGSRenderer will call libpgs loadFromUrl()
+            // which streams the file rather than buffering it all at once.
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
                 videoElement: this._videoElement,
-                subBuffer: pgsBuffer,
+                subUrl: url,
                 timeOffset: this._primaryOffset
             });
 
