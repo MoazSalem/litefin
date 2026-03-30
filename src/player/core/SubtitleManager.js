@@ -17,6 +17,7 @@ import ASSRenderer from './ASSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { toast } from '../../ui/Toast.js';
@@ -714,7 +715,47 @@ export default class SubtitleManager {
             const sizeLabel = totalBytes
                 ? `${(totalBytes / 1024 / 1024).toFixed(1)} MB`
                 : 'unknown size';
-            log.info(`PGS URL validated OK (${sizeLabel}) — handing to renderer: "${track.DisplayTitle}"`);
+            log.info(`PGS URL validated OK (${sizeLabel}) — handing to renderer`);
+
+            // ================================================================
+            // Tizen Chunked Download Fallback
+            //
+            // libpgs's loadFromUrl() uses fetch streaming, which silently hangs
+            // on Tizen's Chromium port for 50MB+ streams. To bypass this, we
+            // manually construct the full ArrayBuffer via 5MB chunked Range
+            // requests, which Tizen processes reliably, and pass it to
+            // loadFromBuffer() instead. Non-Tizen devices keep streaming the URL.
+            // ================================================================
+            let pgsBuffer = null;
+            if (platformInfo.isTizen && totalBytes > 0) {
+                log.info(`Tizen detected — downloading PGS via 5MB chunks (Total: ${sizeLabel})...`);
+                const chunkSize = 5 * 1024 * 1024; // 5 MB
+                const buffer = new Uint8Array(totalBytes);
+                let offset = 0;
+                let lastPercent = 0;
+
+                while (offset < totalBytes) {
+                    const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
+                    const chunkResp = await fetch(url, {
+                        headers: { Range: `bytes=${offset}-${end}` }
+                    });
+
+                    if (!chunkResp.ok) throw new Error(`Chunk fetch failed: ${chunkResp.status}`);
+
+                    const chunkArray = new Uint8Array(await chunkResp.arrayBuffer());
+                    buffer.set(chunkArray, offset);
+                    offset += chunkArray.byteLength;
+
+                    const percent = Math.floor((offset / totalBytes) * 100);
+                    if (percent >= lastPercent + 25 || offset === totalBytes) {
+                        log.debug(`PGS Download progress: ${percent}%`);
+                        lastPercent = percent;
+                    }
+                }
+
+                pgsBuffer = buffer.buffer;
+                log.info(`Chunked download complete — ${pgsBuffer.byteLength.toLocaleString()} bytes ready.`);
+            }
 
             // Destroy any existing renderer before creating a new one.
             if (this._pgsRenderer) {
@@ -722,13 +763,13 @@ export default class SubtitleManager {
                 this._pgsRenderer = null;
             }
 
-            // Pass the URL directly — PGSRenderer will call libpgs loadFromUrl()
-            // which streams the file rather than buffering it all at once.
+            // On Tizen, we pass the assembled buffer. On web, we pass the URL.
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
                 videoElement: this._videoElement,
-                subUrl: url,
+                subUrl: pgsBuffer ? null : url,
+                subBuffer: pgsBuffer,
                 timeOffset: this._primaryOffset
             });
 

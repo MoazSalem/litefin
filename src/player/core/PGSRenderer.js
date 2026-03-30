@@ -135,9 +135,14 @@ class PGSRenderer {
             this._renderer.implementation.onTimestampsUpdated = () => {
                 this._isBufferLoaded = true;
                 if (this._lastTickTime !== null && !this._isDestroyed) {
-                    log.debug(`Timestamps updated — re-rendering at t=${this._lastTickTime.toFixed(2)}s (dedup reset)`);
-                    // TypeScript 'private' is erased at runtime — safe to set directly.
-                    this._renderer.implementation.previousTimestampIndex = NaN;
+                    // libpgs fires this repeatedly (~once per second) while parsing
+                    // the file. We only need to break the dedup lock and log it if
+                    // the renderer is currently stuck in the -1 pre-start phase.
+                    if (this._renderer.implementation.previousTimestampIndex === -1) {
+                        log.debug(`Timestamps updated — breaking dedup lock at t=${this._lastTickTime.toFixed(2)}s`);
+                        // TypeScript 'private' is erased at runtime — safe to set directly.
+                        this._renderer.implementation.previousTimestampIndex = NaN;
+                    }
                     this._renderer.renderAtTimestamp(this._lastTickTime + this._timeOffset);
                 }
             };
