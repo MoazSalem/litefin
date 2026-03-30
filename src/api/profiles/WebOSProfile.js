@@ -274,9 +274,14 @@ export function buildJellyfinProfile(options = {}) {
     const isHtml5 = typeof options === 'object' && options.backend === 'html5';
     const caps = getDeviceCapabilities();
 
-    const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
-    const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
-    const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
+    let enableHEVC = PlayerSettings.get('enableHEVC');
+    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+
+    let enableAV1 = PlayerSettings.get('enableAV1');
+    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+
+    let enableVP9 = PlayerSettings.get('enableVP9');
+    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
     
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
     let enableHDR = PlayerSettings.get('enableHDR');
