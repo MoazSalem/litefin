@@ -22,16 +22,20 @@ class PGSRenderer {
      * @param {string} context.subUrl - The URL to the .sup subtitle file
      * @param {number} [context.timeOffset=0] - Time offset in seconds
      */
-    constructor({ track, videoElement, container, subUrl, timeOffset = 0 }) {
+    constructor({ track, videoElement, container, subUrl, subBuffer, timeOffset = 0 }) {
         this.track = track;
         this._video = videoElement;
         this._container = container;
-        this._url = subUrl;
+        this._url = subUrl || null;           // Fallback URL for non-TV / legacy path
+        this._subBuffer = subBuffer || null;  // Pre-fetched binary, preferred on Tizen
         this._timeOffset = timeOffset;
         this._renderer = null;
         this._canvas = null;
         this._canvasWrapper = null;
         this._isDestroyed = false;
+        this._hasLoggedFirstTick = false;    // One-time tick confirmation log
+        this._lastTickTime = null;           // Last time passed to tick() — used for post-load re-render
+        this._isBufferLoaded = false;        // True once loadFromBuffer().then() has resolved
 
         this._init();
     }
@@ -89,11 +93,13 @@ class PGSRenderer {
         this._canvasWrapper.appendChild(this._canvas);
         this._container.appendChild(this._canvasWrapper);
 
-        // Config object for libpgs — note: workerUrl is omitted for mainThread mode
+        // Config for libpgs — note: we do NOT pass subUrl here.
+        // SubtitleManager pre-fetches the .sup and passes an ArrayBuffer via `subBuffer`.
+        // Passing subUrl would make libpgs do its own internal fetch (no error propagation),
+        // which silently fails on Tizen and leaves updateTimestamps empty forever.
         const config = {
             video: this._video, // null for AVPlay; libpgs is OK without a video element
             canvas: this._canvas,
-            subUrl: this._url,
             timeOffset: this._timeOffset,
             // Mode override: TV platforms use main thread to avoid dead-worker 404 issues
             ...(rendererMode ? { mode: rendererMode } : { workerUrl: 'js/libpgs.worker.js' })
@@ -104,10 +110,54 @@ class PGSRenderer {
         try {
             this._renderer = new PgsRenderer(config);
             log.debug('PgsRenderer instance created');
+
+            if (this._subBuffer) {
+                // Buffer was pre-fetched by SubtitleManager — load it directly.
+                // This is the preferred path: we control the fetch, catch errors ourselves.
+                log.debug(`Loading PGS from pre-fetched buffer (${this._subBuffer.byteLength.toLocaleString()} bytes)`);
+                this._renderer.loadFromBuffer(this._subBuffer);
+
+                // ============================================================
+                // Post-load re-render guard
+                //
+                // loadFromBuffer() is async internally — it calls pgs.loadFromBuffer
+                // and only invokes setUpdateTimestamps() in a .then() callback.
+                // Meanwhile, tick() calls are already flowing. With updateTimestamps
+                // still empty, getIndexFromTimestamps always returns -1, and the dedup
+                // guard in renderAtIndex sets previousTimestampIndex = -1. When the
+                // buffer finishes parsing, if the current playback time maps to index
+                // -1 (i.e. before the first subtitle), the dedup guard fires and no
+                // render ever occurs — the subtitle stays blank forever.
+                //
+                // Fix: hook into onTimestampsUpdated (fired once buffer is parsed) and
+                // force a re-render at the last known playback time.  This breaks the
+                // stale -1 lock so the renderer starts showing frames on the next tick.
+                // ============================================================
+                this._renderer.implementation.onTimestampsUpdated = () => {
+                    this._isBufferLoaded = true;
+                    if (this._lastTickTime !== null && !this._isDestroyed) {
+                        log.debug(`Buffer parsed — forcing re-render at last known time ${this._lastTickTime.toFixed(2)}s to break dedup lock`);
+                        // TypeScript 'private' is erased at runtime — directly reset the
+                        // previousTimestampIndex so the dedup guard in renderAtIndex lets
+                        // through the next renderAtTimestamp() call unconditionally.
+                        // Uses NaN because NaN !== any number, so the guard always fires.
+                        this._renderer.implementation.previousTimestampIndex = NaN;
+                        this._renderer.renderAtTimestamp(this._lastTickTime + this._timeOffset);
+                    }
+                };
+            } else if (this._url) {
+                // Fallback: no pre-fetched buffer (e.g. legacy / non-TV path).
+                // libpgs will do its own internal fetch — errors won't surface here.
+                log.debug(`Loading PGS from URL (fallback): ${this._url}`);
+                this._renderer.loadFromUrl(this._url);
+            } else {
+                log.error('PGSRenderer: no subBuffer or subUrl provided — subtitle will not render');
+            }
         } catch (e) {
             log.error('Failed to create PgsRenderer:', e);
         }
     }
+
 
     /**
      * Update the time offset
@@ -133,15 +183,18 @@ class PGSRenderer {
      */
     tick(currentTime) {
         if (this._renderer) {
-            // libpgs expects timestamp in seconds
-            // We need to add the offset manually if using renderAtTimestamp directly?
-            // Actually libpgs.js source shows:
-            // renderAtVideoTimestamp() { this.video && this.renderAtTimestamp(this.video.currentTime + this.$timeOffset) }
-            // So for manual tick, we should implement logic similar to renderAtVideoTimestamp
-            
-            // However, PgsRenderer class on libpgs documentation or main file might behave differently. 
-            // Checking source: renderAtTimestamp calls `this.implementation.renderAtTimestamp(t)`
-            
+            // Log the first tick once to confirm the time-update loop is connected
+            if (!this._hasLoggedFirstTick) {
+                this._hasLoggedFirstTick = true;
+                log.debug(`First tick received at t=${currentTime.toFixed(2)}s — PGS renderer is active`);
+            }
+
+            // Always track the most recent time so the post-load re-render has
+            // a valid position to render at when the buffer finishes parsing.
+            this._lastTickTime = currentTime;
+
+            // libpgs expects timestamp in seconds.
+            // renderAtTimestamp handles the timestamp→index lookup internally.
             const targetTime = currentTime + this._timeOffset;
             this._renderer.renderAtTimestamp(targetTime);
         }

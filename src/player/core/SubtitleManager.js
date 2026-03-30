@@ -655,6 +655,19 @@ export default class SubtitleManager {
 
     /**
      * Load a PGS track and initialize the PGSRenderer.
+     *
+     * We intentionally pre-fetch the binary .sup file ourselves here rather than
+     * passing subUrl to PGSRenderer and letting libpgs fetch it internally.
+     *
+     * Reason: libpgs's internal loadFromUrl() uses XHR/fetch without propagating
+     * errors back to the caller. On Tizen, this silently fails (bad MIME type,
+     * Tizen XHR quirk, or timing issue), leaving `updateTimestamps` empty forever.
+     * When timestamps are empty, `renderAtTimestamp` always returns index -1,
+     * and after the very first -1 render the dedup guard (`previousTimestampIndex`)
+     * keeps blocking every subsequent call — subtitle never appears.
+     *
+     * By fetching here, we get proper error logging and can abort cleanly.
+     *
      * @param {Object} track
      * @private
      */
@@ -662,40 +675,52 @@ export default class SubtitleManager {
         if (!this._itemId || !this._mediaSourceId) return;
 
         try {
-            // Build the subtitle URL (PGS/.sup)
-            // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.sup
+            // Build the subtitle URL — use the server-provided DeliveryUrl directly,
+            // just as jellyfin-web does in getTextTrackUrl(track, item) with no format
+            // override.  The server bakes the correct extension (.sup for PGS) plus
+            // the start-position segment into DeliveryUrl; we must not override it.
             const url = MediaHelper.getSubtitleUrl(
                 track,
                 this._serverUrl,
                 this._itemId,
                 this._mediaSourceId,
-                this._authToken,
-                'sup'
+                this._authToken
+                // No format arg → uses track.DeliveryUrl as-is
             );
 
-            log.info(`Loading PGS subtitle from: ${url}`);
+            log.info(`Fetching PGS subtitle binary from: ${url}`);
+
+            // Fetch the .pgs file with full error propagation — unlike libpgs's internal
+            // loadFromUrl(), this throws on network errors so we can log and bail out.
+            const response = await fetch(url);
+            if (!response.ok) {
+                throw new Error(`Server returned HTTP ${response.status} for .pgs: ${url}`);
+            }
+
+            const pgsBuffer = await response.arrayBuffer();
+            log.info(`PGS stream fetched OK — ${pgsBuffer.byteLength.toLocaleString()} bytes for track "${track.DisplayTitle}"`);
 
             // Destroy any existing renderer before creating a new one.
-            // We always recreate here because the track (and therefore the URL
-            // and internal state) may have changed — reusing the old renderer
-            // would display stale data from the previous track.
             if (this._pgsRenderer) {
                 this._pgsRenderer.destroy();
                 this._pgsRenderer = null;
             }
 
+            // Pass the pre-fetched ArrayBuffer so PGSRenderer calls loadFromBuffer()
+            // instead of relying on libpgs's internal fetch which silently fails on Tizen.
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
                 videoElement: this._videoElement,
-                subUrl: url,
+                subBuffer: pgsBuffer,
                 timeOffset: this._primaryOffset
             });
 
         } catch (err) {
-            log.error('Failed to load PGS track:', err);
+            log.error('Failed to load PGS track:', err?.message || err);
         }
     }
+
 
     /**
      * Check if a codec is a text-based subtitle format that we can parse.
