@@ -284,7 +284,11 @@ export function buildJellyfinProfile(options = {}) {
         enableHDR = caps.hdr10;
     }
     
-    const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
+    // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
+    let enableDolbyVision = PlayerSettings.get('enableDolbyVision');
+    if (localStorage.getItem('player:enableDolbyVision') === null) {
+        enableDolbyVision = caps.dolbyVision;
+    }
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
 
