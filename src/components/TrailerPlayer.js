@@ -210,14 +210,17 @@ export class TrailerPlayer extends Component {
         }
 
         const url = trailer.Url || '';
+        console.log('[TrailerPlayer] _loadCurrentTrailer url=', url);
         
         // For phase 1 we only perfectly support YouTube via the API
         const ytId = this._extractYouTubeId(url);
+        console.log('[TrailerPlayer] extracted ytId=', ytId);
         
         if (ytId) {
             this._initYouTubePlayer(ytId);
         } else {
             // Fallback: generic iframe — no API control
+            console.log('[TrailerPlayer] No YouTube ID, falling back to raw iframe');
             const iframeRow = this._overlay.querySelector('#trailerIframeContainer');
             iframeRow.innerHTML = `<iframe src="${url}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay"></iframe>`;
         }
@@ -236,39 +239,136 @@ export class TrailerPlayer extends Component {
         const container = this._overlay.querySelector('#trailerIframeContainer');
         container.innerHTML = '<div id="yt-player-host"></div>';
 
-        // Load API script if needed
-        if (!window.YT || !window.YT.Player) {
-            const tag = document.createElement('script');
-            tag.src = "https://www.youtube.com/iframe_api";
-            const firstScriptTag = document.getElementsByTagName('script')[0];
-            firstScriptTag.parentNode.insertBefore(tag, firstScriptTag);
-            
-            // Wait for API ready
-            window.onYouTubeIframeAPIReady = () => {
-                this._createYTPlayer(videoId);
-            };
+        const createPlayer = () => this._createYTPlayer(videoId);
+
+        console.log('[TrailerPlayer] _initYouTubePlayer videoId=', videoId,
+            '| window.YT=', !!window.YT,
+            '| window.YT.Player=', !!(window.YT && window.YT.Player));
+
+        if (window.YT && window.YT.Player) {
+            /* ── API already fully loaded, instantiate immediately ── */
+            console.log('[TrailerPlayer] YT API already ready, calling createPlayer directly');
+            createPlayer();
         } else {
-            this._createYTPlayer(videoId);
+            /* ── API not ready yet — register callback FIRST, then inject script ── */
+            const prevCallback = window.onYouTubeIframeAPIReady;
+            window.onYouTubeIframeAPIReady = () => {
+                console.log('[TrailerPlayer] onYouTubeIframeAPIReady fired! window.YT=', !!window.YT);
+                if (typeof prevCallback === 'function') prevCallback();
+                createPlayer();
+            };
+
+            const existingTag = document.querySelector('script[src*="youtube.com/iframe_api"]');
+            if (!existingTag) {
+                console.log('[TrailerPlayer] Injecting YouTube iframe_api script tag');
+                const tag = document.createElement('script');
+                tag.src = 'https://www.youtube.com/iframe_api';
+                tag.onload = () => console.log('[TrailerPlayer] iframe_api script onload fired');
+                tag.onerror = (e) => {
+                    /* The iframe_api script cannot be loaded — this happens on Tizen/WebOS
+                       packaged apps where the local WebView origin blocks external JS injection.
+                       Fall back to a plain <iframe> embed with all params in the URL. YouTube's
+                       own built-in TV player controls will handle playback. */
+                    console.warn('[TrailerPlayer] iframe_api failed to load, falling back to embed iframe', e);
+                    this._fallbackToEmbedIframe(videoId);
+                };
+                document.head.appendChild(tag);
+            } else {
+                console.log('[TrailerPlayer] Script tag already in DOM, waiting for callback. src=', existingTag.src);
+            }
         }
     }
 
+    /**
+     * Last-resort fallback when the YouTube iframe_api script cannot be loaded.
+     *
+     * Instead of the programmatic YT.Player, we inject a plain <iframe> pointing
+     * at the YouTube embed URL with all playback params baked into the query string.
+     * This works in any WebView that can reach youtube.com — no JS API handshake needed.
+     *
+     * We hide our custom OSD in this mode because there is no programmatic control;
+     * YouTube's own cinematic TV interface takes over inside the iframe.
+     *
+     * @param {string} videoId - YouTube video ID
+     */
+    _fallbackToEmbedIframe(videoId) {
+        console.log('[TrailerPlayer] using embed iframe fallback for videoId=', videoId);
+
+        const container = this._overlay.querySelector('#trailerIframeContainer');
+
+        /* Build the embed URL with all desired params in the query string.
+           origin + host are the key fix for error 153 (embed denied) — YouTube
+           validates that the embedding page's origin matches before allowing playback. */
+        const params = new URLSearchParams({
+            autoplay:         '1',
+            controls:         '1', // Show native controls since we can't drive it via JS
+            rel:              '0',
+            modestbranding:   '1',
+            playsinline:      '1',
+            enablejsapi:      '0', // Explicitly off — we're in fallback, not using the API
+            fs:               '1', // Allow fullscreen from native controls
+            iv_load_policy:   '3',
+            origin:           'https://www.youtube.com',
+            host:             'https://www.youtube.com'
+        });
+
+        container.innerHTML = `
+            <iframe
+                src="https://www.youtube.com/embed/${videoId}?${params.toString()}"
+                width="100%"
+                height="100%"
+                frameborder="0"
+                allow="autoplay; encrypted-media; fullscreen"
+                allowfullscreen>
+            </iframe>
+        `;
+
+        /* Hide our custom OSD — we have no JS handle into this iframe */
+        this._hideOsd();
+    }
+
     _createYTPlayer(videoId) {
+        console.log('[TrailerPlayer] _createYTPlayer called, videoId=', videoId, '| YT.Player=', typeof window.YT?.Player);
+        /* ── playerVars mirroring the jellyfin-web youtubePlayer plugin ─────
+           Key differences from the old config:
+             • enablejsapi: 1  — allows postMessage control, mandatory on TV browsers
+             • playsinline: 1  — prevents native fullscreen hijack on some platforms
+             • origin          — must match the page origin so the iframe API handshake succeeds
+             • autoplay removed — unreliable inside sandboxed iframes on TV; we call
+                                  playVideo() explicitly in the onReady callback instead
+             • disablekb removed — this was blocking API command delivery on Tizen/WebOS */
         this._ytPlayer = new window.YT.Player('yt-player-host', {
             videoId: videoId,
             playerVars: {
-                autoplay: 1,
-                controls: 0, // Disable YT native controls, we provide our OSD
-                disablekb: 1, // Disable YT keyboard controls
-                fs: 0,
-                rel: 0,
-                modestbranding: 1,
-                iv_load_policy: 3
+                controls: 0,        // Hide native YT UI; we draw our own OSD
+                enablejsapi: 1,     // Enable JS API postMessage bridge
+                modestbranding: 1,  // Minimal YouTube branding
+                rel: 0,             // No related videos on end
+                showinfo: 0,        // Deprecated but safe to include
+                fs: 0,              // No native fullscreen button
+                playsinline: 1,     // Inline playback, don't hijack full screen
+                iv_load_policy: 3,  // No video annotations
+                // origin + host are the primary fix for error 153 (embed denied).
+                // Using youtube.com (not nocookie) matches what YouTube validates against.
+                origin: 'https://www.youtube.com',
+                host:   'https://www.youtube.com'
             },
             events: {
                 'onReady': (e) => this._onYTReady(e),
-                'onStateChange': (e) => this._onYTStateChange(e)
+                'onStateChange': (e) => this._onYTStateChange(e),
+                'onError': (e) => this._onYTError(e)
             }
         });
+        console.log('[TrailerPlayer] YT.Player instantiated:', this._ytPlayer);
+    }
+
+    _onYTError(event) {
+        // YT error codes: 2=bad param, 5=HTML5 error, 100=not found, 101/150=embed denied
+        const errorMap = { 2: 'Bad request', 5: 'HTML5 error', 100: 'Not found', 101: 'Embed denied', 150: 'Embed denied' };
+        const msg = errorMap[event.data] || `Error ${event.data}`;
+        console.warn('[TrailerPlayer] YouTube error:', msg);
+        // Auto-advance to next trailer on error
+        this._executeAction('next');
     }
 
     _onYTReady(event) {

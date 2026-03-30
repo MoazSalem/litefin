@@ -2676,9 +2676,8 @@ class DetailsPage extends Page {
      * Opens the iframe overlay TrailerPlayer for remote trailers.
      */
     _showRemoteTrailerPlayer() {
-        // Run Phase 2 overlay manually bypassing router
         import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
-            TrailerPlayer.launchExternal(this._item.RemoteTrailers, this);
+            TrailerPlayer.show(this._item.RemoteTrailers, this);
         });
     }
 

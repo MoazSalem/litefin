@@ -448,12 +448,21 @@ class TizenAdapter {
 
         log.info(`launchYouTube: launching YouTube app for videoId=${videoId}`);
 
-        /* The ApplicationControl pairs an operation with a URI.
-           Passing the standard HTTPS URL to the explicit App ID ensures the
-           app parses the video ID correctly on all Tizen versions. */
+        /* The ApplicationControl paired with the 111299001912 ID requires the 
+           URL to be passed as ApplicationControlData rather than the main URI
+           argument, otherwise the YouTube app fails to parse it and opens 
+           the browser instead. */
         const appControl = new tizen.ApplicationControl(
             'http://tizen.org/appcontrol/operation/view',
-            `https://www.youtube.com/watch?v=${videoId}`
+            null, // uri
+            null, // mime
+            null, // category
+            [
+                new tizen.ApplicationControlData(
+                    'http://tizen.org/appcontrol/data/url',
+                    [`https://www.youtube.com/watch?v=${videoId}`]
+                )
+            ]
         );
 
         // Sequence of app IDs to try. 

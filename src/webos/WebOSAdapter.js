@@ -394,7 +394,10 @@ class WebOSAdapter {
                 method: 'launch',
                 parameters: {
                     id: 'youtube.leanback.v4',
-                    params: { videoId }
+                    params: { 
+                        videoId: videoId,
+                        contentId: videoId // Fallback for some YouTube TV app versions
+                    }
                 },
                 onSuccess: () => log.info('launchYouTube: YouTube app launched successfully'),
                 onFailure: (err) => {
