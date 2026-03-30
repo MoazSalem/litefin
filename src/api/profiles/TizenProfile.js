@@ -228,9 +228,7 @@ export function buildJellyfinProfile(options = {}) {
     // Music audio: FLAC always included — audio-only containers have no sync issue
     const musicAudioCodecString = ['flac', ...baseAudioCodecs].join(',');
 
-    // Legacy alias used by remux/transcode path and codec profile conditions
-    const audioCodecString = musicAudioCodecString;
-
+    // Removed legacy alias audioCodecString to fix lint warning
 
     const generalVideoCodecs = ['h264', 'mpeg2video', 'vc1'];
     if (enableHEVC) generalVideoCodecs.push('hevc');
@@ -388,8 +386,8 @@ export function buildJellyfinProfile(options = {}) {
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = audioCodecString;
-        directAudioCodecs = audioCodecString;
+        transAudioCodecs = videoAudioCodecString;
+        directAudioCodecs = videoAudioCodecString;
 
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
         transVideoCodecs = Array.from(allVideo).join(',');

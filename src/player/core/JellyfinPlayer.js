@@ -1026,13 +1026,38 @@ export class JellyfinPlayer extends EventEmitter {
                               this._currentPlayMethod === 'DirectStream' ||
                               this._currentPlayMethod === 'Remux';
 
+        // Determine if the newly selected track's codec is natively supported
+        // by the current backend. If it isn't (e.g. FLAC on Tizen when disabled),
+        // we MUST force a restart so the server can re-evaluate and transcode.
+        let isTargetCodecSupported = true;
+        if (this._backendType === 'tizen') {
+            const AudioTracks = this.getAudioTracks();
+            const targetTrack = AudioTracks.find(t => t.Index === index);
+            if (targetTrack && targetTrack.Codec) {
+                const targetCodec = targetTrack.Codec.toLowerCase();
+                
+                // FLAC video transcode gate
+                if ((targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+                    isTargetCodecSupported = false;
+                }
+                // DTS passthrough gate
+                else if (targetCodec.includes('dts') && !PlayerSettings.get('enableDts')) {
+                    isTargetCodecSupported = false;
+                }
+                // TrueHD passthrough gate
+                else if (targetCodec === 'truehd' && !PlayerSettings.get('enableTrueHd')) {
+                    isTargetCodecSupported = false;
+                }
+            }
+        }
+
         // True whenever this backend cannot live-switch audio tracks.
         // WebOS reports true for supportsNativeAudioTracks, so it is treated
         // like Tizen for DirectPlay: no restart needed for audio switching.
         const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
-        const requiresRestart = isTranscoding || (this._backendType !== 'tizen' && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && !supportsNativeAudio);
 
-        log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart}`);
+        log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
 
         if (requiresRestart && this._currentPlayOptions && !this._audioRestartInProgress) {
             log.info(`Restarting playback for audio track: ${index} (method: ${this._currentPlayMethod ?? 'DirectPlay/HTML5'})`);

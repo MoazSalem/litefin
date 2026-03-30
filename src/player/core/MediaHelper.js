@@ -179,12 +179,42 @@ export const MediaHelper = {
             'AudioProfileNotSupported'
         ]);
 
-        const hasVideoReason   = reasonList.some(r => VIDEO_REASONS.has(r));
-        const hasAudioReason   = reasonList.some(r => AUDIO_ONLY_REASONS.has(r));
+        let isVideoDirect = !reasonList.some(r => VIDEO_REASONS.has(r));
+        let isAudioDirect = !reasonList.some(r => AUDIO_ONLY_REASONS.has(r));
+
+        // Generic reasons like DirectPlayError or ContainerNotSupported don't explicitly declare 
+        // which stream is being re-encoded. To guarantee accuracy, we manually check if the 
+        // source track's codec is permitted in the target codec pool requested by the client.
+        const allowedVideoCodecsStr = (transcodeUrl.match(/[?&]VideoCodec=([^&]+)/) || [])[1];
+        const allowedAudioCodecsStr = (transcodeUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1];
+
+        if (allowedVideoCodecsStr) {
+            const allowedVideoCodecs = allowedVideoCodecsStr.toLowerCase().split(',');
+            const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
+            if (videoStream && videoStream.Codec && !allowedVideoCodecs.includes(videoStream.Codec.toLowerCase())) {
+                isVideoDirect = false;
+            }
+        }
+
+        if (allowedAudioCodecsStr) {
+            const allowedAudioCodecs = allowedAudioCodecsStr.toLowerCase().split(',');
+            const audioStreamIndexStr = (transcodeUrl.match(/[?&]AudioStreamIndex=([^&]+)/) || [])[1];
+            let audioStream;
+            if (audioStreamIndexStr) {
+                audioStream = mediaSource.MediaStreams?.find(s => s.Index === parseInt(audioStreamIndexStr, 10));
+            } else {
+                audioStream = mediaSource.MediaStreams?.find(s => s.Type === 'Audio' && s.IsDefault) || 
+                              mediaSource.MediaStreams?.find(s => s.Type === 'Audio');
+            }
+
+            if (audioStream && audioStream.Codec && !allowedAudioCodecs.includes(audioStream.Codec.toLowerCase())) {
+                isAudioDirect = false;
+            }
+        }
 
         return {
-            isVideoDirect: !hasVideoReason,
-            isAudioDirect: !hasAudioReason
+            isVideoDirect,
+            isAudioDirect
         };
     },
 
@@ -200,26 +230,65 @@ export const MediaHelper = {
     },
 
     /**
-     * Get subtitle track URL from the Jellyfin API
-     * @param {Object} track - Subtitle track
-     * @param {string} serverUrl - Server URL
-     * @param {string} itemId - Item ID
-     * @param {string} mediaSourceId - Media source ID
-     * @param {string} authToken - Auth token
-     * @param {string} [format='vtt'] - Desired format
-     * @returns {string} Subtitle URL
+     * Get subtitle track URL from the Jellyfin API.
+     *
+     * Mirrors jellyfin-web's getTextTrackUrl() — trust the server-provided
+     * DeliveryUrl on the track object rather than constructing a URL from
+     * scratch. The server already bakes in the correct path segment, format
+     * extension (e.g. '.sup' for PGS, '.vtt' for text tracks), and any
+     * start-position offset.  Constructing a manual URL can produce formats
+     * the server rejects with a 400 (e.g. asking for '.pgs' when only '.sup'
+     * is valid, or skipping the required start-position segment).
+     *
+     * When a specific format is requested (e.g. 'vtt' for text conversion),
+     * we replace the extension in the DeliveryUrl — again, matching
+     * jellyfin-web's `url.replace('.vtt', format)` pattern.
+     *
+     * If the track has no DeliveryUrl (external URL tracks), we fall back to
+     * the raw IsExternalUrl path.
+     *
+     * @param {Object} track       - Subtitle stream object from Jellyfin PlaybackInfo
+     * @param {string} serverUrl   - Jellyfin server base URL (e.g. http://host:8096)
+     * @param {string} itemId      - Item ID (unused, kept for backward-compat signature)
+     * @param {string} mediaSourceId - Media source ID (unused, kept for backward-compat)
+     * @param {string} authToken   - Authentication token for the api_key query param
+     * @param {string} [format]    - If provided, overrides the extension in the DeliveryUrl
+     *                               (e.g. 'vtt').  If omitted the DeliveryUrl is used as-is.
+     * @returns {string} Fully-qualified subtitle URL including auth token
      */
-    getSubtitleUrl(track, serverUrl, itemId, mediaSourceId, authToken, format = 'vtt') {
-        // Canonical Jellyfin API path:
-        // /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/0/Stream.{format}
-        //                                                          ↑ start-position offset, always 0 for full-file subtitle fetches.
-        //
-        // The server's own DeliveryUrl includes this segment — omitting it causes
-        // some server versions or proxy configs to 404, especially for .sup (PGS) fetches
-        // that don't go through the standard subtitle transcode pipeline.
-        const streamIndex = track.Index;
-        let url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${streamIndex}/0/Stream.${format}`;
-        url += `?api_key=${encodeURIComponent(authToken)}`;
+    getSubtitleUrl(track, serverUrl, itemId, mediaSourceId, authToken, format) {
+        // ====================================================================
+        // External URL tracks (e.g. HTTP/HTTPS subtitles hosted elsewhere)
+        // have no server-relative DeliveryUrl — use their URL directly.
+        // ====================================================================
+        if (track.IsExternalUrl) {
+            return track.DeliveryUrl || '';
+        }
+
+        // ====================================================================
+        // Internal tracks: use the server-provided DeliveryUrl.
+        // The server guarantees this path is correct for the track's codec,
+        // start-position offset, and media source — we must not second-guess it.
+        // ====================================================================
+        const deliveryPath = track.DeliveryUrl || '';
+
+        // Ensure it's a fully-qualified URL (DeliveryUrl is usually a root-relative path)
+        let url = deliveryPath.startsWith('http')
+            ? deliveryPath
+            : `${serverUrl}${deliveryPath}`;
+
+        // If the caller wants a specific format (e.g. 'vtt' for text conversion),
+        // swap the extension — jellyfin-web does: url.replace('.vtt', format).
+        // We broaden this to replace whatever extension is currently in the URL.
+        if (format) {
+            url = url.replace(/\.\w+(?=\?)/, `.${format}`)  // before query string
+                     .replace(/\.\w+$/, `.${format}`);     // or at end of string
+        }
+
+        // Append auth token (DeliveryUrl itself usually omits it)
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}api_key=${encodeURIComponent(authToken)}`;
+
         return url;
     },
 
