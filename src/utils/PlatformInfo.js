@@ -77,7 +77,16 @@ class PlatformInfo {
         // on legacy hardware.
         // -------------------------------------------------------------------
         const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
-        const chromeVersion = chromeMatch ? parseInt(chromeMatch[1], 10) : 999;
+        
+        let chromeVersion;
+        if (chromeMatch) {
+            chromeVersion = parseInt(chromeMatch[1], 10);
+        } else if (/Tizen|WebO?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
+            // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding
+            chromeVersion = 34;
+        } else {
+            chromeVersion = 999; // Assume modern if totally unknown (e.g. Firefox/Safari Desktop)
+        }
 
         // Chrome 57+ has CSS Grid support; anything below falls back to flex-wrap.
         this._layoutTier = chromeVersion >= 57 ? 'modern' : 'legacy';
