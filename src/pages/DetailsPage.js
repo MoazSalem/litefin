@@ -2740,9 +2740,20 @@ class DetailsPage extends Page {
 
             this._item.UserData = this._item.UserData || {};
             this._item.UserData.Played = !isPlayed;
+
+            this._updateCachedPlayedStatus();
         } catch (error) {
             log.error('Failed to toggle watched', error);
         }
+    }
+
+    _updateCachedPlayedStatus() {
+        const cachedItem = Object.entries(state.getAll())
+            .filter(([key, cached]) => key.startsWith('library:state:') && cached?.stateData?.items)
+            .flatMap(([, cached]) => cached.stateData.items)
+            .find(({ Id }) => Id === this._itemId);
+
+        if (cachedItem) cachedItem.UserData = { ...cachedItem.UserData, ...this._item.UserData };
     }
 
     async _resetProgress() {
