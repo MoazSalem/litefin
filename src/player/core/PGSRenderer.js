@@ -82,7 +82,7 @@ class PGSRenderer {
         this._canvasWrapper.style.width = '100%';
         this._canvasWrapper.style.height = '100%';
         this._canvasWrapper.style.pointerEvents = 'none';
-        this._canvasWrapper.style.zIndex = '200'; // Above video, below OSD
+        this._canvasWrapper.style.zIndex = '30'; // Above video, below OSD (50-100)
 
         // libpgs expects a canvas element if we want to manually control it
         this._canvas = document.createElement('canvas');
