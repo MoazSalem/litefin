@@ -134,17 +134,42 @@ class PGSRenderer {
             // ================================================================
             this._renderer.implementation.onTimestampsUpdated = () => {
                 this._isBufferLoaded = true;
-                if (this._lastTickTime !== null && !this._isDestroyed) {
-                    // libpgs fires this repeatedly (~once per second) while parsing
-                    // the file. We only need to break the dedup lock and log it if
-                    // the renderer is currently stuck in the -1 pre-start phase.
-                    if (this._renderer.implementation.previousTimestampIndex === -1) {
-                        log.debug(`Timestamps updated — breaking dedup lock at t=${this._lastTickTime.toFixed(2)}s`);
-                        // TypeScript 'private' is erased at runtime — safe to set directly.
-                        this._renderer.implementation.previousTimestampIndex = NaN;
+                if (this._isDestroyed) return;
+
+                // ================================================================
+                // UNCONDITIONALLY reset the dedup lock on every timestamps update.
+                //
+                // The root cause of the "needs a seek to start rendering" bug:
+                //   1. tick() fires while the buffer is still parsing → libpgs
+                //      returns index -1 (no subtitle at that time, because timestamps
+                //      aren't loaded yet) and caches previousTimestampIndex = -1.
+                //   2. Buffer finishes parsing. onTimestampsUpdated fires.
+                //   3. Player is between subtitle cues → renderAtTimestamp also
+                //      returns -1. -1 === -1 (the cached value) → DEDUP → no paint.
+                //   4. Subtitle never appears until seek/pause forces a different
+                //      index value through.
+                //
+                // Setting to NaN guarantees the dedup guard (index === prevIndex)
+                // will ALWAYS fail on the very next renderAtTimestamp call, regardless
+                // of what index is returned. NaN !== NaN is true in JS.
+                // ================================================================
+                this._renderer.implementation.previousTimestampIndex = NaN;
+                log.debug('Timestamps ready — dedup lock reset to NaN');
+
+                // Schedule a re-render on the next animation frame so the browser
+                // has committed the canvas to the compositing layer before we draw.
+                // This also handles the edge case where the buffer finishes parsing
+                // before the first tick() arrives (lastTickTime is still null here).
+                const renderTime = this._lastTickTime !== null
+                    ? this._lastTickTime + this._timeOffset
+                    : this._timeOffset;
+
+                requestAnimationFrame(() => {
+                    if (!this._isDestroyed && this._renderer) {
+                        this._renderer.renderAtTimestamp(renderTime);
+                        log.debug(`Post-load render triggered at t=${renderTime.toFixed(2)}s`);
                     }
-                    this._renderer.renderAtTimestamp(this._lastTickTime + this._timeOffset);
-                }
+                });
             };
 
             if (this._url) {
@@ -202,6 +227,17 @@ class PGSRenderer {
             // a valid position to render at when the buffer finishes parsing.
             this._lastTickTime = currentTime;
 
+            // ================================================================
+            // CRITICAL: Do NOT call renderAtTimestamp until the buffer is fully
+            // parsed. If we render during parsing, libpgs returns index -1 for
+            // every timestamp (no cues loaded yet). This -1 gets cached in
+            // previousTimestampIndex.  Once the buffer is ready, any tick that
+            // lands between subtitle cues ALSO returns -1, matching the cached
+            // value and triggering the dedup guard — painting nothing forever.
+            // onTimestampsUpdated resets the lock unconditionally after parsing.
+            // ================================================================
+            if (!this._isBufferLoaded) return;
+
             // libpgs expects timestamp in seconds.
             // renderAtTimestamp handles the timestamp→index lookup internally.
             const targetTime = currentTime + this._timeOffset;
@@ -219,6 +255,15 @@ class PGSRenderer {
         log.info('Destroying PGS renderer');
 
         if (this._renderer) {
+            // Sever the callback BEFORE dispose() — libpgs's internal async
+            // promise chain (loadFromBuffer parsing, streaming chunks) does NOT
+            // stop when dispose() is called. If onTimestampsUpdated is still set,
+            // it fires our closure which logs, mutates implementation state, and
+            // schedules rAF callbacks long after the player has exited.
+            if (this._renderer.implementation) {
+                this._renderer.implementation.onTimestampsUpdated = null;
+            }
+
             this._renderer.dispose();
             this._renderer = null;
         }

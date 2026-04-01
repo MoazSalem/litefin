@@ -1975,9 +1975,21 @@ export class JellyfinPlayer extends EventEmitter {
      * Destroy the player and clean up resources
      */
     destroy() {
+        log.info('destroy() called');
         this.stop();
+
+        // Destroy subtitle manager BEFORE the backend — the PGS download loop
+        // checks _isDestroyed / _pgsLoadToken (set by SubtitleManager.destroy())
+        // to abort any in-flight chunked fetch. If we destroy the backend first
+        // the HTML video element goes away but libpgs may still be running.
+        if (this._subtitleManager) {
+            this._subtitleManager.destroy();
+            this._subtitleManager = null;
+        }
+
         this._backend?.destroy();
         this._backend = null;
         this.removeAllListeners();
+        log.info('destroy() complete');
     }
 }

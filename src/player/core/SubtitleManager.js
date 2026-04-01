@@ -95,11 +95,21 @@ export default class SubtitleManager {
         this._videoElement = null; // Reference to real video element (or null)
 
         // ====================================================================
-        // Renderers renderers
+        // Renderers
         // ====================================================================
 
         this._assRenderer = null;
         this._pgsRenderer = null;
+
+        // Stale-load guard for the async PGS download pipeline.
+        // Incremented every time a new load starts OR destroy() is called.
+        // Each invocation of _loadPGSTrack captures the token at entry and
+        // checks it after every await — if it has changed, the load is aborted
+        // and no zombie PGSRenderer is created.
+        this._pgsLoadToken = 0;
+
+        // Set to true by destroy() so stray callbacks can bail early.
+        this._isDestroyed = false;
 
         // ====================================================================
         // Primary Subtitle State
@@ -486,6 +496,14 @@ export default class SubtitleManager {
      * Full cleanup — destroy the subtitle manager and release all resources.
      */
     destroy() {
+        // Mark as destroyed FIRST so any in-flight async _loadPGSTrack knows
+        // to abort at its next await point rather than creating a zombie renderer.
+        this._isDestroyed = true;
+
+        // Bump the load token so any in-progress PGS download/parse loop
+        // sees a stale token and exits cleanly.
+        this._pgsLoadToken++;
+
         this._clearPrimary();
         this._clearSecondary();
         this._itemId = null;
@@ -675,6 +693,23 @@ export default class SubtitleManager {
     async _loadPGSTrack(track) {
         if (!this._itemId || !this._mediaSourceId) return;
 
+        // ====================================================================
+        // Stale-load guard — capture the current session token at start.
+        //
+        // _loadPGSTrack is a long-running async function (URL probe + up to
+        // 24 chunked Range requests on a 120 MB file). If the user exits
+        // the player (or switches tracks) while a download is in progress,
+        // destroy() / _clearPrimary() bumps this._pgsLoadToken. After every
+        // await we compare our captured token to the current one — if they
+        // differ, we abort and do NOT create a renderer, preventing a zombie
+        // PGSRenderer from appearing after the SubtitleManager is destroyed.
+        // ====================================================================
+        this._pgsLoadToken++;
+        const myToken = this._pgsLoadToken;
+
+        /** Returns true if this invocation has been superseded or destroyed. */
+        const isStale = () => this._isDestroyed || this._pgsLoadToken !== myToken;
+
         try {
             // Build the subtitle URL — use the server-provided DeliveryUrl directly,
             // just as jellyfin-web does in getTextTrackUrl(track, item) with no format
@@ -701,6 +736,13 @@ export default class SubtitleManager {
             const probeResponse = await fetch(url, {
                 headers: { Range: 'bytes=0-0' }
             });
+
+            // Abort early if the user has already left or switched tracks
+            if (isStale()) {
+                log.debug('_loadPGSTrack: aborted after URL probe (session ended)');
+                return;
+            }
+
             // 206 = range served, 200 = server ignored range but responded OK
             if (!probeResponse.ok) {
                 throw new Error(`Server returned HTTP ${probeResponse.status} for PGS subtitle: ${url}`);
@@ -735,6 +777,12 @@ export default class SubtitleManager {
                 let lastPercent = 0;
 
                 while (offset < totalBytes) {
+                    // Abort mid-download if the session has ended
+                    if (isStale()) {
+                        log.debug(`_loadPGSTrack: aborted during chunk download at ${offset} bytes (session ended)`);
+                        return; // Drop the partial buffer — GC will reclaim it
+                    }
+
                     const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
                     const chunkResp = await fetch(url, {
                         headers: { Range: `bytes=${offset}-${end}` }
@@ -751,6 +799,12 @@ export default class SubtitleManager {
                         log.debug(`PGS Download progress: ${percent}%`);
                         lastPercent = percent;
                     }
+                }
+
+                // Final stale check before handing the buffer off to libpgs
+                if (isStale()) {
+                    log.debug('_loadPGSTrack: aborted after download complete (session ended)');
+                    return;
                 }
 
                 pgsBuffer = buffer.buffer;
@@ -774,7 +828,10 @@ export default class SubtitleManager {
             });
 
         } catch (err) {
-            log.error('Failed to load PGS track:', err?.message || err);
+            // Ignore errors from stale/superseded sessions — don't pollute the log
+            if (!isStale()) {
+                log.error('Failed to load PGS track:', err?.message || err);
+            }
         }
     }
 
@@ -1005,6 +1062,12 @@ export default class SubtitleManager {
         this._activePrimaryCue = null;
         this._primaryActiveIndex = -1;
         this._primaryOffset = 0;
+
+        // Invalidate any in-flight PGS download by bumping the load token.
+        // _loadPGSTrack captures myToken at entry and checks isStale() after
+        // each await — bumping here causes it to abort at the next chunk boundary
+        // rather than completing and creating a renderer for the wrong track.
+        this._pgsLoadToken++;
 
         // Clear the display if something was showing
         if (wasActive) {
