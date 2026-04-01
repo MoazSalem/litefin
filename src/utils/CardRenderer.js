@@ -287,6 +287,20 @@ class CardRenderer {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
         }
 
+        // Played Badge (Check Mark)
+        let playedBadgeHtml = '';
+        const isMusic = item.Type === 'MusicArtist' || item.Type === 'Artist' || item.Type === 'MusicAlbum' || item.Type === 'Audio';
+        
+        if (item.UserData && item.UserData.Played && !isMusic) {
+            playedBadgeHtml = `
+                <div class="played-badge">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                    </svg>
+                </div>
+            `;
+        }
+
         // --- 3. Text Generation ---
 
         let titleText = i18n.ensureBiDi(item.Name);
@@ -366,6 +380,7 @@ class CardRenderer {
                     ${imagePart}
                     ${progressHtml}
                     ${badgeHtml}
+                    ${playedBadgeHtml}
                 </div>
                 ${
                     !isHiddenLibraryLabel

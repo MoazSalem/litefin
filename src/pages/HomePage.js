@@ -240,6 +240,8 @@ class HomePage extends Page {
         // ── Priority 2: Latest per library ───────────────────────────────────
         // Each library gets its own descriptor so they can render independently
         // as they resolve, rather than waiting for all libraries to finish.
+        const hidePlayedInLatest = storage.getItem('pref:hidePlayedInLatest') === 'true';
+
         for (const lib of this._libraries) {
             descriptors.push({
                 id: `latest-${lib.Id}`,
@@ -251,7 +253,8 @@ class HomePage extends Page {
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
-                        const items = await api.getLatestItems(lib.Id);
+                        const params = hidePlayedInLatest ? { Filters: 'IsUnplayed' } : {};
+                        const items = await api.getLatestItems(lib.Id, params);
                         return items?.length > 0 ? items : null;
                     } catch (e) {
                         log.warn(`Failed to load latest for ${lib.Name}`, e);
@@ -307,6 +310,22 @@ class HomePage extends Page {
             this._libraries = viewsResponse.Items || [];
 
             if (!this._isMounted) return;
+
+            // ─── Step 1b: Prune stale libThumb:* cache keys ──────────────────
+            // If a library was removed from Jellyfin, its cached thumbnail URL
+            // stays in localStorage forever. We run a quick Set-lookup against
+            // the IDs we just fetched and evict any orphaned keys via StorageService
+            // (which correctly updates the in-memory cache, not just disk).
+            const currentLibraryIds = new Set(this._libraries.map(l => l.Id));
+            storage.keys()
+                .filter(k => k.startsWith('libThumb:'))
+                .forEach(k => {
+                    const id = k.replace('libThumb:', '');
+                    if (!currentLibraryIds.has(id)) {
+                        log.info(`Pruning stale libThumb for removed library: ${id}`);
+                        storage.removeItem(k);
+                    }
+                });
 
             // ─── Step 2: Optional dynamic library thumbnails ──────────────────
             const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
@@ -1008,9 +1027,11 @@ class HomePage extends Page {
                 try {
                     const cacheKey = `libThumb:${lib.Id}`;
 
-                    // Static mode: check localStorage cache first (zero network overhead)
+                    // Static mode: check StorageService cache first (in-memory, zero disk I/O).
+                    // Using storage.getItem() instead of localStorage.getItem() so the read
+                    // comes from the in-memory Map rather than hitting the disk synchronously.
                     if (mode === 'static') {
-                        const cachedUrl = localStorage.getItem(cacheKey);
+                        const cachedUrl = storage.getItem(cacheKey);
                         if (cachedUrl) {
                             lib._dynamicThumbUrl = cachedUrl;
                             return;
@@ -1155,9 +1176,13 @@ class HomePage extends Page {
 
                         if (resolvedUrl) {
                             lib._dynamicThumbUrl = resolvedUrl;
-                            // Cache in static mode to avoid repeated fetches
+                            // Persist the resolved URL via StorageService in static mode so
+                            // subsequent home page loads skip the API call entirely.
+                            // Using storage.setItem() (not localStorage directly) keeps the
+                            // in-memory cache consistent — the quota guard in flush() will
+                            // auto-evict these keys if storage fills up.
                             if (mode === 'static') {
-                                localStorage.setItem(cacheKey, resolvedUrl);
+                                storage.setItem(cacheKey, resolvedUrl);
                             }
                         }
                     }

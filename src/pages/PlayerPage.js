@@ -113,10 +113,15 @@ class PlayerPage extends Page {
     }
 
     async onInit() {
-        // Reset state for new playback session
+        // Reset state for new playback session.
+        // CRITICAL: _cachedPlayMethod must be cleared here — if the previous item was
+        // DirectPlay, the stale cache would bleed into the new session and cause incorrect
+        // PlayMethod reporting to the server before _currentPlayMethod is resolved from
+        // the new PlaybackInfo response.
         this._item = null;
         this._resumePosition = 0;
         this._hasReportedStart = false;
+        this._cachedPlayMethod = null;
 
         const itemId = this.params.id;
         const resume = this.params.resume === 'true';
@@ -1426,9 +1431,17 @@ class PlayerPage extends Page {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState();
 
-            // Cache mediaSource for later use in stop reporting
-            // (player clears internal state after stop, so we need this)
+            // Cache mediaSource and play method for later use in stop reporting.
+            // (player clears internal state after stop, so we grab these while they're live)
+            // IMPORTANT: Only update the cache if we have a real value. The || 'DirectPlay' fallback
+            // must NOT appear here — if _currentPlayMethod isn't set yet at this moment (race condition
+            // between playbackstart event and play()'s async PlaybackInfo resolution), we must NOT
+            // bake in 'DirectPlay'. The cache will be filled by _getPlayerState as soon as the player
+            // has a real method.
             this._cachedMediaSource = mediaSource;
+            if (this._player?._currentPlayMethod) {
+                this._cachedPlayMethod = this._player._currentPlayMethod;
+            }
 
             const info = {
                 ItemId: this._item.Id,
@@ -1698,6 +1711,17 @@ class PlayerPage extends Page {
                 ? manualPositionTicks
                 : this._player?.getCurrentPositionTicks?.() || 0;
 
+        // Cache the play method if it exists, so we survive player instance recreation during audio track switches.
+        if (this._player?._currentPlayMethod) {
+            this._cachedPlayMethod = this._player._currentPlayMethod;
+        }
+
+        // 'Remux' is our internal label for a container-only remux; the Jellyfin server
+        // PlayMethod enum has no 'Remux' value and returns HTTP 400 if we send it.
+        // Map it to 'DirectStream' which is the closest server-side equivalent.
+        const rawPlayMethod = this._player?._currentPlayMethod || this._cachedPlayMethod;
+        const serverPlayMethod = rawPlayMethod === 'Remux' ? 'DirectStream' : rawPlayMethod;
+
         // Build base state
         const state = {
             // Core position and volume - cast strictly to integers to avoid server 400s
@@ -1706,7 +1730,9 @@ class PlayerPage extends Page {
             IsMuted: Boolean(this._player?.isMuted?.()),
 
             // Playback method (DirectPlay, DirectStream, Transcode)
-            PlayMethod: mediaSource?.PlayMethod || 'DirectPlay',
+            // NOTE: mediaSource.PlayMethod does NOT exist in the Jellyfin API response —
+            // PlayMethod is a client-derived value stored in JellyfinPlayer._currentPlayMethod.
+            PlayMethod: serverPlayMethod,
 
             // Seeking capability
             CanSeek: Boolean(mediaSource?.RunTimeTicks > 0),
@@ -1867,7 +1893,7 @@ class PlayerPage extends Page {
                 PlaySessionId: playSessionId,
                 MediaSourceId: mediaSource?.Id,
                 PositionTicks: positionTicks,
-                
+
                 VolumeLevel: this._player?.getVolume?.() ?? 100,
                 IsMuted: this._player?.isMuted?.() ?? false,
                 IsPaused: true,
@@ -1879,7 +1905,16 @@ class PlayerPage extends Page {
                 ShuffleMode: 'Sorted',
                 CanSeek: true,
                 BufferedRanges: [],
-                PlayMethod: this._player?._currentPlayMethod || 'DirectPlay'
+                // Use cached play method — player.stop() may clear _currentPlayMethod
+                // before this report fires. Map 'Remux' to 'DirectStream' since the server
+                // has no 'Remux' enum value and will return HTTP 400 otherwise.
+                // Fall back to 'DirectPlay' ONLY if we truly have nothing — which shouldn't
+                // happen if _reportPlaybackStart cached correctly.
+                PlayMethod: (() => {
+                    const raw = this._cachedPlayMethod || this._player?._currentPlayMethod;
+                    if (!raw) return mediaSource?.TranscodingUrl ? 'DirectStream' : 'DirectPlay';
+                    return raw === 'Remux' ? 'DirectStream' : raw;
+                })()
             };
 
             // 2.5 Inject SyncPlay tracking fields if active
@@ -1890,7 +1925,7 @@ class PlayerPage extends Page {
                 }
                 const queue = spm.currentPlayQueue;
                 if (queue && queue.Playlist && queue.Playlist.length > 0) {
-                    data.NowPlayingQueue = queue.Playlist.map(item => ({
+                    data.NowPlayingQueue = queue.Playlist.map((item) => ({
                         Id: item.ItemId,
                         PlaylistItemId: item.PlaylistItemId
                     }));

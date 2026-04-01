@@ -35,6 +35,13 @@ const DEFAULTS = {
     // Enable TrueHD passthrough (requires hardware support)
     enableTrueHd: false,
 
+    // Allow FLAC audio in video containers (MKV, MP4, etc.) to DirectPlay.
+    // Disabled by default: FLAC demuxing inside video containers causes a ~2s
+    // A/V sync drift on Tizen hardware (the audio buffer diverges from the video
+    // PTS). FLAC audio-only files (.flac containers) are NOT affected by this
+    // setting — those always DirectPlay regardless.
+    enableFlacInVideo: false,
+
     // Audio normalization mode ('Off', 'TrackGain', 'AlbumGain')
     audioNormalization: 'Off',
 
@@ -201,7 +208,20 @@ const DEFAULTS = {
     enableCinemaMode: false,
 
     // Time format for clock and playback ('12h', '24h')
-    timeFormat: '12h'
+    timeFormat: '12h',
+
+    /*
+     * OSD Focus Restore Mode
+     * Controls where the remote cursor lands when the OSD is revealed
+     * after having been auto-hidden.
+     *
+     *   'remember' — Stay on the last button the user was on (legacy behaviour).
+     *   'timeout'  — If the OSD was hidden for ≥ 10 seconds, jump to Play/Pause;
+     *                otherwise stay on the last button.
+     *   'always'   — Always land on Play/Pause whenever the OSD re-appears,
+     *                no matter how short the hide was.
+     */
+    osdFocusRestoreMode: 'remember'
 };
 
 /**

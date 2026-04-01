@@ -1015,16 +1015,49 @@ export class JellyfinPlayer extends EventEmitter {
         // =====================================================================
         // Determine whether we need to restart playback to apply the audio change.
         // =====================================================================
+        // True whenever the audio codec is baked into the server's HLS output and
+        // cannot be switched without a full PlaybackInfo restart + re-profile.
+        //
+        // 'Remux' must be included here: in Remux sessions, audio runs through the
+        // server's HLS transcoding pipeline too (even if video is copied). Falling
+        // through to the native AVPlay setSelectTrack path would bypass the
+        // enableFlacInVideo gate and let FLAC play directly → 2s sync issue.
         const isTranscoding = this._currentPlayMethod === 'Transcode' ||
-                              this._currentPlayMethod === 'DirectStream';
+                              this._currentPlayMethod === 'DirectStream' ||
+                              this._currentPlayMethod === 'Remux';
+
+        // Determine if the newly selected track's codec is natively supported
+        // by the current backend. If it isn't (e.g. FLAC on Tizen when disabled),
+        // we MUST force a restart so the server can re-evaluate and transcode.
+        let isTargetCodecSupported = true;
+        if (this._backendType === 'tizen') {
+            const AudioTracks = this.getAudioTracks();
+            const targetTrack = AudioTracks.find(t => t.Index === index);
+            if (targetTrack && targetTrack.Codec) {
+                const targetCodec = targetTrack.Codec.toLowerCase();
+                
+                // FLAC video transcode gate
+                if ((targetCodec === 'flac' || targetCodec === 'alac') && !PlayerSettings.get('enableFlacInVideo')) {
+                    isTargetCodecSupported = false;
+                }
+                // DTS passthrough gate
+                else if (targetCodec.includes('dts') && !PlayerSettings.get('enableDts')) {
+                    isTargetCodecSupported = false;
+                }
+                // TrueHD passthrough gate
+                else if (targetCodec === 'truehd' && !PlayerSettings.get('enableTrueHd')) {
+                    isTargetCodecSupported = false;
+                }
+            }
+        }
 
         // True whenever this backend cannot live-switch audio tracks.
         // WebOS reports true for supportsNativeAudioTracks, so it is treated
         // like Tizen for DirectPlay: no restart needed for audio switching.
         const supportsNativeAudio = this._backend && typeof this._backend.supportsNativeAudioTracks === 'function' && this._backend.supportsNativeAudioTracks();
-        const requiresRestart = isTranscoding || (this._backendType !== 'tizen' && !supportsNativeAudio);
+        const requiresRestart = isTranscoding || !isTargetCodecSupported || (this._backendType !== 'tizen' && !supportsNativeAudio);
 
-        log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart}`);
+        log.info(`setAudioStreamIndex: index=${index} playMethod=${this._currentPlayMethod} requiresRestart=${requiresRestart} isTargetCodecSupported=${isTargetCodecSupported}`);
 
         if (requiresRestart && this._currentPlayOptions && !this._audioRestartInProgress) {
             log.info(`Restarting playback for audio track: ${index} (method: ${this._currentPlayMethod ?? 'DirectPlay/HTML5'})`);
@@ -1942,9 +1975,21 @@ export class JellyfinPlayer extends EventEmitter {
      * Destroy the player and clean up resources
      */
     destroy() {
+        log.info('destroy() called');
         this.stop();
+
+        // Destroy subtitle manager BEFORE the backend — the PGS download loop
+        // checks _isDestroyed / _pgsLoadToken (set by SubtitleManager.destroy())
+        // to abort any in-flight chunked fetch. If we destroy the backend first
+        // the HTML video element goes away but libpgs may still be running.
+        if (this._subtitleManager) {
+            this._subtitleManager.destroy();
+            this._subtitleManager = null;
+        }
+
         this._backend?.destroy();
         this._backend = null;
         this.removeAllListeners();
+        log.info('destroy() complete');
     }
 }

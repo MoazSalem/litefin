@@ -274,9 +274,14 @@ export function buildJellyfinProfile(options = {}) {
     const isHtml5 = typeof options === 'object' && options.backend === 'html5';
     const caps = getDeviceCapabilities();
 
-    const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
-    const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
-    const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
+    let enableHEVC = PlayerSettings.get('enableHEVC');
+    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+
+    let enableAV1 = PlayerSettings.get('enableAV1');
+    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+
+    let enableVP9 = PlayerSettings.get('enableVP9');
+    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
     
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
     let enableHDR = PlayerSettings.get('enableHDR');
@@ -284,7 +289,11 @@ export function buildJellyfinProfile(options = {}) {
         enableHDR = caps.hdr10;
     }
     
-    const enableDolbyVision = PlayerSettings.get('enableDolbyVision') && caps.dolbyVision;
+    // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
+    let enableDolbyVision = PlayerSettings.get('enableDolbyVision');
+    if (localStorage.getItem('player:enableDolbyVision') === null) {
+        enableDolbyVision = caps.dolbyVision;
+    }
     const enableDts = PlayerSettings.get('enableDts');
     const enableTrueHd = PlayerSettings.get('enableTrueHd');
 
@@ -420,9 +429,9 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    // HLS + HEVC chunks are notoriously unstable on WebOS decoders.
-    // Always force the server to defensively transcode strictly into H.264.
-    let transVideoCodecs = 'h264';
+    // Previously locked to h264 defensively, but strict locking violently breaks DOVI MKV Remuxes, forcing expensive SDR transcodes.
+    // Allowing hevc restores DirectStream remuxing for 4K DOVI MKV over HLS.
+    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -486,8 +495,8 @@ export function buildJellyfinProfile(options = {}) {
         {
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: 'aac,ac3',
-            VideoCodec: 'h264',
+            AudioCodec: 'aac,ac3,eac3',
+            VideoCodec: enableHEVC ? 'h264,hevc' : 'h264',
             Context: 'Static'
         }
     ];
@@ -599,6 +608,22 @@ export function buildJellyfinProfile(options = {}) {
         Codec: 'flac',
         Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
     });
+
+    if (enableDolbyVision && enableHEVC) {
+        // Enforce Remux for Dolby Vision MKVs by failing DirectPlay condition for DOVI in MKV
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'hevc',
+            Container: 'mkv',
+            Conditions: [
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus', IsRequired: false }
+            ]
+        });
+    }
 
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,

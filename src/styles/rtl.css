@@ -201,6 +201,11 @@
     left: -10px;
 }
 
+[dir="rtl"] .played-badge {
+    right: auto;
+    left: 12px;
+}
+
 /* ================== DETAILS PAGE ================== */
 [dir="rtl"] .hero-poster {
     margin-right: 0;

@@ -192,12 +192,87 @@ class StorageService {
     }
 
     // ========================================================================
+    // Bulk Operations
+    // ========================================================================
+
+    /**
+     * Remove ALL keys that start with the given prefix from both the
+     * in-memory cache and disk.
+     *
+     * Preferred over calling localStorage.clear() because that nukes
+     * everything including auth tokens and user preferences. This is a
+     * surgical, targeted operation — only the named group is affected.
+     *
+     * @param {string} prefix - The key prefix to match (e.g. 'libThumb:')
+     * @returns {number} The number of keys that were removed
+     */
+    clearByPrefix(prefix) {
+        // Collect matching keys from the in-memory cache — zero disk reads
+        const matching = Array.from(this._cache.keys()).filter(k => k.startsWith(prefix));
+
+        // Remove each one: update the in-memory cache and queue disk deletes
+        for (const key of matching) {
+            this._cache.delete(key);
+            this._dirtyKeys.delete(key);    // Cancel any pending write for this key
+            this._removedKeys.add(key);     // Queue disk-level removal on next flush
+        }
+
+        if (matching.length > 0) {
+            log.info(`clearByPrefix('${prefix}'): removed ${matching.length} key(s)`);
+            // Flush immediately so the disk state is consistent ASAP
+            this.flush();
+        }
+
+        return matching.length;
+    }
+
+    /**
+     * Generate a human-readable storage usage report.
+     *
+     * Tallies byte usage purely from the in-memory cache — zero disk I/O.
+     * localStorage stores UTF-16, so each character costs 2 bytes. We count
+     * both key and value lengths to match what the browser quota system tracks.
+     *
+     * @returns {{ totalBytes: number, keyCount: number, breakdown: Object }}
+     *   breakdown keys are the first segment of each storage key (e.g. "libThumb", "pref")
+     */
+    getStorageReport() {
+        let totalBytes = 0;
+        const breakdown = {};
+
+        for (const [key, value] of this._cache.entries()) {
+            // 2 bytes per UTF-16 character for key + value
+            const bytes = (key.length + (value ? value.length : 0)) * 2;
+            totalBytes += bytes;
+
+            /*
+             * Group by the first semantic segment of the key name so the
+             * breakdown stays readable. Priority: colon separator first
+             * (e.g. "libThumb:xyz" → "libThumb"), then underscore
+             * (e.g. "debug_filter_Module" → "debug"), then the whole key.
+             */
+            const prefix = key.includes(':') ? key.split(':')[0]
+                         : key.includes('_') ? key.split('_')[0]
+                         : key;
+
+            breakdown[prefix] = (breakdown[prefix] || 0) + bytes;
+        }
+
+        return { totalBytes, keyCount: this._cache.size, breakdown };
+    }
+
+    // ========================================================================
     // Flush Control
     // ========================================================================
 
     /**
      * Force an immediate synchronous flush of all pending writes to disk.
      * Called on app exit and visibility change to prevent data loss.
+     *
+     * If a QuotaExceededError is encountered, the flush automatically evicts
+     * all libThumb:* cache keys (the largest and most expendable group) from
+     * disk and retries the write. This prevents the app from being permanently
+     * broken by a full localStorage partition on older Tizen hardware.
      */
     flush() {
         // Cancel any pending debounced flush
@@ -212,8 +287,29 @@ class StorageService {
                 try {
                     localStorage.setItem(key, this._cache.get(key));
                 } catch (e) {
-                    // localStorage can throw if storage quota is exceeded
-                    log.error(`Failed to write key "${key}" to disk:`, e);
+                    // ----------------------------------------------------------------
+                    // QuotaExceededError recovery strategy:
+                    //
+                    // Tizen's localStorage partition can fill up, particularly when
+                    // the user has many libraries in static thumbnail mode. Instead
+                    // of silently dropping the write (which diverges memory from disk),
+                    // we evict the most expendable cache group (libThumb:*) and retry.
+                    // ----------------------------------------------------------------
+                    if (e.name === 'QuotaExceededError' || e.code === 22) {
+                        log.warn(`QuotaExceededError writing "${key}" — evicting libThumb:* cache and retrying`);
+                        this._evictLibThumbs();
+
+                        // Retry the failed write after freeing space
+                        try {
+                            localStorage.setItem(key, this._cache.get(key));
+                            log.info(`Retry after eviction succeeded for key "${key}"`);
+                        } catch (retryErr) {
+                            // Even after eviction we still can't write — disk is critically full
+                            log.error(`Retry still failed for key "${key}" — localStorage may be critically full`, retryErr);
+                        }
+                    } else {
+                        log.error(`Failed to write key "${key}" to disk:`, e);
+                    }
                 }
             }
             log.debug(`Flushed ${this._dirtyKeys.size} dirty key(s) to disk`);
@@ -252,6 +348,32 @@ class StorageService {
             this._flushTimer = null;
             this.flush();
         }, FLUSH_DELAY_MS);
+    }
+
+    /**
+     * Emergency eviction: remove all libThumb:* keys from disk-level localStorage.
+     *
+     * Called only when a QuotaExceededError fires during flush. These are purely
+     * cosmetic cached URLs — losing them on disk is harmless because the home page
+     * will regenerate them on the next visit. We do NOT remove them from the
+     * in-memory cache so the current session keeps showing them.
+     * @private
+     */
+    _evictLibThumbs() {
+        let count = 0;
+        for (const key of this._cache.keys()) {
+            if (key.startsWith('libThumb:')) {
+                try {
+                    localStorage.removeItem(key);
+                    count++;
+                } catch (_) {
+                    // Best-effort — ignore individual removal errors
+                }
+            }
+        }
+        if (count > 0) {
+            log.info(`Emergency eviction: freed ${count} libThumb:* key(s) from disk`);
+        }
     }
 }
 

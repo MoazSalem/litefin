@@ -15,6 +15,7 @@ import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 
 const log = logger.create('Sidebar');
 
@@ -176,6 +177,11 @@ class Sidebar extends Component {
         this._onSyncPlayDisabled = () => this._updateSyncPlayBtn(false);
         eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
         eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
+
+        // Initialize visibility in case the plugin is disabled at startup
+        // The default active state is retrieved dynamically from the Manager if it exists,
+        //. but fallback to false if it hasn't started yet.
+        this._updateSyncPlayBtn(window.__syncPlayManager?.isActive || false);
 
         // Register focus
         focusManager.register('sidebar', this.el, {
@@ -441,6 +447,9 @@ class Sidebar extends Component {
         const dot   = this.el.querySelector('#sidebar-syncplay-dot');
         const label = this.el.querySelector('#sidebar-syncplay-label');
         if (!btn) return;
+
+        // Hide completely if the plugin is disabled
+        btn.style.display = pluginManager.isEnabled('syncplay') ? '' : 'none';
 
         btn.classList.toggle('syncplay-active', active);
 

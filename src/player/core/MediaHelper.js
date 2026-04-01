@@ -113,26 +113,111 @@ export const MediaHelper = {
     },
 
     /**
-     * Get granular transcode status for video and audio
-     * @param {Object} mediaSource 
-     * @returns {Object} { isVideoDirect, isAudioDirect }
+     * Get granular transcode status for video and audio.
+     *
+     * Jellyfin's `TranscodingInfo` is only present on MediaSource objects received
+     * via the session WebSocket hub — it is NOT included in the PlaybackInfo API
+     * response. When it's absent, we fall back to parsing the `TranscodeReasons`
+     * query parameter from the TranscodingUrl, which IS always present.
+     *
+     * @param {Object} mediaSource
+     * @returns {{ isVideoDirect: boolean, isAudioDirect: boolean }}
      */
     getTranscodeStatus(mediaSource) {
         const transcodeInfo = mediaSource.TranscodingInfo;
-        
-        if (!transcodeInfo) {
-            const isDirect = !!mediaSource.SupportsDirectPlay || !!mediaSource.SupportsDirectStream;
+
+        // Prefer server-provided TranscodingInfo when available (session hub updates)
+        if (transcodeInfo) {
             return {
-                isVideoDirect: isDirect,
-                isAudioDirect: isDirect
+                isVideoDirect: !!(transcodeInfo.IsVideoDirect || !transcodeInfo.VideoCodec),
+                isAudioDirect: !!transcodeInfo.IsAudioDirect
             };
         }
 
+        // No TranscodingUrl at all → DirectPlay (original file served directly)
+        const transcodeUrl = mediaSource.TranscodingUrl;
+        if (!transcodeUrl) {
+            return { isVideoDirect: true, isAudioDirect: true };
+        }
+
+        // Parse TranscodeReasons from the URL — Jellyfin always includes this
+        // when transcoding is required.
+        const reasonsMatch = transcodeUrl.match(/[?&]TranscodeReasons=([^&]+)/);
+        if (!reasonsMatch) {
+            // URL exists but no reason listed → conservatively assume full transcode
+            return { isVideoDirect: false, isAudioDirect: false };
+        }
+
+        const reasonList = decodeURIComponent(reasonsMatch[1]).split(',').map(r => r.trim());
+
+        // These reasons require the VIDEO track to be re-encoded.
+        // If any of these are present, video is NOT directly copied.
+        const VIDEO_REASONS = new Set([
+            'VideoCodecNotSupported',
+            'VideoProfileNotSupported',
+            'VideoLevelNotSupported',
+            'VideoChannelNotSupported',
+            'VideoResolutionNotSupported',
+            'VideoBitDepthNotSupported',
+            'VideoFramerateNotSupported',
+            'VideoBitrateNotSupported',
+            'RefFramesNotSupported',
+            'AnamorphicVideoNotSupported',
+            'InterlacedVideoNotSupported',
+            // Subtitle burn-in forces a video encode pass
+            'SubtitleCodecNotSupported',
+            'UnknownVideoStreamInfo'
+        ]);
+
+        // These reasons only affect the AUDIO track — video can still be copied.
+        const AUDIO_ONLY_REASONS = new Set([
+            'AudioCodecNotSupported',
+            'AudioChannelsNotSupported',
+            'AudioBitrateNotSupported',
+            'AudioSampleRateNotSupported',
+            'AudioBitDepthNotSupported',
+            'AudioProfileNotSupported'
+        ]);
+
+        let isVideoDirect = !reasonList.some(r => VIDEO_REASONS.has(r));
+        let isAudioDirect = !reasonList.some(r => AUDIO_ONLY_REASONS.has(r));
+
+        // Generic reasons like DirectPlayError or ContainerNotSupported don't explicitly declare 
+        // which stream is being re-encoded. To guarantee accuracy, we manually check if the 
+        // source track's codec is permitted in the target codec pool requested by the client.
+        const allowedVideoCodecsStr = (transcodeUrl.match(/[?&]VideoCodec=([^&]+)/) || [])[1];
+        const allowedAudioCodecsStr = (transcodeUrl.match(/[?&]AudioCodec=([^&]+)/) || [])[1];
+
+        if (allowedVideoCodecsStr) {
+            const allowedVideoCodecs = allowedVideoCodecsStr.toLowerCase().split(',');
+            const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
+            if (videoStream && videoStream.Codec && !allowedVideoCodecs.includes(videoStream.Codec.toLowerCase())) {
+                isVideoDirect = false;
+            }
+        }
+
+        if (allowedAudioCodecsStr) {
+            const allowedAudioCodecs = allowedAudioCodecsStr.toLowerCase().split(',');
+            const audioStreamIndexStr = (transcodeUrl.match(/[?&]AudioStreamIndex=([^&]+)/) || [])[1];
+            let audioStream;
+            if (audioStreamIndexStr) {
+                audioStream = mediaSource.MediaStreams?.find(s => s.Index === parseInt(audioStreamIndexStr, 10));
+            } else {
+                audioStream = mediaSource.MediaStreams?.find(s => s.Type === 'Audio' && s.IsDefault) || 
+                              mediaSource.MediaStreams?.find(s => s.Type === 'Audio');
+            }
+
+            if (audioStream && audioStream.Codec && !allowedAudioCodecs.includes(audioStream.Codec.toLowerCase())) {
+                isAudioDirect = false;
+            }
+        }
+
         return {
-            isVideoDirect: !!(transcodeInfo.IsVideoDirect || !transcodeInfo.VideoCodec),
-            isAudioDirect: !!transcodeInfo.IsAudioDirect
+            isVideoDirect,
+            isAudioDirect
         };
     },
+
 
     /**
      * Check if media source uses HLS
@@ -145,20 +230,82 @@ export const MediaHelper = {
     },
 
     /**
-     * Get subtitle track URL from the Jellyfin API
-     * @param {Object} track - Subtitle track
-     * @param {string} serverUrl - Server URL
-     * @param {string} itemId - Item ID
-     * @param {string} mediaSourceId - Media source ID
-     * @param {string} authToken - Auth token
-     * @param {string} [format='vtt'] - Desired format
-     * @returns {string} Subtitle URL
+     * Get subtitle track URL from the Jellyfin API.
+     *
+     * Mirrors jellyfin-web's getTextTrackUrl() — trust the server-provided
+     * DeliveryUrl on the track object rather than constructing a URL from
+     * scratch. The server already bakes in the correct path segment, format
+     * extension (e.g. '.sup' for PGS, '.vtt' for text tracks), and any
+     * start-position offset.  Constructing a manual URL can produce formats
+     * the server rejects with a 400 (e.g. asking for '.pgs' when only '.sup'
+     * is valid, or skipping the required start-position segment).
+     *
+     * When a specific format is requested (e.g. 'vtt' for text conversion),
+     * we replace the extension in the DeliveryUrl — again, matching
+     * jellyfin-web's `url.replace('.vtt', format)` pattern.
+     *
+     * If the track has no DeliveryUrl (external URL tracks), we fall back to
+     * the raw IsExternalUrl path.
+     *
+     * @param {Object} track       - Subtitle stream object from Jellyfin PlaybackInfo
+     * @param {string} serverUrl   - Jellyfin server base URL (e.g. http://host:8096)
+     * @param {string} itemId      - Item ID (unused, kept for backward-compat signature)
+     * @param {string} mediaSourceId - Media source ID (unused, kept for backward-compat)
+     * @param {string} authToken   - Authentication token for the api_key query param
+     * @param {string} [format]    - If provided, overrides the extension in the DeliveryUrl
+     *                               (e.g. 'vtt').  If omitted the DeliveryUrl is used as-is.
+     * @returns {string} Fully-qualified subtitle URL including auth token
      */
-    getSubtitleUrl(track, serverUrl, itemId, mediaSourceId, authToken, format = 'vtt') {
-        // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.{format}
-        const streamIndex = track.Index;
-        let url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Subtitles/${streamIndex}/Stream.${format}`;
-        url += `?api_key=${encodeURIComponent(authToken)}`;
+    getSubtitleUrl(track, serverUrl, itemId, mediaSourceId, authToken, format) {
+        // ====================================================================
+        // External URL tracks (e.g. HTTP/HTTPS subtitles hosted elsewhere)
+        // have no server-relative DeliveryUrl — use their URL directly.
+        // ====================================================================
+        if (track.IsExternalUrl) {
+            return track.DeliveryUrl || '';
+        }
+
+        // ====================================================================
+        // Internal tracks: prefer the server-provided DeliveryUrl.
+        // The server bakes in the correct path segment, format extension, and
+        // start-position offset — we trust it over any manual construction.
+        //
+        // HOWEVER: for embedded subtitle tracks during Direct Play, the server
+        // does NOT populate DeliveryUrl because the subtitle profile Method is
+        // 'Embed' (the player is supposed to read it from the container).
+        // When we want to render PGS ourselves (client-side, via libpgs) we
+        // still need to fetch the raw stream from the server, so we fall back
+        // to the standard Jellyfin subtitle API path:
+        //   /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/0/Stream.{codec}
+        // ====================================================================
+        let deliveryPath = track.DeliveryUrl;
+
+        if (!deliveryPath) {
+            // Build the URL manually from the track's own index and the known
+            // media source — this matches the Jellyfin server's subtitle route.
+            const codec  = (track.Codec || 'pgssub').toLowerCase();
+            const format_  = format || codec;            // honour caller's override
+            deliveryPath = `/Videos/${itemId}/${mediaSourceId}/Subtitles/${track.Index}/0/Stream.${format_}`;
+            const sep = '?';
+            return `${serverUrl}${deliveryPath}${sep}api_key=${encodeURIComponent(authToken)}`;
+        }
+
+        // Ensure it's a fully-qualified URL (DeliveryUrl is usually root-relative)
+        let url = deliveryPath.startsWith('http')
+            ? deliveryPath
+            : `${serverUrl}${deliveryPath}`;
+
+        // If the caller wants a specific format (e.g. 'vtt' for text conversion),
+        // swap the extension — mirrors jellyfin-web's url.replace('.vtt', format).
+        if (format) {
+            url = url.replace(/\.\w+(?=\?)/, `.${format}`)  // before query string
+                     .replace(/\.\w+$/, `.${format}`);      // or at end of string
+        }
+
+        // Append auth token (DeliveryUrl itself usually omits it)
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}api_key=${encodeURIComponent(authToken)}`;
+
         return url;
     },
 

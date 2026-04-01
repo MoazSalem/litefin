@@ -505,6 +505,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideWatchedContentFromLatestMedia">${i18n.t('HideWatchedContentFromLatestMedia') || 'Hide played from Recently Added'}</span>
+                        <span class="setting-description" data-i18n="HideWatchedContentFromLatestMediaDescription">${i18n.t('HideWatchedContentFromLatestMediaDescription') || 'Hide watched content from Recently Added Media.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hidePlayedInLatest') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-played-latest" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LibraryThumbnails">${i18n.t('LibraryThumbnails') || 'Library Thumbnails'}</span>
                         <span class="setting-description" data-i18n="LibraryThumbnailsDescription">${i18n.t('LibraryThumbnailsDescription') || 'Style of library cards on the home screen'}</span>
                     </div>
@@ -698,6 +711,27 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
+                        <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-focus-mode-select',
+                            [
+                                /* Keep the last button the user navigated to — the legacy behaviour */
+                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
+                                /* Reset to Play/Pause only if idle for ≥ 10 s */
+                                { value: 'timeout',  label: i18n.t('OsdFocusTimeout')  || 'Return to Play/Pause after 10 s' },
+                                /* Always snap to Play/Pause on every OSD reveal */
+                                { value: 'always',   label: i18n.t('OsdFocusAlways')   || 'Always return to Play/Pause' }
+                            ],
+                            PlayerSettings.get('osdFocusRestoreMode') || 'remember'
+                        )}
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="PlaybackCompatibility">${i18n.t('PlaybackCompatibility')}</h3>
 
                 <div class="setting-item">
@@ -838,6 +872,22 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                ${platformInfo.isTizen ? `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="FLACPassthrough">${i18n.t('FLACPassthrough') || 'FLAC in Video Passthrough'}</span>
+                        <span class="setting-description" data-i18n="FLACPassthroughDescription">${i18n.t('FLACPassthroughDescription') || 'Allow FLAC audio tracks in video files to play directly. Disable if you hear audio/video sync issues (~2s delay). Does not affect FLAC music files.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableFlacInVideo') ? 'active' : ''}" 
+                                id="toggle-enable-flac-in-video" 
+                                data-setting="enableFlacInVideo"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1549,6 +1599,58 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- ============================================================ -->
+                <!-- Storage Management Section                                   -->
+                <!-- ============================================================ -->
+                <h3 class="setting-section-title" data-i18n="StorageManagement">${i18n.t('StorageManagement')}</h3>
+
+                <!-- Usage display: populated dynamically in onMounted -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LocalStorageUsage">${i18n.t('LocalStorageUsage')}</span>
+                        <span class="setting-description" id="storage-usage-display" data-i18n="Calculating">${i18n.t('Calculating')}</span>
+                    </div>
+                </div>
+
+                <!-- Clear cached library thumbnail URLs -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ClearImageCache">${i18n.t('ClearImageCache')}</span>
+                        <span class="setting-description" data-i18n="ClearImageCacheDescription">${i18n.t('ClearImageCacheDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-option" id="btn-clear-image-cache" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Clear">
+                            ${i18n.t('Clear')}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Clear stale debug module filter history -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ClearDebugFilters">${i18n.t('ClearDebugFilters')}</span>
+                        <span class="setting-description" data-i18n="ClearDebugFiltersDescription">${i18n.t('ClearDebugFiltersDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-option" id="btn-clear-debug-filters" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Clear">
+                            ${i18n.t('Clear')}
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Nuke all non-essential caches (auth-safe) -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ClearAllCaches">${i18n.t('ClearAllCaches')}</span>
+                        <span class="setting-description" data-i18n="ClearAllCachesDescription">${i18n.t('ClearAllCachesDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger" id="btn-clear-all-storage" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="ClearAll">
+                            ${i18n.t('ClearAll')}
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Module Filters -->
                 <h3 class="setting-section-title" data-i18n="ModuleFilters">${i18n.t('ModuleFilters')}</h3>
                 <div class="module-filters-grid">
@@ -1591,6 +1693,7 @@ class SettingsPage extends Page {
                         )
                         .join('')}
                 </div>
+
             </div>
         `;
     }
@@ -1607,6 +1710,12 @@ class SettingsPage extends Page {
             focusManager.focusElement(activeBtn);
         } else {
             this.setActiveSection('settings-sidebar');
+        }
+
+        // If the debug tab is active, populate the live storage usage display
+        // so the user gets immediate feedback without having to navigate away.
+        if (this.activeTab === 'debug') {
+            this._updateStorageUsageDisplay();
         }
     }
 
@@ -1679,6 +1788,29 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Hide Played in Latest
+        const hidePlayedLatestBtn = this.$('#toggle-hide-played-latest');
+        if (hidePlayedLatestBtn) {
+            hidePlayedLatestBtn.addEventListener('click', async () => {
+                const isHidden = storage.getItem('pref:hidePlayedInLatest') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hidePlayedInLatest', newValue);
+                hidePlayedLatestBtn.classList.toggle('active', newValue);
+
+                // Sync preference with Jellyfin server so it's applied securely
+                try {
+                    const user = await api.getCurrentUser();
+                    if (user && user.Configuration) {
+                        user.Configuration.HidePlayedInLatest = newValue;
+                        await api.updateUserConfiguration(user.Configuration);
+                        log.info(`Synced HidePlayedInLatest (${newValue}) to server`);
+                    }
+                } catch (e) {
+                    log.error('Failed to sync HidePlayedInLatest to server', e);
+                }
+            });
+        }
+
         // Toggle Auto-play Next Episode
         const autoNextBtn = this.$('#toggle-auto-next');
         if (autoNextBtn) {
@@ -1723,23 +1855,102 @@ class SettingsPage extends Page {
         }
 
         // Regenerate Library Thumbnails
+        // Uses storage.clearByPrefix() so the in-memory StorageService cache
+        // is kept in sync with the disk — previously this called localStorage
+        // directly, leaving stale values in the in-memory Map.
         const regenerateThumbsBtn = this.$('#btn-regenerate-thumbs');
         if (regenerateThumbsBtn) {
             regenerateThumbsBtn.addEventListener('click', () => {
                 regenerateThumbsBtn.disabled = true;
-                regenerateThumbsBtn.textContent = i18n.t('Working') || 'Working...';
+                regenerateThumbsBtn.textContent = i18n.t('Working');
 
-                // Clear all library thumb caches in localStorage
-                Object.keys(localStorage).forEach((key) => {
-                    if (key.startsWith('libThumb:')) {
-                        localStorage.removeItem(key);
-                    }
-                });
+                // Clear via StorageService so both the in-memory cache and disk stay in sync
+                storage.clearByPrefix('libThumb:');
 
                 // Short delay for visual feedback then navigate home
                 setTimeout(() => {
                     router.reset('/home');
                 }, 500);
+            });
+        }
+
+        // ================================================================
+        // Storage Management Button Handlers (Debug tab)
+        // ================================================================
+
+        // Helper: refresh the usage display element after a clear action
+        const _refreshUsageDisplay = () => {
+            this._updateStorageUsageDisplay();
+        };
+
+        // ── Clear Image Cache ─────────────────────────────────────────────
+        // Removes all libThumb:* cache entries. Safe to use at any time —
+        // these are purely cosmetic and regenerate on the next home load.
+        const clearImageCacheBtn = this.$('#btn-clear-image-cache');
+        if (clearImageCacheBtn) {
+            clearImageCacheBtn.addEventListener('click', () => {
+                const removed = storage.clearByPrefix('libThumb:');
+                clearImageCacheBtn.textContent = removed > 0 ? i18n.t('Done') : i18n.t('AlreadyEmpty');
+                setTimeout(() => {
+                    clearImageCacheBtn.textContent = i18n.t('Clear');
+                }, 2000);
+                _refreshUsageDisplay();
+            });
+        }
+
+        // ── Clear Debug Filter History ────────────────────────────────────
+        // Removes all debug_filter_* keys so the module filters start fresh.
+        // Also clears the Logger's in-memory disabled-modules set so the
+        // change takes effect immediately (no reload needed).
+        const clearDebugFiltersBtn = this.$('#btn-clear-debug-filters');
+        if (clearDebugFiltersBtn) {
+            clearDebugFiltersBtn.addEventListener('click', () => {
+                // Wipe from StorageService's in-memory cache and disk
+                const removed = storage.clearByPrefix('debug_filter_');
+                // Wipe the logger's runtime disabled-module set too
+                // (logger exposes _disabledModules as part of its controlled surface)
+                logger._disabledModules.clear();
+                clearDebugFiltersBtn.textContent = removed > 0 ? i18n.t('Done') : i18n.t('AlreadyEmpty');
+                setTimeout(() => {
+                    clearDebugFiltersBtn.textContent = i18n.t('Clear');
+                }, 2000);
+                _refreshUsageDisplay();
+            });
+        }
+
+        // ── Clear All Caches (auth-safe) ──────────────────────────────────
+        // Removes all non-essential cache groups.
+        //
+        // IMPORTANT: We only clear known cache prefixes — we do NOT call
+        // localStorage.clear() here. That would wipe auth tokens, server URL,
+        // and user preferences, causing an unexpected signed-out state.
+        //
+        // Keys that are intentionally preserved:
+        //   auth_*         — access token and user session
+        //   server_url     — server connection
+        //   pref:*         — user preferences
+        //   player:*       — player settings
+        //   app_*          — app settings (language, theme etc.)
+        //   debug_*        — debug overlay config (logs enabled, position etc.)
+        const clearAllBtn = this.$('#btn-clear-all-storage');
+        if (clearAllBtn) {
+            clearAllBtn.addEventListener('click', () => {
+                clearAllBtn.disabled = true;
+                clearAllBtn.textContent = i18n.t('Working');
+
+                // Clear each non-essential cache group
+                let totalRemoved = 0;
+                totalRemoved += storage.clearByPrefix('libThumb:');
+
+                // Also clear the logger's runtime disabled-module set
+                logger._disabledModules.clear();
+
+                clearAllBtn.disabled = false;
+                clearAllBtn.textContent = totalRemoved > 0 ? i18n.t('Done') : i18n.t('AlreadyEmpty');
+                setTimeout(() => {
+                    clearAllBtn.textContent = i18n.t('ClearAll');
+                }, 2500);
+                _refreshUsageDisplay();
             });
         }
 
@@ -1864,6 +2075,40 @@ class SettingsPage extends Page {
                 await pluginManager.setPluginEnabled(pluginId, newEnabled);
             });
         });
+    }
+
+    /**
+     * Populate the #storage-usage-display element in the Debug tab with a
+     * live summary of localStorage usage pulled from StorageService's report.
+     *
+     * This is pure in-memory: the report reads from the StorageService Map,
+     * so there is zero synchronous disk I/O involved.
+     *
+     * Called on mount when the debug tab is active, and after each clear action
+     * so the numbers update in real time without a page reload.
+     */
+    _updateStorageUsageDisplay() {
+        const el = this.$('#storage-usage-display');
+        if (!el) return;
+
+        // Pull the usage report from StorageService (all in-memory, instant)
+        const report = storage.getStorageReport();
+
+        // Internal byte formatter — keeps this self-contained
+        const fmt = (bytes) => {
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / 1024 / 1024).toFixed(2)} MB`;
+        };
+
+        // Build a short summary: total + a list of the largest prefixes
+        const topGroups = Object.entries(report.breakdown)
+            .sort(([, a], [, b]) => b - a) // Descending by size
+            .slice(0, 4)                   // Show top 4 groups
+            .map(([prefix, bytes]) => `${prefix}: ${fmt(bytes)}`)
+            .join(' · ');
+
+        el.textContent = `${fmt(report.totalBytes)} across ${report.keyCount} keys — ${topGroups}`;
     }
 
     _renderSlider(id, value, min, max, step, unit = '%') {
@@ -2186,7 +2431,12 @@ class SettingsPage extends Page {
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
             'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
-            'time-format-select': { key: 'timeFormat', type: 'player' }
+            'time-format-select': { key: 'timeFormat', type: 'player' },
+            /*
+             * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
+             * every time the OSD transitions from hidden to visible. No extra handler needed.
+             */
+            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2525,6 +2775,12 @@ class SettingsPage extends Page {
 
             if (tabId === 'home') {
                 this._setupHomeLayoutUI();
+            }
+
+            // Populate the live storage usage display whenever the debug tab is opened.
+            // _bindContentEvents() already wired the buttons; this fills in the initial numbers.
+            if (tabId === 'debug') {
+                this._updateStorageUsageDisplay();
             }
 
             focusManager.invalidateCache('settings-content');

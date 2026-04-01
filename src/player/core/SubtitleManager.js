@@ -17,6 +17,7 @@ import ASSRenderer from './ASSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { toast } from '../../ui/Toast.js';
@@ -94,11 +95,21 @@ export default class SubtitleManager {
         this._videoElement = null; // Reference to real video element (or null)
 
         // ====================================================================
-        // Renderers renderers
+        // Renderers
         // ====================================================================
 
         this._assRenderer = null;
         this._pgsRenderer = null;
+
+        // Stale-load guard for the async PGS download pipeline.
+        // Incremented every time a new load starts OR destroy() is called.
+        // Each invocation of _loadPGSTrack captures the token at entry and
+        // checks it after every await — if it has changed, the load is aborted
+        // and no zombie PGSRenderer is created.
+        this._pgsLoadToken = 0;
+
+        // Set to true by destroy() so stray callbacks can bail early.
+        this._isDestroyed = false;
 
         // ====================================================================
         // Primary Subtitle State
@@ -485,6 +496,14 @@ export default class SubtitleManager {
      * Full cleanup — destroy the subtitle manager and release all resources.
      */
     destroy() {
+        // Mark as destroyed FIRST so any in-flight async _loadPGSTrack knows
+        // to abort at its next await point rather than creating a zombie renderer.
+        this._isDestroyed = true;
+
+        // Bump the load token so any in-progress PGS download/parse loop
+        // sees a stale token and exits cleanly.
+        this._pgsLoadToken++;
+
         this._clearPrimary();
         this._clearSecondary();
         this._itemId = null;
@@ -655,47 +674,197 @@ export default class SubtitleManager {
 
     /**
      * Load a PGS track and initialize the PGSRenderer.
+     *
+     * We intentionally pre-fetch the binary .sup file ourselves here rather than
+     * passing subUrl to PGSRenderer and letting libpgs fetch it internally.
+     *
+     * Reason: libpgs's internal loadFromUrl() uses XHR/fetch without propagating
+     * errors back to the caller. On Tizen, this silently fails (bad MIME type,
+     * Tizen XHR quirk, or timing issue), leaving `updateTimestamps` empty forever.
+     * When timestamps are empty, `renderAtTimestamp` always returns index -1,
+     * and after the very first -1 render the dedup guard (`previousTimestampIndex`)
+     * keeps blocking every subsequent call — subtitle never appears.
+     *
+     * By fetching here, we get proper error logging and can abort cleanly.
+     *
      * @param {Object} track
      * @private
      */
     async _loadPGSTrack(track) {
         if (!this._itemId || !this._mediaSourceId) return;
 
+        // ====================================================================
+        // Stale-load guard — capture the current session token at start.
+        //
+        // _loadPGSTrack is a long-running async function (URL probe + up to
+        // 24 chunked Range requests on a 120 MB file). If the user exits
+        // the player (or switches tracks) while a download is in progress,
+        // destroy() / _clearPrimary() bumps this._pgsLoadToken. After every
+        // await we compare our captured token to the current one — if they
+        // differ, we abort and do NOT create a renderer, preventing a zombie
+        // PGSRenderer from appearing after the SubtitleManager is destroyed.
+        // ====================================================================
+        this._pgsLoadToken++;
+        const myToken = this._pgsLoadToken;
+
+        /** Returns true if this invocation has been superseded or destroyed. */
+        const isStale = () => this._isDestroyed || this._pgsLoadToken !== myToken;
+
         try {
-            // Build the subtitle URL (PGS/.sup)
-            // Jellyfin API: /Videos/{itemId}/{mediaSourceId}/Subtitles/{streamIndex}/Stream.sup
+            // Build the subtitle URL — use the server-provided DeliveryUrl directly,
+            // just as jellyfin-web does in getTextTrackUrl(track, item) with no format
+            // override.  The server bakes the correct extension plus the start-position
+            // segment into DeliveryUrl; we must not override it.
             const url = MediaHelper.getSubtitleUrl(
                 track,
                 this._serverUrl,
                 this._itemId,
                 this._mediaSourceId,
-                this._authToken,
-                'sup'
+                this._authToken
+                // No format arg → uses track.DeliveryUrl as-is
             );
 
-            log.info(`Loading PGS subtitle from: ${url}`);
+            // ================================================================
+            // URL validation via a zero-cost range request
+            //
+            // Jellyfin's subtitle endpoint does not support HEAD (405), so we
+            // use a Range GET to fetch only the first byte.  This confirms the
+            // URL is reachable without pulling the entire file into memory.
+            // A 206 Partial Content or 200 OK both mean the server is happy.
+            // ================================================================
+            log.info(`Validating PGS subtitle URL: ${url}`);
+            const probeResponse = await fetch(url, {
+                headers: { Range: 'bytes=0-0' }
+            });
+
+            // Abort early if the user has already left or switched tracks
+            if (isStale()) {
+                log.debug('_loadPGSTrack: aborted after URL probe (session ended)');
+                return;
+            }
+
+            // 206 = range served, 200 = server ignored range but responded OK
+            if (!probeResponse.ok) {
+                throw new Error(`Server returned HTTP ${probeResponse.status} for PGS subtitle: ${url}`);
+            }
+
+            // Log the full content-length if the server exposed it
+            const contentRange  = probeResponse.headers.get('content-range');   // e.g. "bytes 0-0/126877696"
+            const contentLength = probeResponse.headers.get('content-length');
+            const totalBytes    = contentRange
+                ? parseInt(contentRange.split('/')[1], 10)
+                : parseInt(contentLength || '0', 10);
+            const sizeLabel = totalBytes
+                ? `${(totalBytes / 1024 / 1024).toFixed(1)} MB`
+                : 'unknown size';
+            log.info(`PGS URL validated OK (${sizeLabel}) — handing to renderer`);
+
+            // ================================================================
+            // Tizen Chunked Download Fallback
+            //
+            // libpgs's loadFromUrl() uses fetch streaming, which silently hangs
+            // on Tizen's Chromium port for 50MB+ streams. To bypass this, we
+            // manually construct the full ArrayBuffer via 5MB chunked Range
+            // requests, which Tizen processes reliably, and pass it to
+            // loadFromBuffer() instead. Non-Tizen devices keep streaming the URL.
+            // ================================================================
+            let pgsBuffer = null;
+            if (platformInfo.isTizen && totalBytes > 0) {
+                log.info(`Tizen detected — downloading PGS via 5MB chunks (Total: ${sizeLabel})...`);
+                const chunkSize = 5 * 1024 * 1024; // 5 MB
+                const buffer = new Uint8Array(totalBytes);
+                let offset = 0;
+                let lastPercent = 0;
+
+                while (offset < totalBytes) {
+                    // Abort mid-download if the session has ended
+                    if (isStale()) {
+                        log.debug(`_loadPGSTrack: aborted during chunk download at ${offset} bytes (session ended)`);
+                        return; // Drop the partial buffer — GC will reclaim it
+                    }
+
+                    const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
+                    const chunkResp = await fetch(url, {
+                        headers: { Range: `bytes=${offset}-${end}` }
+                    });
+
+                    if (!chunkResp.ok) throw new Error(`Chunk fetch failed: ${chunkResp.status}`);
+
+                    const chunkArray = new Uint8Array(await chunkResp.arrayBuffer());
+                    buffer.set(chunkArray, offset);
+                    offset += chunkArray.byteLength;
+
+                    const percent = Math.floor((offset / totalBytes) * 100);
+                    if (percent >= lastPercent + 25 || offset === totalBytes) {
+                        log.debug(`PGS Download progress: ${percent}%`);
+                        lastPercent = percent;
+                    }
+                }
+
+                // Final stale check before handing the buffer off to libpgs
+                if (isStale()) {
+                    log.debug('_loadPGSTrack: aborted after download complete (session ended)');
+                    return;
+                }
+
+                pgsBuffer = buffer.buffer;
+                log.info(`Chunked download complete — ${pgsBuffer.byteLength.toLocaleString()} bytes ready.`);
+            }
 
             // Destroy any existing renderer before creating a new one.
-            // We always recreate here because the track (and therefore the URL
-            // and internal state) may have changed — reusing the old renderer
-            // would display stale data from the previous track.
             if (this._pgsRenderer) {
                 this._pgsRenderer.destroy();
                 this._pgsRenderer = null;
+            }
+
+            // ================================================================
+            // Blob URL strategy for Tizen (progressive parsing fix)
+            //
+            // libpgs.loadFromBuffer() parses via a tight generator/microtask
+            // loop — `await undefined` only yields to the microtask queue, not
+            // the macrotask/event loop. The browser gets zero frame budget
+            // until the ENTIRE file is parsed (30-60 seconds on a large file).
+            // onProgress and rAF callbacks from onTimestampsUpdated queue up
+            // but cannot execute until that microtask burst ends.
+            //
+            // loadFromUrl() with a blob:// URL uses fetch().body.getReader()
+            // (ReadableStream). Even for in-memory blobs, each read() on a
+            // ReadableStream yields at the macrotask level in Chromium. This
+            // gives the browser real frame slots between chunks, allowing rAF
+            // to fire and progressive subtitles to paint during parse.
+            //
+            // We convert the assembled buffer → Blob → blob:// URL, pass it
+            // to PGSRenderer as subUrl, and clean up the URL in destroy().
+            // ================================================================
+            let subUrl = url;
+            const subBuffer = null; // Always null now that we use blob URLs on Tizen
+
+            if (pgsBuffer) {
+                // Create a blob URL from the downloaded bytes
+                const blob = new Blob([pgsBuffer], { type: 'application/octet-stream' });
+                subUrl = URL.createObjectURL(blob);
+                log.info(`Blob URL created for progressive parsing: ${subUrl.slice(0, 40)}...`);
+                // Release the original buffer memory
+                pgsBuffer = null;
             }
 
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
                 videoElement: this._videoElement,
-                subUrl: url,
+                subUrl,
+                subBuffer,
                 timeOffset: this._primaryOffset
             });
 
         } catch (err) {
-            log.error('Failed to load PGS track:', err);
+            // Ignore errors from stale/superseded sessions — don't pollute the log
+            if (!isStale()) {
+                log.error('Failed to load PGS track:', err?.message || err);
+            }
         }
     }
+
 
     /**
      * Check if a codec is a text-based subtitle format that we can parse.
@@ -923,6 +1092,12 @@ export default class SubtitleManager {
         this._activePrimaryCue = null;
         this._primaryActiveIndex = -1;
         this._primaryOffset = 0;
+
+        // Invalidate any in-flight PGS download by bumping the load token.
+        // _loadPGSTrack captures myToken at entry and checks isStale() after
+        // each await — bumping here causes it to abort at the next chunk boundary
+        // rather than completing and creating a renderer for the wrong track.
+        this._pgsLoadToken++;
 
         // Clear the display if something was showing
         if (wasActive) {

@@ -174,9 +174,14 @@ export function buildJellyfinProfile(options = {}) {
 
     const caps = getDeviceCapabilities();
 
-    const enableHEVC = PlayerSettings.get('enableHEVC') && caps.hevc;
-    const enableAV1 = PlayerSettings.get('enableAV1') && caps.av1;
-    const enableVP9 = PlayerSettings.get('enableVP9') && caps.vp9;
+    let enableHEVC = PlayerSettings.get('enableHEVC');
+    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+
+    let enableAV1 = PlayerSettings.get('enableAV1');
+    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+
+    let enableVP9 = PlayerSettings.get('enableVP9');
+    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
     
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
     let enableHDR = PlayerSettings.get('enableHDR');
@@ -201,14 +206,34 @@ export function buildJellyfinProfile(options = {}) {
 
     const maxAudioChannels = String(caps.maxAudioChannels);
 
-    const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
-    if (caps.ac3) audioCodecs.push('ac3');
-    if (caps.eac3) audioCodecs.push('eac3');
-    if (caps.tizenVersion >= 6.5) audioCodecs.push('ac4');
-    if (enableDts) audioCodecs.push('dts', 'dca');
-    if (enableTrueHd) audioCodecs.push('truehd');
+    // enableFlacInVideo: when false (default), FLAC is NOT included in the video
+    // DirectPlay audio codec list. This forces Jellyfin to transcode FLAC tracks
+    // in video containers to AC3, which AVPlay buffers correctly and without the
+    // ~2s A/V sync drift that FLAC+video container demuxing causes on Tizen hardware.
+    //
+    // IMPORTANT: Music (audio-only) files are always kept as-is — the musicAudioCodecString
+    // always contains FLAC so .flac containers DirectPlay regardless of this setting.
+    const enableFlacInVideo = PlayerSettings.get('enableFlacInVideo');
 
-    const audioCodecString = audioCodecs.join(',');
+    // Base codec list shared by all audio contexts
+    const baseAudioCodecs = ['aac', 'mp3', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    if (caps.ac3) baseAudioCodecs.push('ac3');
+    if (caps.eac3) baseAudioCodecs.push('eac3');
+    if (caps.tizenVersion >= 6.5) baseAudioCodecs.push('ac4');
+    if (enableDts) baseAudioCodecs.push('dts', 'dca');
+    if (enableTrueHd) baseAudioCodecs.push('truehd');
+
+    // Video audio: conditionally includes FLAC based on setting
+    const videoAudioCodecs = enableFlacInVideo
+        ? ['flac', ...baseAudioCodecs]
+        : [...baseAudioCodecs];  // FLAC excluded → server transcodes to AC3
+
+    const videoAudioCodecString = videoAudioCodecs.join(',');
+
+    // Music audio: FLAC always included — audio-only containers have no sync issue
+    const musicAudioCodecString = ['flac', ...baseAudioCodecs].join(',');
+
+    // Removed legacy alias audioCodecString to fix lint warning
 
     const generalVideoCodecs = ['h264', 'mpeg2video', 'vc1'];
     if (enableHEVC) generalVideoCodecs.push('hevc');
@@ -233,18 +258,19 @@ export function buildJellyfinProfile(options = {}) {
 
     if (playbackMode !== 'transcode' && playbackMode !== 'remux') {
         // Standard Web formats (MP4, MKV, WebM)
+        // Video DirectPlay: audioCodec string excludes FLAC by default (see enableFlacInVideo)
         directPlayProfiles.push({
             Container: 'mp4,m4v,mov',
             Type: 'Video',
             VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         directPlayProfiles.push({
             Container: 'mkv',
             Type: 'Video',
             VideoCodec: mkvVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         if (webmVideoCodecs.length > 0) {
@@ -262,7 +288,7 @@ export function buildJellyfinProfile(options = {}) {
             Container: 'hls',
             Type: 'Video',
             VideoCodec: generalVideoCodecs.join(','),
-            AudioCodec: audioCodecString
+            AudioCodec: videoAudioCodecString
         });
 
         // AVPlay handles many legacy containers natively
@@ -270,59 +296,103 @@ export function buildJellyfinProfile(options = {}) {
             directPlayProfiles.push({
                 Container: 'asf',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'ts,mpegts',
                 Type: 'Video',
                 VideoCodec: tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'm2ts',
                 Type: 'Video',
                 VideoCodec: m2tsVideoCodecs.join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'avi',
                 Type: 'Video',
                 VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'wmv,asf',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
             directPlayProfiles.push({
                 Container: 'mpg,mpeg,flv,3gp,vob,vro',
                 Type: 'Video',
-                AudioCodec: audioCodecString
+                AudioCodec: videoAudioCodecString
             });
         }
 
+        // Music/audio-only files: FLAC always allowed regardless of enableFlacInVideo.
+        // Audio-only containers don't have the video-sync drift issue.
         directPlayProfiles.push({
             Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
             Type: 'Audio',
-            AudioCodec: audioCodecString
+            AudioCodec: musicAudioCodecString
         });
     }
 
-    // Tizen AVPlay frequently crashes or fails to prepareAsync when attempting to play
-    // HLS Fragmented MP4 (fMP4) streams that contain AC3 or EAC3 audio tracks.
-    // To ensure stable playback when audio MUST be transcoded (e.g. from DTS),
-    // we restrict the transcoding audio codec exclusively to AAC, which is fully supported.
-    // However, for DirectStream (progressive mp4 Remux), we safely allow native AC3/EAC3 capability.
-    let transAudioCodecs = 'aac';
+    // =========================================================================
+    // HLS Transcode Audio Configuration (Version-Gated)
+    //
+    // There are two completely separate audio decoder paths on Samsung TVs:
+    //   1. Hardware passthrough (for local/DLNA/progressive HTTP files) — supports AC3, DTS, etc.
+    //   2. AVPlay HLS media extractor (for HLS streams) — this is more restrictive.
+    //
+    // Tizen 5.x (2019-2020 TVs):
+    //   AVPlay's HLS parser only accepts AAC in MPEG-TS segments. AC3/EAC3 in the TS
+    //   container causes PLAYER_ERROR_NOT_SUPPORTED_FORMAT during buffering — the same
+    //   crash we saw with multichannel AAC. The ONLY safe option for HLS transcodes
+    //   on Tizen 5.x is stereo AAC (2 channels), which is universally reliable.
+    //
+    // Tizen 6+ (2021+ TVs):
+    //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
+    //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
+    // =========================================================================
+    let transAudioCodecs;
+    let transMaxAudioChannels;
+
+    if (caps.tizenVersion >= 6) {
+        // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use full surround sound
+        transAudioCodecs = 'ac3,eac3';
+        transMaxAudioChannels = maxAudioChannels;
+    } else {
+        // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
+        // multichannel AAC in TS also crashes AVPlay on Tizen 5.0.
+        transAudioCodecs = 'aac';
+        transMaxAudioChannels = '2';
+    }
+
     let directAudioCodecs = 'aac,ac3,eac3,mp3';
 
-    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+
+    // =========================================================================
+    // Transcode codec selection
+    //
+    // transVideoCodecs determines which input video codecs Jellyfin is ALLOWED
+    // to "copy" (pass-through, no re-encode) into the output HLS segments.
+    //
+    // MPEG-TS can natively carry H264, HEVC, MPEG-2 Video, and VC1 — so listing
+    // all of these lets Jellyfin copy any of them while only transcoding the audio.
+    //
+    // VP9 and AV1 are intentionally EXCLUDED: they cannot be muxed into MPEG-TS.
+    // When a VP9/AV1 file has an incompatible audio codec, the video must be
+    // re-encoded to H264 regardless — no way around it with an HLS/TS container.
+    // =========================================================================
+    const tsCompatibleVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
+    if (enableHEVC) tsCompatibleVideoCodecs.push('hevc');
+
+    let transVideoCodecs = tsCompatibleVideoCodecs.join(',');
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = audioCodecString;
-        directAudioCodecs = audioCodecString;
+        transAudioCodecs = videoAudioCodecString;
+        directAudioCodecs = videoAudioCodecString;
 
         const allVideo = new Set([...generalVideoCodecs, ...mkvVideoCodecs, ...tsVideoCodecs]);
         transVideoCodecs = Array.from(allVideo).join(',');
@@ -337,10 +407,25 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: transVideoCodecs, // ts container only safely supports h264/hevc
             Context: 'Streaming',
             Protocol: 'hls',
-            MaxAudioChannels: maxAudioChannels,
+            // Tizen 5.x: capped at 2 (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
+            MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? '1' : '2',
             SegmentLength: isHtml5 ? '2' : '6',
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
+            // BreakOnNonKeyFrames=True with video copy mode causes Tizen AVPlay to crash:
+            // FFmpeg cannot cut at non-IDR boundaries when copying, so it cuts at the nearest
+            // keyframe AFTER the target duration. The declared #EXTINF value in the playlist
+            // then mismatches the actual segment content length — Tizen 5.0's HLS parser is
+            // strict about this and fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT.
+            // Setting false ensures FFmpeg only cuts at real IDR frames, producing honest
+            // #EXTINF values that AVPlay can parse cleanly.
+            // HTML5 (MSE-based) handles irregular segments fine, so keep original there.
+            BreakOnNonKeyFrames: isHtml5 ? (playbackMode !== 'remux') : false,
+            // VBR AAC in MPEG-TS uses LATM framing (stream type 0x11 in the PMT).
+            // Tizen 5.0 AVPlay's HLS parser expects standard ADTS framing (0x0F) and
+            // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
+            // Setting this to false forces CBR AAC with ADTS framing on AVPlay.
+            // HTML5/MSE players handle LATM fine, so keep VBR enabled there.
+            EnableAudioVbrEncoding: isHtml5
         },
         {
             Container: 'aac',
@@ -389,8 +474,13 @@ export function buildJellyfinProfile(options = {}) {
     // Samsung TVs can play the HDR10/HDR10+ fallback of Dolby Vision Profile 7/8.
     // DOVIWithHDR10Plus is a distinct type from DOVIWithHDR10 and must be listed separately —
     // Jellyfin reports these based on the actual base layer of the encode, not just the DV type.
+    // Full Dolby Vision subtype list — each mode is a distinct value Jellyfin reports.
+    // DOVIWithEL = DV with Enhancement Layer (EL-only profile, common in remuxes).
+    // DOVIWithELHDR10Plus = DV EL + HDR10+ base (the type that triggered the transcode here).
+    // Omitting any of these causes VideoRangeTypeNotSupported → unnecessary full video transcode.
+    // WebProfile.js already includes both: keep Tizen in sync.
     const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR'
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus'
         : 'SDR|DOVIWithSDR';
 
     const codecProfiles = [
@@ -407,6 +497,13 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
+                // Tizen AVPlay HLS parser does NOT support interlaced H264 streams (1080i).
+                // FFmpeg with -c:v copy passes the interlaced flag through to the TS segments,
+                // and AVPlay immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it detects
+                // the interlaced scan type in the H264 SPS. HLS streams must be progressive.
+                // IsRequired: true forces Jellyfin to transcode (not copy) interlaced content,
+                // at which point FFmpeg applies bwdif deinterlacing to produce clean progressive output.
+                { Condition: 'Equals', Property: 'IsInterlaced', Value: 'false', IsRequired: true },
                 ...hdrCondition
             ]
         },
@@ -422,6 +519,28 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
+    // CodecProfile for AAC: limit to stereo channels for DirectPlay qualification.
+    // This tells Jellyfin: "only DirectPlay an AAC source if it has ≤2 channels".
+    // On Tizen < 6, multichannel AAC in HLS/TS crashes AVPlay, so we exclude those from
+    // DirectPlay. Tizen 6+ uses fMP4 which handles 5.1 AAC reliably.
+    //
+    // NOTE: This does NOT control the output channel count of transcodes — that is governed
+    // solely by MaxAudioChannels in the TranscodingProfile, which we've already set correctly.
+    // This CodecProfile only affects DirectPlay/DirectStream path decisions.
+    codecProfiles.push({
+        Type: 'Audio',
+        Codec: 'aac',
+        Conditions: [
+            {
+                Condition: 'LessThanEqual',
+                Property: 'AudioChannels',
+                // Permit DirectPlay of AAC only if channel count is within safe limits.
+                Value: caps.tizenVersion >= 6 ? maxAudioChannels : '2',
+                IsRequired: false
+            }
+        ]
+    });
 
     // Explicitly force transcoding of DTS/TrueHD tracks if the user
     // has disabled passthrough for them.

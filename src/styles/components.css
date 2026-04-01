@@ -1026,3 +1026,128 @@ html[data-layout-tier="legacy"] .media-info-row {
     color: white;
 }
 
+/* ==========================================================================
+   Trailer Dialog Specifics
+   Overrides the base .settings-modal / .modal-option-btn for the trailer
+   choice dialog, which uses richer option cards (icon + label + sublabel).
+   ========================================================================== */
+
+/* Slightly narrower than the wide MediaInfo modal, but taller per option */
+.trailer-dialog-modal {
+    width: 520px;
+}
+
+/* Trim padding on the options column — only 2 options, no scrolling needed */
+.trailer-dialog-options {
+    padding: 12px 20px !important;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Fallback for flex gap on older Tizen */
+.trailer-dialog-options > * {
+    margin-bottom: 10px;
+}
+
+.trailer-dialog-options > *:last-child {
+    margin-bottom: 0;
+}
+
+/*
+ * Individual trailer option card: icon on the left, two-line text on the right.
+ * Overrides the fixed 80px height so the sublabel has room to breathe.
+ */
+.trailer-option {
+    height: auto !important;
+    min-height: 90px;
+    padding: 20px 24px !important;
+}
+
+/* Icon wrapper — fixed square, accent-tinted background to match brand */
+.trailer-option-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    border-radius: var(--jf-border-radius);
+    background: rgba(var(--jf-accent-rgb), 0.12);
+    color: var(--jf-accent);
+    flex-shrink: 0;
+    transition: background 0.18s ease, color 0.18s ease;
+    margin-right: 20px; /* Fallback for gap */
+}
+
+/* On focus/hover the icon surface follows the accent button color */
+.trailer-option:focus .trailer-option-icon,
+.trailer-option.focused .trailer-option-icon,
+.trailer-option:hover .trailer-option-icon {
+    background: rgba(255, 255, 255, 0.2);
+    color: var(--jf-primary-btn-color, #fff);
+}
+
+/* Text column — primary label over dimmed sublabel */
+.trailer-option-text {
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
+}
+
+.trailer-option-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    line-height: 1.2;
+    margin-bottom: 4px; /* Fallback for gap */
+}
+
+.trailer-option-sublabel {
+    font-size: 1rem;
+    font-weight: 400;
+    color: var(--jf-text-secondary);
+    line-height: 1.2;
+}
+
+/* Sublabel goes near-white when the button is active */
+.trailer-option:focus .trailer-option-sublabel,
+.trailer-option.focused .trailer-option-sublabel,
+.trailer-option:hover .trailer-option-sublabel {
+    color: rgba(255, 255, 255, 0.75) !important;
+}
+
+/* ============================================================================
+   Phase 2: Remote Trailer Fullscreen OSD
+   ============================================================================ */
+.trailer-player-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background: #000;
+    z-index: 99999;
+}
+
+.trailer-iframe-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1; /* Behind OSD */
+}
+
+/* Trailer iframe overrides to remove any inherited margins */
+.trailer-iframe-container iframe {
+    width: 100%;
+    height: 100%;
+    display: block;
+    border: none;
+    margin: 0;
+    padding: 0;
+}
+
+/* Make sure the OSD overlays the iframe correctly */
+.trailer-osd {
+    z-index: 10; 
+}

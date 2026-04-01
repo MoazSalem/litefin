@@ -657,7 +657,11 @@ class LibraryPage extends Page {
 
             // Apply Filters
             if (this.state.nameStartsWith) {
-                params.NameStartsWith = this.state.nameStartsWith;
+                if (this.state.nameStartsWith === '#') {
+                    params.NameLessThan = 'A';
+                } else {
+                    params.NameStartsWith = this.state.nameStartsWith;
+                }
             }
 
             let subViewItemTypes = 'Movie,Series'; // Exclude Episode by default for all genre/studio/tag views
@@ -1138,14 +1142,16 @@ class LibraryPage extends Page {
                     ParentId: this.state.libraryId,
                     StartIndex: params.StartIndex,
                     Limit: params.Limit,
-                    NameStartsWith: params.NameStartsWith
+                    NameStartsWith: params.NameStartsWith,
+                    NameLessThan: params.NameLessThan
                 });
             } else if (viewType === 'Artists') {
                 result = await api.getMusicArtists({
                     ParentId: this.state.libraryId,
                     StartIndex: params.StartIndex,
                     Limit: params.Limit,
-                    NameStartsWith: params.NameStartsWith
+                    NameStartsWith: params.NameStartsWith,
+                    NameLessThan: params.NameLessThan
                 });
             } else if (viewType === 'Songs') {
                 params.IncludeItemTypes = 'Audio';
@@ -1361,7 +1367,7 @@ class LibraryPage extends Page {
 
         picker.innerHTML = this.state.alphaPickerChars
             .map((char) => {
-                const isActive = char === activeChar || (char === '#' && activeChar === '0-9'); // Simplify # logic
+                const isActive = char === activeChar; // Simplified # logic
                 return `
                 <button class="alpha-btn ${isActive ? 'active' : ''}" 
                         data-char="${char}" 
@@ -2050,7 +2056,7 @@ class LibraryPage extends Page {
             // Toggle off? Maybe not standard behavior, but useful
             this.state.nameStartsWith = null;
         } else {
-            this.state.nameStartsWith = char === '#' ? '0-9' : char; // API usually expects 0-9 or specific chars
+            this.state.nameStartsWith = char; // Store literal char ('#', 'A', etc.)
         }
 
         this.state.startIndex = 0;

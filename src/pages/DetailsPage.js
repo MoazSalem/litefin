@@ -20,6 +20,7 @@ import FavoriteButton from '../components/FavoriteButton.js';
 import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
+import TrailerDialog from '../components/TrailerDialog.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
@@ -87,6 +88,13 @@ class DetailsPage extends Page {
                                     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
                                         <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
                                         <path d="M3 3v5h5"/>
+                                    </svg>
+                                </button>
+                                <!-- Trailer button — shown only when item has local or remote trailers.
+                                     Visibility is set dynamically by _updateTrailerButton() after load. -->
+                                <button class="btn btn-icon trailer-btn hidden" tabindex="-1" aria-label="${i18n.t('WatchTrailer') || 'Watch Trailer'}">
+                                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                        <path d="M18 3v2h-2V3H8v2H6V3H4v18h2v-2h2v2h8v-2h2v2h2V3h-2zM8 17H6v-2h2v2zm0-4H6v-2h2v2zm0-4H6V7h2v2zm10 8h-2v-2h2v2zm0-4h-2v-2h2v2zm0-4h-2V7h2v2z"/>
                                     </svg>
                                 </button>
                                 <button class="btn btn-icon shuffle-btn hidden" tabindex="-1" aria-label="${i18n.t('Shuffle')}">
@@ -260,6 +268,11 @@ class DetailsPage extends Page {
             this._resetProgress();
         });
 
+        // Trailer button — dispatches to dialog or directly to player/iframe
+        this.$('.trailer-btn')?.addEventListener('click', () => {
+            this._onTrailerClick();
+        });
+
         // Shuffle button
         this.$('.shuffle-btn')?.addEventListener('click', () => {
             this._shufflePlay();
@@ -303,6 +316,11 @@ class DetailsPage extends Page {
             this._renderHeroText();
             this._setupFavoriteButton();
             this._renderRichMetadata();
+
+            // Show/hide the trailer button based on what the item exposes.
+            // We can do this immediately — both LocalTrailerCount and RemoteTrailers
+            // are present in the initial getItem response without extra API calls.
+            this._updateTrailerButton();
 
             // 3. Fire image loading in the background (fire-and-forget).
             // The poster and backdrop are not used for layout — they are decorative
@@ -2550,6 +2568,120 @@ class DetailsPage extends Page {
     }
 
     // ============================================================================
+    // ── Trailer Playback ──────────────────────────────────────────────────────
+    // Phase 1: button visibility, selection dialog, local trailer playback.
+    // Phase 2: remote trailer via iframe (stub in _showRemoteTrailerPlayer).
+    // ============================================================================
+
+    /**
+     * Evaluate whether the current item has any trailers and show/hide
+     * the trailer button accordingly.
+     *
+     * Called immediately after the item is fetched, so no extra API round-trip
+     * is needed — both `LocalTrailerCount` and `RemoteTrailers` are included
+     * in the standard getItem response.
+     */
+    _updateTrailerButton() {
+        const item = this._item;
+
+        // Determine availability — stash on instance so _onTrailerClick can reuse
+        this._hasLocalTrailers  = (item.LocalTrailerCount || 0) > 0;
+        this._hasRemoteTrailers = !!(item.RemoteTrailers && item.RemoteTrailers.length > 0);
+
+        const btn = this.$('.trailer-btn');
+        if (!btn) return;
+
+        if (this._hasLocalTrailers || this._hasRemoteTrailers) {
+            // Reveal the button and make it focusable
+            btn.classList.remove('hidden');
+            btn.setAttribute('tabindex', '0');
+
+            // Let FocusManager know there is a new element in this section
+            focusManager.invalidateCache('details-actions');
+
+            log.debug(`Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers}`);
+        }
+    }
+
+    /**
+     * Called when the trailer button is pressed.
+     *
+     * Decision tree:
+     *   - Both local AND remote trailers exist → show TrailerDialog selection
+     *   - Only local  → play immediately via native player
+     *   - Only remote → open inline iframe player (Phase 2)
+     */
+    _onTrailerClick() {
+        const hasLocal  = this._hasLocalTrailers;
+        const hasRemote = this._hasRemoteTrailers;
+
+        if (hasLocal && hasRemote) {
+            // Both available — let the user choose
+            TrailerDialog.show(
+                { hasLocal, hasRemote },
+                this,
+                () => this._playLocalTrailer(),
+                () => this._showRemoteTrailerPlayer()
+            );
+            return;
+        }
+
+        // Only one type available — skip the dialog entirely
+        if (hasLocal)  { this._playLocalTrailer();       return; }
+        if (hasRemote) { this._showRemoteTrailerPlayer(); return; }
+    }
+
+    /**
+     * Fetch local trailers from the server and route the first one
+     * into the native player via the standard eventBus player:play event.
+     *
+     * Local trailers are proper Jellyfin items with their own Ids,
+     * so the existing player pipeline handles them without any modifications.
+     */
+    async _playLocalTrailer() {
+        try {
+            const trailers = await api.getLocalTrailers(this._itemId);
+
+            if (!trailers || trailers.length === 0) {
+                // Shouldn't normally happen (button is gated on LocalTrailerCount > 0),
+                // but guard against stale data anyway.
+                log.warn('getLocalTrailers returned empty for item', this._itemId);
+                toast.show(i18n.t('NoLocalTrailersFound') || 'No local trailers found.');
+                return;
+            }
+
+            const trailerItem = trailers[0];
+            log.info(`Playing local trailer "${trailerItem.Name}" (${trailerItem.Id})`);
+
+            // Reuse the backdrop from the parent item for a smooth visual transition
+            const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
+                maxWidth: 3840,
+                quality: 90
+            });
+
+            // Emit the standard player:play event — same path as normal item playback.
+            // No resume position, no audio/subtitle override.
+            eventBus.emit('player:play', {
+                item: trailerItem,
+                resume: false,
+                backdropUrl
+            });
+        } catch (err) {
+            log.error('Failed to load local trailers', err);
+            toast.show(i18n.t('ErrorFetchingTrailers') || 'Could not load trailers.');
+        }
+    }
+
+    /**
+     * Opens the iframe overlay TrailerPlayer for remote trailers.
+     */
+    _showRemoteTrailerPlayer() {
+        import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
+            TrailerPlayer.show(this._item.RemoteTrailers, this);
+        });
+    }
+
+    // ============================================================================
 
     _setupFavoriteButton() {
         const actionsContainer = this.$('#actions');
@@ -2608,9 +2740,20 @@ class DetailsPage extends Page {
 
             this._item.UserData = this._item.UserData || {};
             this._item.UserData.Played = !isPlayed;
+
+            this._updateCachedPlayedStatus();
         } catch (error) {
             log.error('Failed to toggle watched', error);
         }
+    }
+
+    _updateCachedPlayedStatus() {
+        const cachedItem = Object.entries(state.getAll())
+            .filter(([key, cached]) => key.startsWith('library:state:') && cached?.stateData?.items)
+            .flatMap(([, cached]) => cached.stateData.items)
+            .find(({ Id }) => Id === this._itemId);
+
+        if (cachedItem) cachedItem.UserData = { ...cachedItem.UserData, ...this._item.UserData };
     }
 
     async _resetProgress() {
