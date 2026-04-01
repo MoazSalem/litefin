@@ -189,6 +189,41 @@ body.app-splash-active .page-loading .loading-spinner {
     opacity: 0;
 }
 
+/* Premium Shimmer Skeleton Animation */
+/* PERFORMANCE: Use transform: translateX() instead of background-position.
+   Animating 'background-position' triggers a CPU repaint for every frame, 
+   which is extremely expensive when dozens of skeletons are visible. 
+   'transform' is handled by the GPU compositor. */
+.skeleton-shimmer {
+    position: relative;
+    background: #1a1a1a;
+    overflow: hidden;
+}
+
+.skeleton-shimmer::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: linear-gradient(90deg,
+            rgba(255, 255, 255, 0) 0%,
+            rgba(255, 255, 255, 0.04) 50%,
+            rgba(255, 255, 255, 0) 100%);
+    animation: shimmer-gpu 1.5s infinite linear;
+    will-change: transform;
+}
+
+@keyframes shimmer-gpu {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(100%);
+    }
+}
+
 .loading-spinner {
     width: 48px;
     height: 48px;
@@ -204,7 +239,6 @@ body.app-splash-active .page-loading .loading-spinner {
     /* TIZEN PERF: Promote to its own compositor layer */
     will-change: transform;
     transform: translateZ(0);
-    -webkit-transform: translateZ(0);
 }
 
 .loading-spinner::after,
@@ -218,13 +252,12 @@ body.app-splash-active .page-loading .loading-spinner {
     left: 0;
     border-radius: 50%;
     background-color: #FFF;
-    animation: animloader 1s infinite ease-in-out;
+    animation: animloader-gpu 1s infinite ease-in-out;
     will-change: transform;
 }
 
 .loading-spinner::before {
     background-color: var(--jf-accent);
-    /* Offset the second dot spatially without affecting its center point for scaling */
     left: auto;
     right: 0;
     top: auto;
@@ -240,48 +273,12 @@ body.app-splash-active .page-loading .loading-spinner {
     }
 }
 
-@keyframes animloader {
+@keyframes animloader-gpu {
     0%, 100% {
-        transform: scale(0.5);
+        transform: translateZ(0) scale(0.5);
     }
     50% {
-        transform: scale(1);
-    }
-}
-
-/* ============================================================================
-   Transitions & Animations (Premium Feel)
-   ============================================================================ */
-
-/* Smooth Fade-in for Lazy Loaded Images */
-.lazy {
-    opacity: 0;
-    transition: opacity 0.4s ease-out;
-}
-
-.lazy.loaded {
-    opacity: 1;
-}
-
-/* Premium Shimmer Skeleton Animation */
-/* Optimized for Tizen 4 (No backdrop-filter needed) */
-.skeleton-shimmer {
-    background: #1a1a1a;
-    background-image: linear-gradient(90deg,
-            rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.05) 50%,
-            rgba(255, 255, 255, 0) 100%);
-    background-size: 200% 100%;
-    animation: shimmer 1.5s infinite linear;
-}
-
-@keyframes shimmer {
-    from {
-        background-position: 200% 0;
-    }
-
-    to {
-        background-position: -200% 0;
+        transform: translateZ(0) scale(1);
     }
 }
 

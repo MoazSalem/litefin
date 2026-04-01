@@ -204,13 +204,18 @@
     border: 2px solid var(--jf-text-tertiary);
     border-top-color: var(--jf-accent);
     border-radius: 50%;
-    animation: spin 1s linear infinite;
+    animation: spin-gpu 1s linear infinite;
     margin-right: 8px;
+    will-change: transform;
+    transform: translateZ(0);
 }
 
-@keyframes spin {
+@keyframes spin-gpu {
+    from {
+        transform: translateZ(0) rotate(0deg);
+    }
     to {
-        transform: rotate(360deg);
+        transform: translateZ(0) rotate(360deg);
     }
 }
 
