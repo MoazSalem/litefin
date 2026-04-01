@@ -44,9 +44,11 @@ class AuthManager {
     constructor() {
         // Bind methods
         this._onUnauthorized = this._onUnauthorized.bind(this);
+        this._onWebosDeviceInfo = this._onWebosDeviceInfo.bind(this);
 
         // Listen for unauthorized events from API
         eventBus.on('api:unauthorized', this._onUnauthorized);
+        eventBus.on('webos:deviceInfoReady', this._onWebosDeviceInfo);
     }
 
     // ========================================================================
@@ -584,6 +586,41 @@ class AuthManager {
         state.set('user:data', null);
 
         eventBus.emit('auth:expired');
+    }
+
+    /**
+     * Dynamically update device name if hardware capability detection completes
+     * after initial startup. Fixes "LG WebOS TV" generic names in Jellyfin dashboard.
+     * @private
+     */
+    _onWebosDeviceInfo(info) {
+        if (!info || !info.modelName || !platformInfo.isWebOS) return;
+
+        const deviceId = storage.getItem(STORAGE_KEYS.DEVICE_ID);
+        if (deviceId) {
+            log.info(`Updating API device name from generic to WebOS model: ${info.modelName}`);
+            api.setDevice(deviceId, info.modelName);
+
+            // If we are already connected, fire a capabilities report to ensure the
+            // server dashboard registers the new name immediately.
+            if (this.isAuthenticated()) {
+                api.reportCapabilities({
+                    DeviceProfile: buildJellyfinProfile(),
+                    PlayableMediaTypes: ['Video', 'Audio'],
+                    SupportedCommands: [
+                        'MoveUp', 'MoveDown', 'MoveLeft', 'MoveRight', 'ToggleOsd',
+                        'Select', 'Back', 'SendKey', 'SendString', 'GoHome',
+                        'GoToSettings', 'VolumeUp', 'VolumeDown', 'Mute', 'Unmute',
+                        'ToggleMute', 'SetVolume', 'SetAudioStreamIndex',
+                        'SetSubtitleStreamIndex', 'DisplayContent', 'GoToSearch',
+                        'DisplayMessage', 'SetRepeatMode', 'SetShuffleQueue',
+                        'ChannelUp', 'ChannelDown', 'PlayMediaSource'
+                    ],
+                    SupportsMediaControl: true,
+                    SupportsPersistentIdentifier: true
+                }).catch(e => log.warn('Failed to report capabilities for late device name update:', e));
+            }
+        }
     }
 
     // ========================================================================
