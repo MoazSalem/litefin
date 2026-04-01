@@ -581,8 +581,15 @@ export default class SubtitleManager {
 
         // Priority 4: PGS → PGS_BITMAP
         if (codec === 'pgs' || codec === 'pgssub') {
-            log.debug(`Track "${track.DisplayTitle}" is PGS → PGS_BITMAP`);
-            return DeliveryMethod.PGS_BITMAP;
+            const pgsMode = PlayerSettings.get('pgsPlaybackMode') || 'client';
+
+            if (pgsMode === 'client') {
+                log.debug(`Track "${track.DisplayTitle}" is PGS → PGS_BITMAP`);
+                return DeliveryMethod.PGS_BITMAP;
+            } else {
+                log.info(`Track "${track.DisplayTitle}" is PGS, but mode is ${pgsMode} -> NONE (Client rendering skipped)`);
+                return DeliveryMethod.NONE;
+            }
         }
 
         // Image-based subtitles (DVDsub etc.) on HTML5 or unknown codecs cannot be rendered.

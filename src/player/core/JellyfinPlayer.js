@@ -1582,7 +1582,24 @@ export class JellyfinPlayer extends EventEmitter {
      * @returns {Array} Subtitle streams
      */
     getSubtitleTracks() {
-        return this._currentMediaSource?.MediaStreams?.filter((s) => s.Type === 'Subtitle') || [];
+        if (!this._currentMediaSource || !this._currentMediaSource.MediaStreams) {
+            return [];
+        }
+
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+
+        return this._currentMediaSource.MediaStreams.filter((s) => {
+            if (s.Type !== 'Subtitle') return false;
+
+            if (disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    return false;
+                }
+            }
+
+            return true;
+        });
     }
 
     // ========================================================================
