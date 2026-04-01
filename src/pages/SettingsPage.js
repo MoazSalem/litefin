@@ -776,6 +776,23 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
+                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-time-display-select',
+                            [
+                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                            ],
+                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
+                        )}
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="PlaybackCompatibility">${i18n.t('PlaybackCompatibility')}</h3>
 
                 <div class="setting-item">
@@ -2516,7 +2533,8 @@ class SettingsPage extends Page {
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
              */
-            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' },
+            'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
+            'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
             'text-scale-select': { key: 'litefin:textScale', type: 'local' }
         };

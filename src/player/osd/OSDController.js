@@ -1728,8 +1728,12 @@ export default class OSDController extends Component {
             this._osdCurrentTimeEl.textContent = timeStr;
         }
 
-        // Total time
-        const totalStr = this._formatTime(duration, forceHours);
+        // Time string for the duration label (right side)
+        const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+        const isRemaining = timeDisplayMode === 'remaining';
+        const durationDisplayTicks = isRemaining ? (duration - current) : duration;
+        
+        const totalStr = (isRemaining ? '-' : '') + this._formatTime(durationDisplayTicks, forceHours);
         if (this._osdTotalTimeEl.textContent !== totalStr) {
             this._osdTotalTimeEl.textContent = totalStr;
         }
@@ -1802,8 +1806,18 @@ export default class OSDController extends Component {
         const duration = this._player.getDurationTicks();
         const percent = percentRaw / 100;
         const forceHours = duration >= 3600 * 10000000;
+        const currentTicks = duration * percent;
         const currentEl = this._osdEl.querySelector('#osdCurrentTime');
-        if (currentEl) currentEl.textContent = this._formatTime(duration * percent, forceHours);
+        if (currentEl) currentEl.textContent = this._formatTime(currentTicks, forceHours);
+
+        // Update Duration/Remaining label live
+        const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+        const isRemaining = timeDisplayMode === 'remaining';
+        const durationDisplayTicks = isRemaining ? (duration - currentTicks) : duration;
+        const totalStr = (isRemaining ? '-' : '') + this._formatTime(durationDisplayTicks, forceHours);
+        if (this._osdTotalTimeEl && this._osdTotalTimeEl.textContent !== totalStr) {
+            this._osdTotalTimeEl.textContent = totalStr;
+        }
     }
 
     _handlePositionSliderChange(e) {
