@@ -343,6 +343,34 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="TextScale">${i18n.t('TextScale') || 'Text scale'}</span>
+                        <span class="setting-description" data-i18n="TextScaleDescription">${i18n.t('TextScaleDescription') || 'Adjust the size of all text and UI elements proportionally'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'text-scale-select',
+                            [
+                                { value: '0.8', label: '80%' },
+                                { value: '0.85', label: '85%' },
+                                { value: '0.9', label: '90%' },
+                                { value: '0.95', label: '95%' },
+                                { value: '1', label: 'Normal (100%)' },
+                                { value: '1.05', label: '105%' },
+                                { value: '1.1', label: '110%' },
+                                { value: '1.15', label: '115%' },
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' }
+                            ],
+                            layoutManager.getTextScale().toString()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -736,9 +764,12 @@ class SettingsPage extends Page {
                                 /* Keep the last button the user navigated to — the legacy behaviour */
                                 { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
                                 /* Reset to Play/Pause only if idle for ≥ 10 s */
-                                { value: 'timeout',  label: i18n.t('OsdFocusTimeout')  || 'Return to Play/Pause after 10 s' },
+                                {
+                                    value: 'timeout',
+                                    label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
+                                },
                                 /* Always snap to Play/Pause on every OSD reveal */
-                                { value: 'always',   label: i18n.t('OsdFocusAlways')   || 'Always return to Play/Pause' }
+                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' }
                             ],
                             PlayerSettings.get('osdFocusRestoreMode') || 'remember'
                         )}
@@ -795,7 +826,7 @@ class SettingsPage extends Page {
                                 // First launch: Base the toggle state entirely on hardware capabilities
                                 // If running on WebOS/Tizen, default OFF if it's an SDR 1080p display
                                 try {
-                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform 
+                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform
                                     // but we can just require DeviceProfile generically if we were importing it.
                                     // To be safer without circular imports in SettingsPage, we inspect window width.
                                     isHdrOn = window.screen.width >= 3840;
@@ -886,7 +917,9 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                ${platformInfo.isTizen ? `
+                ${
+                    platformInfo.isTizen
+                        ? `
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="FLACPassthrough">${i18n.t('FLACPassthrough') || 'FLAC in Video Passthrough'}</span>
@@ -900,7 +933,9 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-                ` : ''}
+                `
+                        : ''
+                }
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1005,7 +1040,10 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'pgs-playback-mode-select',
                             [
-                                { value: 'client', label: i18n.t('PgsModeClient') || 'Client Rendering (Web Worker, Smooth TV UI)' },
+                                {
+                                    value: 'client',
+                                    label: i18n.t('PgsModeClient') || 'Client Rendering (Web Worker, Smooth TV UI)'
+                                },
                                 { value: 'burn', label: i18n.t('PgsModeBurn') || 'Transcode (Force Server Burn-In)' },
                                 { value: 'disable', label: i18n.t('PgsModeDisable') || 'Disable and Hide Completely' }
                             ],
@@ -2146,7 +2184,7 @@ class SettingsPage extends Page {
         // Build a short summary: total + a list of the largest prefixes
         const topGroups = Object.entries(report.breakdown)
             .sort(([, a], [, b]) => b - a) // Descending by size
-            .slice(0, 4)                   // Show top 4 groups
+            .slice(0, 4) // Show top 4 groups
             .map(([prefix, bytes]) => `${prefix}: ${fmt(bytes)}`)
             .join(' · ');
 
@@ -2479,7 +2517,8 @@ class SettingsPage extends Page {
              * every time the OSD transitions from hidden to visible. No extra handler needed.
              */
             'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' },
-            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' }
+            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
+            'text-scale-select': { key: 'litefin:textScale', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2505,6 +2544,9 @@ class SettingsPage extends Page {
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
+                        } else if (id === 'text-scale-select') {
+                            // SPECIAL CASE: Text Scale handled by LayoutManager
+                            layoutManager.setTextScale(parseFloat(newValue));
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 

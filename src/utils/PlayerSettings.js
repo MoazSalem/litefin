@@ -99,11 +99,11 @@ const DEFAULTS = {
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
 
-    // Outline thickness for ASS (baseline is 0.8)
-    subtitleOutlineThickness: 0.8,
+    // Outline thickness for ASS (baseline is 1.0)
+    subtitleOutlineThickness: 1.0,
 
-    // Shadow thickness for ASS (baseline is 0.5)
-    subtitleShadowThickness: 0.5,
+    // Shadow thickness for ASS (baseline is 1.0)
+    subtitleShadowThickness: 1.0,
 
     // Vertical spacing offset for ASS (baseline is 0px)
     subtitleLineHeight: 0,

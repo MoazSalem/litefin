@@ -63,6 +63,9 @@ class LayoutManager {
         // Rounded corners setting
         this._roundedCorners = true;
 
+        // Global text scale multiplier
+        this._textScale = 1.0;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -87,12 +90,14 @@ class LayoutManager {
         const savedThemeColor = storage.getItem('litefin:themeColor') || this._themeColor;
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
+        const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
+        this.setTextScale(savedTextScale, false);
 
         // Stamp the tier
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -272,6 +277,31 @@ class LayoutManager {
         document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
         if (save) storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
         eventBus.emit('roundedCorners:changed', { enabled });
+    }
+
+    /**
+     * Set the global text scale multiplier
+     * @param {number} scale Multiplier for the base font size (e.g. 1.2 for 120%)
+     * @param {boolean} [save=true] 
+     */
+    setTextScale(scale, save = true) {
+        this._textScale = scale;
+
+        // Calculate and apply base font size directly to the root element.
+        // Standard base is 16px. Scaling this scales all 'rem' units.
+        const pixelSize = 16 * scale;
+        document.documentElement.style.fontSize = `${pixelSize}px`;
+
+        if (save) {
+            storage.setItem('litefin:textScale', scale.toString());
+        }
+
+        log.info(`Text scale updated: ${scale} (${pixelSize}px)`);
+        eventBus.emit('textScale:changed', { scale });
+    }
+
+    getTextScale() {
+        return this._textScale;
     }
 
     // Component registration (Existing logic maintained)
