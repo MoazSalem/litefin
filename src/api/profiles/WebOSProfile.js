@@ -429,9 +429,9 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    // HLS + HEVC chunks are notoriously unstable on WebOS decoders.
-    // Always force the server to defensively transcode strictly into H.264.
-    let transVideoCodecs = 'h264';
+    // Previously locked to h264 defensively, but strict locking violently breaks DOVI MKV Remuxes, forcing expensive SDR transcodes.
+    // Allowing hevc restores DirectStream remuxing for 4K DOVI MKV over HLS.
+    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -495,8 +495,8 @@ export function buildJellyfinProfile(options = {}) {
         {
             Container: 'mp4',
             Type: 'Video',
-            AudioCodec: 'aac,ac3',
-            VideoCodec: 'h264',
+            AudioCodec: 'aac,ac3,eac3',
+            VideoCodec: enableHEVC ? 'h264,hevc' : 'h264',
             Context: 'Static'
         }
     ];
@@ -608,6 +608,22 @@ export function buildJellyfinProfile(options = {}) {
         Codec: 'flac',
         Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
     });
+
+    if (enableDolbyVision && enableHEVC) {
+        // Enforce Remux for Dolby Vision MKVs by failing DirectPlay condition for DOVI in MKV
+        codecProfiles.push({
+            Type: 'Video',
+            Codec: 'hevc',
+            Container: 'mkv',
+            Conditions: [
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus', IsRequired: false }
+            ]
+        });
+    }
 
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
