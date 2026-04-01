@@ -817,13 +817,43 @@ export default class SubtitleManager {
                 this._pgsRenderer = null;
             }
 
-            // On Tizen, we pass the assembled buffer. On web, we pass the URL.
+            // ================================================================
+            // Blob URL strategy for Tizen (progressive parsing fix)
+            //
+            // libpgs.loadFromBuffer() parses via a tight generator/microtask
+            // loop — `await undefined` only yields to the microtask queue, not
+            // the macrotask/event loop. The browser gets zero frame budget
+            // until the ENTIRE file is parsed (30-60 seconds on a large file).
+            // onProgress and rAF callbacks from onTimestampsUpdated queue up
+            // but cannot execute until that microtask burst ends.
+            //
+            // loadFromUrl() with a blob:// URL uses fetch().body.getReader()
+            // (ReadableStream). Even for in-memory blobs, each read() on a
+            // ReadableStream yields at the macrotask level in Chromium. This
+            // gives the browser real frame slots between chunks, allowing rAF
+            // to fire and progressive subtitles to paint during parse.
+            //
+            // We convert the assembled buffer → Blob → blob:// URL, pass it
+            // to PGSRenderer as subUrl, and clean up the URL in destroy().
+            // ================================================================
+            let subUrl = url;
+            const subBuffer = null; // Always null now that we use blob URLs on Tizen
+
+            if (pgsBuffer) {
+                // Create a blob URL from the downloaded bytes
+                const blob = new Blob([pgsBuffer], { type: 'application/octet-stream' });
+                subUrl = URL.createObjectURL(blob);
+                log.info(`Blob URL created for progressive parsing: ${subUrl.slice(0, 40)}...`);
+                // Release the original buffer memory
+                pgsBuffer = null;
+            }
+
             this._pgsRenderer = new PGSRenderer({
                 track,
                 container: this._container,
                 videoElement: this._videoElement,
-                subUrl: pgsBuffer ? null : url,
-                subBuffer: pgsBuffer,
+                subUrl,
+                subBuffer,
                 timeOffset: this._primaryOffset
             });
 

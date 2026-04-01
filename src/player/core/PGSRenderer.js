@@ -112,64 +112,76 @@ class PGSRenderer {
             log.debug('PgsRenderer instance created');
 
             // ================================================================
-            // Post-load dedup-reset guard  (applies to BOTH loading paths)
+            // THE REAL FIX: Override renderAtIndex to prevent -1 from ever
+            // being cached as previousTimestampIndex.
             //
-            // loadFromUrl() and loadFromBuffer() are both async internally.
-            // ticks() start arriving before the file is fully parsed, so
-            // updateTimestamps is still empty.  getIndexFromTimestamps returns
-            // -1, renderAtIndex sets previousTimestampIndex = -1, and when
-            // real timestamps finally arrive:
-            //   • libpgs's default onTimestampsUpdated calls renderAtVideoTimestamp()
-            //     which needs this.video — null on Tizen → complete no-op.
-            //   • subsequent ticks at a time before the first subtitle also map
-            //     to -1 → dedup guard fires → no render ever.
+            // Reading the libpgs dist confirms:
+            //   • previousTimestampIndex initialises to 0 (not -1).
+            //   • renderAtIndex(t) dedup check: if (previousTimestampIndex !== t)
+            //       → previousTimestampIndex = t; render(t)
+            //   • getIndexFromTimestamps returns -1 when t < timestamps[0],
+            //     i.e. when playback is before the very first subtitle cue.
             //
-            // Fix: replace the default callback with one that directly resets
-            // previousTimestampIndex to NaN (NaN !== any number, so the dedup
-            // guard always passes on the next call) then re-renders at the
-            // last-known playback position.  This happens once after load and
-            // is harmless for subsequent onTimestampsUpdated calls (partial-
-            // progress updates during URL streaming) because we always re-
-            // render at current time regardless.
+            // On Tizen the AVPlay startup stabilisation holds the timeline
+            // near t=0 for several seconds — before subtitle cues begin.
+            // Every tick() + every post-load rAF calls renderAtTimestamp(~0)
+            // → getIndexFromTimestamps → -1 → renderAtIndex(-1)
+            //   → previousTimestampIndex = -1  ← POISONED
+            // From that point every further call returns -1 → dedup fires
+            // → render() never called → subtitles invisible until seek.
+            //
+            // Fix: patch renderAtIndex so -1 is NEVER stored. The dedup still
+            // works normally for valid (≥ 0) cue indices, avoiding redundant
+            // GPU paints. Only the "nothing here yet" sentinel is exempted.
+            // ================================================================
+            this._renderer.implementation.renderAtIndex = function(index) {
+                if (index < 0) {
+                    // Before the first cue or past the last — clear canvas but
+                    // do NOT cache -1 as previousTimestampIndex, so the very
+                    // next tick that lands on a real cue is never suppressed.
+                    this.render(index);
+                    return;
+                }
+                // Standard dedup for actual subtitle frames: only repaint when
+                // the cue index changes (avoids churning the GPU every tick).
+                if (this.previousTimestampIndex !== index) {
+                    this.previousTimestampIndex = index;
+                    this.render(index);
+                }
+            };
+
+            // ================================================================
+            // Post-parse hook: trigger a render at the current playing time so
+            // progressive subtitles appear as they download.
+            //
+            // Previously, we reset previousTimestampIndex = NaN here, but
+            // because this callback fires repeatedly during stream parsing,
+            // that caused 60fps of redundant `putImageData` execution on the TV,
+            // stalling the download completely!
+            // Thanks to the renderAtIndex patch above, we no longer need to
+            // clear the dedup cache. We just lightly request a frame update.
             // ================================================================
             this._renderer.implementation.onTimestampsUpdated = () => {
                 this._isBufferLoaded = true;
                 if (this._isDestroyed) return;
 
-                // ================================================================
-                // UNCONDITIONALLY reset the dedup lock on every timestamps update.
-                //
-                // The root cause of the "needs a seek to start rendering" bug:
-                //   1. tick() fires while the buffer is still parsing → libpgs
-                //      returns index -1 (no subtitle at that time, because timestamps
-                //      aren't loaded yet) and caches previousTimestampIndex = -1.
-                //   2. Buffer finishes parsing. onTimestampsUpdated fires.
-                //   3. Player is between subtitle cues → renderAtTimestamp also
-                //      returns -1. -1 === -1 (the cached value) → DEDUP → no paint.
-                //   4. Subtitle never appears until seek/pause forces a different
-                //      index value through.
-                //
-                // Setting to NaN guarantees the dedup guard (index === prevIndex)
-                // will ALWAYS fail on the very next renderAtTimestamp call, regardless
-                // of what index is returned. NaN !== NaN is true in JS.
-                // ================================================================
-                this._renderer.implementation.previousTimestampIndex = NaN;
-                log.debug('Timestamps ready — dedup lock reset to NaN');
+                // Throttle the rendering requests so we don't spam the browser
+                // if libpgs emits 50 update events in a single microtask burst.
+                if (!this._isRenderingPending) {
+                    this._isRenderingPending = true;
 
-                // Schedule a re-render on the next animation frame so the browser
-                // has committed the canvas to the compositing layer before we draw.
-                // This also handles the edge case where the buffer finishes parsing
-                // before the first tick() arrives (lastTickTime is still null here).
-                const renderTime = this._lastTickTime !== null
-                    ? this._lastTickTime + this._timeOffset
-                    : this._timeOffset;
-
-                requestAnimationFrame(() => {
-                    if (!this._isDestroyed && this._renderer) {
-                        this._renderer.renderAtTimestamp(renderTime);
-                        log.debug(`Post-load render triggered at t=${renderTime.toFixed(2)}s`);
-                    }
-                });
+                    requestAnimationFrame(() => {
+                        this._isRenderingPending = false;
+                        if (!this._isDestroyed && this._renderer) {
+                            const renderTime = this._lastTickTime !== null
+                                ? this._lastTickTime + this._timeOffset
+                                : this._timeOffset;
+                                
+                            this._renderer.renderAtTimestamp(renderTime);
+                            log.debug(`Timestamps updated — progressive render tick at t=${renderTime.toFixed(2)}s`);
+                        }
+                    });
+                }
             };
 
             if (this._url) {
@@ -266,6 +278,11 @@ class PGSRenderer {
 
             this._renderer.dispose();
             this._renderer = null;
+        }
+
+        if (this._url && this._url.startsWith('blob:')) {
+            URL.revokeObjectURL(this._url);
+            log.debug('Revoked blob URL for PGS track');
         }
 
         if (this._canvasWrapper && this._canvasWrapper.parentNode) {
