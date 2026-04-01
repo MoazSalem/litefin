@@ -35,6 +35,9 @@ export class BackdropScreensaver {
 
         // Hide text option: if true, we don't render titles/taglines
         this._hideText = storage.getItem('pref:backdropHideText') === 'true';
+
+        // Include music option: if true, we Include MusicArtist in the backdrop search
+        this._includeMusic = storage.getItem('pref:backdropIncludeMusic') === 'true';
     }
 
     async show() {
@@ -50,7 +53,7 @@ export class BackdropScreensaver {
             const result = await api.getItems({
                 ImageTypes: 'Backdrop',
                 EnableImageTypes: 'Backdrop',
-                IncludeItemTypes: 'Movie,Series,MusicArtist',
+                IncludeItemTypes: this._includeMusic ? 'Movie,Series,MusicArtist' : 'Movie,Series',
                 SortBy: 'Random',
                 Recursive: true,
                 Fields: 'Taglines',

@@ -473,6 +473,19 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-include-music-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BackdropIncludeMusic">${i18n.t('BackdropIncludeMusic') || 'Include music library'}</span>
+                        <span class="setting-description" data-i18n="BackdropIncludeMusicDescription">${i18n.t('BackdropIncludeMusicDescription') || 'Show backdrops from music artists in the screensaver'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:backdropIncludeMusic') === 'true' ? 'active' : ''}" 
+                                 id="toggle-backdrop-include-music" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -1785,6 +1798,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Backdrop Include Music
+        const includeMusicBtn = this.$('#toggle-backdrop-include-music');
+        if (includeMusicBtn) {
+            includeMusicBtn.addEventListener('click', () => {
+                const isIncluded = storage.getItem('pref:backdropIncludeMusic') === 'true';
+                const newValue = !isIncluded;
+                storage.setItem('pref:backdropIncludeMusic', newValue);
+                includeMusicBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Rounded Corners
         const roundedCornersBtn = this.$('#toggle-rounded-corners');
         if (roundedCornersBtn) {
@@ -2514,6 +2538,10 @@ class SettingsPage extends Page {
                                 }
                                 if (hideTextContainer) {
                                     hideTextContainer.classList.toggle('hidden', isLogo);
+                                }
+                                const musicContainer = document.getElementById('screensaver-include-music-item');
+                                if (musicContainer) {
+                                    musicContainer.classList.toggle('hidden', isLogo);
                                 }
                                 focusManager.invalidateCache('settings-content');
                             }

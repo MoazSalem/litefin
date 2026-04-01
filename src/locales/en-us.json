@@ -248,6 +248,8 @@
     "BackdropDimmerDescription": "How dark the backdrop screensaver should be",
     "BackdropHideText": "Hide title and catchphrase",
     "BackdropHideTextDescription": "Do not show any text over the backdrop screensaver images",
+    "BackdropIncludeMusic": "Include music library",
+    "BackdropIncludeMusicDescription": "Show backdrops from music artists in the screensaver",
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
     "BackendWebOS": "LG Native (webOS Player)",
