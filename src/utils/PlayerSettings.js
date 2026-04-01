@@ -137,6 +137,12 @@ const DEFAULTS = {
 
     // Custom Vertical Position (0-100% from bottom, used when subtitleVerticalPosition is 'custom')
     subtitleVerticalPositionCustom: 10,
+    
+    // PGS Subtitle Playback Mode ('client', 'burn', 'disable')
+    // 'client' = Custom Web Worker rendering on the TV (Default)
+    // 'burn' = Force server to transcode video and burn into frames
+    // 'disable' = Completely hide/ignore PGS tracks
+    pgsPlaybackMode: 'client',
 
     // =========================================================================
     // SECONDARY SUBTITLE SETTINGS

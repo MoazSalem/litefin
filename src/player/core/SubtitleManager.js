@@ -581,8 +581,15 @@ export default class SubtitleManager {
 
         // Priority 4: PGS → PGS_BITMAP
         if (codec === 'pgs' || codec === 'pgssub') {
-            log.debug(`Track "${track.DisplayTitle}" is PGS → PGS_BITMAP`);
-            return DeliveryMethod.PGS_BITMAP;
+            const pgsMode = PlayerSettings.get('pgsPlaybackMode') || 'client';
+
+            if (pgsMode === 'client') {
+                log.debug(`Track "${track.DisplayTitle}" is PGS → PGS_BITMAP`);
+                return DeliveryMethod.PGS_BITMAP;
+            } else {
+                log.info(`Track "${track.DisplayTitle}" is PGS, but mode is ${pgsMode} -> NONE (Client rendering skipped)`);
+                return DeliveryMethod.NONE;
+            }
         }
 
         // Image-based subtitles (DVDsub etc.) on HTML5 or unknown codecs cannot be rendered.
@@ -724,128 +731,79 @@ export default class SubtitleManager {
                 // No format arg → uses track.DeliveryUrl as-is
             );
 
-            // ================================================================
-            // URL validation via a zero-cost range request
-            //
-            // Jellyfin's subtitle endpoint does not support HEAD (405), so we
-            // use a Range GET to fetch only the first byte.  This confirms the
-            // URL is reachable without pulling the entire file into memory.
-            // A 206 Partial Content or 200 OK both mean the server is happy.
-            // ================================================================
-            log.info(`Validating PGS subtitle URL: ${url}`);
-            const probeResponse = await fetch(url, {
-                headers: { Range: 'bytes=0-0' }
-            });
-
-            // Abort early if the user has already left or switched tracks
-            if (isStale()) {
-                log.debug('_loadPGSTrack: aborted after URL probe (session ended)');
-                return;
-            }
-
-            // 206 = range served, 200 = server ignored range but responded OK
-            if (!probeResponse.ok) {
-                throw new Error(`Server returned HTTP ${probeResponse.status} for PGS subtitle: ${url}`);
-            }
-
-            // Log the full content-length if the server exposed it
-            const contentRange  = probeResponse.headers.get('content-range');   // e.g. "bytes 0-0/126877696"
-            const contentLength = probeResponse.headers.get('content-length');
-            const totalBytes    = contentRange
-                ? parseInt(contentRange.split('/')[1], 10)
-                : parseInt(contentLength || '0', 10);
-            const sizeLabel = totalBytes
-                ? `${(totalBytes / 1024 / 1024).toFixed(1)} MB`
-                : 'unknown size';
-            log.info(`PGS URL validated OK (${sizeLabel}) — handing to renderer`);
-
-            // ================================================================
-            // Tizen Chunked Download Fallback
-            //
-            // libpgs's loadFromUrl() uses fetch streaming, which silently hangs
-            // on Tizen's Chromium port for 50MB+ streams. To bypass this, we
-            // manually construct the full ArrayBuffer via 5MB chunked Range
-            // requests, which Tizen processes reliably, and pass it to
-            // loadFromBuffer() instead. Non-Tizen devices keep streaming the URL.
-            // ================================================================
-            let pgsBuffer = null;
-            if (platformInfo.isTizen && totalBytes > 0) {
-                log.info(`Tizen detected — downloading PGS via 5MB chunks (Total: ${sizeLabel})...`);
-                const chunkSize = 5 * 1024 * 1024; // 5 MB
-                const buffer = new Uint8Array(totalBytes);
-                let offset = 0;
-                let lastPercent = 0;
-
-                while (offset < totalBytes) {
-                    // Abort mid-download if the session has ended
-                    if (isStale()) {
-                        log.debug(`_loadPGSTrack: aborted during chunk download at ${offset} bytes (session ended)`);
-                        return; // Drop the partial buffer — GC will reclaim it
-                    }
-
-                    const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
-                    const chunkResp = await fetch(url, {
-                        headers: { Range: `bytes=${offset}-${end}` }
-                    });
-
-                    if (!chunkResp.ok) throw new Error(`Chunk fetch failed: ${chunkResp.status}`);
-
-                    const chunkArray = new Uint8Array(await chunkResp.arrayBuffer());
-                    buffer.set(chunkArray, offset);
-                    offset += chunkArray.byteLength;
-
-                    const percent = Math.floor((offset / totalBytes) * 100);
-                    if (percent >= lastPercent + 25 || offset === totalBytes) {
-                        log.debug(`PGS Download progress: ${percent}%`);
-                        lastPercent = percent;
-                    }
-                }
-
-                // Final stale check before handing the buffer off to libpgs
-                if (isStale()) {
-                    log.debug('_loadPGSTrack: aborted after download complete (session ended)');
-                    return;
-                }
-
-                pgsBuffer = buffer.buffer;
-                log.info(`Chunked download complete — ${pgsBuffer.byteLength.toLocaleString()} bytes ready.`);
-            }
-
             // Destroy any existing renderer before creating a new one.
             if (this._pgsRenderer) {
                 this._pgsRenderer.destroy();
                 this._pgsRenderer = null;
             }
 
-            // ================================================================
-            // Blob URL strategy for Tizen (progressive parsing fix)
-            //
-            // libpgs.loadFromBuffer() parses via a tight generator/microtask
-            // loop — `await undefined` only yields to the microtask queue, not
-            // the macrotask/event loop. The browser gets zero frame budget
-            // until the ENTIRE file is parsed (30-60 seconds on a large file).
-            // onProgress and rAF callbacks from onTimestampsUpdated queue up
-            // but cannot execute until that microtask burst ends.
-            //
-            // loadFromUrl() with a blob:// URL uses fetch().body.getReader()
-            // (ReadableStream). Even for in-memory blobs, each read() on a
-            // ReadableStream yields at the macrotask level in Chromium. This
-            // gives the browser real frame slots between chunks, allowing rAF
-            // to fire and progressive subtitles to paint during parse.
-            //
-            // We convert the assembled buffer → Blob → blob:// URL, pass it
-            // to PGSRenderer as subUrl, and clean up the URL in destroy().
-            // ================================================================
             let subUrl = url;
-            const subBuffer = null; // Always null now that we use blob URLs on Tizen
+            const subBuffer = null;
 
-            if (pgsBuffer) {
-                // Create a blob URL from the downloaded bytes
-                const blob = new Blob([pgsBuffer], { type: 'application/octet-stream' });
-                subUrl = URL.createObjectURL(blob);
-                log.info(`Blob URL created for progressive parsing: ${subUrl.slice(0, 40)}...`);
-                // Release the original buffer memory
-                pgsBuffer = null;
+            // ================================================================
+            // URL validation and Chunked Download Fallback
+            //
+            // Only performed for external subtitles. If the subtitle is embedded,
+            // the server extracts it on the fly. Probing an embedded subtitle
+            // tricks the server into extracting it fully just to serve the 'bytes=0-0'
+            // range, which blocks the connection for several minutes and causes
+            // a duplicate extraction delay when the Worker actually requests it.
+            // ================================================================
+            if (track.IsExternal) {
+                log.info(`Validating external PGS subtitle URL: ${url}`);
+                const probeResponse = await fetch(url, {
+                    headers: { Range: 'bytes=0-0' }
+                });
+
+                if (isStale()) return;
+
+                if (!probeResponse.ok) {
+                    throw new Error(`Server returned HTTP ${probeResponse.status} for PGS subtitle: ${url}`);
+                }
+
+                const contentRange = probeResponse.headers.get('content-range');
+                const contentLength = probeResponse.headers.get('content-length');
+                const totalBytes = contentRange
+                    ? parseInt(contentRange.split('/')[1], 10)
+                    : parseInt(contentLength || '0', 10);
+                
+                // Tizen Chunked Download Fallback for very large DirectPlay PGS streams
+                if (platformInfo.isTizen && totalBytes > 0) {
+                    const sizeLabel = `${(totalBytes / 1024 / 1024).toFixed(1)} MB`;
+                    log.info(`Tizen detected — downloading external PGS via 5MB chunks (Total: ${sizeLabel})...`);
+                    const chunkSize = 5 * 1024 * 1024;
+                    const buffer = new Uint8Array(totalBytes);
+                    let offset = 0;
+                    let lastPercent = 0;
+
+                    while (offset < totalBytes) {
+                        if (isStale()) return;
+                        const end = Math.min(offset + chunkSize - 1, totalBytes - 1);
+                        const chunkResp = await fetch(url, {
+                            headers: { Range: `bytes=${offset}-${end}` }
+                        });
+
+                        if (!chunkResp.ok) throw new Error(`Chunk fetch failed: ${chunkResp.status}`);
+                        const chunkArray = new Uint8Array(await chunkResp.arrayBuffer());
+                        buffer.set(chunkArray, offset);
+                        offset += chunkArray.byteLength;
+
+                        const percent = Math.floor((offset / totalBytes) * 100);
+                        if (percent >= lastPercent + 25 || offset === totalBytes) {
+                            log.debug(`PGS Download progress: ${percent}%`);
+                            lastPercent = percent;
+                        }
+                    }
+
+                    if (isStale()) return;
+                    
+                    // Progressive parsing fix
+                    const blob = new Blob([buffer.buffer], { type: 'application/octet-stream' });
+                    subUrl = URL.createObjectURL(blob);
+                    log.info(`Blob URL created for progressive parsing: ${subUrl.slice(0, 40)}...`);
+                }
+            } else {
+                log.info(`Skipping probe for embedded PGS track — handing URL directly to renderer.`);
             }
 
             this._pgsRenderer = new PGSRenderer({

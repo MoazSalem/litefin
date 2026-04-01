@@ -983,6 +983,24 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelPgsPlaybackMode">${i18n.t('LabelPgsPlaybackMode') || 'PGS Subtitle Engine'}</span>
+                        <span class="setting-description" data-i18n="PgsPlaybackModeDescription">${i18n.t('PgsPlaybackModeDescription') || 'Choose how graphic subtitles (PGS/VOBSUB) are handled.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'pgs-playback-mode-select',
+                            [
+                                { value: 'client', label: i18n.t('PgsModeClient') || 'Client Rendering (Web Worker, Smooth TV UI)' },
+                                { value: 'burn', label: i18n.t('PgsModeBurn') || 'Transcode (Force Server Burn-In)' },
+                                { value: 'disable', label: i18n.t('PgsModeDisable') || 'Disable and Hide Completely' }
+                            ],
+                            PlayerSettings.get('pgsPlaybackMode')
+                        )}
+                    </div>
+                </div>
+
                 <!-- Subtitle Appearance Section -->
                 <h3 class="setting-section-title" data-i18n="HeaderSubtitleAppearance">${i18n.t('HeaderSubtitleAppearance')}</h3>
 
@@ -2436,7 +2454,8 @@ class SettingsPage extends Page {
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
              */
-            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' }
+            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' },
+            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' }
         };
 
         this.$$('.select-btn').forEach((btn) => {

@@ -17,6 +17,7 @@ export class BaseProfile {
      */
     static getSubtitleProfiles() {
         const subtitleBurnIn = PlayerSettings.get('subtitleBurnIn') || '';
+        const pgsMode = PlayerSettings.get('pgsPlaybackMode') || 'client';
 
         const textSubtitleProfiles = [
             { Format: 'srt', Method: 'External' },
@@ -42,14 +43,20 @@ export class BaseProfile {
         // 'Embed' → Jellyfin tries to mux the bitmap subtitle track into the
         //   output container. For HLS/TS transcodes this is IMPOSSIBLE, so
         //   the server falls back to burning the subtitles into the video
-        //   frames (hard-encoding), which forces a full video transcode even
-        //   if the video would otherwise DirectPlay or DirectStream.
+        //   frames (hard-encoding), which forces a full video transcode.
         //
         // 'Encode' → explicit burn-in: always encode into video frames.
-        //   Only used when the user has turned on Subtitle Burn-In.
         // ====================================================================
-        const bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'External';
+        let bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'External';
 
+        if (pgsMode === 'burn') {
+            bitmapSubtitleMethod = 'Encode';
+        }
+
+        // We MUST declare 'External' support for PGS even when the user selects 'disable',
+        // otherwise Jellyfin will forcefully transcode the video to burn them in if a PGS
+        // track is set as default. The UI will hide the track from the user, and SubtitleManager
+        // will refuse to render it, achieving a clean 'disable' without breaking DirectPlay.
         const bitmapSubtitleProfiles = [
             { Format: 'pgs', Method: bitmapSubtitleMethod },
             { Format: 'pgssub', Method: bitmapSubtitleMethod },

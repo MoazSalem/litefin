@@ -50,28 +50,17 @@ class PGSRenderer {
         // ====================================================================
         // Renderer mode selection
         //
-        // libpgs supports three modes: 'worker' (OffscreenCanvas), 
-        // 'workerWithoutOffscreenCanvas', and 'mainThread'.
-        //
-        // On Tizen and WebOS, the worker-based modes silently fail because:
-        //   1. The libpgs worker file ('libpgs.worker.js') is not bundled into
-        //      the webpack output as a separate asset — it's not being copied
-        //      or emitted by any webpack rule.
-        //   2. new Worker(workerUrl) 404s silently; all subsequent postMessage()
-        //      calls go into a dead worker and the subtitle canvas stays blank.
-        //
-        // 'mainThread' mode bypasses the Web Worker entirely — libpgs parses 
-        // the .sup file and renders PGS bitmaps directly on the main thread.
-        // This is slightly less performant but works reliably on all TV platforms.
+        // We explicitly force 'workerWithoutOffscreenCanvas' for all TV platforms.
+        // Webpack is configured to copy 'libpgs.worker.js' to the 'js/' directory.
+        // Using a Web Worker pushes the heavy binary extraction and RLE decoding
+        // of `.pgssub` streams onto a background thread.
+        // 
+        // While this does not make the 30-second network parsing phase faster,
+        // it completely frees up the Main Thread, allowing the TV UI, OSD,
+        // and background video playback to remain perfectly smooth instead
+        // of freezing entirely while libpgs crunches the arrays.
         // ====================================================================
-        const isTizen = typeof tizen !== 'undefined' ||
-            navigator.userAgent.indexOf('SMART-TV') >= 0 ||
-            navigator.userAgent.indexOf('Tizen') >= 0;
-        const isWebOS = navigator.userAgent.indexOf('Web0S') >= 0 ||
-            navigator.userAgent.indexOf('WebOS') >= 0;
-
-        // Force main thread rendering on TV platforms where the worker approach fails
-        const rendererMode = (isTizen || isWebOS) ? 'mainThread' : undefined; // undefined = auto-detect
+        const rendererMode = 'workerWithoutOffscreenCanvas';
 
         // Create a wrapper for the canvas to ensure correct positioning
         this._canvasWrapper = document.createElement('div');
@@ -93,19 +82,15 @@ class PGSRenderer {
         this._canvasWrapper.appendChild(this._canvas);
         this._container.appendChild(this._canvasWrapper);
 
-        // Config for libpgs — note: we do NOT pass subUrl here.
-        // SubtitleManager pre-fetches the .sup and passes an ArrayBuffer via `subBuffer`.
-        // Passing subUrl would make libpgs do its own internal fetch (no error propagation),
-        // which silently fails on Tizen and leaves updateTimestamps empty forever.
         const config = {
             video: this._video, // null for AVPlay; libpgs is OK without a video element
             canvas: this._canvas,
             timeOffset: this._timeOffset,
-            // Mode override: TV platforms use main thread to avoid dead-worker 404 issues
-            ...(rendererMode ? { mode: rendererMode } : { workerUrl: 'js/libpgs.worker.js' })
+            mode: rendererMode,
+            workerUrl: 'js/libpgs.worker.js'
         };
 
-        log.debug(`PGS renderer mode: ${rendererMode || 'auto-detect (non-TV)'}`);
+        log.debug(`PGS renderer mode: ${rendererMode} (Worker: ${config.workerUrl})`);
 
         try {
             this._renderer = new PgsRenderer(config);
@@ -136,12 +121,22 @@ class PGSRenderer {
             // ================================================================
             this._renderer.implementation.renderAtIndex = function(index) {
                 if (index < 0) {
+                    // Log once per change so we don't spam 60 times a second
+                    if (this.previousTimestampIndex !== -1) {
+                        log.debug('[PGSRenderer] getIndexFromTimestamps returned -1: Parse progress has not yet reached the requested playback time, waiting...');
+                    }
                     // Before the first cue or past the last — clear canvas but
                     // do NOT cache -1 as previousTimestampIndex, so the very
                     // next tick that lands on a real cue is never suppressed.
                     this.render(index);
                     return;
                 }
+                
+                // Track when the subtitle FINALLY catches up to the playback target!
+                if (this.previousTimestampIndex === undefined || this.previousTimestampIndex === -1 || isNaN(this.previousTimestampIndex)) {
+                    log.info(`[PGSRenderer] BINGO! Target subtitle cue ${index} successfully mapped and rendered.`);
+                }
+
                 // Standard dedup for actual subtitle frames: only repaint when
                 // the cue index changes (avoids churning the GPU every tick).
                 if (this.previousTimestampIndex !== index) {
@@ -153,17 +148,13 @@ class PGSRenderer {
             // ================================================================
             // Post-parse hook: trigger a render at the current playing time so
             // progressive subtitles appear as they download.
-            //
-            // Previously, we reset previousTimestampIndex = NaN here, but
-            // because this callback fires repeatedly during stream parsing,
-            // that caused 60fps of redundant `putImageData` execution on the TV,
-            // stalling the download completely!
-            // Thanks to the renderAtIndex patch above, we no longer need to
-            // clear the dedup cache. We just lightly request a frame update.
             // ================================================================
             this._renderer.implementation.onTimestampsUpdated = () => {
                 this._isBufferLoaded = true;
                 if (this._isDestroyed) return;
+                
+                // Show how many subtitles are loaded so far (if property exists)
+                const c = this._renderer.implementation.timestamps ? this._renderer.implementation.timestamps.length : '?';
 
                 // Throttle the rendering requests so we don't spam the browser
                 // if libpgs emits 50 update events in a single microtask burst.
@@ -177,8 +168,8 @@ class PGSRenderer {
                                 ? this._lastTickTime + this._timeOffset
                                 : this._timeOffset;
                                 
+                            log.debug(`[PGSRenderer] Parsing active: ${c} cues mapped so far. Checking target t=${renderTime.toFixed(2)}s...`);    
                             this._renderer.renderAtTimestamp(renderTime);
-                            log.debug(`Timestamps updated — progressive render tick at t=${renderTime.toFixed(2)}s`);
                         }
                     });
                 }

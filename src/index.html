@@ -290,36 +290,39 @@
             position: absolute;
             width: 24px;
             height: 24px;
-            top: 50%;
-            left: 50%;
-            transform: scale(0.5) translate(0, 0);
-            background-color: #FFF;
+            top: 0;
+            left: 0;
             border-radius: 50%;
-            animation: animloader 1s infinite ease-in-out;
+            background-color: #FFF;
+            animation: animloader-gpu 1s infinite ease-in-out;
             will-change: transform;
-            backface-visibility: hidden;
-            -webkit-backface-visibility: hidden;
         }
 
         .loading-spinner::before {
             background-color: var(--jf-accent, #00a4dc);
-            /* Use JF Accent color instead of static red */
-            transform: scale(0.5) translate(-48px, -48px);
+            left: auto;
+            right: 0;
+            top: auto;
+            bottom: 0;
         }
 
         @keyframes rotation {
             0% {
-                transform: rotate(0deg);
+                transform: translateZ(0) rotate(0deg);
             }
 
             100% {
-                transform: rotate(360deg);
+                transform: translateZ(0) rotate(360deg);
             }
         }
 
-        @keyframes animloader {
+        @keyframes animloader-gpu {
+            0%, 100% {
+                transform: translateZ(0) scale(0.5);
+            }
+
             50% {
-                transform: scale(1) translate(-50%, -50%);
+                transform: translateZ(0) scale(1);
             }
         }
     </style>

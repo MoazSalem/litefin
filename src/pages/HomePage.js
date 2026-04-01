@@ -441,8 +441,8 @@ class HomePage extends Page {
 
             sectionEl.innerHTML = `
                 <h2 class="row-title">${descriptor.title}</h2>
-                <div class="row-items" style="overflow: hidden; padding: 0 60px;">
-                    <div class="row-items-track" style="display: flex;">
+                <div class="row-items">
+                    <div class="row-items-track">
                         ${skeletonHtml}
                     </div>
                 </div>
