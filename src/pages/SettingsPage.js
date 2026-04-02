@@ -692,6 +692,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableBackgroundService">${i18n.t('EnableBackgroundService') || 'Enable Background Service'}</span>
+                        <span class="setting-description" data-i18n="EnableBackgroundServiceDescription">${i18n.t('EnableBackgroundServiceDescription') || 'Enable the background Node.js service for Discovery and Proxy playback. Disable if you experience performance issues.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableBackgroundService') ? 'active' : ''}" 
+                                id="toggle-background-service" 
+                                data-setting="enableBackgroundService"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelAudioLanguagePreference">${i18n.t('LabelAudioLanguagePreference')}</span>
                         <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">${i18n.t('PreferredAudioLanguageDescription')}</span>
                     </div>
@@ -2080,7 +2094,8 @@ class SettingsPage extends Page {
             'toggle-enable-vp9',
             'toggle-enable-dts',
             'toggle-enable-truehd',
-            'toggle-force-transcode'
+            'toggle-force-transcode',
+            'toggle-background-service'
         ];
         profileToggles.forEach((toggleId) => {
             const btn = this.$(`#${toggleId}`);

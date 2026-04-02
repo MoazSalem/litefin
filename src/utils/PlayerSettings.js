@@ -200,6 +200,9 @@ const DEFAULTS = {
     // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
     trailerPlaybackMode: 'internal_proxy',
 
+    // Enable background Node.js service (for Discovery and Proxy)
+    enableBackgroundService: true,
+
     // Skip forward duration in milliseconds
     skipForwardLength: 10000,
 

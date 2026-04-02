@@ -48,6 +48,7 @@ if (typeof AbortController === 'undefined') {
 // Import core modules
 import { app } from './core/App.js';
 import { logger } from './utils/Logger.js';
+import { PlayerSettings } from './utils/PlayerSettings.js';
 
 const log = logger.create('Bootstrap');
 
@@ -104,25 +105,30 @@ async function bootstrap() {
      * WebOS: A dummy luna request will wake up the service context.
      */
     try {
-        if (typeof tizen !== 'undefined') {
-            try {
-                const appId = tizen.application.getCurrentApplication().appInfo.id;
-                const pkgId = appId.split('.')[0];
-                tizen.application.launch(
-                    pkgId + '.ytresolver',
-                    function() { log.info('Tizen background service launched successfully'); },
-                    function(err) { log.error('Failed to launch Tizen background service: ' + err.message); }
-                );
-            } catch (e) {
-                log.error('Exception launching Tizen service: ' + e.message);
+        const isSvcEnabled = PlayerSettings.get('enableBackgroundService');
+        if (isSvcEnabled !== false) {
+            if (typeof tizen !== 'undefined') {
+                try {
+                    const appId = tizen.application.getCurrentApplication().appInfo.id;
+                    const pkgId = appId.split('.')[0];
+                    tizen.application.launch(
+                        pkgId + '.ytresolver',
+                        function() { log.info('Tizen background service launched successfully'); },
+                        function(err) { log.error('Failed to launch Tizen background service: ' + err.message); }
+                    );
+                } catch (e) {
+                    log.error('Exception launching Tizen service: ' + e.message);
+                }
+            } else if (window.webOS && window.webOS.service) {
+                window.webOS.service.request('luna://org.litefin.app.service', {
+                    method: 'discover',
+                    parameters: { subscribe: false },
+                    onSuccess: function() {},
+                    onFailure: function() {}
+                });
             }
-        } else if (window.webOS && window.webOS.service) {
-            window.webOS.service.request('luna://org.litefin.app.service', {
-                method: 'discover',
-                parameters: { subscribe: false },
-                onSuccess: function() {},
-                onFailure: function() {}
-            });
+        } else {
+            log.info('Background service launch skipped (disabled in settings)');
         }
     } catch(e) {
         log.warn('Failed to wake up background service:', e);
