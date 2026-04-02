@@ -324,7 +324,116 @@ function handler(req, res) {
         return writeResponse(res, 200, 'text/html', PLAYER_HTML);
     }
 
+    if (u.pathname === '/trailer') {
+        var tmdbId = u.query.tmdbId;
+        var title = u.query.title;
+        var year = u.query.year;
+        var lang = u.query.lang || 'en';
+        var type = u.query.type || 'movie';
+
+        fetchTmdbTrailer(tmdbId, type, lang).then(function(key) {
+            if (key) return writeResponse(res, 200, 'application/json', JSON.stringify({ key: key, source: 'tmdb' }));
+            
+            return searchDdgLite(title, year, lang).then(function(ddgKey) {
+                if (ddgKey) return writeResponse(res, 200, 'application/json', JSON.stringify({ key: ddgKey, source: 'ddg' }));
+                
+                // Fallbacks: TMDB en, then DDG en
+                return fetchTmdbTrailer(tmdbId, type, 'en').then(function(enKey) {
+                    if (enKey) return writeResponse(res, 200, 'application/json', JSON.stringify({ key: enKey, source: 'tmdb_en' }));
+                    
+                    return searchDdgLite(title, year, null).then(function(enDdgKey) {
+                        if (enDdgKey) return writeResponse(res, 200, 'application/json', JSON.stringify({ key: enDdgKey, source: 'ddg_en' }));
+                        return writeResponse(res, 404, 'application/json', JSON.stringify({ error: 'No trailer found' }));
+                    });
+                });
+            });
+        }).catch(function(err) {
+            console.error('Trailer error', err);
+            writeResponse(res, 500, 'application/json', JSON.stringify({ error: 'Internal Server Error' }));
+        });
+        return;
+    }
+
     return writeResponse(res, 404, 'text/plain', 'Not Found');
+}
+
+var https = require('https');
+var TMDB_KEY = '4219e299c89411838049ab0dab19ebd5';
+var __LANG_MAP__ = {
+    ab:'Abkhaz Аԥсуа', af:'Afrikaans', ar:'Arabic العربية', as:'Assamese অসমীয়া', be:'Belarusian Беларуская', bg:'Bulgarian Български',
+    bn:'Bengali বাংলা', ca:'Catalan Català', chr:'Cherokee ᏣᎳᎩ', cs:'Czech Český', cy:'Welsh Cymraeg', da:'Danish Dansk',
+    de:'Deutsch German', el:'Greek Ελληνικά', en:'English', enm:'English', eo:'Esperanto', es:'Spanish Español', et:'Estonian Eesti',
+    eu:'Basque Euskara', fa:'Persian Farsi فارسی', fi:'Finnish Suomi', fil:'Filipino Tagalog', fo:'Faroese Føroyskt',
+    fr:'French Français', ga:'Irish Gaeilge', gl:'Galician Galego', gsw:'Swiss German Schweizerdeutsch', he:'Hebrew עברית',
+    hi:'Hindi हिन्दी', hr:'Croatian Hrvatski', ht:'Haitian Creole Kreyòl', hu:'Hungarian Magyar', hy:'Armenian Հայերեն',
+    id:'Indonesian Bahasa', is:'Icelandic Íslenska', it:'Italian Italiano', ja:'Japanese 日本語', jbo:'Lojban', ka:'Georgian ქართული',
+    kab:'Kabyle Taqbaylit', kk:'Kazakh Қазақша', km:'Khmer ភាសាខ្មែរ', kn:'Kannada ಕನ್ನಡ', ko:'Korean 한국어', kw:'Cornish Kernewek',
+    ky:'Kyrgyz Кыргызча', lb:'Luxembourgish Lëtzebuergesch', lt:'Lithuanian Lietuvių', lv:'Latvian Latviešu', lzh:'Chinese 中文',
+    mi:'Maori Māori', mk:'Macedonian Македонски', ml:'Malayalam മലയാളം', mn:'Mongolian Монгол', mr:'Marathi मराठी', ms:'Malay Melayu',
+    mt:'Maltese Malti', my:'Burmese Myanmar မြန်မာ', nb:'Norwegian Norsk', ne:'Nepali नेपाली', nl:'Dutch Nederlands', nn:'Norwegian Norsk',
+    oc:'Occitan', or:'Odia ଓଡ଼ିଆ', pa:'Punjabi ਪੰਜਾਬੀ', pl:'Polish Polski', pr:'English', pt:'Portuguese Português', ro:'Romanian Română',
+    ru:'Russian Русский', si:'Sinhala සිංහල', sk:'Slovak Slovenský', sl:'Slovenian Slovenščina', sn:'Shona', sq:'Albanian Shqip',
+    sr:'Serbian Српски', sv:'Swedish Svenska', sw:'Swahili Kiswahili', ta:'Tamil தமிழ்', te:'Telugu తెలుగు', th:'Thai ไทย',
+    tr:'Turkish Türkçe', ug:'Uyghur ئۇيغۇرچە', uk:'Ukrainian Українська', ur:'Urdu اردو', uz:'Uzbek Oʻzbekcha', vi:'Vietnamese Tiếng Việt',
+    zh:'Chinese 中文', zu:'Zulu isiZulu'
+};
+
+function fetchJson(url) {
+    return new Promise(function(resolve, reject) {
+        https.get(url, function(res) {
+            var data = '';
+            res.on('data', function(chunk) { data += chunk; });
+            res.on('end', function() {
+                try { resolve(JSON.parse(data)); } catch(e) { resolve(null); }
+            });
+        }).on('error', function() { resolve(null); });
+    });
+}
+
+function fetchText(url) {
+    return new Promise(function(resolve, reject) {
+        var opts = require('url').parse(url);
+        opts.headers = { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36' };
+        https.get(opts, function(res) {
+            var data = '';
+            res.on('data', function(chunk) { data += chunk; });
+            res.on('end', function() { resolve(data); });
+        }).on('error', function() { resolve(null); });
+    });
+}
+
+function fetchTmdbTrailer(tmdbId, type, lang) {
+    if (!tmdbId) return Promise.resolve(null);
+    var url = 'https://api.themoviedb.org/3/' + type + '/' + tmdbId + '/videos?api_key=' + TMDB_KEY + (lang ? '&language=' + lang : '');
+    return fetchJson(url).then(function(json) {
+        if (!json || !json.results) return null;
+        var r = json.results;
+        for (var i = 0; i < r.length; i++) {
+            if (r[i].site === 'YouTube' && r[i].type === 'Trailer') return r[i].key;
+        }
+        for (var i = 0; i < r.length; i++) {
+            if (r[i].site === 'YouTube' && (r[i].type === 'Teaser' || r[i].type === 'Clip')) return r[i].key;
+        }
+        for (var i = 0; i < r.length; i++) {
+            if (r[i].site === 'YouTube') return r[i].key;
+        }
+        return null;
+    });
+}
+
+function searchDdgLite(title, year, langIso) {
+    if (!title) return Promise.resolve(null);
+    var langStr = langIso ? (__LANG_MAP__[langIso.split('-')[0].toLowerCase()] || '') : '';
+    var q = encodeURIComponent(title + ' ' + (year || '') + ' ' + langStr + ' trailer site:youtube.com').replace(/%20/g, '+');
+    var url = 'https://html.duckduckgo.com/html/?q=' + q;
+    return fetchText(url).then(function(html) {
+        if (!html) return null;
+        var match = html.match(/v=([-_a-zA-Z0-9]{11})/);
+        if (match) return match[1];
+        match = html.match(/youtu\.be%2F([-_a-zA-Z0-9]{11})/);
+        if (match) return match[1];
+        return null;
+    });
 }
 
 var proxyServer = http.createServer(handler);

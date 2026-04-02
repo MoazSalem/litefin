@@ -224,6 +224,11 @@ export class TrailerPlayer extends Component {
             this._nextBtn.setAttribute('tabindex', '0');
         }
 
+        if (trailer.IsProxyFallback) {
+            this._executeFallbackSearch(trailer);
+            return;
+        }
+
         const url = trailer.Url || '';
         console.log('[TrailerPlayer] _loadCurrentTrailer url=', url);
         
@@ -242,6 +247,33 @@ export class TrailerPlayer extends Component {
             console.log('[TrailerPlayer] No YouTube ID, falling back to raw iframe');
             const iframeRow = this._overlay.querySelector('#trailerIframeContainer');
             iframeRow.innerHTML = `<iframe src="${url}" width="100%" height="100%" frameborder="0" allowfullscreen allow="autoplay"></iframe>`;
+        }
+    }
+
+    async _executeFallbackSearch(trailer) {
+        this._titleEl.textContent = i18n.t('Searching') || 'Searching for trailer...';
+        const iframeRow = this._overlay.querySelector('#trailerIframeContainer');
+        iframeRow.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1.5rem;"><div class="spinner" style="margin-right:16px;"></div>${i18n.t('Searching') || 'Searching for trailer...'}</div>`;
+
+        try {
+            // Use i18n.currentLang — the i18n module stores the active language there
+            const lang = i18n.currentLang || 'en';
+            const qs = `?tmdbId=${trailer.TmdbId || ''}&title=${encodeURIComponent(trailer.ItemName || '')}&year=${trailer.ItemYear || ''}&lang=${lang}&type=${trailer.ItemType === 'Series' ? 'tv' : 'movie'}`;
+            console.log('[TrailerPlayer] Querying fallback crawler:', `http://localhost:8123/trailer${qs}`);
+            const res = await fetch(`http://localhost:8123/trailer${qs}`);
+            const data = await res.json();
+            
+            if (data && data.key) {
+                console.log('[TrailerPlayer] Crawler found key:', data.key, 'source:', data.source);
+                this._titleEl.textContent = trailer.Name || 'Trailer';
+                this._initProxyPlayer(data.key);
+            } else {
+                console.warn('[TrailerPlayer] Crawler returned no key:', data);
+                iframeRow.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1.5rem;">${i18n.t('NoTrailerFound') || 'No trailer found.'}</div>`;
+            }
+        } catch (e) {
+            console.error('[TrailerPlayer] Fallback crawler failed:', e && e.message || e);
+            iframeRow.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1.5rem;">${i18n.t('NoTrailerFound') || 'No trailer found.'}</div>`;
         }
     }
 
