@@ -33,7 +33,7 @@
 }
 
 .media-row {
-    margin-bottom: 32px;
+    margin-bottom: 36px;
     /* GPU layer for the row itself — enables composited scrolling of the parent */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);

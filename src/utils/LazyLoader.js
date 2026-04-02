@@ -8,6 +8,7 @@
  */
 
 import { logger } from './Logger.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('LazyLoader');
 
@@ -18,6 +19,24 @@ class LazyLoader {
     }
 
     _init() {
+        // Legacy TV Focus-Driven Lazy Load
+        // Since IntersectionObserver fails on Tizen/WebOS hardware layers (especially for grids),
+        // we use D-Pad focus events to aggressively preload the grid as the user navigates.
+        // NATIVE focus is disabled in this TV app, so we must hook EventBus.
+        eventBus.on('focus:changed', (target) => {
+            if (!target || !target.classList) return;
+            
+            // If it's a media card
+            if (target.classList.contains('media-card')) {
+                const img = target.querySelector('img[data-src]');
+                if (img) {
+                    this.forceLoad(img);
+                }
+                // Batch preload ahead to prevent popping
+                this._batchPreloadImages(img || target);
+            }
+        });
+
         // Tizen 4 (Chrome 56) supports IntersectionObserver
         if ('IntersectionObserver' in window) {
             this.observer = new IntersectionObserver(
@@ -32,12 +51,6 @@ class LazyLoader {
                             // (e.g. library grids, details cast rows).
                             if (target.hasAttribute('data-lazy-row')) {
                                 this._loadRow(target);
-
-                                // Removed: aggressive next-3-rows burst preload.
-                                // The 2.5-screen rootMargin already ensures the next row enters
-                                // the observer before it's visible. Loading 3 rows in a burst
-                                // caused a spike of 60+ simultaneous image requests on page load,
-                                // choking the CPU exactly when it's also trying to animate the scroll.
                             }
                             // Case 2: Individual Image (Grid)
                             else if (target.dataset.src) {

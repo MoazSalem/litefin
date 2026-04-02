@@ -23,6 +23,7 @@ import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { logger } from '../utils/Logger.js';
@@ -2584,9 +2585,21 @@ class DetailsPage extends Page {
     _updateTrailerButton() {
         const item = this._item;
 
-        // Determine availability — stash on instance so _onTrailerClick can reuse
         this._hasLocalTrailers  = (item.LocalTrailerCount || 0) > 0;
         this._hasRemoteTrailers = !!(item.RemoteTrailers && item.RemoteTrailers.length > 0);
+
+        // Fallback Crawler Activation: Force remote trailers flag for standard media
+        // if the node proxy is enabled, since the crawler can fetch them dynamically.
+        const isStandardMedia = ['Movie', 'Series'].includes(item.Type);
+        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        const isProxyEnabled = mode === 'internal_proxy' && PlayerSettings.get('enableBackgroundService') !== false;
+
+        if (!this._hasRemoteTrailers && isStandardMedia && isProxyEnabled) {
+            this._hasRemoteTrailers = true;
+            this._isProxyFallback = true;
+        } else {
+            this._isProxyFallback = false;
+        }
 
         const btn = this.$('.trailer-btn');
         if (!btn) return;
@@ -2599,7 +2612,7 @@ class DetailsPage extends Page {
             // Let FocusManager know there is a new element in this section
             focusManager.invalidateCache('details-actions');
 
-            log.debug(`Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers}`);
+            log.debug(`Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers} (Fallback: ${this._isProxyFallback})`);
         }
     }
 
@@ -2672,12 +2685,33 @@ class DetailsPage extends Page {
         }
     }
 
-    /**
-     * Opens the iframe overlay TrailerPlayer for remote trailers.
-     */
     _showRemoteTrailerPlayer() {
-        import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
-            TrailerPlayer.show(this._item.RemoteTrailers, this);
+        Promise.all([
+            import('../components/TrailerPlayer.js'),
+            import('../utils/PlayerSettings.js')
+        ]).then(([ { TrailerPlayer }, { PlayerSettings } ]) => {
+            const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+            
+            let trailers = this._item.RemoteTrailers || [];
+            if (this._isProxyFallback && trailers.length === 0) {
+                trailers = [{
+                    Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
+                    Url: '',
+                    IsProxyFallback: true,
+                    TmdbId: this._item.ProviderIds?.Tmdb,
+                    ItemName: this._item.OriginalTitle || this._item.Name,
+                    ItemYear: this._item.ProductionYear,
+                    ItemType: this._item.Type
+                }];
+            }
+
+            if (mode === 'external') {
+                TrailerPlayer.launchExternal(trailers, this);
+            } else if (mode === 'internal_iframe') {
+                TrailerPlayer.showLegacy(trailers, this);
+            } else {
+                TrailerPlayer.show(trailers, this);
+            }
         });
     }
 

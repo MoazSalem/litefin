@@ -343,6 +343,34 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="TextScale">${i18n.t('TextScale') || 'Text scale'}</span>
+                        <span class="setting-description" data-i18n="TextScaleDescription">${i18n.t('TextScaleDescription') || 'Adjust the size of all text and UI elements proportionally'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'text-scale-select',
+                            [
+                                { value: '0.8', label: '80%' },
+                                { value: '0.85', label: '85%' },
+                                { value: '0.9', label: '90%' },
+                                { value: '0.95', label: '95%' },
+                                { value: '1', label: 'Normal (100%)' },
+                                { value: '1.05', label: '105%' },
+                                { value: '1.1', label: '110%' },
+                                { value: '1.15', label: '115%' },
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' }
+                            ],
+                            layoutManager.getTextScale().toString()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -469,6 +497,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:backdropHideText') === 'true' ? 'active' : ''}" 
                                  id="toggle-backdrop-hide-text" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-include-music-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BackdropIncludeMusic">${i18n.t('BackdropIncludeMusic') || 'Include music library'}</span>
+                        <span class="setting-description" data-i18n="BackdropIncludeMusicDescription">${i18n.t('BackdropIncludeMusicDescription') || 'Show backdrops from music artists in the screensaver'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:backdropIncludeMusic') === 'true' ? 'active' : ''}" 
+                                 id="toggle-backdrop-include-music" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -629,6 +670,46 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <h3 class="setting-section-title" data-i18n="TrailersSettings">${i18n.t('TrailersSettings')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TrailerPlayback">${i18n.t('TrailerPlayback') || 'Trailer Playback'}</span>
+                        <span class="setting-description" data-i18n="TrailerPlaybackDescription">${i18n.t('TrailerPlaybackDescription') || 'Choose how remote trailers are opened'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'trailer-playback-select',
+                            [
+                                {
+                                    value: 'internal_proxy',
+                                    label: i18n.t('InternalPlayerNew') || 'Internal Player (New)'
+                                },
+                                {
+                                    value: 'internal_iframe',
+                                    label: i18n.t('InternalPlayerLegacy') || 'Internal Player (Legacy Iframe)'
+                                },
+                                { value: 'external', label: i18n.t('ExternalApp') || 'External App' }
+                            ],
+                            PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableBackgroundService">${i18n.t('EnableBackgroundService') || 'Enable Background Service'}</span>
+                        <span class="setting-description" data-i18n="EnableBackgroundServiceDescription">${i18n.t('EnableBackgroundServiceDescription') || 'Enable the background Node.js service for Discovery and Proxy playback. Disable if you experience performance issues.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableBackgroundService') ? 'active' : ''}" 
+                                id="toggle-background-service" 
+                                data-setting="enableBackgroundService"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="PlaybackBehavior">${i18n.t('PlaybackBehavior')}</h3>
 
                 <div class="setting-item">
@@ -723,11 +804,31 @@ class SettingsPage extends Page {
                                 /* Keep the last button the user navigated to — the legacy behaviour */
                                 { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
                                 /* Reset to Play/Pause only if idle for ≥ 10 s */
-                                { value: 'timeout',  label: i18n.t('OsdFocusTimeout')  || 'Return to Play/Pause after 10 s' },
+                                {
+                                    value: 'timeout',
+                                    label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
+                                },
                                 /* Always snap to Play/Pause on every OSD reveal */
-                                { value: 'always',   label: i18n.t('OsdFocusAlways')   || 'Always return to Play/Pause' }
+                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' }
                             ],
                             PlayerSettings.get('osdFocusRestoreMode') || 'remember'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
+                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-time-display-select',
+                            [
+                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                            ],
+                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
                         )}
                     </div>
                 </div>
@@ -782,7 +883,7 @@ class SettingsPage extends Page {
                                 // First launch: Base the toggle state entirely on hardware capabilities
                                 // If running on WebOS/Tizen, default OFF if it's an SDR 1080p display
                                 try {
-                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform 
+                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform
                                     // but we can just require DeviceProfile generically if we were importing it.
                                     // To be safer without circular imports in SettingsPage, we inspect window width.
                                     isHdrOn = window.screen.width >= 3840;
@@ -873,7 +974,9 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                ${platformInfo.isTizen ? `
+                ${
+                    platformInfo.isTizen
+                        ? `
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="FLACPassthrough">${i18n.t('FLACPassthrough') || 'FLAC in Video Passthrough'}</span>
@@ -887,7 +990,9 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-                ` : ''}
+                `
+                        : ''
+                }
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -992,7 +1097,10 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'pgs-playback-mode-select',
                             [
-                                { value: 'client', label: i18n.t('PgsModeClient') || 'Client Rendering (Web Worker, Smooth TV UI)' },
+                                {
+                                    value: 'client',
+                                    label: i18n.t('PgsModeClient') || 'Client Rendering (Web Worker, Smooth TV UI)'
+                                },
                                 { value: 'burn', label: i18n.t('PgsModeBurn') || 'Transcode (Force Server Burn-In)' },
                                 { value: 'disable', label: i18n.t('PgsModeDisable') || 'Disable and Hide Completely' }
                             ],
@@ -1785,6 +1893,17 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Backdrop Include Music
+        const includeMusicBtn = this.$('#toggle-backdrop-include-music');
+        if (includeMusicBtn) {
+            includeMusicBtn.addEventListener('click', () => {
+                const isIncluded = storage.getItem('pref:backdropIncludeMusic') === 'true';
+                const newValue = !isIncluded;
+                storage.setItem('pref:backdropIncludeMusic', newValue);
+                includeMusicBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Rounded Corners
         const roundedCornersBtn = this.$('#toggle-rounded-corners');
         if (roundedCornersBtn) {
@@ -1983,7 +2102,8 @@ class SettingsPage extends Page {
             'toggle-enable-vp9',
             'toggle-enable-dts',
             'toggle-enable-truehd',
-            'toggle-force-transcode'
+            'toggle-force-transcode',
+            'toggle-background-service'
         ];
         profileToggles.forEach((toggleId) => {
             const btn = this.$(`#${toggleId}`);
@@ -2122,7 +2242,7 @@ class SettingsPage extends Page {
         // Build a short summary: total + a list of the largest prefixes
         const topGroups = Object.entries(report.breakdown)
             .sort(([, a], [, b]) => b - a) // Descending by size
-            .slice(0, 4)                   // Show top 4 groups
+            .slice(0, 4) // Show top 4 groups
             .map(([prefix, bytes]) => `${prefix}: ${fmt(bytes)}`)
             .join(' · ');
 
@@ -2418,6 +2538,7 @@ class SettingsPage extends Page {
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
             'player-backend-select': { key: 'playerBackend', type: 'player' },
             'max-bitrate-select': { key: 'maxBitrateInternet', type: 'player' },
+            'trailer-playback-select': { key: 'trailerPlaybackMode', type: 'player' },
             'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
             'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
@@ -2454,8 +2575,10 @@ class SettingsPage extends Page {
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
              */
-            'osd-focus-mode-select': { key: 'osdFocusRestoreMode', type: 'player' },
-            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' }
+            'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
+            'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
+            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
+            'text-scale-select': { key: 'litefin:textScale', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2481,6 +2604,9 @@ class SettingsPage extends Page {
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
                             layoutManager.setUiFont(newValue);
+                        } else if (id === 'text-scale-select') {
+                            // SPECIAL CASE: Text Scale handled by LayoutManager
+                            layoutManager.setTextScale(parseFloat(newValue));
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 
@@ -2514,6 +2640,10 @@ class SettingsPage extends Page {
                                 }
                                 if (hideTextContainer) {
                                     hideTextContainer.classList.toggle('hidden', isLogo);
+                                }
+                                const musicContainer = document.getElementById('screensaver-include-music-item');
+                                if (musicContainer) {
+                                    musicContainer.classList.toggle('hidden', isLogo);
                                 }
                                 focusManager.invalidateCache('settings-content');
                             }

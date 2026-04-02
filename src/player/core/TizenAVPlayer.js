@@ -62,6 +62,9 @@ export class TizenAVPlayer {
         this._currentAudioStreamIndex = null;
         this._currentSubtitleStreamIndex = null;
 
+        // Tracks the actively selected internal Tizen TEXT track index
+        this._activeTizenSubtitleIndex = null;
+
         // Subtitle offset in seconds (applied via AVPlay's native API)
         this._subtitleOffset = 0;
 
@@ -705,6 +708,7 @@ export class TizenAVPlayer {
                     this._avplay.setSilentSubtitle(true);
                     this._pendingSubtitleIndex = null;
                     this._delayedSubtitleIndex = null;
+                    this._activeTizenSubtitleIndex = -1;
                 } catch (e) {
                     log.warn('Failed to disable subtitles:', e);
                 }
@@ -749,8 +753,9 @@ export class TizenAVPlayer {
                             this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                             this._avplay.setSilentSubtitle(true);
                             this._avplay.setSilentSubtitle(false);
-                            log.info(`TEXT track ${tizenSubIndex} applied in ${avplayState} state (pending kept for re-apply)`);
+                            log.info(`TEXT track ${tizenSubIndex} applied in ${avplayState} state`);
                             this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
+                            this._activeTizenSubtitleIndex = tizenSubIndex; // Track active selection
                         } catch (e) {
                             // If Tizen returns InvalidStateError, keep trying in the loop.
                             if (e.name === 'InvalidStateError' || e.code === 11) {
@@ -874,9 +879,16 @@ export class TizenAVPlayer {
                 try {
                     this._avplay.setSilentSubtitle(true);
                     log.debug('Proactive subtitle silence applied immediately after play()');
+                    
+                    // If a specific track was already successfully applied eagerly during READY state,
+                    // the proactive silence just muted it. Unmute it to restore visibility.
+                    if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
+                        this._avplay.setSilentSubtitle(false);
+                        log.debug('Restored silence state (unmuted) for active eager TEXT track');
+                    }
                 } catch (silenceErr) {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
-                    log.warn('Proactive setSilentSubtitle(true) failed (non-fatal):', silenceErr.message || silenceErr);
+                    log.warn('Proactive setSilentSubtitle(true/false) failed (non-fatal):', silenceErr.message || silenceErr);
                 }
 
                 // Emit 'playing' immediately after play() executes. Since Tizen's 
@@ -1122,6 +1134,7 @@ export class TizenAVPlayer {
      * @private
      */
     async _stopInternal() {
+        this._activeTizenSubtitleIndex = null;
         if (this._avplay) {
             // 1. Attempt stop
             try {
