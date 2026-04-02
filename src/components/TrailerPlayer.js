@@ -33,11 +33,17 @@ export class TrailerPlayer extends Component {
         this._updateProgress = this._updateProgress.bind(this);
     }
 
-    static show(trailers, parentPage) {
+    static showLegacy(trailers, parentPage) {
         if (!trailers || !trailers.length) return;
         const player = new TrailerPlayer(trailers, parentPage);
         player.mount(document.body);
         return player;
+    }
+
+    static show(trailers, parentPage) {
+        // TODO (Phase 1): Implement internal proxy player initialization here.
+        // For now, fall back to the legacy iframe implementation so it doesn't break.
+        return this.showLegacy(trailers, parentPage);
     }
 
     static launchExternal(trailers, parentPage) {

@@ -197,6 +197,9 @@ const DEFAULTS = {
     // PLAYBACK SETTINGS
     // =========================================================================
 
+    // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
+    trailerPlaybackMode: 'internal_proxy',
+
     // Skip forward duration in milliseconds
     skipForwardLength: 10000,
 

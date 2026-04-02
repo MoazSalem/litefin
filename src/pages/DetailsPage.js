@@ -2676,8 +2676,19 @@ class DetailsPage extends Page {
      * Opens the iframe overlay TrailerPlayer for remote trailers.
      */
     _showRemoteTrailerPlayer() {
-        import('../components/TrailerPlayer.js').then(({ TrailerPlayer }) => {
-            TrailerPlayer.show(this._item.RemoteTrailers, this);
+        Promise.all([
+            import('../components/TrailerPlayer.js'),
+            import('../utils/PlayerSettings.js')
+        ]).then(([ { TrailerPlayer }, { PlayerSettings } ]) => {
+            const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+
+            if (mode === 'external') {
+                TrailerPlayer.launchExternal(this._item.RemoteTrailers, this);
+            } else if (mode === 'internal_iframe') {
+                TrailerPlayer.showLegacy(this._item.RemoteTrailers, this);
+            } else {
+                TrailerPlayer.show(this._item.RemoteTrailers, this);
+            }
         });
     }
 

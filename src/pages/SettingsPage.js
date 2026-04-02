@@ -674,6 +674,24 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="TrailerPlayback">${i18n.t('TrailerPlayback') || 'Trailer Playback'}</span>
+                        <span class="setting-description" data-i18n="TrailerPlaybackDescription">${i18n.t('TrailerPlaybackDescription') || 'Choose how remote trailers are opened'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'trailer-playback-select',
+                            [
+                                { value: 'internal_proxy', label: i18n.t('InternalPlayerNew') || 'Internal Player (New)' },
+                                { value: 'internal_iframe', label: i18n.t('InternalPlayerLegacy') || 'Internal Player (Legacy Iframe)' },
+                                { value: 'external', label: i18n.t('ExternalApp') || 'External App' }
+                            ],
+                            PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelAudioLanguagePreference">${i18n.t('LabelAudioLanguagePreference')}</span>
                         <span class="setting-description" data-i18n="PreferredAudioLanguageDescription">${i18n.t('PreferredAudioLanguageDescription')}</span>
                     </div>
@@ -2497,6 +2515,7 @@ class SettingsPage extends Page {
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
             'player-backend-select': { key: 'playerBackend', type: 'player' },
             'max-bitrate-select': { key: 'maxBitrateInternet', type: 'player' },
+            'trailer-playback-select': { key: 'trailerPlaybackMode', type: 'player' },
             'audio-lang-select': { key: 'pref:audioLang', type: 'local' },
             'subtitle-lang-select': { key: 'pref:subtitleLang', type: 'local' },
             'skip-forward-select': { key: 'skipForwardLength', type: 'player' },
