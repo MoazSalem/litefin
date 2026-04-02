@@ -10,6 +10,8 @@
 import { eventBus } from './EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
+import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
 import { LogoScreensaver } from './screensaver/LogoScreensaver.js';
@@ -118,7 +120,8 @@ class ScreensaverManager {
         const minIdleTimeMs = this._delaySeconds * 1000;
 
         // Check platform keys (TV remote)
-        if (tizenAdapter.idleTime < minIdleTimeMs) return;
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+        if (platformAdapter.idleTime < minIdleTimeMs) return;
 
         // Check pointer (Magic Remote / Web mouse)
         const pointerIdleTimeMs = Date.now() - this._lastPointerInputTime;
@@ -179,7 +182,8 @@ class ScreensaverManager {
         document.body.classList.remove('screensaver-active');
 
         // Reset tracking to prevent immediate re-triggering
-        tizenAdapter.reportInput?.();
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+        platformAdapter.reportInput?.();
         this._lastPointerInputTime = Date.now();
 
         // Let plugin clean up DOM/Animation

@@ -58,6 +58,21 @@ class WebOSAdapter {
     }
 
     /**
+     * Get idle time in milliseconds
+     * @returns {number} Idle time
+     */
+    get idleTime() {
+        return Date.now() - (this._lastInteractionTime || Date.now());
+    }
+
+    /**
+     * Report an input interaction (mouse, touch etc from outside)
+     */
+    reportInput() {
+        this._lastInteractionTime = Date.now();
+    }
+
+    /**
      * Detect if running on WebOS platform
      * @private
      */
