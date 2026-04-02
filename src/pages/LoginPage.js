@@ -1027,7 +1027,7 @@ class LoginPage extends Page {
             <li class="server-item" data-server-index="${index}" tabindex="0">
                 <span class="server-name">${server.name}</span>
                 <span class="server-address">${server.address}</span>
-                <span class="server-version">v${server.version || '?'}</span>
+                ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
             </li>
         `
             )

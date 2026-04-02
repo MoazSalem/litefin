@@ -1444,6 +1444,83 @@ export function cancelDiscovery() {
  *                                  or null if the service could not be contacted
  *                                  (caller should fall back to HTTP scan).
  */
+/**
+ * Attempt Jellyfin server discovery via the Tizen background service HTTP endpoint.
+ *
+ * The Tizen service doesn't have a push bus like WebOS Luna, so instead we
+ * expose a simple GET /discover endpoint on the local HTTP proxy.  The service
+ * creates a one-shot UDP socket, broadcasts the autodiscovery probe, waits 3
+ * seconds for responses, then returns the found servers as JSON.
+ *
+ * This avoids the ~10 second HTTP subnet scan for users who have the background
+ * service enabled.
+ *
+ * @param {Function|null} onServerFound  Called immediately for each discovered server.
+ * @returns {Promise<Array|null>}  Array of found servers, or null if the service
+ *                                  is unreachable (fall through to HTTP scan).
+ */
+async function _discoverViaTizenService(onServerFound) {
+    return new Promise(function (resolve) {
+        let settled = false;
+        const foundServers = [];
+        let es = null;
+
+        // Fallback timeout in case the service hangs or never boots
+        const timeout = setTimeout(function () {
+            if (settled) return;
+            settled = true;
+            if (es) es.close();
+            log.warn('Tizen /discover: request timed out — falling back to HTTP scan');
+            resolve(foundServers.length > 0 ? foundServers : null);
+        }, 4200);
+
+        function connect() {
+            if (settled) return;
+
+            /*
+             * Tizen /discover endpoint returns a text/event-stream (SSE).
+             * This allows servers to be pushed to the UI instantly.
+             */
+            es = new EventSource('http://localhost:8123/discover');
+
+            es.onmessage = function (event) {
+                try {
+                    const srv = JSON.parse(event.data);
+                    const serverInfo = {
+                        address: srv.Address,
+                        name:    srv.Name,
+                        id:      srv.Id
+                    };
+                    log.info('Tizen /discover: found "' + srv.Name + '" at ' + srv.Address);
+                    foundServers.push(serverInfo);
+                    if (onServerFound) onServerFound(serverInfo);
+                } catch (err) {
+                    log.warn('Tizen /discover: parse error ' + err.message);
+                }
+            };
+
+            es.onerror = function () {
+                if (settled) return;
+                es.close(); // Prevent slow native auto-reconnect
+
+                if (foundServers.length > 0) {
+                    // Stream successfully completed its 3-second cycle
+                    settled = true;
+                    clearTimeout(timeout);
+                    log.info('Tizen /discover: stream complete — ' + foundServers.length + ' server(s) found');
+                    resolve(foundServers);
+                } else {
+                    // Connection refused — service is likely still booting.
+                    // Retry rapidly until the 4.2s global timeout hits.
+                    setTimeout(connect, 200);
+                }
+            };
+        }
+
+        connect();
+    });
+}
+
 async function _discoverViaLunaService(onServerFound) {
     return new Promise((resolve) => {
         const foundServers = [];
@@ -1556,7 +1633,7 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
      * to the standard HTTP scan below.
      * =========================================================================
      */
-    if (typeof window.webOS !== 'undefined' && window.webOS.service) {
+    if (typeof tizen === 'undefined' && typeof window.webOS !== 'undefined' && window.webOS.service) {
         log.info('WebOS detected — trying Luna discovery service first...');
 
         const lunaServers = await _discoverViaLunaService(onServerFound);
@@ -1568,6 +1645,46 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
         }
 
         log.warn('Luna service unavailable — falling back to HTTP scan');
+    }
+
+    /*
+     * =========================================================================
+     * Tizen Fast Path: Native UDP Discovery via HTTP Proxy Service
+     * =========================================================================
+     * The Tizen background service (service.js) exposes a GET /discover
+     * endpoint on localhost:8123.  It fires the same UDP broadcast as the
+     * WebOS service and returns discovered servers as JSON after a 3-second
+     * collection window.
+     *
+     * Only attempt this when:
+     *   a) Running on Tizen (the `tizen` global is defined), AND
+     *   b) The background service is enabled in PlayerSettings
+     *      (it is on by default — checking the setting avoids a hanging
+     *       XHR in the off chance the user has disabled it in settings).
+     *
+     * If the endpoint does not respond within its timeout (service not running,
+     * WGT not repackaged yet, etc.) we fall through to the HTTP scan below so
+     * the user still gets discovery — just slower.
+     * =========================================================================
+     */
+    if (typeof tizen !== 'undefined') {
+        const { PlayerSettings } = await import('../utils/PlayerSettings.js');
+        const bgEnabled = PlayerSettings.get('enableBackgroundService') !== false;
+
+        if (bgEnabled) {
+            log.info('Tizen detected — trying /discover service endpoint...');
+
+            const tizenServers = await _discoverViaTizenService(onServerFound);
+
+            if (tizenServers !== null) {
+                log.info(`Tizen /discover complete: ${tizenServers.length} server(s) found`);
+                return tizenServers;
+            }
+
+            log.warn('Tizen /discover unavailable — falling back to HTTP scan');
+        } else {
+            log.info('Background service disabled — skipping Tizen /discover, using HTTP scan');
+        }
     }
 
     // =========================================================================

@@ -354,6 +354,105 @@ function handler(req, res) {
         return;
     }
 
+    /*
+     * =========================================================================
+     * GET /discover
+     * =========================================================================
+     * Tizen equivalent of the WebOS Luna discover method.
+     *
+     * Creates a one-shot UDP socket, broadcasts the Jellyfin autodiscovery
+     * probe to 255.255.255.255:7359, and returns results instantly via SSE
+     * (Server-Sent Events) so the UI doesn't have to wait 3 seconds.
+     *
+     * Response: event-stream of { Id, Name, Address } JSON objects.
+     * =========================================================================
+     */
+    if (u.pathname === '/discover') {
+        console.log('[Litefin Discovery] /discover request received — starting UDP probe');
+
+        var dgram = require('dgram');
+
+        var DISC_PORT    = 7359;
+        var DISC_MSG;
+        try {
+            DISC_MSG = Buffer.from('who is JellyfinServer?');
+        } catch (_) {
+            DISC_MSG = new Buffer('who is JellyfinServer?'); // Fallback for Tizen Node <= 5.x
+        }
+        var DISC_WAIT_MS = 3000; // Collect responses for 3 seconds
+
+        var disc    = dgram.createSocket('udp4');
+        var found   = {};   // keyed by Id for deduplication
+        var settled = false;
+
+        res.writeHead(200, {
+            'Content-Type': 'text/event-stream',
+            'Cache-Control': 'no-cache',
+            'Connection': 'keep-alive',
+            'Access-Control-Allow-Origin': '*',
+            // Optional: avoid Safari/proxy buffering
+            'X-Accel-Buffering': 'no'
+        });
+
+        /* ── Helper: close socket, end stream ── */
+        function finishDiscover() {
+            if (settled) return;
+            settled = true;
+
+            try { disc.close(); } catch (_) {}
+
+            var serversCount = Object.keys(found).length;
+            console.log('[Litefin Discovery] /discover done — ' + serversCount + ' server(s) found');
+            res.end();
+        }
+
+        /* ── Parse incoming UDP responses from Jellyfin servers ── */
+        disc.on('message', function (message) {
+            try {
+                var msg = JSON.parse(message.toString('utf-8'));
+                if (
+                    typeof msg === 'object' &&
+                    typeof msg.Id === 'string' &&
+                    typeof msg.Name === 'string' &&
+                    typeof msg.Address === 'string' &&
+                    !found[msg.Id]
+                ) {
+                    console.log('[Litefin Discovery] Found: "' + msg.Name + '" at ' + msg.Address);
+                    var payload = { Id: msg.Id, Name: msg.Name, Address: msg.Address };
+                    found[msg.Id] = payload;
+                    
+                    // Immediately stream to client
+                    res.write('data: ' + JSON.stringify(payload) + '\n\n');
+                }
+            } catch (_) {
+                // Non-Jellyfin UDP traffic — ignore
+            }
+        });
+
+        disc.on('error', function (err) {
+            console.log('[Litefin Discovery] UDP socket error: ' + err.message);
+            finishDiscover();
+        });
+
+        /* ── Once socket is bound, enable broadcast and send the probe ── */
+        disc.bind(function () {
+            try { disc.setBroadcast(true); } catch (_) {}
+
+            disc.send(DISC_MSG, 0, DISC_MSG.length, DISC_PORT, '255.255.255.255', function (err) {
+                if (err) {
+                    console.log('[Litefin Discovery] Broadcast failed: ' + err.message);
+                } else {
+                    console.log('[Litefin Discovery] Broadcast probe sent');
+                }
+            });
+
+            // Resolve after the collection window regardless of how many servers answered
+            setTimeout(finishDiscover, DISC_WAIT_MS);
+        });
+
+        return;
+    }
+
     return writeResponse(res, 404, 'text/plain', 'Not Found');
 }
 
