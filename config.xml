@@ -19,5 +19,12 @@
    <feature name="http://tizen.org/feature/screen.size.all"/>
    <feature name="http://tizen.org/feature/network.internet"/>
    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"></tizen:setting>
+   <tizen:service id="LitefinApp.ytresolver" type="service">
+      <tizen:content src="services/service.js"></tizen:content>
+      <tizen:name>ytresolver</tizen:name>
+   </tizen:service>
+   <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' http://localhost:8123 https://www.youtube.com; frame-src * http://localhost:8123 https://www.youtube.com; connect-src * http://localhost:8123;</tizen:content-security-policy>
+   <tizen:allow-navigation>*</tizen:allow-navigation>
+   <tizen:allow-mixed-content>true</tizen:allow-mixed-content>
    <tizen:profile name="tv-samsung"></tizen:profile>
 </widget>

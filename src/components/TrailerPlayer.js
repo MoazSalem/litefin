@@ -10,10 +10,11 @@ import { webosAdapter } from '../webos/WebOSAdapter.js';
  * with a minimal OSD that matches the native Tizen player UI.
  */
 export class TrailerPlayer extends Component {
-    constructor(trailers, parentPage) {
+    constructor(trailers, parentPage, isProxy = false) {
         super();
         this._trailers = trailers;
         this._parentPage = parentPage;
+        this._isProxy = isProxy;
         
         this._currentIndex = 0;
         this._ytPlayer = null;
@@ -31,19 +32,21 @@ export class TrailerPlayer extends Component {
         this._onYTReady = this._onYTReady.bind(this);
         this._onYTStateChange = this._onYTStateChange.bind(this);
         this._updateProgress = this._updateProgress.bind(this);
+        this._onProxyMessage = this._onProxyMessage.bind(this);
     }
 
     static showLegacy(trailers, parentPage) {
         if (!trailers || !trailers.length) return;
-        const player = new TrailerPlayer(trailers, parentPage);
+        const player = new TrailerPlayer(trailers, parentPage, false);
         player.mount(document.body);
         return player;
     }
 
     static show(trailers, parentPage) {
-        // TODO (Phase 1): Implement internal proxy player initialization here.
-        // For now, fall back to the legacy iframe implementation so it doesn't break.
-        return this.showLegacy(trailers, parentPage);
+        if (!trailers || !trailers.length) return;
+        const player = new TrailerPlayer(trailers, parentPage, true);
+        player.mount(document.body);
+        return player;
     }
 
     static launchExternal(trailers, parentPage) {
@@ -147,7 +150,12 @@ export class TrailerPlayer extends Component {
 
         // Scrubbing via slider
         this._positionSliderEl.addEventListener('change', (e) => {
-            if (this._ytPlayer && this._ytPlayer.getDuration) {
+            if (this._isProxy) {
+                if (this._proxyDuration) {
+                    const targetTime = (percent / 100) * this._proxyDuration;
+                    this._sendProxyCommand('seek', targetTime * 1000);
+                }
+            } else if (this._ytPlayer && this._ytPlayer.getDuration) {
                 const percent = parseFloat(e.target.value);
                 const duration = this._ytPlayer.getDuration();
                 const targetTime = (percent / 100) * duration;
@@ -177,6 +185,7 @@ export class TrailerPlayer extends Component {
     onBeforeDestroy() {
         document.removeEventListener('keydown', this._handleKeyDown, true);
         
+        if (this._isProxy) { window.removeEventListener('message', this._onProxyMessage); }
         if (this._progressTimer) clearInterval(this._progressTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
         
@@ -223,7 +232,11 @@ export class TrailerPlayer extends Component {
         console.log('[TrailerPlayer] extracted ytId=', ytId);
         
         if (ytId) {
-            this._initYouTubePlayer(ytId);
+            if (this._isProxy) {
+                this._initProxyPlayer(ytId);
+            } else {
+                this._initYouTubePlayer(ytId);
+            }
         } else {
             // Fallback: generic iframe — no API control
             console.log('[TrailerPlayer] No YouTube ID, falling back to raw iframe');
@@ -463,21 +476,32 @@ export class TrailerPlayer extends Component {
                 this._close();
                 break;
             case 'togglePlay':
-                if (!this._ytPlayer) break;
-                if (this._isPlaying) {
-                    this._ytPlayer.pauseVideo();
-                } else {
-                    this._ytPlayer.playVideo();
+                if (this._isProxy) {
+                    this._sendProxyCommand(this._isPlaying ? 'pause' : 'play');
+                } else if (this._ytPlayer) {
+                    if (this._isPlaying) {
+                        this._ytPlayer.pauseVideo();
+                    } else {
+                        this._ytPlayer.playVideo();
+                    }
                 }
                 break;
             case 'rewind':
-                if (this._ytPlayer && this._ytPlayer.getCurrentTime) {
+                if (this._isProxy) {
+                    if (this._proxyCurrentTime !== undefined) {
+                        this._sendProxyCommand('seek', Math.max(0, this._proxyCurrentTime - 10) * 1000);
+                    }
+                } else if (this._ytPlayer && this._ytPlayer.getCurrentTime) {
                     const ct = this._ytPlayer.getCurrentTime();
                     this._ytPlayer.seekTo(Math.max(0, ct - 10), true);
                 }
                 break;
             case 'fastForward':
-                if (this._ytPlayer && this._ytPlayer.getCurrentTime && this._ytPlayer.getDuration) {
+                if (this._isProxy) {
+                    if (this._proxyCurrentTime !== undefined && this._proxyDuration !== undefined) {
+                        this._sendProxyCommand('seek', Math.min(this._proxyDuration, this._proxyCurrentTime + 30) * 1000);
+                    }
+                } else if (this._ytPlayer && this._ytPlayer.getCurrentTime && this._ytPlayer.getDuration) {
                     const ct = this._ytPlayer.getCurrentTime();
                     const dur = this._ytPlayer.getDuration();
                     this._ytPlayer.seekTo(Math.min(dur, ct + 30), true);
@@ -577,6 +601,75 @@ export class TrailerPlayer extends Component {
     }
 
     _close() {
+        if (this._isProxy) {
+            this._sendProxyCommand('stop');
+        }
         this.destroy();
+    }
+
+    _initProxyPlayer(videoId) {
+        const container = this._overlay.querySelector('#trailerIframeContainer');
+        container.innerHTML = `<iframe id="ytProxyIframe" src="http://localhost:8123/player.html?videoId=${encodeURIComponent(videoId)}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media; fullscreen"></iframe>`;
+        this._proxyIframe = this._overlay.querySelector('#ytProxyIframe');
+        
+        window.removeEventListener('message', this._onProxyMessage);
+        window.addEventListener('message', this._onProxyMessage);
+        
+        this._proxyDuration = 0;
+        this._proxyCurrentTime = 0;
+    }
+
+    _onProxyMessage(ev) {
+        if (!ev.data || !ev.data.__ytbridge) return;
+        const msg = ev.data;
+        
+        if (msg.type === 'ready') {
+            this._isPlaying = true;
+            this._playPauseBtn.innerHTML = ICONS.pause;
+            this._resetAutoHide();
+        } else if (msg.type === 'time') {
+            this._proxyCurrentTime = msg.t / 1000;
+            this._proxyDuration = msg.d / 1000;
+            
+            if (this._proxyDuration > 0) {
+                this._currentTimeEl.textContent = this._formatTicks(this._proxyCurrentTime * 10000000);
+                this._totalTimeEl.textContent = this._formatTicks(this._proxyDuration * 10000000);
+                
+                const percent = (this._proxyCurrentTime / this._proxyDuration) * 100;
+                this._positionFillEl.style.width = `${percent}%`;
+                if (document.activeElement !== this._positionSliderEl) {
+                    this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
+                }
+            }
+            
+            if (msg.s !== undefined && msg.s !== -1) {
+                if (msg.s === 1) { 
+                    this._isPlaying = true; 
+                    this._playPauseBtn.innerHTML = ICONS.pause; 
+                } else if (msg.s === 2) { 
+                    this._isPlaying = false; 
+                    this._playPauseBtn.innerHTML = ICONS.play; 
+                } else if (msg.s === 0) {
+                    this._executeAction('next');
+                }
+            }
+        } else if (msg.type === 'state') {
+            const state = msg.data;
+            if (state === 1) { 
+                this._isPlaying = true; 
+                this._playPauseBtn.innerHTML = ICONS.pause; 
+            } else if (state === 2) { 
+                this._isPlaying = false; 
+                this._playPauseBtn.innerHTML = ICONS.play; 
+            } else if (state === 0) {
+                this._executeAction('next');
+            }
+        }
+    }
+
+    _sendProxyCommand(cmd, val) {
+        if (this._proxyIframe && this._proxyIframe.contentWindow) {
+            this._proxyIframe.contentWindow.postMessage({ __ytbridge_cmd: true, cmd: cmd, val: val }, '*');
+        }
     }
 }
