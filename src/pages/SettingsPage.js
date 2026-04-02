@@ -670,7 +670,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <h3 class="setting-section-title" data-i18n="PlaybackBehavior">${i18n.t('PlaybackBehavior')}</h3>
+                <h3 class="setting-section-title" data-i18n="TrailersSettings">${i18n.t('TrailersSettings')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -681,8 +681,14 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'trailer-playback-select',
                             [
-                                { value: 'internal_proxy', label: i18n.t('InternalPlayerNew') || 'Internal Player (New)' },
-                                { value: 'internal_iframe', label: i18n.t('InternalPlayerLegacy') || 'Internal Player (Legacy Iframe)' },
+                                {
+                                    value: 'internal_proxy',
+                                    label: i18n.t('InternalPlayerNew') || 'Internal Player (New)'
+                                },
+                                {
+                                    value: 'internal_iframe',
+                                    label: i18n.t('InternalPlayerLegacy') || 'Internal Player (Legacy Iframe)'
+                                },
                                 { value: 'external', label: i18n.t('ExternalApp') || 'External App' }
                             ],
                             PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy'
@@ -703,6 +709,8 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <h3 class="setting-section-title" data-i18n="PlaybackBehavior">${i18n.t('PlaybackBehavior')}</h3>
 
                 <div class="setting-item">
                     <div class="setting-label">
