@@ -150,13 +150,14 @@ export class TrailerPlayer extends Component {
 
         // Scrubbing via slider
         this._positionSliderEl.addEventListener('change', (e) => {
+            const percent = parseFloat(e.target.value);
+            
             if (this._isProxy) {
                 if (this._proxyDuration) {
                     const targetTime = (percent / 100) * this._proxyDuration;
                     this._sendProxyCommand('seek', targetTime * 1000);
                 }
             } else if (this._ytPlayer && this._ytPlayer.getDuration) {
-                const percent = parseFloat(e.target.value);
                 const duration = this._ytPlayer.getDuration();
                 const targetTime = (percent / 100) * duration;
                 this._ytPlayer.seekTo(targetTime, true);
@@ -695,6 +696,10 @@ export class TrailerPlayer extends Component {
                 this._playPauseBtn.innerHTML = ICONS.play; 
             } else if (state === 0) {
                 this._executeAction('next');
+            }
+        } else if (msg.type === 'title') {
+            if (msg.data && this._titleEl.textContent !== msg.data) {
+                this._titleEl.textContent = msg.data;
             }
         }
     }

@@ -289,8 +289,13 @@ var PLAYER_HTML = `<!doctype html>
                     }
 
                     setInterval(function(){
-                        if(player && player.getCurrentTime)
+                        if(player && player.getCurrentTime) {
                             post('time', null, player.getCurrentTime()*1000, player.getDuration()*1000, player.getPlayerState());
+                            try {
+                                var d = player.getVideoData();
+                                if (d && d.title) post('title', d.title);
+                            } catch(e) {}
+                        }
                     }, 500);
                 },
                 'onStateChange': function(ev) { post('state', ev.data); },

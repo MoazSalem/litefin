@@ -2695,7 +2695,7 @@ class DetailsPage extends Page {
             let trailers = this._item.RemoteTrailers || [];
             if (this._isProxyFallback && trailers.length === 0) {
                 trailers = [{
-                    Name: 'Trailer',
+                    Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
                     Url: '',
                     IsProxyFallback: true,
                     TmdbId: this._item.ProviderIds?.Tmdb,
