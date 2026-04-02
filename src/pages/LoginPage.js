@@ -187,6 +187,9 @@ class LoginPage extends Page {
                             <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
                                 Back
                             </button>
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="ButtonChangeServer">
+                                Change Server
+                            </button>
                         </div>
                         <p class="login-error" id="manual-error"></p>
                     </div>
@@ -319,6 +322,11 @@ class LoginPage extends Page {
         // Quick Connect buttons (on users screen and manual screen)
         this.$$('.quick-connect-btn').forEach(btn => {
             btn.addEventListener('click', () => this._startQuickConnect());
+        });
+
+        // Change Server buttons (on manual screen)
+        this.$$('.change-server-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._goToServerSelection());
         });
 
         // Manual Login buttons
@@ -799,6 +807,11 @@ class LoginPage extends Page {
         const qcBtn = this.$('.manual-section .quick-connect-btn');
         if (qcBtn) {
             qcBtn.style.display = isAutoRedirect ? '' : 'none';
+        }
+
+        const changeServerBtn = this.$('.manual-section .change-server-btn');
+        if (changeServerBtn) {
+            changeServerBtn.style.display = isAutoRedirect ? '' : 'none';
         }
 
         this._showState(STATE.MANUAL);
