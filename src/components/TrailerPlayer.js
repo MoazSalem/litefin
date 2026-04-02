@@ -4,6 +4,7 @@ import { i18n } from '../utils/i18n.js';
 import { ICONS } from '../player/osd/icons.js'; // Borrowing native OSD icons
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 /**
  * TrailerPlayer
  * Displays a fullscreen iframe to play remote trailers (mostly YouTube),
@@ -149,18 +150,36 @@ export class TrailerPlayer extends Component {
         });
 
         // Scrubbing via slider
+        this._positionSliderEl.addEventListener('mousedown', () => this._isDraggingSlider = true);
+        this._positionSliderEl.addEventListener('touchstart', () => this._isDraggingSlider = true, { passive: true });
+        
+        // Visually update the custom CSS fill while actively dragging before "drop/change"
+        this._positionSliderEl.addEventListener('input', (e) => {
+            this._positionFillEl.style.width = `${e.target.value}%`;
+            this._resetAutoHide();
+        });
+
         this._positionSliderEl.addEventListener('change', (e) => {
+            this._isDraggingSlider = false;
+            
+            // Set a soft lock to prevent `_updateProgress` from rubber-banding the slider
+            // before the underlying YouTube player or Proxy has a chance to execute the seek
+            this._isSeeking = true;
+            if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
+            this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
+
             const percent = parseFloat(e.target.value);
             
             if (this._isProxy) {
                 if (this._proxyDuration) {
                     const targetTime = (percent / 100) * this._proxyDuration;
+                    this._proxyCurrentTime = targetTime; // Optimistic jump visually
                     this._sendProxyCommand('seek', targetTime * 1000);
                 }
             } else if (this._ytPlayer && this._ytPlayer.getDuration) {
                 const duration = this._ytPlayer.getDuration();
                 const targetTime = (percent / 100) * duration;
-                this._ytPlayer.seekTo(targetTime, true);
+                if (this._ytPlayer.seekTo) this._ytPlayer.seekTo(targetTime, true);
             }
             this._resetAutoHide();
         });
@@ -473,13 +492,19 @@ export class TrailerPlayer extends Component {
             if (total > 0) {
                 // Time strings need ticks (seconds * 10,000,000)
                 this._currentTimeEl.textContent = this._formatTicks(current * 10000000);
-                this._totalTimeEl.textContent = this._formatTicks(total * 10000000);
+                
+                const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+                const isRemaining = timeDisplayMode === 'remaining';
+                const durationDisplaySecs = isRemaining ? (total - current) : total;
+                const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
+                this._totalTimeEl.textContent = totalStr;
                 
                 const percent = (current / total) * 100;
-                this._positionFillEl.style.width = `${percent}%`;
-                // Only update physical slider value if not actively dragging/focused
-                if (document.activeElement !== this._positionSliderEl) {
-                    this._positionSliderEl.value = percent;
+                
+                // Only force slider value/visuals if user isn't actively interacting with it
+                if (!this._isDraggingSlider && !this._isSeeking) {
+                    this._positionFillEl.style.width = `${percent}%`;
+                    this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
                 }
             }
         } catch (e) {
@@ -519,27 +544,72 @@ export class TrailerPlayer extends Component {
                     }
                 }
                 break;
-            case 'rewind':
-                if (this._isProxy) {
-                    if (this._proxyCurrentTime !== undefined) {
-                        this._sendProxyCommand('seek', Math.max(0, this._proxyCurrentTime - 5) * 1000);
-                    }
-                } else if (this._ytPlayer && this._ytPlayer.getCurrentTime) {
-                    const ct = this._ytPlayer.getCurrentTime();
-                    this._ytPlayer.seekTo(Math.max(0, ct - 5), true);
-                }
-                break;
-            case 'fastForward':
-                if (this._isProxy) {
-                    if (this._proxyCurrentTime !== undefined && this._proxyDuration !== undefined) {
-                        this._sendProxyCommand('seek', Math.min(this._proxyDuration, this._proxyCurrentTime + 5) * 1000);
-                    }
+            case 'rewind': {
+                let targetSecs = 0, durationSecs = 0;
+                if (this._isProxy && this._proxyCurrentTime !== undefined && this._proxyDuration) {
+                    targetSecs = Math.max(0, this._proxyCurrentTime - 5);
+                    durationSecs = this._proxyDuration;
+                    this._proxyCurrentTime = targetSecs;
+                    this._sendProxyCommand('seek', targetSecs * 1000);
                 } else if (this._ytPlayer && this._ytPlayer.getCurrentTime && this._ytPlayer.getDuration) {
                     const ct = this._ytPlayer.getCurrentTime();
-                    const dur = this._ytPlayer.getDuration();
-                    this._ytPlayer.seekTo(Math.min(dur, ct + 5), true);
+                    durationSecs = this._ytPlayer.getDuration();
+                    targetSecs = Math.max(0, ct - 5);
+                    this._ytPlayer.seekTo(targetSecs, true);
+                }
+                
+                if (durationSecs > 0) {
+                    this._isSeeking = true;
+                    if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
+                    this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
+                    
+                    this._currentTimeEl.textContent = this._formatTicks(targetSecs * 10000000);
+                    
+                    const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+                    const isRemaining = timeDisplayMode === 'remaining';
+                    const durationDisplaySecs = isRemaining ? (durationSecs - targetSecs) : durationSecs;
+                    const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
+                    this._totalTimeEl.textContent = totalStr;
+                    
+                    const percent = (targetSecs / durationSecs) * 100;
+                    this._positionFillEl.style.width = `${percent}%`;
+                    this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
                 }
                 break;
+            }
+            case 'fastForward': {
+                let targetSecs = 0, durationSecs = 0;
+                if (this._isProxy && this._proxyCurrentTime !== undefined && this._proxyDuration) {
+                    targetSecs = Math.min(this._proxyDuration, this._proxyCurrentTime + 5);
+                    durationSecs = this._proxyDuration;
+                    this._proxyCurrentTime = targetSecs;
+                    this._sendProxyCommand('seek', targetSecs * 1000);
+                } else if (this._ytPlayer && this._ytPlayer.getCurrentTime && this._ytPlayer.getDuration) {
+                    const ct = this._ytPlayer.getCurrentTime();
+                    durationSecs = this._ytPlayer.getDuration();
+                    targetSecs = Math.min(durationSecs, ct + 5);
+                    this._ytPlayer.seekTo(targetSecs, true);
+                }
+
+                if (durationSecs > 0) {
+                    this._isSeeking = true;
+                    if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
+                    this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
+                    
+                    this._currentTimeEl.textContent = this._formatTicks(targetSecs * 10000000);
+                    
+                    const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+                    const isRemaining = timeDisplayMode === 'remaining';
+                    const durationDisplaySecs = isRemaining ? (durationSecs - targetSecs) : durationSecs;
+                    const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
+                    this._totalTimeEl.textContent = totalStr;
+                    
+                    const percent = (targetSecs / durationSecs) * 100;
+                    this._positionFillEl.style.width = `${percent}%`;
+                    this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
+                }
+                break;
+            }
             case 'prev':
                 if (this._currentIndex > 0) {
                     this._currentIndex--;
@@ -564,6 +634,7 @@ export class TrailerPlayer extends Component {
         this._showOsd();
 
         switch (e.keyCode) {
+            case 461: // WebOS Back
             case 10009: // Return
             case 27: // Escape
             case 8: // Backspace
@@ -571,6 +642,7 @@ export class TrailerPlayer extends Component {
                 e.stopPropagation();
                 this._close();
                 return;
+            case 10252: // MediaPlayPause
             case 415: // MediaPlay
             case 19: // Pause
             case 32: // Space
@@ -578,6 +650,22 @@ export class TrailerPlayer extends Component {
                 e.stopPropagation();
                 this._executeAction('togglePlay');
                 return;
+            case 37: // Left
+                if (this._positionSliderEl.classList.contains('focused')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this._executeAction('rewind');
+                    return;
+                }
+                break;
+            case 39: // Right
+                if (this._positionSliderEl.classList.contains('focused')) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this._executeAction('fastForward');
+                    return;
+                }
+                break;
             case 412: // MediaRewind
                 e.preventDefault();
                 e.stopPropagation();
@@ -592,6 +680,18 @@ export class TrailerPlayer extends Component {
                 e.preventDefault();
                 e.stopPropagation();
                 this._close();
+                return;
+            case 34: // WebOS Prev
+            case 10232: // Tizen Prev
+                e.preventDefault();
+                e.stopPropagation();
+                this._executeAction('prev');
+                return;
+            case 33: // WebOS Next
+            case 10233: // Tizen Next
+                e.preventDefault();
+                e.stopPropagation();
+                this._executeAction('next');
                 return;
         }
     }
@@ -666,11 +766,18 @@ export class TrailerPlayer extends Component {
             
             if (this._proxyDuration > 0) {
                 this._currentTimeEl.textContent = this._formatTicks(this._proxyCurrentTime * 10000000);
-                this._totalTimeEl.textContent = this._formatTicks(this._proxyDuration * 10000000);
+                
+                const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
+                const isRemaining = timeDisplayMode === 'remaining';
+                const durationDisplaySecs = isRemaining ? (this._proxyDuration - this._proxyCurrentTime) : this._proxyDuration;
+                const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
+                this._totalTimeEl.textContent = totalStr;
                 
                 const percent = (this._proxyCurrentTime / this._proxyDuration) * 100;
-                this._positionFillEl.style.width = `${percent}%`;
-                if (document.activeElement !== this._positionSliderEl) {
+                
+                // Only force slider value/visuals if user isn't actively interacting with it
+                if (!this._isDraggingSlider && !this._isSeeking) {
+                    this._positionFillEl.style.width = `${percent}%`;
                     this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
                 }
             }
