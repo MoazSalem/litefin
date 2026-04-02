@@ -522,22 +522,22 @@ export class TrailerPlayer extends Component {
             case 'rewind':
                 if (this._isProxy) {
                     if (this._proxyCurrentTime !== undefined) {
-                        this._sendProxyCommand('seek', Math.max(0, this._proxyCurrentTime - 10) * 1000);
+                        this._sendProxyCommand('seek', Math.max(0, this._proxyCurrentTime - 5) * 1000);
                     }
                 } else if (this._ytPlayer && this._ytPlayer.getCurrentTime) {
                     const ct = this._ytPlayer.getCurrentTime();
-                    this._ytPlayer.seekTo(Math.max(0, ct - 10), true);
+                    this._ytPlayer.seekTo(Math.max(0, ct - 5), true);
                 }
                 break;
             case 'fastForward':
                 if (this._isProxy) {
                     if (this._proxyCurrentTime !== undefined && this._proxyDuration !== undefined) {
-                        this._sendProxyCommand('seek', Math.min(this._proxyDuration, this._proxyCurrentTime + 30) * 1000);
+                        this._sendProxyCommand('seek', Math.min(this._proxyDuration, this._proxyCurrentTime + 5) * 1000);
                     }
                 } else if (this._ytPlayer && this._ytPlayer.getCurrentTime && this._ytPlayer.getDuration) {
                     const ct = this._ytPlayer.getCurrentTime();
                     const dur = this._ytPlayer.getDuration();
-                    this._ytPlayer.seekTo(Math.min(dur, ct + 30), true);
+                    this._ytPlayer.seekTo(Math.min(dur, ct + 5), true);
                 }
                 break;
             case 'prev':
