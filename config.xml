@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://jellyfin.org/jellyfin" version="0.10.2" viewmodes="maximized">
+<widget xmlns="http://www.w3.org/ns/widgets" xmlns:tizen="http://tizen.org/ns/widgets" id="http://jellyfin.org/jellyfin" version="0.11.0" viewmodes="maximized">
    <tizen:application id="LitefinApp.Litefin" package="LitefinApp" required_version="2.3"></tizen:application>
    <access origin="*" subdomains="true"></access>
    <name>Litefin</name>
@@ -16,8 +16,16 @@
    <tizen:privilege name="http://developer.samsung.com/privilege/productinfo"/>
    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
    <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
+   <tizen:privilege name="http://tizen.org/privilege/network"/>
    <feature name="http://tizen.org/feature/screen.size.all"/>
    <feature name="http://tizen.org/feature/network.internet"/>
    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"></tizen:setting>
+   <tizen:service id="LitefinApp.ytresolver" type="service">
+      <tizen:content src="services/service.js"></tizen:content>
+      <tizen:name>ytresolver</tizen:name>
+   </tizen:service>
+   <tizen:content-security-policy>default-src * 'unsafe-inline' 'unsafe-eval' data: blob:; script-src * 'unsafe-inline' 'unsafe-eval' http://localhost:8123 https://www.youtube.com; frame-src * http://localhost:8123 https://www.youtube.com; connect-src * http://localhost:8123;</tizen:content-security-policy>
+   <tizen:allow-navigation>*</tizen:allow-navigation>
+   <tizen:allow-mixed-content>true</tizen:allow-mixed-content>
    <tizen:profile name="tv-samsung"></tizen:profile>
 </widget>

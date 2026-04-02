@@ -187,6 +187,9 @@ class LoginPage extends Page {
                             <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
                                 Back
                             </button>
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="ButtonChangeServer">
+                                Change Server
+                            </button>
                         </div>
                         <p class="login-error" id="manual-error"></p>
                     </div>
@@ -319,6 +322,11 @@ class LoginPage extends Page {
         // Quick Connect buttons (on users screen and manual screen)
         this.$$('.quick-connect-btn').forEach(btn => {
             btn.addEventListener('click', () => this._startQuickConnect());
+        });
+
+        // Change Server buttons (on manual screen)
+        this.$$('.change-server-btn').forEach(btn => {
+            btn.addEventListener('click', () => this._goToServerSelection());
         });
 
         // Manual Login buttons
@@ -801,6 +809,11 @@ class LoginPage extends Page {
             qcBtn.style.display = isAutoRedirect ? '' : 'none';
         }
 
+        const changeServerBtn = this.$('.manual-section .change-server-btn');
+        if (changeServerBtn) {
+            changeServerBtn.style.display = isAutoRedirect ? '' : 'none';
+        }
+
         this._showState(STATE.MANUAL);
         this.setActiveSection('login-manual');
         focusManager.invalidateCache('login-manual');
@@ -1027,7 +1040,7 @@ class LoginPage extends Page {
             <li class="server-item" data-server-index="${index}" tabindex="0">
                 <span class="server-name">${server.name}</span>
                 <span class="server-address">${server.address}</span>
-                <span class="server-version">v${server.version || '?'}</span>
+                ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
             </li>
         `
             )

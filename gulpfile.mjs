@@ -133,6 +133,9 @@ async function createWgt(buildDir, outputName) {
 
         archive.pipe(output);
         archive.directory(buildDir + '/', false);
+        if (existsSync('services')) {
+            archive.directory('services/', 'services');
+        }
         archive.finalize();
     });
 }
