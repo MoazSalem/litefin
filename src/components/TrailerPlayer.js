@@ -629,9 +629,22 @@ export class TrailerPlayer extends Component {
     }
 
     _handleKeyDown(e) {
+        const wasHidden = !this._isOsdVisible;
+        
         // Tizen specific keys and generic media keys intercept
         this._resetAutoHide();
         this._showOsd();
+
+        // Dynamically place focus upon wakeup
+        if (wasHidden) {
+            if (e.keyCode === 37 || e.keyCode === 39) {
+                // If woken by a seek action (Left/Right), focus the slider so the user can continue seeking quickly
+                focusManager.focusElement(this._positionSliderEl);
+            } else {
+                // Otherwise default to the play/pause button
+                focusManager.focusElement(this._playPauseBtn);
+            }
+        }
 
         switch (e.keyCode) {
             case 461: // WebOS Back
@@ -651,7 +664,7 @@ export class TrailerPlayer extends Component {
                 this._executeAction('togglePlay');
                 return;
             case 37: // Left
-                if (this._positionSliderEl.classList.contains('focused')) {
+                if (wasHidden || this._positionSliderEl.classList.contains('focused')) {
                     e.preventDefault();
                     e.stopPropagation();
                     this._executeAction('rewind');
@@ -659,7 +672,7 @@ export class TrailerPlayer extends Component {
                 }
                 break;
             case 39: // Right
-                if (this._positionSliderEl.classList.contains('focused')) {
+                if (wasHidden || this._positionSliderEl.classList.contains('focused')) {
                     e.preventDefault();
                     e.stopPropagation();
                     this._executeAction('fastForward');
