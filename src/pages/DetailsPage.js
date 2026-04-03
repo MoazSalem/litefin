@@ -2274,18 +2274,29 @@ class DetailsPage extends Page {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
         }
 
-        options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') });
+        // ── Refresh Metadata Permission Check ────────────────────────────────
+        // Following jellyfin-web logic: only administrators can refresh metadata
+        if (this._currentUser?.Policy?.IsAdministrator) {
+            const i = this._item;
+            const invalidRefreshTypes = ['Timer', 'SeriesTimer', 'Program', 'TvChannel'];
+            const isLiveTv = i.CollectionType === 'livetv';
+            const isIncompleteRecording = i.Type === 'Recording' && i.Status !== 'Completed';
+
+            if (!invalidRefreshTypes.includes(i.Type) && !isLiveTv && !isIncompleteRecording) {
+                options.push({ id: 'refresh', label: i18n.t('RefreshMetadata') });
+            }
+        }
 
         // ── Subtitle Editing Permission Check ────────────────────────────────
         // Based on jellyfin-web canEditSubtitles logic
         if (this._item && this._currentUser) {
             const i = this._item;
             const p = this._currentUser.Policy || {};
-            const isLocal = i.LocationType === 'Offline';
+            const isOffline = i.LocationType === 'Offline';
             const isVirtual = i.LocationType === 'Virtual';
-            const invalidTypes = ['TvChannel', 'Program', 'Timer', 'SeriesTimer', 'UserRootFolder', 'UserView'];
+            const invalidSubtitleTypes = ['TvChannel', 'Program', 'Timer', 'SeriesTimer', 'UserRootFolder', 'UserView'];
 
-            if (i.MediaType === 'Video' && !isLocal && !isVirtual && !invalidTypes.includes(i.Type)) {
+            if (i.MediaType === 'Video' && !isOffline && !isVirtual && !invalidSubtitleTypes.includes(i.Type)) {
                 if (p.EnableSubtitleManagement || p.IsAdministrator) {
                     options.push({ id: 'edit-subtitles', label: i18n.t('EditSubtitles') || 'Edit Subtitles' });
                 }
