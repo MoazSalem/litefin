@@ -300,18 +300,22 @@ class DetailsPage extends Page {
         this._hasEnteredEpisodesGrid = false;
 
         try {
-            // 1. Fetch Item (with detailed metadata fields)
-            this._item = await api.getItem(this._itemId, {
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,Overview,LibraryId'
+            // ────────────────────────────────────────────────────────────────────────
+            // 2. Fetch Base Item Details
+            // ────────────────────────────────────────────────────────────────────────
+            const item = await api.getItem(this._itemId, {
+                // We request comprehensive fields to avoid redundant refetching.
+                // CanDelete is essential for implementing the 'Delete Media' feature.
+                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,Overview,LibraryId,CanDelete'
             });
-            this.title = this._item.Name;
+            this._item = item;
+            log.debug('Item loaded:', item);
 
-            // Fetch current user policy for permission checks (like subtitle editing)
-            try {
-                this._currentUser = await api.getCurrentUser();
-            } catch (err) {
-                log.warn('Failed to load current user for permissions', err);
-            }
+            // ────────────────────────────────────────────────────────────────────────
+            // 3. Fetch User and Library Context
+            // ────────────────────────────────────────────────────────────────────────
+            this._currentUser = await api.getCurrentUser();
+            log.debug('Current user loaded:', this._currentUser);
 
             // 2. Render all text content immediately (Metadata, Hero Info)
             this._renderHeroText();
@@ -2286,12 +2290,18 @@ class DetailsPage extends Page {
                     options.push({ id: 'edit-subtitles', label: i18n.t('EditSubtitles') || 'Edit Subtitles' });
                 }
             }
+
+            // ── Delete Media Permission Check ────────────────────────────────────
+            // Only show delete option if the item explicitly reports CanDelete=true
+            if (this._item.CanDelete) {
+                options.push({ id: 'delete', label: i18n.t('DeleteMedia') || 'Delete media' });
+            }
         }
 
         const optionsHtml = options
             .map((opt, i) => {
                 return `
-                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                <button class="modal-option-btn ${opt.id === 'delete' ? 'danger-action' : ''}" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
             `;
@@ -2312,136 +2322,159 @@ class DetailsPage extends Page {
             </div>
         `;
 
-        const onSelect = (id) => {
-            if (id === 'go-to-series' || id === 'go-to-album') {
-                _close(false);
-                const parentId = id === 'go-to-series' ? this._item.SeriesId : this._item.AlbumId;
-                log.info(`Navigating to parent details (${id === 'go-to-series' ? 'Series' : 'Album'}) ID:`, parentId);
-                router.navigate(`/details/${parentId}`);
-            } else if (id === 'refresh') {
-                // Close current modal without restoring focus (since we are opening another)
-                _close(false);
+        // Focus management - Register as a new section
+        const optionsContainer = overlay.querySelector('.modal-options');
+        const actionsContainer = overlay.querySelector('.modal-actions');
+        const optionsSection = 'details-more-menu';
+        const actionsSection = 'details-more-menu-actions';
 
-                // Transfer context but flag that we want to return to this menu on back
-                const context = {
-                    prevFocus: this._prevFocus,
-                    prevSection: this._prevSection,
-                    fromMoreOptions: true,
-                    oldOnBack: oldOnBack // Pass the parent handler down
-                };
-                this._showRefreshMetadataModal(itemId, context);
-            } else if (id === 'media-info') {
-                _close(false);
-                const context = {
-                    prevFocus: this._prevFocus,
-                    prevSection: this._prevSection,
-                    fromMoreOptions: true,
-                    oldOnBack: oldOnBack
-                };
-                MediaInfoModal.show(itemId, this, context);
-            } else if (id === 'edit-subtitles') {
-                // Close the More Options menu without restoring focus yet —
-                // the subtitle editor will take ownership of the focus context.
-                _close(false);
+        this._isMoreMenuOpen = true;
 
-                // Pass full transition context so the subtitle editor can chain
-                // Back navigation back to this menu and ultimately the details page.
-                const context = {
-                    prevFocus: this._prevFocus,
-                    prevSection: this._prevSection,
-                    fromMoreOptions: true,
-                    oldOnBack: oldOnBack
-                };
-                SubtitleEditorModal.show(itemId, this, context);
-            }
-        };
-
-        const _close = (restoreFocus = true) => {
-            // Restore handler if we are still the active one
-            if (this.onBack === myOnBack) {
-                this.onBack = oldOnBack;
-            }
-
-            overlay.classList.remove('visible');
-            setTimeout(() => overlay.remove(), 300);
-
-            if (restoreFocus) {
-                // Restore focus
-                if (this._prevFocus) {
-                    focusManager.focusElement(this._prevFocus);
-                }
-                if (this._prevSection) {
-                    focusManager.setActiveSection(this._prevSection, false);
-                }
-                // Clear context for next session
-                this._prevFocus = null;
-                this._prevSection = null;
-            }
-        };
-
-        // Trap focus
-        focusManager.register('details-more-actions', overlay.querySelector('.modal-options'), {
+        // Register the options section
+        focusManager.register(optionsSection, optionsContainer, {
             orientation: 'vertical',
-            circular: true,
-            leaveLeft: null,
-            leaveRight: null
+            leaveDown: actionsSection,
+            leaveUp: actionsSection,
+            enterTo: 'last'
         });
 
-        // Register cancel button area
-        focusManager.register('details-more-footer', overlay.querySelector('.modal-actions'), {
+        // Register the actions section (Cancel button)
+        focusManager.register(actionsSection, actionsContainer, {
             orientation: 'horizontal',
-            leaveLeft: null,
-            leaveRight: null,
-            leaveUp: 'details-more-actions',
-            leaveDown: null
+            leaveUp: optionsSection,
+            onMove: (direction) => {
+                if (direction === 'down') {
+                    focusManager.setActiveSection(optionsSection, true, null, { enterTo: 'first' });
+                    return true;
+                }
+                return false;
+            }
         });
 
-        // Link actions up to footer
-        const actionsConfig = focusManager.getSectionConfig('details-more-actions');
-        if (actionsConfig) {
-            actionsConfig.leaveDown = 'details-more-footer';
-            focusManager.register('details-more-actions', actionsConfig.container, actionsConfig);
-        }
+        // Set active immediately
+        focusManager.setActiveSection(optionsSection);
 
-        focusManager.setActiveSection('details-more-actions');
+        // Helper to close menu
+        this._closeMoreMenu = () => {
+            if (!this._isMoreMenuOpen) return;
 
-        // Bind clicks
+            this._isMoreMenuOpen = false;
+            overlay.classList.remove('visible');
+
+            // Unregister focus sections
+            focusManager.unregister(optionsSection);
+            focusManager.unregister(actionsSection);
+
+            // Clean up DOM after animation
+            setTimeout(() => {
+                if (!this._isMoreMenuOpen) overlay.remove();
+            }, 300);
+
+            // Restore focus to previous element
+            if (this._prevSection) {
+                focusManager.setActiveSection(this._prevSection, false);
+            }
+            if (this._prevFocus) {
+                focusManager.focusElement(this._prevFocus);
+            } else {
+                focusManager.setActiveSection('details-actions');
+            }
+
+            // Restore state
+            this._prevFocus = null;
+            this._prevSection = null;
+            this.onBack = oldOnBack;
+        };
+
+        this.onBack = () => {
+            this._closeMoreMenu();
+            return true;
+        };
+
+        // Click outside to close
+        overlay.onclick = (e) => {
+            if (e.target === overlay) this._closeMoreMenu();
+        };
+
+        // Bind click events for options
         overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                onSelect(btn.dataset.id);
-                // Don't call _close() here, onSelect handles it
+                const id = btn.dataset.id;
+                log.debug(`Selected more-option: ${id}`);
+
+                if (id === 'go-to-series') {
+                    this._closeMoreMenu(); // Close FIRST to restore focus/handler
+                    router.navigate(`/details/${this._item.SeriesId}`);
+                } else if (id === 'go-to-album') {
+                    this._closeMoreMenu();
+                    router.navigate(`/details/${this._item.AlbumId}`);
+                } else if (id === 'media-info') {
+                    // Close menu but DON'T restore focus yet (MediaInfo will take it)
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    // Chain to Media Info with full context
+                    MediaInfoModal.show(itemId, this, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'refresh') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    this._showRefreshMetadataModal(itemId, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'edit-subtitles') {
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister('details-more-menu');
+                    focusManager.unregister('details-more-menu-actions');
+                    setTimeout(() => overlay.remove(), 300);
+
+                    SubtitleEditorModal.show(itemId, this, {
+                        prevFocus: this._prevFocus,
+                        prevSection: this._prevSection,
+                        fromMoreOptions: true,
+                        oldOnBack: oldOnBack
+                    });
+                } else if (id === 'delete') {
+                    // Transition to confirmation dialog
+                    this._showDeleteConfirmation(itemId);
+                }
             };
         });
 
+        // Bind cancel button
         overlay.querySelector('#btn-modal-cancel').onclick = (e) => {
             e.stopPropagation();
-            _close();
+            this._closeMoreMenu();
         };
-
-        overlay.onclick = (e) => {
-            if (e.target === overlay) _close();
-        };
-
-        // Back button
-        const myOnBack = () => {
-            _close();
-            return true;
-        };
-        this.onBack = myOnBack;
     }
 
+    /**
+     * Show Refresh Metadata Modal
+     */
     _showRefreshMetadataModal(itemId, transitionContext = null) {
         const oldOnBack = transitionContext?.oldOnBack || this.onBack;
-
-        // Store focus context for restoration
         const prevFocus = transitionContext?.prevFocus || focusManager.getFocused();
         const prevSection = transitionContext?.prevSection || focusManager.getActiveSection();
 
         let overlay = document.getElementById('details-refresh-menu');
-        if (overlay) {
-            overlay.remove();
-        }
+        if (overlay) overlay.remove();
+
         overlay = document.createElement('div');
         overlay.id = 'details-refresh-menu';
         overlay.className = 'modal-overlay visible';
@@ -2454,13 +2487,11 @@ class DetailsPage extends Page {
         ];
 
         const optionsHtml = options
-            .map((opt) => {
-                return `
+            .map((opt) => `
                 <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
-            `;
-            })
+            `)
             .join('');
 
         overlay.innerHTML = `
@@ -2478,25 +2509,13 @@ class DetailsPage extends Page {
         `;
 
         const _close = (restoreFocus = true) => {
-            // Restore handler if we are still active
-            if (this.onBack === myOnBack) {
-                this.onBack = oldOnBack;
-            }
-
+            this.onBack = oldOnBack;
             overlay.classList.remove('visible');
             setTimeout(() => overlay.remove(), 300);
 
             if (restoreFocus) {
-                if (prevFocus) {
-                    focusManager.focusElement(prevFocus);
-                }
-                if (prevSection) {
-                    focusManager.setActiveSection(prevSection, false);
-                }
-
-                // Clear instance context if this was the last modal in the chain
-                this._prevFocus = null;
-                this._prevSection = null;
+                if (prevFocus) focusManager.focusElement(prevFocus);
+                if (prevSection) focusManager.setActiveSection(prevSection, false);
             }
         };
 
@@ -2518,22 +2537,21 @@ class DetailsPage extends Page {
             }
         };
 
-        // Trap focus
-        const actionsId = 'refresh-modal-actions';
-        const footerId = 'refresh-modal-footer';
+        const section = 'details-refresh-menu';
+        const actionsSection = 'details-refresh-actions';
 
-        focusManager.register(actionsId, overlay.querySelector('.modal-options'), {
+        focusManager.register(section, overlay.querySelector('.modal-options'), {
             orientation: 'vertical',
-            circular: true,
-            leaveDown: footerId
+            circular: false,
+            leaveDown: actionsSection
         });
 
-        focusManager.register(footerId, overlay.querySelector('.modal-actions'), {
+        focusManager.register(actionsSection, overlay.querySelector('.modal-actions'), {
             orientation: 'horizontal',
-            leaveUp: actionsId
+            leaveUp: section
         });
 
-        focusManager.setActiveSection(actionsId);
+        focusManager.setActiveSection(section);
 
         overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.onclick = (e) => {
@@ -2548,16 +2566,8 @@ class DetailsPage extends Page {
             _close();
         };
 
-        overlay.onclick = (e) => {
-            if (e.target === overlay) _close();
-        };
-
-        // Back button handler
-        const myOnBack = () => {
-            // Check if we need to go back to More Options
+        this.onBack = () => {
             if (transitionContext?.fromMoreOptions) {
-                // Before closing, ensure onBack is restored so More Options captures the correct parent again
-                this.onBack = oldOnBack;
                 _close(false);
                 this._showMoreOptionsModal(itemId);
             } else {
@@ -2565,8 +2575,114 @@ class DetailsPage extends Page {
             }
             return true;
         };
-        this.onBack = myOnBack;
     }
+
+    /**
+     * Show a confirmation dialog before deleting media
+     * @param {string} itemId - ID of the item to delete
+     */
+    _showDeleteConfirmation(itemId) {
+        log.info('Showing delete confirmation for:', itemId);
+
+        // Reuse standard modal styles but with danger branding
+        let overlay = document.getElementById('details-delete-confirm');
+        if (overlay) overlay.remove();
+
+        overlay = document.createElement('div');
+        overlay.id = 'details-delete-confirm';
+        overlay.className = 'modal-overlay visible delete-modal';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal confirm-modal danger" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2 class="danger-title">${i18n.t('DeleteMediaConfirmTitle')}</h2>
+                </div>
+                <div class="modal-body" style="padding: 0 40px 30px 40px;">
+                    <p class="confirm-message" style="margin-bottom: 16px; font-size: 1.3rem;">${i18n.t('DeleteMediaConfirmMessage')}</p>
+                    <p class="confirm-item-name" style="font-weight: 700; color: var(--jf-accent); font-size: 1.4rem;">${i18n.ensureBiDi(this._item?.Name || '')}</p>
+                </div>
+                <div class="modal-actions horizontal" style="padding-top: 0;">
+                    <button class="modal-action-btn focusable danger" id="btn-delete-confirm" tabindex="0">${i18n.t('Delete')}</button>
+                    <button class="modal-action-btn focusable" id="btn-delete-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
+                </div>
+            </div>
+        `;
+
+        const section = 'details-delete-confirm';
+        focusManager.register(section, overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            defaultElement: '#btn-delete-cancel' // Default to Cancel for safety
+        });
+
+        focusManager.setActiveSection(section);
+
+        const close = () => {
+            overlay.classList.remove('visible');
+            focusManager.unregister(section);
+            setTimeout(() => overlay.remove(), 300);
+
+            // Bring focus back to the "Delete" option in the more menu if it's still open
+            if (this._isMoreMenuOpen) {
+                focusManager.setActiveSection('details-more-menu');
+                const deleteBtn = document.querySelector('.modal-option-btn[data-id="delete"]');
+                if (deleteBtn) focusManager.focusElement(deleteBtn);
+            }
+        };
+
+        overlay.querySelector('#btn-delete-confirm').onclick = async (e) => {
+            e.stopPropagation();
+            await this._handleDelete(itemId);
+            overlay.remove(); // Remove immediately on success to avoid double clicks
+        };
+
+        overlay.querySelector('#btn-delete-cancel').onclick = (e) => {
+            e.stopPropagation();
+            close();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) close();
+        };
+    }
+
+    /**
+     * Execute the item deletion API call
+     * @param {string} itemId - ID of the item to delete
+     */
+    async _handleDelete(itemId) {
+        log.info('Deleting item:', itemId);
+
+        try {
+            // Show loading state if we have a way, or just proceed
+            await api.delete(`/Items/${itemId}`);
+            log.info('Item deleted successfully');
+
+            // Success feedback
+            eventBus.emit('notify', {
+                text: i18n.t('Success'),
+                type: 'success'
+            });
+
+            // If we are on the details page for this item, we must leave
+            // Close all modals first
+            if (this._closeMoreMenu) this._closeMoreMenu();
+            
+            // Navigate back to parent or home
+            setTimeout(() => {
+                router.back();
+            }, 100);
+
+        } catch (error) {
+            log.error('Failed to delete item:', error);
+            eventBus.emit('notify', {
+                text: i18n.t('LabelFailed'),
+                type: 'error'
+            });
+        }
+    }
+
+
 
     // ============================================================================
     // ── Trailer Playback ──────────────────────────────────────────────────────
