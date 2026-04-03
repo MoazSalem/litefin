@@ -2619,6 +2619,8 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'layout_direction'
                             ) {
+                                // Flush memory to disk synchronously before the reboot nukes the event loop
+                                storage.flush();
                                 window.location.reload();
                             }
 
