@@ -268,31 +268,19 @@
 }
 
 /* Navigation & Libraries Container */
-.sidebar-nav,
+.sidebar-content {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
 .sidebar-libraries {
     display: flex;
     flex-direction: column;
     width: 100%;
-}
-
-/* Libraries Section */
-/* Libraries Section */
-.sidebar-libraries-wrapper {
-    margin-top: 0;
-    flex: 1;
-    overflow-y: auto;
-    overflow-x: hidden;
-
-    /* Hide completely when collapsed */
-    opacity: 0;
-    visibility: hidden;
-    transition: opacity 0.15s ease-out, visibility 0s linear 0.15s;
-}
-
-.sidebar.expanded .sidebar-libraries-wrapper {
-    opacity: 1;
-    visibility: visible;
-    transition: opacity 0.2s ease, visibility 0s linear 0s;
 }
 
 .sidebar-section-header {
