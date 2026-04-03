@@ -2609,12 +2609,12 @@ class DetailsPage extends Page {
                 <div class="modal-header">
                     <h2 class="danger-title">${i18n.t('DeleteMediaConfirmTitle')}</h2>
                 </div>
-                <div class="modal-body" style="padding: 0 40px 30px 40px;">
+                <div class="modal-body" style="padding: 0 40px 20px 40px;">
                     <p class="confirm-message" style="margin-bottom: 16px; font-size: 1.3rem;">${i18n.t('DeleteMediaConfirmMessage')}</p>
                     <p class="confirm-item-name" style="font-weight: 700; color: var(--jf-accent); font-size: 1.4rem;">${i18n.ensureBiDi(this._item?.Name || '')}</p>
                 </div>
-                <div class="modal-actions horizontal" style="padding-top: 0;">
-                    <button class="modal-action-btn focusable danger" id="btn-delete-confirm" tabindex="0">${i18n.t('Delete')}</button>
+                <div class="modal-actions horizontal" style="justify-content: center; padding-bottom: 30px;">
+                    <button class="modal-action-btn focusable danger" id="btn-delete-confirm" tabindex="0" style="margin-right: 20px;">${i18n.t('Delete')}</button>
                     <button class="modal-action-btn focusable" id="btn-delete-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
                 </div>
             </div>
@@ -2628,10 +2628,15 @@ class DetailsPage extends Page {
 
         focusManager.setActiveSection(section);
 
+        const oldOnBack = this.onBack;
+
         const close = () => {
             overlay.classList.remove('visible');
             focusManager.unregister(section);
             setTimeout(() => overlay.remove(), 300);
+
+            // Restore previous back handler
+            this.onBack = oldOnBack;
 
             // Bring focus back to the "Delete" option in the more menu if it's still open
             if (this._isMoreMenuOpen) {
@@ -2639,6 +2644,12 @@ class DetailsPage extends Page {
                 const deleteBtn = document.querySelector('.modal-option-btn[data-id="delete"]');
                 if (deleteBtn) focusManager.focusElement(deleteBtn);
             }
+        };
+
+        // Bind back button
+        this.onBack = () => {
+            close();
+            return true; // Stop propagation
         };
 
         overlay.querySelector('#btn-delete-confirm').onclick = async (e) => {
