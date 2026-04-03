@@ -2124,7 +2124,6 @@ class SettingsPage extends Page {
         // Log Out
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
             await auth.logout();
-            router.reset('/login');
         });
 
         // Color Selection

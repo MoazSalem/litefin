@@ -129,7 +129,7 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="Settings">Settings</span>
                     </button>
-                    
+                    <!-- 
                     <button class="sidebar-item" id="sidebar-logout" tabindex="0">
                         <div class="item-icon">
                             <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -143,6 +143,7 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="ButtonSignOut">Logout</span>
                     </button>
+                    -->
                 </div>
                 
                 <!-- Sliding Focus Indicator -->
@@ -334,8 +335,15 @@ class Sidebar extends Component {
                     } else {
                         router.navigate(path);
                     }
+                } else if (item.id === 'sidebar-user') {
+                    // Clicking the user profile tile opens the "Who's Watching" profiles screen.
+                    // From there the user can switch profiles, add a user, or switch servers.
+                    router.navigate('/profiles');
                 } else if (item.id === 'sidebar-logout') {
-                    auth.logout();
+                    // AuthManager.logout() handles the routing based on remaining sessions:
+                    //   • Other sessions remain → auth:switchToProfiles → App.js routes to /profiles
+                    //   • No sessions remain    → auth:logout           → App.js routes to /login
+                    // auth.logout();
                 } else if (item.id === 'sidebar-syncplay') {
                     // Open the SyncPlay group menu overlay (works from any screen)
                     syncPlayGroupMenu.open();

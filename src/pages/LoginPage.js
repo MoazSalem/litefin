@@ -55,6 +55,16 @@ class LoginPage extends Page {
         this._quickConnectPollCount = 0; // How many polls have been made so far
 
         this._isManualLoginAutoRedirect = false; // Whether we reached manual login because users were hidden
+
+        /*
+         * "Add User" mode: set to true when we arrive here from the ProfilesPage's
+         * "Add User" tile. In this mode:
+         *   - The server URL is already set; we skip server selection.
+         *   - All "Change Server" / "Log out of server" buttons are hidden.
+         *   - After a successful login we navigate to /profiles, not /home.
+         *   - The Back button returns to /profiles rather than exiting.
+         */
+        this._isAddUserMode = false;
     }
 
     destroy() {
@@ -280,6 +290,18 @@ class LoginPage extends Page {
         const savedUrl = auth.getSavedServerUrl();
         const isKnownOffline = state.get('server:offline') === true;
 
+        // Check if we arrived here from ProfilesPage's "Add User" flow.
+        // The ProfilesPage calls router.navigate('/login', { state: { addUser: true } }),
+        // which persists the flag via state.set('router:pageState', ...).
+        const pageState = state.get('router:pageState');
+        if (pageState && pageState.addUser) {
+            this._isAddUserMode = true;
+            // Consume the flag so re-mounts (e.g. back-nav) don't re-trigger it.
+            state.set('router:pageState', null);
+        } else {
+            this._isAddUserMode = false;
+        }
+
         if (savedUrl && !isKnownOffline) {
             // Server already saved and not known to be offline - skip server selection
             this._serverInput.value = savedUrl;
@@ -302,6 +324,12 @@ class LoginPage extends Page {
                     eventBus.emit('app:hideSplash');
                 });
             }, 10);
+        }
+
+        // Apply addUser UI restrictions AFTER the connection flow decision,
+        // so we hide buttons regardless of which screen is shown first.
+        if (this._isAddUserMode) {
+            this._applyAddUserMode();
         }
     }
 
@@ -570,8 +598,24 @@ class LoginPage extends Page {
     }
 
     /**
-     * Go to server selection screen (when Change Server button is clicked)
-     * This is the only way users can change their server after initial setup.
+     * Apply visual restrictions for "Add User" mode.
+     * Called once per mount when _isAddUserMode is true.
+     * Hides every "Change Server" / "Log out of server" button on all sections,
+     * since the server is already selected and should not be changeable.
+     * @private
+     */
+    _applyAddUserMode() {
+        log.info('LoginPage: Add User mode active — hiding server change buttons');
+        // Hide Change Server buttons on both the users section and manual-login section
+        this.$$('.change-server-btn').forEach((btn) => {
+            btn.style.display = 'none';
+        });
+    }
+
+    /**
+     * Go to server selection screen (when Change Server button is clicked).
+     * Uses logoutAll() to ensure ALL sessions are cleared before switching —
+     * a server change is a full reset, not a single-user sign-out.
      */
     _goToServerSelection() {
         log.info('Going to server selection');
@@ -589,9 +633,11 @@ class LoginPage extends Page {
         // But auth.logout() handles the rest and notifies server
         storage.removeItem('litefin:serverUrl');
 
-        // Call proper logout to notify server.
-        // NOTE: AuthManager.logout() calls router.reset('/login') internally.
-        auth.logout();
+        // Call logoutAll to clear ALL sessions — switching server means starting fresh.
+        // logoutAll() emits auth:logout, which App.js catches and routes to /login.
+        // We don't use auth.logout() here because that would emit auth:switchToProfiles
+        // if other sessions exist (wrong — we want the full reset flow).
+        auth.logoutAll();
 
         // Reset state
         this._showState(STATE.SERVER);
@@ -721,7 +767,12 @@ class LoginPage extends Page {
                 cancelDiscovery();
 
                 await auth.login(user.Name, '');
-                router.navigate('/home', { replace: true });
+                // In addUser mode, return to the profiles screen instead of going home
+                if (this._isAddUserMode) {
+                    router.navigate('/profiles', { replace: true });
+                } else {
+                    router.navigate('/home', { replace: true });
+                }
             } else {
                 // Password required - show password form
                 log.info(`LoginPage: User "${user.Name}" requires password`);
@@ -782,8 +833,12 @@ class LoginPage extends Page {
             // Short delay to ensure state propagation
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            // Success! Navigate to home
-            router.navigate('/home', { replace: true });
+            // In addUser mode, return to the profiles screen so the user can pick a profile
+            if (this._isAddUserMode) {
+                router.navigate('/profiles', { replace: true });
+            } else {
+                router.navigate('/home', { replace: true });
+            }
         } catch (error) {
             this._showState(STATE.PASSWORD);
             this._showError('password-error', error.message || i18n.t('Error'));
@@ -849,7 +904,12 @@ class LoginPage extends Page {
             // Short delay to ensure state propagation
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            router.navigate('/home', { replace: true });
+            // In addUser mode, return to the profiles screen so the user can pick a profile
+            if (this._isAddUserMode) {
+                router.navigate('/profiles', { replace: true });
+            } else {
+                router.navigate('/home', { replace: true });
+            }
         } catch (error) {
             this._showState(STATE.MANUAL);
             this._showError('manual-error', error.message || i18n.t('Error'));
@@ -875,8 +935,14 @@ class LoginPage extends Page {
             }
             return true;
         } else if (this._state === STATE.SERVER) {
-            // Exit app if back is pressed on server screen
-            if (typeof tizen !== 'undefined') {
+            /*
+             * Back on the server screen.
+             * In addUser mode we came from ProfilesPage, so go back there.
+             * In normal mode, exit the app — there's nowhere to go.
+             */
+            if (this._isAddUserMode) {
+                router.navigate('/profiles', { replace: true });
+            } else if (typeof tizen !== 'undefined') {
                 try {
                     tizen.application.getCurrentApplication().exit();
                 } catch (e) {
@@ -887,9 +953,18 @@ class LoginPage extends Page {
             }
             return true;
         } else if (this._state === STATE.USERS) {
-            this._showState(STATE.SERVER);
-            this.setActiveSection('login-server');
-            this._serverInput.focus();
+            /*
+             * Back on the user selection screen.
+             * In addUser mode, go back to ProfilesPage.
+             * In normal mode, go back to the server input screen.
+             */
+            if (this._isAddUserMode) {
+                router.navigate('/profiles', { replace: true });
+            } else {
+                this._showState(STATE.SERVER);
+                this.setActiveSection('login-server');
+                this._serverInput.focus();
+            }
             return true;
         } else if (this._state === STATE.MANUAL) {
             // Prevent going back if autoredirected (no users found)
