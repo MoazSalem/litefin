@@ -4,13 +4,25 @@
  * ============================================================================
  * Handles user authentication, session management, and credential storage.
  *
- * Features:
- * - Session persistence (auto-login on app restart)
- * - HasPassword detection (auto-login for passwordless users)
- * - Manual login with username/password
- * - Proper logout with server notification
+ * Multi-User Architecture:
+ * ------------------------
+ * All sessions are stored in a single JSON array under `litefin:sessions`.
+ * The currently active user is tracked by `litefin:activeUserId`.
+ * ApiClient remains a thin transport layer — AuthManager orchestrates which
+ * user's credentials are fed to it at any given time.
  *
- * Based on jellyfin-web patterns for compatibility.
+ * Session Object Shape:
+ *   {
+ *     userId: string,
+ *     accessToken: string,
+ *     userName: string,
+ *     primaryImageTag: string|null
+ *   }
+ *
+ * Backward Compatibility:
+ * When old single-user keys (litefin:accessToken, litefin:userId, etc.) are
+ * detected on first launch, they are automatically migrated to the new sessions
+ * array and the old keys are pruned.
  * ============================================================================
  */
 
@@ -30,11 +42,49 @@ const log = logger.create('AuthManager');
 // Storage Keys
 // ============================================================================
 const STORAGE_KEYS = {
-    SERVER_URL: 'litefin:serverUrl',
-    ACCESS_TOKEN: 'litefin:accessToken',
-    USER_ID: 'litefin:userId',
-    USER_DATA: 'litefin:userData',
-    DEVICE_ID: 'litefin:deviceId'
+    SERVER_URL:    'litefin:serverUrl',
+    DEVICE_ID:     'litefin:deviceId',
+
+    // --- Multi-user keys ---
+    /** JSON array of session objects */
+    SESSIONS:      'litefin:sessions',
+    /** userId string of the currently active session */
+    ACTIVE_USER:   'litefin:activeUserId',
+
+    // --- Legacy single-user keys (kept for migration, then pruned) ---
+    ACCESS_TOKEN:  'litefin:accessToken',
+    USER_ID:       'litefin:userId',
+    USER_DATA:     'litefin:userData'
+};
+
+/**
+ * Maximum number of user sessions stored simultaneously.
+ * A TV is a shared device, but we keep this sane.
+ */
+const MAX_SESSIONS = 8;
+
+/**
+ * Shared capabilities block sent to the server after every login / session
+ * restore. Extracted as a constant to avoid copy-pasting the same array
+ * in four places throughout this file.
+ */
+const SUPPORTED_CAPABILITIES = {
+    DeviceProfile: null, // Filled in at call time via buildJellyfinProfile()
+    PlayableMediaTypes: ['Video', 'Audio'],
+    SupportedCommands: [
+        'MoveUp', 'MoveDown', 'MoveLeft', 'MoveRight',
+        'ToggleOsd',
+        'Select', 'Back', 'SendKey', 'SendString',
+        'GoHome', 'GoToSettings',
+        'VolumeUp', 'VolumeDown', 'Mute', 'Unmute', 'ToggleMute', 'SetVolume',
+        'SetAudioStreamIndex', 'SetSubtitleStreamIndex',
+        'DisplayContent', 'GoToSearch', 'DisplayMessage',
+        'SetRepeatMode', 'SetShuffleQueue',
+        'ChannelUp', 'ChannelDown',
+        'PlayMediaSource'
+    ],
+    SupportsMediaControl: true,
+    SupportsPersistentIdentifier: true
 };
 
 // ============================================================================
@@ -42,8 +92,8 @@ const STORAGE_KEYS = {
 // ============================================================================
 class AuthManager {
     constructor() {
-        // Bind methods
-        this._onUnauthorized = this._onUnauthorized.bind(this);
+        // Bind methods that are wired to external event sources
+        this._onUnauthorized    = this._onUnauthorized.bind(this);
         this._onWebosDeviceInfo = this._onWebosDeviceInfo.bind(this);
 
         // Listen for unauthorized events from API
@@ -56,18 +106,23 @@ class AuthManager {
     // ========================================================================
 
     /**
-     * Initialize auth manager
+     * Initialize auth manager.
      * - Ensures device ID exists
-     * - Attempts to restore saved session
-     * @returns {Promise<boolean>} True if session was restored
+     * - Migrates old single-user credentials to the new sessions array (one-time)
+     * - Attempts to restore the last active session
+     *
+     * @returns {Promise<boolean>} True if a session was successfully restored
      */
     async init() {
         log.info('Initializing...');
 
-        // Ensure we have a device ID
+        // Ensure a unique device ID is registered with the API
         this._ensureDeviceId();
 
-        // Try to restore saved session
+        // One-time migration from the old single-user storage format
+        this._migrateOldSession();
+
+        // Restore the last active session from the sessions array
         const restored = await this._restoreSession();
 
         if (restored) {
@@ -79,20 +134,20 @@ class AuthManager {
     }
 
     /**
-     * Ensure we have a unique device ID
+     * Ensure we have a unique device ID registered with ApiClient.
      * @private
      */
     _ensureDeviceId() {
         let deviceId = storage.getItem(STORAGE_KEYS.DEVICE_ID);
 
         if (!deviceId) {
-            // Generate UUID v4
+            // Generate UUID v4 for first launch
             deviceId = this._generateUUID();
             storage.setItem(STORAGE_KEYS.DEVICE_ID, deviceId);
             log.info('Generated new device ID');
         }
 
-        // Get device name from appropriate adapter
+        // Resolve device name from the platform adapter
         let deviceName;
         if (platformInfo.isWebOS) {
             deviceName = webosAdapter.getDeviceName();
@@ -105,120 +160,154 @@ class AuthManager {
     }
 
     /**
-     * Restore session from localStorage
+     * One-time migration: if old-style single-user keys exist but the new
+     * sessions array does not, lift them into a sessions array and prune the
+     * legacy keys so they don't accumulate.
      * @private
-     * @returns {Promise<boolean>} True if session was valid
+     */
+    _migrateOldSession() {
+        // If the new sessions format already exists, nothing to do
+        if (storage.getItem(STORAGE_KEYS.SESSIONS) !== null) return;
+
+        const oldToken  = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
+        const oldUserId = storage.getItem(STORAGE_KEYS.USER_ID);
+        let   oldUser   = null;
+
+        // Attempt to parse cached user object (may be absent on very old installs)
+        try {
+            const raw = storage.getItem(STORAGE_KEYS.USER_DATA);
+            if (raw) oldUser = JSON.parse(raw);
+        } catch (_) { /* ignore parse errors — treat as missing */ }
+
+        if (oldToken && oldUserId) {
+            log.info('Migrating legacy single-user session to multi-user format');
+
+            // Construct a session object from whatever data we have
+            const session = {
+                userId:          oldUserId,
+                accessToken:     oldToken,
+                userName:        oldUser?.Name  || '',
+                primaryImageTag: oldUser?.PrimaryImageTag || null
+            };
+
+            // Write the new format
+            storage.setItem(STORAGE_KEYS.SESSIONS,    JSON.stringify([session]));
+            storage.setItem(STORAGE_KEYS.ACTIVE_USER, oldUserId);
+        } else {
+            // No usable legacy data — initialize an empty sessions array
+            storage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify([]));
+        }
+
+        // Prune old single-user keys regardless (clean slate)
+        storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
+        storage.removeItem(STORAGE_KEYS.USER_ID);
+        storage.removeItem(STORAGE_KEYS.USER_DATA);
+
+        log.info('Legacy session migration complete');
+    }
+
+    /**
+     * Attempt to restore the last active session from the sessions array.
+     * Validates the token by calling the server; clears the specific session
+     * on 401/403 so stale entries don't accumulate.
+     *
+     * @returns {Promise<boolean>} True if the session was valid and restored
+     * @private
      */
     async _restoreSession() {
         log.info('_restoreSession() called');
 
-        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
-        const accessToken = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-        const userId = storage.getItem(STORAGE_KEYS.USER_ID);
+        const serverUrl    = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        const sessions     = this._loadSessions();
+        const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
 
-        log.debug('Stored credentials check:', {
-            hasServerUrl: !!serverUrl,
-            hasAccessToken: !!accessToken,
-            hasUserId: !!userId
+        log.debug('Restore check:', {
+            hasServerUrl:    !!serverUrl,
+            sessionCount:    sessions.length,
+            hasActiveUserId: !!activeUserId
         });
 
-        // Need all three to restore
-        if (!serverUrl || !accessToken || !userId) {
-            log.info('Missing credentials, cannot restore');
+        if (!serverUrl || sessions.length === 0 || !activeUserId) {
+            log.info('Missing credentials — cannot restore');
+            // Publish session count so App.js routing can make decisions
+            state.set('user:sessionCount', sessions.length);
             return false;
         }
 
-        // Configure API with saved values
+        // Find the session that was active when we last quit
+        const session = sessions.find((s) => s.userId === activeUserId);
+        if (!session) {
+            log.warn('Active user ID not found in sessions array — clearing activeUserId');
+            storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+            state.set('user:sessionCount', sessions.length);
+            return false;
+        }
+
+        // Arm ApiClient with the saved credentials
         api.setServer(serverUrl);
-        api.setAuth(accessToken, userId);
+        api.setAuth(session.accessToken, session.userId);
         log.info('API configured with saved credentials');
 
-        // Validate token by fetching user info
+        // Validate token with a server round-trip
         try {
             log.info('Validating token by fetching current user...');
             const user = await api.getCurrentUser();
             log.info('Token valid, user:', user?.Name);
 
-            // Token is valid - restore state
-            state.set('user:data', user);
+            // Sync the stored session with fresh user data from the server
+            this._saveSession({
+                userId:          user.Id,
+                accessToken:     session.accessToken,
+                userName:        user.Name || '',
+                primaryImageTag: user.PrimaryImageTag || null
+            });
+
+            // Publish authenticated state
+            state.set('user:data',        user);
             state.set('user:authenticated', true);
             state.set('server:connected', true);
-            state.set('server:offline', false);
+            state.set('server:offline',   false);
+            state.set('user:sessionCount', this._loadSessions().length);
 
-            // Report capabilities to establish session (make user appear online)
-            // MUST await this on Tizen - fire-and-forget doesn't complete reliably
+            // Report capabilities to make this user visible as "online" in the dashboard
             log.info('Reporting capabilities to server...');
             try {
                 await api.reportCapabilities({
-                    DeviceProfile: buildJellyfinProfile(),
-                    PlayableMediaTypes: ['Video', 'Audio'],
-                    SupportedCommands: [
-                        'MoveUp',
-                        'MoveDown',
-                        'MoveLeft',
-                        'MoveRight',
-                        'ToggleOsd',
-                        //'ToggleContextMenu',
-                        'Select',
-                        'Back',
-                        'SendKey',
-                        'SendString',
-                        'GoHome',
-                        'GoToSettings',
-                        'VolumeUp',
-                        'VolumeDown',
-                        'Mute',
-                        'Unmute',
-                        'ToggleMute',
-                        'SetVolume',
-                        'SetAudioStreamIndex',
-                        'SetSubtitleStreamIndex',
-                        'DisplayContent',
-                        'GoToSearch',
-                        'DisplayMessage',
-                        'SetRepeatMode',
-                        'SetShuffleQueue',
-                        'ChannelUp',
-                        'ChannelDown',
-                        'PlayMediaSource'
-                        //'PlayTrailers'
-                    ],
-                    SupportsMediaControl: true,
-                    SupportsPersistentIdentifier: true
+                    ...SUPPORTED_CAPABILITIES,
+                    DeviceProfile: buildJellyfinProfile()
                 });
-                log.info('✓ Session capabilities reported on restore - user should be online');
+                log.info('✓ Capabilities reported on restore — user is online');
             } catch (e) {
                 log.error('✗ Failed to report capabilities on restore:', e);
             }
 
-            // Open WebSocket for real-time online status tracking
+            // Open WebSocket for real-time dashboard presence
             api.openWebSocket();
 
             return true;
         } catch (error) {
-            // Check if it's a network/timeout error
             if (error instanceof ServerUnreachableError) {
-                log.warn('Server unreachable during restore. Keeping credentials for later retry.');
+                // Server unreachable — keep credentials for when it comes back
+                log.warn('Server unreachable during restore. Preserving credentials for retry.');
                 state.set('server:connected', false);
-                state.set('server:offline', true);
-                state.set('user:authenticated', false); // CRITICAL: Not authenticated until server responds
+                state.set('server:offline',   true);
+                state.set('user:authenticated', false);
+                state.set('user:sessionCount', sessions.length);
                 return false;
             }
 
-            // Only clear storage for explicit "Unauthorized" or "Forbidden"
-            // This prevents generic server errors (500) or parsing issues from nuking the session
             if (error.status === 401 || error.status === 403) {
-                log.warn('Session expired or unauthorized. Clearing stored credentials.');
-                this._clearStorage();
+                // Token explicitly rejected by server — prune this specific session
+                log.warn('Session expired or unauthorized. Removing this session from storage.');
+                this._removeSession(activeUserId);
+                storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
                 api.clearAuth();
             } else {
-                log.warn(
-                    `Unexpected error during restore (Status: ${error.status || '??'}). Preserving session.`,
-                    error
-                );
-                // Still return false to show Offline/Login page, but don't delete token
+                // Unexpected error (500, parse failure) — don't nuke the session
+                log.warn(`Unexpected restore error (status ${error.status ?? '??'}) — preserving session.`, error);
             }
 
+            state.set('user:sessionCount', this._loadSessions().length);
             return false;
         }
     }
@@ -228,9 +317,9 @@ class AuthManager {
     // ========================================================================
 
     /**
-     * Connect to a Jellyfin server
+     * Connect to a Jellyfin server.
      * @param {string} serverUrl - Server URL
-     * @returns {Promise<Object>} Server info
+     * @returns {Promise<Object>} Server public info
      */
     async connectToServer(serverUrl) {
         log.info(`Connecting to ${serverUrl}`);
@@ -240,17 +329,16 @@ class AuthManager {
         try {
             const info = await api.getPublicInfo();
 
-            // Save server URL
+            // Persist the server URL
             storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
 
             state.set('server:connected', true);
-            state.set('server:offline', false);
-            state.set('server:info', info);
+            state.set('server:offline',   false);
+            state.set('server:info',      info);
 
             eventBus.emit('auth:serverConnected', info);
 
             log.info(`Connected to ${info.ServerName} (v${info.Version})`);
-
             return info;
         } catch (error) {
             state.set('server:connected', false);
@@ -259,7 +347,7 @@ class AuthManager {
     }
 
     /**
-     * Lightweight check to see if the server is reachable
+     * Lightweight check to see if the server is reachable.
      * @returns {Promise<boolean>} True if reachable
      */
     async checkServerStatus() {
@@ -267,7 +355,6 @@ class AuthManager {
         if (!url) return false;
 
         try {
-            // Use the public info endpoint which requires no auth
             await api.getPublicInfo();
             return true;
         } catch (e) {
@@ -276,8 +363,8 @@ class AuthManager {
     }
 
     /**
-     * Get saved server URL
-     * @returns {string|null} Server URL if saved
+     * Get the saved server URL.
+     * @returns {string|null} Server URL or null
      */
     getSavedServerUrl() {
         return storage.getItem(STORAGE_KEYS.SERVER_URL);
@@ -288,98 +375,69 @@ class AuthManager {
     // ========================================================================
 
     /**
-     * Get list of public users
-     * Each user has HasPassword field to determine if password is required
-     * @returns {Promise<Array>} Public users
+     * Get list of public users from the server.
+     * @returns {Promise<Array>} Public users array
      */
     async getPublicUsers() {
         return api.getPublicUsers();
     }
 
     /**
-     * Authenticate a user by name and password
-     * This is the core authentication method
-     * @param {string} username - Username (case-insensitive on most servers)
-     * @param {string} password - Password (empty string for passwordless users)
-     * @returns {Promise<Object>} Authentication result
+     * Authenticate a user by username and password.
+     * On success the session is *added* to the sessions array (not overwritten),
+     * and the new user is set as the active session.
+     *
+     * @param {string} username - Jellyfin username (case-insensitive on most servers)
+     * @param {string} [password=''] - Password; empty string for passwordless users
+     * @returns {Promise<Object>} Authentication result from the server
      */
     async login(username, password = '') {
         log.info(`Logging in as "${username}"`);
 
-        // Capture existing memory state to restore on failure
-        const prevToken = api.accessToken;
+        // Save in-memory credentials so we can restore them if this login fails
+        // (prevents the app from being half-logged-out on a wrong password)
+        const prevToken  = api.accessToken;
         const prevUserId = api.userId;
 
         try {
-            // 1. Prepare for clean login request
-            // We clear memory token so ApiClient doesn't send a stale one in the header.
-            // We do NOT clear localStorage yet - we only do that on SUCCESS.
+            // Clear in-memory token so ApiClient doesn't send a stale one in the header
             api.setAuth(null, null);
-            log.info(`Cleared in-memory auth for login request attempt`);
 
-            // 2. Call Jellyfin authenticate endpoint
+            // Call the Jellyfin authenticate endpoint
             const result = await api.post('/Users/AuthenticateByName', {
                 Username: username,
                 Pw: password
             });
 
-            // 3. SUCCESS - Now we can safely overwrite the old session
+            // Unpack response
             const accessToken = result.AccessToken || result.accessToken;
-            const user = result.User || result.user;
-            const userId = user?.Id || user?.id;
+            const user        = result.User        || result.user;
+            const userId      = user?.Id           || user?.id;
 
             if (!accessToken || !userId) {
                 log.error('Invalid login response structure', result);
                 throw new Error('Invalid server response');
             }
 
-            // Clear old and save new to storage
-            this._clearStorage();
-            storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-            storage.setItem(STORAGE_KEYS.USER_ID, userId);
-            storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+            // --- Persist the new session ---
+            // We add-or-update so the same user can upgrade their token
+            // (e.g., they were added before and are logging in again)
+            this._saveSession({
+                userId,
+                accessToken,
+                userName:        user.Name             || '',
+                primaryImageTag: user.PrimaryImageTag  || null
+            });
+            storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
 
-            // Configure API with new credentials
+            // Arm the API client
             api.setAuth(accessToken, userId);
 
             // Establish session capabilities
             try {
                 await api.reportCapabilities({
-                    DeviceProfile: buildJellyfinProfile(),
-                    PlayableMediaTypes: ['Video', 'Audio'],
-                    SupportedCommands: [
-                        'MoveUp',
-                        'MoveDown',
-                        'MoveLeft',
-                        'MoveRight',
-                        'ToggleOsd',
-                        //'ToggleContextMenu',
-                        'Select',
-                        'Back',
-                        'SendKey',
-                        'SendString',
-                        'GoHome',
-                        'GoToSettings',
-                        'VolumeUp',
-                        'VolumeDown',
-                        'Mute',
-                        'Unmute',
-                        'ToggleMute',
-                        'SetVolume',
-                        'SetAudioStreamIndex',
-                        'SetSubtitleStreamIndex',
-                        'DisplayContent',
-                        'GoToSearch',
-                        'DisplayMessage',
-                        'SetRepeatMode',
-                        'SetShuffleQueue',
-                        'ChannelUp',
-                        'ChannelDown',
-                        'PlayMediaSource'
-                        //'PlayTrailers'
-                    ],
-                    SupportsMediaControl: true,
-                    SupportsPersistentIdentifier: true
+                    ...SUPPORTED_CAPABILITIES,
+                    DeviceProfile: buildJellyfinProfile()
                 });
             } catch (capError) {
                 log.warn('Non-fatal: Failed to report capabilities after login:', capError);
@@ -387,8 +445,10 @@ class AuthManager {
 
             api.openWebSocket();
 
+            // Update app state
             state.set('user:authenticated', true);
-            state.set('user:data', user);
+            state.set('user:data',          user);
+            state.set('user:sessionCount',  this._loadSessions().length);
 
             eventBus.emit('auth:login', user);
             log.info(`Login successful for "${user.Name || username}"`);
@@ -397,9 +457,7 @@ class AuthManager {
         } catch (error) {
             log.error('Login request failed:', error);
 
-            // 4. FAILURE - Restore previous in-memory credentials
-            // This prevents the app from being "half-logged out" if the failure
-            // was just a wrong password or temporary network glitch.
+            // Restore previous in-memory credentials on failure
             if (prevToken && prevUserId) {
                 log.info('Restoring previous in-memory credentials after failed login attempt');
                 api.setAuth(prevToken, prevUserId);
@@ -410,104 +468,71 @@ class AuthManager {
     }
 
     /**
-     * Login with a public user
-     * Checks HasPassword to determine if password prompt is needed
+     * Login with a public user object.
+     * Checks HasPassword to determine whether a password prompt is needed.
+     *
      * @param {Object} user - User object from getPublicUsers()
-     * @param {string} [password] - Password (only needed if HasPassword is true)
+     * @param {string} [password=''] - Password (only meaningful when HasPassword)
      * @returns {Promise<Object>} Authentication result
      */
     async loginWithUser(user, password = '') {
-        // If user has no password, always use empty string
         const pw = user.HasPassword ? password : '';
         return this.login(user.Name, pw);
     }
 
     /**
      * Complete login using an authorized Quick Connect secret.
-     * Called after the polling loop detects Authenticated === true.
+     * Follows the exact same session-persistence path as login().
      *
-     * Follows the exact same finalization path as login() — saves credentials
-     * to storage, configures API, reports capabilities, and opens the WebSocket.
-     *
-     * @param {string} secret - The Secret from the authorized Quick Connect result
+     * @param {string} secret - Authorized Quick Connect secret
      * @returns {Promise<Object>} Authentication result (same shape as login())
      */
     async loginWithQuickConnect(secret) {
         log.info('Completing login via Quick Connect...');
 
         try {
-            // Exchange the authorized secret for a real access token.
-            // No username/password needed — the user authorized us on another device.
+            // Exchange the authorized secret for a real access token
             const result = await api.authenticateWithQuickConnect(secret);
 
-            // Unpack the token and user from the server response
             const accessToken = result.AccessToken || result.accessToken;
-            const user = result.User || result.user;
-            const userId = user?.Id || user?.id;
+            const user        = result.User        || result.user;
+            const userId      = user?.Id           || user?.id;
 
             if (!accessToken || !userId) {
                 log.error('Invalid Quick Connect auth response structure', result);
                 throw new Error('Invalid server response from Quick Connect');
             }
 
-            // Persist new credentials (same as standard login flow)
-            this._clearStorage();
-            storage.setItem(STORAGE_KEYS.ACCESS_TOKEN, accessToken);
-            storage.setItem(STORAGE_KEYS.USER_ID, userId);
-            storage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(user));
+            // Persist — same add-or-update path as manual login
+            this._saveSession({
+                userId,
+                accessToken,
+                userName:        user.Name             || '',
+                primaryImageTag: user.PrimaryImageTag  || null
+            });
+            storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
 
-            // Arm the API client with the fresh token
+            // Arm ApiClient
             api.setAuth(accessToken, userId);
 
-            // Report capabilities so our session becomes visible on the server dashboard
+            // Report capabilities
             try {
                 await api.reportCapabilities({
-                    DeviceProfile: buildJellyfinProfile(),
-                    PlayableMediaTypes: ['Video', 'Audio'],
-                    SupportedCommands: [
-                        'MoveUp',
-                        'MoveDown',
-                        'MoveLeft',
-                        'MoveRight',
-                        'ToggleOsd',
-                        //'ToggleContextMenu',
-                        'Select',
-                        'Back',
-                        'SendKey',
-                        'SendString',
-                        'GoHome',
-                        'GoToSettings',
-                        'VolumeUp',
-                        'VolumeDown',
-                        'Mute',
-                        'Unmute',
-                        'ToggleMute',
-                        'SetVolume',
-                        'SetAudioStreamIndex',
-                        'SetSubtitleStreamIndex',
-                        'DisplayContent',
-                        'GoToSearch',
-                        'DisplayMessage',
-                        'SetRepeatMode',
-                        'SetShuffleQueue',
-                        'ChannelUp',
-                        'ChannelDown',
-                        'PlayMediaSource'
-                        //'PlayTrailers'
-                    ],
-                    SupportsMediaControl: true,
-                    SupportsPersistentIdentifier: true
+                    ...SUPPORTED_CAPABILITIES,
+                    DeviceProfile: buildJellyfinProfile()
                 });
             } catch (capError) {
                 log.warn('Non-fatal: Failed to report capabilities after Quick Connect login:', capError);
             }
 
-            // Establish WebSocket for real-time status
+            // Establish WebSocket presence
             api.openWebSocket();
 
-            // Broadcast authenticated state
+            // Update app state
             state.set('user:authenticated', true);
-            state.set('user:data', user);
+            state.set('user:data',          user);
+            state.set('user:sessionCount',  this._loadSessions().length);
+
             eventBus.emit('auth:login', user);
 
             log.info(`Quick Connect login successful for "${user.Name}"`);
@@ -519,33 +544,116 @@ class AuthManager {
     }
 
     // ========================================================================
+    // Session Switching
+    // ========================================================================
+
+    /**
+     * Switch the active user to another stored session without requiring
+     * a password. The ApiClient credentials are swapped, capabilities are
+     * re-reported, and the WebSocket is reset to the new user's token.
+     *
+     * If the token for the target session has expired, the error is surfaced
+     * to the caller and the bad session is pruned automatically.
+     *
+     * @param {string} userId - The userId of the session to switch to
+     * @returns {Promise<Object>} The user's current profile from the server
+     */
+    async switchUser(userId) {
+        log.info(`Switching to user ${userId}...`);
+
+        const sessions = this._loadSessions();
+        const session  = sessions.find((s) => s.userId === userId);
+
+        if (!session) {
+            throw new Error(`No stored session found for user ${userId}`);
+        }
+
+        // Close the previous user's WebSocket (marks old user offline on server)
+        api.closeWebSocket();
+
+        // Swap ApiClient to the new user's credentials
+        api.setAuth(session.accessToken, session.userId);
+
+        try {
+            // Validate and fetch fresh profile data in one call
+            const user = await api.getCurrentUser();
+
+            // Update the session with fresher data (image tag may have changed)
+            this._saveSession({
+                userId:          user.Id,
+                accessToken:     session.accessToken,
+                userName:        user.Name             || '',
+                primaryImageTag: user.PrimaryImageTag  || null
+            });
+            storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
+
+            // Report capabilities for the new session
+            try {
+                await api.reportCapabilities({
+                    ...SUPPORTED_CAPABILITIES,
+                    DeviceProfile: buildJellyfinProfile()
+                });
+                log.info('✓ Capabilities reported for switched user');
+            } catch (e) {
+                log.warn('Non-fatal: Failed to report capabilities on user switch:', e);
+            }
+
+            // Establish new WebSocket for the switched-to user
+            api.openWebSocket();
+
+            // Update global state to reflect the new active user
+            state.set('user:authenticated', true);
+            state.set('user:data',          user);
+            state.set('user:sessionCount',  sessions.length);
+
+            eventBus.emit('auth:login', user);
+            log.info(`Switched to user "${user.Name}"`);
+
+            return user;
+        } catch (error) {
+            if (error.status === 401 || error.status === 403) {
+                // Token is dead — remove the stale session from storage
+                log.warn(`Token for user ${userId} is expired. Pruning session.`);
+                this._removeSession(userId);
+                state.set('user:sessionCount', this._loadSessions().length);
+            }
+            throw error;
+        }
+    }
+
+    // ========================================================================
     // Logout
     // ========================================================================
 
     /**
-     * Logout current user
-     * Clears local session and notifies server
-     * NOTE: Local cleanup happens regardless of server response
+     * Log out the current active user.
+     *
+     * If other sessions remain, the app emits `auth:switchToProfiles` so the
+     * caller (App.js) can navigate to the "Who's Watching" screen instead of
+     * the login page. If this was the last session, `auth:logout` is emitted
+     * and the app resets to the login page.
+     *
+     * The server is always notified via /Sessions/Logout (best-effort).
      */
     async logout() {
-        log.info('Logging out...');
+        log.info('Logging out current user...');
 
-        // Close WebSocket first (marks user offline immediately)
+        const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
+        const sessions     = this._loadSessions();
+        const session      = sessions.find((s) => s.userId === activeUserId);
+
+        // Close WebSocket immediately (marks this user offline on the dashboard)
         api.closeWebSocket();
 
-        // Get current credentials BEFORE clearing (needed for server notification)
-        const accessToken = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-        const serverUrl = api._serverUrl;
-
-        // Notify server FIRST (while we still have valid credentials)
-        if (accessToken && serverUrl) {
-            const url = `${serverUrl}/Sessions/Logout`;
-            const authHeader = api.getAuthHeader(accessToken);
+        // Notify the server while we still have valid credentials (best-effort)
+        if (session && api._serverUrl) {
+            const url        = `${api._serverUrl}/Sessions/Logout`;
+            const authHeader = api.getAuthHeader(session.accessToken);
 
             log.info('Notifying server of logout...');
             try {
                 await fetch(url, {
-                    method: 'POST',
+                    method:  'POST',
                     headers: {
                         'X-Emby-Authorization': authHeader,
                         'Content-Type': 'application/json'
@@ -553,19 +661,102 @@ class AuthManager {
                 });
                 log.info('Server notified of logout');
             } catch (e) {
-                log.warn('Server logout request failed:', e.message);
+                log.warn('Server logout request failed (best-effort):', e.message);
             }
         }
 
-        // THEN clear local state
-        log.info('Clearing local credentials...');
-        this._clearStorage();
+        // Remove only this user's session from storage
+        if (activeUserId) {
+            this._removeSession(activeUserId);
+            storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+        }
+
+        // Clear ApiClient credentials for this user
         api.clearAuth();
         state.set('user:authenticated', false);
-        state.set('user:data', null);
+        state.set('user:data',          null);
 
+        const remaining = this._loadSessions();
+        state.set('user:sessionCount', remaining.length);
+
+        if (remaining.length > 0) {
+            /*
+             * Other users are still logged in — go to the profiles screen
+             * instead of the login page. App.js listens for this event.
+             */
+            log.info(`Logout complete. ${remaining.length} session(s) remain — routing to profiles.`);
+            eventBus.emit('auth:switchToProfiles');
+        } else {
+            // This was the last session — fall back to the login page
+            log.info('Logout complete. No remaining sessions — routing to login.');
+            eventBus.emit('auth:logout');
+        }
+    }
+
+    /**
+     * Log out ALL stored users at once.
+     * Used by "Switch Server" on the profiles screen.
+     * The server is NOT notified individually per user because we are
+     * switching servers (the old tokens are no longer relevant).
+     */
+    async logoutAll() {
+        log.info('Logging out ALL users (switch server)...');
+
+        // Close WebSocket cleanly
+        api.closeWebSocket();
+
+        // Wipe the sessions array and active user marker
+        storage.setItem(STORAGE_KEYS.SESSIONS,   JSON.stringify([]));
+        storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+        storage.removeItem(STORAGE_KEYS.SERVER_URL);
+
+        // Clear ApiClient
+        api.clearAuth();
+        api.setServer(''); // Detach server URL so it doesn't auto-reconnect
+
+        // Reset state
+        state.set('user:authenticated', false);
+        state.set('user:data',          null);
+        state.set('user:sessionCount',  0);
+        state.set('server:connected',   false);
+
+        // Route to login page
         eventBus.emit('auth:logout');
-        log.info('Logout complete');
+        log.info('All users logged out');
+    }
+
+    // ========================================================================
+    // Session Accessors
+    // ========================================================================
+
+    /**
+     * Return all stored sessions as an array.
+     * Callers should treat this as read-only; use _saveSession/_removeSession
+     * to mutate.
+     *
+     * @returns {Array<{userId, accessToken, userName, primaryImageTag}>}
+     */
+    getSessions() {
+        return this._loadSessions();
+    }
+
+    /**
+     * Return the session object for the currently active user, or null if none.
+     * @returns {{userId, accessToken, userName, primaryImageTag}|null}
+     */
+    getActiveSession() {
+        const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
+        if (!activeUserId) return null;
+        const sessions = this._loadSessions();
+        return sessions.find((s) => s.userId === activeUserId) || null;
+    }
+
+    /**
+     * Return the number of stored sessions.
+     * @returns {number}
+     */
+    getSessionCount() {
+        return this._loadSessions().length;
     }
 
     // ========================================================================
@@ -573,24 +764,41 @@ class AuthManager {
     // ========================================================================
 
     /**
-     * Handle unauthorized API response (401)
+     * Handle 401 Unauthorized from ApiClient.
+     * Clears only the current session (not all sessions) so the user is
+     * routed to the profiles screen to pick a different, still-valid one.
      * @private
      */
     _onUnauthorized() {
-        log.warn('Unauthorized - clearing session');
+        log.warn('Unauthorized — session expired');
 
-        this._clearStorage();
+        const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
+
+        // Prune the dead session
+        if (activeUserId) {
+            this._removeSession(activeUserId);
+            storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
+        }
+
         api.clearAuth();
-
         state.set('user:authenticated', false);
-        state.set('user:data', null);
+        state.set('user:data',          null);
 
-        eventBus.emit('auth:expired');
+        const remaining = this._loadSessions();
+        state.set('user:sessionCount', remaining.length);
+
+        // Route back to profiles if other sessions remain, otherwise login page
+        if (remaining.length > 0) {
+            eventBus.emit('auth:switchToProfiles');
+        } else {
+            eventBus.emit('auth:expired');
+        }
     }
 
     /**
-     * Dynamically update device name if hardware capability detection completes
-     * after initial startup. Fixes "LG WebOS TV" generic names in Jellyfin dashboard.
+     * Dynamically update device name when WebOS hardware capability detection
+     * completes after initial startup. Fixes "LG WebOS TV" generic names.
+     * @param {Object} info - Device info from webOS adapter
      * @private
      */
     _onWebosDeviceInfo(info) {
@@ -598,44 +806,87 @@ class AuthManager {
 
         const deviceId = storage.getItem(STORAGE_KEYS.DEVICE_ID);
         if (deviceId) {
-            log.info(`Updating API device name from generic to WebOS model: ${info.modelName}`);
+            log.info(`Updating API device name to WebOS model: ${info.modelName}`);
             api.setDevice(deviceId, info.modelName);
 
-            // If we are already connected, fire a capabilities report to ensure the
-            // server dashboard registers the new name immediately.
+            // Re-report capabilities so the dashboard shows the correct device name
             if (this.isAuthenticated()) {
                 api.reportCapabilities({
-                    DeviceProfile: buildJellyfinProfile(),
-                    PlayableMediaTypes: ['Video', 'Audio'],
-                    SupportedCommands: [
-                        'MoveUp', 'MoveDown', 'MoveLeft', 'MoveRight', 'ToggleOsd',
-                        'Select', 'Back', 'SendKey', 'SendString', 'GoHome',
-                        'GoToSettings', 'VolumeUp', 'VolumeDown', 'Mute', 'Unmute',
-                        'ToggleMute', 'SetVolume', 'SetAudioStreamIndex',
-                        'SetSubtitleStreamIndex', 'DisplayContent', 'GoToSearch',
-                        'DisplayMessage', 'SetRepeatMode', 'SetShuffleQueue',
-                        'ChannelUp', 'ChannelDown', 'PlayMediaSource'
-                    ],
-                    SupportsMediaControl: true,
-                    SupportsPersistentIdentifier: true
-                }).catch(e => log.warn('Failed to report capabilities for late device name update:', e));
+                    ...SUPPORTED_CAPABILITIES,
+                    DeviceProfile: buildJellyfinProfile()
+                }).catch((e) => log.warn('Failed to report capabilities for late device name update:', e));
             }
         }
     }
 
     // ========================================================================
-    // Storage Management
+    // Private — Sessions Array CRUD
     // ========================================================================
 
     /**
-     * Clear stored credentials
+     * Load the sessions array from storage.
+     * Safe: always returns an array even if storage is empty or corrupted.
+     * @returns {Array}
      * @private
      */
-    _clearStorage() {
-        storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-        storage.removeItem(STORAGE_KEYS.USER_ID);
-        storage.removeItem(STORAGE_KEYS.USER_DATA);
-        // Keep server URL and device ID
+    _loadSessions() {
+        try {
+            const raw = storage.getItem(STORAGE_KEYS.SESSIONS);
+            if (!raw) return [];
+            const parsed = JSON.parse(raw);
+            return Array.isArray(parsed) ? parsed : [];
+        } catch (e) {
+            log.error('Failed to parse sessions from storage — returning empty array:', e);
+            return [];
+        }
+    }
+
+    /**
+     * Persist the sessions array back to storage.
+     * @param {Array} sessions - The full sessions array to save
+     * @private
+     */
+    _writeSessions(sessions) {
+        storage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+    }
+
+    /**
+     * Add a new session or update an existing one (matched by userId).
+     * Enforces the MAX_SESSIONS cap by removing the oldest entry when full.
+     *
+     * @param {{userId, accessToken, userName, primaryImageTag}} session
+     * @private
+     */
+    _saveSession(session) {
+        const sessions = this._loadSessions();
+
+        // Find and replace an existing entry for the same user
+        const existingIdx = sessions.findIndex((s) => s.userId === session.userId);
+
+        if (existingIdx !== -1) {
+            sessions[existingIdx] = session;
+        } else {
+            // Enforce cap before adding a brand-new entry
+            if (sessions.length >= MAX_SESSIONS) {
+                const removed = sessions.shift(); // Remove oldest (front of array)
+                log.warn(`Session cap (${MAX_SESSIONS}) reached — evicted oldest session for ${removed.userName}`);
+            }
+            sessions.push(session);
+        }
+
+        this._writeSessions(sessions);
+    }
+
+    /**
+     * Remove a session by userId.
+     * @param {string} userId
+     * @private
+     */
+    _removeSession(userId) {
+        const sessions = this._loadSessions();
+        const filtered = sessions.filter((s) => s.userId !== userId);
+        this._writeSessions(filtered);
+        log.debug(`Session removed for user ${userId}. Remaining: ${filtered.length}`);
     }
 
     // ========================================================================
@@ -644,6 +895,7 @@ class AuthManager {
 
     /**
      * Generate UUID v4
+     * @returns {string}
      * @private
      */
     _generateUUID() {
@@ -659,7 +911,7 @@ class AuthManager {
     // ========================================================================
 
     /**
-     * Get current user data
+     * Get the current active user's profile data from app state.
      * @returns {Object|null} User data
      */
     getCurrentUser() {
@@ -667,8 +919,8 @@ class AuthManager {
     }
 
     /**
-     * Check if user is authenticated
-     * @returns {boolean} True if authenticated
+     * Check if there is an active authenticated session.
+     * @returns {boolean}
      */
     isAuthenticated() {
         return state.get('user:authenticated', false);
