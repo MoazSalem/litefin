@@ -306,7 +306,8 @@ class DetailsPage extends Page {
             const item = await api.getItem(this._itemId, {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,Overview,LibraryId,CanDelete'
+                // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
+                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete'
             });
             this._item = item;
             log.debug('Item loaded:', item);
@@ -1415,6 +1416,33 @@ class DetailsPage extends Page {
             } else {
                 shuffleBtn.classList.add('hidden');
                 shuffleBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // Subtitles & Audio Track Button Visibility
+        const audioBtn = this.$('.audio-btn');
+        const subtitleBtn = this.$('.subtitle-btn');
+        const mediaStreams = item.MediaSources?.[0]?.MediaStreams || [];
+
+        if (audioBtn) {
+            // Only show audio tracks if there's at least one available to select
+            if (mediaStreams.some((s) => s.Type === 'Audio')) {
+                audioBtn.classList.remove('hidden');
+                audioBtn.setAttribute('tabindex', '0');
+            } else {
+                audioBtn.classList.add('hidden');
+                audioBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        if (subtitleBtn) {
+            // Only show subtitle tracks if there's at least one available to select
+            if (mediaStreams.some((s) => s.Type === 'Subtitle')) {
+                subtitleBtn.classList.remove('hidden');
+                subtitleBtn.setAttribute('tabindex', '0');
+            } else {
+                subtitleBtn.classList.add('hidden');
+                subtitleBtn.setAttribute('tabindex', '-1');
             }
         }
     }
