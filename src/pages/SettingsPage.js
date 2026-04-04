@@ -546,6 +546,37 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
+                        <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'next-up-max-days-select',
+                            [
+                                { value: 0, label: i18n.t('Unlimited') },
+                                { value: 1, label: i18n.t('DaysValue', [1]) },
+                                { value: 2, label: i18n.t('DaysValue', [2]) },
+                                { value: 3, label: i18n.t('DaysValue', [3]) },
+                                { value: 4, label: i18n.t('DaysValue', [4]) },
+                                { value: 5, label: i18n.t('DaysValue', [5]) },
+                                { value: 6, label: i18n.t('DaysValue', [6]) },
+                                { value: 7, label: i18n.t('DaysValue', [7]) },
+                                { value: 14, label: i18n.t('DaysValue', [14]) },
+                                { value: 21, label: i18n.t('DaysValue', [21]) },
+                                { value: 28, label: i18n.t('DaysValue', [28]) },
+                                { value: 30, label: i18n.t('DaysValue', [30]) },
+                                { value: 60, label: i18n.t('MonthsValue', [2]) },
+                                { value: 90, label: i18n.t('MonthsValue', [3]) },
+                                { value: 180, label: i18n.t('MonthsValue', [6]) },
+                                { value: 365, label: i18n.t('YearValue', [1]) }
+                            ],
+                            storage.getItem('pref:nextUpMaxDays') || 365
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideWatchedContentFromLatestMedia">${i18n.t('HideWatchedContentFromLatestMedia') || 'Hide played from Recently Added'}</span>
                         <span class="setting-description" data-i18n="HideWatchedContentFromLatestMediaDescription">${i18n.t('HideWatchedContentFromLatestMediaDescription') || 'Hide watched content from Recently Added Media.'}</span>
                     </div>
@@ -2585,7 +2616,8 @@ class SettingsPage extends Page {
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
-            'text-scale-select': { key: 'litefin:textScale', type: 'local' }
+            'text-scale-select': { key: 'litefin:textScale', type: 'local' },
+            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
