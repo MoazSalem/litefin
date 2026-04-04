@@ -19,6 +19,7 @@ import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
+import { exitDialog } from '../ui/ExitDialog.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -304,6 +305,11 @@ class App {
                 return;
             }
 
+            if (exitDialog && exitDialog.isVisible) {
+                exitDialog.close();
+                return;
+            }
+
             const currentPage = router.getCurrentPage();
 
             // 1. Try page-specific back handler
@@ -397,14 +403,21 @@ class App {
 
         // Handle application exit
         eventBus.on('app:exitRequested', () => {
-            log.info('Exit requested - closing application');
-            // We DO NOT end the session on the server here.
-            // Calling /Sessions/Logout actively revokes the authentication token.
-            // The dashboard Offline status is handled automatically by the WebSocket dropping.
-            if (platformInfo.isWebOS) {
-                webosAdapter.exit();
+            log.info('Exit requested - checking settings');
+            
+            if (storage.getItem('pref:confirmExit') === 'true') {
+                log.info('Confirm exit enabled - showing prompt');
+                exitDialog.show();
             } else {
-                tizenAdapter.exit();
+                log.info('Closing application immediately');
+                // We DO NOT end the session on the server here.
+                // Calling /Sessions/Logout actively revokes the authentication token.
+                // The dashboard Offline status is handled automatically by the WebSocket dropping.
+                if (platformInfo.isWebOS) {
+                    webosAdapter.exit();
+                } else {
+                    tizenAdapter.exit();
+                }
             }
         });
 

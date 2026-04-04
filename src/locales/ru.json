@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "Да",
+    "ConfirmAppExitDescription": "Показывать подтверждение перед закрытием приложения.",
+    "ConfirmAppExitLabel": "Подтверждение при выходе",
+    "ConfirmAppExitMessage": "Вы уверены, что хотите выйти из Litefin?",
+    "ConfirmAppExitTitle": "Выйти из приложения?",
     "DeleteMediaConfirmMessage": "Вы уверены, что хотите удалить этот элемент из своей библиотеки и хранилища? Это действие невозможно отменить.",
     "DeleteMediaConfirmTitle": "Удалить медиа?",
     "HeaderWhoIsWatching": "Кто смотрит?",

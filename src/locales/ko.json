@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "예",
+    "ConfirmAppExitDescription": "애플리케이션을 닫기 전에 확인 프롬프트를 표시합니다.",
+    "ConfirmAppExitLabel": "종료 시 확인",
+    "ConfirmAppExitMessage": "Litefin을 종료하시겠습니까?",
+    "ConfirmAppExitTitle": "애플리케이션 종료?",
     "DeleteMediaConfirmMessage": "이 항목을 라이브러리와 저장소에서 삭제하시겠습니까? 이 작업은 취소할 수 없습니다.",
     "DeleteMediaConfirmTitle": "미디어를 삭제하시겠습니까?",
     "HeaderWhoIsWatching": "누가 시청 중인가요?",

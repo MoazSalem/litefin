@@ -529,6 +529,20 @@ class SettingsPage extends Page {
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
 
+                <!-- Application Behavior -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ConfirmAppExitLabel">${i18n.t('ConfirmAppExitLabel') || 'Confirm on Exit'}</span>
+                        <span class="setting-description" data-i18n="ConfirmAppExitDescription">${i18n.t('ConfirmAppExitDescription') || 'Show a confirmation prompt before closing the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:confirmExit') === 'true' ? 'active' : ''}" 
+                                id="toggle-confirm-exit" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
 
 
                 <div class="setting-item">
@@ -2791,6 +2805,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Confirm App Exit
+        const confirmExitToggle = this.$('#toggle-confirm-exit');
+        if (confirmExitToggle) {
+            confirmExitToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:confirmExit') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:confirmExit', newValue);
+                confirmExitToggle.classList.toggle('active', newValue);
+                log.info(`Confirm Exit set to: ${newValue}`);
             });
         }
 

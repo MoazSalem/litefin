@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "Có",
+    "ConfirmAppExitDescription": "Hiển thị lời nhắc xác nhận trước khi đóng ứng dụng.",
+    "ConfirmAppExitLabel": "Xác nhận khi thoát",
+    "ConfirmAppExitMessage": "Bạn có chắc chắn muốn thoát Litefin không?",
+    "ConfirmAppExitTitle": "Thoát ứng dụng?",
     "DeleteMediaConfirmMessage": "Bạn có chắc chắn muốn xóa mục này khỏi thư viện và bộ nhớ của mình không? Hành động này không thể hoàn tác.",
     "DeleteMediaConfirmTitle": "Xóa phương tiện?",
     "HeaderWhoIsWatching": "Ai đang xem?",

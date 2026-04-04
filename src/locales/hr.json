@@ -184,6 +184,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "Da",
+    "ConfirmAppExitDescription": "Prikaži upit za potvrdu prije zatvaranja aplikacije.",
+    "ConfirmAppExitLabel": "Potvrdi pri izlasku",
+    "ConfirmAppExitMessage": "Jeste li sigurni da želite izaći iz Litefin-a?",
+    "ConfirmAppExitTitle": "Izaći iz aplikacije?",
     "DeleteMediaConfirmMessage": "Jeste li sigurni da želite obrisati ovu stavku iz svoje biblioteke i pohrane? Ova se radnja ne može poništiti.",
     "DeleteMediaConfirmTitle": "Obrisati medij?",
     "HeaderWhoIsWatching": "Tko gleda?",

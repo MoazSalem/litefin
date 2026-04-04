@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "Evet",
+    "ConfirmAppExitDescription": "Uygulamayı kapatmadan önce bir onay istemi göster.",
+    "ConfirmAppExitLabel": "Çıkışta onayla",
+    "ConfirmAppExitMessage": "Litefin'den çıkmak istediğinizden emin misiniz?",
+    "ConfirmAppExitTitle": "Uygulamadan çıkılsın mı?",
     "DeleteMediaConfirmMessage": "Bu öğeyi kitaplığınızdan ve depolama alanınızdan silmek istediğinizden emin misiniz? Bu işlem geri alınamaz.",
     "DeleteMediaConfirmTitle": "Medyayı Sil?",
     "HeaderWhoIsWatching": "Kim izliyor?",

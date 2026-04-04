@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "Ja",
+    "ConfirmAppExitDescription": "Toon een bevestigingsvenster voor het sluiten van de applicatie.",
+    "ConfirmAppExitLabel": "Bevestigen bij afsluiten",
+    "ConfirmAppExitMessage": "Weet je zeker dat je Litefin wilt afsluiten?",
+    "ConfirmAppExitTitle": "Applicatie afsluiten?",
     "DeleteMediaConfirmMessage": "Weet je zeker dat je dit item uit je bibliotheek en opslag wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.",
     "DeleteMediaConfirmTitle": "Media verwijderen?",
     "HeaderWhoIsWatching": "Wie kijkt er?",

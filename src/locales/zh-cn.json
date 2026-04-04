@@ -215,6 +215,10 @@
 
     "_Jellyfin Untranslated Keys": "",
     "ButtonYes": "是",
+    "ConfirmAppExitDescription": "关闭应用程序前显示确认提示。",
+    "ConfirmAppExitLabel": "退出时确认",
+    "ConfirmAppExitMessage": "您确定要退出 Litefin 吗？",
+    "ConfirmAppExitTitle": "退出应用程序？",
     "DeleteMediaConfirmMessage": "您确定要从库和存储中删除此项目吗？此操作无法撤销。",
     "DeleteMediaConfirmTitle": "删除媒体？",
     "HeaderWhoIsWatching": "谁正在观看？",
