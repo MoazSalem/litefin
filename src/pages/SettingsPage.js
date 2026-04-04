@@ -1590,27 +1590,35 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="HDRSupport">${i18n.t('HDRSupport')}</span>
-                            <span class="identity-value">${
-                                [
+                            <span class="identity-value">${(() => {
+                                const userHdr = PlayerSettings.get('enableHDR');
+                                const hwHdr = [
                                     caps.hdr10 ? 'HDR10' : null,
                                     caps.hdr10Plus ? 'HDR10+' : null,
                                     caps.hlg ? 'HLG' : null,
                                     caps.dolbyVision ? i18n.t('DolbyVision') : null
-                                ]
-                                    .filter(Boolean)
-                                    .join(', ') || i18n.t('SDROnly')
-                            }</span>
+                                ].filter(Boolean);
+
+                                if (hwHdr.length === 0) return i18n.t('SDROnly');
+                                if (!userHdr) return `${hwHdr.join(', ')} (${i18n.t('Disabled')})`;
+                                return hwHdr.join(', ');
+                            })()}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="VideoCodecs">${i18n.t('VideoCodecs')}</span>
-                            <span class="identity-value">${[
-                                'H.264',
-                                caps.hevc ? 'HEVC' : null,
-                                caps.av1 ? 'AV1' : null,
-                                caps.vp9 ? 'VP9' : null
-                            ]
-                                .filter(Boolean)
-                                .join(', ')}</span>
+                            <span class="identity-value">${(() => {
+                                const codecs = [
+                                    { name: 'H.264', hw: true, user: true },
+                                    { name: 'HEVC', hw: caps.hevc, user: PlayerSettings.get('enableHEVC') },
+                                    { name: 'AV1', hw: caps.av1, user: PlayerSettings.get('enableAV1') },
+                                    { name: 'VP9', hw: caps.vp9, user: PlayerSettings.get('enableVP9') }
+                                ];
+
+                                return codecs
+                                    .filter((c) => c.hw)
+                                    .map((c) => (c.user ? c.name : `${c.name} (${i18n.t('Disabled')})`))
+                                    .join(', ');
+                            })()}</span>
                         </div>
                     </div>
                 </div>

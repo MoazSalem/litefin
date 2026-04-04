@@ -127,15 +127,21 @@ export function getDeviceCapabilities() {
     // ------------------------------------------------------------------------
     // Sync Device Info
     // ------------------------------------------------------------------------
+    let hdr10Hw = null;
+    let screenWidthHw = null;
+    let screenHeightHw = null;
+
     const info = webosAdapter.deviceInfo;
     if (info) {
         log.debug('WebOSProfile: Using cached webosAdapter deviceInfo');
         if (info.modelName) modelName = info.modelName;
-        if (info.uhd) uhd = info.uhd === 'true';
-        if (info['8k']) uhd8K = info['8k'] === 'true';
-        if (uhd) {
-            if (info.dolbyVision === 'true') dolbyVision = true;
-        }
+        if (info.uhd !== undefined) uhd = info.uhd === true || info.uhd === 'true';
+        if (info.uhd8K !== undefined) uhd8K = info.uhd8K === true || info.uhd8K === 'true';
+        if (info['8k'] !== undefined) uhd8K = info['8k'] === true || info['8k'] === 'true';
+        if (info.dolbyVision !== undefined) dolbyVision = info.dolbyVision === true || info.dolbyVision === 'true';
+        if (info.hdr10 !== undefined) hdr10Hw = info.hdr10 === true || info.hdr10 === 'true';
+        if (info.screenWidth) screenWidthHw = parseInt(info.screenWidth, 10);
+        if (info.screenHeight) screenHeightHw = parseInt(info.screenHeight, 10);
     } else if (typeof window.webOS !== 'undefined' && window.webOS.deviceInfo) {
         window.webOS.deviceInfo((res) => {
             log.info('WebOSProfile: Async deviceInfo received, clearing cache');
@@ -147,14 +153,13 @@ export function getDeviceCapabilities() {
 
     // HEVC: Always trust TV to support HEVC unless explicitly denied by device info
     let hevc = true;
-    if (info && info.hevc) {
-        hevc = info.hevc === 'true';
+    if (info && info.hevc !== undefined) {
+        hevc = info.hevc === true || info.hevc === 'true';
     }
 
-    // HDR10: Rely strictly on the UHD detection. MSE probing natively fails across WebOS 
-    // and device info strings are too inconsistent. If it's a 4K WebOS TV, it handles HDR10.
-    // If not, it safely falls back to internal SDR tone-mapping automatically.
-    const hdr10 = uhd;
+    // HDR10: Use WebOS Adapter's detected hardware value if available. 
+    // Otherwise rely strictly on the UHD detection. MSE probing natively fails across WebOS.
+    const hdr10 = hdr10Hw !== null ? hdr10Hw : uhd;
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
@@ -192,8 +197,8 @@ export function getDeviceCapabilities() {
         modelName,
         deviceId,
         webosVersion,
-        screenWidth: uhd8K ? 7680 : uhd ? 3840 : 1920,
-        screenHeight: uhd8K ? 4320 : uhd ? 2160 : 1080,
+        screenWidth: screenWidthHw || (uhd8K ? 7680 : uhd ? 3840 : 1920),
+        screenHeight: screenHeightHw || (uhd8K ? 4320 : uhd ? 2160 : 1080),
         uhd,
         uhd8K,
         hdr10,
