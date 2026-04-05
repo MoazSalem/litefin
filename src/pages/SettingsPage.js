@@ -26,6 +26,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { versionChecker } from '../utils/VersionChecker.js';
 
 const log = logger.create('SettingsPage');
 
@@ -1614,6 +1615,7 @@ class SettingsPage extends Page {
                     <p class="about-credits" data-i18n="DevelopedBy">${i18n.t('DevelopedBy')}</p>
                 </div>
 
+
                 <h3 class="setting-section-title" data-i18n="DeviceInformation">${i18n.t('DeviceInformation')}</h3>
                 <div class="about-card identity-card" tabindex="0">
                     <div class="identity-grid">
@@ -1665,6 +1667,34 @@ class SettingsPage extends Page {
                                     .join(', ');
                             })()}</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Updates Section -->
+                <h3 class="setting-section-title" data-i18n="Updates">${i18n.t('Updates')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AutoUpdateCheck">${i18n.t('AutoUpdateCheck')}</span>
+                        <span class="setting-description" data-i18n="AutoUpdateCheckDesc">${i18n.t('AutoUpdateCheckDesc')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch focusable ${storage.getItem('pref:checkForUpdates') !== 'false' ? 'active' : ''}" 
+                                id="toggle-check-updates" 
+                                tabindex="0"
+                                data-focusable="true">
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CheckForUpdates">${i18n.t('CheckForUpdates')}</span>
+                        <span class="setting-description" data-i18n="CheckForUpdatesDesc">${i18n.t('CheckForUpdatesDesc') || 'Trigger a manual check for new releases on GitHub.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary setting-btn focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 160px;">
+                            ${i18n.t('CheckForUpdatesNow')}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2817,6 +2847,26 @@ class SettingsPage extends Page {
                 storage.setItem('pref:confirmExit', newValue);
                 confirmExitToggle.classList.toggle('active', newValue);
                 log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Auto Update Check
+        const autoUpdateToggle = this.$('#toggle-check-updates');
+        if (autoUpdateToggle) {
+            autoUpdateToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:checkForUpdates') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:checkForUpdates', newValue.toString());
+                autoUpdateToggle.classList.toggle('active', newValue);
+                log.info(`Auto Update Check set to: ${newValue}`);
+            });
+        }
+
+        // Button for Manual Update Check
+        const manualUpdateBtn = this.$('#btn-check-updates');
+        if (manualUpdateBtn) {
+            manualUpdateBtn.addEventListener('click', () => {
+                versionChecker.checkUpdate(true);
             });
         }
 

@@ -42,6 +42,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
+import { versionChecker } from '../utils/VersionChecker.js';
 
 const log = logger.create('App');
 
@@ -208,7 +209,6 @@ class App {
             // Remove the body class that blocks duplicate page-level spinners
             document.body.classList.remove('app-splash-active');
 
-            // Fade out and remove the global splash screen
             const splash = document.getElementById('app-splash');
             if (splash) {
                 log.info('Hiding initial splash screen');
@@ -217,7 +217,11 @@ class App {
                     if (splash.parentNode) splash.parentNode.removeChild(splash);
                 }, 400); // Matches CSS transition duration
             }
+
+            // Trigger auto-update check (respects user settings inside)
+            versionChecker.checkAtStartup();
         });
+
 
         // Register routes
         this._registerRoutes();

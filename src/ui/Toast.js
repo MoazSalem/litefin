@@ -110,7 +110,6 @@ class Toast {
                 display: flex !important;
                 -webkit-align-items: center !important;
                 align-items: center !important;
-                gap: 16px !important;
                 padding: 16px 24px !important;
                 background: var(--jf-overlay-bg, rgba(20, 20, 20, 0.8)) !important;
                 backdrop-filter: blur(20px) !important;
@@ -198,6 +197,7 @@ class Toast {
                 flex-shrink: 0;
                 width: 24px;
                 height: 24px;
+                margin-right: 16px;
                 fill: currentColor;
                 opacity: 0.8;
             }
