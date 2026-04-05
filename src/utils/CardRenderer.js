@@ -75,6 +75,37 @@ class CardRenderer {
                     quality: seriesParams.quality
                 });
             }
+        } else if (type === 'banner') {
+            // Banner Optimization: Look for horizontal branding first
+            const params = imageService.getParams('banner');
+            
+            // Priority: Banner -> Backdrop -> Thumb -> Primary
+            if (item.ImageTags && item.ImageTags.Banner) {
+                imageUrl = api.getImageUrl(itemId, 'Banner', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Banner
+                });
+            } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.BackdropImageTags[0]
+                });
+            } else if (item.ImageTags && item.ImageTags.Thumb) {
+                imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Thumb
+                });
+            } else if (item.ImageTags && item.ImageTags.Primary) {
+                // Last Resort: Poster (will be object-fit: cover in CSS to fill gaps)
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            }
         } else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             //
@@ -246,6 +277,7 @@ class CardRenderer {
                 });
             } else if (
                 item.ImageTags?.Primary ||
+                item.AlbumPrimaryImageTag ||
                 (itemId &&
                     (item.Type === 'MusicArtist' ||
                         item.Type === 'Artist' ||
@@ -254,11 +286,20 @@ class CardRenderer {
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
                 const params = imageService.getParams('poster');
+                
+                let targetId = itemId;
+                let targetTag = item.ImageTags?.Primary;
+                
+                // If it's an Audio track without own art, fallback to Album art
+                if (item.Type === 'Audio' && item.AlbumId && !targetTag) {
+                    targetId = item.AlbumId;
+                    targetTag = item.AlbumPrimaryImageTag;
+                }
 
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = api.getImageUrl(targetId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    ...(item.ImageTags?.Primary ? { tag: item.ImageTags.Primary } : {})
+                    ...(targetTag ? { tag: targetTag } : {})
                 });
             }
         }
@@ -342,8 +383,8 @@ class CardRenderer {
                 if (artist) parts.push(artist);
                 else if (item.ProductionYear) parts.push(item.ProductionYear);
             } else {
-                // Movies/Shows/Others
-                if (item.ProductionYear) parts.push(item.ProductionYear);
+                // Movies/Shows/Others - skip year here in List View as it's handled in metaParts
+                if (item.ProductionYear && !options.showMeta) parts.push(item.ProductionYear);
 
                 // Support both standard Role and _roleName (from MediaGrid mapping)
                 const role = item.Role || item._roleName;
@@ -353,6 +394,15 @@ class CardRenderer {
             }
 
             subtitleText = parts.join(' · ');
+        }
+
+        // --- 3.5. List View Override ---
+        // In list-view, we want the Title on the left and EVERY other piece of info 
+        // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
+        let listExtraInfo = '';
+        if (options.showMeta && subtitleText) {
+            listExtraInfo = `<span class="card-meta-extra">${subtitleText}</span>`;
+            subtitleText = ''; // Clear it so it doesn't stay on the left with the title
         }
 
         // --- 4. HTML Assembly ---
@@ -374,20 +424,55 @@ class CardRenderer {
 
         const isHiddenLibraryLabel = type === 'library' && storage.getItem('pref:hideLibraryLabels') === 'true';
 
+        // --- 5. Optional Meta Row (list view) ---
+        // showMeta injects an additional row with rating + year + runtime for
+        // dense list-view cards. Only requested by _renderGrid() in list mode.
+        let metaHtml = '';
+        if (options.showMeta) {
+            const metaParts = [];
+            if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
+            if (item.CommunityRating) metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
+            if (item.ProductionYear) metaParts.push(`<span class="card-meta-year">${item.ProductionYear}</span>`);
+            if (item.RunTimeTicks) {
+                const mins = Math.round(item.RunTimeTicks / 600000000);
+                const hrs = Math.floor(mins / 60);
+                const rem = mins % 60;
+                const timeStr = hrs > 0 ? `${hrs}h ${rem}m` : `${mins}m`;
+                metaParts.push(`<span class="card-meta-runtime">${timeStr}</span>`);
+            }
+            if (metaParts.length > 0 || listExtraInfo) {
+                metaHtml = `<div class="card-meta">${listExtraInfo}${metaParts.join('')}</div>`;
+            }
+        }
+
+        const badgeContainer = `
+            ${badgeHtml}
+            ${playedBadgeHtml}
+        `;
+
         return `
             <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
-                    ${badgeHtml}
-                    ${playedBadgeHtml}
+                    ${!options.showMeta ? badgeContainer : ''}
                 </div>
                 ${
                     !isHiddenLibraryLabel
                         ? `
                 <div class="card-info">
-                    <div class="card-title">${titleText}</div>
+                    ${
+                        options.showMeta
+                            ? `
+                    <div class="card-title-row">
+                        <div class="card-title">${titleText}</div>
+                        ${badgeContainer}
+                    </div>
+                    `
+                            : `<div class="card-title">${titleText}</div>`
+                    }
                     ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                    ${metaHtml}
                 </div>
                 `
                         : ''
@@ -438,18 +523,49 @@ class CardRenderer {
     }
 
     /**
-     * Create generic skeleton loader HTML
-     * @param {number} count - Number of items to generate
-     * @param {boolean} isLandscape - Layout mode
+     * Create generic skeleton loader HTML.
+     * Adapts the card shape to match the active view mode so skeletons
+     * visually match what the real cards will look like.
+     *
+     * @param {number}  count      - Number of skeleton cards to generate
+     * @param {boolean} isLandscape - Whether the content is landscape (episodes/networks)
+     * @param {string}  [viewMode='poster'] - Active view mode identifier
      * @returns {string} HTML string
      */
-    static createSkeletonHtml(count = 10, isLandscape = false) {
+    static createSkeletonHtml(count = 10, isLandscape = false, viewMode = 'poster') {
+        // Determine the CSS class suffix that matches the real card's layout
+        let cardClass = 'media-card skeleton';
+        if (isLandscape || viewMode === 'thumb') {
+            cardClass += ' landscape';
+        } else if (viewMode === 'square') {
+            cardClass += ' square';
+        } else if (viewMode === 'banner') {
+            // Banner = landscape image at fixed height — use landscape card class
+            cardClass += ' landscape';
+        } else if (viewMode === 'list') {
+            // List skeletons are horizontal strips with a small image + text block
+            cardClass += ' list-skeleton';
+        }
+        // 'poster' and 'small-poster' both use the default portrait shape
+
         let html = '';
         for (let i = 0; i < count; i++) {
-            html += `
-                <div class="media-card skeleton ${isLandscape ? 'landscape' : ''}">
+            if (viewMode === 'list') {
+                // List skeleton: horizontal strip
+                html += `
+                <div class="${cardClass}">
+                    <div class="card-image skeleton-image skeleton-shimmer"></div>
+                    <div class="card-info">
+                        <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
+                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>
+                    </div>
+                </div>
+            `;
+            } else {
+                html += `
+                <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer">
-                        <!-- Space reserved by .card-image padding -->
+                        <!-- Space reserved by aspect-ratio padding -->
                     </div>
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80 m-auto"></div>
@@ -457,6 +573,7 @@ class CardRenderer {
                     </div>
                 </div>
             `;
+            }
         }
         return html;
     }
