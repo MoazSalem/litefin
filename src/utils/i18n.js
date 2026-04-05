@@ -77,26 +77,35 @@ class I18nManager {
      */
     _localeUrl(lang) {
         /*
-         * WHY origin + pathname instead of href:
+         * WHY we can't use window.location.origin + pathname on WebOS:
          *
-         * On a hash-router web dev server the full href looks like:
+         * On file:// URLs (packaged Tizen/WebOS apps), window.location.origin
+         * is literally the string "null" (not a real origin), so combining it
+         * with pathname produces: "null/path/to/index.html" — a completely
+         * invalid URL that XHR silently fails to load.
+         *
+         * The safe universal approach is to use window.location.href directly:
+         *   file:///media/.../index.html  → strip everything after last /
+         *   http://192.168.1.1:8081/#/route → strip fragment first via origin+pathname
+         *
+         * For HTTP (dev server with hash router), href looks like:
          *   http://192.168.1.24:8081/#/settings
-         *
-         * Calling lastIndexOf('/') on that hits the slash INSIDE '#/' and the
-         * base becomes 'http://192.168.1.24:8081/#/' — making the locale URL a
-         * fragment (#/locales/...) rather than a real HTTP path, which causes
-         * an immediate XHR 404 / network error.
-         *
-         * window.location.origin + window.location.pathname gives:
-         *   http://192.168.1.24:8081/index.html
-         * which we then strip to:
-         *   http://192.168.1.24:8081/
-         *
-         * For packaged Tizen/WebOS file:// apps pathname is the full path to
-         * index.html — the same lastIndexOf('/') trick works identically.
+         * We still need origin+pathname to avoid the '#/' fragment issue.
          */
-        const pageUrl = window.location.origin + window.location.pathname;
-        const base = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
+        let base;
+
+        const href = window.location.href;
+        const protocol = window.location.protocol;
+
+        if (protocol === 'file:') {
+            // file:// packaged app — origin is null/useless, extract base from raw href
+            base = href.substring(0, href.lastIndexOf('/') + 1);
+        } else {
+            // http:// or https:// — use origin+pathname to avoid hash-router fragments
+            const pageUrl = window.location.origin + window.location.pathname;
+            base = pageUrl.substring(0, pageUrl.lastIndexOf('/') + 1);
+        }
+
         return base + 'locales/' + lang + '.json';
     }
 
@@ -109,13 +118,21 @@ class I18nManager {
         this.isRTL = langCode === 'ar' || langCode === 'he' || langCode === 'fa';
 
         const url = this._localeUrl(this.currentLang);
-        log.info(`[i18n] Initializing with lang: ${this.currentLang}, url: ${url}`);
+        log.info(`[i18n] Initializing with lang: ${this.currentLang}`);
+        log.info(`[i18n] Locale URL: ${url} (protocol: ${window.location.protocol})`);
 
         try {
             // Use XHR instead of fetch() — works on both Tizen and WebOS file:// contexts
             const data = await this._loadJson(url);
             this.dictionary = data;
-            log.info(`[i18n] Successfully loaded ${Object.keys(this.dictionary).length} keys for ${this.currentLang}`);
+
+            const keyCount = Object.keys(this.dictionary).length;
+            log.info(`[i18n] Successfully loaded ${keyCount} keys for ${this.currentLang}`);
+
+            // Sanity check — empty dict means url was wrong; this would cause all keys to show raw
+            if (keyCount === 0) {
+                log.warn(`[i18n] WARNING: Loaded 0 keys! The locale file at "${url}" may be empty or the URL is wrong.`);
+            }
         } catch (error) {
             log.error(`[i18n] Init failed, falling back to empty dict`, {
                 url,

@@ -19,6 +19,7 @@ import { platformInfo } from '../utils/PlatformInfo.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from './syncplay/SyncPlayGroupMenu.js';
+import { exitDialog } from '../ui/ExitDialog.js';
 
 // Page imports (static to support Tizen 4's Chromium 56)
 import LoginPage from '../pages/LoginPage.js';
@@ -31,6 +32,7 @@ import SettingsPage from '../pages/SettingsPage.js';
 import FavoritesPage from '../pages/FavoritesPage.js';
 import OfflinePage from '../pages/OfflinePage.js';
 import PlayerPage from '../pages/PlayerPage.js';
+import ProfilesPage from '../pages/ProfilesPage.js';
 import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
@@ -40,6 +42,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
+import { versionChecker } from '../utils/VersionChecker.js';
 
 const log = logger.create('App');
 
@@ -206,7 +209,6 @@ class App {
             // Remove the body class that blocks duplicate page-level spinners
             document.body.classList.remove('app-splash-active');
 
-            // Fade out and remove the global splash screen
             const splash = document.getElementById('app-splash');
             if (splash) {
                 log.info('Hiding initial splash screen');
@@ -215,7 +217,11 @@ class App {
                     if (splash.parentNode) splash.parentNode.removeChild(splash);
                 }, 400); // Matches CSS transition duration
             }
+
+            // Trigger auto-update check (respects user settings inside)
+            versionChecker.checkAtStartup();
         });
+
 
         // Register routes
         this._registerRoutes();
@@ -241,7 +247,9 @@ class App {
         if (!this.sidebar) return;
 
         // Routes that should NOT show the sidebar
-        const fullScreenRoutes = ['/login', '/offline'];
+        // ProfilesPage is intentionally fullscreen — it IS the user switcher, so
+        // showing the sidebar (which contains the active user's name) would be inconsistent.
+        const fullScreenRoutes = ['/login', '/offline', '/profiles'];
         const isFullScreen = fullScreenRoutes.includes(path) || path.startsWith('/player');
 
         if (isFullScreen) {
@@ -271,6 +279,11 @@ class App {
         if (!state.has('user:data')) {
             state.set('user:data', null);
         }
+        // Safety default — auth.init() sets this before _initializeState() is called,
+        // but we guard against the edge case where a restore error prevents it from being set.
+        if (!state.has('user:sessionCount')) {
+            state.set('user:sessionCount', 0);
+        }
 
         // Server state - only set defaults if not already set
         if (!state.has('server:url')) {
@@ -293,6 +306,11 @@ class App {
             // 1. Check for standalone global overlays
             if (syncPlayGroupMenu && syncPlayGroupMenu.isVisible) {
                 syncPlayGroupMenu.close();
+                return;
+            }
+
+            if (exitDialog && exitDialog.isVisible) {
+                exitDialog.close();
                 return;
             }
 
@@ -363,6 +381,17 @@ class App {
             router.reset('/login');
         });
 
+        /*
+         * auth:switchToProfiles fires when the active user logs out but other
+         * sessions are still stored (multi-user scenario). Instead of going to
+         * /login, we show the "Who's Watching" profiles screen so the next
+         * user can pick their profile without having to re-enter credentials.
+         */
+        eventBus.on('auth:switchToProfiles', () => {
+            log.info('Switching to profiles screen (other sessions remain)');
+            router.reset('/profiles');
+        });
+
         // Initialize plugin manager when user successfully logs in
         // (covers fresh logins, not session restores which are handled in init())
         eventBus.on('auth:login', () => {
@@ -378,14 +407,21 @@ class App {
 
         // Handle application exit
         eventBus.on('app:exitRequested', () => {
-            log.info('Exit requested - closing application');
-            // We DO NOT end the session on the server here.
-            // Calling /Sessions/Logout actively revokes the authentication token.
-            // The dashboard Offline status is handled automatically by the WebSocket dropping.
-            if (platformInfo.isWebOS) {
-                webosAdapter.exit();
+            log.info('Exit requested - checking settings');
+            
+            if (storage.getItem('pref:confirmExit') === 'true') {
+                log.info('Confirm exit enabled - showing prompt');
+                exitDialog.show();
             } else {
-                tizenAdapter.exit();
+                log.info('Closing application immediately');
+                // We DO NOT end the session on the server here.
+                // Calling /Sessions/Logout actively revokes the authentication token.
+                // The dashboard Offline status is handled automatically by the WebSocket dropping.
+                if (platformInfo.isWebOS) {
+                    webosAdapter.exit();
+                } else {
+                    tizenAdapter.exit();
+                }
             }
         });
 
@@ -581,8 +617,9 @@ class App {
 
         // Import pages at top of file (see imports above)
         // Register all routes
-        router.register('/login', LoginPage);
-        router.register('/home', HomePage);
+        router.register('/login',    LoginPage);
+        router.register('/profiles', ProfilesPage);
+        router.register('/home',     HomePage);
         router.register('/library/:id', LibraryPage);
         router.register('/library/:id/genre/:genreId', LibraryPage); // Filtered by Genre
         router.register('/library/:id/studio/:studioId', LibraryPage); // Filtered by Studio/Network
@@ -604,18 +641,29 @@ class App {
             }
         });
 
-        // Default route - check auth and redirect appropriately
+        // Default route — check auth and redirect appropriately.
+        // With multi-user support we now consider the number of stored sessions:
+        //   • Offline          → /offline
+        //   • ≥2 sessions      → /profiles ("Who's Watching" prompt)
+        //   • 1 session, valid → /home (same auto-login as before)
+        //   • 0 sessions       → /login
         router.register('/', {
             init: () => {
-                const isOffline = state.get('server:offline');
+                const isOffline      = state.get('server:offline');
                 const isAuthenticated = state.get('user:authenticated');
+                const sessionCount   = state.get('user:sessionCount', 0);
 
                 if (isOffline) {
                     // Saved session exists but server is unreachable
                     log.info('Initial route: Server is offline, navigating to OfflinePage');
                     router.navigate('/offline', { replace: true });
+                } else if (isAuthenticated && sessionCount > 1) {
+                    // Multiple users are stored — make them choose who's watching
+                    log.info(`Initial route: ${sessionCount} sessions stored, navigating to ProfilesPage`);
+                    router.navigate('/profiles', { replace: true });
                 } else if (isAuthenticated) {
-                    log.info('Initial route: Authenticated, navigating to HomePage');
+                    // Single user — skip the profiles screen and go straight home
+                    log.info('Initial route: Authenticated (single user), navigating to HomePage');
                     router.navigate('/home', { replace: true });
                 } else {
                     log.info('Initial route: No session, navigating to LoginPage');

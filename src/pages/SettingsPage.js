@@ -26,6 +26,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { versionChecker } from '../utils/VersionChecker.js';
 
 const log = logger.create('SettingsPage');
 
@@ -529,6 +530,20 @@ class SettingsPage extends Page {
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
 
+                <!-- Application Behavior -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ConfirmAppExitLabel">${i18n.t('ConfirmAppExitLabel') || 'Confirm on Exit'}</span>
+                        <span class="setting-description" data-i18n="ConfirmAppExitDescription">${i18n.t('ConfirmAppExitDescription') || 'Show a confirmation prompt before closing the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:confirmExit') === 'true' ? 'active' : ''}" 
+                                id="toggle-confirm-exit" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
 
 
                 <div class="setting-item">
@@ -541,6 +556,37 @@ class SettingsPage extends Page {
                                  id="toggle-library-labels" 
                                  tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
+                        <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'next-up-max-days-select',
+                            [
+                                { value: 0, label: i18n.t('Unlimited') },
+                                { value: 1, label: i18n.t('DaysValue', [1]) },
+                                { value: 2, label: i18n.t('DaysValue', [2]) },
+                                { value: 3, label: i18n.t('DaysValue', [3]) },
+                                { value: 4, label: i18n.t('DaysValue', [4]) },
+                                { value: 5, label: i18n.t('DaysValue', [5]) },
+                                { value: 6, label: i18n.t('DaysValue', [6]) },
+                                { value: 7, label: i18n.t('DaysValue', [7]) },
+                                { value: 14, label: i18n.t('DaysValue', [14]) },
+                                { value: 21, label: i18n.t('DaysValue', [21]) },
+                                { value: 28, label: i18n.t('DaysValue', [28]) },
+                                { value: 30, label: i18n.t('DaysValue', [30]) },
+                                { value: 60, label: i18n.t('MonthsValue', [2]) },
+                                { value: 90, label: i18n.t('MonthsValue', [3]) },
+                                { value: 180, label: i18n.t('MonthsValue', [6]) },
+                                { value: 365, label: i18n.t('YearValue', [1]) }
+                            ],
+                            storage.getItem('pref:nextUpMaxDays') || 365
+                        )}
                     </div>
                 </div>
 
@@ -1569,6 +1615,7 @@ class SettingsPage extends Page {
                     <p class="about-credits" data-i18n="DevelopedBy">${i18n.t('DevelopedBy')}</p>
                 </div>
 
+
                 <h3 class="setting-section-title" data-i18n="DeviceInformation">${i18n.t('DeviceInformation')}</h3>
                 <div class="about-card identity-card" tabindex="0">
                     <div class="identity-grid">
@@ -1590,28 +1637,64 @@ class SettingsPage extends Page {
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="HDRSupport">${i18n.t('HDRSupport')}</span>
-                            <span class="identity-value">${
-                                [
+                            <span class="identity-value">${(() => {
+                                const userHdr = PlayerSettings.get('enableHDR');
+                                const hwHdr = [
                                     caps.hdr10 ? 'HDR10' : null,
                                     caps.hdr10Plus ? 'HDR10+' : null,
                                     caps.hlg ? 'HLG' : null,
                                     caps.dolbyVision ? i18n.t('DolbyVision') : null
-                                ]
-                                    .filter(Boolean)
-                                    .join(', ') || i18n.t('SDROnly')
-                            }</span>
+                                ].filter(Boolean);
+
+                                if (hwHdr.length === 0) return i18n.t('SDROnly');
+                                if (!userHdr) return `${hwHdr.join(', ')} (${i18n.t('Disabled')})`;
+                                return hwHdr.join(', ');
+                            })()}</span>
                         </div>
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="VideoCodecs">${i18n.t('VideoCodecs')}</span>
-                            <span class="identity-value">${[
-                                'H.264',
-                                caps.hevc ? 'HEVC' : null,
-                                caps.av1 ? 'AV1' : null,
-                                caps.vp9 ? 'VP9' : null
-                            ]
-                                .filter(Boolean)
-                                .join(', ')}</span>
+                            <span class="identity-value">${(() => {
+                                const codecs = [
+                                    { name: 'H.264', hw: true, user: true },
+                                    { name: 'HEVC', hw: caps.hevc, user: PlayerSettings.get('enableHEVC') },
+                                    { name: 'AV1', hw: caps.av1, user: PlayerSettings.get('enableAV1') },
+                                    { name: 'VP9', hw: caps.vp9, user: PlayerSettings.get('enableVP9') }
+                                ];
+
+                                return codecs
+                                    .filter((c) => c.hw)
+                                    .map((c) => (c.user ? c.name : `${c.name} (${i18n.t('Disabled')})`))
+                                    .join(', ');
+                            })()}</span>
                         </div>
+                    </div>
+                </div>
+
+                <!-- Updates Section -->
+                <h3 class="setting-section-title" data-i18n="Updates">${i18n.t('Updates')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="AutoUpdateCheck">${i18n.t('AutoUpdateCheck')}</span>
+                        <span class="setting-description" data-i18n="AutoUpdateCheckDesc">${i18n.t('AutoUpdateCheckDesc')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch focusable ${storage.getItem('pref:checkForUpdates') !== 'false' ? 'active' : ''}" 
+                                id="toggle-check-updates" 
+                                tabindex="0"
+                                data-focusable="true">
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CheckForUpdates">${i18n.t('CheckForUpdates')}</span>
+                        <span class="setting-description" data-i18n="CheckForUpdatesDesc">${i18n.t('CheckForUpdatesDesc') || 'Trigger a manual check for new releases on GitHub.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-secondary setting-btn focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 160px;">
+                            ${i18n.t('CheckForUpdatesNow')}
+                        </button>
                     </div>
                 </div>
             </div>
@@ -2124,7 +2207,6 @@ class SettingsPage extends Page {
         // Log Out
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
             await auth.logout();
-            router.reset('/login');
         });
 
         // Color Selection
@@ -2578,7 +2660,8 @@ class SettingsPage extends Page {
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
-            'text-scale-select': { key: 'litefin:textScale', type: 'local' }
+            'text-scale-select': { key: 'litefin:textScale', type: 'local' },
+            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2619,6 +2702,8 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'layout_direction'
                             ) {
+                                // Flush memory to disk synchronously before the reboot nukes the event loop
+                                storage.flush();
                                 window.location.reload();
                             }
 
@@ -2750,6 +2835,38 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Confirm App Exit
+        const confirmExitToggle = this.$('#toggle-confirm-exit');
+        if (confirmExitToggle) {
+            confirmExitToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:confirmExit') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:confirmExit', newValue);
+                confirmExitToggle.classList.toggle('active', newValue);
+                log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Auto Update Check
+        const autoUpdateToggle = this.$('#toggle-check-updates');
+        if (autoUpdateToggle) {
+            autoUpdateToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:checkForUpdates') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:checkForUpdates', newValue.toString());
+                autoUpdateToggle.classList.toggle('active', newValue);
+                log.info(`Auto Update Check set to: ${newValue}`);
+            });
+        }
+
+        // Button for Manual Update Check
+        const manualUpdateBtn = this.$('#btn-check-updates');
+        if (manualUpdateBtn) {
+            manualUpdateBtn.addEventListener('click', () => {
+                versionChecker.checkUpdate(true);
             });
         }
 

@@ -223,7 +223,18 @@ class HomePage extends Page {
             cardType: 'episode',
             contextType: 'nextUp',
             fetchFn: async () => {
-                const res = await api.getNextUp();
+                const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                // Default to 365 days if not set, or use 0 for unlimited
+                const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+
+                const params = {};
+                if (daysLimit > 0) {
+                    const cutoff = new Date();
+                    cutoff.setDate(cutoff.getDate() - daysLimit);
+                    params.NextUpDateCutoff = cutoff.toISOString();
+                }
+
+                const res = await api.getNextUp(params);
                 if (!res?.Items?.length) return null;
 
                 // Filter out items that have playback progress, as they should 

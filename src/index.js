@@ -70,6 +70,7 @@ import './styles/syncplay-menu.css';  /* SyncPlay group-selection overlay */
 import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';
+import './styles/profiles.css';   /* "Who's Watching" profile switcher */
 import './styles/screensaver.css';
 import './styles/rtl.css'; // Directional overrides
 import './themes/classic/index.js'; // All classic themes

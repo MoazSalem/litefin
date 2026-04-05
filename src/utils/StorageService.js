@@ -84,13 +84,14 @@ class StorageService {
         const elapsed = (performance.now() - startTime).toFixed(1);
         log.info(`Loaded ${this._cache.size} keys from localStorage in ${elapsed}ms`);
 
-        // Flush pending writes on visibility change (TV sleep, input switch)
-        // This prevents data loss if the app is suspended without a clean exit
+        // Flush pending writes during app teardown/sleep
+        // This prevents data loss if the app is suspended or reloaded
+        const flushHandler = () => this.flush();
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'hidden') {
-                this.flush();
-            }
+            if (document.visibilityState === 'hidden') flushHandler();
         });
+        window.addEventListener('pagehide', flushHandler);
+        window.addEventListener('beforeunload', flushHandler);
     }
 
     // ========================================================================

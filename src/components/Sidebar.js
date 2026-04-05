@@ -80,8 +80,8 @@ class Sidebar extends Component {
                     <span class="item-text user-name">${this._getUserName()}</span>
                 </button>
 
-                <!-- Navigation Items -->
-                <div class="sidebar-nav">
+                <!-- Scrollable Sidebar Content -->
+                <div class="sidebar-content">
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
                         <div class="item-icon">
                             <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -129,32 +129,14 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="Settings">Settings</span>
                     </button>
-                    
-                    <button class="sidebar-item" id="sidebar-logout" tabindex="0">
-                        <div class="item-icon">
-                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path>
-                                <polyline points="16 17 21 12 16 7"></polyline>
-                                <line x1="21" y1="12" x2="9" y2="12"></line>
-                            </svg>
-                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M17 7l-1.41 1.41L18.17 11H8v2h10.17l-2.58 2.58L17 17l5-5zM4 5h8V3H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h8v-2H4V5z"/>
-                            </svg>
-                        </div>
-                        <span class="item-text" data-i18n="ButtonSignOut">Logout</span>
-                    </button>
-                </div>
-                
-                <!-- Sliding Focus Indicator -->
-                <div class="sidebar-focus-indicator"></div>
 
-                <!-- Libraries Section (Dynamic) -->
-                <div class="sidebar-libraries-wrapper">
-                    <div class="sidebar-divider"></div>
                     <div class="sidebar-libraries" id="sidebar-libraries">
                         <!-- Filled dynamically -->
                     </div>
                 </div>
+
+                <!-- Sliding Focus Indicator -->
+                <div class="sidebar-focus-indicator"></div>
             </nav>
         `;
     }
@@ -275,7 +257,10 @@ class Sidebar extends Component {
         } else {
             // Clear libraries on logout
             const container = this.el.querySelector('#sidebar-libraries');
-            if (container) container.innerHTML = '';
+            if (container) {
+                container.innerHTML = '';
+                focusManager.resetDOMCache();
+            }
         }
     }
 
@@ -334,8 +319,15 @@ class Sidebar extends Component {
                     } else {
                         router.navigate(path);
                     }
+                } else if (item.id === 'sidebar-user') {
+                    // Clicking the user profile tile opens the "Who's Watching" profiles screen.
+                    // From there the user can switch profiles, add a user, or switch servers.
+                    router.navigate('/profiles');
                 } else if (item.id === 'sidebar-logout') {
-                    auth.logout();
+                    // AuthManager.logout() handles the routing based on remaining sessions:
+                    //   • Other sessions remain → auth:switchToProfiles → App.js routes to /profiles
+                    //   • No sessions remain    → auth:logout           → App.js routes to /login
+                    // auth.logout();
                 } else if (item.id === 'sidebar-syncplay') {
                     // Open the SyncPlay group menu overlay (works from any screen)
                     syncPlayGroupMenu.open();
@@ -404,6 +396,9 @@ class Sidebar extends Component {
 
                 container.appendChild(btn);
             });
+            
+            // Invalidate focus manager cache to discover dynamically added libraries
+            focusManager.resetDOMCache();
         } catch (e) {
             log.warn('Failed to load libraries', e);
         }

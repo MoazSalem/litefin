@@ -5,6 +5,7 @@ import { ICONS } from '../player/osd/icons.js'; // Borrowing native OSD icons
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { api } from '../api/index.js';
 /**
  * TrailerPlayer
  * Displays a fullscreen iframe to play remote trailers (mostly YouTube),
@@ -83,10 +84,20 @@ export class TrailerPlayer extends Component {
         this._overlay.className = 'trailer-player-overlay';
         this._overlay.style.zIndex = '99999'; // Ensure it's above everything
 
+        let backdropUrl = '';
+        if (this._parentPage && this._parentPage._item) {
+            const item = this._parentPage._item;
+            if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                backdropUrl = api.getImageUrl(item.Id, 'Backdrop', { maxWidth: 1920 });
+            }
+        }
+        
+        const backdropStyle = backdropUrl ? `background-image: url('${backdropUrl}'); background-size: cover; background-position: center;` : 'background-color: #000;';
+
         this._overlay.innerHTML = `
-            <div class="trailer-iframe-container" id="trailerIframeContainer"></div>
+            <div class="trailer-iframe-container" id="trailerIframeContainer" style="opacity: 0; transition: opacity 0.5s ease; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1;"></div>
             
-            <div class="player-osd trailer-osd osd-is-hidden" id="trailerOsd">
+            <div class="player-osd trailer-osd osd-is-hidden" id="trailerOsd" style="z-index: 2;">
                 <div class="osd-main">
                     <!-- Header -->
                     <div class="osd-header">
@@ -124,7 +135,13 @@ export class TrailerPlayer extends Component {
                     </div>
                 </div>
             </div>
+
+            <div class="trailer-backdrop" id="trailerBackdrop" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; ${backdropStyle} z-index: 100; display: flex; align-items: center; justify-content: center; overflow: hidden;">
+                <div style="position: absolute; top:0; left:0; width:100%; height:100%; background: rgba(0,0,0,0.6); z-index: 1;"></div>
+                <div class="loading-spinner" style="z-index: 2;"></div>
+            </div>
         `;
+
 
         // Cache DOM elements
         this._osdEl = this._overlay.querySelector('#trailerOsd');
@@ -197,8 +214,11 @@ export class TrailerPlayer extends Component {
             orientation: 'grid'
         });
         
-        // Show initial loading state OSD
-        this._showOsd();
+        // Start player hidden natively and let user interactions trigger the OSD
+        this._hideOsd();
+        focusManager.setActiveSection('trailer-player');
+        focusManager.focusElement(this._playPauseBtn);
+        
         this._loadCurrentTrailer();
     }
 
@@ -223,7 +243,57 @@ export class TrailerPlayer extends Component {
         }
     }
 
+    _showLoading() {
+        if (!this._overlay) return;
+        const iframe = this._overlay.querySelector('#trailerIframeContainer');
+        const backdrop = this._overlay.querySelector('#trailerBackdrop');
+        const spinner = this._overlay.querySelector('.loading-spinner');
+        
+        if (iframe) iframe.style.opacity = '0';
+        if (backdrop) {
+            backdrop.style.display = 'flex';
+            backdrop.style.opacity = '1';
+            backdrop.style.visibility = 'visible';
+            backdrop.style.zIndex = '100';
+        }
+        if (spinner) {
+            spinner.style.display = 'block';
+            spinner.style.animationPlayState = 'running';
+        }
+    }
+
+    _hideLoading() {
+        if (!this._overlay) return;
+        const iframe = this._overlay.querySelector('#trailerIframeContainer');
+        const backdrop = this._overlay.querySelector('#trailerBackdrop');
+        const spinner = this._overlay.querySelector('.loading-spinner');
+        
+        if (iframe) iframe.style.opacity = '1';
+        if (backdrop) {
+            // Aggressive repaints for Tizen GPU compositor bugs
+            backdrop.style.display = 'none';
+            backdrop.style.opacity = '0';
+            backdrop.style.visibility = 'hidden';
+            backdrop.style.zIndex = '-1';
+        }
+        if (spinner) {
+            spinner.style.display = 'none';
+            spinner.style.animationPlayState = 'paused';
+        }
+    }
+
     _loadCurrentTrailer() {
+        // Reset loading state for this new trailer
+        this._showLoading();
+
+        // Master failsafe: if neither the YT API nor the fallback succeeds in shedding the loader
+        // after 5 seconds, forcefully clear it so the UI never permanently hangs.
+        if (this._globalLoadFailsafe) clearTimeout(this._globalLoadFailsafe);
+        this._globalLoadFailsafe = setTimeout(() => {
+            console.warn('[TrailerPlayer] Master load failsafe triggered - forcing loader reveal');
+            this._hideLoading();
+        }, 5000);
+
         const trailer = this._trailers[this._currentIndex];
         this._titleEl.textContent = trailer.Name || 'Trailer';
         
@@ -370,7 +440,7 @@ export class TrailerPlayer extends Component {
         /* Build the embed URL with all desired params in the query string.
            origin + host are the key fix for error 153 (embed denied) — YouTube
            validates that the embedding page's origin matches before allowing playback. */
-        const params = new URLSearchParams({
+        const paramsObj = {
             autoplay:         '1',
             controls:         '1', // Show native controls since we can't drive it via JS
             rel:              '0',
@@ -381,18 +451,33 @@ export class TrailerPlayer extends Component {
             iv_load_policy:   '3',
             origin:           'https://www.youtube.com',
             host:             'https://www.youtube.com'
-        });
+        };
 
-        container.innerHTML = `
-            <iframe
-                src="https://www.youtube.com/embed/${videoId}?${params.toString()}"
-                width="100%"
-                height="100%"
-                frameborder="0"
-                allow="autoplay; encrypted-media; fullscreen"
-                allowfullscreen>
-            </iframe>
-        `;
+        const paramsString = Object.keys(paramsObj)
+            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(paramsObj[key]))
+            .join('&');
+
+        const iframe = document.createElement('iframe');
+        iframe.src = `https://www.youtube.com/embed/${videoId}?${paramsString}`;
+        iframe.width = '100%';
+        iframe.height = '100%';
+        iframe.setAttribute('frameborder', '0');
+        iframe.allow = 'autoplay; encrypted-media; fullscreen';
+        iframe.allowFullscreen = true;
+        
+        const revealIframe = () => {
+            if (this._overlay) {
+                this._hideLoading();
+            }
+        };
+
+        iframe.addEventListener('load', revealIframe);
+        
+        // Failsafe: some TV browsers swallow cross-origin load events
+        setTimeout(revealIframe, 3000);
+
+        container.innerHTML = '';
+        container.appendChild(iframe);
 
         /* Hide our custom OSD — we have no JS handle into this iframe */
         this._hideOsd();
@@ -446,6 +531,12 @@ export class TrailerPlayer extends Component {
         event.target.playVideo();
         this._startProgressUpdate();
         
+        // Failsafe: if autoplay is blocked, it will never reach PLAYING state.
+        // Reveal the player once the API confirms it is loaded.
+        setTimeout(() => {
+            this._hideLoading();
+        }, 500);
+
         // Try to get real YouTube title immediately once ready
         try {
             const data = event.target.getVideoData();
@@ -460,6 +551,7 @@ export class TrailerPlayer extends Component {
         if (event.data === 1) { // Playing
             this._isPlaying = true;
             this._playPauseBtn.innerHTML = ICONS.pause;
+            this._hideLoading();
             
             // Try again on play in case data was delayed
             try {
@@ -629,9 +721,22 @@ export class TrailerPlayer extends Component {
     }
 
     _handleKeyDown(e) {
+        const wasHidden = !this._isOsdVisible;
+        
         // Tizen specific keys and generic media keys intercept
         this._resetAutoHide();
         this._showOsd();
+
+        // Dynamically place focus upon wakeup
+        if (wasHidden) {
+            if (e.keyCode === 37 || e.keyCode === 39) {
+                // If woken by a seek action (Left/Right), focus the slider so the user can continue seeking quickly
+                focusManager.focusElement(this._positionSliderEl);
+            } else {
+                // Otherwise default to the play/pause button
+                focusManager.focusElement(this._playPauseBtn);
+            }
+        }
 
         switch (e.keyCode) {
             case 461: // WebOS Back
@@ -651,7 +756,7 @@ export class TrailerPlayer extends Component {
                 this._executeAction('togglePlay');
                 return;
             case 37: // Left
-                if (this._positionSliderEl.classList.contains('focused')) {
+                if (wasHidden || this._positionSliderEl.classList.contains('focused')) {
                     e.preventDefault();
                     e.stopPropagation();
                     this._executeAction('rewind');
@@ -659,7 +764,7 @@ export class TrailerPlayer extends Component {
                 }
                 break;
             case 39: // Right
-                if (this._positionSliderEl.classList.contains('focused')) {
+                if (wasHidden || this._positionSliderEl.classList.contains('focused')) {
                     e.preventDefault();
                     e.stopPropagation();
                     this._executeAction('fastForward');
@@ -756,9 +861,13 @@ export class TrailerPlayer extends Component {
         if (!ev.data || !ev.data.__ytbridge) return;
         const msg = ev.data;
         
-        if (msg.type === 'ready') {
+        if (msg.event === 'playing') {
             this._isPlaying = true;
             this._playPauseBtn.innerHTML = ICONS.pause;
+            this._hideLoading();
+        } else if (msg.event === 'paused') {
+            this._isPlaying = false;
+            this._playPauseBtn.innerHTML = ICONS.play;
             this._resetAutoHide();
         } else if (msg.type === 'time') {
             this._proxyCurrentTime = msg.t / 1000;

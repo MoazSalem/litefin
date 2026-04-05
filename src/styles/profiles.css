@@ -1,0 +1,368 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Profiles Page Styles ("Who's Watching")
+ * ============================================================================
+ * Following Apple Human Interface Guidelines:
+ * - Large, fingertip/remote-friendly tap targets (160px+ cards)
+ * - Generous whitespace — breathing room is the design
+ * - Muted surface + accent-pop on focus
+ * - Spring animations: cubic-bezier(0.34, 1.56, 0.64, 1) = overshoot/bounce
+ * - Confirmation dialog with frosted glass backdrop
+ * ============================================================================
+ */
+
+/* ============================================================================
+   Page Shell
+   ============================================================================ */
+
+.profiles-page {
+    /* Full-screen take-over — no sidebar on this page */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    padding: 40px;
+    box-sizing: border-box;
+    overflow-x: hidden;
+}
+
+/* ============================================================================
+   Header / Title
+   ============================================================================ */
+
+.profiles-header {
+    text-align: center;
+    margin-bottom: 64px;
+}
+
+.profiles-title {
+    font-size: 3.8rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    letter-spacing: -1px;
+    margin: 0;
+    /* Subtle fade-up entrance */
+    animation: profiles-fade-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@keyframes profiles-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================================================
+   Profile Grid
+   ============================================================================ */
+
+.profiles-grid {
+    /* Flexible wrapping row — extra space distributes evenly around cards */
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    align-items: flex-start;
+    max-width: 1600px;
+    width: 100%;
+    padding: 0 40px;
+    box-sizing: border-box;
+    /* Stagger the grid in slightly after the title */
+    animation: profiles-fade-up 0.5s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+/* Wrapper for card + name label — keeps label anchored below the card */
+.profiles-profile-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 20px 28px;
+}
+
+/* ============================================================================
+   Profile Card
+   ============================================================================ */
+
+.profiles-card {
+    position: relative;
+    width: 160px;
+    height: 160px;
+    border-radius: var(--jf-border-radius-lg, 16px);
+    border: none;
+    background: var(--jf-surface, #1e1e1e);
+    cursor: pointer;
+    overflow: hidden;
+    padding: 0;
+    margin: 0;
+    display: flex; /* Flexbox for icon centering */
+    align-items: center;
+    justify-content: center;
+
+    /*
+     * Spring animation — cubic-bezier with an overshoot coefficient (1.56)
+     * gives the card a satisfying "pop" on focus, akin to a physical spring.
+     */
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                border-color 0.18s ease;
+    will-change: transform;
+}
+
+/*
+ * Focus indicator drawn as an overlay (::after pseudo-element) so it
+ * never clips the avatar image or shifts the layout.
+ * Using var(--jf-button-border-focus) to match the login page buttons.
+ */
+.profiles-card::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border: 4px solid var(--jf-button-border-focus);
+    border-radius: inherit;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    pointer-events: none;
+    z-index: 2;
+}
+
+.profiles-card:focus,
+.profiles-card.focused {
+    transform: scale(1.07);
+    outline: none;
+    z-index: 10;
+    /* Box shadow removed as requested */
+}
+
+.profiles-card:focus::after,
+.profiles-card.focused::after {
+    opacity: 1;
+}
+
+/* ============================================================================
+   Card Avatar Image
+   ============================================================================ */
+
+.profiles-card-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+}
+
+/*
+ * Initial-letter fallback: shown when no avatar image is available,
+ * or when the image fails to load (onerror swaps the classes).
+ */
+.profiles-card-initial {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 4.5rem;
+    font-weight: 500;
+    color: var(--jf-accent);
+    background: var(--jf-surface, #1e1e1e);
+    text-shadow: none; /* Ensure no weird character shadow */
+}
+
+/* ============================================================================
+   Profile Name Label
+   ============================================================================ */
+
+.profiles-card-name {
+    margin-top: 18px;
+    font-size: 1.35rem;
+    font-weight: 400;
+    color: var(--jf-text-secondary, #aaa);
+    text-align: center;
+    max-width: 180px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    transition: color 0.2s ease;
+}
+
+/* When the card above is focused, the name brightens and adopts the accent */
+.profiles-profile-item:focus-within .profiles-card-name,
+.profiles-profile-item .profiles-card.focused + .profiles-card-name {
+    color: var(--jf-accent);
+}
+
+/* ============================================================================
+   "Add User" Card — distinct secondary styling
+   ============================================================================ */
+
+/* idle state: solid subtle border (Tizen 4 fix: avoid dashed/dotted overlap bugs) */
+.profiles-add-card {
+    background: transparent;
+    border: 2px solid rgba(255, 255, 255, 0.12);
+}
+
+.profiles-add-card:focus,
+.profiles-add-card.focused {
+    /* 
+     * Prevent double border: hide the element's own border-color change
+     * and let ::after provide the consistent focus ring.
+     */
+    border-color: transparent;
+}
+
+.profiles-add-icon {
+    font-size: 4.5rem;
+    font-weight: 200;
+    color: rgba(255, 255, 255, 0.35);
+    line-height: 1;
+    transition: color 0.2s ease, transform 0.22s ease;
+    pointer-events: none;
+}
+
+.profiles-add-card:focus .profiles-add-icon,
+.profiles-add-card.focused .profiles-add-icon {
+    color: var(--jf-accent);
+}
+
+/* ============================================================================
+   Bottom Bar (Switch Server)
+   ============================================================================ */
+
+.profiles-bottom {
+    margin-top: 64px;
+    padding-top: 0;
+    display: flex;
+    justify-content: center;
+    animation: profiles-fade-up 0.5s 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+}
+
+.profiles-switch-server-btn {
+    /*
+     * Intentionally understated — this is a destructive action,
+     * we don't want it drawing the eye away from the profile cards.
+     */
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    color: var(--jf-text-tertiary, #666);
+    font-size: 1.2rem;
+    font-weight: 400;
+    padding: 16px 40px;
+    border-radius: var(--jf-border-radius, 10px);
+    cursor: pointer;
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                color 0.18s ease,
+                border-color 0.18s ease;
+    will-change: transform;
+}
+
+.profiles-switch-server-btn:focus,
+.profiles-switch-server-btn.focused {
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--jf-text-primary);
+    border-color: rgba(255, 255, 255, 0.45);
+    outline: none;
+    transform: scale(1.04);
+}
+
+/* ============================================================================
+   Switch Server Confirmation Dialog
+   ============================================================================ */
+
+/*
+ * The .modal-overlay and .settings-modal classes are defined in components.css.
+ * We only add page-specific overrides here.
+ */
+
+.profiles-dialog-overlay {
+    /* 
+     * Higher z-index than the sidebar (usually around 1000) to ensure 
+     * the backdrop effectively darkens the entire UI.
+     */
+    z-index: 10000;
+}
+
+.profiles-dialog {
+    /* Standard modal width */
+    width: 650px;
+    max-width: 90%;
+    /* Remove padding — handled by .modal-header and .modal-options */
+    padding: 0;
+}
+
+.profiles-dialog-title {
+    /* Inherit from .settings-modal .modal-header h2 */
+    margin: 0;
+    font-size: 1.8rem;
+    color: var(--jf-text-primary);
+}
+
+.profiles-dialog-body {
+    font-size: 1.4rem;
+    color: var(--jf-text-secondary);
+    line-height: 1.5;
+    margin: 0;
+    padding: 20px 30px 40px;
+}
+
+.profiles-dialog-actions {
+    /* .modal-actions already provides padding and flex */
+    padding: 24px 30px;
+}
+
+/* 
+ * Tizen Compatibility: Chromium 56 does not support CSS 'gap'.
+ * We use margin-left on the second item instead.
+ */
+.profiles-dialog-btn + .profiles-dialog-btn {
+    margin-left: 20px;
+}
+
+.profiles-dialog-btn {
+    flex: 1;
+    padding: 18px 30px;
+    font-size: 1.3rem;
+    font-weight: 500;
+    border-radius: var(--jf-border-radius, 10px);
+    cursor: pointer;
+    border: 3px solid transparent; /* Match app button style */
+    transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease;
+    will-change: transform;
+}
+
+/* Cancel — secondary button style */
+.profiles-dialog-cancel {
+    background: var(--jf-button-bg, #2a2a2a);
+    color: var(--jf-text-primary);
+}
+
+.profiles-dialog-cancel:focus,
+.profiles-dialog-cancel.focused {
+    background: var(--jf-accent);
+    color: var(--jf-primary-btn-color, white);
+    border-color: var(--jf-button-border-focus);
+    outline: none;
+    transform: scale(1.05);
+}
+
+/* Confirm — destructive red */
+.profiles-dialog-confirm {
+    background: rgba(220, 53, 69, 0.2);
+    border-color: rgba(220, 53, 69, 0.4);
+    color: #ff6b6b;
+}
+
+.profiles-dialog-confirm:focus,
+.profiles-dialog-confirm.focused {
+    background: var(--jf-error, #dc3545);
+    border-color: var(--jf-button-border-focus);
+    color: white;
+    outline: none;
+    transform: scale(1.05);
+}
