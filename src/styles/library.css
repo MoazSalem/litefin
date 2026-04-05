@@ -185,6 +185,14 @@
     margin-right: 12px;
 }
 
+/* View mode toggle button sits in the controls bar next to Sort/Filter.
+   It inherits all styles from .control-btn — no extra rules needed here. */
+
+/* Visual indicator: dim the SVG when no mode is active (shouldn't happen) */
+.btn-view-mode .control-svg {
+    opacity: 0.85;
+}
+
 .count-indicator {
     color: var(--text-muted);
     font-size: 14px;
@@ -327,16 +335,223 @@
 
 /* Redundant @keyframes removed, using global definition from base.css */
 
+/* =============================================================================
+   Library Grid — Flexbox Base
+   ---------------------------------------------------------------------------
+   We use flexbox (not CSS Grid) so we can drive card widths purely via CSS
+   modifier classes. This also removes the dual grid/flex Tizen 4 polyfill — the
+   base is already flex, so legacy devices work identically without overrides.
+   ========================================================================== */
+
 .library-grid {
-    display: grid;
-    /* Responsive Grid using mix/max for TV */
-    /* Responsive Grid using mix/max for TV */
-    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-    /* Hits strictly 5 per row at 1080p */
-    grid-gap: 40px 30px; /* Legacy fallback for Tizen 5.0 */
-    gap: 40px 30px;
+    /* Flexbox wrap lets us control card width per view mode */
+    display: flex;
+    flex-wrap: wrap;
+    align-content: flex-start;
+    /*
+     * NOTE: gap is NOT used here — Tizen 4 (Chrome 56) doesn't support flex gap.
+     * Spacing between cards is handled via margin-right/margin-bottom on media-card.
+     */
     padding-bottom: 0;
-    /* Let footer handle spacing */
+}
+
+/* ── View mode: Poster (default) ─────────────────────────────────── */
+/* Standard 2:3 portrait card. Each card fixes at 220px — roughly 7 per 1080p row. */
+.library-grid .media-card {
+    flex: 0 0 auto;
+    width: 220px;
+    /* 20px gap between cards, compatible with Tizen 4 */
+    margin-right: 20px;
+    margin-bottom: 20px;
+    /* Isolate each card's layout/paint for smoother focus transitions */
+    contain: layout style paint;
+}
+
+/* ── View mode: Small Poster ─────────────────────────────────────── */
+/* Tighter portrait cards (~150px) — fits ~10–11 per row. Dense browsing. */
+.library-grid.view-small-poster .media-card {
+    width: 150px;
+}
+
+/* ── View mode: Thumb ────────────────────────────────────────────── */
+/* 16:9 landscape cards (~330px wide). TV-episode-style browsing. */
+.library-grid.view-thumb .media-card {
+    width: 330px;
+}
+
+/* Force the card image into landscape aspect ratio for thumb mode */
+.library-grid.view-thumb .card-image {
+    padding-bottom: 56.25%; /* 16:9 */
+}
+
+/* ── View mode: Banner ───────────────────────────────────────────── */
+/* Full-width strips at a fixed height (~110px). Labeled browsing. */
+.library-grid.view-banner .media-card {
+    /* Stretch to fill the row — one per visual line */
+    width: 100%;
+    /* Full-width: no horizontal gap between cards */
+    margin-right: 0;
+    /* IMPORTANT: flex-direction row because card-image is left, card-info right */
+    flex-direction: row;
+    align-items: center;
+    height: 110px;
+    overflow: hidden;
+}
+
+/* Banner: fixed-size image thumbnail on the left */
+.library-grid.view-banner .card-image {
+    /* Fixed width thumbnail — no aspect-ratio padding trick needed */
+    width: 196px;      /* 16:9 of 110px height ≈ 196px */
+    flex-shrink: 0;
+    height: 100%;
+    padding-bottom: 0; /* Override portrait aspect ratio */
+    position: relative;
+}
+
+/* Banner: text fills remaining space to the right */
+.library-grid.view-banner .card-info {
+    flex: 1;
+    padding: 0 20px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+}
+
+/* Banner: image sharp crop from center */
+.library-grid.view-banner .card-image img,
+.library-grid.view-banner .card-image .media-fallback {
+    object-fit: cover;
+    object-position: center 30%;
+    position: absolute;
+    /* inset: 0 not supported on Tizen 4 (Chrome 56) — use longhand */
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+/* ── View mode: List ─────────────────────────────────────────────── */
+/* One full-width row per item: small poster on the left, rich metadata on the right. */
+.library-grid.view-list .media-card {
+    width: 100%;
+    /* Full-width rows: no horizontal gap between cards */
+    margin-right: 0;
+    flex-direction: row;
+    align-items: center;
+    height: 90px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    overflow: hidden;
+}
+
+/* List: small portrait thumbnail on the left */
+.library-grid.view-list .card-image {
+    width: 60px;
+    flex-shrink: 0;
+    height: 74px;
+    padding-bottom: 0; /* Override portrait aspect ratio */
+    position: relative;
+    border-radius: var(--jf-border-radius);
+    overflow: hidden;
+    /* 16px space to the right of the thumbnail — replaces gap: 16px for Tizen 4 */
+    margin-right: 16px;
+}
+
+.library-grid.view-list .card-image img,
+.library-grid.view-list .card-image .media-fallback {
+    position: absolute;
+    /* inset: 0 not supported on Tizen 4 (Chrome 56) — use longhand */
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* List: text column fills remaining space */
+.library-grid.view-list .card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    overflow: hidden;
+    min-width: 0; /* Prevent flex overflow clipping titles */
+}
+
+.library-grid.view-list .card-title {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.library-grid.view-list .card-subtitle {
+    font-size: 15px;
+    margin-top: 2px;
+}
+
+/* Card meta row (rating, score, runtime) — only shown in list view */
+.card-meta {
+    display: flex;
+    align-items: center;
+    /* NOTE: no gap — use margin-right on each child span for Tizen 4 compat */
+    margin-top: 4px;
+    font-size: 13px;
+    color: var(--text-muted);
+    flex-wrap: wrap;
+}
+
+/* Spacing between meta pills — replaces gap: 12px */
+.card-meta > span {
+    margin-right: 12px;
+}
+
+.card-meta-rating {
+    /* Parental rating badge pill */
+    border: 1px solid currentColor;
+    border-radius: 4px;
+    padding: 1px 5px;
+    font-size: 12px;
+    opacity: 0.8;
+}
+
+.card-meta-score {
+    color: var(--jf-accent);
+    font-weight: 600;
+}
+
+/* List view skeleton — horizontal strip shape */
+.media-card.list-skeleton {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    width: 100%;
+    height: 90px;
+    padding: 8px 12px;
+    box-sizing: border-box;
+    /* no gap — margin-right on card-image child for Tizen 4 compat */
+}
+
+.media-card.list-skeleton .card-image {
+    width: 60px;
+    height: 74px;
+    flex-shrink: 0;
+    padding-bottom: 0;
+    border-radius: var(--jf-border-radius);
+    /* 16px right spacing — replaces gap: 16px on parent for Tizen 4 */
+    margin-right: 16px;
+}
+
+.media-card.list-skeleton .card-info {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    /* no gap — margin-top on child lines for Tizen 4 compat */
 }
 
 /* Reset media-card styles for Grid context */
@@ -348,73 +563,25 @@
     transform: scale(1.05);
 }
 
-.library-grid .media-card {
-    width: 100% !important;
-    /* Let grid column size it */
-    margin: 0 !important;
-    /* Let grid gap handle spacing */
-
-    /*
-     * Grid-specific containment: isolate each card's layout and paint pass so
-     * focus/image transitions in one card don't cause the browser to re-layout
-     * or repaint the entire grid. This gives a boost on scroll-heavy grids.
-     *
-     * 'layout' — card's internal layout changes don't affect siblings
-     * 'style'  — counters/pseudo-element changes are scoped to this card
-     * 'paint'  — card clips to its box; overflow doesn't affect neighboring paint
-     *
-     * NOTE: We tried content-visibility: auto but it caused a stutter every ~3 items
-     * on Tizen hardware — the deferred layout cost hits all at once when cards enter
-     * the viewport, which is worse than steady state paint. Contain without
-     * content-visibility gives the repaint isolation benefits without the reveal hiccup.
-     */
-    contain: layout style paint;
-}
-
-
-/* Adjust for landscape items if needed via class modifier */
-.library-grid.landscape {
-    grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
-    /* Hits strictly 4 per row at 1080p */
-}
-
-
-
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
- * We force flex display and reset all grid-related properties to ensure
- * a predictable 5-card row regardless of modern browser support.
+ * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid was unavailable.
+ * Since we now use flexbox as the base, these overrides reduce to no-ops.
+ * Kept for safety in case any stale HTML references .landscape width rules.
  */
-html[data-layout-tier="legacy"] .library-grid {
-    display: flex !important;
-    flex-wrap: wrap !important;
-    gap: 0 !important;
-    grid-template-columns: none !important;
-    justify-content: flex-start !important;
-    align-items: stretch !important;
-}
-
 html[data-layout-tier="legacy"] .library-grid .media-card {
-    /* (100% - 4 gaps * 30px) / 5 = calc(20% - 24px) */
-    width: calc(20% - 24px) !important;
-    margin-right: 30px !important;
-    margin-bottom: 40px !important;
-    flex: 0 0 auto !important; /* Force fixed size, no grow/shrink */
+    /* (100% - 6 gaps * 20px) / 7 ≈ calc(14.28% - 17px) — close to 220px target */
+    width: calc(14.28% - 17px);
 }
 
-html[data-layout-tier="legacy"] .library-grid .media-card:nth-child(5n) {
-    margin-right: 0 !important;
+html[data-layout-tier="legacy"] .library-grid.view-thumb .media-card {
+    /* 5 thumb cards per row on legacy devices */
+    width: calc(20% - 16px);
 }
 
-html[data-layout-tier="legacy"] .library-grid.landscape .media-card {
-    /* (100% - 3 gaps * 30px) / 4 = calc(25% - 22.5px) */
-    width: calc(25% - 22.5px) !important;
-    margin-right: 30px !important;
-    flex: 0 0 auto !important;
-}
-
-html[data-layout-tier="legacy"] .library-grid.landscape .media-card:nth-child(4n) {
-    margin-right: 0 !important;
+html[data-layout-tier="legacy"] .library-grid.view-banner .media-card,
+html[data-layout-tier="legacy"] .library-grid.view-list .media-card {
+    /* Full width strips work identically on legacy */
+    width: 100%;
 }
 
 /* --- Alpha Picker (Right Side) --- */
@@ -1026,4 +1193,101 @@ html[data-layout-tier="legacy"] .library-rows-container {
 html[data-layout-tier="legacy"] .library-row {
     display: block !important;
     width: 100% !important;
+}
+
+/* =============================================================================
+   View Mode Picker Modal
+   ============================================================================= */
+
+/*
+ * Compact modal that presents the 5 view mode options as icon+label tiles.
+ * Sized to comfortably sit centre-screen even on a 1080p TV.
+ */
+.view-mode-modal {
+    width: 900px;
+    max-width: 92vw;
+    padding: 0;
+}
+
+/*
+ * Options row: 5 tiles laid out horizontally.
+ * flex-wrap: nowrap so they stay in a single row; each tile squeezes equally.
+ */
+.view-mode-options {
+    display: flex;
+    flex-direction: row;
+    /* Intentionally no gap; border separators on buttons handle visual spacing */
+    padding: 30px 30px 10px 30px;
+    /* gap: 16px not supported on Tizen 4 Chrome 56, use margin on children */
+}
+
+/*
+ * Individual option tile — icon above, label below.
+ * Matches the style of .modal-option-btn but is square/icon-centric.
+ */
+.view-mode-option-btn {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    /* NOTE: gap not supported on Tizen 4 (Chrome 56) — use margin on child instead */
+    padding: 20px 10px;
+    margin: 0 8px;
+    border-radius: var(--jf-border-radius-lg);
+    border: 2px solid transparent;
+    background: rgba(255, 255, 255, 0.04);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease,
+                color 0.18s ease;
+}
+
+/* Active / selected mode gets an accent ring */
+.view-mode-option-btn.selected {
+    border-color: var(--jf-accent);
+    background: rgba(255, 255, 255, 0.08);
+    color: var(--jf-accent);
+}
+
+/* D-pad focus ring — same spring-scale pattern as other library buttons.
+ * Also enforces border-radius to avoid the Tizen 4 rectangular focus box bug. */
+.view-mode-option-btn:focus,
+.view-mode-option-btn.focused {
+    outline: none !important;
+    background-color: var(--jf-accent) !important;
+    border-color: var(--jf-action-btn-active-border) !important;
+    color: var(--jf-primary-btn-color, #fff) !important;
+    transform: scale(1.08);
+    will-change: transform;
+    /* Border-radius must be repeated on :focus — Tizen 4 resets it */
+    border-radius: var(--jf-border-radius-lg) !important;
+    -webkit-border-radius: var(--jf-border-radius-lg) !important;
+    overflow: hidden !important;
+}
+
+/* Icon wrapper — scaled to a consistent size; margin-bottom provides icon-to-label gap */
+.vm-icon-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 40px;
+    /* 10px space between icon and label (replaces gap: 10px for legacy Tizen compat) */
+    margin-bottom: 10px;
+}
+
+.vm-icon {
+    width: 100%;
+    height: 100%;
+}
+
+/* Mode label */
+.vm-label {
+    font-size: 16px;
+    font-weight: 600;
+    text-align: center;
+    line-height: 1.2;
 }

@@ -16,6 +16,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('Library');
 
@@ -42,7 +43,24 @@ class LibraryPage extends Page {
 
             // Data Cache
             items: [],
-            alphaPickerChars: '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('')
+            alphaPickerChars: '#ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split(''),
+
+            /*
+             * View Mode: controls how the main grid renders cards.
+             * Persisted per-library via StorageService key:
+             *   pref:library:viewMode:<libraryId>
+             *
+             * Valid values:
+             *   'poster'       — 2:3 portrait card (default for most libraries)
+             *   'small-poster' — tighter portrait card (~150px wide, ~10 per row)
+             *   'thumb'        — 16:9 landscape card (~330px, ~5 per row)
+             *   'banner'       — full-width horizontal strip with small thumbnail
+             *   'list'         — full-width row with thumb + title + meta on right
+             *
+             * Music libraries default to 'square' (album-cover style), which maps to
+             * CardRenderer type 'square' rather than adding a 6th viewMode constant.
+             */
+            viewMode: 'poster'
         };
 
         // Bindings
@@ -104,6 +122,18 @@ class LibraryPage extends Page {
                                         </svg>
                                     </span> 
                                     <span class="control-btn-text" data-i18n="Filter">Filter</span>
+                                </button>
+                                <!-- View Mode Toggle -->
+                                <button class="control-btn btn-view-mode" id="btn-view-mode" tabindex="0">
+                                    <span class="icon">
+                                        <svg viewBox="0 0 24 24" fill="none" class="control-svg">
+                                            <rect x="3" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+                                            <rect x="14" y="3" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+                                            <rect x="3" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+                                            <rect x="14" y="14" width="7" height="7" rx="1" stroke="currentColor" stroke-width="2"/>
+                                        </svg>
+                                    </span>
+                                    <span class="control-btn-text" data-i18n="ViewMode">View</span>
                                 </button>
                                 <button class="control-btn" id="btn-quick-reset" tabindex="0" style="display: none;">
                                     <span class="icon">
@@ -209,6 +239,13 @@ class LibraryPage extends Page {
             // Merge cached state properties
             Object.assign(this.state, savedState.stateData);
 
+            // ------------------------------------------------------------------
+            // Load persisted view mode for this library.
+            // We do this AFTER the Object.assign so the cache doesn't overwrite
+            // a preference the user changed while browsing back and forth.
+            // ------------------------------------------------------------------
+            this._loadPersistedViewMode();
+
             // 1. Setup UI Components
             this._renderTabs();
             this._renderAlphaPicker();
@@ -276,6 +313,11 @@ class LibraryPage extends Page {
 
         // 1. Fetch Library Info
         await this._fetchLibraryInfo();
+
+        // Load persisted view mode now that we know the libraryId and collectionType.
+        // This happens before _renderGrid() so the correct mode is active from the start.
+        this._loadPersistedViewMode();
+
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -414,6 +456,7 @@ class LibraryPage extends Page {
         this.$('#btn-shuffle')?.addEventListener('click', this._handleShuffle.bind(this));
         this.$('#btn-sort')?.addEventListener('click', this._handleSort.bind(this));
         this.$('#btn-filter')?.addEventListener('click', this._handleFilter.bind(this));
+        this.$('#btn-view-mode')?.addEventListener('click', this._handleViewMode.bind(this));
         this.$('#btn-quick-reset')?.addEventListener('click', this._handleResetFilters.bind(this));
         this.$('#alpha-picker')?.addEventListener('click', this._handleAlphaClick.bind(this));
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
@@ -516,7 +559,7 @@ class LibraryPage extends Page {
 
     /**
      * Get page state for navigation history.
-     * Saves filters, sort, pagination, and tab selection.
+     * Saves filters, sort, pagination, tab selection, AND view mode.
      */
     getNavigationState() {
         return {
@@ -526,7 +569,8 @@ class LibraryPage extends Page {
             filters: { ...this.state.filters }, // Clone object
             nameStartsWith: this.state.nameStartsWith,
             startIndex: this.state.startIndex,
-            limit: this.state.limit
+            limit: this.state.limit,
+            viewMode: this.state.viewMode
         };
     }
 
@@ -546,7 +590,9 @@ class LibraryPage extends Page {
             filters: savedState.filters || {},
             nameStartsWith: savedState.nameStartsWith || null,
             startIndex: savedState.startIndex || 0,
-            limit: savedState.limit || this.state.limit
+            limit: savedState.limit || this.state.limit,
+            // Restore view mode from nav state (set before _renderGrid runs)
+            viewMode: savedState.viewMode || this.state.viewMode
         });
 
         log.info('Navigation state restored:', savedState);
@@ -639,7 +685,10 @@ class LibraryPage extends Page {
         }
 
         if (grid && !isHorizontalLayout) {
-            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape);
+            // Show a skeleton whose shape matches the active view mode.
+            // For forced landscape tab types, ignore viewMode and show landscape skeletons.
+            const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
+            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode);
         }
 
         try {
@@ -1248,8 +1297,90 @@ class LibraryPage extends Page {
     }
 
     // ========================================================================
-    // Rendering Logic
+    // View Mode Helpers
     // ========================================================================
+
+    /**
+     * Load the persisted view mode for the current library from StorageService.
+     *
+     * Rules:
+     *  - Sub-views (genre/studio/person/tag/year filters) always reset to 'poster'
+     *    so Browse paths never inherit a list or thumb preference.
+     *  - All libraries default to 'poster' when no saved preference exists.
+     *
+     * IMPORTANT: 'viewMode' is a layout concept (grid width, orientation).
+     * The card image type (poster vs square vs backdrop) is resolved separately
+     * in _resolveCardType() so that viewMode always maps to one of the 5 picker
+     * options regardless of library type.
+     */
+    _loadPersistedViewMode() {
+        if (this._isSubView()) {
+            // Sub-views always reset to the poster default rather than inheriting
+            // whatever the parent library is configured to — avoids confusing layouts
+            // when drilling into genres/studios/persons.
+            this.state.viewMode = 'poster';
+            return;
+        }
+
+        const storageKey = `pref:library:viewMode:${this.state.libraryId}`;
+        const saved = storage.getItem(storageKey);
+
+        if (saved) {
+            // Validate the value is still a known picker option (guards against stale data)
+            const validModes = ['poster', 'small-poster', 'thumb', 'banner', 'list'];
+            this.state.viewMode = validModes.includes(saved) ? saved : 'poster';
+        } else {
+            // No preference saved — universal default is 'poster'.
+            // Music albums show as square cards via _resolveCardType(), not via viewMode.
+            this.state.viewMode = 'poster';
+        }
+
+        log.info(`[ViewMode] Loaded view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
+    }
+
+    /**
+     * Resolve the CardRenderer card type string based on the active viewMode,
+     * viewType override (Episodes, Networks), and library collection type.
+     *
+     * Priority: forced landscape tab types > music library > user view mode
+     *
+     * @param {boolean} isLandscape - Whether the current tab forces landscape
+     * @returns {string} Card type string for CardRenderer.createCardHtml()
+     */
+    _resolveCardType(isLandscape) {
+        // Forced tab-type overrides: always resolve before checking user preference
+        if (this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming') {
+            return 'episode';
+        }
+        if (this.state.viewType === 'Networks') {
+            return 'backdrop';
+        }
+
+        // Music library always shows album-cover square cards regardless of view mode
+        // (Thumb and Banner still use a landscape image for music, but that's a
+        //  reasonable concession — music art is usually square anyway.)
+        if (this.state.libraryInfo?.CollectionType === 'music') {
+            // For thumb/banner, use backdrop if available; fall back gracefully
+            if (this.state.viewMode === 'thumb' || this.state.viewMode === 'banner') {
+                return 'backdrop';
+            }
+            return 'square';
+        }
+
+        // Map user view mode to card type
+        // - poster, small-poster, list: portrait primary image
+        // - thumb, banner: landscape backdrop/thumb image
+        switch (this.state.viewMode) {
+            case 'thumb':
+            case 'banner':
+                return 'backdrop';
+            case 'poster':
+            case 'small-poster':
+            case 'list':
+            default:
+                return 'poster';
+        }
+    }
 
     _isSubView() {
         return !!(
@@ -1402,15 +1533,35 @@ class LibraryPage extends Page {
         if (pagination) pagination.style.display = ''; // Restore pagination
 
         // Use landscape cards via CSS class if needed (e.g. for Episodes, Upcoming, Networks)
+        // These viewTypes always force landscape regardless of user view mode preference.
         const isLandscape =
             this.state.viewType === 'Episodes' ||
             this.state.viewType === 'Upcoming' ||
             this.state.viewType === 'Networks';
 
+        // --------------------------------------------------------------------
+        // Apply the view mode CSS modifier class to the grid container.
+        // Special viewTypes (Episodes, Networks) are always landscape and ignore
+        // the user's viewMode preference. For everything else we apply the mode.
+        //
+        // IMPORTANT: only apply classes for the 5 known picker modes. 'poster'
+        // uses the base style (no extra class). Any unexpected value is silently
+        // treated as 'poster' to avoid broken layouts from stale storage data.
+        // --------------------------------------------------------------------
+        const viewModeClasses = ['view-small-poster', 'view-thumb', 'view-banner', 'view-list'];
+        viewModeClasses.forEach((cls) => grid.classList.remove(cls));
+        grid.classList.remove('landscape');
+
         if (isLandscape) {
+            // Force landscape display for tab types that mandate it
             grid.classList.add('landscape');
         } else {
-            grid.classList.remove('landscape');
+            // The 4 non-default modes each get a CSS class; 'poster' uses base styles
+            const nonDefaultModes = ['small-poster', 'thumb', 'banner', 'list'];
+            if (nonDefaultModes.includes(this.state.viewMode)) {
+                grid.classList.add(`view-${this.state.viewMode}`);
+            }
+            // Any unknown mode (e.g. stale 'square' from old storage) falls through to poster
         }
 
         if (!items || items.length === 0) {
@@ -1528,20 +1679,19 @@ class LibraryPage extends Page {
         const end = Math.min(this.state.startIndex + this.state.limit, this.state.totalRecordCount);
         this.$('#count-indicator').textContent = i18n.t('ListPaging', [start, end, this.state.totalRecordCount]);
 
-        // Generate HTML
+        // Resolve card type based on the active view mode and library/tab context.
+        // Special viewTypes (Episodes, Networks) always override the user preference.
+        const resolvedCardType = this._resolveCardType(isLandscape);
+
+        // Generate HTML using the correct card type and view mode flag
         const html = items
             .map((item) =>
                 CardRenderer.createCardHtml(item, {
-                    isLandscape: isLandscape,
-                    type:
-                        this.state.viewType === 'Episodes' || this.state.viewType === 'Upcoming'
-                            ? 'episode'
-                            : this.state.viewType === 'Networks'
-                              ? 'backdrop'
-                              : this.state.libraryInfo?.CollectionType === 'music'
-                                ? 'square'
-                                : 'poster',
-                    contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null // Handle special contexts
+                    isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
+                    type: resolvedCardType,
+                    contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null,
+                    // Only show rich meta row in list view (rating, score, runtime)
+                    showMeta: !isLandscape && this.state.viewMode === 'list'
                 })
             )
             .join('');
@@ -2293,6 +2443,179 @@ class LibraryPage extends Page {
         this._renderSortModal(sortOptions, orderOptions);
     }
 
+    // ========================================================================
+    // View Mode Picker
+    // ========================================================================
+
+    /**
+     * Open the view mode picker modal.
+     * Not available for subviews or forced-landscape viewTypes.
+     */
+    _handleViewMode() {
+        // View mode picker has no meaning for horizontal row layouts or special tabs
+        const isHorizontalLayout =
+            this.state.viewType === 'Genres' ||
+            this.state.viewType === 'MusicGenres' ||
+            this.state.viewType === 'Suggestions' ||
+            this.state.viewType === 'Upcoming';
+
+        if (isHorizontalLayout) return;
+        this._renderViewModeModal();
+    }
+
+    /**
+     * Render the view mode picker modal.
+     *
+     * Presents 5 available modes as radio-style option buttons with icons.
+     * The currently active mode is pre-selected. Applying a new mode immediately
+     * re-renders the grid and persists the choice to StorageService.
+     */
+    _renderViewModeModal() {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Save focus context so we can restore it on close
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        const current = this.state.viewMode;
+
+        /*
+         * View mode options — each has a label i18n key, a mode value, and an
+         * inline SVG icon that visually communicates the layout style.
+         */
+        const modes = [
+            {
+                value: 'poster',
+                label: 'ViewModePoster',
+                fallback: 'Poster',
+                icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
+                    <rect x="2" y="2" width="9" height="12" rx="1"/>
+                    <rect x="13" y="2" width="9" height="12" rx="1"/>
+                    <rect x="2" y="16" width="9" height="6" rx="1" opacity="0.4"/>
+                    <rect x="13" y="16" width="9" height="6" rx="1" opacity="0.4"/>
+                </svg>`
+            },
+            {
+                value: 'small-poster',
+                label: 'ViewModeSmallPoster',
+                fallback: 'Small',
+                icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
+                    <rect x="1" y="2" width="5" height="7" rx="1"/>
+                    <rect x="7.5" y="2" width="5" height="7" rx="1"/>
+                    <rect x="14" y="2" width="5" height="7" rx="1"/>
+                    <rect x="20" y="2" width="3" height="7" rx="1" opacity="0.3"/>
+                    <rect x="1" y="11" width="5" height="7" rx="1"/>
+                    <rect x="7.5" y="11" width="5" height="7" rx="1"/>
+                    <rect x="14" y="11" width="5" height="7" rx="1"/>
+                </svg>`
+            },
+            {
+                value: 'thumb',
+                label: 'ViewModeThumb',
+                fallback: 'Thumbs',
+                icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
+                    <rect x="2" y="3" width="20" height="11" rx="1"/>
+                    <rect x="2" y="16" width="20" height="6" rx="1" opacity="0.4"/>
+                </svg>`
+            },
+            {
+                value: 'banner',
+                label: 'ViewModeBanner',
+                fallback: 'Banner',
+                icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
+                    <rect x="2" y="3" width="20" height="5" rx="1"/>
+                    <rect x="2" y="10" width="20" height="5" rx="1"/>
+                    <rect x="2" y="17" width="20" height="5" rx="1"/>
+                </svg>`
+            },
+            {
+                value: 'list',
+                label: 'ViewModeList',
+                fallback: 'List',
+                icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
+                    <rect x="7" y="3" width="15" height="4" rx="1"/>
+                    <rect x="7" y="10" width="15" height="4" rx="1"/>
+                    <rect x="7" y="17" width="15" height="4" rx="1"/>
+                    <rect x="2" y="3" width="3.5" height="4" rx="0.5"/>
+                    <rect x="2" y="10" width="3.5" height="4" rx="0.5"/>
+                    <rect x="2" y="17" width="3.5" height="4" rx="0.5"/>
+                </svg>`
+            }
+        ];
+
+        overlay.innerHTML = `
+            <div class="library-modal view-mode-modal">
+                <h2 class="modal-title">${i18n.t('ViewMode')}</h2>
+                <div class="view-mode-options" id="view-mode-options">
+                    ${modes
+                        .map(
+                            (m) => `
+                        <button class="view-mode-option-btn ${m.value === current ? 'selected' : ''}"
+                                data-mode="${m.value}"
+                                tabindex="0">
+                            <span class="vm-icon-wrap">${m.icon}</span>
+                            <span class="vm-label">${i18n.t(m.label)}</span>
+                        </button>
+                    `
+                        )
+                        .join('')}
+                </div>
+                <div class="modal-actions" id="vm-actions">
+                    <button class="modal-action-btn close" id="btn-vm-close">${i18n.t('ButtonClose')}</button>
+                </div>
+            </div>
+        `;
+
+        overlay.classList.remove('hidden');
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        // Track temp selection before applying
+        let tempMode = current;
+
+        // Option button click handler: mark selected and immediately apply preview
+        overlay.querySelectorAll('.view-mode-option-btn').forEach((btn) => {
+            btn.addEventListener('click', () => {
+                // Update temp and visual selection state
+                tempMode = btn.dataset.mode;
+                overlay.querySelectorAll('.view-mode-option-btn').forEach((b) => {
+                    b.classList.toggle('selected', b.dataset.mode === tempMode);
+                });
+
+                // Apply immediately: re-render grid with new mode and persist
+                this.state.viewMode = tempMode;
+                storage.setItem(`pref:library:viewMode:${this.state.libraryId}`, tempMode);
+                this._renderGrid(this.state.items);
+
+                log.info(`[ViewMode] Changed to: ${tempMode} for library ${this.state.libraryId}`);
+
+                // Close modal after selection (single-action UX — no Apply button needed)
+                this._closeModal();
+            });
+        });
+
+        this.$('#btn-vm-close')?.addEventListener('click', () => this._closeModal());
+
+        // Register FocusManager sections for D-pad navigation inside the modal
+        this.registerFocusSection('view-mode-options', overlay.querySelector('#view-mode-options'), {
+            orientation: 'horizontal',
+            leaveDown: 'vm-actions',
+            leaveUp: 'vm-actions',
+            selector: '.view-mode-option-btn',
+            enterTo: 'active-element' // Land on the currently selected mode
+        });
+
+        this.registerFocusSection('vm-actions', overlay.querySelector('#vm-actions'), {
+            orientation: 'horizontal',
+            leaveUp: 'view-mode-options',
+            selector: 'button'
+        });
+
+        // Start focus on the options row
+        this.setActiveSection('view-mode-options');
+    }
+
     _renderSortModal(sortOptions, orderOptions) {
         const overlay = this.$('#modal-overlay');
         if (!overlay) return;
@@ -2980,12 +3303,17 @@ class LibraryPage extends Page {
         const overlay = this.$('#modal-overlay');
         if (!overlay || !overlay.classList.contains('visible')) return;
 
-        // Unregister all specific modal sections
+        // Unregister all specific modal sections (sort AND view mode picker)
         focusManager.unregister('library-modal');
         focusManager.unregister('sort-by-col');
         focusManager.unregister('sort-order-col');
-        focusManager.unregister('sort-actions'); // Updated name
+        focusManager.unregister('sort-actions');
         focusManager.unregister('modal-close-btn');
+        focusManager.unregister('view-mode-options');
+        focusManager.unregister('vm-actions');
+        focusManager.unregister('filter-col');
+        focusManager.unregister('filter-actions');
+        focusManager.unregister('filter-close-btn');
 
         overlay.classList.remove('visible');
         overlay.setAttribute('aria-hidden', 'true');

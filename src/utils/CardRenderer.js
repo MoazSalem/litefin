@@ -374,6 +374,26 @@ class CardRenderer {
 
         const isHiddenLibraryLabel = type === 'library' && storage.getItem('pref:hideLibraryLabels') === 'true';
 
+        // --- 5. Optional Meta Row (list view) ---
+        // showMeta injects an additional row with rating + year + runtime for
+        // dense list-view cards. Only requested by _renderGrid() in list mode.
+        let metaHtml = '';
+        if (options.showMeta) {
+            const metaParts = [];
+            if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
+            if (item.CommunityRating) metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
+            if (item.RunTimeTicks) {
+                const mins = Math.round(item.RunTimeTicks / 600000000);
+                const hrs = Math.floor(mins / 60);
+                const rem = mins % 60;
+                const timeStr = hrs > 0 ? `${hrs}h ${rem}m` : `${mins}m`;
+                metaParts.push(`<span class="card-meta-runtime">${timeStr}</span>`);
+            }
+            if (metaParts.length > 0) {
+                metaHtml = `<div class="card-meta">${metaParts.join('')}</div>`;
+            }
+        }
+
         return `
             <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
@@ -388,6 +408,7 @@ class CardRenderer {
                 <div class="card-info">
                     <div class="card-title">${titleText}</div>
                     ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                    ${metaHtml}
                 </div>
                 `
                         : ''
@@ -438,18 +459,49 @@ class CardRenderer {
     }
 
     /**
-     * Create generic skeleton loader HTML
-     * @param {number} count - Number of items to generate
-     * @param {boolean} isLandscape - Layout mode
+     * Create generic skeleton loader HTML.
+     * Adapts the card shape to match the active view mode so skeletons
+     * visually match what the real cards will look like.
+     *
+     * @param {number}  count      - Number of skeleton cards to generate
+     * @param {boolean} isLandscape - Whether the content is landscape (episodes/networks)
+     * @param {string}  [viewMode='poster'] - Active view mode identifier
      * @returns {string} HTML string
      */
-    static createSkeletonHtml(count = 10, isLandscape = false) {
+    static createSkeletonHtml(count = 10, isLandscape = false, viewMode = 'poster') {
+        // Determine the CSS class suffix that matches the real card's layout
+        let cardClass = 'media-card skeleton';
+        if (isLandscape || viewMode === 'thumb') {
+            cardClass += ' landscape';
+        } else if (viewMode === 'square') {
+            cardClass += ' square';
+        } else if (viewMode === 'banner') {
+            // Banner = landscape image at fixed height — use landscape card class
+            cardClass += ' landscape';
+        } else if (viewMode === 'list') {
+            // List skeletons are horizontal strips with a small image + text block
+            cardClass += ' list-skeleton';
+        }
+        // 'poster' and 'small-poster' both use the default portrait shape
+
         let html = '';
         for (let i = 0; i < count; i++) {
-            html += `
-                <div class="media-card skeleton ${isLandscape ? 'landscape' : ''}">
+            if (viewMode === 'list') {
+                // List skeleton: horizontal strip
+                html += `
+                <div class="${cardClass}">
+                    <div class="card-image skeleton-image skeleton-shimmer"></div>
+                    <div class="card-info">
+                        <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
+                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>
+                    </div>
+                </div>
+            `;
+            } else {
+                html += `
+                <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer">
-                        <!-- Space reserved by .card-image padding -->
+                        <!-- Space reserved by aspect-ratio padding -->
                     </div>
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80 m-auto"></div>
@@ -457,6 +509,7 @@ class CardRenderer {
                     </div>
                 </div>
             `;
+            }
         }
         return html;
     }
