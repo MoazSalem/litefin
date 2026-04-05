@@ -318,7 +318,6 @@ class LibraryPage extends Page {
         // This happens before _renderGrid() so the correct mode is active from the start.
         this._loadPersistedViewMode();
 
-
         // 2. Setup UI Components
         this._renderTabs();
         this._renderAlphaPicker();
@@ -2501,13 +2500,12 @@ class LibraryPage extends Page {
                 label: 'ViewModeSmallPoster',
                 fallback: 'Small',
                 icon: `<svg viewBox="0 0 24 24" fill="none" class="vm-icon" stroke="currentColor" stroke-width="1.8">
-                    <rect x="1" y="2" width="5" height="7" rx="1"/>
-                    <rect x="7.5" y="2" width="5" height="7" rx="1"/>
-                    <rect x="14" y="2" width="5" height="7" rx="1"/>
-                    <rect x="20" y="2" width="3" height="7" rx="1" opacity="0.3"/>
-                    <rect x="1" y="11" width="5" height="7" rx="1"/>
-                    <rect x="7.5" y="11" width="5" height="7" rx="1"/>
-                    <rect x="14" y="11" width="5" height="7" rx="1"/>
+                    <rect x="3" y="4" width="5" height="7" rx="1"/>
+                    <rect x="9.5" y="4" width="5" height="7" rx="1"/>
+                    <rect x="16" y="4" width="5" height="7" rx="1"/>
+                    <rect x="3" y="13" width="5" height="7" rx="1"/>
+                    <rect x="9.5" y="13" width="5" height="7" rx="1"/>
+                    <rect x="16" y="13" width="5" height="7" rx="1"/>
                 </svg>`
             },
             {

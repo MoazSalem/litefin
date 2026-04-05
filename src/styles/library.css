@@ -353,10 +353,16 @@
      * Spacing between cards is handled via margin-right/margin-bottom on media-card.
      */
     padding-bottom: 0;
+    margin: 0 auto;
 }
 
 /* ── View mode: Poster (default) ─────────────────────────────────── */
-/* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. */
+/* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. 
+   Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
+.library-grid:not([class*="view-"]) {
+    max-width: 1705px;
+}
+
 .library-grid:not([class*="view-"]) .media-card {
     flex: 0 0 auto;
     width: 320px;
@@ -410,7 +416,11 @@
 
 /* ── View mode: Small Poster ─────────────────────────────────────── */
 /* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
-   Calculated: 9 * 160px + 8 * 20px = 1600px (comfortable fit). */
+   Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
+.library-grid.view-small-poster {
+    max-width: 1645px;
+}
+
 .library-grid.view-small-poster .media-card {
     width: 160px !important;
     margin-right: 20px !important;
@@ -445,7 +455,11 @@
 
 /* ── View mode: Thumb ────────────────────────────────────────────── */
 /* 16:9 landscape cards (390px wide) — exactly 4 per 1080p row. 
-   Calculated: 4 * 390px + 3 * 30px = 1650px (safe fit). */
+   Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
+.library-grid.view-thumb {
+    max-width: 1670px;
+}
+
 .library-grid.view-thumb .media-card {
     width: 390px !important;
     margin-right: 30px !important;
@@ -467,20 +481,24 @@
     font-size: 15px;
 }
 
-/* Ensure the 4th item in every row doesn't have extra margin in Thumb mode */
-.library-grid.view-thumb .media-card:nth-child(4n) {
-    margin-right: 0 !important;
-}
-
-/* Restore/adjust 5n/9n rules so they don't break the 4-column layout */
+/* Reset any inherited 5n/9n logic from other grid rules first */
 .library-grid.view-thumb .media-card:nth-child(5n),
 .library-grid.view-thumb .media-card:nth-child(9n) {
     margin-right: 30px !important;
 }
 
+/* Ensure the 4th item in every row doesn't have extra margin in Thumb mode (Must come last) */
+.library-grid.view-thumb .media-card:nth-child(4n) {
+    margin-right: 0 !important;
+}
+
 /* ── View mode: Banner ───────────────────────────────────────────── */
 /* Horizontal banners (540px wide) — exactly 3 per 1080p row. 
-   Calculated: 3 * 540px + 2 * 40px = 1700px (safe fit). */
+   Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
+.library-grid.view-banner {
+    max-width: 1690px; 
+}
+
 .library-grid.view-banner .media-card {
     display: block !important; /* Bypass flex height calculation bugs */
     flex: 0 0 auto !important; 
@@ -531,15 +549,15 @@
     text-align: center;
 }
 
-/* Ensure the 3rd item in every row doesn't have extra margin in Banner mode */
-.library-grid.view-banner .media-card:nth-child(3n) {
-    margin-right: 0 !important;
-}
-
-/* Reset any inherited 5n/9n logic from other grid rules */
+/* Reset any inherited 5n/9n logic from other grid rules first */
 .library-grid.view-banner .media-card:nth-child(5n),
 .library-grid.view-banner .media-card:nth-child(9n) {
     margin-right: 20px !important;
+}
+
+/* Ensure the 3rd item in every row doesn't have extra margin in Banner mode (Must come last) */
+.library-grid.view-banner .media-card:nth-child(3n) {
+    margin-right: 0 !important;
 }
 
 /* ── View mode: List ─────────────────────────────────────────────── */
