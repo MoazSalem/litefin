@@ -201,8 +201,14 @@ class LazyLoader {
 
         let nextCard = currentCard.nextElementSibling;
         let count = 0;
+        
+        // Default preload is 20 images. If in a dense small-poster grid, preload 6 more (26).
+        let limit = 20;
+        if (currentCard.parentElement && currentCard.parentElement.classList.contains('view-small-poster')) {
+            limit += 6;
+        }
 
-        while (nextCard && count < 20) {
+        while (nextCard && count < limit) {
             const img = nextCard.querySelector('img[data-src]');
             if (img) {
                 this._loadImage(img);
@@ -233,9 +239,14 @@ class LazyLoader {
         const images = container.querySelectorAll('img[data-src]');
 
         // LEGACY FIX: Eagerly load the first 25 images in the container.
-        // This ensures the initial viewport is populated even if IntersectionObserver
-        // fails to fire (common on older Tizen hardware scrollers).
-        for (let i = 0; i < Math.min(images.length, 25); i++) {
+        // If view mode is small-poster, load 2 more items (27 total).
+        // This ensures the initial viewport is populated even if IntersectionObserver fails.
+        let eagerLoadCount = 25;
+        if (container.classList.contains('view-small-poster')) {
+            eagerLoadCount += 2; // 27 items
+        }
+
+        for (let i = 0; i < Math.min(images.length, eagerLoadCount); i++) {
             this.forceLoad(images[i]);
         }
 
