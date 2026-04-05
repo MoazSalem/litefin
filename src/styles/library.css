@@ -356,15 +356,55 @@
 }
 
 /* ── View mode: Poster (default) ─────────────────────────────────── */
-/* Standard 2:3 portrait card. Each card fixes at 220px — roughly 7 per 1080p row. */
+/* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. */
 .library-grid .media-card {
     flex: 0 0 auto;
-    width: 220px;
-    /* 20px gap between cards, compatible with Tizen 4 */
+    width: 320px;
+    /* 30px gap between cards, compatible with Tizen 4 margin logic.
+       Calculated: (1820 total width - 100 content padding) = 1720.
+       5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
     margin-right: 20px;
-    margin-bottom: 20px;
+    margin-bottom: 30px;
+    
+    /* Premium Apple-style spring transition for focus 'pop' */
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
+    
     /* Isolate each card's layout/paint for smoother focus transitions */
     contain: layout style paint;
+}
+
+/* Typography Perfection for larger cards */
+.library-grid .card-title {
+    font-size: 20px; /* Increased from base 1.2rem (~19px) */
+    font-weight: 800; /* Extra bold for TV prominence */
+    letter-spacing: -0.3px;
+    margin-top: 4px;
+}
+
+.library-grid .card-subtitle {
+    font-size: 16px; /* 1rem equivalent */
+    font-weight: 500;
+    opacity: 0.7;
+    margin-top: 2px;
+}
+
+.library-grid .card-info {
+    padding: 16px 12px 0 12px; /* Increased padding for breathable metadata */
+}
+
+/* Ensure images and fallbacks use the larger 'LG' radius for a modern feel */
+.library-grid .media-card .card-image,
+.library-grid .media-card .media-fallback {
+    border-radius: var(--jf-border-radius-lg);
+}
+
+.library-grid .media-card .card-image img {
+    border-radius: calc(var(--jf-border-radius-lg) - 3px);
+}
+
+/* Ensure the 5th item in every row doesn't have extra margin to maintain perfect alignment */
+.library-grid .media-card:nth-child(5n) {
+    margin-right: 0;
 }
 
 /* ── View mode: Small Poster ─────────────────────────────────────── */
@@ -557,10 +597,18 @@
 /* Reset media-card styles for Grid context */
 /* --- Media Fallback Styles moved to components.css --- */
 
+/* Premium Hover/Focus Polish for larger cards.
+ * We use a deeper, more breathable shadow for the 320px cards. */
+.media-card:focus,
+.media-card.focused {
+    transform: scale(1.06); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    z-index: 10;
+}
+
 .media-card:focus .media-fallback-name,
 .media-card.focused .media-fallback-name {
-    opacity: 0.9;
-    transform: scale(1.05);
+    opacity: 0.95;
+    transform: scale(1.03); 
 }
 
 /*
@@ -569,8 +617,8 @@
  * Kept for safety in case any stale HTML references .landscape width rules.
  */
 html[data-layout-tier="legacy"] .library-grid .media-card {
-    /* (100% - 6 gaps * 20px) / 7 ≈ calc(14.28% - 17px) — close to 220px target */
-    width: calc(14.28% - 17px);
+    /* (100% - 4 gaps * 30px) / 5 ≈ calc(20% - 24px) — perfectly hits 5 items per row */
+    width: calc(20% - 24px);
 }
 
 html[data-layout-tier="legacy"] .library-grid.view-thumb .media-card {
