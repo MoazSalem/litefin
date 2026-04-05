@@ -479,39 +479,67 @@
 }
 
 /* ── View mode: Banner ───────────────────────────────────────────── */
-/* Horizontal banners (320px wide) — exactly 5 per 1080p row. 
-   Slimmer profile than posters, optimized for branded/logo browsing. */
+/* Horizontal banners (540px wide) — exactly 3 per 1080p row. 
+   Calculated: 3 * 540px + 2 * 40px = 1700px (safe fit). */
 .library-grid.view-banner .media-card {
-    width: 320px !important;
-    height: 120px !important;
-    margin-right: 30px !important;
-    margin-bottom: 30px !important;
-    flex-direction: column !important;
-    align-items: center !important;
+    display: block !important; /* Bypass flex height calculation bugs */
+    flex: 0 0 auto !important; 
+    width: 545px !important;
+    min-width: 545px !important; 
+    height: 155px !important;
+    margin-right: 20px !important;
+    margin-bottom: 25px !important;
+    border-radius: 20px !important; /* Deeper, more premium Apple-style curve */
+    -webkit-border-radius: 20px !important;
+    background-clip: padding-box !important;
 }
 
-/* Banner image logic: fill the card but maintain slim height */
+/* Ensure the focus state also respects the banner radius without collapsing */
+.library-grid.view-banner .media-card:focus,
+.library-grid.view-banner .media-card.focused {
+    border-radius: 20px !important;
+    -webkit-border-radius: 20px !important;
+    outline: none !important;
+}
+
+/* Banner image logic: safely use 100% now that parent is block */
 .library-grid.view-banner .card-image {
     width: 100% !important;
-    height: 90px !important;
+    height: 100% !important;
     padding-bottom: 0 !important;
     position: relative;
     overflow: hidden;
+    border-radius: 20px !important; /* Match the 20px card curve */
+    -webkit-border-radius: 20px !important;
+}
+
+.library-grid.view-banner .card-image img {
+    width: 100% !important;
+    height: 100% !important; /* Safe here as parent now has explicit px height */
+    object-fit: cover !important; /* Cover to ensure posters fill the wide banner card */
+    background: rgba(255,255,255,0.02);
 }
 
 .library-grid.view-banner .card-info {
-    padding: 8px 4px 0 4px !important;
+    display: none !important; /* Text hidden for clean branded look in Banner mode */
 }
 
+/* Specific Typography for Banners */
 .library-grid.view-banner .card-title {
-    font-size: 17px !important;
+    font-size: 18px !important;
     font-weight: 700 !important;
     text-align: center;
 }
 
-/* Ensure the 5th item doesn't have extra margin in Banner mode */
-.library-grid.view-banner .media-card:nth-child(5n) {
+/* Ensure the 3rd item in every row doesn't have extra margin in Banner mode */
+.library-grid.view-banner .media-card:nth-child(3n) {
     margin-right: 0 !important;
+}
+
+/* Reset any inherited 5n/9n logic from other grid rules */
+.library-grid.view-banner .media-card:nth-child(5n),
+.library-grid.view-banner .media-card:nth-child(9n) {
+    margin-right: 20px !important;
 }
 
 /* ── View mode: List ─────────────────────────────────────────────── */

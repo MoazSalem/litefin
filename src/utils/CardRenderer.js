@@ -75,6 +75,37 @@ class CardRenderer {
                     quality: seriesParams.quality
                 });
             }
+        } else if (type === 'banner') {
+            // Banner Optimization: Look for horizontal branding first
+            const params = imageService.getParams('banner');
+            
+            // Priority: Banner -> Backdrop -> Thumb -> Primary
+            if (item.ImageTags && item.ImageTags.Banner) {
+                imageUrl = api.getImageUrl(itemId, 'Banner', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Banner
+                });
+            } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                imageUrl = api.getImageUrl(itemId, 'Backdrop', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.BackdropImageTags[0]
+                });
+            } else if (item.ImageTags && item.ImageTags.Thumb) {
+                imageUrl = api.getImageUrl(itemId, 'Thumb', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Thumb
+                });
+            } else if (item.ImageTags && item.ImageTags.Primary) {
+                // Last Resort: Poster (will be object-fit: cover in CSS to fill gaps)
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            }
         } else if (isLandscape) {
             // Landscape (Thumb/Backdrop) Preference
             //

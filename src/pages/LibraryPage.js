@@ -1688,7 +1688,7 @@ class LibraryPage extends Page {
             .map((item) =>
                 CardRenderer.createCardHtml(item, {
                     isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
-                    type: resolvedCardType,
+                    type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
                     contextType: this.state.viewType === 'Upcoming' ? 'upcoming' : null,
                     // Only show rich meta row in list view (rating, score, runtime)
                     showMeta: !isLandscape && this.state.viewMode === 'list'
