@@ -444,12 +444,12 @@
 }
 
 /* ── View mode: Thumb ────────────────────────────────────────────── */
-/* 16:9 landscape cards (400px wide) — exactly 4 per 1080p row. 
-   Calculated: 4 * 400px + 3 * 40px = 1720px (exact fit). */
+/* 16:9 landscape cards (390px wide) — exactly 4 per 1080p row. 
+   Calculated: 4 * 390px + 3 * 30px = 1650px (safe fit). */
 .library-grid.view-thumb .media-card {
-    width: 400px;
-    margin-right: 40px;
-    margin-bottom: 45px; /* Extra breathing room below large landscape cards */
+    width: 390px !important;
+    margin-right: 30px !important;
+    margin-bottom: 45px !important;
 }
 
 /* Force the card image into landscape aspect ratio for thumb mode */
@@ -469,13 +469,13 @@
 
 /* Ensure the 4th item in every row doesn't have extra margin in Thumb mode */
 .library-grid.view-thumb .media-card:nth-child(4n) {
-    margin-right: 0;
+    margin-right: 0 !important;
 }
 
 /* Restore/adjust 5n/9n rules so they don't break the 4-column layout */
 .library-grid.view-thumb .media-card:nth-child(5n),
 .library-grid.view-thumb .media-card:nth-child(9n) {
-    margin-right: 40px;
+    margin-right: 30px !important;
 }
 
 /* ── View mode: Banner ───────────────────────────────────────────── */
