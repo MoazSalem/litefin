@@ -4,7 +4,7 @@
 [![GitHub release (latest by date)](https://img.shields.io/github/v/release/MoazSalem/litefin?color=blue&label=version&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
 [![GitHub all releases](https://img.shields.io/github/downloads/MoazSalem/litefin/total?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/releases)
 [![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/stargazers)
-[![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/main/LICENSE)
+[![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/release/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/issues)
 
 ![Litefin Banner](./Docs/Previews/banner.png)
