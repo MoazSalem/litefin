@@ -614,7 +614,8 @@
     overflow: hidden !important;
     text-overflow: ellipsis !important;
 }
-.library-grid.view-list .card-image {
+/* List View: Explicitly force image dimensions to override square/landscape aspect-ratio hacks */
+.library-grid.view-list .media-card .card-image {
     width: 75px !important; 
     height: 110px !important; 
     flex-shrink: 0;
@@ -627,13 +628,23 @@
     background: transparent !important;
 }
 
-.library-grid.view-list .card-image img {
+.library-grid.view-list .media-card .card-image img {
     width: 100% !important;
     height: 100% !important;
     border-radius: inherit !important; 
     -webkit-border-radius: inherit !important;
     object-fit: cover !important;
     display: block !important;
+}
+
+/* List: Ensure fallbacks don't overflow the tiny 75x110 block */
+.library-grid.view-list .card-image .media-fallback-initials {
+    font-size: 24px !important;
+    margin-bottom: 0 !important;
+}
+
+.library-grid.view-list .card-image .media-fallback-name {
+    display: none !important; /* The name is already next to it in card-title */
 }
 
 /* List: text column fills remaining space */

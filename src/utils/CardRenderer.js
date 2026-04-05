@@ -277,6 +277,7 @@ class CardRenderer {
                 });
             } else if (
                 item.ImageTags?.Primary ||
+                item.AlbumPrimaryImageTag ||
                 (itemId &&
                     (item.Type === 'MusicArtist' ||
                         item.Type === 'Artist' ||
@@ -285,11 +286,20 @@ class CardRenderer {
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
                 const params = imageService.getParams('poster');
+                
+                let targetId = itemId;
+                let targetTag = item.ImageTags?.Primary;
+                
+                // If it's an Audio track without own art, fallback to Album art
+                if (item.Type === 'Audio' && item.AlbumId && !targetTag) {
+                    targetId = item.AlbumId;
+                    targetTag = item.AlbumPrimaryImageTag;
+                }
 
-                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                imageUrl = api.getImageUrl(targetId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
-                    ...(item.ImageTags?.Primary ? { tag: item.ImageTags.Primary } : {})
+                    ...(targetTag ? { tag: targetTag } : {})
                 });
             }
         }
