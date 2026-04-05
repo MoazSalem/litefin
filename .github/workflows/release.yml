@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -54,19 +56,48 @@ jobs:
           }
           EOF
 
-      - name: Read Release Footer
-        id: footer
+      - name: Generate Release Body
+        id: release_body
         run: |
-          content=$(cat .github/RELEASE_NOTES_FOOTER.md)
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || git rev-list --max-parents=0 HEAD)
+          
+          FEATURES=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^feat' || true)
+          BUGS=$(git log ${PREV_TAG}..HEAD --pretty=format:"%s" | grep -E '^fix' || true)
+          
+          CHANGELOG="# Changes\n"
+          
+          if [ -n "$FEATURES" ]; then
+            CHANGELOG="${CHANGELOG}## New Features:\n"
+            while IFS= read -r line; do
+              clean_line=$(echo "$line" | sed -E 's/^feat\(([^)]+)\): /- \1: /' | sed -E 's/^feat: /- /')
+              CHANGELOG="${CHANGELOG}${clean_line}\n"
+            done <<< "$FEATURES"
+            CHANGELOG="${CHANGELOG}\n"
+          fi
+          
+          if [ -n "$BUGS" ]; then
+            CHANGELOG="${CHANGELOG}## Bug fixes:\n"
+            while IFS= read -r line; do
+               clean_line=$(echo "$line" | sed -E 's/^fix\(([^)]+)\): /- \1: /' | sed -E 's/^fix: /- /')
+               CHANGELOG="${CHANGELOG}${clean_line}\n"
+            done <<< "$BUGS"
+            CHANGELOG="${CHANGELOG}\n"
+          fi
+          
+          CHANGELOG="${CHANGELOG}---\n"
+          
+          FOOTER=$(cat .github/RELEASE_NOTES_FOOTER.md)
+          
           echo "content<<EOF" >> $GITHUB_OUTPUT
-          echo "$content" >> $GITHUB_OUTPUT
+          echo -e "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "$FOOTER" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           body: |
-            ${{ steps.footer.outputs.content }}
+            ${{ steps.release_body.outputs.content }}
           generate_release_notes: true
           files: |
             *.wgt
