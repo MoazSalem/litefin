@@ -69,7 +69,7 @@ jobs:
           if [ -n "$FEATURES" ]; then
             CHANGELOG="${CHANGELOG}## New Features:\n"
             while IFS= read -r line; do
-              clean_line=$(echo "$line" | sed -E 's/^feat\(([^)]+)\): /- \1: /' | sed -E 's/^feat: /- /')
+              clean_line=$(echo "$line" | sed -E 's/^feat\(([^)]+)\): /- /' | sed -E 's/^feat: /- /')
               CHANGELOG="${CHANGELOG}${clean_line}\n"
             done <<< "$FEATURES"
             CHANGELOG="${CHANGELOG}\n"
@@ -83,8 +83,6 @@ jobs:
             done <<< "$BUGS"
             CHANGELOG="${CHANGELOG}\n"
           fi
-          
-          CHANGELOG="${CHANGELOG}---\n"
           
           FOOTER=$(cat .github/RELEASE_NOTES_FOOTER.md)
           
