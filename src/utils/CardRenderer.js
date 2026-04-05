@@ -373,8 +373,8 @@ class CardRenderer {
                 if (artist) parts.push(artist);
                 else if (item.ProductionYear) parts.push(item.ProductionYear);
             } else {
-                // Movies/Shows/Others
-                if (item.ProductionYear) parts.push(item.ProductionYear);
+                // Movies/Shows/Others - skip year here in List View as it's handled in metaParts
+                if (item.ProductionYear && !options.showMeta) parts.push(item.ProductionYear);
 
                 // Support both standard Role and _roleName (from MediaGrid mapping)
                 const role = item.Role || item._roleName;
@@ -384,6 +384,15 @@ class CardRenderer {
             }
 
             subtitleText = parts.join(' · ');
+        }
+
+        // --- 3.5. List View Override ---
+        // In list-view, we want the Title on the left and EVERY other piece of info 
+        // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
+        let listExtraInfo = '';
+        if (options.showMeta && subtitleText) {
+            listExtraInfo = `<span class="card-meta-extra">${subtitleText}</span>`;
+            subtitleText = ''; // Clear it so it doesn't stay on the left with the title
         }
 
         // --- 4. HTML Assembly ---
@@ -413,6 +422,7 @@ class CardRenderer {
             const metaParts = [];
             if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
             if (item.CommunityRating) metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
+            if (item.ProductionYear) metaParts.push(`<span class="card-meta-year">${item.ProductionYear}</span>`);
             if (item.RunTimeTicks) {
                 const mins = Math.round(item.RunTimeTicks / 600000000);
                 const hrs = Math.floor(mins / 60);
@@ -420,24 +430,37 @@ class CardRenderer {
                 const timeStr = hrs > 0 ? `${hrs}h ${rem}m` : `${mins}m`;
                 metaParts.push(`<span class="card-meta-runtime">${timeStr}</span>`);
             }
-            if (metaParts.length > 0) {
-                metaHtml = `<div class="card-meta">${metaParts.join('')}</div>`;
+            if (metaParts.length > 0 || listExtraInfo) {
+                metaHtml = `<div class="card-meta">${listExtraInfo}${metaParts.join('')}</div>`;
             }
         }
+
+        const badgeContainer = `
+            ${badgeHtml}
+            ${playedBadgeHtml}
+        `;
 
         return `
             <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
-                    ${badgeHtml}
-                    ${playedBadgeHtml}
+                    ${!options.showMeta ? badgeContainer : ''}
                 </div>
                 ${
                     !isHiddenLibraryLabel
                         ? `
                 <div class="card-info">
-                    <div class="card-title">${titleText}</div>
+                    ${
+                        options.showMeta
+                            ? `
+                    <div class="card-title-row">
+                        <div class="card-title">${titleText}</div>
+                        ${badgeContainer}
+                    </div>
+                    `
+                            : `<div class="card-title">${titleText}</div>`
+                    }
                     ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
                     ${metaHtml}
                 </div>

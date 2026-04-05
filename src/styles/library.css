@@ -545,53 +545,120 @@
 /* ── View mode: List ─────────────────────────────────────────────── */
 /* One full-width row per item: small poster on the left, rich metadata on the right. */
 .library-grid.view-list .media-card {
-    width: 100% !important;
-    height: 100px !important;
-    margin-right: 0 !important;
-    margin-bottom: 12px !important;
+    display: flex !important; 
     flex-direction: row !important;
+    width: 100% !important;
+    height: 110px !important; 
+    margin-right: 0 !important;
+    margin-bottom: 22px !important; /* Slightly more vertical air */
     align-items: center !important;
-    padding: 10px 20px !important;
-    background: rgba(255, 255, 255, 0.03);
-    border-radius: var(--jf-border-radius);
+    padding: 0 !important; 
+    background: rgba(255, 255, 255, 0.04);
+    border-radius: 12px !important; 
+    -webkit-border-radius: 12px !important;
+    
+    /* UNIVERSAL ZERO-SPACE: No borders or padding in any state */
+    border: none !important;
+    border-width: 0 !important;
+    outline: none !important;
+    box-shadow: none !important;
+    
     transition: background-color 0.2s ease, transform 0.2s ease;
+    position: relative !important; 
+    overflow: hidden !important; 
 }
 
 .library-grid.view-list .media-card:focus,
 .library-grid.view-list .media-card.focused {
-    background: rgba(255, 255, 255, 0.1);
-    transform: scale(1.02); /* Subtle scale for full-width rows */
-    box-shadow: none !important;
+    background: rgba(255, 255, 255, 0.15) !important;
+    transform: scale(1.02); /* Slight pop to show selection */
+    box-shadow: 0 0 0 3px var(--jf-accent) !important; /* BOLD OUTER Focus Ring */
+    z-index: 10;
 }
 
-/* List: small portrait thumbnail on the left */
+/* Strip double-focus: ensure only the whole row gets the highlight */
+.library-grid.view-list .media-card:focus .card-image,
+.library-grid.view-list .media-card.focused .card-image {
+    background: none !important;
+    border: none !important;
+    box-shadow: none !important;
+    outline: none !important;
+    transform: none !important;
+}
+
+/* List: move badges from image to be inline after the title */
+.library-grid.view-list .played-badge,
+.library-grid.view-list .count-badge {
+    position: relative !important;
+    top: 0 !important;
+    right: 0 !important;
+    transform: none !important;
+    margin-left: 10px !important; /* Perfect gap after the title text */
+    flex-shrink: 0;
+    z-index: 5;
+}
+
+/* Ensure the title and badges stay in a single line */
+.library-grid.view-list .card-title-row {
+    display: flex !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    flex-wrap: nowrap !important;
+    margin-bottom: 4px !important;
+    min-width: 0;
+}
+
+.library-grid.view-list .card-title {
+    margin-bottom: 0 !important; /* Managed by title-row now */
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+}
 .library-grid.view-list .card-image {
-    width: 54px !important;
-    height: 80px !important;
+    width: 75px !important; 
+    height: 110px !important; 
     flex-shrink: 0;
     padding-bottom: 0 !important;
+    margin: 0 !important; /* Force flushness */
     position: relative;
-    border-radius: var(--jf-border-radius-sm, 4px);
-    overflow: hidden;
-    margin-right: 24px !important;
+    border-radius: 12px 0 0 12px !important; 
+    -webkit-border-radius: 12px 0 0 12px !important;
+    overflow: hidden !important;
+    background: transparent !important;
+}
+
+.library-grid.view-list .card-image img {
+    width: 100% !important;
+    height: 100% !important;
+    border-radius: inherit !important; 
+    -webkit-border-radius: inherit !important;
+    object-fit: cover !important;
+    display: block !important;
 }
 
 /* List: text column fills remaining space */
 .library-grid.view-list .card-info {
     flex: 1 !important;
-    padding: 0 !important;
+    padding: 12px 25px !important; /* Re-added inner padding for the info */
     display: flex !important;
-    flex-direction: column !important;
-    justify-content: center !important;
-    text-align: left !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    padding-right: 70px !important; 
     min-width: 0;
 }
 
 .library-grid.view-list .card-title {
     text-align: left !important;
-    font-size: 22px !important;
+    font-size: 24px !important;
     font-weight: 700 !important;
-    margin-bottom: 4px !important;
+    margin-bottom: 0 !important; /* Removed vertical gap */
+    color: #ffffff !important;
+    flex: 1 !important; /* Takes up left-side space */
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-right: 40px !important; /* Gap before metadata starts */
 }
 
 .library-grid.view-list .card-subtitle {
@@ -610,16 +677,22 @@
 .card-meta {
     display: flex;
     align-items: center;
-    /* NOTE: no gap — use margin-right on each child span for Tizen 4 compat */
-    margin-top: 4px;
-    font-size: 13px;
-    color: var(--text-muted);
-    flex-wrap: wrap;
+    margin-top: 0 !important; /* Align vertically with title */
+    font-size: 16px;
+    color: rgba(255, 255, 255, 0.6);
+    flex-shrink: 0; /* Don't squash the metadata */
+    font-weight: 500;
 }
 
-/* Spacing between meta pills — replaces gap: 12px */
+/* Spacing between meta pills — ensures year, rating, score are clearly separated */
 .card-meta > span {
-    margin-right: 12px;
+    margin-right: 0 !important;
+    margin-left: 18px !important; /* Space items from the left title/each other */
+}
+
+.card-meta-extra,
+.card-meta-year {
+    opacity: 0.6 !important; /* Muted grey for non-critical info */
 }
 
 .card-meta-rating {
