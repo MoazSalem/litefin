@@ -357,7 +357,7 @@
 
 /* ── View mode: Poster (default) ─────────────────────────────────── */
 /* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. */
-.library-grid .media-card {
+.library-grid:not([class*="view-"]) .media-card {
     flex: 0 0 auto;
     width: 320px;
     /* 30px gap between cards, compatible with Tizen 4 margin logic.
@@ -402,21 +402,54 @@
     border-radius: calc(var(--jf-border-radius-lg) - 3px);
 }
 
-/* Ensure the 5th item in every row doesn't have extra margin to maintain perfect alignment */
-.library-grid .media-card:nth-child(5n) {
+/* Ensure the 5th item in every row doesn't have extra margin to maintain perfect alignment 
+   ONLY when no other view mode modifier is present. */
+.library-grid:not([class*="view-"]) .media-card:nth-child(5n) {
     margin-right: 0;
 }
 
 /* ── View mode: Small Poster ─────────────────────────────────────── */
-/* Tighter portrait cards (~150px) — fits ~10–11 per row. Dense browsing. */
+/* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
+   Calculated: 9 * 160px + 8 * 20px = 1600px (comfortable fit). */
 .library-grid.view-small-poster .media-card {
-    width: 150px;
+    width: 160px !important;
+    margin-right: 20px !important;
+    margin-bottom: 25px !important;
+}
+
+/* Specific Typography for Small Cards */
+.library-grid.view-small-poster .card-title {
+    font-size: 14px !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.1px;
+}
+
+.library-grid.view-small-poster .card-subtitle {
+    font-size: 12px !important;
+    opacity: 0.8;
+}
+
+.library-grid.view-small-poster .card-info {
+    padding: 10px 4px 0 4px !important; /* Tighter padding for density */
+}
+
+/* Ensure the 9th item in every row doesn't have extra margin in Small mode */
+.library-grid.view-small-poster .media-card:nth-child(9n) {
+    margin-right: 0 !important;
+}
+
+/* Reset any inherited 5n logic from the base grid */
+.library-grid.view-small-poster .media-card:nth-child(5n) {
+    margin-right: 20px; 
 }
 
 /* ── View mode: Thumb ────────────────────────────────────────────── */
-/* 16:9 landscape cards (~330px wide). TV-episode-style browsing. */
+/* 16:9 landscape cards (400px wide) — exactly 4 per 1080p row. 
+   Calculated: 4 * 400px + 3 * 40px = 1720px (exact fit). */
 .library-grid.view-thumb .media-card {
-    width: 330px;
+    width: 400px;
+    margin-right: 40px;
+    margin-bottom: 45px; /* Extra breathing room below large landscape cards */
 }
 
 /* Force the card image into landscape aspect ratio for thumb mode */
@@ -424,110 +457,120 @@
     padding-bottom: 56.25%; /* 16:9 */
 }
 
-/* ── View mode: Banner ───────────────────────────────────────────── */
-/* Full-width strips at a fixed height (~110px). Labeled browsing. */
-.library-grid.view-banner .media-card {
-    /* Stretch to fill the row — one per visual line */
-    width: 100%;
-    /* Full-width: no horizontal gap between cards */
+/* Thumb Typography: Slightly larger for cinematic feel */
+.library-grid.view-thumb .card-title {
+    font-size: 19px;
+    font-weight: 700;
+}
+
+.library-grid.view-thumb .card-subtitle {
+    font-size: 15px;
+}
+
+/* Ensure the 4th item in every row doesn't have extra margin in Thumb mode */
+.library-grid.view-thumb .media-card:nth-child(4n) {
     margin-right: 0;
-    /* IMPORTANT: flex-direction row because card-image is left, card-info right */
-    flex-direction: row;
-    align-items: center;
-    height: 110px;
+}
+
+/* Restore/adjust 5n/9n rules so they don't break the 4-column layout */
+.library-grid.view-thumb .media-card:nth-child(5n),
+.library-grid.view-thumb .media-card:nth-child(9n) {
+    margin-right: 40px;
+}
+
+/* ── View mode: Banner ───────────────────────────────────────────── */
+/* Horizontal banners (320px wide) — exactly 5 per 1080p row. 
+   Slimmer profile than posters, optimized for branded/logo browsing. */
+.library-grid.view-banner .media-card {
+    width: 320px !important;
+    height: 120px !important;
+    margin-right: 30px !important;
+    margin-bottom: 30px !important;
+    flex-direction: column !important;
+    align-items: center !important;
+}
+
+/* Banner image logic: fill the card but maintain slim height */
+.library-grid.view-banner .card-image {
+    width: 100% !important;
+    height: 90px !important;
+    padding-bottom: 0 !important;
+    position: relative;
     overflow: hidden;
 }
 
-/* Banner: fixed-size image thumbnail on the left */
-.library-grid.view-banner .card-image {
-    /* Fixed width thumbnail — no aspect-ratio padding trick needed */
-    width: 196px;      /* 16:9 of 110px height ≈ 196px */
-    flex-shrink: 0;
-    height: 100%;
-    padding-bottom: 0; /* Override portrait aspect ratio */
-    position: relative;
-}
-
-/* Banner: text fills remaining space to the right */
 .library-grid.view-banner .card-info {
-    flex: 1;
-    padding: 0 20px;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
+    padding: 8px 4px 0 4px !important;
 }
 
-/* Banner: image sharp crop from center */
-.library-grid.view-banner .card-image img,
-.library-grid.view-banner .card-image .media-fallback {
-    object-fit: cover;
-    object-position: center 30%;
-    position: absolute;
-    /* inset: 0 not supported on Tizen 4 (Chrome 56) — use longhand */
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
+.library-grid.view-banner .card-title {
+    font-size: 17px !important;
+    font-weight: 700 !important;
+    text-align: center;
+}
+
+/* Ensure the 5th item doesn't have extra margin in Banner mode */
+.library-grid.view-banner .media-card:nth-child(5n) {
+    margin-right: 0 !important;
 }
 
 /* ── View mode: List ─────────────────────────────────────────────── */
 /* One full-width row per item: small poster on the left, rich metadata on the right. */
 .library-grid.view-list .media-card {
-    width: 100%;
-    /* Full-width rows: no horizontal gap between cards */
-    margin-right: 0;
-    flex-direction: row;
-    align-items: center;
-    height: 90px;
-    padding: 8px 12px;
-    box-sizing: border-box;
-    overflow: hidden;
+    width: 100% !important;
+    height: 100px !important;
+    margin-right: 0 !important;
+    margin-bottom: 12px !important;
+    flex-direction: row !important;
+    align-items: center !important;
+    padding: 10px 20px !important;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: var(--jf-border-radius);
+    transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+.library-grid.view-list .media-card:focus,
+.library-grid.view-list .media-card.focused {
+    background: rgba(255, 255, 255, 0.1);
+    transform: scale(1.02); /* Subtle scale for full-width rows */
+    box-shadow: none !important;
 }
 
 /* List: small portrait thumbnail on the left */
 .library-grid.view-list .card-image {
-    width: 60px;
+    width: 54px !important;
+    height: 80px !important;
     flex-shrink: 0;
-    height: 74px;
-    padding-bottom: 0; /* Override portrait aspect ratio */
+    padding-bottom: 0 !important;
     position: relative;
-    border-radius: var(--jf-border-radius);
+    border-radius: var(--jf-border-radius-sm, 4px);
     overflow: hidden;
-    /* 16px space to the right of the thumbnail — replaces gap: 16px for Tizen 4 */
-    margin-right: 16px;
-}
-
-.library-grid.view-list .card-image img,
-.library-grid.view-list .card-image .media-fallback {
-    position: absolute;
-    /* inset: 0 not supported on Tizen 4 (Chrome 56) — use longhand */
-    top: 0;
-    right: 0;
-    bottom: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
+    margin-right: 24px !important;
 }
 
 /* List: text column fills remaining space */
 .library-grid.view-list .card-info {
-    flex: 1;
-    display: flex;
-    flex-direction: column;
-    justify-content: center;
-    overflow: hidden;
-    min-width: 0; /* Prevent flex overflow clipping titles */
+    flex: 1 !important;
+    padding: 0 !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    text-align: left !important;
+    min-width: 0;
 }
 
 .library-grid.view-list .card-title {
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    font-size: 20px;
-    font-weight: 600;
+    text-align: left !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    margin-bottom: 4px !important;
+}
+
+.library-grid.view-list .card-subtitle {
+    text-align: left !important;
+    font-size: 16px !important;
+    opacity: 0.6 !important;
+    margin-top: 0 !important;
 }
 
 .library-grid.view-list .card-subtitle {
