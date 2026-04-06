@@ -132,48 +132,101 @@ class CssVarsPolyfill {
         const themeMode = root.getAttribute('data-theme-mode') || 'classic-dark';
         const vars = {};
 
-        // 1. Scan raw text content of injected <style> tags
-        // This avoids missing vars that fail to parse into CSSOM on Chrome 32
+        // 1. Scan raw text content of injected <style> tags.
+        // This avoids missing vars that fail to parse into CSSOM on Chrome 32.
         const styleTags = document.querySelectorAll('style');
-        
-        // Regex to capture the block containing the active theme rules
-        const themeBlockRegex = new RegExp('\\[data-theme(?:-mode)?=["\']?' + themeMode + '["\']?\\][^{]*\\{([^}]+)\\}', 'g');
-        const rootBlockRegex = /:root[^{]*\{([^}]+)\}/g;
-        
-        // Regex to capture variables inside the block
+
+        // Regex to capture variables inside any block
         const varRegex = /(--[^:]+):\s*([^;}]+)/g;
+
+        // Regex for :root blocks
+        const rootBlockRegex = /:root[^{]*\{([^}]+)\}/g;
+
+        // Regex for the active [data-theme-mode="..."] block
+        const themeBlockRegex = new RegExp('\\[data-theme(?:-mode)?=["\']?' + themeMode + '["\']?\\][^{]*\\{([^}]+)\\}', 'g');
+
+        // ----------------------------------------------------------------
+        // Build regexes for ALL other active html[data-*] attributes.
+        // e.g. data-rounded-corners="true", data-ui-font="system", etc.
+        // The ponyfill never sees these because they aren't :root, so we
+        // manually scan their CSS blocks and inject the resolved values.
+        // ----------------------------------------------------------------
+        const activeAttrRegexes = [];
+        const attrs = root.attributes;
+        for (let a = 0; a < attrs.length; a++) {
+            const attrName  = attrs[a].name;
+            const attrValue = attrs[a].value;
+            // Only process data-* attributes that have a value and aren't
+            // the theme-mode one (already handled above)
+            if (
+                attrName.indexOf('data-') === 0 &&
+                attrName !== 'data-theme-mode' &&
+                attrName !== 'data-theme' &&
+                attrValue
+            ) {
+                // Escape any special regex chars in the attribute value
+                const escapedValue = attrValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+                activeAttrRegexes.push(
+                    new RegExp(
+                        '\\[' + attrName + '=["\']?' + escapedValue + '["\']?\\][^{]*\\{([^}]+)\\}',
+                        'g'
+                    )
+                );
+            }
+        }
 
         for (let i = 0; i < styleTags.length; i++) {
             const cssText = styleTags[i].textContent;
-            if (!cssText || cssText.indexOf('--jf-') === -1) continue;
+            if (!cssText || cssText.indexOf('--') === -1) continue;
 
-            // Extract from targeted [data-theme-mode="..."]
-            let match;
-            while ((match = themeBlockRegex.exec(cssText)) !== null) {
+            let match, varMatch;
+
+            // Extract from :root blocks — these are the "global" defaults
+            rootBlockRegex.lastIndex = 0;
+            while ((match = rootBlockRegex.exec(cssText)) !== null) {
                 const blockContent = match[1];
-                let varMatch;
+                varRegex.lastIndex = 0;
                 while ((varMatch = varRegex.exec(blockContent)) !== null) {
                     vars[varMatch[1].trim()] = varMatch[2].trim();
                 }
             }
 
-            // Also extract from any static :root definitions
-            while ((match = rootBlockRegex.exec(cssText)) !== null) {
+            // Extract from the active [data-theme-mode="..."] block; these
+            // override the :root defaults for theme colors.
+            themeBlockRegex.lastIndex = 0;
+            while ((match = themeBlockRegex.exec(cssText)) !== null) {
                 const blockContent = match[1];
-                let varMatch;
+                varRegex.lastIndex = 0;
                 while ((varMatch = varRegex.exec(blockContent)) !== null) {
                     vars[varMatch[1].trim()] = varMatch[2].trim();
+                }
+            }
+
+            // Extract from all other active html[data-*="value"] blocks.
+            // This covers data-rounded-corners, data-ui-font, data-layout-tier, etc.
+            for (let r = 0; r < activeAttrRegexes.length; r++) {
+                const attrRegex = activeAttrRegexes[r];
+                attrRegex.lastIndex = 0;
+                while ((match = attrRegex.exec(cssText)) !== null) {
+                    const blockContent = match[1];
+                    varRegex.lastIndex = 0;
+                    while ((varMatch = varRegex.exec(blockContent)) !== null) {
+                        // These vars win over :root but lose to inline style (step 2)
+                        vars[varMatch[1].trim()] = varMatch[2].trim();
+                    }
                 }
             }
         }
 
-        // 2. Scan variables set directly on <html> inline style
-        // (LayoutManager uses this to override the accent color dynamically)
+        // 2. Scan variables set directly on <html> inline style.
+        // These are written by LayoutManager._applyDynamicTheme() via a
+        // <style id="litefin-dynamic-theme-vars"> tag injected into <head>.
+        // We also read the root.style directly for any overrides set via JS.
         if (root.style) {
-            for (let i = 0; i < root.style.length; i++) {
-                const prop = root.style[i];
+            for (var j = 0; j < root.style.length; j++) {
+                var prop = root.style[j];
                 if (prop && prop.indexOf('--') === 0) {
-                    const value = root.style.getPropertyValue(prop);
+                    var value = root.style.getPropertyValue(prop);
                     if (value) vars[prop] = value.trim();
                 }
             }
