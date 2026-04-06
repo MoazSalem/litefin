@@ -194,6 +194,27 @@ const DEFAULTS = {
     // Force all content to transcode (emergency/debug fallback)
     forceTranscode: false,
 
+    // -------------------------------------------------------------------------
+    // fMP4 HLS CONTAINER PREFERENCES
+    // -------------------------------------------------------------------------
+    // When enabled, the device profile will advertise an fMP4 (ISOBMFF) HLS
+    // transcoding profile in addition to (or instead of) the classic MPEG-TS
+    // one. fMP4 unlocks HEVC and AV1 copy-stream remuxing over HLS, which
+    // MPEG-TS cannot carry reliably on many TV platforms.
+    //
+    //   enableFmp4HlsContainer — Master switch. When false the fMP4 HLS profile
+    //     is never advertised, regardless of the hardware version gate.
+    //     Default: true (hardware version gates still apply unless forced).
+    //
+    //   forceFmp4HlsContainer — When true, completely bypasses the hardware
+    //     version gate (tizenVersion >= 6 / webosVersion >= 6) and promotes
+    //     the fMP4 profile to be the PRIMARY HLS transcode. Useful when a
+    //     newer-firmware TV is not detected correctly but you know it handles
+    //     fMP4 reliably. Ignored when enableFmp4HlsContainer is false.
+    //     Default: false.
+    enableFmp4HlsContainer: true,
+    forceFmp4HlsContainer: false,
+
     // =========================================================================
     // PLAYBACK SETTINGS
     // =========================================================================

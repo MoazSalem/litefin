@@ -370,6 +370,24 @@ export function buildJellyfinProfile(options = {}) {
 
     let directAudioCodecs = 'aac,ac3,eac3,mp3';
 
+    // -------------------------------------------------------------------------
+    // fMP4 HLS preference resolution
+    // -------------------------------------------------------------------------
+    // enableFmp4HlsContainer = master toggle (default on).
+    // forceFmp4HlsContainer  = bypass the tizenVersion >= 6 hardware gate and
+    //                          promote fMP4 to the PRIMARY HLS transcode.
+    const enableFmp4Hls = PlayerSettings.get('enableFmp4HlsContainer');
+    const forceFmp4Hls  = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
+
+    // Hardware version gate: Tizen < 6 cannot reliably parse fMP4 HLS segments
+    // through AVPlay (fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT on some 5.x builds).
+    // The force flag lets the user override this when they know their TV is safe.
+    const supportsFmp4Hls = enableFmp4Hls && (forceFmp4Hls || caps.tizenVersion >= 6);
+
+    // When fMP4 is forced, it becomes the PRIMARY HLS container (replaces TS as
+    // the first entry the Jellyfin server picks from the TranscodingProfiles list).
+    const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
+
 
     // =========================================================================
     // Transcode codec selection
@@ -401,25 +419,29 @@ export function buildJellyfinProfile(options = {}) {
 
     const transcodingProfiles = [
         {
-            Container: 'ts',
+            /*
+             * Primary HLS video transcoding profile.
+             *
+             * Container selection:
+             *   forceFmp4Hls — use fMP4 (mp4) as the primary container. This unlocks
+             *     HEVC/AV1 copy-stream remuxing over HLS on Tizen devices where fMP4
+             *     is known-good but the tizenVersion >= 6 gate would normally block it.
+             *   default (no force) — use MPEG-TS, which is the only AVPlay-safe
+             *     container on Tizen 5.x and below.
+             */
+            Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs, // ts container only safely supports h264/hevc
+            VideoCodec: transVideoCodecs, // fMP4 also safely carries h264/hevc
             Context: 'Streaming',
             Protocol: 'hls',
-            // Tizen 5.x: capped at 2 (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
+            // Tizen 5.x: capped at 2 channels (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? '1' : '2',
             SegmentLength: isHtml5 ? '2' : '6',
-            // BreakOnNonKeyFrames=True with video copy mode causes Tizen AVPlay to crash:
-            // FFmpeg cannot cut at non-IDR boundaries when copying, so it cuts at the nearest
-            // keyframe AFTER the target duration. The declared #EXTINF value in the playlist
-            // then mismatches the actual segment content length — Tizen 5.0's HLS parser is
-            // strict about this and fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT.
-            // Setting false ensures FFmpeg only cuts at real IDR frames, producing honest
-            // #EXTINF values that AVPlay can parse cleanly.
-            // HTML5 (MSE-based) handles irregular segments fine, so keep original there.
-            BreakOnNonKeyFrames: isHtml5 ? (playbackMode !== 'remux') : false,
+            // BreakOnNonKeyFrames with fMP4 must be false — fMP4 segments must align to IDR
+            // frames. For TS we keep the original behaviour (false for AVPlay, true for HTML5).
+            BreakOnNonKeyFrames: forceFmp4Hls ? false : (isHtml5 ? (playbackMode !== 'remux') : false),
             // VBR AAC in MPEG-TS uses LATM framing (stream type 0x11 in the PMT).
             // Tizen 5.0 AVPlay's HLS parser expects standard ADTS framing (0x0F) and
             // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
@@ -463,6 +485,31 @@ export function buildJellyfinProfile(options = {}) {
         // instead of progressive HTTP streams for transcodes,
         // which Tizen AVPlay cannot reliably parse.
     ];
+
+    // -------------------------------------------------------------------------
+    // Secondary fMP4 HLS profile (Tizen 6+ only by default)
+    // -------------------------------------------------------------------------
+    // Only added when fMP4 is supported but NOT already the primary container.
+    // If forceFmp4Hls is true, the primary profile above is already mp4, so
+    // there is nothing extra to push here — avoid a duplicate.
+    if (supportsFmp4Hls && !forceFmp4Hls) {
+        transcodingProfiles.push({
+            Container: 'mp4',
+            Type: 'Video',
+            AudioCodec: transAudioCodecs,
+            VideoCodec: transVideoCodecs,
+            Context: 'Streaming',
+            Protocol: 'hls',
+            // On Tizen 6+ the transMaxAudioChannels is full surround (AC3/EAC3),
+            // which fMP4 HLS handles without issue.
+            MaxAudioChannels: transMaxAudioChannels,
+            MinSegments: isHtml5 ? '1' : '2',
+            SegmentLength: isHtml5 ? '2' : '6',
+            // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
+            BreakOnNonKeyFrames: false,
+            EnableAudioVbrEncoding: isHtml5
+        });
+    }
 
     const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5 ? '52' : caps.tizenVersion >= 4 ? '42' : '41';
     const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '150'; // Standardize to 5.0 fallback for HEVC

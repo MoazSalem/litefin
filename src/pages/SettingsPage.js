@@ -1042,6 +1042,34 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableFmp4HlsContainer">${i18n.t('EnableFmp4HlsContainer') || 'Prefer fMP4 HLS Container'}</span>
+                        <span class="setting-description" data-i18n="EnableFmp4HlsContainerDescription">${i18n.t('EnableFmp4HlsContainerDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableFmp4HlsContainer') ? 'active' : ''}" 
+                                id="toggle-enable-fmp4-hls" 
+                                data-setting="enableFmp4HlsContainer"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ForceFmp4HlsContainer">${i18n.t('ForceFmp4HlsContainer') || 'Force fMP4 HLS Container'}</span>
+                        <span class="setting-description" data-i18n="ForceFmp4HlsContainerDescription">${i18n.t('ForceFmp4HlsContainerDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('forceFmp4HlsContainer') ? 'active' : ''}" 
+                                id="toggle-force-fmp4-hls" 
+                                data-setting="forceFmp4HlsContainer"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ForceTranscode">${i18n.t('ForceTranscode')}</span>
                         <span class="setting-description" data-i18n="ForceTranscodeDescription">${i18n.t('ForceTranscodeDescription')}</span>
                     </div>
@@ -2185,6 +2213,9 @@ class SettingsPage extends Page {
             'toggle-enable-vp9',
             'toggle-enable-dts',
             'toggle-enable-truehd',
+            'toggle-enable-flac-in-video',
+            'toggle-enable-fmp4-hls',
+            'toggle-force-fmp4-hls',
             'toggle-force-transcode',
             'toggle-background-service'
         ];
