@@ -465,17 +465,20 @@
 /* ================== MODAL OPTIONS ================== */
 [dir="rtl"] .modal-option-btn {
     text-align: right;
-    justify-content: flex-start;
 }
 
 [dir="rtl"] .modal-option-btn .check-icon {
-    margin-left: 10px;
-    margin-right: auto;
+    margin-right: 0;
+    margin-left: 1.25em;
 }
 
-[dir="rtl"] .track-badge {
-    margin-left: 0;
-    margin-right: 10px;
+[dir="rtl"] .modal-option-btn .track-badges,
+[dir="rtl"] .modal-option-btn .subtitle-track-meta,
+[dir="rtl"] .track-option .track-badges,
+[dir="rtl"] .modal-option-btn .track-badge:not(.track-badges .track-badge):not(.subtitle-track-meta .track-badge) {
+    right: auto;
+    left: 30px;
+    margin: 0;
 }
 
 [dir="rtl"] .identity-card {

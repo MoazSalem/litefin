@@ -2452,13 +2452,15 @@ class SettingsPage extends Page {
                             let badge = '';
                             if (opt.completeness !== undefined) {
                                 const percentage = Math.floor(opt.completeness);
+                                let innerBadge = '';
                                 if (percentage === 0) {
-                                    badge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
                                 } else if (percentage < 85) {
-                                    badge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
                                 } else {
-                                    badge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
                                 }
+                                badge = `<span class="track-badges">${innerBadge}</span>`;
                             }
                             return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 

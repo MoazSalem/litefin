@@ -485,6 +485,7 @@ progress.card-progress::-webkit-progress-value {
     width: 600px;
     max-width: 90%;
     max-height: 80vh;
+    min-height: 180px; /* Lower minimum for short dialogs (e.g. Delete?) */
     animation: modal-fade-in 0.3s ease-out;
 }
 
@@ -494,9 +495,10 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .settings-modal .modal-header {
-    padding: 10px 30px;
-    margin-bottom: 15px;
+    padding: 15px 30px; /* Balanced vertical breathing room */
+    margin-bottom: 0px;
     background: rgba(255, 255, 255, 0.02);
+    flex-shrink: 0; /* Never collapse header */
 }
 
 .settings-modal .modal-header h2 {
@@ -511,6 +513,9 @@ progress.card-progress::-webkit-progress-value {
     padding: 20px;
     overflow-y: auto;
     display: block;
+    flex: 0 1 auto; /* Grow to content height, then scroll */
+    max-height: calc(80vh - 150px); /* Stability: stop growing before footer overlap */
+    min-height: 0; /* Fix flex-child overflow bug in older WebKit */
 }
 
 .modal-option-btn {
@@ -530,9 +535,12 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-text-primary);
     text-align: left;
     cursor: pointer;
-    font-size: 1.2rem;
-    font-weight: 500;
     display: block;
+    width: 100%; /* Force full width on legacy Chromium */
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    position: relative; /* Anchor for absolute positioned items like badges */
+    font-size: 0; /* Collapse HTML whitespace for pixel-perfect Ghost Centering */
     line-height: normal;
     white-space: nowrap; /* CRITICAL: Prevent wrapping which hides text on legacy engines */
     text-overflow: ellipsis;
@@ -552,6 +560,7 @@ progress.card-progress::-webkit-progress-value {
 .modal-option-btn > * {
     display: inline-block;
     vertical-align: middle;
+    font-size: 1.25rem; /* Restore font size after parent collapse */
     white-space: normal; /* Allow internal wrapping if truly needed, though container prevents it */
 }
 
@@ -617,16 +626,94 @@ progress.card-progress::-webkit-progress-value {
 }
 
 /* Modal Option Label Scaling */
-.modal-option-btn span {
-    max-width: 80%; /* Leave room for icon */
+.modal-option-btn span:first-of-type {
+    max-width: 80%; /* Leave room for icon/badge */
     overflow: hidden;
     text-overflow: ellipsis;
+    display: inline-block;
+    vertical-align: middle;
+    white-space: normal; /* Allow internal wrapping (e.g. American English) */
+    line-height: 1.2;
 }
+
+/* Improved Badge Containers: Position the container once, let children flow side-by-side */
+.modal-option-btn .track-badges,
+.modal-option-btn .subtitle-track-meta,
+.track-option .track-badges {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    margin: 0;
+    transform: translateY(-50%);
+    -webkit-transform: translateY(-50%);
+    display: flex;
+    gap: 10px; /* Increased gap for better visual separation */
+    align-items: center;
+}
+
+
+/* Base Badge Styling: Clean, Apple-style pills with glassmorphism */
+.track-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 14px; /* Wider padding */
+    min-width: 54px; /* Ensure 0% and 100% have similar weight */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    font-size: 0.85rem; /* Slightly smaller for the wider pill look */
+    font-weight: 700;
+    white-space: nowrap;
+    text-transform: uppercase;
+    color: var(--jf-text-primary);
+    transition: all 0.2s ease;
+    letter-spacing: 0.8px;
+    line-height: 1;
+}
+
+/* Status-specific translucent colors */
+.track-badge.badge-success {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.4);
+    color: #2ecc71;
+}
+
+.track-badge.badge-warning {
+    background: rgba(241, 196, 15, 0.15);
+    border-color: rgba(241, 196, 15, 0.4);
+    color: #f1c40f;
+}
+
+.track-badge.badge-danger {
+    background: rgba(231, 76, 60, 0.15);
+    border-color: rgba(231, 76, 60, 0.4);
+    color: #e74c3c;
+}
+
+/* Focused State: Invert colors slightly for maximum punch on teal background */
+.modal-option-btn.focused .track-badge {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff !important; /* Force white text on focused teal */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-option-btn.focused .track-badge.badge-success,
+.modal-option-btn.focused .track-badge.badge-warning,
+.modal-option-btn.focused .track-badge.badge-danger {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff !important;
+}
+
+
 .modal-option-btn.selected {
     background: rgba(var(--jf-accent-rgb), 0.1);
     border-color: var(--jf-accent);
     color: var(--jf-text-primary);
 }
+
 
 .modal-option-btn:hover,
 .modal-option-btn:focus,
@@ -770,9 +857,12 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-actions {
-    padding: 20px;
+    padding: 15px 20px; /* Slightly more compact footer */
     display: block;
     text-align: right;
+    flex-shrink: 0; /* Never collapse footer actions */
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.08); /* Clearer visual separation */
 }
 
 .modal-action-btn {
