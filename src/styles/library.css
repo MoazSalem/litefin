@@ -160,7 +160,9 @@
     /* Spacing for Tizen */
     display: flex;
     align-items: center;
+    justify-content: center;
     padding: 12px 18px;
+    white-space: nowrap;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -178,13 +180,12 @@
 .control-svg {
     width: 18px;
     height: 18px;
-    display: block;
+    display: inline-block;
     /* Spacing logic handled by parent flex/margins */
 }
 
 .control-btn-text {
-    margin-left: 12px;
-    margin-right: 12px;
+    margin-left: 10px;
 }
 
 /* View mode toggle button sits in the controls bar next to Sort/Filter.
@@ -241,6 +242,7 @@ html[data-layout-tier="ultra-legacy"] .pagination-btn {
     height: 52px;
     padding: 0 18px;
     line-height: normal;
+    font-size: 0;
 }
 
 html[data-layout-tier="ultra-legacy"] .control-btn::before,
@@ -259,6 +261,7 @@ html[data-layout-tier="ultra-legacy"] .control-svg {
 html[data-layout-tier="ultra-legacy"] .control-btn-text {
     display: inline-block;
     vertical-align: middle;
+    font-size: 18px;
 }
 
 

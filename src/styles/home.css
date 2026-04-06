@@ -223,3 +223,25 @@
 .media-card.focused .card-overlay-label {
     transform: translate(-50%, -50%) scale(1.05);
 }
+
+/* ============================================================================
+   Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x)
+   ============================================================================ */
+
+html[data-layout-tier="ultra-legacy"] .card-overlay-label {
+    /* Bug: 'transform: translate(-50%, -50%)' is unreliable on ancient engines */
+    left: 0;
+    width: 100%;
+    transform: none;
+    -webkit-transform: none;
+    text-align: center;
+    /* Vertical centering fallback: pulll up from the 50% anchor by half the text height */
+    margin-top: -1.4rem; 
+}
+
+html[data-layout-tier="ultra-legacy"] .media-card:focus .card-overlay-label,
+html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
+    /* Scale only, no translate */
+    transform: scale(1.05);
+    -webkit-transform: scale(1.05);
+}

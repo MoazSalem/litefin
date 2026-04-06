@@ -1854,8 +1854,8 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="ClearAllCachesDescription">${i18n.t('ClearAllCachesDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-danger" id="btn-clear-all-storage" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="ClearAll">
-                            ${i18n.t('ClearAll')}
+                        <button class="btn btn-danger" id="btn-clear-all-storage" tabindex="0" style="width: auto; min-width: 120px; padding: 12px 24px; font-size: 1.2rem;" data-i18n="Clear">
+                            ${i18n.t('Clear')}
                         </button>
                     </div>
                 </div>

@@ -366,3 +366,13 @@
     outline: none;
     transform: scale(1.05);
 }
+
+/* Perfect centering for icons/initials without flexbox */
+html[data-layout-tier="ultra-legacy"] .profiles-card-initial,
+html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
+    display: block;
+    width: 100%;
+    height: 100%;
+    line-height: 160px; /* Force vertical centering based on card height */
+    text-align: center;
+}

@@ -599,6 +599,18 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
 }
 
 /* ==========================================================================
+   Ultra-Legacy Toggle Fixed Handling
+   ========================================================================== */
+
+html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
+    /* Bug: 'transform: translateX' is often ignored or buggy on ancient engines */
+    left: 29px; 
+    transform: none;
+    -webkit-transform: none;
+}
+
+
+/* ==========================================================================
    Settings Modal (Popup) - Adapted from Library
    ========================================================================== */
 /* .modal-overlay moved to components.css */
@@ -987,6 +999,21 @@ html[data-layout-tier="ultra-legacy"] .theme-color-grid {
     max-width: 500px;
     margin-left: auto;
 }
+
+/* ==========================================================================
+   Ultra-Legacy Theme Color Center Fix
+   ========================================================================== */
+
+html[data-layout-tier="ultra-legacy"] .color-option.active::after {
+    /* Bug: 'transform: translate(-50%, -50%)' is unreliable on ancient engines */
+    top: 50%;
+    left: 50%;
+    margin-top: -6px; /* Dot is 12px wide/high */
+    margin-left: -6px;
+    transform: none;
+    -webkit-transform: none;
+}
+
 
 html[data-layout-tier="legacy"] .color-option,
 html[data-layout-tier="ultra-legacy"] .color-option {
