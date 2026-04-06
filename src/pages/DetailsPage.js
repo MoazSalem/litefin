@@ -21,6 +21,7 @@ import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
+import { TrailerPlayer } from '../components/TrailerPlayer.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -2852,33 +2853,28 @@ class DetailsPage extends Page {
     }
 
     _showRemoteTrailerPlayer() {
-        Promise.all([
-            import('../components/TrailerPlayer.js'),
-            import('../utils/PlayerSettings.js')
-        ]).then(([ { TrailerPlayer }, { PlayerSettings } ]) => {
-            const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
-            
-            let trailers = this._item.RemoteTrailers || [];
-            if (this._isProxyFallback && trailers.length === 0) {
-                trailers = [{
-                    Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
-                    Url: '',
-                    IsProxyFallback: true,
-                    TmdbId: this._item.ProviderIds?.Tmdb,
-                    ItemName: this._item.OriginalTitle || this._item.Name,
-                    ItemYear: this._item.ProductionYear,
-                    ItemType: this._item.Type
-                }];
-            }
+        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        
+        let trailers = this._item.RemoteTrailers || [];
+        if (this._isProxyFallback && trailers.length === 0) {
+            trailers = [{
+                Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
+                Url: '',
+                IsProxyFallback: true,
+                TmdbId: this._item.ProviderIds?.Tmdb,
+                ItemName: this._item.OriginalTitle || this._item.Name,
+                ItemYear: this._item.ProductionYear,
+                ItemType: this._item.Type
+            }];
+        }
 
-            if (mode === 'external') {
-                TrailerPlayer.launchExternal(trailers, this);
-            } else if (mode === 'internal_iframe') {
-                TrailerPlayer.showLegacy(trailers, this);
-            } else {
-                TrailerPlayer.show(trailers, this);
-            }
-        });
+        if (mode === 'external') {
+            TrailerPlayer.launchExternal(trailers, this);
+        } else if (mode === 'internal_iframe') {
+            TrailerPlayer.showLegacy(trailers, this);
+        } else {
+            TrailerPlayer.show(trailers, this);
+        }
     }
 
     // ============================================================================
