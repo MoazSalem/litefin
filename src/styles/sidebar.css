@@ -29,7 +29,8 @@
     z-index: 200;
 
     /* GPU-accelerated transition */
-    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+    transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
 
     overflow: hidden;
     /* Hide overflow text when collapsed */
@@ -37,17 +38,21 @@
     border-right: 1px solid rgba(255, 255, 255, 0.05);
     white-space: nowrap;
     will-change: transform;
+    -webkit-transform: translate3d(-250px, 0, 0);
     transform: translate3d(-250px, 0, 0);
     /* Start collapsed via translate */
+    -webkit-backface-visibility: hidden;
     backface-visibility: hidden;
 }
 
 /* Fully hidden state */
 .sidebar.hidden {
+    -webkit-transform: translate3d(-100%, 0, 0);
     transform: translate3d(-100%, 0, 0);
 }
 
 .sidebar.expanded {
+    -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
     /* Shift to reveal full sidebar */
 }
@@ -64,13 +69,15 @@
     pointer-events: none;
     opacity: 0;
     /* Default: No transform transition while hidden/inactive to prevent "reset" slides */
+    -webkit-transition: -webkit-transform 0s, opacity 0.15s ease;
     transition: transform 0s, opacity 0.15s ease;
     will-change: transform, opacity;
 }
 
 .sidebar.expanded .sidebar-focus-indicator {
     /* Smooth sliding only when expanded and already visible */
-    transition: transform 0.2s cubic-bezier(0.2, 0.0, 0.0, 1.0), opacity 0.15s ease;
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
+    transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
 }
 
 .sidebar.has-focus .sidebar-focus-indicator {
@@ -86,6 +93,7 @@
 /* Compensate for translation on ALL content elements to keep them visible at the screen edge */
 .sidebar:not(.expanded) .logo-icon,
 .sidebar:not(.expanded) .item-icon {
+    -webkit-transform: translate3d(250px, 0, 0);
     transform: translate3d(250px, 0, 0);
 }
 
@@ -113,7 +121,8 @@
     /* Center in the column */
     flex-shrink: 0;
     color: var(--jf-accent);
-    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+    transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     will-change: transform;
     position: relative;
     z-index: 10;
@@ -219,7 +228,8 @@
     vertical-align: middle;
     flex-shrink: 0;
     line-height: 0; /* Reset line-height inside icons to prevent offset */
-    transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
+    -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1);
+    transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     will-change: transform;
     position: relative;
     z-index: 10;
