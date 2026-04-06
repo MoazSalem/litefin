@@ -1186,6 +1186,30 @@ progress.card-progress::-webkit-progress-value {
 .media-info-grid .media-info-row {
     margin-bottom: 12px;
 }
+.media-info-full-rows {
+    padding: 16px 24px;
+}
+
+.media-info-full-rows .media-info-row {
+    flex-direction: column;
+    align-items: flex-start;
+    padding: 10px 0;
+    border-bottom: 1px dashed rgba(255, 255, 255, 0.08);
+}
+
+.media-info-full-rows .media-info-row .info-label {
+    margin-bottom: 6px;
+    font-size: 0.95rem;
+    color: var(--jf-accent);
+}
+
+.media-info-full-rows .media-info-row .info-value {
+    text-align: left;
+    font-size: 1rem;
+    line-height: 1.4;
+    word-break: break-all;
+    width: 100%;
+}
 
 /* Fallback for Tizen 3/4 (Legacy browser) and ultra-legacy */
 html[data-layout-tier="legacy"] .media-info-grid,

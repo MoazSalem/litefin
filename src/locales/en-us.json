@@ -137,6 +137,8 @@
     "OptionReleaseDate": "Release Date",
     "OptionResumable": "Resumable",
     "OptionTrackName": "Track Name",
+    "Path": "Path",
+    "FileName": "File",
     "People": "People",
     "Photos": "Photos",
     "Play": "Play",

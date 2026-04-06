@@ -142,6 +142,18 @@ class MediaInfoModal {
                 </div>
             `;
 
+            // File Details (Full Width for long paths)
+            if (source.Path || source.FileName) {
+                html += `
+                    <div class="media-info-section media-info-focusable" tabindex="0">
+                        <div class="media-info-full-rows">
+                            ${source.FileName ? this._renderRow(i18n.t('FileName'), source.FileName) : ''}
+                            ${source.Path ? this._renderRow(i18n.t('Path'), source.Path) : ''}
+                        </div>
+                    </div>
+                `;
+            }
+
             // Streams
             source.MediaStreams.forEach((stream) => {
                 const typeLabel = i18n.t(stream.Type);
