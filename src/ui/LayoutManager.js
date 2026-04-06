@@ -198,8 +198,19 @@ class LayoutManager {
         const accents = themeUtils.getAccentVariants(this._themeColor);
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
         
+        // Remove any inline flash-prevention variables injected by index.html
+        // so that our dynamic stylesheet (which has lower specificity than inline style)
+        // can successfully cascade and take full control.
+        const rootStyle = document.documentElement.style;
+        rootStyle.removeProperty('--jf-accent');
+        rootStyle.removeProperty('--jf-background');
+        rootStyle.removeProperty('--jf-text-primary');
+        rootStyle.removeProperty('--jf-text-secondary');
+
         // 1. Build style rules for native and polyfill consumption
-        let dynamicCss = `:root {
+        // Use html[data-theme-mode="..."] to ensure 0,1,1 specificity, which beats
+        // lazily loaded :root chunks and regular [data-theme-mode] (0,1,0) rules.
+        let dynamicCss = `html[data-theme-mode="${this._themeMode}"] {
             --jf-accent: ${accents.accent};
             --jf-accent-rgb: ${accents.accentRgb};
             --jf-accent-hover: ${accents.accentHover};
@@ -213,8 +224,11 @@ class LayoutManager {
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
-        const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
-        dynamicCss += `
+        // Only inject base text colors if NOT tinted. Tinted mode handles its own 
+        // transparent text colors in tinted.css, which we shouldn't override globally.
+        if (this._themeMode !== THEME_MODES.TINTED) {
+            const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
+            dynamicCss += `
             --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
             --jf-text-secondary: ${isLight ? '#666666' : '#999999'};
             --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
@@ -222,6 +236,13 @@ class LayoutManager {
             --text-primary: var(--jf-text-primary);
             --text-secondary: var(--jf-text-secondary);
             --text-muted: var(--jf-text-secondary);`;
+        } else {
+            // For tinted mode, just pass through the custom aliases
+            dynamicCss += `
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+        }
 
         // 2. Clear or apply tinted background variables
         if (this._themeMode === THEME_MODES.TINTED) {
