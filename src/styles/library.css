@@ -61,7 +61,7 @@
     font-size: 32px;
     font-weight: 700;
     margin: 0;
-    color: var(--text-primary);
+    color: var(--jf-text-primary);
 }
 
 /* Tabs (Chip Style) */
@@ -88,7 +88,7 @@
     background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
     /* Match Resume/Icon btn in details */
-    color: var(--text-primary);
+    color: var(--jf-text-primary);
     border: 2px solid var(--jf-action-btn-border)!important;
     font-size: 20px;
     font-weight: 600;
@@ -173,7 +173,7 @@
     overflow: hidden;
     background-clip: padding-box;
     background-color: rgba(40, 40, 40, 0.8);
-    color: var(--text-primary);
+    color: var(--jf-text-primary);
     border: 2px solid var(--jf-action-btn-border)!important;
     font-size: 18px;
     font-weight: 600;
@@ -214,7 +214,7 @@
 }
 
 .count-indicator {
-    color: var(--text-muted);
+    color: var(--jf-text-secondary);
     font-size: 14px;
     font-weight: 500;
     margin-right: 15px;

@@ -31,6 +31,17 @@
     --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
     --jf-action-btn-active-color: #101010;
 
+    /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: #999999;
+    --jf-text-tertiary: #666666;
+
+    /* Legacy Aliases (Compatibility for untracked CSS files) */
+    --text-primary: var(--jf-text-primary);
+    --text-secondary: var(--jf-text-secondary);
+    --text-muted: var(--jf-text-secondary); /* Standardize muted to secondary */
+    --text-tertiary: var(--jf-text-tertiary);
+
     /* Global Rounded Corner Defaults (Setting-controlled) */
     --jf-border-radius: 4px;
     --jf-border-radius-lg: 4px;

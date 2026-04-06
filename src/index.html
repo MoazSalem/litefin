@@ -276,17 +276,19 @@
 
                 // Theme variables for early loading (must match CSS)
                 var themes = {
-                    'dark': { accent: '#00a4dc', bg: '#101010' },
-                    'light': { accent: '#00a4dc', bg: '#f5f5f5' },
-                    'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a' },
-                    'purplehaze': { accent: '#b24bf3', bg: '#0f0a14' },
-                    'wmc': { accent: '#52b043', bg: '#0a120a' },
-                    'appletv': { accent: '#0a84ff', bg: '#000000' }
+                    'dark': { accent: '#00a4dc', bg: '#101010', text: '#ffffff', textSec: '#999999' },
+                    'light': { accent: '#00a4dc', bg: '#f5f5f5', text: '#101010', textSec: '#666666' },
+                    'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
+                    'purplehaze': { accent: '#b24bf3', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
+                    'wmc': { accent: '#52b043', bg: '#0a120a', text: '#ffffff', textSec: '#999999' },
+                    'appletv': { accent: '#0a84ff', bg: '#000000', text: '#ffffff', textSec: '#999999' }
                 };
 
                 var currentTheme = themes[savedTheme] || themes['dark'];
                 document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
                 document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
+                document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
+                document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);
             } catch (e) {
                 console.error('Error restoring theme:', e);
             }

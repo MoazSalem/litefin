@@ -212,6 +212,17 @@ class LayoutManager {
             --jf-button-border-focus: ${contrastColor};
             --jf-focus-border-color: ${accents.accent};`;
 
+        // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
+        const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
+        dynamicCss += `
+            --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
+            --jf-text-secondary: ${isLight ? '#666666' : '#999999'};
+            --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
+            
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+
         // 2. Clear or apply tinted background variables
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
