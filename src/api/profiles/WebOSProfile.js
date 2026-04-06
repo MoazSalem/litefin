@@ -92,6 +92,8 @@ function getWebOSVersion() {
 
     const versionMajor = parseInt(match[1].split('.')[0], 10);
 
+    if (versionMajor >= 120) return 25; // Estimate for WebOS 25
+    if (versionMajor >= 108) return 24;
     if (versionMajor >= 94) return 23;
     if (versionMajor >= 87) return 22;
     if (versionMajor >= 79) return 6;
@@ -157,7 +159,7 @@ export function getDeviceCapabilities() {
         hevc = info.hevc === true || info.hevc === 'true';
     }
 
-    // HDR10: Use WebOS Adapter's detected hardware value if available. 
+    // HDR10: Use WebOS Adapter's detected hardware value if available.
     // Otherwise rely strictly on the UHD detection. MSE probing natively fails across WebOS.
     const hdr10 = hdr10Hw !== null ? hdr10Hw : uhd;
 
@@ -287,13 +289,13 @@ export function buildJellyfinProfile(options = {}) {
 
     let enableVP9 = PlayerSettings.get('enableVP9');
     if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
-    
+
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
     let enableHDR = PlayerSettings.get('enableHDR');
     if (localStorage.getItem('player:enableHDR') === null) {
         enableHDR = caps.hdr10;
     }
-    
+
     // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
     let enableDolbyVision = PlayerSettings.get('enableDolbyVision');
     if (localStorage.getItem('player:enableDolbyVision') === null) {
@@ -615,11 +617,17 @@ export function buildJellyfinProfile(options = {}) {
     });
 
     if (enableDolbyVision && enableHEVC) {
-        // Enforce Remux for Dolby Vision MKVs by failing DirectPlay condition for DOVI in MKV
+        // Restrictions for Dolby Vision containers based on WebOS version.
+        // WebOS >= 25 supports DOVI in MP4, TS, MKV.
+        // WebOS < 25 supports DOVI only in MP4, TS.
+        const allowedContainers = caps.webosVersion >= 25 ? ['mp4', 'ts', 'mkv'] : ['mp4', 'ts'];
+        const containerExcludeStr = '-' + allowedContainers.join(',-');
+
+        // Enforce Remux by failing DirectPlay condition for DOVI in any unallowed container.
         codecProfiles.push({
             Type: 'Video',
             Codec: 'hevc',
-            Container: 'mkv',
+            Container: containerExcludeStr,
             Conditions: [
                 { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
                 { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
