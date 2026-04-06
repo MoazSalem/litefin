@@ -541,7 +541,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-option-btn.focused.selected .radio-icon::after {
-    background: white;
+    background: var(--jf-primary-btn-color);
 }
 
 /* Checkbox Styling (Filter Modal) */
@@ -572,7 +572,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-option-btn.focused .check-mark {
-    color: white !important;
+    color: var(--jf-primary-btn-color) !important;
 }
 
 /* Modal Option Label Scaling */
@@ -639,20 +639,20 @@ progress.card-progress::-webkit-progress-value {
     color: #e74c3c;
 }
 
-/* Focused State: Invert colors slightly for maximum punch on teal background */
+/* Focused State: Use dynamic contrast color instead of hardcoded white */
 .modal-option-btn.focused .track-badge {
-    background: rgba(255, 255, 255, 0.25);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #fff !important; /* Force white text on focused teal */
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    background: rgba(var(--jf-primary-btn-color-rgb), 0.15) !important;
+    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.35) !important;
+    color: var(--jf-primary-btn-color) !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 
 .modal-option-btn.focused .track-badge.badge-success,
 .modal-option-btn.focused .track-badge.badge-warning,
 .modal-option-btn.focused .track-badge.badge-danger {
-    background: rgba(255, 255, 255, 0.2);
-    border-color: rgba(255, 255, 255, 0.5);
-    color: #fff !important;
+    background: rgba(var(--jf-primary-btn-color-rgb), 0.2) !important;
+    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.4) !important;
+    color: var(--jf-primary-btn-color) !important;
 }
 
 
@@ -889,8 +889,9 @@ progress.card-progress::-webkit-progress-value {
 .subtitle-result-btn:focus .track-badge,
 .track-option.focused .track-badge,
 .track-option:focus .track-badge {
+    background-color: rgba(var(--jf-primary-btn-color-rgb), 0.15) !important;
     color: var(--jf-primary-btn-color);
-    border-color: var(--jf-primary-btn-color);
+    border-color: rgba(var(--jf-primary-btn-color-rgb), 0.35) !important;
 }
 
 .track-label-text {
@@ -1305,7 +1306,7 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
 .trailer-option:focus .trailer-option-icon,
 .trailer-option.focused .trailer-option-icon,
 .trailer-option:hover .trailer-option-icon {
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(var(--jf-primary-btn-color-rgb), 0.2);
     color: var(--jf-primary-btn-color, #fff);
 }
 
@@ -1331,11 +1332,17 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     line-height: 1.2;
 }
 
-/* Sublabel goes near-white when the button is active */
+/* Sublabel follows the primary button contrast color when active */
 .trailer-option:focus .trailer-option-sublabel,
 .trailer-option.focused .trailer-option-sublabel,
 .trailer-option:hover .trailer-option-sublabel {
-    color: rgba(255, 255, 255, 0.75) !important;
+    color: rgba(var(--jf-primary-btn-color-rgb), 0.7) !important;
+}
+
+/* Ensure labels also switch to contrast color when parent is focused */
+.trailer-option.focused .trailer-option-label,
+.trailer-option:focus .trailer-option-label {
+    color: var(--jf-primary-btn-color) !important;
 }
 
 /* ============================================================================

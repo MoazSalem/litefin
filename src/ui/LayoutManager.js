@@ -197,6 +197,8 @@ class LayoutManager {
     _applyDynamicTheme() {
         const accents = themeUtils.getAccentVariants(this._themeColor);
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
+        const contrastRgb = themeUtils.hexToRgb(contrastColor);
+        const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
         
         // Remove any inline flash-prevention variables injected by index.html
         // so that our dynamic stylesheet (which has lower specificity than inline style)
@@ -217,7 +219,9 @@ class LayoutManager {
             --jf-accent-active: ${accents.accentActive};
             --jf-accent-light: ${accents.accentLight};
             --jf-accent-content-color: ${contrastColor};
+            --jf-accent-content-color-rgb: ${contrastRgbStr};
             --jf-primary-btn-color: ${contrastColor};
+            --jf-primary-btn-color-rgb: ${contrastRgbStr};
             --jf-switch-handle: ${contrastColor};
             --jf-action-btn-active-border: ${contrastColor};
             --jf-button-border-focus: ${contrastColor};
