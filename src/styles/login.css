@@ -204,7 +204,10 @@ body.app-splash-active .loading-section .loading-spinner {
 
 .login-section:not(.hidden) {
     animation: fadeInSection 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    -webkit-animation: webkit-fadeInSection 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     will-change: opacity, transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 @keyframes fadeInSection {
@@ -215,6 +218,17 @@ body.app-splash-active .loading-section .loading-spinner {
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
+    }
+}
+
+@-webkit-keyframes webkit-fadeInSection {
+    from {
+        opacity: 0;
+        -webkit-transform: scale(0.98) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        -webkit-transform: scale(1) translateY(0);
     }
 }
 
@@ -555,9 +569,15 @@ body.app-splash-active .loading-section .loading-spinner {
     font-size: 1.1rem;
     margin-bottom: 40px;
     animation: qc-pulse 2.5s ease-in-out infinite;
+    -webkit-animation: webkit-qc-pulse 2.5s ease-in-out infinite;
 }
 
 @keyframes qc-pulse {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1;   }
+}
+
+@-webkit-keyframes webkit-qc-pulse {
     0%, 100% { opacity: 0.5; }
     50%       { opacity: 1;   }
 }

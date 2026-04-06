@@ -368,6 +368,7 @@
             color: #FFF;
             box-sizing: border-box;
             animation: rotation 1s linear infinite;
+            -webkit-animation: webkit-rotation 1s linear infinite;
             /* TIZEN PERF: Promote to its own compositor layer so the rotation
                animation runs on the GPU, independent of main-thread JS work. */
             will-change: transform;
@@ -389,7 +390,10 @@
             border-radius: 50%;
             background-color: #FFF;
             animation: animloader-gpu 1s infinite ease-in-out;
+            -webkit-animation: webkit-animloader-gpu 1s infinite ease-in-out;
             will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
         }
 
         .loading-spinner::before {
@@ -401,23 +405,23 @@
         }
 
         @keyframes rotation {
-            0% {
-                transform: translateZ(0) rotate(0deg);
-            }
+            0% { transform: translateZ(0) rotate(0deg); }
+            100% { transform: translateZ(0) rotate(360deg); }
+        }
 
-            100% {
-                transform: translateZ(0) rotate(360deg);
-            }
+        @-webkit-keyframes webkit-rotation {
+            0% { -webkit-transform: translateZ(0) rotate(0deg); }
+            100% { -webkit-transform: translateZ(0) rotate(360deg); }
         }
 
         @keyframes animloader-gpu {
-            0%, 100% {
-                transform: translateZ(0) scale(0.5);
-            }
+            0%, 100% { transform: translateZ(0) scale(0.5); }
+            50% { transform: translateZ(0) scale(1); }
+        }
 
-            50% {
-                transform: translateZ(0) scale(1);
-            }
+        @-webkit-keyframes webkit-animloader-gpu {
+            0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
+            50% { -webkit-transform: translateZ(0) scale(1); }
         }
     </style>
 </head>
