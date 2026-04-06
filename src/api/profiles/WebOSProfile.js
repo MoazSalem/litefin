@@ -332,7 +332,23 @@ export function buildJellyfinProfile(options = {}) {
     }
 
     const maxAudioChannels = String(caps.maxAudioChannels);
-    const supportsFmp4Hls = caps.webosVersion >= 6; // WebOS 4/5 frequently stutter on fMP4 chunks
+
+    // -------------------------------------------------------------------------
+    // fMP4 HLS preference resolution
+    // -------------------------------------------------------------------------
+    // enableFmp4HlsContainer = master toggle (default on).
+    // forceFmp4HlsContainer  = bypass the webosVersion >= 6 hardware gate and
+    //                          promote fMP4 to the primary HLS transcode.
+    const enableFmp4Hls  = PlayerSettings.get('enableFmp4HlsContainer');
+    const forceFmp4Hls   = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
+
+    // Hardware version gate: WebOS < 6 frequently stutters on fMP4 HLS chunks.
+    // The force flag overrides this gate when the user explicitly enables it.
+    const supportsFmp4Hls = enableFmp4Hls && (forceFmp4Hls || caps.webosVersion >= 6);
+
+    // When fMP4 is forced, it becomes the PRIMARY HLS container (replaces TS
+    // as the first/default transcoding profile the server picks).
+    const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
 
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
@@ -450,13 +466,20 @@ export function buildJellyfinProfile(options = {}) {
             /*
              * Primary HLS video transcoding profile.
              *
+             * Container selection:
+             *   forceFmp4Hls — use fMP4 (mp4) as the primary container. This unlocks
+             *     HEVC/AV1 copy-stream remuxing over HLS on devices where fMP4 is
+             *     known-good but the hardware version gate would normally block it.
+             *   default (no force) — use MPEG-TS, which is the universally safe
+             *     container and required for legacy WebOS 4/5 systems.
+             *
              * Segment sizing strategy:
-             *   webos  (native) — larger segments (4s) reduce the number of HTTP round-trips
-             *            and give the hardware decoder more headroom for smooth playback.
-             *   html5  (Hls.js) — smaller segments (2s) enable faster startup and allow
-             *            Hls.js to recover from network blips more quickly.
+             *   webos  (native) — larger segments (4s) reduce HTTP round-trips and
+             *            give the hardware decoder more headroom.
+             *   html5  (Hls.js) — smaller segments (2s) enable faster startup and
+             *            allow Hls.js to recover from network blips more quickly.
              */
-            Container: 'ts',
+            Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: transAudioCodecs,
             VideoCodec: transVideoCodecs,
@@ -465,7 +488,9 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
             SegmentLength: '2',
-            BreakOnNonKeyFrames: playbackMode !== 'remux'
+            // fMP4 segments must always be cut on IDR frames; BreakOnNonKeyFrames
+            // is only safe for MPEG-TS remux mode.
+            BreakOnNonKeyFrames: !forceFmp4Hls && playbackMode !== 'remux'
         },
         {
             Container: 'aac',
@@ -508,9 +533,13 @@ export function buildJellyfinProfile(options = {}) {
         }
     ];
 
-    // fMP4 HLS as a secondary option for devices that support it (WebOS 4+).
-    // Apply the same per-backend segment sizing as the primary TS profile above.
-    if (supportsFmp4Hls) {
+    // -------------------------------------------------------------------------
+    // Secondary fMP4 HLS profile
+    // -------------------------------------------------------------------------
+    // Only added when fMP4 is *supported* but NOT already the primary container.
+    // If forceFmp4Hls is true the primary profile above is already mp4, so
+    // there is nothing extra to push here — avoid a duplicate.
+    if (supportsFmp4Hls && !forceFmp4Hls) {
         transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
@@ -521,6 +550,7 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
             SegmentLength: '2',
+            // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });
     }
@@ -616,24 +646,32 @@ export function buildJellyfinProfile(options = {}) {
         Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
     });
 
-    if (enableDolbyVision && enableHEVC) {
-        // Restrictions for Dolby Vision containers based on WebOS version.
-        // WebOS >= 25 supports DOVI in MP4, TS, MKV.
-        // WebOS < 25 supports DOVI only in MP4, TS.
-        const allowedContainers = caps.webosVersion >= 25 ? ['mp4', 'ts', 'mkv'] : ['mp4', 'ts'];
-        const containerExcludeStr = '-' + allowedContainers.join(',-');
-
-        // Enforce Remux by failing DirectPlay condition for DOVI in any unallowed container.
+    // -------------------------------------------------------------------------
+    // Dolby Vision MKV — Force Remux on WebOS < 25
+    // -------------------------------------------------------------------------
+    // WebOS < 25 cannot reliably direct-play Dolby Vision content wrapped in an
+    // MKV container, regardless of the video codec (HEVC, H.264, etc.). DirectPlay
+    // of DOVI MKVs causes the native player to stall and crash due to the way the
+    // raw MKV byte stream is fed to the hardware decoder over HTTP.
+    //
+    // The correct fix: add a CodecProfile scoped to Container:'mkv' with no Codec
+    // restriction (so it applies universally to every video codec). The NotEquals
+    // conditions tell the Jellyfin server "DOVI is not supported for direct-play in
+    // this container" — causing it to immediately fall back to an fMP4 HLS Remux,
+    // which packages the identical stream into segments the TV handles flawlessly.
+    //
+    // WebOS >= 25 handles DOVI MKV natively, so we skip this block for those devices.
+    if (enableDolbyVision && caps.webosVersion < 25) {
         codecProfiles.push({
             Type: 'Video',
-            Codec: 'hevc',
-            Container: containerExcludeStr,
+            // No Codec field = applies to ALL video codecs (hevc, h264, av1, vp9, etc.)
+            Container: 'mkv',
             Conditions: [
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR', IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus', IsRequired: false }
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI',             IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10',    IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG',      IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR',      IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus',IsRequired: false }
             ]
         });
     }
