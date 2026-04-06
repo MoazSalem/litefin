@@ -381,6 +381,7 @@
    Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
 .library-grid:not([class*="view-"]) {
     max-width: 1705px;
+    min-width: 1705px;
 }
 
 .library-grid:not([class*="view-"]) .media-card {
@@ -439,6 +440,7 @@
    Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
 .library-grid.view-small-poster {
     max-width: 1645px;
+    min-width: 1645px;
 }
 
 .library-grid.view-small-poster .media-card {
@@ -478,6 +480,7 @@
    Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
 .library-grid.view-thumb {
     max-width: 1670px;
+    min-width: 1670px;
 }
 
 .library-grid.view-thumb .media-card {
@@ -517,6 +520,7 @@
    Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
 .library-grid.view-banner {
     max-width: 1690px; 
+    min-width: 1690px;
 }
 
 .library-grid.view-banner .media-card {
