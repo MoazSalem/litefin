@@ -194,54 +194,46 @@ class LayoutManager {
         }
     }
 
-    /**
-     * Internal method to calculate and inject dynamic CSS variables
-     */
     _applyDynamicTheme() {
-        const root = document.documentElement;
         const accents = themeUtils.getAccentVariants(this._themeColor);
-        
-        // 1. Apply core accent variables directly to element style
-        // This ensures they override any static CSS or index.html boot styles
-        root.style.setProperty('--jf-accent', accents.accent);
-        root.style.setProperty('--jf-accent-rgb', accents.accentRgb);
-        root.style.setProperty('--jf-accent-hover', accents.accentHover);
-        root.style.setProperty('--jf-accent-active', accents.accentActive);
-        root.style.setProperty('--jf-accent-light', accents.accentLight);
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
-        root.style.setProperty('--jf-accent-content-color', contrastColor);
-        root.style.setProperty('--jf-primary-btn-color', contrastColor);
-        root.style.setProperty('--jf-switch-handle', contrastColor);
-        root.style.setProperty('--jf-action-btn-active-border', contrastColor);
-        root.style.setProperty('--jf-button-border-focus', contrastColor);
-        root.style.setProperty('--jf-focus-border-color', accents.accent);
+        
+        // 1. Build style rules for native and polyfill consumption
+        let dynamicCss = `:root {
+            --jf-accent: ${accents.accent};
+            --jf-accent-rgb: ${accents.accentRgb};
+            --jf-accent-hover: ${accents.accentHover};
+            --jf-accent-active: ${accents.accentActive};
+            --jf-accent-light: ${accents.accentLight};
+            --jf-accent-content-color: ${contrastColor};
+            --jf-primary-btn-color: ${contrastColor};
+            --jf-switch-handle: ${contrastColor};
+            --jf-action-btn-active-border: ${contrastColor};
+            --jf-button-border-focus: ${contrastColor};
+            --jf-focus-border-color: ${accents.accent};`;
 
         // 2. Clear or apply tinted background variables
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
-            root.style.setProperty('--jf-background', tints.background);
-            root.style.setProperty('--jf-background-alt', tints.backgroundAlt);
-            root.style.setProperty('--jf-surface', tints.surface);
-            root.style.setProperty('--jf-card-bg', tints.cardBg);
-            root.style.setProperty('--jf-card-bg-hover', tints.cardBgHover);
-            root.style.setProperty('--jf-divider', tints.divider);
-            root.style.setProperty('--jf-navbar-bg', tints.background);
-        } else {
-            // Remove tinted variables so theme CSS can take over
-            root.style.removeProperty('--jf-background');
-            root.style.removeProperty('--jf-background-alt');
-            root.style.removeProperty('--jf-surface');
-            root.style.removeProperty('--jf-card-bg');
-            root.style.removeProperty('--jf-card-bg-hover');
-            root.style.removeProperty('--jf-divider');
-            root.style.removeProperty('--jf-navbar-bg');
+            dynamicCss += `
+            --jf-background: ${tints.background};
+            --jf-background-alt: ${tints.backgroundAlt};
+            --jf-surface: ${tints.surface};
+            --jf-card-bg: ${tints.cardBg};
+            --jf-card-bg-hover: ${tints.cardBgHover};
+            --jf-divider: ${tints.divider};
+            --jf-navbar-bg: ${tints.background};`;
         }
 
-        // Clean up legacy style element if it exists from previous versions
-        if (this._dynamicStyleEl) {
-            this._dynamicStyleEl.remove();
-            this._dynamicStyleEl = null;
+        dynamicCss += `\n        }`;
+
+        // Create or update the dynamic style element
+        if (!this._dynamicStyleEl) {
+            this._dynamicStyleEl = document.createElement('style');
+            this._dynamicStyleEl.id = 'litefin-dynamic-theme-vars';
+            document.head.appendChild(this._dynamicStyleEl);
         }
+        this._dynamicStyleEl.textContent = dynamicCss;
 
         // Polyfill update for legacy Tizen
         cssVarsPolyfill.update();

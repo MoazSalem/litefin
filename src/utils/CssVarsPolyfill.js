@@ -16,7 +16,6 @@
  */
 
 import cssVars from 'css-vars-ponyfill';
-import { platformInfo } from './PlatformInfo.js';
 import { logger } from './Logger.js';
 
 const log = logger.create('CssVarsPolyfill');
@@ -54,18 +53,45 @@ class CssVarsPolyfill {
      * (i.e. after layoutManager.init()). On Chrome 49+ this is a no-op.
      */
     init() {
-        // Only activate on legacy tier (Chrome < 49 / Tizen 3.0)
-        if (platformInfo.layoutTier !== 'legacy') {
+        // ----------------------------------------------------------------
+        // Use real CSS custom property feature detection instead of a
+        // fragile UserAgent / Chrome-version heuristic.
+        // window.CSS.supports is itself a CSS4 API — if it doesn't exist,
+        // the browser definitely can't handle CSS custom properties natively.
+        // Old WebOS / Tizen 2.x WebKit browsers fail this test correctly.
+        // ----------------------------------------------------------------
+        const nativeCSSVars =
+            typeof window.CSS !== 'undefined' &&
+            typeof window.CSS.supports === 'function' &&
+            window.CSS.supports('--test', '0');
+
+        if (nativeCSSVars) {
             log.debug('Native CSS vars supported — polyfill skipped');
             return;
         }
 
         this._active = true;
-        log.info('CSS vars not natively supported — activating ponyfill');
+        log.info('CSS vars NOT natively supported — activating ponyfill');
 
-        // Run initial pass to resolve all var() calls with the current
-        // theme variable values. This typically takes < 10ms on TV hardware.
-        cssVars(PONYFILL_OPTIONS);
+        // ----------------------------------------------------------------
+        // Defer the first pass with setTimeout(0).
+        // style-loader injects <style> tags lazily as each JS chunk executes.
+        // If we run cssVars() synchronously here, the injected stylesheets
+        // may not yet be in the DOM so the ponyfill processes nothing.
+        // A 0ms timeout defers to after all synchronous chunk evaluation.
+        // ----------------------------------------------------------------
+        const self = this;
+        setTimeout(function() {
+            log.debug('Running initial CSS vars ponyfill pass');
+            const themeVars = self._extractThemeVariables();
+            
+            // Provide our scoped variables manually, otherwise the ponyfill
+            // ignores our [data-theme-mode="..."] selectors since they aren't :root
+            const options = Object.assign({}, PONYFILL_OPTIONS, {
+                variables: themeVars
+            });
+            cssVars(options);
+        }, 0);
     }
 
     /**
@@ -80,9 +106,80 @@ class CssVarsPolyfill {
 
         log.debug('Re-applying CSS vars polyfill after theme change');
 
-        // Re-run with the preserved options — the ponyfill will re-scan the
-        // stylesheets and update its injected <style> block with the new values.
-        cssVars(PONYFILL_OPTIONS);
+        const themeVars = this._extractThemeVariables();
+        
+        // Re-run with the preserved options + updated variables manually extracted
+        // from the active theme class ([data-theme-mode="xyz"])
+        const options = Object.assign({}, PONYFILL_OPTIONS, {
+            variables: themeVars
+        });
+        cssVars(options);
+    }
+
+    /**
+     * Extracts CSS variables from the currently active theme.
+     * `css-vars-ponyfill` ONLY supports variables defined in `:root` or `:host`.
+     * Since Litefin uses `[data-theme-mode="classic-dark"]` for dynamic themes, 
+     * the ponyfill ignores our theme variables internally!
+     * 
+     * We manually extract them from the <style> tags text content and provide
+     * them explicitly via the `variables: {}` option.
+     * @returns {Object} Map of css variable names to values
+     */
+    _extractThemeVariables() {
+        // Find the active theme explicitly set on HTML tag
+        const root = document.documentElement;
+        const themeMode = root.getAttribute('data-theme-mode') || 'classic-dark';
+        const vars = {};
+
+        // 1. Scan raw text content of injected <style> tags
+        // This avoids missing vars that fail to parse into CSSOM on Chrome 32
+        const styleTags = document.querySelectorAll('style');
+        
+        // Regex to capture the block containing the active theme rules
+        const themeBlockRegex = new RegExp('\\[data-theme(?:-mode)?=["\']?' + themeMode + '["\']?\\][^{]*\\{([^}]+)\\}', 'g');
+        const rootBlockRegex = /:root[^{]*\{([^}]+)\}/g;
+        
+        // Regex to capture variables inside the block
+        const varRegex = /(--[^:]+):\s*([^;}]+)/g;
+
+        for (let i = 0; i < styleTags.length; i++) {
+            const cssText = styleTags[i].textContent;
+            if (!cssText || cssText.indexOf('--jf-') === -1) continue;
+
+            // Extract from targeted [data-theme-mode="..."]
+            let match;
+            while ((match = themeBlockRegex.exec(cssText)) !== null) {
+                const blockContent = match[1];
+                let varMatch;
+                while ((varMatch = varRegex.exec(blockContent)) !== null) {
+                    vars[varMatch[1].trim()] = varMatch[2].trim();
+                }
+            }
+
+            // Also extract from any static :root definitions
+            while ((match = rootBlockRegex.exec(cssText)) !== null) {
+                const blockContent = match[1];
+                let varMatch;
+                while ((varMatch = varRegex.exec(blockContent)) !== null) {
+                    vars[varMatch[1].trim()] = varMatch[2].trim();
+                }
+            }
+        }
+
+        // 2. Scan variables set directly on <html> inline style
+        // (LayoutManager uses this to override the accent color dynamically)
+        if (root.style) {
+            for (let i = 0; i < root.style.length; i++) {
+                const prop = root.style[i];
+                if (prop && prop.indexOf('--') === 0) {
+                    const value = root.style.getPropertyValue(prop);
+                    if (value) vars[prop] = value.trim();
+                }
+            }
+        }
+
+        return vars;
     }
 }
 
