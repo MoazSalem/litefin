@@ -135,6 +135,11 @@
     margin-right: 8px;
 }
 
+[dir="rtl"] .global-clock {
+    right: auto;
+    left: 50px;
+}
+
 /* ================== PLAYER OSD ================== */
 [dir="rtl"] .osd-btn {
     margin-left: 0;

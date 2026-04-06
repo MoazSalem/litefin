@@ -43,6 +43,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { versionChecker } from '../utils/VersionChecker.js';
+import { globalClock } from '../ui/GlobalClock.js';
 
 const log = logger.create('App');
 
@@ -140,6 +141,9 @@ class App {
         // Must be initialized after StorageService so it can read delay preferences.
         const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
+
+        // Initialize Global Clock — persistent time display above all UI
+        globalClock.init();
 
         // Get container element
         if (typeof options.container === 'string') {

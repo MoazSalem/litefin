@@ -6,6 +6,7 @@ import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
 import { ICONS } from './icons.js';
 import { TrickplayManager } from './TrickplayManager.js';
+import { globalClock } from '../../ui/GlobalClock.js';
 
 import TrackMenu from './TrackMenu.js';
 import SettingsMenu from './SettingsMenu.js';
@@ -370,7 +371,6 @@ export default class OSDController extends Component {
                         <span class="osd-title" id="osdTitle"></span>
                     </div>
                     <div class="osd-header-right">
-                        <span class="osd-clock" id="osdClock"></span>
                     </div>
                 </div>
 
@@ -439,7 +439,6 @@ export default class OSDController extends Component {
         this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
         this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
         this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
-        this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
         /* Cache trickplay tooltip sub-elements to avoid repeated queries during seek */
@@ -522,6 +521,9 @@ export default class OSDController extends Component {
         if (this._osdMainEl) this._osdMainEl.classList.remove('osd-hidden');
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
+
+        // Show the global clock when OSD is active
+        globalClock.setVisibility(true);
 
         // Start background polling when OSD becomes visible
         this._startUpdates();
@@ -770,6 +772,9 @@ export default class OSDController extends Component {
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+
+        // Hide the global clock when OSD hides
+        globalClock.setVisibility(false);
 
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
@@ -1697,7 +1702,6 @@ export default class OSDController extends Component {
             }
 
             this._updateTimeDisplay(this._player);
-            this._updateClock();
             
             if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(this._player);
@@ -1774,19 +1778,6 @@ export default class OSDController extends Component {
         if (Math.abs(currentVal - percent) > 0.01) {
             this._osdPositionSliderEl.value = percent;
             this._osdPositionFillEl.style.width = percent + '%';
-        }
-    }
-
-    /**
-     * Update the wall clock on the OSD.
-     * @private
-     */
-    _updateClock() {
-        if (!this._osdClockEl) return;
-        const hour12 = PlayerSettings.get('timeFormat') === '12h';
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
-        if (this._osdClockEl.textContent !== timeStr) {
-            this._osdClockEl.textContent = timeStr;
         }
     }
 

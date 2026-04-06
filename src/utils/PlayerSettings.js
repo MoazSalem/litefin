@@ -15,6 +15,7 @@
 
 import { logger } from './Logger.js';
 import { storage } from './StorageService.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('PlayerSettings');
 
@@ -288,6 +289,9 @@ export const PlayerSettings = {
 
         storage.setItem(STORAGE_PREFIX + key, String(value));
         log.debug(`Saved ${key}: ${value}`);
+        
+        // Notify subscribers that a setting has changed
+        eventBus.emit(`pref:${key}`, value);
     },
 
     /**

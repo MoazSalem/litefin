@@ -145,12 +145,6 @@
     margin: 0;
 }
 
-.osd-clock {
-    font-size: 1.44em;
-    /* 1.2em * 1.2 */
-    font-weight: bold;
-    opacity: 0.9;
-}
 
 .osd-sync-icon {
     opacity: 0.8;

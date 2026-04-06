@@ -159,6 +159,22 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     white-space: nowrap;
 }
 
+.global-clock {
+    position: fixed;
+    top: 32px;
+    right: 50px;
+    z-index: 100000; /* Above everything including screensaver */
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--jf-text-primary);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
+}
+
 .page-content {
     flex: 1;
     height: auto;

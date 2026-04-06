@@ -30,6 +30,7 @@ import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { webosAdapter } from '../webos/WebOSAdapter.js';
 import { syncPlayManager } from '../core/syncplay/SyncPlayManager.js';
+import { globalClock } from '../ui/GlobalClock.js';
 
 const log = logger.create('Player');
 
@@ -122,6 +123,9 @@ class PlayerPage extends Page {
         this._resumePosition = 0;
         this._hasReportedStart = false;
         this._cachedPlayMethod = null;
+
+        // Hide global clock during player loading/playback
+        globalClock.setVisibility(false);
 
         const itemId = this.params.id;
         const resume = this.params.resume === 'true';
@@ -2109,6 +2113,9 @@ class PlayerPage extends Page {
         // Disable Tizen AVPlayer transparency mode and clear state classes
         document.body.classList.remove('player-active', 'lyrics-active');
         document.documentElement.classList.remove('player-active');
+
+        // Restore global clock visibility when leaving playback
+        globalClock.setVisibility(true);
 
         log.info('destroy() complete');
         super.destroy();
