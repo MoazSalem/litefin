@@ -332,7 +332,7 @@ class DebugOverlay {
     getLogDump() {
         const header = [
             '================================================================================',
-            `Litefin Tizen Client Log`,
+            `Litefin Client Log`,
             `Version: ${__APP_VERSION__}`,
             `User Agent: ${navigator.userAgent}`,
             `Time: ${new Date().toLocaleString()}`,

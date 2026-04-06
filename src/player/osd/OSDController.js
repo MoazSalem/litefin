@@ -1748,8 +1748,8 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0) {
             const remaining = duration - current;
             const endTime = new Date(Date.now() + (remaining / 10000));
-            // Use 24h format or localized string
-            const endStr = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+            const hour12 = PlayerSettings.get('timeFormat') === '12h';
+            const endStr = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 })]);
             if (endsAtEl.textContent !== endStr) {
                 endsAtEl.textContent = endStr;
             }
@@ -1783,7 +1783,8 @@ export default class OSDController extends Component {
      */
     _updateClock() {
         if (!this._osdClockEl) return;
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const hour12 = PlayerSettings.get('timeFormat') === '12h';
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12 });
         if (this._osdClockEl.textContent !== timeStr) {
             this._osdClockEl.textContent = timeStr;
         }
