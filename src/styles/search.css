@@ -5,8 +5,8 @@
  */
 
 .search-controls {
-    display: flex;
-    align-items: center;
+    display: block;
+    text-align: left;
     padding: 30px 60px 0 60px;
 }
 
@@ -25,9 +25,8 @@
     padding: 0 32px;
     box-sizing: border-box;
     line-height: normal;
-    /* Let padding center it */
-    display: flex;
-    align-items: center;
+    display: inline-block;
+    vertical-align: middle;
     font-size: 1.4rem;
     /* Slightly larger text */
     background: var(--jf-action-btn-bg, rgba(40, 40, 40, 0.8));
@@ -35,6 +34,7 @@
     border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     /* Match nav button border */
     border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     /* Half of 72px */
     /* Rounded full */
     color: var(--jf-text-primary);

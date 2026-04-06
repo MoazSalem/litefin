@@ -59,16 +59,30 @@
     border: 3px solid transparent;
     background-clip: padding-box;
     color: var(--jf-text-primary);
-    padding: 10px 20px;
+    display: inline-block;
+    vertical-align: middle;
+    height: 48px;
+    line-height: normal;
+    padding: 0 20px;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
-    display: flex;
-    align-items: center;
 }
 
+.nav-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
 
-.nav-btn>*:not(:last-child) {
+.nav-btn > * {
+    display: inline-block;
+    vertical-align: middle;
     margin-right: 8px;
+}
+
+.nav-btn > *:last-child {
+    margin-right: 0;
 }
 
 .nav-btn:focus,
@@ -81,14 +95,26 @@
 
 .nav-btn.icon-only {
     background: transparent;
-    padding: 8px;
+    padding: 0;
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
     color: var(--jf-text-primary);
+}
+
+.nav-btn.icon-only::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+.nav-btn.icon-only svg {
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .nav-btn.icon-only:focus,
@@ -124,13 +150,25 @@
     color: var(--jf-text-secondary);
     font-size: 1.2rem;
     cursor: pointer;
-    padding: 4px;
+    padding: 0;
     border-radius: 50%;
     width: 32px;
     height: 32px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+}
+
+.btn-icon-small::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+.btn-icon-small svg {
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .btn-icon-small:focus,
@@ -190,11 +228,18 @@
     border-radius: 50%;
     background: var(--jf-accent);
     color: white;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
     font-size: 1rem;
     font-weight: 600;
+}
+
+.header-avatar-placeholder::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 /* Loaders */
@@ -465,8 +510,7 @@ progress.card-progress::-webkit-progress-value {
 .settings-modal .modal-options {
     padding: 20px;
     overflow-y: auto;
-    display: flex;
-    flex-direction: column;
+    display: block;
 }
 
 .modal-option-btn {
@@ -488,18 +532,96 @@ progress.card-progress::-webkit-progress-value {
     cursor: pointer;
     font-size: 1.2rem;
     font-weight: 500;
-    display: flex;
-    justify-content: flex-start;
-    /* Left align for sort menu */
-    align-items: center;
+    display: block;
+    line-height: normal;
+    white-space: nowrap; /* CRITICAL: Prevent wrapping which hides text on legacy engines */
+    text-overflow: ellipsis;
     flex-shrink: 0;
     /* Prevent shrinking/distortion on TV browsers */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
 }
 
+.modal-option-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
 
+.modal-option-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    white-space: normal; /* Allow internal wrapping if truly needed, though container prevents it */
+}
 
+/* Radio Button Styling (Sort Modal) */
+.radio-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    margin-right: 20px;
+    position: relative;
+    background-clip: padding-box;
+}
+
+.radio-btn.selected .radio-icon::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 12px;
+    height: 12px;
+    background: var(--jf-accent);
+    border-radius: 50%;
+}
+
+.modal-option-btn.focused .radio-icon {
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.modal-option-btn.focused.selected .radio-icon::after {
+    background: white;
+}
+
+/* Checkbox Styling (Filter Modal) */
+.checkbox-box {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    margin-right: 20px;
+    position: relative;
+    text-align: center;
+    background-clip: padding-box;
+}
+
+.checkbox-box .check-mark {
+    display: none;
+    line-height: 20px;
+    font-size: 18px;
+    color: var(--jf-accent);
+}
+
+.check-btn.selected .checkbox-box .check-mark {
+    display: block;
+}
+
+.modal-option-btn.focused .checkbox-box {
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.modal-option-btn.focused .check-mark {
+    color: white !important;
+}
+
+/* Modal Option Label Scaling */
+.modal-option-btn span {
+    max-width: 80%; /* Leave room for icon */
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
 .modal-option-btn.selected {
     background: rgba(var(--jf-accent-rgb), 0.1);
     border-color: var(--jf-accent);
@@ -519,9 +641,8 @@ progress.card-progress::-webkit-progress-value {
 
 
 .modal-option-btn .check-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     width: 20px;
     height: 20px;
     margin-right: 1.2em; /* Spacing from text */
@@ -538,10 +659,120 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-primary-btn-color) !important;
 }
 
+/* Filter Modal Split View Stabilization (Chromium 32) */
+.filter-modal.split-view {
+    width: 900px;
+    max-width: 90vw;
+}
+
+/* Base modal container style for library views */
+.library-modal {
+    background: var(--jf-background-alt, #1a1a1a);
+    border: 3px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
+    padding: 20px 0;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.82);
+    position: relative;
+    overflow: hidden;
+    color: var(--jf-text-primary);
+}
+
+.modal-title {
+    margin: 0;
+    padding: 20px 40px;
+    font-size: 1.8rem;
+    font-weight: 700;
+}
+
+.filter-split-container {
+    display: block;
+    width: 100%;
+    height: 450px; /* Fixed height for modal stability */
+}
+
+/* Sidebar and Main columns using legacy layout */
+.filter-sidebar {
+    display: block;
+    float: left;
+    width: 30%;
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.filter-main {
+    display: block;
+    float: left;
+    width: 70%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+/* Ensure clear after floats */
+.filter-split-container::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+.filter-category-btn {
+    display: block;
+    width: 100%;
+    padding: 20px 24px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+}
+
+.filter-category-btn.active {
+    color: var(--jf-accent);
+    border-left-color: var(--jf-accent);
+    background: rgba(var(--jf-accent-rgb), 0.1);
+}
+
+.filter-category-btn.focused,
+.filter-category-btn:focus {
+    background: var(--jf-accent);
+    color: white;
+    outline: none;
+}
+
+/* Sort Modal Column Stabilization */
+.sort-columns {
+    display: block;
+    width: 100%;
+}
+
+.sort-column {
+    display: block;
+    float: left;
+    width: 50%;
+    padding: 0 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.sort-columns::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
 .modal-actions {
     padding: 20px;
-    display: flex;
-    justify-content: flex-end;
+    display: block;
+    text-align: right;
 }
 
 .modal-action-btn {
@@ -576,11 +807,8 @@ progress.card-progress::-webkit-progress-value {
 
 /* Track Option Badges (Subtitle Metadata) */
 .track-option-label {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+    display: block;
     width: 100%;
-    flex: 1;
 }
 
 /* Remote Subtitle Results Styling */
@@ -591,9 +819,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-info {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: block;
     flex: 1;
     min-width: 0;
 }
@@ -607,9 +833,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    display: block;
 }
 
 .subtitle-result-meta .track-badge {
@@ -623,20 +847,23 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .track-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--jf-border-radius);
-    padding: 2px 6px;
+    padding: 4px 6px;
     font-size: 0.85rem;
     font-weight: 700;
     margin-left: 10px;
     color: var(--jf-text-primary);
     text-transform: uppercase;
     flex-shrink: 0;
-    line-height: 1;
+    line-height: normal;
+}
+
+.track-option-label .track-badge {
+    float: right;
 }
 
 /* Language Completeness Badge */
@@ -686,8 +913,8 @@ progress.card-progress::-webkit-progress-value {
 
 /* Modal variant compatibility */
 .modal-option-btn span {
-    display: flex;
-    align-items: center; /* Standardize vertical centering */
+    display: inline-block;
+    vertical-align: middle;
 }
 
 /* ==========================================================================

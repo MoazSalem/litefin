@@ -48,9 +48,10 @@
 }
 
 .settings-menu-btn {
-    display: flex;
-    align-items: center;
-    padding: 16px 24px;
+    display: block;
+    line-height: normal;
+    padding: 0 24px;
+    height: 60px;
     background: transparent;
     border: none;
     color: var(--jf-text-secondary);
@@ -64,16 +65,27 @@
     overflow: hidden;
     background-clip: padding-box;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
-    /* will-change on :focus only — ~8 sidebar buttons */
+}
+
+.settings-menu-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+.settings-menu-btn > * {
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .settings-menu-btn .menu-icon {
     margin-right: 16px;
     width: 28px;
     height: 28px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
 }
 
 .settings-menu-btn .menu-icon svg {

@@ -66,19 +66,22 @@
 
 /* Tabs (Chip Style) */
 .library-tabs {
-    display: flex;
+    display: block;
     overflow-x: auto;
     padding: 6px 0;
     margin-bottom: 6px;
-    justify-content: center;
+    text-align: center;
     scrollbar-width: none;
-    flex-wrap: wrap;
+    white-space: nowrap;
 }
 
 .tab-btn {
     margin: 0 10px 10px 10px;
     /* Spacing for Tizen */
-    padding: 12px 28px;
+    display: inline-block;
+    vertical-align: middle;
+    height: 52px;
+    padding: 0 28px;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -91,10 +94,17 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
+    line-height: normal;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    /* No will-change here — with 6+ tabs all getting a compositor layer upfront
-       it wastes VRAM on Tizen. Only the focused button needs promotion. */
 }
+
+.tab-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}    /* No will-change here — with 6+ tabs all getting a compositor layer upfront
+       it wastes VRAM on Tizen. Only the focused button needs promotion. */
 
 .tab-btn.active {
     background-color: var(--jf-accent);
@@ -146,19 +156,18 @@
 }
 
 .library-controls {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    justify-content: center;
+    display: block;
+    text-align: center;
 }
 
 .control-btn,
 .pagination-btn {
     margin: 5px 10px;
     /* Spacing for Tizen */
-    display: flex;
-    align-items: center;
-    padding: 12px 18px;
+    display: inline-block;
+    vertical-align: middle;
+    height: 52px;
+    padding: 0 18px;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -169,18 +178,29 @@
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
+    line-height: normal;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-    /* will-change applied only on :focus — see unified focus rule above */
 }
+
+.control-btn::before,
+.pagination-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+    /* will-change applied only on :focus — see unified focus rule above */
 
 .control-svg {
     width: 18px;
     height: 18px;
-    display: block;
-    /* Spacing logic handled by parent flex/margins */
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .control-btn-text {
+    display: inline-block;
+    vertical-align: middle;
     margin-left: 12px;
     margin-right: 12px;
 }

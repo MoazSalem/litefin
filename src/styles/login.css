@@ -21,16 +21,26 @@
 }
 
 .login-logo-container {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block; /* Removed flex */
+    text-align: center; /* Center inline-block children */
     margin-bottom: 8px;
+    font-size: 0; /* Collapse whitespace between logo and text */
+}
+
+/* Ghost element for logo centering */
+.login-logo-container::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 .login-logo-svg {
     width: 80px;
     height: 80px;
     margin-right: 20px;
+    display: inline-block;
+    vertical-align: middle;
 }
 
 .login-logo-svg path {
@@ -38,6 +48,8 @@
 }
 
 .login-logo {
+    display: inline-block;
+    vertical-align: middle;
     font-size: 5rem;
     font-weight: 300;
     color: #e0e0e0;
@@ -125,13 +137,12 @@
  */
 .login-actions .btn {
     padding: 16px 32px; /* Standardize padding */
-    font-size: 1.3rem;   /* Unified font size */
+    font-size: 0;   /* CRITICAL: Collapse whitespace gap */
     min-width: 250px;   /* Stronger min-width for TV readability */
     height: 70px;       /* FORCE exact same height */
     margin: 0 12px;     /* Unified spacing */
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: block; /* Removed flex */
+    text-align: center; /* Center horizontally inline content */
     border-radius: var(--jf-border-radius);
     box-sizing: border-box;
     /* Apple-style subtle shadows and simplified transparency for Tizen */
@@ -140,6 +151,22 @@
     color: var(--jf-text-primary);
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
+    white-space: nowrap;
+}
+
+/* Ghost element for vertical alignment in login buttons */
+.login-actions .btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+/* Restore font size for children */
+.login-actions .btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1.3rem; 
 }
 
 /* Reset .back-btn specific overrides when inside login-actions */
@@ -313,9 +340,8 @@ body.app-splash-active .loading-section .loading-spinner {
 }
 
 .user-item {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
+    display: block; /* Removed flex */
+    text-align: center; /* Center horizontally */
     width: 170px;
     margin: 20px; /* Traditional margin instead of gap */
 }
@@ -325,6 +351,7 @@ body.app-splash-active .loading-section .loading-spinner {
     width: 170px;
     height: 170px;
     background: var(--jf-surface);
+    display: inline-block; /* Respect text-align: center on parent */
     border: none;
     border-radius: var(--jf-border-radius); /* Slightly smaller radius for smaller card */
     cursor: pointer;
