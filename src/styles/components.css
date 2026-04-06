@@ -59,15 +59,14 @@
     border: 3px solid transparent;
     background-clip: padding-box;
     color: var(--jf-text-primary);
+    display: flex;
+    align-items: center;
     padding: 10px 20px;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
-    display: flex;
-    align-items: center;
 }
 
-
-.nav-btn>*:not(:last-child) {
+.nav-btn > *:not(:last-child) {
     margin-right: 8px;
 }
 
@@ -440,7 +439,9 @@ progress.card-progress::-webkit-progress-value {
     width: 600px;
     max-width: 90%;
     max-height: 80vh;
+    min-height: 180px; /* Lower minimum for short dialogs (e.g. Delete?) */
     animation: modal-fade-in 0.3s ease-out;
+    -webkit-animation: webkit-modal-fade-in 0.3s ease-out;
 }
 
 @keyframes modal-fade-in {
@@ -448,10 +449,16 @@ progress.card-progress::-webkit-progress-value {
     to { opacity: 1; transform: scale(1); }
 }
 
+@-webkit-keyframes webkit-modal-fade-in {
+    from { opacity: 0; -webkit-transform: scale(0.95); }
+    to { opacity: 1; -webkit-transform: scale(1); }
+}
+
 .settings-modal .modal-header {
-    padding: 10px 30px;
-    margin-bottom: 15px;
+    padding: 15px 30px; /* Balanced vertical breathing room */
+    margin-bottom: 0px;
     background: rgba(255, 255, 255, 0.02);
+    flex-shrink: 0; /* Never collapse header */
 }
 
 .settings-modal .modal-header h2 {
@@ -467,6 +474,9 @@ progress.card-progress::-webkit-progress-value {
     overflow-y: auto;
     display: flex;
     flex-direction: column;
+    flex: 0 1 auto;
+    max-height: calc(80vh - 150px);
+    min-height: 0;
 }
 
 .modal-option-btn {
@@ -486,18 +496,164 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-text-primary);
     text-align: left;
     cursor: pointer;
-    font-size: 1.2rem;
-    font-weight: 500;
     display: flex;
     justify-content: flex-start;
-    /* Left align for sort menu */
     align-items: center;
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    position: relative; /* Anchor for absolute positioned badge containers */
+    font-size: 1.25rem;
     flex-shrink: 0;
     /* Prevent shrinking/distortion on TV browsers */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
 }
 
+.modal-option-btn > * {
+    vertical-align: middle;
+}
+
+/* Radio Button Styling (Sort Modal) */
+.radio-icon {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 50%;
+    margin-right: 20px;
+    position: relative;
+    background-clip: padding-box;
+}
+
+.radio-btn.selected .radio-icon::after {
+    content: '';
+    position: absolute;
+    top: 4px;
+    left: 4px;
+    width: 12px;
+    height: 12px;
+    background: var(--jf-accent);
+    border-radius: 50%;
+}
+
+.modal-option-btn.focused .radio-icon {
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.modal-option-btn.focused.selected .radio-icon::after {
+    background: white;
+}
+
+/* Checkbox Styling (Filter Modal) */
+.checkbox-box {
+    width: 24px;
+    height: 24px;
+    border: 2px solid rgba(255, 255, 255, 0.4);
+    border-radius: 4px;
+    margin-right: 20px;
+    position: relative;
+    text-align: center;
+    background-clip: padding-box;
+}
+
+.checkbox-box .check-mark {
+    display: none;
+    line-height: 20px;
+    font-size: 18px;
+    color: var(--jf-accent);
+}
+
+.check-btn.selected .checkbox-box .check-mark {
+    display: block;
+}
+
+.modal-option-btn.focused .checkbox-box {
+    border-color: rgba(0, 0, 0, 0.3);
+}
+
+.modal-option-btn.focused .check-mark {
+    color: white !important;
+}
+
+/* Modal Option Label Scaling */
+.modal-option-btn span:first-of-type {
+    max-width: 80%; /* Leave room for icon/badge */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    line-height: 1.2;
+}
+
+/* Improved Badge Containers: Position the container once, let children flow side-by-side */
+.modal-option-btn .track-badges,
+.modal-option-btn .subtitle-track-meta,
+.track-option .track-badges {
+    position: absolute;
+    right: 30px;
+    top: 50%;
+    margin: 0;
+    transform: translateY(-50%);
+    -webkit-transform: translateY(-50%);
+    display: flex;
+    gap: 10px; /* Increased gap for better visual separation */
+    align-items: center;
+}
+
+
+/* Base Badge Styling: Clean, Apple-style pills with glassmorphism */
+.track-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 14px; /* Wider padding */
+    min-width: 54px; /* Ensure 0% and 100% have similar weight */
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 6px;
+    font-size: 0.85rem; /* Slightly smaller for the wider pill look */
+    font-weight: 700;
+    white-space: nowrap;
+    text-transform: uppercase;
+    color: var(--jf-text-primary);
+    transition: all 0.2s ease;
+    letter-spacing: 0.8px;
+    line-height: 1;
+}
+
+/* Status-specific translucent colors */
+.track-badge.badge-success {
+    background: rgba(46, 204, 113, 0.15);
+    border-color: rgba(46, 204, 113, 0.4);
+    color: #2ecc71;
+}
+
+.track-badge.badge-warning {
+    background: rgba(241, 196, 15, 0.15);
+    border-color: rgba(241, 196, 15, 0.4);
+    color: #f1c40f;
+}
+
+.track-badge.badge-danger {
+    background: rgba(231, 76, 60, 0.15);
+    border-color: rgba(231, 76, 60, 0.4);
+    color: #e74c3c;
+}
+
+/* Focused State: Invert colors slightly for maximum punch on teal background */
+.modal-option-btn.focused .track-badge {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff !important; /* Force white text on focused teal */
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+}
+
+.modal-option-btn.focused .track-badge.badge-success,
+.modal-option-btn.focused .track-badge.badge-warning,
+.modal-option-btn.focused .track-badge.badge-danger {
+    background: rgba(255, 255, 255, 0.2);
+    border-color: rgba(255, 255, 255, 0.5);
+    color: #fff !important;
+}
 
 
 .modal-option-btn.selected {
@@ -505,6 +661,7 @@ progress.card-progress::-webkit-progress-value {
     border-color: var(--jf-accent);
     color: var(--jf-text-primary);
 }
+
 
 .modal-option-btn:hover,
 .modal-option-btn:focus,
@@ -519,9 +676,8 @@ progress.card-progress::-webkit-progress-value {
 
 
 .modal-option-btn .check-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     width: 20px;
     height: 20px;
     margin-right: 1.2em; /* Spacing from text */
@@ -538,10 +694,67 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-primary-btn-color) !important;
 }
 
+/* Filter/Sort column layout: flex for modern/legacy, floats for ultra-legacy (Chrome 32) */
+.filter-split-container {
+    display: flex;
+    width: 100%;
+    height: 450px;
+}
+
+.filter-sidebar {
+    width: 30%;
+    height: 100%;
+    overflow-y: auto;
+    border-right: 1px solid rgba(255, 255, 255, 0.1);
+    box-sizing: border-box;
+}
+
+.filter-category-btn {
+    display: block;
+    width: 100%;
+    padding: 20px 24px;
+    text-align: left;
+    background: transparent;
+    border: none;
+    color: var(--jf-text-secondary);
+    font-size: 1.1rem;
+    font-weight: 500;
+    cursor: pointer;
+    border-left: 4px solid transparent;
+}
+
+.filter-category-btn.active {
+    color: var(--jf-accent);
+    border-left-color: var(--jf-accent);
+    background: rgba(var(--jf-accent-rgb), 0.1);
+}
+
+.filter-category-btn.focused,
+.filter-category-btn:focus {
+    background: var(--jf-accent);
+    color: white;
+    outline: none;
+}
+
+/* Sort Modal Column Stabilization */
+.sort-columns {
+    display: flex;
+    width: 100%;
+}
+
+.sort-column {
+    width: 50%;
+    padding: 0 20px;
+    box-sizing: border-box;
+}
+
 .modal-actions {
-    padding: 20px;
+    padding: 15px 20px;
     display: flex;
     justify-content: flex-end;
+    flex-shrink: 0;
+    background: rgba(0, 0, 0, 0.2);
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .modal-action-btn {
@@ -623,20 +836,23 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .track-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     background: rgba(255, 255, 255, 0.1);
     border: 1px solid rgba(255, 255, 255, 0.2);
     border-radius: var(--jf-border-radius);
-    padding: 2px 6px;
+    padding: 4px 6px;
     font-size: 0.85rem;
     font-weight: 700;
     margin-left: 10px;
     color: var(--jf-text-primary);
     text-transform: uppercase;
     flex-shrink: 0;
-    line-height: 1;
+    line-height: normal;
+}
+
+.track-option-label .track-badge {
+    float: right;
 }
 
 /* Language Completeness Badge */
@@ -687,7 +903,7 @@ progress.card-progress::-webkit-progress-value {
 /* Modal variant compatibility */
 .modal-option-btn span {
     display: flex;
-    align-items: center; /* Standardize vertical centering */
+    align-items: center;
 }
 
 /* ==========================================================================
@@ -970,13 +1186,15 @@ progress.card-progress::-webkit-progress-value {
     margin-bottom: 12px;
 }
 
-/* Fallback for Tizen 3/4 (Legacy browser) */
-html[data-layout-tier="legacy"] .media-info-grid {
+/* Fallback for Tizen 3/4 (Legacy browser) and ultra-legacy */
+html[data-layout-tier="legacy"] .media-info-grid,
+html[data-layout-tier="ultra-legacy"] .media-info-grid {
     display: flex;
     flex-wrap: wrap;
 }
 
-html[data-layout-tier="legacy"] .media-info-row {
+html[data-layout-tier="legacy"] .media-info-row,
+html[data-layout-tier="ultra-legacy"] .media-info-row {
     width: 45%;
     margin-right: 5%;
 }
@@ -1154,5 +1372,201 @@ html[data-layout-tier="legacy"] .media-info-row {
 
 /* Make sure the OSD overlays the iframe correctly */
 .trailer-osd {
-    z-index: 10; 
+    z-index: 10;
+}
+
+/* ============================================================================
+   Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x / WebOS 1.x)
+   ============================================================================
+   Chrome 32 has deeply broken flexbox support for many alignment scenarios,
+   and does not support display: flex with align-items on fixed-height elements.
+   These rules override the modern flex defaults above with the ghost-centering
+   technique (font-size:0 + ::before ghost + inline-block children) and the
+   float-based column layout for the filter/sort modals.
+   ============================================================================ */
+
+/* Nav Button: restore block + ghost centering */
+html[data-layout-tier="ultra-legacy"] .nav-btn {
+    display: inline-block;
+    vertical-align: middle;
+    height: 48px;
+    padding: 0 20px;
+    line-height: normal;
+    font-size: 0; /* Collapse whitespace between icon and text */
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1rem; /* Restore font size for children */
+    margin-right: 8px;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn > *:last-child {
+    margin-right: 0;
+}
+
+/* Nav Icon-Only: center SVG via ghost */
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    padding: 0;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Small Icon Button: center SVG via ghost */
+html[data-layout-tier="ultra-legacy"] .btn-icon-small {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    padding: 0;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon-small::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon-small svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Header Avatar Placeholder: center initials via ghost */
+html[data-layout-tier="ultra-legacy"] .header-avatar-placeholder {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-avatar-placeholder::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+/* Modal Options Scroll Container */
+html[data-layout-tier="ultra-legacy"] .settings-modal .modal-options {
+    display: block;
+}
+
+/* Modal Option Button: block + ghost centering */
+html[data-layout-tier="ultra-legacy"] .modal-option-btn {
+    display: block;
+    font-size: 0; /* Collapse whitespace */
+    line-height: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1.25rem; /* Restore after parent collapse */
+    white-space: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span:first-of-type {
+    white-space: nowrap;
+}
+
+/* Filter/Sort Columns: float-based layout */
+html[data-layout-tier="ultra-legacy"] .filter-split-container {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-sidebar {
+    float: left;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-main {
+    display: block;
+    float: left;
+    width: 70%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-split-container::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-columns {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-column {
+    display: block;
+    float: left;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-columns::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+/* Modal Actions Footer */
+html[data-layout-tier="ultra-legacy"] .modal-actions {
+    display: block;
+    text-align: right;
+}
+
+/* Track Option Labels */
+html[data-layout-tier="ultra-legacy"] .track-option-label {
+    display: block;
+    width: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-result-info {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
+    display: block;
 }

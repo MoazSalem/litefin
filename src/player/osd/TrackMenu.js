@@ -139,8 +139,10 @@ export default class TrackMenu extends BaseMenu {
                 const location = track.IsExternal ? 'EXT' : 'INT';
                 
                 metadataHtml = `
-                    <span class="track-badge">${type}</span>
-                    <span class="track-badge">${location}</span>
+                    <span class="track-badges">
+                        <span class="track-badge">${type}</span>
+                        <span class="track-badge">${location}</span>
+                    </span>
                 `;
             }
 

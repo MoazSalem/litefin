@@ -506,12 +506,16 @@ class Sidebar extends Component {
 
             if (forceInstant) {
                 // Force an instant snap
+                indicator.style.webkitTransition = 'none';
                 indicator.style.transition = 'none';
+                indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
                 indicator.offsetHeight;
+                indicator.style.webkitTransition = '';
                 indicator.style.transition = '';
             } else {
+                indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
             }
 

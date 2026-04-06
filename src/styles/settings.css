@@ -82,6 +82,35 @@
     stroke-width: 2px;
 }
 
+/*
+ * ── Ultra-Legacy Overrides: Settings menu-btn (Chrome <47 / Tizen 2.x) ──────
+ */
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn {
+    display: block;
+    line-height: normal;
+    padding: 0 24px;
+    height: 60px;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+}
+
+
 .settings-menu-btn.active {
     /* Inverted Mode (White BG, Blue Text) */
     background: var(--jf-primary-btn-color, #ffffff);
@@ -477,15 +506,18 @@
 }
 
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid is unavailable.
  * Replicate the 2-column identity grid using flex-wrap with calc widths.
+ * Ultra-legacy (Chrome <47) inherits this too.
  */
-html[data-layout-tier="legacy"] .identity-grid {
+html[data-layout-tier="legacy"] .identity-grid,
+html[data-layout-tier="ultra-legacy"] .identity-grid {
     display: flex;
     flex-wrap: wrap;
 }
 
-html[data-layout-tier="legacy"] .identity-grid .identity-item {
+html[data-layout-tier="legacy"] .identity-grid .identity-item,
+html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item {
     /* Two items per row with a 30px gap between them */
     width: calc(50% - 15px);
     margin-right: 30px;
@@ -493,7 +525,8 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item {
 }
 
 /* Remove right margin from every second item (even columns) */
-html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
+html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even),
+html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(even) {
     margin-right: 0;
 }
 
@@ -564,6 +597,18 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     transform: scale(1.05);
     will-change: transform;
 }
+
+/* ==========================================================================
+   Ultra-Legacy Toggle Fixed Handling
+   ========================================================================== */
+
+html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
+    /* Bug: 'transform: translateX' is often ignored or buggy on ancient engines */
+    left: 29px; 
+    transform: none;
+    -webkit-transform: none;
+}
+
 
 /* ==========================================================================
    Settings Modal (Popup) - Adapted from Library
@@ -942,19 +987,36 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     pointer-events: none;
 }
 
-/* Legacy layout support (Tizen 3.0/4.0) */
-html[data-layout-tier="legacy"] .theme-color-grid {
+/* Legacy / ultra-legacy layout support (Tizen 3.0/4.0 and Tizen 2.x) */
+html[data-layout-tier="legacy"] .theme-color-grid,
+html[data-layout-tier="ultra-legacy"] .theme-color-grid {
     display: block;
     text-align: right;
     /* Eliminate whitespace gaps between inline-block items from the JS template */
     font-size: 0;
-    /* 10 items * (38px + 10px margin) = 480px. 
+    /* 10 items * (38px + 10px margin) = 480px.
        500px provides a safe buffer for scaling/sub-pixel issues while still forcing 11th items to wrap. */
     max-width: 500px;
     margin-left: auto;
 }
 
-html[data-layout-tier="legacy"] .color-option {
+/* ==========================================================================
+   Ultra-Legacy Theme Color Center Fix
+   ========================================================================== */
+
+html[data-layout-tier="ultra-legacy"] .color-option.active::after {
+    /* Bug: 'transform: translate(-50%, -50%)' is unreliable on ancient engines */
+    top: 50%;
+    left: 50%;
+    margin-top: -6px; /* Dot is 12px wide/high */
+    margin-left: -6px;
+    transform: none;
+    -webkit-transform: none;
+}
+
+
+html[data-layout-tier="legacy"] .color-option,
+html[data-layout-tier="ultra-legacy"] .color-option {
     display: inline-block;
     vertical-align: top;
     margin: 5px;

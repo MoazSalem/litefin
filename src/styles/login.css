@@ -53,6 +53,35 @@
     letter-spacing: 0.5px;
 }
 
+/*
+ * ── Ultra-Legacy Overrides: Login logo (Chrome <47 / Tizen 2.x) ────────────
+ */
+html[data-layout-tier="ultra-legacy"] .login-logo-container {
+    display: block;
+    text-align: center;
+    font-size: 0; /* Collapse whitespace between logo and text */
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo-container::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo-svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 5rem; /* Restore after parent font-size: 0 */
+}
+
+
+
 .server-section {
     max-width: 600px;
     margin: 0 auto;
@@ -125,7 +154,7 @@
  */
 .login-actions .btn {
     padding: 16px 32px; /* Standardize padding */
-    font-size: 1.3rem;   /* Unified font size */
+    font-size: 1.3rem;
     min-width: 250px;   /* Stronger min-width for TV readability */
     height: 70px;       /* FORCE exact same height */
     margin: 0 12px;     /* Unified spacing */
@@ -140,6 +169,30 @@
     color: var(--jf-text-primary);
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
+}
+
+/*
+ * ── Ultra-Legacy Overrides: Login buttons (Chrome <47 / Tizen 2.x) ──────────
+ */
+html[data-layout-tier="ultra-legacy"] .login-actions .btn {
+    display: block;
+    text-align: center;
+    font-size: 0; /* Collapse whitespace between inline-blocks */
+    white-space: nowrap;
+    line-height: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-actions .btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-actions .btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1.3rem;
 }
 
 /* Reset .back-btn specific overrides when inside login-actions */
@@ -177,7 +230,10 @@ body.app-splash-active .loading-section .loading-spinner {
 
 .login-section:not(.hidden) {
     animation: fadeInSection 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    -webkit-animation: webkit-fadeInSection 0.3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     will-change: opacity, transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 @keyframes fadeInSection {
@@ -188,6 +244,17 @@ body.app-splash-active .loading-section .loading-spinner {
     to {
         opacity: 1;
         transform: scale(1) translateY(0);
+    }
+}
+
+@-webkit-keyframes webkit-fadeInSection {
+    from {
+        opacity: 0;
+        -webkit-transform: scale(0.98) translateY(10px);
+    }
+    to {
+        opacity: 1;
+        -webkit-transform: scale(1) translateY(0);
     }
 }
 
@@ -317,7 +384,7 @@ body.app-splash-active .loading-section .loading-spinner {
     flex-direction: column;
     align-items: center;
     width: 170px;
-    margin: 20px; /* Traditional margin instead of gap */
+    margin: 20px;
 }
 
 .user-card {
@@ -325,6 +392,7 @@ body.app-splash-active .loading-section .loading-spinner {
     width: 170px;
     height: 170px;
     background: var(--jf-surface);
+    display: inline-block; /* Respect text-align: center on parent */
     border: none;
     border-radius: var(--jf-border-radius); /* Slightly smaller radius for smaller card */
     cursor: pointer;
@@ -338,6 +406,19 @@ body.app-splash-active .loading-section .loading-spinner {
     
     will-change: transform;
 }
+
+/*
+ * ── Ultra-Legacy Overrides: User item (Chrome <47 / Tizen 2.x) ────────────
+ */
+html[data-layout-tier="ultra-legacy"] .user-item {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .user-card {
+    display: inline-block; /* Respect text-align: center */
+}
+
 
 /* Focus indicator as overlay to prevent layout shift and image clipping bugs */
 .user-card::after {
@@ -528,9 +609,15 @@ body.app-splash-active .loading-section .loading-spinner {
     font-size: 1.1rem;
     margin-bottom: 40px;
     animation: qc-pulse 2.5s ease-in-out infinite;
+    -webkit-animation: webkit-qc-pulse 2.5s ease-in-out infinite;
 }
 
 @keyframes qc-pulse {
+    0%, 100% { opacity: 0.5; }
+    50%       { opacity: 1;   }
+}
+
+@-webkit-keyframes webkit-qc-pulse {
     0%, 100% { opacity: 0.5; }
     50%       { opacity: 1;   }
 }

@@ -31,6 +31,17 @@
     --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
     --jf-action-btn-active-color: #101010;
 
+    /* Global Text Fallbacks (Crucial for ultra-legacy ponyfill stability) */
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: #999999;
+    --jf-text-tertiary: #666666;
+
+    /* Legacy Aliases (Compatibility for untracked CSS files) */
+    --text-primary: var(--jf-text-primary);
+    --text-secondary: var(--jf-text-secondary);
+    --text-muted: var(--jf-text-secondary); /* Standardize muted to secondary */
+    --text-tertiary: var(--jf-text-tertiary);
+
     /* Global Rounded Corner Defaults (Setting-controlled) */
     --jf-border-radius: 4px;
     --jf-border-radius-lg: 4px;
@@ -212,16 +223,20 @@ body.app-splash-active .page-loading .loading-spinner {
             rgba(255, 255, 255, 0.04) 50%,
             rgba(255, 255, 255, 0) 100%);
     animation: shimmer-gpu 1.5s infinite linear;
+    -webkit-animation: webkit-shimmer-gpu 1.5s infinite linear;
     will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 @keyframes shimmer-gpu {
-    from {
-        transform: translateX(-100%);
-    }
-    to {
-        transform: translateX(100%);
-    }
+    from { transform: translateX(-100%); }
+    to { transform: translateX(100%); }
+}
+
+@-webkit-keyframes webkit-shimmer-gpu {
+    from { -webkit-transform: translateX(-100%); }
+    to { -webkit-transform: translateX(100%); }
 }
 
 .loading-spinner {
@@ -236,13 +251,32 @@ body.app-splash-active .page-loading .loading-spinner {
     color: #FFF;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
+    -webkit-animation: webkit-rotation 1s linear infinite;
     /* TIZEN PERF: Promote to its own compositor layer */
     will-change: transform;
     transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+}
+
+/* Small variant for discovery and inline loaders */
+.loading-spinner-small {
+    width: 24px;
+    height: 24px;
+    display: inline-block;
+    vertical-align: middle;
+    position: relative;
+    color: #FFF;
+    box-sizing: border-box;
+    animation: rotation 1s linear infinite;
+    -webkit-animation: webkit-rotation 1s linear infinite;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
 .loading-spinner::after,
-.loading-spinner::before {
+.loading-spinner::before,
+.loading-spinner-small::after,
+.loading-spinner-small::before {
     content: '';
     box-sizing: border-box;
     position: absolute;
@@ -253,10 +287,20 @@ body.app-splash-active .page-loading .loading-spinner {
     border-radius: 50%;
     background-color: #FFF;
     animation: animloader-gpu 1s infinite ease-in-out;
+    -webkit-animation: webkit-animloader-gpu 1s infinite ease-in-out;
     will-change: transform;
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
 }
 
-.loading-spinner::before {
+.loading-spinner-small::after,
+.loading-spinner-small::before {
+    width: 12px;
+    height: 12px;
+}
+
+.loading-spinner::before,
+.loading-spinner-small::before {
     background-color: var(--jf-accent);
     left: auto;
     right: 0;
@@ -265,31 +309,34 @@ body.app-splash-active .page-loading .loading-spinner {
 }
 
 @keyframes rotation {
-    0% {
-        transform: translateZ(0) rotate(0deg);
-    }
-    100% {
-        transform: translateZ(0) rotate(360deg);
-    }
+    0% { transform: translateZ(0) rotate(0deg); }
+    100% { transform: translateZ(0) rotate(360deg); }
+}
+
+@-webkit-keyframes webkit-rotation {
+    0% { -webkit-transform: translateZ(0) rotate(0deg); }
+    100% { -webkit-transform: translateZ(0) rotate(360deg); }
 }
 
 @keyframes animloader-gpu {
-    0%, 100% {
-        transform: translateZ(0) scale(0.5);
-    }
-    50% {
-        transform: translateZ(0) scale(1);
-    }
+    0%, 100% { transform: translateZ(0) scale(0.5); }
+    50% { transform: translateZ(0) scale(1); }
+}
+
+@-webkit-keyframes webkit-animloader-gpu {
+    0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
+    50% { -webkit-transform: translateZ(0) scale(1); }
 }
 
 /* Base Animations */
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-    }
-    to {
-        opacity: 1;
-    }
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@-webkit-keyframes webkit-fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
 }
 
 
