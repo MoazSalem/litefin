@@ -48,10 +48,9 @@
 }
 
 .settings-menu-btn {
-    display: block;
-    line-height: normal;
-    padding: 0 24px;
-    height: 60px;
+    display: flex;
+    align-items: center;
+    padding: 16px 24px;
     background: transparent;
     border: none;
     color: var(--jf-text-secondary);
@@ -65,27 +64,16 @@
     overflow: hidden;
     background-clip: padding-box;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
-}
-
-.settings-menu-btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.settings-menu-btn > * {
-    display: inline-block;
-    vertical-align: middle;
+    /* will-change on :focus only — ~8 sidebar buttons */
 }
 
 .settings-menu-btn .menu-icon {
     margin-right: 16px;
     width: 28px;
     height: 28px;
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .settings-menu-btn .menu-icon svg {
@@ -93,6 +81,35 @@
     height: 100%;
     stroke-width: 2px;
 }
+
+/*
+ * ── Ultra-Legacy Overrides: Settings menu-btn (Chrome <47 / Tizen 2.x) ──────
+ */
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn {
+    display: block;
+    line-height: normal;
+    padding: 0 24px;
+    height: 60px;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+}
+
 
 .settings-menu-btn.active {
     /* Inverted Mode (White BG, Blue Text) */
@@ -489,15 +506,18 @@
 }
 
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid is unavailable.
  * Replicate the 2-column identity grid using flex-wrap with calc widths.
+ * Ultra-legacy (Chrome <47) inherits this too.
  */
-html[data-layout-tier="legacy"] .identity-grid {
+html[data-layout-tier="legacy"] .identity-grid,
+html[data-layout-tier="ultra-legacy"] .identity-grid {
     display: flex;
     flex-wrap: wrap;
 }
 
-html[data-layout-tier="legacy"] .identity-grid .identity-item {
+html[data-layout-tier="legacy"] .identity-grid .identity-item,
+html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item {
     /* Two items per row with a 30px gap between them */
     width: calc(50% - 15px);
     margin-right: 30px;
@@ -505,7 +525,8 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item {
 }
 
 /* Remove right margin from every second item (even columns) */
-html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
+html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even),
+html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(even) {
     margin-right: 0;
 }
 
@@ -954,19 +975,21 @@ html[data-layout-tier="legacy"] .identity-grid .identity-item:nth-child(even) {
     pointer-events: none;
 }
 
-/* Legacy layout support (Tizen 3.0/4.0) */
-html[data-layout-tier="legacy"] .theme-color-grid {
+/* Legacy / ultra-legacy layout support (Tizen 3.0/4.0 and Tizen 2.x) */
+html[data-layout-tier="legacy"] .theme-color-grid,
+html[data-layout-tier="ultra-legacy"] .theme-color-grid {
     display: block;
     text-align: right;
     /* Eliminate whitespace gaps between inline-block items from the JS template */
     font-size: 0;
-    /* 10 items * (38px + 10px margin) = 480px. 
+    /* 10 items * (38px + 10px margin) = 480px.
        500px provides a safe buffer for scaling/sub-pixel issues while still forcing 11th items to wrap. */
     max-width: 500px;
     margin-left: auto;
 }
 
-html[data-layout-tier="legacy"] .color-option {
+html[data-layout-tier="legacy"] .color-option,
+html[data-layout-tier="ultra-legacy"] .color-option {
     display: inline-block;
     vertical-align: top;
     margin: 5px;

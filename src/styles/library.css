@@ -66,22 +66,21 @@
 
 /* Tabs (Chip Style) */
 .library-tabs {
-    display: block;
+    display: flex;
     overflow-x: auto;
     padding: 6px 0;
     margin-bottom: 6px;
-    text-align: center;
+    justify-content: center;
     scrollbar-width: none;
-    white-space: nowrap;
+    flex-wrap: wrap;
 }
 
 .tab-btn {
     margin: 0 10px 10px 10px;
     /* Spacing for Tizen */
-    display: inline-block;
-    vertical-align: middle;
-    height: 52px;
-    padding: 0 28px;
+    display: flex;
+    align-items: center;
+    padding: 12px 28px;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -94,17 +93,10 @@
     font-weight: 600;
     cursor: pointer;
     white-space: nowrap;
-    line-height: normal;
+    /* No will-change here — with 6+ tabs all getting a compositor layer upfront
+       it wastes VRAM on Tizen. Only the focused button needs promotion. */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
-
-.tab-btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}    /* No will-change here — with 6+ tabs all getting a compositor layer upfront
-       it wastes VRAM on Tizen. Only the focused button needs promotion. */
 
 .tab-btn.active {
     background-color: var(--jf-accent);
@@ -156,18 +148,19 @@
 }
 
 .library-controls {
-    display: block;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
 }
 
 .control-btn,
 .pagination-btn {
     margin: 5px 10px;
     /* Spacing for Tizen */
-    display: inline-block;
-    vertical-align: middle;
-    height: 52px;
-    padding: 0 18px;
+    display: flex;
+    align-items: center;
+    padding: 12px 18px;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
@@ -178,29 +171,18 @@
     font-size: 18px;
     font-weight: 600;
     cursor: pointer;
-    line-height: normal;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
-}
-
-.control-btn::before,
-.pagination-btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
     /* will-change applied only on :focus — see unified focus rule above */
+}
 
 .control-svg {
     width: 18px;
     height: 18px;
-    display: inline-block;
-    vertical-align: middle;
+    display: block;
+    /* Spacing logic handled by parent flex/margins */
 }
 
 .control-btn-text {
-    display: inline-block;
-    vertical-align: middle;
     margin-left: 12px;
     margin-right: 12px;
 }
@@ -220,6 +202,65 @@
     margin-right: 15px;
     /* Spacing before buttons */
 }
+
+/*
+ * ── Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x) ────────────────────────
+ * Chrome 32 has broken flex alignment in many contexts.
+ * Replace flex with inline-block + ghost ::before centering.
+ */
+html[data-layout-tier="ultra-legacy"] .library-tabs {
+    display: block;
+    text-align: center;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .tab-btn {
+    display: inline-block;
+    vertical-align: middle;
+    height: 52px;
+    padding: 0 28px;
+    line-height: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .tab-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .library-controls {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-btn,
+html[data-layout-tier="ultra-legacy"] .pagination-btn {
+    display: inline-block;
+    vertical-align: middle;
+    height: 52px;
+    padding: 0 18px;
+    line-height: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-btn::before,
+html[data-layout-tier="ultra-legacy"] .pagination-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-btn-text {
+    display: inline-block;
+    vertical-align: middle;
+}
+
 
 /* --- Main Grid Content --- */
 
@@ -809,22 +850,27 @@
 }
 
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid was unavailable.
- * Since we now use flexbox as the base, these overrides reduce to no-ops.
- * Kept for safety in case any stale HTML references .landscape width rules.
+ * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid was unavailable.
+ * Since we use flexbox as the base, these overrides set explicit widths so
+ * the flex-wrap grid behaves like a correct n-column layout.
+ * Ultra-legacy (Chrome <47) inherits these same overrides.
  */
-html[data-layout-tier="legacy"] .library-grid .media-card {
+html[data-layout-tier="legacy"] .library-grid .media-card,
+html[data-layout-tier="ultra-legacy"] .library-grid .media-card {
     /* (100% - 4 gaps * 30px) / 5 ≈ calc(20% - 24px) — perfectly hits 5 items per row */
     width: calc(20% - 24px);
 }
 
-html[data-layout-tier="legacy"] .library-grid.view-thumb .media-card {
+html[data-layout-tier="legacy"] .library-grid.view-thumb .media-card,
+html[data-layout-tier="ultra-legacy"] .library-grid.view-thumb .media-card {
     /* 5 thumb cards per row on legacy devices */
     width: calc(20% - 16px);
 }
 
 html[data-layout-tier="legacy"] .library-grid.view-banner .media-card,
-html[data-layout-tier="legacy"] .library-grid.view-list .media-card {
+html[data-layout-tier="legacy"] .library-grid.view-list .media-card,
+html[data-layout-tier="ultra-legacy"] .library-grid.view-banner .media-card,
+html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     /* Full width strips work identically on legacy */
     width: 100%;
 }
@@ -1169,17 +1215,21 @@ html[data-layout-tier="legacy"] .library-grid.view-list .media-card {
 }
 
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid is unavailable.
  * filter-main is the filter modal's checkbox grid. Use flex-wrap with
  * fixed ~220px widths to match the auto-fill column intent.
+ * Ultra-legacy (Chrome <47) inherits this and also gets the float-based
+ * layout override in components.css that replaces even flex with floats.
  */
-html[data-layout-tier="legacy"] .filter-main {
+html[data-layout-tier="legacy"] .filter-main,
+html[data-layout-tier="ultra-legacy"] .filter-main {
     display: flex;
     flex-wrap: wrap;
     align-content: flex-start;
 }
 
-html[data-layout-tier="legacy"] .filter-main > * {
+html[data-layout-tier="legacy"] .filter-main > *,
+html[data-layout-tier="ultra-legacy"] .filter-main > * {
     /* Match the minmax target at typical 1080p widths */
     width: 220px;
     margin-right: 20px;
@@ -1430,12 +1480,14 @@ html[data-layout-tier="legacy"] .filter-main > * {
     flex-direction: column;
 }
 
-/* --- Legacy Tier Stacking Fix --- */
-html[data-layout-tier="legacy"] .library-rows-container {
+/* --- Legacy / Ultra-Legacy Tier Stacking Fix --- */
+html[data-layout-tier="legacy"] .library-rows-container,
+html[data-layout-tier="ultra-legacy"] .library-rows-container {
     display: block !important;
 }
 
-html[data-layout-tier="legacy"] .library-row {
+html[data-layout-tier="legacy"] .library-row,
+html[data-layout-tier="ultra-legacy"] .library-row {
     display: block !important;
     width: 100% !important;
 }

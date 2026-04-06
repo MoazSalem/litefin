@@ -290,32 +290,15 @@
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    display: block; /* Removed flex */
-    text-align: center; /* Center horizontally inline-block children */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     padding: 0 32px;
-    font-size: 0; /* CRITICAL: Collapse HTML whitespace between inline-blocks */
+    font-size: 1.5rem;
     font-weight: 600;
-    line-height: normal;
-    white-space: nowrap; /* Prevent internal wrapping */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     border: 3px solid transparent;
     background-clip: padding-box;
-}
-
-/* Ghost element for vertical alignment in Detail buttons */
-.details-actions .btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-    width: 0; /* Ensure zero width */
-}
-
-/* Ensure children participate in ghost alignment */
-.details-actions .btn > * {
-    display: inline-block;
-    vertical-align: middle;
-    font-size: 1.5rem; /* Restore font size for text */
 }
 
 
@@ -373,20 +356,41 @@
     background: var(--jf-action-btn-bg);
     border: 2px solid var(--jf-action-btn-border) !important;
     color: var(--jf-action-btn-color);
-    display: block; /* Removed flex */
-    text-align: center; /* Center horizontally */
-    font-size: 0; /* CRITICAL: Collapse whitespace gaps */
-    line-height: normal;
-    white-space: nowrap;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     overflow: hidden;
     background-clip: padding-box;
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-/* Ghost element for icon buttons */
-.btn-icon::before,
-.details-actions .btn-icon::before {
+.btn-icon svg,
+.details-actions .btn-icon svg {
+    width: 28px;
+    height: 28px;
+    min-width: 28px;
+    min-height: 28px;
+    flex-shrink: 0;
+    stroke-width: 2.5;
+    margin: 0;
+}
+
+/*
+ * ── Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x) ────────────────────────
+ * Chrome 32 can't reliably center content in flex containers.
+ * Use ghost element (::before) + inline-block technique instead.
+ */
+html[data-layout-tier="ultra-legacy"] .details-actions .btn {
+    display: block;
+    text-align: center;
+    padding: 0 32px;
+    font-size: 0; /* Collapse whitespace between inline-blocks */
+    line-height: normal;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .details-actions .btn::before {
     content: '';
     display: inline-block;
     height: 100%;
@@ -394,18 +398,36 @@
     width: 0;
 }
 
-.btn-icon svg,
-.details-actions .btn-icon svg {
-    display: inline-block; /* Removed flex from child */
+html[data-layout-tier="ultra-legacy"] .details-actions .btn > * {
+    display: inline-block;
     vertical-align: middle;
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    flex-shrink: 0;
-    stroke-width: 2.5;
-    /* Remove any implicit margins */
-    margin: 0; 
+    font-size: 1.5rem;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon,
+html[data-layout-tier="ultra-legacy"] .person-actions-row .btn-icon {
+    display: block;
+    text-align: center;
+    font-size: 0;
+    line-height: normal;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon::before,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+    width: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon svg,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0;
 }
 
 /* Active State (Heart Filled / Checked) */

@@ -21,26 +21,16 @@
 }
 
 .login-logo-container {
-    display: block; /* Removed flex */
-    text-align: center; /* Center inline-block children */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     margin-bottom: 8px;
-    font-size: 0; /* Collapse whitespace between logo and text */
-}
-
-/* Ghost element for logo centering */
-.login-logo-container::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
 }
 
 .login-logo-svg {
     width: 80px;
     height: 80px;
     margin-right: 20px;
-    display: inline-block;
-    vertical-align: middle;
 }
 
 .login-logo-svg path {
@@ -48,8 +38,6 @@
 }
 
 .login-logo {
-    display: inline-block;
-    vertical-align: middle;
     font-size: 5rem;
     font-weight: 300;
     color: #e0e0e0;
@@ -64,6 +52,35 @@
     font-weight: 400;
     letter-spacing: 0.5px;
 }
+
+/*
+ * ── Ultra-Legacy Overrides: Login logo (Chrome <47 / Tizen 2.x) ────────────
+ */
+html[data-layout-tier="ultra-legacy"] .login-logo-container {
+    display: block;
+    text-align: center;
+    font-size: 0; /* Collapse whitespace between logo and text */
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo-container::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo-svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-logo {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 5rem; /* Restore after parent font-size: 0 */
+}
+
+
 
 .server-section {
     max-width: 600px;
@@ -137,12 +154,13 @@
  */
 .login-actions .btn {
     padding: 16px 32px; /* Standardize padding */
-    font-size: 0;   /* CRITICAL: Collapse whitespace gap */
+    font-size: 1.3rem;
     min-width: 250px;   /* Stronger min-width for TV readability */
     height: 70px;       /* FORCE exact same height */
     margin: 0 12px;     /* Unified spacing */
-    display: block; /* Removed flex */
-    text-align: center; /* Center horizontally inline content */
+    display: flex;
+    align-items: center;
+    justify-content: center;
     border-radius: var(--jf-border-radius);
     box-sizing: border-box;
     /* Apple-style subtle shadows and simplified transparency for Tizen */
@@ -151,22 +169,30 @@
     color: var(--jf-text-primary);
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
-    white-space: nowrap;
 }
 
-/* Ghost element for vertical alignment in login buttons */
-.login-actions .btn::before {
+/*
+ * ── Ultra-Legacy Overrides: Login buttons (Chrome <47 / Tizen 2.x) ──────────
+ */
+html[data-layout-tier="ultra-legacy"] .login-actions .btn {
+    display: block;
+    text-align: center;
+    font-size: 0; /* Collapse whitespace between inline-blocks */
+    white-space: nowrap;
+    line-height: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .login-actions .btn::before {
     content: '';
     display: inline-block;
     height: 100%;
     vertical-align: middle;
 }
 
-/* Restore font size for children */
-.login-actions .btn > * {
+html[data-layout-tier="ultra-legacy"] .login-actions .btn > * {
     display: inline-block;
     vertical-align: middle;
-    font-size: 1.3rem; 
+    font-size: 1.3rem;
 }
 
 /* Reset .back-btn specific overrides when inside login-actions */
@@ -354,10 +380,11 @@ body.app-splash-active .loading-section .loading-spinner {
 }
 
 .user-item {
-    display: block; /* Removed flex */
-    text-align: center; /* Center horizontally */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
     width: 170px;
-    margin: 20px; /* Traditional margin instead of gap */
+    margin: 20px;
 }
 
 .user-card {
@@ -379,6 +406,19 @@ body.app-splash-active .loading-section .loading-spinner {
     
     will-change: transform;
 }
+
+/*
+ * ── Ultra-Legacy Overrides: User item (Chrome <47 / Tizen 2.x) ────────────
+ */
+html[data-layout-tier="ultra-legacy"] .user-item {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .user-card {
+    display: inline-block; /* Respect text-align: center */
+}
+
 
 /* Focus indicator as overlay to prevent layout shift and image clipping bugs */
 .user-card::after {

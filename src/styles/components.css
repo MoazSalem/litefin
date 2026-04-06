@@ -59,30 +59,15 @@
     border: 3px solid transparent;
     background-clip: padding-box;
     color: var(--jf-text-primary);
-    display: inline-block;
-    vertical-align: middle;
-    height: 48px;
-    line-height: normal;
-    padding: 0 20px;
+    display: flex;
+    align-items: center;
+    padding: 10px 20px;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
 }
 
-.nav-btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.nav-btn > * {
-    display: inline-block;
-    vertical-align: middle;
+.nav-btn > *:not(:last-child) {
     margin-right: 8px;
-}
-
-.nav-btn > *:last-child {
-    margin-right: 0;
 }
 
 .nav-btn:focus,
@@ -95,26 +80,14 @@
 
 .nav-btn.icon-only {
     background: transparent;
-    padding: 0;
+    padding: 8px;
     width: 48px;
     height: 48px;
     border-radius: 50%;
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     color: var(--jf-text-primary);
-}
-
-.nav-btn.icon-only::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.nav-btn.icon-only svg {
-    display: inline-block;
-    vertical-align: middle;
 }
 
 .nav-btn.icon-only:focus,
@@ -150,25 +123,13 @@
     color: var(--jf-text-secondary);
     font-size: 1.2rem;
     cursor: pointer;
-    padding: 0;
+    padding: 4px;
     border-radius: 50%;
     width: 32px;
     height: 32px;
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
-}
-
-.btn-icon-small::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.btn-icon-small svg {
-    display: inline-block;
-    vertical-align: middle;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .btn-icon-small:focus,
@@ -228,18 +189,11 @@
     border-radius: 50%;
     background: var(--jf-accent);
     color: white;
-    display: inline-block;
-    vertical-align: middle;
-    text-align: center;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     font-size: 1rem;
     font-weight: 600;
-}
-
-.header-avatar-placeholder::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
 }
 
 /* Loaders */
@@ -518,10 +472,11 @@ progress.card-progress::-webkit-progress-value {
 .settings-modal .modal-options {
     padding: 20px;
     overflow-y: auto;
-    display: block;
-    flex: 0 1 auto; /* Grow to content height, then scroll */
-    max-height: calc(80vh - 150px); /* Stability: stop growing before footer overlap */
-    min-height: 0; /* Fix flex-child overflow bug in older WebKit */
+    display: flex;
+    flex-direction: column;
+    flex: 0 1 auto;
+    max-height: calc(80vh - 150px);
+    min-height: 0;
 }
 
 .modal-option-btn {
@@ -541,33 +496,22 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-text-primary);
     text-align: left;
     cursor: pointer;
-    display: block;
-    width: 100%; /* Force full width on legacy Chromium */
+    display: flex;
+    justify-content: flex-start;
+    align-items: center;
+    width: 100%;
     box-sizing: border-box;
     -webkit-box-sizing: border-box;
-    position: relative; /* Anchor for absolute positioned items like badges */
-    font-size: 0; /* Collapse HTML whitespace for pixel-perfect Ghost Centering */
-    line-height: normal;
-    white-space: nowrap; /* CRITICAL: Prevent wrapping which hides text on legacy engines */
-    text-overflow: ellipsis;
+    position: relative; /* Anchor for absolute positioned badge containers */
+    font-size: 1.25rem;
     flex-shrink: 0;
     /* Prevent shrinking/distortion on TV browsers */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
 }
 
-.modal-option-btn::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
 .modal-option-btn > * {
-    display: inline-block;
     vertical-align: middle;
-    font-size: 1.25rem; /* Restore font size after parent collapse */
-    white-space: normal; /* Allow internal wrapping if truly needed, though container prevents it */
 }
 
 /* Radio Button Styling (Sort Modal) */
@@ -636,9 +580,7 @@ progress.card-progress::-webkit-progress-value {
     max-width: 80%; /* Leave room for icon/badge */
     overflow: hidden;
     text-overflow: ellipsis;
-    display: inline-block;
-    vertical-align: middle;
-    white-space: normal; /* Allow internal wrapping (e.g. American English) */
+    white-space: nowrap;
     line-height: 1.2;
 }
 
@@ -752,66 +694,19 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-primary-btn-color) !important;
 }
 
-/* Filter Modal Split View Stabilization (Chromium 32) */
-.filter-modal.split-view {
-    width: 900px;
-    max-width: 90vw;
-}
-
-/* Base modal container style for library views */
-.library-modal {
-    background: var(--jf-background-alt, #1a1a1a);
-    border: 3px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
-    border-radius: var(--jf-border-radius-lg);
-    -webkit-border-radius: var(--jf-border-radius-lg);
-    padding: 20px 0;
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.82);
-    position: relative;
-    overflow: hidden;
-    color: var(--jf-text-primary);
-}
-
-.modal-title {
-    margin: 0;
-    padding: 20px 40px;
-    font-size: 1.8rem;
-    font-weight: 700;
-}
-
+/* Filter/Sort column layout: flex for modern/legacy, floats for ultra-legacy (Chrome 32) */
 .filter-split-container {
-    display: block;
+    display: flex;
     width: 100%;
-    height: 450px; /* Fixed height for modal stability */
+    height: 450px;
 }
 
-/* Sidebar and Main columns using legacy layout */
 .filter-sidebar {
-    display: block;
-    float: left;
     width: 30%;
     height: 100%;
     overflow-y: auto;
     border-right: 1px solid rgba(255, 255, 255, 0.1);
-    -webkit-box-sizing: border-box;
     box-sizing: border-box;
-}
-
-.filter-main {
-    display: block;
-    float: left;
-    width: 70%;
-    height: 100%;
-    overflow-y: auto;
-    padding: 0 20px;
-    -webkit-box-sizing: border-box;
-    box-sizing: border-box;
-}
-
-/* Ensure clear after floats */
-.filter-split-container::after {
-    content: '';
-    display: block;
-    clear: both;
 }
 
 .filter-category-btn {
@@ -843,32 +738,23 @@ progress.card-progress::-webkit-progress-value {
 
 /* Sort Modal Column Stabilization */
 .sort-columns {
-    display: block;
+    display: flex;
     width: 100%;
 }
 
 .sort-column {
-    display: block;
-    float: left;
     width: 50%;
     padding: 0 20px;
-    -webkit-box-sizing: border-box;
     box-sizing: border-box;
 }
 
-.sort-columns::after {
-    content: '';
-    display: block;
-    clear: both;
-}
-
 .modal-actions {
-    padding: 15px 20px; /* Slightly more compact footer */
-    display: block;
-    text-align: right;
-    flex-shrink: 0; /* Never collapse footer actions */
+    padding: 15px 20px;
+    display: flex;
+    justify-content: flex-end;
+    flex-shrink: 0;
     background: rgba(0, 0, 0, 0.2);
-    border-top: 1px solid rgba(255, 255, 255, 0.08); /* Clearer visual separation */
+    border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .modal-action-btn {
@@ -903,8 +789,11 @@ progress.card-progress::-webkit-progress-value {
 
 /* Track Option Badges (Subtitle Metadata) */
 .track-option-label {
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
     width: 100%;
+    flex: 1;
 }
 
 /* Remote Subtitle Results Styling */
@@ -915,7 +804,9 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-info {
-    display: block;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
     flex: 1;
     min-width: 0;
 }
@@ -929,7 +820,9 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-meta {
-    display: block;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
 }
 
 .subtitle-result-meta .track-badge {
@@ -1009,8 +902,8 @@ progress.card-progress::-webkit-progress-value {
 
 /* Modal variant compatibility */
 .modal-option-btn span {
-    display: inline-block;
-    vertical-align: middle;
+    display: flex;
+    align-items: center;
 }
 
 /* ==========================================================================
@@ -1293,13 +1186,15 @@ progress.card-progress::-webkit-progress-value {
     margin-bottom: 12px;
 }
 
-/* Fallback for Tizen 3/4 (Legacy browser) */
-html[data-layout-tier="legacy"] .media-info-grid {
+/* Fallback for Tizen 3/4 (Legacy browser) and ultra-legacy */
+html[data-layout-tier="legacy"] .media-info-grid,
+html[data-layout-tier="ultra-legacy"] .media-info-grid {
     display: flex;
     flex-wrap: wrap;
 }
 
-html[data-layout-tier="legacy"] .media-info-row {
+html[data-layout-tier="legacy"] .media-info-row,
+html[data-layout-tier="ultra-legacy"] .media-info-row {
     width: 45%;
     margin-right: 5%;
 }
@@ -1477,5 +1372,201 @@ html[data-layout-tier="legacy"] .media-info-row {
 
 /* Make sure the OSD overlays the iframe correctly */
 .trailer-osd {
-    z-index: 10; 
+    z-index: 10;
+}
+
+/* ============================================================================
+   Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x / WebOS 1.x)
+   ============================================================================
+   Chrome 32 has deeply broken flexbox support for many alignment scenarios,
+   and does not support display: flex with align-items on fixed-height elements.
+   These rules override the modern flex defaults above with the ghost-centering
+   technique (font-size:0 + ::before ghost + inline-block children) and the
+   float-based column layout for the filter/sort modals.
+   ============================================================================ */
+
+/* Nav Button: restore block + ghost centering */
+html[data-layout-tier="ultra-legacy"] .nav-btn {
+    display: inline-block;
+    vertical-align: middle;
+    height: 48px;
+    padding: 0 20px;
+    line-height: normal;
+    font-size: 0; /* Collapse whitespace between icon and text */
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1rem; /* Restore font size for children */
+    margin-right: 8px;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn > *:last-child {
+    margin-right: 0;
+}
+
+/* Nav Icon-Only: center SVG via ghost */
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    padding: 0;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .nav-btn.icon-only svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Small Icon Button: center SVG via ghost */
+html[data-layout-tier="ultra-legacy"] .btn-icon-small {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    padding: 0;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon-small::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon-small svg {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+/* Header Avatar Placeholder: center initials via ghost */
+html[data-layout-tier="ultra-legacy"] .header-avatar-placeholder {
+    display: inline-block;
+    vertical-align: middle;
+    text-align: center;
+    font-size: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-avatar-placeholder::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+/* Modal Options Scroll Container */
+html[data-layout-tier="ultra-legacy"] .settings-modal .modal-options {
+    display: block;
+}
+
+/* Modal Option Button: block + ghost centering */
+html[data-layout-tier="ultra-legacy"] .modal-option-btn {
+    display: block;
+    font-size: 0; /* Collapse whitespace */
+    line-height: normal;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1.25rem; /* Restore after parent collapse */
+    white-space: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span:first-of-type {
+    white-space: nowrap;
+}
+
+/* Filter/Sort Columns: float-based layout */
+html[data-layout-tier="ultra-legacy"] .filter-split-container {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-sidebar {
+    float: left;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-main {
+    display: block;
+    float: left;
+    width: 70%;
+    height: 100%;
+    overflow-y: auto;
+    padding: 0 20px;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .filter-split-container::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-columns {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-column {
+    display: block;
+    float: left;
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .sort-columns::after {
+    content: '';
+    display: block;
+    clear: both;
+}
+
+/* Modal Actions Footer */
+html[data-layout-tier="ultra-legacy"] .modal-actions {
+    display: block;
+    text-align: right;
+}
+
+/* Track Option Labels */
+html[data-layout-tier="ultra-legacy"] .track-option-label {
+    display: block;
+    width: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-result-info {
+    display: block;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-result-meta {
+    display: block;
 }

@@ -99,25 +99,21 @@
 
 /* Header / Logo */
 .sidebar-header {
-    display: block;
+    display: flex;
+    align-items: center;
     height: 60px;
     margin-bottom: 40px;
     padding-left: 0;
-    white-space: nowrap;
-}
-
-.sidebar-header::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
+    /* Centered in collapsed via flex */
+    justify-content: flex-start;
 }
 
 .logo-icon {
     width: var(--sidebar-width-collapsed);
     height: 60px;
-    display: inline-block;
-    vertical-align: middle;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     /* Center in the column */
     flex-shrink: 0;
     color: var(--jf-accent);
@@ -126,15 +122,6 @@
     will-change: transform;
     position: relative;
     z-index: 10;
-    line-height: 0;
-}
-
-.logo-icon svg {
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    -webkit-transform: translate(-50%, -50%);
 }
 
 .logo-icon svg {
@@ -162,6 +149,7 @@
     z-index: 6;
 }
 
+
 .sidebar.expanded .logo-text {
     opacity: 1;
     visibility: visible;
@@ -172,7 +160,8 @@
 
 /* Items */
 .sidebar-item {
-    display: block;
+    display: flex;
+    align-items: center;
     height: 72px;
     /* Large touch targets */
     width: 100%;
@@ -184,14 +173,6 @@
     outline: none;
     text-align: left;
     position: relative;
-    white-space: nowrap;
-}
-
-.sidebar-item::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
 }
 
 .sidebar-item:focus,
@@ -224,10 +205,10 @@
 .item-icon {
     width: var(--sidebar-width-collapsed);
     height: 72px;
-    display: inline-block;
-    vertical-align: middle;
+    display: flex;
+    align-items: center;
+    justify-content: center;
     flex-shrink: 0;
-    line-height: 0; /* Reset line-height inside icons to prevent offset */
     -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     will-change: transform;
@@ -236,6 +217,35 @@
 }
 
 .item-icon svg {
+    width: 28px;
+    height: 28px;
+}
+
+/*
+ * ── Ultra-Legacy Overrides: Sidebar (Chrome <47 / Tizen 2.x) ───────────────
+ * Flex centering is unreliable in Chrome 32 for fixed-height items.
+ * Use the ghost (::before) + inline-block technique instead.
+ * SVGs are centered with absolute position as flex can't be relied upon.
+ */
+html[data-layout-tier="ultra-legacy"] .sidebar-header {
+    display: block;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .sidebar-header::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .logo-icon {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .logo-icon svg {
     position: absolute;
     top: 50%;
     left: 50%;
@@ -243,10 +253,38 @@
     -webkit-transform: translate(-50%, -50%);
 }
 
-.item-icon svg {
-    width: 28px;
-    height: 28px;
+html[data-layout-tier="ultra-legacy"] .sidebar-item {
+    display: block;
+    white-space: nowrap;
 }
+
+html[data-layout-tier="ultra-legacy"] .sidebar-item::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .item-icon {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .item-icon svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
+}
+
+html[data-layout-tier="ultra-legacy"] .item-text {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: normal;
+}
+
 
 /* Icon toggle: outline by default, filled when active */
 .item-icon .icon-outline {

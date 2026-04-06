@@ -23,41 +23,21 @@
 }
 
 .header-left {
-    display: inline-block;
-    vertical-align: middle;
-    height: 100%;
+    display: flex;
+    align-items: center;
 }
 
-.header-left::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.header-left > * {
-    display: inline-block;
-    vertical-align: middle;
+.header-left > *:not(:last-child) {
     margin-right: 20px;
 }
 
-.header-left > *:last-child {
-    margin-right: 0;
-}
-
 .header-logo {
-    display: inline-block;
-    vertical-align: middle;
+    display: flex;
+    align-items: center;
 }
 
-.header-logo > * {
-    display: inline-block;
-    vertical-align: middle;
+.header-logo > *:not(:last-child) {
     margin-right: 12px;
-}
-
-.header-logo > *:last-child {
-    margin-right: 0;
 }
 
 .header-mid {
@@ -65,27 +45,11 @@
     left: 50%;
     -webkit-transform: translateX(-50%);
     transform: translateX(-50%);
-    display: inline-block;
-    vertical-align: middle;
-    height: 100%;
-    text-align: center;
+    display: flex;
 }
 
-.header-mid::before {
-    content: '';
-    display: inline-block;
-    height: 100%;
-    vertical-align: middle;
-}
-
-.header-mid > * {
-    display: inline-block;
-    vertical-align: middle;
+.header-mid > *:not(:last-child) {
     margin-right: 15px;
-}
-
-.header-mid > *:last-child {
-    margin-right: 0;
 }
 
 .logo-text {
@@ -95,17 +59,93 @@
 }
 
 .header-nav {
+    display: flex;
+}
+
+.header-nav > *:not(:last-child) {
+    margin-right: 12px;
+}
+
+/*
+ * ── Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x) ──────────────────────────
+ * Chrome 32 has broken flex alignment in many contexts.
+ * Replace flex with inline-block + ghost ::before centering trick.
+ * These rules deliberately override the flex defaults above.
+ */
+html[data-layout-tier="ultra-legacy"] .header-left {
+    display: inline-block;
+    vertical-align: middle;
+    height: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 20px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-logo {
     display: inline-block;
     vertical-align: middle;
 }
 
-.header-nav > * {
+html[data-layout-tier="ultra-legacy"] .header-logo > * {
     display: inline-block;
     vertical-align: middle;
     margin-right: 12px;
 }
 
-.header-nav > *:last-child {
+html[data-layout-tier="ultra-legacy"] .header-logo > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid {
+    display: inline-block;
+    vertical-align: middle;
+    height: 100%;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 15px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 12px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     margin-right: 0;
 }
 
