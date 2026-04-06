@@ -91,22 +91,25 @@
 
 /* Header / Logo */
 .sidebar-header {
-    display: flex;
-    align-items: center;
+    display: block;
     height: 60px;
     margin-bottom: 40px;
     padding-left: 0;
-    /* Centered in collapsed via flex */
-    /* Center logo in collapsed state? */
-    justify-content: flex-start;
+    white-space: nowrap;
+}
+
+.sidebar-header::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 .logo-icon {
     width: var(--sidebar-width-collapsed);
     height: 60px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     /* Center in the column */
     flex-shrink: 0;
     color: var(--jf-accent);
@@ -114,6 +117,15 @@
     will-change: transform;
     position: relative;
     z-index: 10;
+    line-height: 0;
+}
+
+.logo-icon svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
 }
 
 .logo-icon svg {
@@ -126,9 +138,12 @@
 }
 
 .logo-text {
+    display: inline-block;
+    vertical-align: middle;
     font-size: 1.8rem;
     font-weight: 700;
     color: var(--jf-text-primary);
+    line-height: normal;
     opacity: 0;
     visibility: hidden;
     /* Instant hidden state to avoid sliding under icons */
@@ -148,8 +163,7 @@
 
 /* Items */
 .sidebar-item {
-    display: flex;
-    align-items: center;
+    display: block;
     height: 72px;
     /* Large touch targets */
     width: 100%;
@@ -161,6 +175,14 @@
     outline: none;
     text-align: left;
     position: relative;
+    white-space: nowrap;
+}
+
+.sidebar-item::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 .sidebar-item:focus,
@@ -193,14 +215,22 @@
 .item-icon {
     width: var(--sidebar-width-collapsed);
     height: 72px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    display: inline-block;
+    vertical-align: middle;
     flex-shrink: 0;
+    line-height: 0; /* Reset line-height inside icons to prevent offset */
     transition: transform 0.25s cubic-bezier(0.2, 0.0, 0.0, 1.0);
     will-change: transform;
     position: relative;
     z-index: 10;
+}
+
+.item-icon svg {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
 }
 
 .item-icon svg {
@@ -233,6 +263,11 @@
     border-radius: 50%;
     object-fit: cover;
     border: 2px solid transparent;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    -webkit-transform: translate(-50%, -50%);
 }
 
 .sidebar-item:focus .sidebar-avatar,
@@ -242,8 +277,11 @@
 
 /* Text - Hidden when collapsed */
 .item-text {
+    display: inline-block;
+    vertical-align: middle;
     font-size: 1.4rem;
     font-weight: 500;
+    line-height: normal;
     opacity: 0;
     visibility: hidden;
     /* Instant hidden state to avoid sliding under icons */
