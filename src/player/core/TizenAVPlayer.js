@@ -1401,11 +1401,24 @@ export class TizenAVPlayer {
                  */
                 const tizenSubIndex = this._findTizenSubtitleIndex(index);
                 if (tizenSubIndex !== null) {
+                    let avplayState = 'UNKNOWN';
+                    try { avplayState = this._avplay.getState(); } catch (e) {}
+
+                    // Tizen 4.0+ firmwares ignore setSelectTrack when PAUSED/buffering.
+                    // If we didn't force the pause ourselves for the legacy workaround, defer it.
+                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'READY') {
+                        this._pendingSubtitleIndex = index;
+                        this._currentSubtitleStreamIndex = index;
+                        log.debug(`setSubtitleStreamIndex: Player state is ${avplayState}. Deferring TEXT track ${tizenSubIndex}.`);
+                        return;
+                    }
+
                     this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                     this._avplay.setSilentSubtitle(true);
                     this._avplay.setSilentSubtitle(false);
                     this._currentSubtitleStreamIndex = index;
                     this._activeTizenSubtitleIndex = tizenSubIndex;
+                    this._pendingSubtitleIndex = null;
                     log.debug(`setSubtitleStreamIndex: Jellyfin ${index} → Tizen TEXT ${tizenSubIndex}`);
                 } else {
                     log.warn(`setSubtitleStreamIndex: Could not map Jellyfin index ${index} to Tizen TEXT track`);
