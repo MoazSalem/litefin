@@ -706,9 +706,7 @@
 .track-menu {
     background: transparent;
     padding: 1.8em;
-    /* 1.5em * 1.2 */
-    min-width: 480px;
-    /* 400px * 1.2 */
+    min-width: 600px;
     max-width: 90vw;
     max-height: 70vh;
     overflow-y: auto;
@@ -734,6 +732,7 @@
 }
 
 .track-option {
+    position: relative; /* Ensure absolute children (badges) are scoped to each item */
     display: flex;
     align-items: center;
     padding: 0.96em 1.44em;
@@ -748,6 +747,8 @@
     font-weight: bold;
     cursor: pointer;
     text-align: left;
+    width: 100%;
+    box-sizing: border-box;
     transition: background 0.15s;
 }
 
@@ -784,6 +785,27 @@
 
 .track-option-label {
     flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+}
+
+.track-option .track-label-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap; /* Single line for OSD tracks */
+    margin-right: 20px;
+}
+
+.track-option .track-badges {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 10px;
+    margin-left: auto !important; /* Forces badges to the far right on Tizen 4.0 */
 }
 
 .track-option-content {

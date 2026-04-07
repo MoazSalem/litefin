@@ -405,8 +405,8 @@ progress.card-progress::-webkit-progress-value {
     position: fixed;
     top: 0;
     left: 0;
-    width: 100vw;
-    height: 100vh;
+    width: 100%;
+    height: 100%;
     background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.7));
     z-index: 10000;
     display: flex;
@@ -480,6 +480,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .modal-option-btn {
+    position: relative; /* Ensure absolute children (badges) are scoped to the button */
     appearance: none;
     -webkit-appearance: none;
     background: rgba(255, 255, 255, 0.05);
@@ -497,7 +498,6 @@ progress.card-progress::-webkit-progress-value {
     text-align: left;
     cursor: pointer;
     display: flex;
-    justify-content: flex-start;
     align-items: center;
     width: 100%;
     box-sizing: border-box;
@@ -576,26 +576,22 @@ progress.card-progress::-webkit-progress-value {
 }
 
 /* Modal Option Label Scaling */
-.modal-option-btn > span:first-child,
-.modal-option-btn > div:first-child {
-    overflow: visible;
+.modal-option-btn .track-label-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
+    white-space: nowrap; /* Default: single line for track selection */
 }
 
-/* Improved Badge Containers: Position the container once, let children flow side-by-side */
 .modal-option-btn .track-badges,
 .modal-option-btn .subtitle-track-meta,
 .track-option .track-badges {
-    position: absolute;
-    right: 30px;
-    top: 50%;
-    margin: 0;
-    transform: translateY(-50%);
-    -webkit-transform: translateY(-50%);
+    margin-left: auto; /* Push to the right in flex contexts */
     display: flex;
-    gap: 10px; /* Increased gap for better visual separation */
+    gap: 10px;
     align-items: center;
+    flex-shrink: 0;
 }
 
 
@@ -802,34 +798,46 @@ progress.card-progress::-webkit-progress-value {
     padding-bottom: 15px !important;
 }
 
+/* ============================================================================ */
+/* Subtitle Downloader Result Item (Stacked Layout) */
+/* ============================================================================ */
+
+.subtitle-result-btn.modal-option-btn {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    height: auto !important; /* Allow results to expand */
+    padding: 1.4rem !important;
+}
+
 .subtitle-result-info {
     display: flex !important;
     flex-direction: column !important;
-    align-items: flex-start !important;
-    flex: 1;
+    width: 100%;
     min-width: 0;
-    width: 100%; /* Force full width on legacy engines */
 }
 
 .subtitle-result-info .track-label-text {
-    white-space: normal !important;
+    white-space: normal !important; /* Allow wrapping for search results */
     text-align: left;
-    line-height: 1.3;
-    margin-bottom: 10px;
+    line-height: 1.4;
     word-break: break-all !important;
-    font-size: 1.2rem;
+    font-size: 1.25rem;
     color: var(--jf-text-primary);
-    width: 100%;
+    width: 100% !important;
+    margin-bottom: 12px;
 }
 
 .subtitle-result-meta {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: center;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 8px;
+    width: 100%;
 }
 
 .subtitle-result-meta .track-badge {
-    margin-left: 0;
+    margin-left: 0 !important;
+    margin-right: 10px;
 }
 
 .track-badge.match-badge {
@@ -855,15 +863,15 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .track-option-label .track-badge {
-    float: right;
+    text-align: center;
 }
 
 /* Language Completeness Badge */
 .lang-badge {
     margin-left: auto;
-    margin-right: 15px; /* Spacing before check-icon */
     font-variant-numeric: tabular-nums;
     width: 50px;
+    text-align: center;
 }
 
 .lang-badge.badge-warning {
@@ -895,6 +903,7 @@ progress.card-progress::-webkit-progress-value {
     background-color: rgba(var(--jf-primary-btn-color-rgb), 0.15) !important;
     color: var(--jf-primary-btn-color);
     border-color: rgba(var(--jf-primary-btn-color-rgb), 0.35) !important;
+
 }
 
 .track-label-text {

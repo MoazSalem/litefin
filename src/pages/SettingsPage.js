@@ -2517,7 +2517,7 @@ class SettingsPage extends Page {
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                            <span>${i18n.ensureBiDi(opt.label)}</span>
+                            <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
                             ${badge}
                         </button>
                     `;
