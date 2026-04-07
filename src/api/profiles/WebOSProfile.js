@@ -346,9 +346,15 @@ export function buildJellyfinProfile(options = {}) {
     // The force flag overrides this gate when the user explicitly enables it.
     const supportsFmp4Hls = enableFmp4Hls && (forceFmp4Hls || caps.webosVersion >= 6);
 
-    // When fMP4 is forced, it becomes the PRIMARY HLS container (replaces TS
-    // as the first/default transcoding profile the server picks).
-    const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
+    // Dolby Vision HEVC content MUST travel in an fMP4 HLS stream.
+    // MPEG-TS cannot carry the DOVI RPU metadata layer correctly, and WebOS
+    // will silently strip it, producing broken colours or a hard crash.
+    // We auto-promote to fMP4 here regardless of user settings or version gates.
+    const shouldForceFmp4ForDovi = enableDolbyVision && enableHEVC;
+
+    // When fMP4 is forced (user setting OR DOVI mandate), it becomes the PRIMARY
+    // HLS container, replacing TS as the first profile the server picks.
+    const primaryHlsContainer = (forceFmp4Hls || shouldForceFmp4ForDovi) ? 'mp4' : 'ts';
 
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
@@ -451,10 +457,20 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
-    // Previously locked to h264 defensively, but strict locking violently breaks DOVI MKV Remuxes, forcing expensive SDR transcodes.
-    // Allowing hevc restores DirectStream remuxing for 4K DOVI MKV over HLS.
-    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
+    // Always include EAC3 (Dolby Digital Plus) in the safe-to-transmux audio list.
+    // TrueHD and DTS can silently block the Dolby Vision decode pipeline on WebOS,
+    // so we deliberately omit them here and let the DirectPlay audio profiles handle
+    // pass-through when the container allows it.
+    let transAudioCodecs = 'aac,ac3,eac3';
+
+    // When Dolby Vision is active we MUST restrict to HEVC only.
+    // Leaving h264 in the list gives Jellyfin an escape hatch to fall back to
+    // an H.264 transcode, which strips the DOVI layer entirely and produces SDR.
+    // For non-DOVI streams, including h264 lets the server choose lightweight
+    // H.264 for 1080p content where HEVC is unnecessary overhead.
+    let transVideoCodecs = enableHEVC
+        ? (enableDolbyVision ? 'hevc' : 'h264,hevc')
+        : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -487,10 +503,14 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
-            SegmentLength: '2',
+            // Dolby Vision RPU metadata must be aligned to IDR keyframe boundaries.
+            // A 2 s segment is too short — DV metadata can land mid-segment and cause
+            // the hardware decoder to stall while it waits for a sync point.
+            // 4 s segments give the encoder enough room to always hit an IDR boundary.
+            SegmentLength: shouldForceFmp4ForDovi ? '4' : '2',
             // fMP4 segments must always be cut on IDR frames; BreakOnNonKeyFrames
-            // is only safe for MPEG-TS remux mode.
-            BreakOnNonKeyFrames: !forceFmp4Hls && playbackMode !== 'remux'
+            // is only safe for MPEG-TS and only when not in dedicated remux mode.
+            BreakOnNonKeyFrames: primaryHlsContainer !== 'mp4' && playbackMode !== 'remux'
         },
         {
             Container: 'aac',
@@ -601,6 +621,26 @@ export function buildJellyfinProfile(options = {}) {
                 }
             ]
         });
+
+        // Explicit Dolby Vision encouragement profile.
+        // Without this hint, Jellyfin may emit VideoRangeTypeNotSupported and reject
+        // the DOVI stream before we even get a chance to remux it. This tells the
+        // server "DV is acceptable here" so it proceeds to the CodecProfile / container
+        // evaluation step rather than bailing out immediately.
+        if (enableDolbyVision) {
+            codecProfiles.push({
+                Type: 'Video',
+                Codec: 'hevc',
+                Conditions: [
+                    {
+                        Condition: 'EqualsAny',
+                        Property: 'VideoRangeType',
+                        Value: 'DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR',
+                        IsRequired: false
+                    }
+                ]
+            });
+        }
     }
 
     if (enableVP9) {
