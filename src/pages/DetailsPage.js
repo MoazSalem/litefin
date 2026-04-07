@@ -228,6 +228,30 @@ class DetailsPage extends Page {
             // Mark the page as rendered, fulfilling the Promise for NavigationState
             // to restore scroll/focus natively
             this.markReady();
+
+            // ----------------------------------------------------------------
+            // Auto-chain check: did we just return from a local trailer that
+            // was launched as part of an auto-chain sequence?
+            //
+            // _playLocalTrailerThenChain() writes 'details:autoChainRemote'
+            // to state (an in-memory singleton that outlives page instances)
+            // before navigating to the player. When the player finishes and
+            // router.back() brings us back here as a fresh DetailsPage, we
+            // check for that flag and open the remote trailer automatically.
+            //
+            // We only consume the flag if the item ID matches — in case the
+            // user somehow navigated to a different details page in between.
+            // ----------------------------------------------------------------
+            const pendingChain = state.get('details:autoChainRemote');
+            if (pendingChain && pendingChain === this._itemId) {
+                // Consume the flag immediately so it won't re-fire on next visit
+                state.delete('details:autoChainRemote');
+                log.info('[AutoChain] Detected pending remote chain for item', this._itemId, '— opening remote trailer');
+
+                // Short delay: let the page settle visually before slamming the
+                // overlay on top. Prevents a jarring instant transition.
+                setTimeout(() => this._showRemoteTrailerPlayer(), 300);
+            }
         } catch (err) {
             log.error('onInit failed', err);
         }
@@ -2796,7 +2820,17 @@ class DetailsPage extends Page {
         const hasRemote = this._hasRemoteTrailers;
 
         if (hasLocal && hasRemote) {
-            // Both available — let the user choose
+            // ----------------------------------------------------------------
+            // Auto-chain mode: skip the dialog entirely and play the local
+            // trailer immediately via the native player. When it ends (or the
+            // user presses Next on the OSD), the remote player opens instead.
+            // ----------------------------------------------------------------
+            if (PlayerSettings.get('trailerAutoChain')) {
+                this._playLocalTrailerThenChain();
+                return;
+            }
+
+            // Both available and auto-chain is OFF — let the user choose
             TrailerDialog.show(
                 { hasLocal, hasRemote },
                 this,
@@ -2848,6 +2882,66 @@ class DetailsPage extends Page {
             });
         } catch (err) {
             log.error('Failed to load local trailers', err);
+            toast.show(i18n.t('ErrorFetchingTrailers') || 'Could not load trailers.');
+        }
+    }
+
+    /**
+     * Auto-chain mode entry point.
+     *
+     * Writes a pending-chain intent to StateManager (a global in-memory
+     * singleton that persists across page instances), then launches the local
+     * trailer via the standard native player pipeline.
+     *
+     * When the local trailer finishes, the router calls router.back() which
+     * destroys PlayerPage and creates a fresh DetailsPage instance. onInit()
+     * on that fresh instance reads and clears the state flag, then calls
+     * _showRemoteTrailerPlayer() automatically.
+     *
+     * Navigation stack:
+     *   Details page (at rest)
+     *     → PlayerPage  (/player/<localTrailerId>/false)
+     *       → router.back() destroys PlayerPage, creates DetailsPage
+     *     ← DetailsPage.onInit() detects flag → _showRemoteTrailerPlayer()
+     *       → user presses Back in remote player → overlay closes
+     *       → Details page (at rest) ✅
+     */
+    async _playLocalTrailerThenChain() {
+        try {
+            const trailers = await api.getLocalTrailers(this._itemId);
+
+            if (!trailers || trailers.length === 0) {
+                log.warn('getLocalTrailers returned empty for item', this._itemId);
+                toast.show(i18n.t('NoLocalTrailersFound') || 'No local trailers found.');
+                return;
+            }
+
+            const trailerItem = trailers[0];
+            log.info(`[AutoChain] Playing local trailer "${trailerItem.Name}" (${trailerItem.Id}), remote will follow`);
+
+            const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
+                maxWidth: 3840,
+                quality: 90
+            });
+
+            // ----------------------------------------------------------------
+            // Write the chain intent to persistent in-memory state BEFORE
+            // navigating. The router will destroy this DetailsPage instance
+            // during navigation, so we cannot use an instance-level flag or
+            // EventBus listener. StateManager is a global singleton that
+            // outlives any individual page, making it the correct tool here.
+            // ----------------------------------------------------------------
+            state.set('details:autoChainRemote', this._itemId);
+            log.info('[AutoChain] Wrote state flag for item', this._itemId);
+
+            // Kick off the native player via the standard pipeline
+            eventBus.emit('player:play', {
+                item: trailerItem,
+                resume: false,
+                backdropUrl
+            });
+        } catch (err) {
+            log.error('[AutoChain] Failed to load local trailer for chain', err);
             toast.show(i18n.t('ErrorFetchingTrailers') || 'Could not load trailers.');
         }
     }

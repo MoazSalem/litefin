@@ -1051,6 +1051,9 @@ class PlayerPage extends Page {
         // Natural end of playback - report and navigate back
         this._isExiting = true;
         this._reportPlaybackStopped().then(() => {
+            // Notify any listeners (e.g., DetailsPage auto-chain) that this playback
+            // session has ended naturally before we navigate away from the player.
+            eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'ended' });
             router.back();
         });
 
@@ -1061,7 +1064,20 @@ class PlayerPage extends Page {
      * Play next item in queue if available
      */
     async _playNextItem() {
-        if (this._isSwitching || !playQueue.hasNext()) {
+        if (this._isSwitching) return;
+
+        // No next item in the queue — check whether we are in an auto-chain
+        // trailer sequence. If the 'details:autoChainRemote' flag is set in
+        // state, pressing Next should exit the local trailer and hand off to
+        // the remote trailer player, exactly like reaching the end naturally.
+        if (!playQueue.hasNext()) {
+            if (state.get('details:autoChainRemote')) {
+                log.info('[AutoChain] Next pressed with no queue successor — chaining to remote trailer');
+                // Pass false so _stopAndExit does NOT clear the auto-chain flag.
+                // The flag must survive the router.back() so DetailsPage.onInit()
+                // finds it and opens the remote trailer automatically.
+                this._stopAndExit(/* clearChain= */ false);
+            }
             return;
         }
 
@@ -2015,7 +2031,19 @@ class PlayerPage extends Page {
         return true;
     }
 
-    async _stopAndExit() {
+    /**
+     * Stop playback and navigate back to the previous page.
+     *
+     * @param {boolean} [clearChain=true]
+     *   When true (the default, i.e. user pressed Back), the auto-chain
+     *   state flag is deleted so DetailsPage.onInit() does NOT open the
+     *   remote trailer — the user explicitly chose to exit.
+     *
+     *   Pass false when exiting as part of an intentional chain (Next button,
+     *   natural end-of-file) so the flag is preserved for DetailsPage to
+     *   consume and fire the remote trailer player.
+     */
+    async _stopAndExit(clearChain = true) {
         // Prevent multiple calls
         if (this._isExiting) {
             return;
@@ -2041,7 +2069,21 @@ class PlayerPage extends Page {
             log.warn('Error during stop:', error);
         }
 
-        // Navigate back
+        // ----------------------------------------------------------------
+        // If clearChain is true (user pressed Back), remove the auto-chain
+        // flag so DetailsPage.onInit() does not launch the remote trailer.
+        // If clearChain is false (Next/chain exit), leave the flag so the
+        // fresh DetailsPage instance picks it up and opens the remote player.
+        // ----------------------------------------------------------------
+        if (clearChain) {
+            state.delete('details:autoChainRemote');
+        }
+
+        // Emit for any general listeners; no longer used by the chain logic
+        // but kept for potential future use (e.g., analytics, remote control).
+        eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'userStop' });
+
+        // Navigate back to the Details page
         router.back();
     }
 

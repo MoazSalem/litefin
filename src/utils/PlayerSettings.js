@@ -222,6 +222,13 @@ const DEFAULTS = {
     // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
     trailerPlaybackMode: 'internal_proxy',
 
+    // Auto-chain mode: when both local AND remote trailers exist and this is
+    // true, the TrailerDialog selection screen is skipped entirely. Instead,
+    // the local trailer plays immediately via the native player. When it ends
+    // (or the user presses Next), the remote trailer player opens automatically.
+    // Pressing Back at any point returns to the Details page cleanly.
+    trailerAutoChain: false,
+
     // Enable background Node.js service (for Discovery and Proxy)
     enableBackgroundService: true,
 

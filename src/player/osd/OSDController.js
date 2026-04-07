@@ -2,6 +2,7 @@ import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
+import { state } from '../../core/StateManager.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
 import { ICONS } from './icons.js';
@@ -605,6 +606,12 @@ export default class OSDController extends Component {
         
         const hasPrev = playQueue.hasPrevious();
         const hasNext = playQueue.hasNext();
+
+        // In auto-chain trailer mode the queue only contains the local trailer,
+        // so hasNext() is always false. But pressing Next should still work —
+        // it exits the local trailer and opens the remote player. Treat the
+        // chain flag as an implicit "there is something after this" signal.
+        const hasNextOrChain = hasNext || !!state.get('details:autoChainRemote');
         
         const prevBtn = this._osdEl.querySelector('[data-action="previousTrack"]');
         if (prevBtn) {
@@ -619,7 +626,7 @@ export default class OSDController extends Component {
 
         const nextBtn = this._osdEl.querySelector('[data-action="nextTrack"]');
         if (nextBtn) {
-            if (hasNext) {
+            if (hasNextOrChain) {
                 nextBtn.classList.remove('osd-btn-disabled');
                 nextBtn.setAttribute('tabindex', '0');
             } else {
@@ -627,6 +634,9 @@ export default class OSDController extends Component {
                 nextBtn.setAttribute('tabindex', '-1');
             }
         }
+
+        // Re-cache focusable elements so FocusManager picks up tabindex changes
+        this._cacheFocusableElements();
     }
 
     _updateChapterButtons() {

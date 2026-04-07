@@ -683,6 +683,8 @@
     "Top": "Top",
     "TopLow": "Top (Low)",
     "TrackIndex": "Track {0}",
+    "TrailerAutoChain": "Auto-play local, then online",
+    "TrailerAutoChainDescription": "Plays the server-side trailer first, then jumps straight to the online trailer when it ends. No picking required.",
     "TrailerPlayback": "Trailer Playback",
     "TrailerPlaybackDescription": "Choose how remote trailers are opened",
     "TrailersSettings": "Trailers Settings",
