@@ -441,7 +441,7 @@ progress.card-progress::-webkit-progress-value {
     max-height: 80vh;
     min-height: 180px; /* Lower minimum for short dialogs (e.g. Delete?) */
     animation: modal-fade-in 0.3s ease-out;
-    -webkit-animation: webkit-modal-fade-in 0.3s ease-out;
+    -webkit-animation: modal-fade-in 0.3s ease-out;
 }
 
 @keyframes modal-fade-in {
@@ -449,14 +449,14 @@ progress.card-progress::-webkit-progress-value {
     to { opacity: 1; transform: scale(1); }
 }
 
-@-webkit-keyframes webkit-modal-fade-in {
+@-webkit-keyframes modal-fade-in {
     from { opacity: 0; -webkit-transform: scale(0.95); }
     to { opacity: 1; -webkit-transform: scale(1); }
 }
 
 .settings-modal .modal-header {
-    padding: 15px 30px; /* Balanced vertical breathing room */
-    margin-bottom: 0px;
+    padding: 10px 30px; /* Balanced vertical breathing room */
+    margin-bottom: 8px;
     background: rgba(255, 255, 255, 0.02);
     flex-shrink: 0; /* Never collapse header */
 }
@@ -470,7 +470,7 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .settings-modal .modal-options {
-    padding: 20px;
+    padding: 10px 20px;
     overflow-y: auto;
     display: flex;
     flex-direction: column;
@@ -576,11 +576,10 @@ progress.card-progress::-webkit-progress-value {
 }
 
 /* Modal Option Label Scaling */
-.modal-option-btn span:first-of-type {
-    max-width: 80%; /* Leave room for icon/badge */
-    overflow: hidden;
+.modal-option-btn > span:first-child,
+.modal-option-btn > div:first-child {
+    overflow: visible;
     text-overflow: ellipsis;
-    white-space: nowrap;
     line-height: 1.2;
 }
 
@@ -804,19 +803,23 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .subtitle-result-info {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: flex-start !important;
     flex: 1;
     min-width: 0;
+    width: 100%; /* Force full width on legacy engines */
 }
 
 .subtitle-result-info .track-label-text {
-    white-space: normal;
+    white-space: normal !important;
     text-align: left;
     line-height: 1.3;
     margin-bottom: 10px;
-    word-break: break-word;
+    word-break: break-all !important;
+    font-size: 1.2rem;
+    color: var(--jf-text-primary);
+    width: 100%;
 }
 
 .subtitle-result-meta {
@@ -896,15 +899,13 @@ progress.card-progress::-webkit-progress-value {
 
 .track-label-text {
     flex: 1;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    white-space: normal;
+    word-break: break-all;
 }
 
 /* Modal variant compatibility */
 .modal-option-btn span {
     display: flex;
-    align-items: center;
 }
 
 /* ==========================================================================
@@ -912,7 +913,7 @@ progress.card-progress::-webkit-progress-value {
    ========================================================================== */
 
 .modal-section-title {
-    padding: 0 20px 10px;
+    padding: 10px 20px 10px;
     font-size: 1.1rem;
     font-weight: 600;
     color: var(--jf-text-secondary);
@@ -944,37 +945,48 @@ progress.card-progress::-webkit-progress-value {
 
 .subtitle-track-label {
     flex: 1;
-    font-size: 1.25rem;
+    font-size: 1.1rem;
     font-weight: 500;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
+    white-space: normal;
+    line-height: 1.4;
+    padding-right: 4px;
     color: var(--jf-text-primary);
 }
 
 .subtitle-track-meta {
     display: flex;
     align-items: center;
-    margin: 0 20px;
+    margin: 0 8px;
 }
 
 .subtitle-track-meta .track-badge {
     margin-left: 8px;
+    text-align: center;
 }
 
 .subtitle-delete-btn {
-    height: 48px;
-    padding: 0 20px;
+    height: 33px;
+    padding: 0 24px;
     margin: 0;
-    background: rgba(220, 53, 69, 0.2);
-    color: #ff6b6b;
+    background: rgba(255, 59, 48, 0.15) !important;
+    color: #ff3b30 !important;
+    border: 1px solid rgba(255, 59, 48, 0.3) !important;
     border-radius: var(--jf-border-radius);
-    font-size: 1.1rem;
-    font-weight: 600;
+    font-size: 1.1rem !important; /* Force priority over legacy font-size:0 hacks */
+    font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-width: 100px;
+    min-width: 110px;
+    width: auto !important; /* Prevent modal-option-btn style from stretching to 100% */
+}
+
+.subtitle-delete-btn:focus,
+.subtitle-delete-btn.focused {
+    background: #ff3b30 !important;
+    color: white !important;
+    border-color: white !important;
+    transform: scale(1.05);
 }
 
 .subtitle-delete-btn:focus,
@@ -997,7 +1009,7 @@ progress.card-progress::-webkit-progress-value {
 
 .subtitle-search-row {
     display: flex;
-    padding: 0 20px 20px;
+    padding: 0 26px 20px;
 }
 
 .subtitle-search-row > * {
@@ -1530,12 +1542,14 @@ html[data-layout-tier="ultra-legacy"] .modal-option-btn > * {
     white-space: normal;
 }
 
-html[data-layout-tier="ultra-legacy"] .modal-option-btn span {
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span,
+html[data-layout-tier="ultra-legacy"] .modal-option-btn div {
     display: inline-block;
     vertical-align: middle;
 }
 
-html[data-layout-tier="ultra-legacy"] .modal-option-btn span:first-of-type {
+html[data-layout-tier="ultra-legacy"] .modal-option-btn span:first-of-type,
+html[data-layout-tier="ultra-legacy"] .modal-option-btn div:first-of-type {
     white-space: nowrap;
 }
 

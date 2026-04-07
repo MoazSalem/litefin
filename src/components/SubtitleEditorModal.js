@@ -98,7 +98,7 @@ class SubtitleEditorModal {
                             </div>
                             ${
                                 canDel
-                                    ? `<button class="modal-option-btn subtitle-delete-btn" data-index="${s.Index}" tabindex="0">${i18n.t('Delete')}</button>`
+                                    ? `<button class="subtitle-delete-btn" data-index="${s.Index}" tabindex="0">${i18n.t('Delete')}</button>`
                                     : `<span class="subtitle-track-locked" title="${i18n.t('CannotDeleteInternalSubtitle') || 'Internal track — cannot be deleted'}">🔒</span>`
                             }
                         </div>
@@ -424,17 +424,16 @@ class SubtitleEditorModal {
 
                           return `
                     <button class="modal-option-btn subtitle-result-btn" data-id="${r.Id}" tabindex="0">
-                        <span class="subtitle-result-info">
-                            <span class="track-label-text">${name}</span>
-                            <span class="subtitle-result-meta">
+                        <div class="subtitle-result-info">
+                            <div class="track-label-text">${name}</div>
+                            <div class="subtitle-result-meta">
                                 ${isPerfectMatch ? `<span class="track-badge match-badge">${i18n.t('PerfectMatch') || 'Perfect match'}</span>` : ''}
                                 ${provider ? `<span class="track-badge">${provider}</span>` : ''}
                                 ${format ? `<span class="track-badge">${format}</span>` : ''}
                                 ${frameRate ? `<span class="track-badge">${frameRate}</span>` : ''}
                                 ${downloads ? `<span class="track-badge">${downloads}</span>` : ''}
-                            </span>
-                        </span>
-                        <div class="check-icon">⬇</div>
+                            </div>
+                        </div>
                     </button>
                 `;
                       })
