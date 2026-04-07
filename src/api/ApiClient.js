@@ -276,12 +276,34 @@ export class ApiClient {
     async _handleError(response) {
         let message = `HTTP ${response.status}`;
 
-        // Try to parse error message from response
+        // Try to parse the server's error description from the response body.
+        // Jellyfin returns JSON on most errors, but schema-validation 400s can
+        // return plain text. We try JSON first and fall back to raw text so the
+        // actual server reason (e.g. "MaxAudioChannels must be an integer") is
+        // visible in the debug overlay instead of being silently discarded.
         try {
-            const data = await response.json();
-            message = data.message || data.Message || message;
+            const bodyText = await response.text();
+            if (bodyText) {
+                try {
+                    const data = JSON.parse(bodyText);
+                    message = data.message || data.Message || message;
+                } catch {
+                    // Not JSON — use raw text as the error message (trim to 200 chars max)
+                    const trimmed = bodyText.trim();
+                    if (trimmed) {
+                        message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
+                    }
+                }
+            }
         } catch {
-            // Response wasn't JSON, use status code
+            // Could not read body at all — keep the "HTTP N" default
+        }
+
+        // Log 400s at error level so they are always visible in the debug overlay
+        // even when general logging is disabled. The server reason is included so
+        // the developer can diagnose schema issues without needing DevTools.
+        if (response.status === 400) {
+            log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
         // Handle specific status codes

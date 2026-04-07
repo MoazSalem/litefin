@@ -243,9 +243,11 @@ function _buildMinimalProfile(caps) {
                 VideoCodec: 'h264',
                 Context: 'Streaming',
                 Protocol: 'hls',
-                MaxAudioChannels: String(caps.maxAudioChannels),
-                MinSegments: '1',
-                SegmentLength: '3',
+                // Integer fields — Jellyfin TranscodingProfileDto schema is strict
+                // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
+                MaxAudioChannels: caps.maxAudioChannels,
+                MinSegments: 1,
+                SegmentLength: 3,
                 BreakOnNonKeyFrames: true
             },
             {
@@ -331,7 +333,15 @@ export function buildJellyfinProfile(options = {}) {
         maxBitrate = 40000000;
     }
 
-    const maxAudioChannels = String(caps.maxAudioChannels);
+    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
+    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
+    // Sending a string (e.g. "6") triggers a JSON-schema validation 400 Bad Request
+    // on strict server versions.
+    const maxAudioChannels = caps.maxAudioChannels;
+
+    // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
+    // a separate string-form for use inside CodecProfile condition objects.
+    const maxAudioChannelsStr = String(caps.maxAudioChannels);
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -499,13 +509,14 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
+            // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
+            MinSegments: 1,
             // Dolby Vision RPU metadata must be aligned to IDR keyframe boundaries.
             // A 3 s segment (our new default for standard content) is already safe,
             // but DV needs an extra margin — 4 s guarantees every segment boundary
             // is an IDR frame, preventing RPU orphans that crash the LG decoder.
-            SegmentLength: shouldForceFmp4ForDovi ? '4' : '3',
+            SegmentLength: shouldForceFmp4ForDovi ? 4 : 3,
             // fMP4 segments must always be cut on IDR frames; BreakOnNonKeyFrames
             // is only safe for MPEG-TS and only when not in dedicated remux mode.
             BreakOnNonKeyFrames: primaryHlsContainer !== 'mp4' && playbackMode !== 'remux'
@@ -517,7 +528,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1'
+            MinSegments: 1
         },
         {
             Container: 'mp3',
@@ -565,9 +576,10 @@ export function buildJellyfinProfile(options = {}) {
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
+            // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1',
-            SegmentLength: '2',
+            MinSegments: 1,
+            SegmentLength: 2,
             // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });
@@ -593,7 +605,8 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'AudioChannels',
-                    Value: maxAudioChannels,
+                    // ProfileCondition.Value must be a string in Jellyfin's schema
+                    Value: maxAudioChannelsStr,
                     IsRequired: false
                 }
             ]

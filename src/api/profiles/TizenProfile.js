@@ -148,9 +148,11 @@ function _buildMinimalProfile(caps) {
                 VideoCodec: 'h264',
                 Context: 'Streaming',
                 Protocol: 'hls',
-                MaxAudioChannels: String(caps.maxAudioChannels),
-                MinSegments: '1',
-                SegmentLength: '3',
+                // Integer fields — Jellyfin TranscodingProfileDto schema is strict
+                // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
+                MaxAudioChannels: caps.maxAudioChannels,
+                MinSegments: 1,
+                SegmentLength: 3,
                 BreakOnNonKeyFrames: true
             },
             {
@@ -204,7 +206,15 @@ export function buildJellyfinProfile(options = {}) {
             (caps.uhd8K ? 120000000 : caps.uhd ? 120000000 : 40000000);
     }
 
-    const maxAudioChannels = String(caps.maxAudioChannels);
+    // Keep as integer — the Jellyfin server TranscodingProfileDto schema expects
+    // MaxAudioChannels, MinSegments and SegmentLength to be integers, not strings.
+    // Sending a string (e.g. "6") causes a JSON-schema validation 400 Bad Request
+    // on strict server versions.
+    const maxAudioChannels = caps.maxAudioChannels;
+
+    // ProfileCondition.Value is always a string in Jellyfin's schema, so we keep
+    // a separate string-form for use inside CodecProfile condition objects.
+    const maxAudioChannelsStr = String(caps.maxAudioChannels);
 
     // enableFlacInVideo: when false (default), FLAC is NOT included in the video
     // DirectPlay audio codec list. This forces Jellyfin to transcode FLAC tracks
@@ -365,7 +375,8 @@ export function buildJellyfinProfile(options = {}) {
         // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
         // multichannel AAC in TS also crashes AVPlay on Tizen 5.0.
         transAudioCodecs = 'aac';
-        transMaxAudioChannels = '2';
+        // Cap at 2 (integer) — multichannel AAC in TS crashes AVPlay on Tizen 5.x
+        transMaxAudioChannels = 2;
     }
 
     let directAudioCodecs = 'aac,ac3,eac3,mp3';
@@ -436,9 +447,10 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             // Tizen 5.x: capped at 2 channels (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
+            // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: transMaxAudioChannels,
-            MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '6',
+            MinSegments: isHtml5 ? 1 : 2,
+            SegmentLength: isHtml5 ? 2 : 6,
             // BreakOnNonKeyFrames with fMP4 must be false — fMP4 segments must align to IDR
             // frames. For TS we keep the original behaviour (false for AVPlay, true for HTML5).
             BreakOnNonKeyFrames: forceFmp4Hls ? false : (isHtml5 ? (playbackMode !== 'remux') : false),
@@ -456,7 +468,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
-            MinSegments: '1'
+            MinSegments: 1
         },
         {
             Container: 'mp3',
@@ -503,8 +515,8 @@ export function buildJellyfinProfile(options = {}) {
             // On Tizen 6+ the transMaxAudioChannels is full surround (AC3/EAC3),
             // which fMP4 HLS handles without issue.
             MaxAudioChannels: transMaxAudioChannels,
-            MinSegments: isHtml5 ? '1' : '2',
-            SegmentLength: isHtml5 ? '2' : '6',
+            MinSegments: isHtml5 ? 1 : 2,
+            SegmentLength: isHtml5 ? 2 : 6,
             // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
             BreakOnNonKeyFrames: false,
             EnableAudioVbrEncoding: isHtml5
@@ -560,7 +572,8 @@ export function buildJellyfinProfile(options = {}) {
                 {
                     Condition: 'LessThanEqual',
                     Property: 'AudioChannels',
-                    Value: maxAudioChannels,
+                    // ProfileCondition.Value must be a string in Jellyfin's schema
+                    Value: maxAudioChannelsStr,
                     IsRequired: false
                 }
             ]
@@ -583,7 +596,8 @@ export function buildJellyfinProfile(options = {}) {
                 Condition: 'LessThanEqual',
                 Property: 'AudioChannels',
                 // Permit DirectPlay of AAC only if channel count is within safe limits.
-                Value: caps.tizenVersion >= 6 ? maxAudioChannels : '2',
+                // ProfileCondition.Value must always be a string in Jellyfin's schema.
+                Value: caps.tizenVersion >= 6 ? maxAudioChannelsStr : '2',
                 IsRequired: false
             }
         ]
@@ -676,7 +690,6 @@ export function buildJellyfinProfile(options = {}) {
         MaxStaticBitrate: maxBitrate,
         MaxStaticMusicBitrate: 40000000,
         MusicStreamingTranscodingBitrate: 384000,
-        EnableSubtitlesInManifest: true,
         DirectPlayProfiles: directPlayProfiles,
         DirectStreamProfiles: directStreamProfiles,
         TranscodingProfiles: transcodingProfiles,
