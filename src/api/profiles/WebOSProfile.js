@@ -339,8 +339,8 @@ export function buildJellyfinProfile(options = {}) {
     // enableFmp4HlsContainer = master toggle (default on).
     // forceFmp4HlsContainer  = bypass the webosVersion >= 6 hardware gate and
     //                          promote fMP4 to the primary HLS transcode.
-    const enableFmp4Hls  = PlayerSettings.get('enableFmp4HlsContainer');
-    const forceFmp4Hls   = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
+    const enableFmp4Hls = PlayerSettings.get('enableFmp4HlsContainer');
+    const forceFmp4Hls = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
 
     // Hardware version gate: WebOS < 6 frequently stutters on fMP4 HLS chunks.
     // The force flag overrides this gate when the user explicitly enables it.
@@ -354,7 +354,7 @@ export function buildJellyfinProfile(options = {}) {
 
     // When fMP4 is forced (user setting OR DOVI mandate), it becomes the PRIMARY
     // HLS container, replacing TS as the first profile the server picks.
-    const primaryHlsContainer = (forceFmp4Hls || shouldForceFmp4ForDovi) ? 'mp4' : 'ts';
+    const primaryHlsContainer = forceFmp4Hls || shouldForceFmp4ForDovi ? 'mp4' : 'ts';
 
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
@@ -468,9 +468,7 @@ export function buildJellyfinProfile(options = {}) {
     // an H.264 transcode, which strips the DOVI layer entirely and produces SDR.
     // For non-DOVI streams, including h264 lets the server choose lightweight
     // H.264 for 1080p content where HEVC is unnecessary overhead.
-    let transVideoCodecs = enableHEVC
-        ? (enableDolbyVision ? 'hevc' : 'h264,hevc')
-        : 'h264';
+    let transVideoCodecs = enableHEVC ? (enableDolbyVision ? 'hevc' : 'h264,hevc') : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -504,10 +502,10 @@ export function buildJellyfinProfile(options = {}) {
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '1',
             // Dolby Vision RPU metadata must be aligned to IDR keyframe boundaries.
-            // A 2 s segment is too short — DV metadata can land mid-segment and cause
-            // the hardware decoder to stall while it waits for a sync point.
-            // 4 s segments give the encoder enough room to always hit an IDR boundary.
-            SegmentLength: shouldForceFmp4ForDovi ? '4' : '2',
+            // A 3 s segment (our new default for standard content) is already safe,
+            // but DV needs an extra margin — 4 s guarantees every segment boundary
+            // is an IDR frame, preventing RPU orphans that crash the LG decoder.
+            SegmentLength: shouldForceFmp4ForDovi ? '4' : '3',
             // fMP4 segments must always be cut on IDR frames; BreakOnNonKeyFrames
             // is only safe for MPEG-TS and only when not in dedicated remux mode.
             BreakOnNonKeyFrames: primaryHlsContainer !== 'mp4' && playbackMode !== 'remux'
@@ -707,11 +705,11 @@ export function buildJellyfinProfile(options = {}) {
             // No Codec field = applies to ALL video codecs (hevc, h264, av1, vp9, etc.)
             Container: 'mkv',
             Conditions: [
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI',             IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10',    IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG',      IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR',      IsRequired: false },
-                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus',IsRequired: false }
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVI', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHLG', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithSDR', IsRequired: false },
+                { Condition: 'NotEquals', Property: 'VideoRangeType', Value: 'DOVIWithHDR10Plus', IsRequired: false }
             ]
         });
     }

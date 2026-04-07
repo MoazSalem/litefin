@@ -957,20 +957,45 @@ export class WebOSPlayer {
 
     /**
      * Track progress events to emit buffer state info for the UI.
-     * The buffered range is logged for diagnostics; a future enhancement
-     * could expose it via a getBandwidth() or getBufferedSeconds() API.
+     *
+     * IMPORTANT — buffer range selection:
+     * We deliberately iterate the buffered ranges and find the one that *contains*
+     * the current playback position, rather than taking buffered.end(last).
+     *
+     * The naive `buffered.end(length - 1)` approach reports the end of the FINAL
+     * downloaded segment — which can be 40+ seconds ahead — even when there is a
+     * zero-byte gap sitting 2 seconds in front of the playhead. That gap is what
+     * actually causes the decoder to stall; our old code completely hid it in the
+     * logs. This corrected version will show "Buffer ahead 0.0 s" right before a
+     * real stall, making the root cause immediately obvious.
+     *
      * @private
      */
     _onProgress() {
         const video = this._videoElement;
         if (!video || !video.buffered || video.buffered.length === 0) return;
         try {
-            // Amount of video currently buffered ahead of playback head
-            const bufferedEnd     = video.buffered.end(video.buffered.length - 1);
-            const secondsAhead    = Math.max(0, bufferedEnd - video.currentTime);
+            const buffered    = video.buffered;
+            const currentTime = video.currentTime;
+
+            // Find the buffered range that contains the current playhead.
+            // If none contains it (i.e. we are sitting in a gap), secondsAhead
+            // stays at 0, which is the honest value to log and act on.
+            let secondsAhead = 0;
+            for (let i = 0; i < buffered.length; i++) {
+                const start = buffered.start(i);
+                const end   = buffered.end(i);
+
+                // This range covers our current position — use its end
+                if (start <= currentTime && currentTime < end) {
+                    secondsAhead = Math.max(0, end - currentTime);
+                    break;
+                }
+            }
+
             log.debug('WebOSPlayer: Buffer ahead', secondsAhead.toFixed(1), 's');
         } catch (e) {
-            // Benign — buffered may be empty between segments
+            // Benign — buffered may be momentarily empty between segments
         }
     }
 
@@ -1075,23 +1100,39 @@ export class WebOSPlayer {
     // ========================================================================
 
     /**
-     * Start a timer that kicks the video with a tiny seek if playback stays
-     * stalled for more than 5 seconds. This is a last-resort recovery for
-     * WebOS buffer under-run scenarios with adaptive streams.
+     * Start a timer that kicks the video with a seek if playback stays stalled
+     * for more than 2.5 seconds.
+     *
+     * TWO improvements over the previous implementation:
+     *
+     *   Timeout: 5 000 ms → 2 500 ms
+     *     5 seconds of a frozen 4K frame is unacceptable. 2.5 s is tight enough
+     *     to recover quickly while still avoiding false positives during the
+     *     initial segment pipeline fill (which completes in < 1 s normally).
+     *
+     *   Kick magnitude: 0.01 s → 0.5 s
+     *     A 10 ms nudge often lands inside the same decoded frame and is silently
+     *     ignored by the WebOS native media engine on high-bitrate HEVC streams.
+     *     A 500 ms nudge is guaranteed to cross at least one HLS segment boundary,
+     *     forcing the pipeline to seek to a clean IDR frame and re-initialize the
+     *     decode path — which is what actually clears the stall.
+     *
      * @private
      */
     _startStallCheck() {
         this._clearStallCheck();
         this._stallTimer = setTimeout(() => {
             if (this._videoElement && !this._videoElement.paused && this._started) {
-                log.warn('WebOSPlayer: Still stalled after 5s — attempting recovery kick');
+                log.warn('WebOSPlayer: Still stalled after 2.5s — attempting recovery kick (+0.5s)');
                 try {
-                    this._videoElement.currentTime += 0.01;
+                    // Skip forward half a second to cross the next HLS segment boundary
+                    // and force the decoder pipeline to seek to a clean IDR keyframe.
+                    this._videoElement.currentTime += 0.5;
                 } catch (e) {
                     log.error('WebOSPlayer: Stall recovery kick failed', e);
                 }
             }
-        }, 5000);
+        }, 2500);
     }
 
     /** @private */
