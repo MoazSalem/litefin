@@ -473,6 +473,16 @@ class App {
             state.set('player:contextType', itemToPlay?.contextType || null);
             state.set('player:contextId', itemToPlay?.contextId || null);
 
+            // Store explicit trailer metadata overrides since the player re-fetches the item
+            // and loses the parent context injected by DetailsPage.
+            if (itemToPlay && itemToPlay.Type === 'Trailer') {
+                state.set('player:overrideName', itemToPlay.Name || null);
+                state.set('player:overrideYear', itemToPlay.ProductionYear !== undefined ? itemToPlay.ProductionYear : 'NONE');
+            } else {
+                state.set('player:overrideName', null);
+                state.set('player:overrideYear', null);
+            }
+
             // Store backdrop URL for loading screen transition
             state.set('player:backdropUrl', backdropUrl || null);
 

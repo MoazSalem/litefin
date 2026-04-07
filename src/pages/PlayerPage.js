@@ -200,6 +200,23 @@ class PlayerPage extends Page {
 
             // Load item details (and wait for font if needed)
             const [itemResult] = await Promise.all(fetchTasks);
+
+            // Preserve local trailer metadata mutations (Name & ProductionYear) since
+            // local trailers lack parent context and the fresh API fetch wipes our changes.
+            const overrideName = state.get('player:overrideName');
+            const overrideYear = state.get('player:overrideYear');
+
+            if (itemResult.Type === 'Trailer') {
+                if (overrideName && overrideName !== itemResult.Name) {
+                    itemResult.Name = overrideName;
+                }
+                if (overrideYear === 'NONE') {
+                    delete itemResult.ProductionYear;
+                } else if (overrideYear !== null) {
+                    itemResult.ProductionYear = parseInt(overrideYear, 10);
+                }
+            }
+
             this._item = itemResult;
             this.title = this._item.Name;
 

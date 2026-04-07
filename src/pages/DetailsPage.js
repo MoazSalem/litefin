@@ -2865,6 +2865,32 @@ class DetailsPage extends Page {
             }
 
             const trailerItem = trailers[0];
+            const parentName = this._item?.Name || this._item?.OriginalTitle || 'Video';
+
+            // Jellyfin often names local trailers generically (e.g. "Trailer" or "Trailers").
+            // Prefix it with the parent item's name so it looks good in the OSD title.
+            // e.g. "Inception - Trailer (2010)" instead of "Trailers (2010)".
+            if (trailerItem.Name) {
+                // If it's just "trailer" or "trailers", or starts with the parent name, clean it up.
+                if (/^(trailer|trailers|official trailer)s?$/i.test(trailerItem.Name.trim())) {
+                    trailerItem.Name = `${parentName} - Trailer`;
+                } else if (!trailerItem.Name.toLowerCase().startsWith(parentName.toLowerCase())) {
+                    // Capitalize 'trailers' if it's oddly lowercased by the backend
+                    let tName = trailerItem.Name;
+                    if (tName === 'trailers') tName = 'Trailer';
+                    trailerItem.Name = `${parentName} - ${tName}`;
+                }
+            } else {
+                trailerItem.Name = `${parentName} - Trailer`;
+            }
+
+            // Sync the year so the OSD displays the Movie's year, not the trailer file's metadata year
+            if (this._item && this._item.ProductionYear) {
+                trailerItem.ProductionYear = this._item.ProductionYear;
+            } else {
+                delete trailerItem.ProductionYear;
+            }
+
             log.info(`Playing local trailer "${trailerItem.Name}" (${trailerItem.Id})`);
 
             // Reuse the backdrop from the parent item for a smooth visual transition
@@ -2917,6 +2943,31 @@ class DetailsPage extends Page {
             }
 
             const trailerItem = trailers[0];
+            const parentName = this._item?.Name || this._item?.OriginalTitle || 'Video';
+
+            // Override generic local trailer names with the parent item's name
+            // so it reads cleanly in the player OSD.
+            if (trailerItem.Name) {
+                // If it's just "trailer" or "trailers", or starts with the parent name, clean it up.
+                if (/^(trailer|trailers|official trailer)s?$/i.test(trailerItem.Name.trim())) {
+                    trailerItem.Name = `${parentName} - Trailer`;
+                } else if (!trailerItem.Name.toLowerCase().startsWith(parentName.toLowerCase())) {
+                    // Capitalize 'trailers' if it's oddly lowercased by the backend
+                    let tName = trailerItem.Name;
+                    if (tName === 'trailers') tName = 'Trailer';
+                    trailerItem.Name = `${parentName} - ${tName}`;
+                }
+            } else {
+                trailerItem.Name = `${parentName} - Trailer`;
+            }
+
+            // Sync the year so the OSD displays the Movie's year, not the trailer file's metadata year
+            if (this._item && this._item.ProductionYear) {
+                trailerItem.ProductionYear = this._item.ProductionYear;
+            } else {
+                delete trailerItem.ProductionYear;
+            }
+
             log.info(`[AutoChain] Playing local trailer "${trailerItem.Name}" (${trailerItem.Id}), remote will follow`);
 
             const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
