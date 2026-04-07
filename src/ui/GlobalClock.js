@@ -8,7 +8,7 @@
  */
 
 import { eventBus } from '../core/EventBus.js';
-import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 
 const log = logger.create('GlobalClock');
@@ -60,15 +60,8 @@ class GlobalClock {
     update() {
         if (!this._element) return;
 
-        const timeFormat = PlayerSettings.get('timeFormat') || '12h';
-        const is24h = timeFormat === '24h' || timeFormat === '24';
-
         const now = new Date();
-        const timeString = now.toLocaleTimeString([], {
-            hour: 'numeric',
-            minute: '2-digit',
-            hour12: !is24h
-        });
+        const timeString = i18n.formatLocalTime(now);
 
         // Use a sleek format: 10:45 PM or 22:45
         this._element.textContent = timeString;

@@ -9,6 +9,11 @@ body.screensaver-active {
     overflow: hidden !important;
 }
 
+/* Hide the global clock during screensaver to prevent OLED burn-in */
+body.screensaver-active .global-clock {
+    display: none !important;
+}
+
 /* ============================================================================
    Logo Screensaver
    ============================================================================ */
