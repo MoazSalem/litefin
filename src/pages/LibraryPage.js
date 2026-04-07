@@ -38,7 +38,7 @@ class LibraryPage extends Page {
 
             // Pagination
             startIndex: 0,
-            limit: 100, // Per user requirement
+            limit: parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
             totalRecordCount: 0,
 
             // Data Cache

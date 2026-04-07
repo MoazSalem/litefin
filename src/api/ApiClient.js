@@ -28,7 +28,7 @@ export class ServerUnreachableError extends Error {
 }
 
 // API request timeout (ms)
-const REQUEST_TIMEOUT = 10000;
+const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware (Tizen/WebOS)
 
 // ============================================================================
 // ApiClient Class
@@ -210,11 +210,13 @@ export class ApiClient {
 
         try {
             // Create abort controller for timeout
+            // Support per-request timeout override via options.timeout
+            const timeout = options.timeout || REQUEST_TIMEOUT;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
             fetchOptions.signal = controller.signal;
 
-            log.debug(`Fetching ${url}...`);
+            log.debug(`Fetching ${url} (timeout: ${timeout}ms)...`);
             const response = await fetch(url, fetchOptions);
             clearTimeout(timeoutId);
 
@@ -249,8 +251,9 @@ export class ApiClient {
             const isNetworkError = error instanceof TypeError;
 
             if (isTimeout || isNetworkError) {
+                const timeout = options.timeout || REQUEST_TIMEOUT;
                 const msg = isTimeout
-                    ? `Connection timed out after ${REQUEST_TIMEOUT / 1000}s`
+                    ? `Connection timed out after ${timeout / 1000}s`
                     : `Server unreachable at ${this._serverUrl}`;
 
                 log.error(`${msg}:`, error.message);

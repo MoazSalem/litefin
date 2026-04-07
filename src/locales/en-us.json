@@ -456,6 +456,8 @@
     "LayoutModeDescription": "Choose optimized layout for your screen",
     "LayoutModern": "Modern (later)",
     "LayoutOrder": "Home Screen Layout",
+    "LabelLibraryPageSize": "Items per page (Library)",
+    "LibraryPageSizeDescription": "Choose how many items to load at once in the grid view. Low values improve performance on weaker devices.",
     "Library": "Library",
     "LibraryThumbnails": "Library Thumbnails",
     "LibraryThumbnailsDescription": "Style of library cards on the home screen",

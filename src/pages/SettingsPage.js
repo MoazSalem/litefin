@@ -372,6 +372,26 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLibraryPageSize">${i18n.t('LabelLibraryPageSize') || 'Items per page (Library)'}</span>
+                        <span class="setting-description" data-i18n="LibraryPageSizeDescription">${i18n.t('LibraryPageSizeDescription') || 'Choose how many items to load at once in the grid view.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'library-page-size-select',
+                            [
+                                { value: 25, label: '25' },
+                                { value: 50, label: '50' },
+                                { value: 75, label: '75' },
+                                { value: 100, label: '100' },
+                                { value: 150, label: '150' }
+                            ],
+                            storage.getItem('pref:libraryPageSize') || 100
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -2692,9 +2712,9 @@ class SettingsPage extends Page {
              */
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
-            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
-            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' }
+            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
+            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
