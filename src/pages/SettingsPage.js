@@ -668,6 +668,23 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="hero-carousel-style-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroStyle">${i18n.t('HeroStyle')}</span>
+                        <span class="setting-description" data-i18n="HeroStyleDescription">${i18n.t('HeroStyleDescription') || 'Visual style of the hero carousel'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-style-select',
+                            [
+                                { value: 'banner', label: i18n.t('StyleBanner') || 'Banner' },
+                                { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
+                            ],
+                            storage.getItem('pref:heroCarouselStyle') || 'banner'
+                        )}
+                    </div>
+                </div>
+
                 <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
@@ -2813,7 +2830,8 @@ class SettingsPage extends Page {
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
-            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' }
+            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
+            'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2999,6 +3017,28 @@ class SettingsPage extends Page {
                 storage.setItem('pref:confirmExit', newValue);
                 confirmExitToggle.classList.toggle('active', newValue);
                 log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hero Carousel
+        const heroCarouselToggle = this.$('#toggle-hero-carousel');
+        if (heroCarouselToggle) {
+            heroCarouselToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:heroCarousel') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:heroCarousel', newValue.toString());
+                heroCarouselToggle.classList.toggle('active', newValue);
+
+                // Toggle visibility of dependent settings
+                const textTitleItem = this.$('#hero-carousel-text-title-item');
+                const compactItem = this.$('#hero-carousel-compact-item');
+                const styleItem = this.$('#hero-carousel-style-item');
+
+                if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
+                if (compactItem) compactItem.style.display = newValue ? '' : 'none';
+                if (styleItem) styleItem.style.display = newValue ? '' : 'none';
+
+                focusManager.invalidateCache('settings-content');
             });
         }
 

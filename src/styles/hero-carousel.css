@@ -89,7 +89,7 @@
     width: 100%;
     height: 100%;
     /* Bottom-to-top mask to blend with rows */
-    background: linear-gradient(to top, var(--jf-background) 0%, rgba(0, 0, 0, 0.6) 30%, transparent 60%);
+    background: linear-gradient(to top,var(--jf-background) 6%,rgba(0,0,0,0.8) 15%,transparent 30%);
     z-index: 2;
 }
 
@@ -250,6 +250,81 @@
 .hero-carousel-container:focus::after,
 .hero-carousel-container.focused::after {
     opacity: 0.15;
+}
+
+/* ============================================================================
+   Carousel Styles: Banner Mode
+   ============================================================================ */
+
+.hero-carousel-container.banner {
+    margin: 100px 80px 40px 80px;
+    border-radius: var(--jf-border-radius-lg);
+    background: #000;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    transition: transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), 
+                box-shadow 0.5s ease;
+    /* Use outline/shadow instead of border to prevent radius mismatch issues */
+}
+
+/* Ensure inner carousel respects container radius */
+.hero-carousel-container.banner .hero-carousel {
+    border-radius: inherit;
+    height: 60vh; /* Slightly shorter in banner mode for better proportions */
+}
+
+.hero-carousel-container.banner.compact .hero-carousel {
+    height: 45vh;
+}
+
+/* Banner Focus State: Clean White Ring + Apple-style shadow */
+.hero-carousel-container.banner:focus,
+.hero-carousel-container.banner.focused {
+    transform: scale(1.025);
+    /* 
+     * We use a layered box-shadow to achieve the HIG look:
+     * 1. A 2px gap of background color to create separation
+     * 2. A 4px solid white ring
+     * 3. A soft glow/depth shadow
+     */
+    box-shadow: 0 0 0 2px var(--jf-background),
+                0 0 0 7px #fff,
+                0 30px 60px rgba(0, 0, 0, 0.8);
+    z-index: 1000;
+}
+
+/* Subtle inner glow for focus */
+.hero-carousel-container.banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    z-index: 5;
+    transition: box-shadow 0.5s ease;
+}
+
+.hero-carousel-container.banner:focus::before,
+.hero-carousel-container.banner.focused::before {
+    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+}
+
+/* Adjust gradients for banner mode (more self-contained) */
+.hero-carousel-container.banner .hero-item::after {
+    background: linear-gradient(to top, 
+        rgba(0, 0, 0, 0.9) 0%, 
+        rgba(0, 0, 0, 0.5) 40%, 
+        transparent 80%);
+}
+
+.hero-carousel-container.banner .hero-indicators {
+    bottom: 30px;
+    right: 40px;
+}
+
+[dir="rtl"] .hero-carousel-container.banner .hero-indicators {
+    right: auto;
+    left: 40px;
 }
 
 /* Animation for Auto-Scroll */
