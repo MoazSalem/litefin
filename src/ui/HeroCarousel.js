@@ -39,10 +39,12 @@ class HeroCarousel {
 
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index)).join('');
         const dotsHtml = this._items.map((_, index) => `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`).join('');
+        
+        const isCompact = storage.getItem('pref:heroCarouselCompact') === 'true';
 
         return `
             <div id="hero-carousel-container" class="hero-carousel-container focusable" tabindex="0">
-                <div class="hero-carousel">
+                <div class="hero-carousel ${isCompact ? 'compact' : ''}">
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
@@ -196,6 +198,9 @@ class HeroCarousel {
         this._stopAutoScroll();
         if (this._items.length <= 1) return;
         
+        // Reset the visual progress bar to stay in sync with the JS timer
+        this._resetIndicatorAnimation();
+
         this._timer = setInterval(() => {
             this.next();
         }, this._autoScrollInterval);
@@ -209,6 +214,24 @@ class HeroCarousel {
         if (this._timer) {
             clearInterval(this._timer);
             this._timer = null;
+        }
+    }
+
+    /**
+     * Restart the CSS animation on the current dot
+     * @private
+     */
+    _resetIndicatorAnimation() {
+        if (!this._container) return;
+        
+        const dots = this._container.querySelectorAll('.hero-dot');
+        const currentDot = dots[this._currentIndex];
+        
+        if (currentDot) {
+            currentDot.classList.remove('active');
+            // Force reflow to restart animation
+            void currentDot.offsetWidth;
+            currentDot.classList.add('active');
         }
     }
 
@@ -270,6 +293,7 @@ class HeroCarousel {
     _handleFocus() {
         this._isFocused = true;
         this._container.classList.add('focused');
+        this._startAutoScroll();
     }
 
     /**

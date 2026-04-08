@@ -581,32 +581,6 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableHeroCarousel">${i18n.t('EnableHeroCarousel') || 'Hero Carousel'}</span>
-                        <span class="setting-description" data-i18n="EnableHeroCarouselDescription">${i18n.t('EnableHeroCarouselDescription') || 'Show a featured carousel at the top of the home screen.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:heroCarousel') !== 'false' ? 'active' : ''}" 
-                                 id="toggle-hero-carousel" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
-                        <span class="setting-description" data-i18n="HeroCarouselTextTitleDescription">${i18n.t('HeroCarouselTextTitleDescription') || 'Prefer text titles over logos in the hero carousel.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselTextTitle') === 'true' ? 'active' : ''}" 
-                                 id="toggle-hero-carousel-text-title" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
                         <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
                     </div>
@@ -675,6 +649,47 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="btn btn-option" id="btn-regenerate-thumbs" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="Regenerate">
                             ${i18n.t('Regenerate') || 'Regenerate'}
+                        </button>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="HeroCarousel" style="margin-top: 40px;">${i18n.t('HeroCarousel') || 'Hero Carousel'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHeroCarousel">${i18n.t('EnableHeroCarousel') || 'Hero Carousel'}</span>
+                        <span class="setting-description" data-i18n="EnableHeroCarouselDescription">${i18n.t('EnableHeroCarouselDescription') || 'Show a featured carousel at the top of the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarousel') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselTextTitleDescription">${i18n.t('HeroCarouselTextTitleDescription') || 'Prefer text titles over logos in the hero carousel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselTextTitle') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-text-title" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-compact-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselCompact">${i18n.t('HeroCarouselCompact') || 'Compact Mode'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselCompactDescription">${i18n.t('HeroCarouselCompactDescription') || 'Reduces the height of the hero section to improve scroll performance.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselCompact') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-compact" 
+                                 tabindex="0">
                         </button>
                     </div>
                 </div>
@@ -2105,12 +2120,16 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarousel', newValue);
                 heroCarouselBtn.classList.toggle('active', newValue);
 
-                // Toggle visibility of the text title option
+                // Toggle visibility of the text title and compact options
                 const textTitleItem = this.$('#hero-carousel-text-title-item');
+                const compactItem = this.$('#hero-carousel-compact-item');
                 if (textTitleItem) {
                     textTitleItem.style.display = newValue ? '' : 'none';
-                    focusManager.invalidateCache();
                 }
+                if (compactItem) {
+                    compactItem.style.display = newValue ? '' : 'none';
+                }
+                focusManager.invalidateCache();
             });
         }
 
@@ -2122,6 +2141,17 @@ class SettingsPage extends Page {
                 const newValue = !isEnabled;
                 storage.setItem('pref:heroCarouselTextTitle', newValue);
                 heroCarouselTextBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Hero Carousel Compact Mode
+        const heroCarouselCompactBtn = this.$('#toggle-hero-carousel-compact');
+        if (heroCarouselCompactBtn) {
+            heroCarouselCompactBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselCompact') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselCompact', newValue);
+                heroCarouselCompactBtn.classList.toggle('active', newValue);
             });
         }
 

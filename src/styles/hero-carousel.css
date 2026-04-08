@@ -11,10 +11,26 @@
     width: 100%;
     height: 70vh; /* Adjust height as needed for TV screens */
     min-height: 500px;
-    margin-bottom: 20px;
     overflow: hidden;
     /* Composite layer for smooth performance */
     transform: translateZ(0);
+}
+
+.hero-carousel.compact {
+    height: 50vh;
+    min-height: 400px;
+}
+
+.hero-carousel.compact .hero-item {
+    padding-bottom: 80px;
+}
+
+.hero-carousel.compact .hero-logo-container {
+    height: 80px;
+}
+
+.hero-carousel.compact .hero-item-title {
+    font-size: 3rem;
 }
 
 .hero-carousel-track {
@@ -121,7 +137,6 @@
 .hero-meta-row {
     display: flex;
     align-items: center;
-    gap: 16px;
     margin-bottom: 24px;
     font-size: 1.3rem;
     color: rgba(255, 255, 255, 0.9);
@@ -131,6 +146,17 @@
 .hero-meta-item {
     display: inline-flex;
     align-items: center;
+    margin-right: 16px;
+}
+
+[dir="rtl"] .hero-meta-item {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+.hero-meta-item:last-child {
+    margin-right: 0;
+    margin-left: 0;
 }
 
 .hero-meta-badge {
@@ -160,7 +186,6 @@
     bottom: 40px;
     right: 80px;
     display: flex;
-    gap: 12px;
     z-index: 20;
 }
 
@@ -171,10 +196,21 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* Essential for visibility on light backgrounds */
+    margin-right: 12px;
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                 background 0.3s ease,
                 transform 0.3s ease;
     overflow: hidden;
+}
+
+[dir="rtl"] .hero-dot {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+.hero-dot:last-child {
+    margin-right: 0;
+    margin-left: 0;
 }
 
 .hero-dot.active {
