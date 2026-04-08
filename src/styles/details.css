@@ -784,19 +784,17 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 .person-grid.landscape-grid .media-card {
     width: calc(33.33% - 26px) !important;
     /* 3 items per row for better visibility/detail */
+    margin-right: 24px !important;
 }
 
-/* Reset the 5n clearing from the base grid */
+/* 1. First, restore margins for items that would have been cleared by the base 5-column rule */
 .person-grid.landscape-grid .media-card:nth-child(5n) {
     margin-right: 24px !important;
 }
 
+/* 2. Then, apply the actual 3-column clearing (this must come AFTER the 5n reset to win conflicts at 15n) */
 .person-grid.landscape-grid .media-card:nth-child(3n) {
     margin-right: 0 !important;
-}
-
-.person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-right: 24px !important;
 }
 
 /* Reset media-card margin for first item on row titles if needed */
