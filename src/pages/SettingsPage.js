@@ -581,6 +581,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHeroCarousel">${i18n.t('EnableHeroCarousel') || 'Hero Carousel'}</span>
+                        <span class="setting-description" data-i18n="EnableHeroCarouselDescription">${i18n.t('EnableHeroCarouselDescription') || 'Show a featured carousel at the top of the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarousel') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
                         <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
                     </div>
@@ -2067,6 +2080,17 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Hero Carousel
+        const heroCarouselBtn = this.$('#toggle-hero-carousel');
+        if (heroCarouselBtn) {
+            heroCarouselBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarousel') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarousel', newValue);
+                heroCarouselBtn.classList.toggle('active', newValue);
             });
         }
 

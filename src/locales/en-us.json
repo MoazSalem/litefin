@@ -368,6 +368,8 @@
     "EnableFmp4HlsContainer": "Prefer fMP4 HLS Container",
     "EnableFmp4HlsContainerDescription": "Advertise fMP4 (ISOBMFF) HLS transcoding profiles. Unlocks HEVC/AV1 remuxing on supported hardware.",
     "EnableHDR": "Enable HDR (High Dynamic Range)",
+    "EnableHeroCarousel": "Enable Hero Carousel",
+    "EnableHeroCarouselDescription": "Display an auto-scrolling hero section at the top of the home screen.",
     "EnableHEVC": "Enable HEVC (H.265)",
     "EnableTrickplay": "Thumbnail Preview",
     "EnableTrickplayDescription": "Show video frame previews when scrubbing through the timeline",
