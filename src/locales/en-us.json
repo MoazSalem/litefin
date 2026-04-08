@@ -372,6 +372,7 @@
     "EnableHeroCarouselDescription": "Display an auto-scrolling hero section at the top of the home screen.",
     "HeroCarousel": "Hero Carousel",
     "HeroStyle": "Hero Style",
+    "HeroStyleDescription": "Visual style of the hero carousel",
     "StyleImmersive": "Immersive",
     "StyleBanner": "Banner",
     "HeroCarouselTextTitle": "Use Text Titles",

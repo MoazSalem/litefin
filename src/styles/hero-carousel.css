@@ -16,20 +16,20 @@
     transform: translateZ(0);
 }
 
-.hero-carousel.compact {
+.hero-carousel-container.compact .hero-carousel {
     height: 50vh;
     min-height: 400px;
 }
 
-.hero-carousel.compact .hero-item {
+.hero-carousel-container.compact .hero-item {
     padding-bottom: 80px;
 }
 
-.hero-carousel.compact .hero-logo-container {
+.hero-carousel-container.compact .hero-logo-container {
     height: 80px;
 }
 
-.hero-carousel.compact .hero-item-title {
+.hero-carousel-container.compact .hero-item-title {
     font-size: 3rem;
 }
 
@@ -177,7 +177,7 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin-bottom: 40px;
-    text-shadow: 0 2px 4px rgba(0,0,0,0.3);
+    /* Removed text-shadow for performance during transitions */
 }
 
 /* Indicators (Dots) */
@@ -191,11 +191,11 @@
 
 .hero-dot {
     position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
     width: 8px;
     height: 8px;
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* Essential for visibility on light backgrounds */
     margin-right: 12px;
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                 background 0.3s ease,
@@ -222,7 +222,6 @@
 .hero-carousel-container {
     position: relative;
     overflow: hidden;
-    margin-bottom: 16px;
 }
 
 .hero-carousel-container::after {
@@ -232,10 +231,12 @@
     left: 0;
     right: 0;
     bottom: 0;
-    background: linear-gradient(to top, var(--jf-accent) 0%, transparent 100%);
-    /* Mask out the very bottom edge to prevent a hard cutoff */
-    mask-image: linear-gradient(to top, transparent 0%, black 15%, black 100%);
-    -webkit-mask-image: linear-gradient(to top, transparent 0%, black 15%, black 100%);
+    /* REFINED: Removed expensive mask-image. Using a smarter gradient for performance. */
+    background: linear-gradient(to top, 
+        transparent 0%, 
+        rgba(0, 0, 0, 0) 5%, 
+        var(--jf-accent) 20%, 
+        transparent 100%);
     opacity: 0;
     transition: opacity 0.5s ease;
     pointer-events: none;
@@ -257,56 +258,76 @@
    ============================================================================ */
 
 .hero-carousel-container.banner {
-    margin: 100px 80px 40px 80px;
+    margin: 90px 75px 30px 75px; /* Perfectly aligned with media grid (40px page + 60px row offset) */
     border-radius: var(--jf-border-radius-lg);
     background: #000;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+    border: 4px solid transparent; /* 4px (thinned) persistent border */
+    background-clip: padding-box;
     transition: transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), 
-                box-shadow 0.5s ease;
-    /* Use outline/shadow instead of border to prevent radius mismatch issues */
+                margin 0.5s ease,
+                border-color 0.4s ease;
 }
 
 /* Ensure inner carousel respects container radius */
 .hero-carousel-container.banner .hero-carousel {
-    border-radius: inherit;
+    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
     height: 60vh; /* Slightly shorter in banner mode for better proportions */
 }
 
-.hero-carousel-container.banner.compact .hero-carousel {
-    height: 45vh;
+.hero-carousel-container.banner.compact {
+    margin: 90px 75px 20px 75px; /* Mantaining 100px horizontal alignment in compact mode */
 }
 
-/* Banner Focus State: Clean White Ring + Apple-style shadow */
+.hero-carousel-container.banner.compact .hero-carousel {
+    height: 40vh; /* Scaled down from 60vh to allow next rows to peak through */
+    min-height: 320px;
+}
+
+/* Internal scaling for banner + compact */
+.hero-carousel-container.banner.compact .hero-logo-container {
+    height: 60px;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.banner.compact .hero-item-title {
+    font-size: 2.2rem;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.banner.compact .hero-description {
+    font-size: 1.15rem;
+    margin-bottom: 20px;
+    -webkit-line-clamp: 2; /* Fewer lines of detail in compact mode */
+    line-clamp: 2;
+}
+
+.hero-carousel-container.banner.compact .hero-indicators {
+    bottom: 20px;
+    right: 30px;
+}
+
+/* Banner Focus State: Performant Accent Ring (Sharp 1:1 Scale to prevent blurring) */
 .hero-carousel-container.banner:focus,
 .hero-carousel-container.banner.focused {
-    transform: scale(1.025);
-    /* 
-     * We use a layered box-shadow to achieve the HIG look:
-     * 1. A 2px gap of background color to create separation
-     * 2. A 4px solid white ring
-     * 3. A soft glow/depth shadow
-     */
-    box-shadow: 0 0 0 2px var(--jf-background),
-                0 0 0 7px #fff,
-                0 30px 60px rgba(0, 0, 0, 0.8);
+    border-color: var(--jf-accent); /* Sharp, high-contrast brand color */
     z-index: 1000;
 }
 
-/* Subtle inner glow for focus */
+/* Subtle inner glow for depth (using border for performance) */
 .hero-carousel-container.banner::before {
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: inherit;
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.1);
+    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
+    border: 2px solid rgba(255, 255, 255, 0.1);
     pointer-events: none;
     z-index: 5;
-    transition: box-shadow 0.5s ease;
+    transition: border-color 0.5s ease;
 }
 
 .hero-carousel-container.banner:focus::before,
 .hero-carousel-container.banner.focused::before {
-    box-shadow: inset 0 0 0 2px rgba(255, 255, 255, 0.3);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 
 /* Adjust gradients for banner mode (more self-contained) */
@@ -339,7 +360,7 @@
     left: 0;
     height: 100%;
     background: var(--jf-accent);
-    border-radius: inherit;
+    border-radius: 4px; /* Explicitly match dot radius for perfect rounding */
     width: 0;
 }
 

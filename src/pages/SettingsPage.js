@@ -704,7 +704,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="HeroCarouselCompactDescription">${i18n.t('HeroCarouselCompactDescription') || 'Reduces the height of the hero section to improve scroll performance.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselCompact') === 'true' ? 'active' : ''}" 
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselCompact') !== 'false' ? 'active' : ''}" 
                                  id="toggle-hero-carousel-compact" 
                                  tabindex="0">
                         </button>

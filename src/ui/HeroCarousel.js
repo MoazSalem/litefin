@@ -40,12 +40,14 @@ class HeroCarousel {
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index)).join('');
         const dotsHtml = this._items.map((_, index) => `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`).join('');
         
-        const isCompact = storage.getItem('pref:heroCarouselCompact') === 'true';
+        const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
 
+        // Apply compact to the container to manage external margins (Banner Mode)
+        // and internal scaling (Immersive Mode).
         return `
-            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} focusable" tabindex="0">
-                <div class="hero-carousel ${isCompact ? 'compact' : ''}">
+            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} focusable" tabindex="0">
+                <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
