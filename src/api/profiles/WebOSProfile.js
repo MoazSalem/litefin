@@ -359,12 +359,19 @@ export function buildJellyfinProfile(options = {}) {
     // Dolby Vision HEVC content MUST travel in an fMP4 HLS stream.
     // MPEG-TS cannot carry the DOVI RPU metadata layer correctly, and WebOS
     // will silently strip it, producing broken colours or a hard crash.
-    // We auto-promote to fMP4 here regardless of user settings or version gates.
+    //
+    // STRATEGY: Rather than globally forcing fMP4 as the primary container
+    // (which broke H.264 content by restricting all transcoding), we keep TS
+    // as primary but EXCLUDE HEVC from the TS profile's VideoCodec list.
+    // The Jellyfin StreamBuilder ranks transcoding profiles by whether they
+    // can copy the source video stream. When HEVC isn't in the TS profile,
+    // the server automatically picks the fMP4 secondary profile for any HEVC
+    // content (including DOVI), while H.264 content stays on the fast TS path.
     const shouldForceFmp4ForDovi = enableDolbyVision && enableHEVC;
 
-    // When fMP4 is forced (user setting OR DOVI mandate), it becomes the PRIMARY
-    // HLS container, replacing TS as the first profile the server picks.
-    const primaryHlsContainer = forceFmp4Hls || shouldForceFmp4ForDovi ? 'mp4' : 'ts';
+    // Primary HLS container: driven ONLY by the user's explicit fMP4 setting.
+    // DOVI routing is handled by codec selection, not container override.
+    const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
 
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
@@ -473,12 +480,12 @@ export function buildJellyfinProfile(options = {}) {
     // pass-through when the container allows it.
     let transAudioCodecs = 'aac,ac3,eac3';
 
-    // When Dolby Vision is active we MUST restrict to HEVC only.
-    // Leaving h264 in the list gives Jellyfin an escape hatch to fall back to
-    // an H.264 transcode, which strips the DOVI layer entirely and produces SDR.
-    // For non-DOVI streams, including h264 lets the server choose lightweight
-    // H.264 for 1080p content where HEVC is unnecessary overhead.
-    let transVideoCodecs = enableHEVC ? (enableDolbyVision ? 'hevc' : 'h264,hevc') : 'h264';
+    // Full set of video codecs for transcoding/remuxing.
+    // We do NOT restrict this to HEVC-only when DV is enabled because that would
+    // force a heavyweight HEVC transcode for every H.264 file. Instead, DOVI
+    // routing is handled at the per-profile level (HEVC excluded from TS, present
+    // in fMP4) so the server's rank-based selection picks the right container.
+    let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
         transAudioCodecs = 'copy';
@@ -506,17 +513,19 @@ export function buildJellyfinProfile(options = {}) {
             Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs,
+            // When DOVI is active and primary is TS, exclude HEVC from the TS
+            // profile. This forces the Jellyfin StreamBuilder to pick the fMP4
+            // secondary profile for HEVC streams (where DOVI RPU is safe),
+            // while H.264 content keeps the fast TS copy path.
+            VideoCodec: (shouldForceFmp4ForDovi && primaryHlsContainer === 'ts')
+                ? 'h264'
+                : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
             MinSegments: 1,
-            // Dolby Vision RPU metadata must be aligned to IDR keyframe boundaries.
-            // A 3 s segment (our new default for standard content) is already safe,
-            // but DV needs an extra margin — 4 s guarantees every segment boundary
-            // is an IDR frame, preventing RPU orphans that crash the LG decoder.
-            SegmentLength: shouldForceFmp4ForDovi ? 4 : 3,
+            SegmentLength: 3,
             // fMP4 segments must always be cut on IDR frames; BreakOnNonKeyFrames
             // is only safe for MPEG-TS and only when not in dedicated remux mode.
             BreakOnNonKeyFrames: primaryHlsContainer !== 'mp4' && playbackMode !== 'remux'
@@ -565,21 +574,36 @@ export function buildJellyfinProfile(options = {}) {
     // -------------------------------------------------------------------------
     // Secondary fMP4 HLS profile
     // -------------------------------------------------------------------------
-    // Only added when fMP4 is *supported* but NOT already the primary container.
-    // If forceFmp4Hls is true the primary profile above is already mp4, so
-    // there is nothing extra to push here — avoid a duplicate.
-    if (supportsFmp4Hls && !forceFmp4Hls) {
+    // Added in two scenarios:
+    //   1. Standard: fMP4 is hardware-supported but NOT already the primary
+    //      container (user preference or WebOS >= 6).
+    //   2. DOVI mandate: Dolby Vision requires fMP4 to carry RPU metadata.
+    //      Added even if the user hasn't explicitly enabled fMP4, because the
+    //      TS primary profile excludes HEVC and the server MUST have an fMP4
+    //      profile available to route HEVC/DOVI content to.
+    //
+    // When the primary is already mp4 (forceFmp4Hls), skip — no duplicate.
+    const needsSecondaryFmp4 =
+        (supportsFmp4Hls && primaryHlsContainer !== 'mp4') ||
+        (shouldForceFmp4ForDovi && primaryHlsContainer !== 'mp4');
+
+    if (needsSecondaryFmp4) {
         transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
             AudioCodec: transAudioCodecs,
+            // Full codec set — the server will only pick this profile when it
+            // can actually video-copy (HEVC source → HEVC in fMP4). H.264
+            // sources match the TS profile first (lower rank wins by order).
             VideoCodec: transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
-            // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
             MinSegments: 1,
-            SegmentLength: 2,
+            // DOVI RPU metadata must be aligned to IDR keyframe boundaries.
+            // 4s segments guarantee every boundary is an IDR frame, preventing
+            // RPU orphans that crash the LG decoder.
+            SegmentLength: shouldForceFmp4ForDovi ? 4 : 2,
             // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });
