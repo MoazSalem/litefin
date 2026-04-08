@@ -973,8 +973,8 @@ class HomePage extends Page {
                 SortBy: 'Random',
                 Recursive: true,
                 Limit: 5,
-                Fields: 'Overview,BackdropImageTags,PrimaryImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
-                ImageTypes: 'Backdrop',
+                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
+                EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
                 Filters: 'HasBackdrop'
             });

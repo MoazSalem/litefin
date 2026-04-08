@@ -13,7 +13,6 @@
     min-height: 500px;
     margin-bottom: 20px;
     overflow: hidden;
-    background: #000;
     /* Composite layer for smooth performance */
     transform: translateZ(0);
 }
@@ -170,7 +169,8 @@
     width: 8px;
     height: 8px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.3);
+    background: rgba(255, 255, 255, 0.2);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5); /* Essential for visibility on light backgrounds */
     transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
                 background 0.3s ease,
                 transform 0.3s ease;
@@ -179,8 +179,7 @@
 
 .hero-dot.active {
     width: 32px;
-    background: #fff;
-    box-shadow: 0 0 10px rgba(255, 255, 255, 0.3);
+    background: var(--jf-accent-content-color);
 }
 
 /* Focus State */
@@ -197,19 +196,24 @@
     left: 0;
     right: 0;
     bottom: 0;
-    box-shadow: inset 0 0 160px var(--jf-accent);
+    background: linear-gradient(to top, var(--jf-accent) 0%, transparent 100%);
+    /* Mask out the very bottom edge to prevent a hard cutoff */
+    mask-image: linear-gradient(to top, transparent 0%, black 15%, black 100%);
+    -webkit-mask-image: linear-gradient(to top, transparent 0%, black 15%, black 100%);
     opacity: 0;
-    transition: opacity 0.4s ease;
+    transition: opacity 0.5s ease;
     pointer-events: none;
     z-index: 100;
 }
 
-.hero-carousel-container:focus {
+.hero-carousel-container:focus,
+.hero-carousel-container.focused {
     outline: none;
 }
 
-.hero-carousel-container:focus::after {
-    opacity: 0.25;
+.hero-carousel-container:focus::after,
+.hero-carousel-container.focused::after {
+    opacity: 0.15;
 }
 
 /* Animation for Auto-Scroll */

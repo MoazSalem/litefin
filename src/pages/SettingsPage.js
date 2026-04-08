@@ -592,6 +592,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselTextTitleDescription">${i18n.t('HeroCarouselTextTitleDescription') || 'Prefer text titles over logos in the hero carousel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselTextTitle') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-text-title" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
@@ -2091,6 +2104,24 @@ class SettingsPage extends Page {
                 const newValue = !isEnabled;
                 storage.setItem('pref:heroCarousel', newValue);
                 heroCarouselBtn.classList.toggle('active', newValue);
+
+                // Toggle visibility of the text title option
+                const textTitleItem = this.$('#hero-carousel-text-title-item');
+                if (textTitleItem) {
+                    textTitleItem.style.display = newValue ? '' : 'none';
+                    focusManager.invalidateCache();
+                }
+            });
+        }
+
+        // Toggle Hero Carousel Text Title
+        const heroCarouselTextBtn = this.$('#toggle-hero-carousel-text-title');
+        if (heroCarouselTextBtn) {
+            heroCarouselTextBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselTextTitle') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselTextTitle', newValue);
+                heroCarouselTextBtn.classList.toggle('active', newValue);
             });
         }
 
