@@ -516,16 +516,30 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
-            // Dolby Vision RPU metadata must be aligned to IDR keyframe boundaries
-            // regardless of the HLS container (TS or fMP4). 4s gives the encoder
-            // enough room to always land a segment cut on a real IDR frame, preventing
-            // RPU orphans that can crash or corrupt the LG hardware decoder.
-            // Non-DOVI content uses 3s — fewer HTTP round-trips, more decode headroom.
-            SegmentLength: isDoviContent ? 6 : 3,
-            // fMP4 segments must always be cut on IDR frames.
-            // DOVI in TS also requires IDR alignment (RPU is frame-accurate).
-            // BreakOnNonKeyFrames is only safe for non-DOVI TS, and never in remux mode.
-            BreakOnNonKeyFrames: !isDoviContent && primaryHlsContainer !== 'mp4' && playbackMode !== 'remux'
+            // ---------------------------------------------------------------------
+            // Segment sizing strategy:
+            //
+            //   DOVI (10 s): DV RPU metadata must align to IDR keyframe boundaries.
+            //     Larger segments give the encoder more room to land a genuine IDR
+            //     cut, preventing RPU orphans that crash the LG hardware decoder.
+            //     10 s also means only ~360 boundary crossings per hour of 4K DV
+            //     content — more than 2× fewer stall opportunities than 6 s.
+            //
+            //   Non-DOVI (6 s): Doubled from the previous 3 s to halve the number
+            //     of segment transitions per hour. WebOS native HLS fires a brief
+            //     'waiting' event at every TS boundary; fewer boundaries = fewer
+            //     decoder micro-stalls, even with the new buffer-aware recovery.
+            // ---------------------------------------------------------------------
+            SegmentLength: isDoviContent ? 10 : 6,
+            // Force IDR-aligned segment cuts for all TS content, not only DOVI.
+            // The WebOS decoder produces visible macroblocking artifacts when split
+            // mid-GOP, and the resulting non-IDR boundaries also trigger additional
+            // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
+            // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
+            // passes the stream through as-is so we must not override it either.
+            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false
+                                : playbackMode === 'remux'    ? false
+                                : false  // always false for TS on WebOS
         },
         {
             Container: 'aac',
