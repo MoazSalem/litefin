@@ -55,37 +55,44 @@ export class VirtualCardRow {
         // Inject a hidden dummy element to natively expand the track's height.
         // Since absolute children collapse the parent, this static element prevents
         // the 3px height bug without needing hardcoded pixel guessing.
+        // We use a zero-width block to avoid interfering with horizontal (RTL) layout.
         if (this.totalItems > 0) {
-            // Build a pure DIV dummy to force native track height without any focusable elements
             const dummyDiv = document.createElement('div');
-            dummyDiv.style.width = `${this.itemWidth}px`;
-            dummyDiv.style.border = '3px solid transparent';
+            // Outer container has zero width and no horizontal impact
+            dummyDiv.style.width = '0';
+            dummyDiv.style.height = 'auto';
+            dummyDiv.style.display = 'block';
             dummyDiv.style.position = 'static';
             dummyDiv.style.visibility = 'hidden';
             dummyDiv.style.pointerEvents = 'none';
-            dummyDiv.style.display = 'inline-block';
-            dummyDiv.style.verticalAlign = 'top'; // CRITICAL: Stop inline-block baseline from adding ~4px to the bottom row
+            dummyDiv.style.overflow = 'visible';
+
+            // Inner wrapper provides the actual pixel context for height calculation
+            const dummyContent = document.createElement('div');
+            dummyContent.style.width = `${this.itemWidth}px`;
+            dummyContent.style.border = '3px solid transparent';
+            dummyContent.style.display = 'block';
 
             // Emulate .card-image
             const imageRatioDiv = document.createElement('div');
             imageRatioDiv.style.width = '100%';
-            imageRatioDiv.style.height = '0'; // CRITICAL: Match .card-image exactly
+            imageRatioDiv.style.height = '0';
             let padding = '150%'; // Poster
             if (this.isLandscape) padding = '56.25%';
             else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
             imageRatioDiv.style.paddingBottom = padding;
             imageRatioDiv.style.border = '3px solid transparent';
-            dummyDiv.appendChild(imageRatioDiv);
+            dummyContent.appendChild(imageRatioDiv);
 
             // Emulate .card-info
             if (!this.hideLabels) {
                 const infoDiv = document.createElement('div');
                 infoDiv.style.padding = '12px 4px 0 4px';
-                // Use explicit sizes to match the CSS exactly, preventing baseline stretch
                 infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
-                dummyDiv.appendChild(infoDiv);
+                dummyContent.appendChild(infoDiv);
             }
 
+            dummyDiv.appendChild(dummyContent);
             this.track.appendChild(dummyDiv);
         }
 

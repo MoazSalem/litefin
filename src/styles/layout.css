@@ -222,8 +222,8 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
 .row-items-track {
     position: relative; /* GUARANTEE offsetParent for JS calculation */
     display: inline-flex;
-    padding-left: 60px;
-    padding-right: 60px; /* Spacer to allow last item to clear screen edge */
+    padding-left: 0;
+    padding-right: 0; /* Spacer managed by JS for virtual rows */
     
     transform: translateZ(0); /* Hardware accelerate */
     will-change: transform;

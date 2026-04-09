@@ -176,18 +176,24 @@
 }
 
 /* ================== LIBRARY / ROW ITEMS ================== */
+
+[dir="rtl"] .library-content.horizontal-rows {
+    padding-left: 0;
+    padding-right: 60px;
+}
+
 [dir="rtl"] .row-title {
     margin-left: 0;
-    margin-right: -20px;
+    margin-right: 0;
     padding-left: 0;
-    padding-right: 20px;
+    padding-right: 60px;
     border-left: none;
     border-right: 3px solid transparent;
 }
 
 [dir="rtl"] .media-row {
     padding-left: 0;
-    padding-right: 60px;
+    padding-right: 0;
 }
 
 [dir="rtl"] .virtual-card {
