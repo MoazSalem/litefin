@@ -212,7 +212,6 @@
     "Video": "Beeld",
     "Writer": "Scenario",
     "Writers": "Scenario",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuten",
     "1Minute": "1 Minuut",
@@ -580,6 +579,7 @@
     "SampleRate": "Bemonsteringsfrequentie",
     "ScanningNetwork": "Netwerk scannen...",
     "Screensaver": "Schermbeveiliging",
+    "ScreensaverBlack": "Zwart",
     "ScreensaverDelay": "Weergavetijd",
     "ScreensaverDelayDescription": "Wanneer de schermbeveiliging moet worden weergegeven bij inactiviteit",
     "ScreensaverType": "Stijl schermbeveiliging",

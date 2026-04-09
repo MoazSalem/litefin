@@ -212,7 +212,6 @@
     "Video": "Wideo",
     "Writer": "Scenariusz",
     "Writers": "Scenariusz",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minut",
     "1Minute": "1 minuta",
@@ -580,6 +579,7 @@
     "SampleRate": "Częstotliwość próbkowania",
     "ScanningNetwork": "Skanowanie sieci...",
     "Screensaver": "Wygaszacz ekranu",
+    "ScreensaverBlack": "Czarny",
     "ScreensaverDelay": "Czas wyświetlania",
     "ScreensaverDelayDescription": "Po jakim czasie wyświetlić wygaszacz ekranu podczas bezczynności",
     "ScreensaverType": "Styl wygaszacza ekranu",

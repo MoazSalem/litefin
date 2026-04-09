@@ -212,7 +212,6 @@
     "Video": "Video",
     "Writer": "Người viết",
     "Writers": "Người viết",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 phút",
     "1Minute": "1 phút",
@@ -580,6 +579,7 @@
     "SampleRate": "Tỉ lệ mẫu (Sample Rate)",
     "ScanningNetwork": "Đang quét mạng...",
     "Screensaver": "Trình bảo vệ màn hình",
+    "ScreensaverBlack": "Đen",
     "ScreensaverDelay": "Thời gian hiển thị",
     "ScreensaverDelayDescription": "Khi nào hiển thị trình bảo vệ màn hình khi rảnh rỗi",
     "ScreensaverType": "Kiểu bảo vệ màn hình",

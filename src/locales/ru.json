@@ -212,7 +212,6 @@
     "Video": "Видео",
     "Writer": "Сценарист",
     "Writers": "Сценаристы",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 минут",
     "1Minute": "1 минута",
@@ -580,6 +579,7 @@
     "SampleRate": "Частота дискретизации",
     "ScanningNetwork": "Сканирование сети...",
     "Screensaver": "Заставка",
+    "ScreensaverBlack": "Черный",
     "ScreensaverDelay": "Время до показа",
     "ScreensaverDelayDescription": "Через сколько времени бездействия показать заставку",
     "ScreensaverType": "Стиль заставки",

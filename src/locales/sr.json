@@ -212,7 +212,6 @@
     "Video": "Видео",
     "Writer": "Писац",
     "Writers": "Писци",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 минута",
     "1Minute": "1 minut",
@@ -580,6 +579,7 @@
     "SampleRate": "Брзина узорковања",
     "ScanningNetwork": "Скенирање мреже...",
     "Screensaver": "Чувар екрана",
+    "ScreensaverBlack": "Crna",
     "ScreensaverDelay": "Време приказа",
     "ScreensaverDelayDescription": "Када приказати чувар екрана током мировања",
     "ScreensaverType": "Стил чувара екрана",

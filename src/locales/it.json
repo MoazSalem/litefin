@@ -212,7 +212,6 @@
     "Video": "Video",
     "Writer": "Scrittore",
     "Writers": "Scrittori",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minuti",
     "1Minute": "1 Minuto",
@@ -580,6 +579,7 @@
     "SampleRate": "Frequenza di Campionamento",
     "ScanningNetwork": "Scansione rete...",
     "Screensaver": "Salvaschermo",
+    "ScreensaverBlack": "Nero",
     "ScreensaverDelay": "Tempo di visualizzazione",
     "ScreensaverDelayDescription": "Quando visualizzare il salvaschermo durante l'inattività",
     "ScreensaverType": "Stile salvaschermo",

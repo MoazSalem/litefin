@@ -478,14 +478,15 @@ class SettingsPage extends Page {
                             'screensaver-type-select',
                             [
                                 { value: 'backdrop', label: i18n.t('Backdrop') || 'Backdrop' },
-                                { value: 'logo', label: i18n.t('Logo') || 'Logo' }
+                                { value: 'logo', label: i18n.t('Logo') || 'Logo' },
+                                { value: 'black', label: i18n.t('ScreensaverBlack') || 'Black' }
                             ],
                             storage.getItem('pref:screensaverType') || 'backdrop'
                         )}
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-dim-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-dim-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropDimmer">${i18n.t('BackdropDimmer') || 'Backdrop dim level'}</span>
                         <span class="setting-description" data-i18n="BackdropDimmerDescription">${i18n.t('BackdropDimmerDescription') || 'How dark the backdrop screensaver should be'}</span>
@@ -510,7 +511,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-hide-text-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-hide-text-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropHideText">${i18n.t('BackdropHideText') || 'Hide title and catchphrase'}</span>
                         <span class="setting-description" data-i18n="BackdropHideTextDescription">${i18n.t('BackdropHideTextDescription') || 'Do not show any text over the backdrop screensaver images'}</span>
@@ -523,7 +524,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-include-music-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-include-music-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropIncludeMusic">${i18n.t('BackdropIncludeMusic') || 'Include music library'}</span>
                         <span class="setting-description" data-i18n="BackdropIncludeMusicDescription">${i18n.t('BackdropIncludeMusicDescription') || 'Show backdrops from music artists in the screensaver'}</span>
@@ -2891,17 +2892,17 @@ class SettingsPage extends Page {
                             if (id === 'screensaver-type-select') {
                                 const dimContainer = document.getElementById('screensaver-dim-item');
                                 const hideTextContainer = document.getElementById('screensaver-hide-text-item');
-                                const isLogo = newValue === 'logo';
+                                const musicContainer = document.getElementById('screensaver-include-music-item');
+                                const isBackdrop = newValue === 'backdrop';
 
                                 if (dimContainer) {
-                                    dimContainer.classList.toggle('hidden', isLogo);
+                                    dimContainer.classList.toggle('hidden', !isBackdrop);
                                 }
                                 if (hideTextContainer) {
-                                    hideTextContainer.classList.toggle('hidden', isLogo);
+                                    hideTextContainer.classList.toggle('hidden', !isBackdrop);
                                 }
-                                const musicContainer = document.getElementById('screensaver-include-music-item');
                                 if (musicContainer) {
-                                    musicContainer.classList.toggle('hidden', isLogo);
+                                    musicContainer.classList.toggle('hidden', !isBackdrop);
                                 }
                                 focusManager.invalidateCache('settings-content');
                             }

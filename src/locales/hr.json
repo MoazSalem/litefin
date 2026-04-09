@@ -181,7 +181,6 @@
     "Unknown": "Nepoznato",
     "Video": "Video",
     "Writer": "Pisac",
-
     "_Jellyfin Untranslated Keys": "",
     "LabelOriginalMediaInfo": "Original Media Info",
     "LabelPlaybackInfo": "Playback Info",
@@ -214,7 +213,6 @@
     "Uniform": "Uniform",
     "Unplayed": "Unplayed",
     "Writers": "Writers",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuta",
     "1Minute": "1 minuta",
@@ -582,6 +580,7 @@
     "SampleRate": "Brzina uzorkovanja",
     "ScanningNetwork": "Skeniranje mreže...",
     "Screensaver": "Čuvar zaslona",
+    "ScreensaverBlack": "Crna",
     "ScreensaverDelay": "Vrijeme prikaza",
     "ScreensaverDelayDescription": "Kada prikazati čuvar zaslona tijekom mirovanja",
     "ScreensaverType": "Stil čuvara zaslona",

@@ -212,7 +212,6 @@
     "Video": "视频",
     "Writer": "编剧",
     "Writers": "作者",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10分钟",
     "1Minute": "1 分钟",
@@ -580,6 +579,7 @@
     "SampleRate": "采样率",
     "ScanningNetwork": "正在扫描网络...",
     "Screensaver": "屏幕保护程序",
+    "ScreensaverBlack": "黑色",
     "ScreensaverDelay": "显示时间",
     "ScreensaverDelayDescription": "闲置时显示屏幕保护程序的时间",
     "ScreensaverType": "屏幕保护程序样式",

@@ -212,7 +212,6 @@
     "Video": "Video",
     "Writer": "Yazar",
     "Writers": "Senaristler",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Dakika",
     "1Minute": "1 Dakika",
@@ -580,6 +579,7 @@
     "SampleRate": "Örnekleme Hızı",
     "ScanningNetwork": "Ağ taranıyor...",
     "Screensaver": "Ekran Koruyucu",
+    "ScreensaverBlack": "Siyah",
     "ScreensaverDelay": "Ekran süresi",
     "ScreensaverDelayDescription": "Boştayken ekran koruyucunun ne zaman gösterileceği",
     "ScreensaverType": "Ekran koruyucu stili",

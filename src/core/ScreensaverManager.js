@@ -16,6 +16,7 @@ import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
 import { LogoScreensaver } from './screensaver/LogoScreensaver.js';
 import { BackdropScreensaver } from './screensaver/BackdropScreensaver.js';
+import { BlackScreensaver } from './screensaver/BlackScreensaver.js';
 
 const log = logger.create('ScreensaverManager');
 
@@ -126,10 +127,15 @@ class ScreensaverManager {
         // Select plugin
         let pluginToRun = null;
 
-        // Fallback to logo if backdrop requested but not authenticated
-        if (this._pluginType === 'backdrop' && auth.isAuthenticated()) {
+        // Choose plugin based on user preference
+        if (this._pluginType === 'black') {
+            // New "Completely Black" screensaver option
+            pluginToRun = new BlackScreensaver();
+        } else if (this._pluginType === 'backdrop' && auth.isAuthenticated()) {
+            // Backdrop slideshow (requires auth)
             pluginToRun = new BackdropScreensaver();
         } else {
+            // Bouncing app logo (default fallback or unauthenticated)
             pluginToRun = new LogoScreensaver();
         }
 

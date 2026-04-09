@@ -212,7 +212,6 @@
     "Video": "فيديو",
     "Writer": "الكاتب",
     "Writers": "الكتاب",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 دقائق",
     "1Minute": "دقيقة واحدة",
@@ -580,6 +579,7 @@
     "SampleRate": "سرعة المعاينة",
     "ScanningNetwork": "جاري فحص الشبكة...",
     "Screensaver": "شاشة التوقف",
+    "ScreensaverBlack": "أسود",
     "ScreensaverDelay": "وقت العرض",
     "ScreensaverDelayDescription": "متى يتم عرض شاشة التوقف عند الخمول",
     "ScreensaverType": "نمط شاشة التوقف",

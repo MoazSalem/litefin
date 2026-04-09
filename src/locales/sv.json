@@ -212,7 +212,6 @@
     "Video": "Video",
     "Writer": "Manusförfattare",
     "Writers": "Manusförfattare",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minuter",
     "1Minute": "1 Minut",
@@ -580,6 +579,7 @@
     "SampleRate": "Samplingsfrekvens",
     "ScanningNetwork": "Skannar nätverk...",
     "Screensaver": "Skärmsläckare",
+    "ScreensaverBlack": "Svart",
     "ScreensaverDelay": "Visningstid",
     "ScreensaverDelayDescription": "När skärmsläckaren ska visas vid inaktivitet",
     "ScreensaverType": "Skärmsläckarstil",

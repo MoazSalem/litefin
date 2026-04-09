@@ -52,7 +52,6 @@
     "SubtitleMagenta": "मैजेंटा",
     "Unknown": "अज्ञात",
     "Video": "वीडियो",
-
     "_Jellyfin Untranslated Keys": "",
     "AspectRatioCover": "Zoom",
     "AspectRatioFill": "Stretch",
@@ -214,7 +213,6 @@
     "Unplayed": "Unplayed",
     "Writer": "Writer",
     "Writers": "Writers",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 मिनट",
     "1Minute": "1 मिनट",
@@ -582,6 +580,7 @@
     "SampleRate": "नमूना दर",
     "ScanningNetwork": "नेटवर्क स्कैन किया जा रहा है...",
     "Screensaver": "स्क्रीनसेवर",
+    "ScreensaverBlack": "काला",
     "ScreensaverDelay": "प्रदर्शन समय",
     "ScreensaverDelayDescription": "Idle होने पर स्क्रीनसेवर कब प्रदर्शित करना है",
     "ScreensaverType": "स्क्रीनसेवर शैली",

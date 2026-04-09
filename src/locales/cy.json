@@ -582,6 +582,7 @@
     "SampleRate": "Sample Rate",
     "ScanningNetwork": "Scanning network...",
     "Screensaver": "Screensaver",
+    "ScreensaverBlack": "Black",
     "ScreensaverDelay": "Display time",
     "ScreensaverDelayDescription": "When to display the screensaver while idle",
     "ScreensaverType": "Screensaver style",

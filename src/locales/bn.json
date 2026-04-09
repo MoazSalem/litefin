@@ -206,7 +206,6 @@
     "Video": "ভিডিও",
     "Writer": "লেখক",
     "Writers": "লেখকগণ",
-
     "_Jellyfin Untranslated Keys": "",
     "DeleteMedia": "Delete media",
     "Option3D": "3D",
@@ -214,7 +213,6 @@
     "OptionDvd": "DVD",
     "OptionIsHD": "HD",
     "OptionIsSD": "SD",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "১০ মিনিট",
     "1Minute": "১ মিনিট",
@@ -582,6 +580,7 @@
     "SampleRate": "স্যাম্পল রেট",
     "ScanningNetwork": "নেটওয়ার্ক স্ক্যান করা হচ্ছে...",
     "Screensaver": "স্ক্রিনসেভার",
+    "ScreensaverBlack": "কালো",
     "ScreensaverDelay": "ডিসপ্লে সময়",
     "ScreensaverDelayDescription": "আইডল থাকা অবস্থায় কখন স্ক্রিনসেভার দেখাবে",
     "ScreensaverType": "স্ক্রিনসেভার স্টাইল",

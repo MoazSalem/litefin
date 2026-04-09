@@ -212,7 +212,6 @@
     "Video": "ビデオ",
     "Writer": "著書",
     "Writers": "脚本",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10分",
     "1Minute": "1分",
@@ -580,6 +579,7 @@
     "SampleRate": "サンプリングレート",
     "ScanningNetwork": "ネットワークをスキャン中...",
     "Screensaver": "スクリーンセーバー",
+    "ScreensaverBlack": "ブラック",
     "ScreensaverDelay": "表示時間",
     "ScreensaverDelayDescription": "アイドル時にスクリーンセーバーを表示するまでの時間",
     "ScreensaverType": "スクリーンセーバースタイル",

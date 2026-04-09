@@ -212,7 +212,6 @@
     "Video": "Video",
     "Writer": "Drehbuch",
     "Writers": "Autoren",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minuten",
     "1Minute": "1 Minute",
@@ -580,6 +579,7 @@
     "SampleRate": "Abtastrate",
     "ScanningNetwork": "Netzwerk wird gescannt...",
     "Screensaver": "Bildschirmschoner",
+    "ScreensaverBlack": "Schwarz",
     "ScreensaverDelay": "Anzeigezeit",
     "ScreensaverDelayDescription": "Wann der Bildschirmschoner im Leerlauf angezeigt werden soll",
     "ScreensaverType": "Bildschirmschoner-Stil",

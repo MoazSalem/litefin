@@ -212,7 +212,6 @@
     "Video": "Vidéo",
     "Writer": "Scénariste",
     "Writers": "Scénaristes",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minutes",
     "1Minute": "1 Minute",
@@ -580,6 +579,7 @@
     "SampleRate": "Taux d'échantillonnage",
     "ScanningNetwork": "Analyse du réseau...",
     "Screensaver": "Économiseur d'écran",
+    "ScreensaverBlack": "Noir",
     "ScreensaverDelay": "Délai d'affichage",
     "ScreensaverDelayDescription": "Quand afficher l'économiseur d'écran en cas d'inactivité",
     "ScreensaverType": "Style d'économiseur d'écran",

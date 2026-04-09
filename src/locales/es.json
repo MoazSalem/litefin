@@ -212,7 +212,6 @@
     "Video": "Vídeo",
     "Writer": "Escritor",
     "Writers": "Escritores",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 minutos",
     "1Minute": "1 Minuto",
@@ -580,6 +579,7 @@
     "SampleRate": "Frecuencia de muestreo",
     "ScanningNetwork": "Escaneando red...",
     "Screensaver": "Protector de pantalla",
+    "ScreensaverBlack": "Negro",
     "ScreensaverDelay": "Tiempo de visualización",
     "ScreensaverDelayDescription": "Cuándo mostrar el protector de pantalla mientras está inactivo",
     "ScreensaverType": "Estilo de protector de pantalla",
