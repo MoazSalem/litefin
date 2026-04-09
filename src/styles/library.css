@@ -1246,7 +1246,6 @@ html[data-layout-tier="ultra-legacy"] .filter-main > * {
 
 .modal-option-btn.selected .radio-icon,
 .modal-option-btn.selected .checkbox-box {
-    border-color: var(--jf-accent);
     color: var(--jf-accent);
 }
 
@@ -1278,7 +1277,7 @@ html[data-layout-tier="ultra-legacy"] .filter-main > * {
 .modal-option-btn.selected .check-mark {
     opacity: 1;
     transform: scale(1);
-    color: white;
+    color: var(--jf-primary-btn-color);
 }
 
 .modal-option-btn.selected .checkbox-box {
@@ -1329,7 +1328,7 @@ html[data-layout-tier="ultra-legacy"] .filter-main > * {
 
 .modal-action-btn.apply {
     background-color: var(--jf-accent);
-    color: white;
+    color: var(--jf-primary-btn-color);
 }
 
 .modal-action-btn.clear,
@@ -1347,7 +1346,7 @@ html[data-layout-tier="ultra-legacy"] .filter-main > * {
 .modal-action-btn.clear.focused,
 .modal-action-btn.close.focused {
     background-color: rgba(255, 255, 255, 0.2);
-    color: var(--jf-primary-btn-color);
+    color: var(--jf-text-primary);
 }
 
 /* Sort Modal Specifics */

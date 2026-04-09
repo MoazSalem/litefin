@@ -755,21 +755,69 @@ progress.card-progress::-webkit-progress-value {
 .modal-action-btn {
     padding: 12px 32px;
     border-radius: var(--jf-border-radius-lg);
-    background: rgba(255, 255, 255, 0.1);
-    color: white;
-    border: none;
+    /* Use theme-aware background with a fallback */
+    background: var(--jf-action-btn-bg, rgba(255, 255, 255, 0.1));
+    /* FLIP: Use primary text color instead of hardcoded white for theme compliance */
+    color: var(--jf-text-primary);
+    border: 2px solid var(--jf-action-btn-border, transparent);
     font-size: 1rem;
     cursor: pointer;
     font-weight: 600;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
 .modal-action-btn:focus,
 .modal-action-btn:hover,
 .modal-action-btn.focused {
     background: var(--jf-accent);
+    /* High contrast text color calculated by ThemeUtils */
     color: var(--jf-primary-btn-color, #ffffff);
     outline: none;
     transform: scale(1.05);
+    border-color: var(--jf-action-btn-active-border, transparent);
+    z-index: 10;
+}
+
+/* Secondary/Cancel styling: Lower prominence but perfect readability */
+#btn-modal-cancel,
+#exit-dialog-no,
+#btn-subtitle-cancel,
+#btn-lang-modal-cancel,
+#btn-results-cancel,
+#btn-results-back {
+    opacity: 0.85;
+}
+
+#btn-modal-cancel:focus,
+#btn-modal-cancel.focused,
+#exit-dialog-no:focus,
+#exit-dialog-no.focused,
+#btn-subtitle-cancel:focus,
+#btn-subtitle-cancel.focused,
+#btn-lang-modal-cancel:focus,
+#btn-lang-modal-cancel.focused,
+#btn-results-cancel:focus,
+#btn-results-cancel.focused,
+#btn-results-back:focus,
+#btn-results-back.focused {
+    /* Keep secondary buttons visually distinct even when focused */
+    background: rgba(var(--jf-text-primary-rgb, 255, 255, 255), 0.15);
+    color: var(--jf-text-primary);
+    border: 3px solid var(--jf-accent) !important;
+}
+
+/* Redesigned Danger Button for Destructive Modal Actions (e.g. Exit, Delete) */
+.modal-action-btn.danger-btn {
+    background: rgba(255, 59, 48, 0.15); /* Translucent Apple Red */
+    color: #ff3b30;
+    border: 2px solid rgba(255, 59, 48, 0.3);
+}
+
+.modal-action-btn.danger-btn:focus,
+.modal-action-btn.danger-btn.focused {
+    background: #ff3b30 !important;
+    color: white !important;
+    border-color: #ff453a !important;
 }
 
 /* Modal Close Button Focus (Individualized) */
@@ -825,6 +873,11 @@ progress.card-progress::-webkit-progress-value {
     color: var(--jf-text-primary);
     width: 100% !important;
     margin-bottom: 12px;
+}
+
+/* Ensure high contrast when the parent modal button is focused */
+.modal-option-btn.focused .subtitle-result-info .track-label-text {
+    color: var(--jf-primary-btn-color) !important;
 }
 
 .subtitle-result-meta {
@@ -1061,6 +1114,14 @@ progress.card-progress::-webkit-progress-value {
     margin: 0;
     height: auto;
     border-radius: var(--jf-border-radius);
+}
+
+#btn-subtitle-search:focus,
+#btn-subtitle-search.focused {
+    background: var(--jf-accent) !important;
+    /* High contrast text color calculated by ThemeUtils */
+    color: var(--jf-primary-btn-color) !important;
+    transform: scale(1.02);
 }
 
 /* Panel B Results Specifics */
