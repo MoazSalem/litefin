@@ -14,6 +14,7 @@ import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -37,11 +38,11 @@ class HeroCarousel {
     render() {
         if (!this._items || this._items.length === 0) return '';
 
-        const itemsHtml = this._items.map((item, index) => this._renderItem(item, index)).join('');
+        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+        const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
         const dotsHtml = this._items.map((_, index) => `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`).join('');
         
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
 
         // Apply compact to the container to manage external margins (Banner Mode)
         // and internal scaling (Immersive Mode).
@@ -63,13 +64,15 @@ class HeroCarousel {
      * Render a single hero item
      * @private
      */
-    _renderItem(item, index) {
+    _renderItem(item, index, carouselStyle) {
         const isActive = index === 0;
         
-        // Get Backdrop URL
+        // Get optimized image parameters from ImageService based on style
+        const params = imageService.getParams(`hero-${carouselStyle}`);
+
         const backdropUrl = api.getImageUrl(item.Id, 'Backdrop', {
-            maxWidth: 1920,
-            quality: 80,
+            maxWidth: params.maxWidth,
+            quality: params.quality,
             tag: item.ImageTags?.Backdrop
         });
 
@@ -110,7 +113,8 @@ class HeroCarousel {
         if (starRating) metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518; margin-left: 8px;">${starRating}</span>`;
 
         return `
-            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}" style="background-image: url('${backdropUrl}')">
+            <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
+                <div class="hero-backdrop" style="background-image: url('${backdropUrl}')"></div>
                 <div class="hero-content">
                     ${logoHtml}
                     <div class="hero-meta-row">

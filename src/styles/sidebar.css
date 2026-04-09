@@ -153,8 +153,7 @@
 .sidebar.expanded .logo-text {
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.2s ease-out, visibility 0s;
-    transition-delay: 0.15s;
+    transition: opacity 0.5s ease-out, visibility 0s;
     margin-left: 15px;
 }
 
@@ -345,8 +344,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 .sidebar.expanded .item-text {
     opacity: 1;
     visibility: visible;
-    transition: opacity 0.2s ease-out, visibility 0s;
-    transition-delay: 0.15s;
+    transition: opacity 0.5s ease-out, visibility 0s;
 }
 
 .sidebar .user-name {
@@ -467,4 +465,4 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-}
+}

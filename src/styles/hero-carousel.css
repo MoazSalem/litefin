@@ -25,6 +25,12 @@
     padding-bottom: 80px;
 }
 
+.hero-carousel-container.compact .hero-backdrop {
+    /* REFINED: Using a slightly offset top-heavy anchor to keep actor faces 
+       visible in the narrow 50vh viewport. */
+    background-position: 50% 20%;
+}
+
 .hero-carousel-container.compact .hero-logo-container {
     height: 80px;
 }
@@ -51,6 +57,7 @@
     display: flex;
     align-items: flex-end;
     padding-bottom: 120px; /* Space for indicators and breathing room */
+    overflow: hidden; /* Contain the scaled backdrop */
 }
 
 .hero-item.active {
@@ -64,8 +71,11 @@
     left: 0;
     width: 100%;
     height: 100%;
-    object-fit: cover;
     z-index: -1;
+    background-size: cover;
+    background-position: top;
+    background-repeat: no-repeat;
+    /* Transformation handled via animation on the .active class */
 }
 
 /* Gradients for readability */
@@ -109,6 +119,17 @@
 .hero-item.active .hero-content {
     opacity: 1;
     transform: translateY(0);
+}
+
+/* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop ONLY */
+.hero-item.active .hero-backdrop {
+    /* CSS Animation ensures it triggers even on the very first initial mount */
+    animation: hero-ken-burns 12000ms linear forwards;
+}
+
+@keyframes hero-ken-burns {
+    from { transform: scale(1); }
+    to   { transform: scale(1.08); }
 }
 
 .hero-logo-container {
@@ -326,6 +347,15 @@
         rgba(0, 0, 0, 0.9) 0%, 
         rgba(0, 0, 0, 0.5) 20%, 
         transparent 80%);
+}
+
+/* Compact specific gradient optimization: 
+   Pull the mask further down to prevent washing out the restricted image area. */
+.hero-carousel-container.compact .hero-item::after {
+    background: linear-gradient(to top, 
+        var(--jf-background) 0%, 
+        rgba(0, 0, 0, 0.5) 10%, 
+        transparent 25%);
 }
 
 .hero-carousel-container.banner .hero-indicators {

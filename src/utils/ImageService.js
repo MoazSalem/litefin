@@ -41,8 +41,8 @@ class ImageService {
                 poster: 240,
                 backdrop: 640,
                 'card-backdrop': 360,
-                'hero-banner': 800,
-                'hero-immersive': 960,
+                'hero-banner': 554,
+                'hero-immersive': 607,
                 thumb: 320,
                 banner: 480,
                 avatar: 160,
@@ -52,8 +52,8 @@ class ImageService {
                 poster: 360,
                 backdrop: 1080,
                 'card-backdrop': 600,
-                'hero-banner': 1280,
-                'hero-immersive': 1440,
+                'hero-banner': 1662,
+                'hero-immersive': 1820,
                 thumb: 480,
                 banner: 800,
                 avatar: 240,
@@ -63,8 +63,8 @@ class ImageService {
                 poster: 500,
                 backdrop: 1920,
                 'card-backdrop': 800,
-                'hero-banner': 1662,
-                'hero-immersive': 1820,
+                'hero-banner': 1920,
+                'hero-immersive': 1920,
                 thumb: 640,
                 banner: 1280,
                 avatar: 320,
@@ -74,8 +74,8 @@ class ImageService {
                 poster: 800,
                 backdrop: 3840,
                 'card-backdrop': 1280,
-                'hero-banner': 1920,
-                'hero-immersive': 2560,
+                'hero-banner': 3840,
+                'hero-immersive': 3840,
                 thumb: 1280,
                 banner: 1920,
                 avatar: 600,
@@ -85,13 +85,7 @@ class ImageService {
 
         const currentScale = presets[this.getPreset()] || presets.medium;
 
-        let maxWidth = 300; // Default safety
-        if (type === 'poster') maxWidth = currentScale.poster;
-        else if (type === 'backdrop') maxWidth = currentScale.backdrop;
-        else if (type === 'card-backdrop') maxWidth = currentScale['card-backdrop'];
-        else if (type === 'thumb') maxWidth = currentScale.thumb;
-        else if (type === 'banner') maxWidth = currentScale.banner;
-        else if (type === 'avatar') maxWidth = currentScale.avatar;
+        const maxWidth = currentScale[type] || 300;
 
         return {
             maxWidth,

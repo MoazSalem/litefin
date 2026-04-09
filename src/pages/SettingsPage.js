@@ -2134,19 +2134,20 @@ class SettingsPage extends Page {
             heroCarouselBtn.addEventListener('click', () => {
                 const isEnabled = storage.getItem('pref:heroCarousel') !== 'false';
                 const newValue = !isEnabled;
-                storage.setItem('pref:heroCarousel', newValue);
+                storage.setItem('pref:heroCarousel', newValue.toString());
                 heroCarouselBtn.classList.toggle('active', newValue);
 
-                // Toggle visibility of the text title and compact options
+                // Toggle visibility of dependent settings (style, text title, compact)
                 const textTitleItem = this.$('#hero-carousel-text-title-item');
                 const compactItem = this.$('#hero-carousel-compact-item');
-                if (textTitleItem) {
-                    textTitleItem.style.display = newValue ? '' : 'none';
-                }
-                if (compactItem) {
-                    compactItem.style.display = newValue ? '' : 'none';
-                }
-                focusManager.invalidateCache();
+                const styleItem = this.$('#hero-carousel-style-item');
+
+                if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
+                if (compactItem) compactItem.style.display = newValue ? '' : 'none';
+                if (styleItem) styleItem.style.display = newValue ? '' : 'none';
+
+                focusManager.invalidateCache('settings-content');
+                log.info(`Hero Carousel set to: ${newValue}`);
             });
         }
 
@@ -2156,8 +2157,9 @@ class SettingsPage extends Page {
             heroCarouselTextBtn.addEventListener('click', () => {
                 const isEnabled = storage.getItem('pref:heroCarouselTextTitle') === 'true';
                 const newValue = !isEnabled;
-                storage.setItem('pref:heroCarouselTextTitle', newValue);
+                storage.setItem('pref:heroCarouselTextTitle', newValue.toString());
                 heroCarouselTextBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Text Title set to: ${newValue}`);
             });
         }
 
@@ -2165,10 +2167,11 @@ class SettingsPage extends Page {
         const heroCarouselCompactBtn = this.$('#toggle-hero-carousel-compact');
         if (heroCarouselCompactBtn) {
             heroCarouselCompactBtn.addEventListener('click', () => {
-                const isEnabled = storage.getItem('pref:heroCarouselCompact') === 'true';
+                const isEnabled = storage.getItem('pref:heroCarouselCompact') !== 'false';
                 const newValue = !isEnabled;
-                storage.setItem('pref:heroCarouselCompact', newValue);
+                storage.setItem('pref:heroCarouselCompact', newValue.toString());
                 heroCarouselCompactBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Compact Mode set to: ${newValue}`);
             });
         }
 
@@ -3020,27 +3023,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Hero Carousel
-        const heroCarouselToggle = this.$('#toggle-hero-carousel');
-        if (heroCarouselToggle) {
-            heroCarouselToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:heroCarousel') !== 'false';
-                const newValue = !currentValue;
-                storage.setItem('pref:heroCarousel', newValue.toString());
-                heroCarouselToggle.classList.toggle('active', newValue);
-
-                // Toggle visibility of dependent settings
-                const textTitleItem = this.$('#hero-carousel-text-title-item');
-                const compactItem = this.$('#hero-carousel-compact-item');
-                const styleItem = this.$('#hero-carousel-style-item');
-
-                if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
-                if (compactItem) compactItem.style.display = newValue ? '' : 'none';
-                if (styleItem) styleItem.style.display = newValue ? '' : 'none';
-
-                focusManager.invalidateCache('settings-content');
-            });
-        }
 
         // Toggle Switch for Trailer Auto-Chain
         const trailerAutoChainToggle = this.$('#toggle-trailer-auto-chain');
