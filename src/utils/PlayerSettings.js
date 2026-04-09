@@ -204,15 +204,17 @@ const DEFAULTS = {
     //
     //   enableFmp4HlsContainer — Master switch. When false the fMP4 HLS profile
     //     is never advertised, regardless of the hardware version gate.
-    //     Default: true (hardware version gates still apply unless forced).
+    //     Default: false — tests showed fMP4 does NOT activate Dolby Vision on
+    //     WebOS; only MPEG-TS reliably triggers the DV pipeline. fMP4 is
+    //     therefore opt-in rather than opt-out.
     //
     //   forceFmp4HlsContainer — When true, completely bypasses the hardware
-    //     version gate (tizenVersion >= 6 / webosVersion >= 6) and promotes
-    //     the fMP4 profile to be the PRIMARY HLS transcode. Useful when a
-    //     newer-firmware TV is not detected correctly but you know it handles
-    //     fMP4 reliably. Ignored when enableFmp4HlsContainer is false.
+    //     version gate (webosVersion >= 6) and promotes the fMP4 profile to be
+    //     the PRIMARY HLS transcode. Only use this if you have confirmed your
+    //     TV handles fMP4 HLS correctly and you don't need DV passthrough.
+    //     Ignored when enableFmp4HlsContainer is false.
     //     Default: false.
-    enableFmp4HlsContainer: true,
+    enableFmp4HlsContainer: false,
     forceFmp4HlsContainer: false,
 
     // =========================================================================
