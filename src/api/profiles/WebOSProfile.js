@@ -638,6 +638,55 @@ export function buildJellyfinProfile(options = {}) {
             ]
         });
 
+        // -----------------------------------------------------------------------
+        // HEVC codec tag gate for fMP4 HLS container (WebOS-specific)
+        // -----------------------------------------------------------------------
+        // When the user has opted into fMP4 as the primary HLS container, we
+        // mandate that the server uses the hvc1 codec tag (in-band parameter
+        // sets) rather than the default hev1 tag (out-of-band parameter sets).
+        //
+        // WHY THIS MATTERS:
+        //   jellyfin-web enforces the exact same restriction for Safari (lines
+        //   1441-1448 of browserDeviceProfile.js) — Safari only supports hvc1
+        //   and dvh1. WebOS has the same undocumented requirement: without hvc1,
+        //   the hardware validates the codec string, fails, and the Dolby Vision
+        //   pipeline stays offline even though the file "plays" (as SDR/HDR10).
+        //
+        //   hvc1 = parameter sets inside the bitstream (in-band)   ✅ WebOS OK
+        //   hev1 = parameter sets in the MP4 side boxes (out-of-band) ❌ DV dead
+        //
+        // WHY ONLY IN fMP4 MODE:
+        //   MPEG-TS doesn't use MP4 codec strings at all. The hardware decoder
+        //   reads raw annexB bytes directly from the TS payload — codec tag
+        //   validation never happens, so DOVI RPU passes through regardless.
+        //   Applying this condition in TS mode would incorrectly refuse direct-
+        //   play of TS files whose hev1/hvc1 we have no control over.
+        //
+        // EFFECT:
+        //   If a source HEVC stream is tagged hev1, the server will remux it
+        //   into an fMP4 segment that Jellyfin tags as hvc1, giving WebOS the
+        //   signal it needs to activate the hardware DV pipeline.
+        // -----------------------------------------------------------------------
+        if (primaryHlsContainer === 'mp4') {
+            codecProfiles.push({
+                Type: 'Video',
+                Codec: 'hevc',
+                // Restrict to mp4/hls containers only — TS is excluded by
+                // omitting the outer Container condition (TS never uses codec tags).
+                Conditions: [
+                    {
+                        // Mandate in-band parameter sets (hvc1) or its DV sibling (dvh1).
+                        // If the source file uses hev1, Jellyfin will remux it via FFmpeg
+                        // with -tag:v hvc1 before sending, ensuring the WebOS DV pipeline fires.
+                        Condition: 'EqualsAny',
+                        Property: 'VideoCodecTag',
+                        Value: 'hvc1|dvh1',
+                        IsRequired: true
+                    }
+                ]
+            });
+        }
+
         // Explicit Dolby Vision encouragement profile.
         // Without this hint, Jellyfin may emit VideoRangeTypeNotSupported and reject
         // the DOVI stream before we even get a chance to remux it. This tells the
