@@ -483,6 +483,20 @@ export class ApiClient {
     }
 
     /**
+     * Get a single random item (Movie or Series) from the user's library.
+     * @returns {Promise<Object|null>} A random item object or null if none found.
+     */
+    async getRandomItem() {
+        const result = await this.getItems({
+            IncludeItemTypes: 'Movie,Series',
+            SortBy: 'Random',
+            Limit: 1,
+            Recursive: true
+        });
+        return result && result.Items && result.Items.length > 0 ? result.Items[0] : null;
+    }
+
+    /**
      * Get latest items in a library
      */
     async getLatestItems(parentId, params = {}) {

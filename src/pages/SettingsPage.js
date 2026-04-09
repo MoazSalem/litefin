@@ -403,6 +403,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowRandomButton">${i18n.t('LabelShowRandomButton')}</span>
+                        <span class="setting-description" data-i18n="ShowRandomButtonDescription">${i18n.t('ShowRandomButtonDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showRandomButton') !== 'false' ? 'active' : ''}" 
+                                id="toggle-random-button" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -2126,6 +2139,22 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Random Button
+        const randomBtnToggle = this.$('#toggle-random-button');
+        if (randomBtnToggle) {
+            randomBtnToggle.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showRandomButton') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showRandomButton', newValue);
+                randomBtnToggle.classList.toggle('active', newValue);
+                
+                // Notify components (like Sidebar) to update
+                eventBus.emit('prefChanged:showRandomButton', newValue);
+                
+                log.info(`Random Button set to: ${newValue}`);
             });
         }
 
