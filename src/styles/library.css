@@ -592,6 +592,10 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 
 /* ── View mode: List ─────────────────────────────────────────────── */
 /* One full-width row per item: small poster on the left, rich metadata on the right. */
+.library-grid.view-list {
+    min-width: 100%;
+}
+
 .library-grid.view-list .media-card {
     display: flex !important; 
     flex-direction: row !important;
