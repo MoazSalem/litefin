@@ -23,6 +23,7 @@
         "package:webos-ultra-legacy": "gulp buildPackageWebosUltraLegacy",
         "package:es6": "gulp buildPackageES6",
         "package:normal": "gulp buildPackageNormal",
+        "package:test": "gulp buildPackageTest",
         "package:legacy": "gulp buildPackageLegacy",
         "package:ultra-legacy": "gulp buildPackageUltraLegacy",
         "package:debug": "gulp buildPackageDebug",

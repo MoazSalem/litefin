@@ -253,6 +253,15 @@ async function packageNormal() {
     await createWgt(buildDir, wgtName);
 }
 
+async function packageTest() {
+    const buildDir = 'dist/normal';
+    const wgtName = `litefin.wgt`; // test output
+
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    await createWgt(buildDir, wgtName);
+}
+
 async function packageDebug() {
     // Debug build ships with source maps — use only for on-device debugging
     const buildDir = 'dist/debug';
@@ -372,6 +381,7 @@ const buildPackage = gulp.series(
 // Individual Tizen build+package tasks
 const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
+const buildPackageTest = gulp.series(syncVersion, cleanDist, webpackNormal, packageTest);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
 const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
@@ -410,6 +420,7 @@ export {
     // Tizen WGT packaging
     packageES6,
     packageNormal,
+    packageTest,
     packageLegacy,
     packageUltraLegacy,
     packageDebug,
@@ -422,6 +433,7 @@ export {
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
+    buildPackageTest,
     buildPackageLegacy,
     buildPackageUltraLegacy,
     buildPackageDebug,
