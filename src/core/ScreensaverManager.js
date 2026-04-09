@@ -33,8 +33,6 @@ class ScreensaverManager {
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
         this._hideBound = this.hide.bind(this);
-        this._onPointerMoveBound = this._onPointerMove.bind(this);
-        this._lastPointerInputTime = Date.now();
     }
 
     init() {
@@ -69,10 +67,6 @@ class ScreensaverManager {
         eventBus.on('pref:screensaverDelay', () => this._updateConfig());
         eventBus.on('pref:screensaverType', () => this._updateConfig());
 
-        // Setup mouse listeners for non-tv pointers
-        document.addEventListener('mousemove', this._onPointerMoveBound, { passive: true });
-        document.addEventListener('pointermove', this._onPointerMoveBound, { passive: true });
-
         this._initialized = true;
         log.info('Initialized with delay:', this._delaySeconds, 's');
     }
@@ -102,33 +96,21 @@ class ScreensaverManager {
         }
     }
 
-    _onPointerMove() {
-        this._lastPointerInputTime = Date.now();
-        if (this.isShowing) {
-            this.hide();
-        }
-    }
 
     _checkIdleTime() {
         if (this.isShowing) return;
         if (this._delaySeconds <= 0) return;
 
         // If currently playing video, never show screensaver
-        // Audio playback can show screensaver (like JF web does)
         if (this._isVideoPlaying) return;
 
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
         const minIdleTimeMs = this._delaySeconds * 1000;
 
-        // Check platform keys (TV remote)
-        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
-        if (platformAdapter.idleTime < minIdleTimeMs) return;
-
-        // Check pointer (Magic Remote / Web mouse)
-        const pointerIdleTimeMs = Date.now() - this._lastPointerInputTime;
-        if (pointerIdleTimeMs < minIdleTimeMs) return;
-
-        log.info('System idle time reached limit, showing screensaver');
-        this.show();
+        if (platformAdapter.idleTime >= minIdleTimeMs) {
+            log.info('System idle time reached limit, showing screensaver');
+            this.show();
+        }
     }
 
     get isShowing() {
@@ -184,7 +166,6 @@ class ScreensaverManager {
         // Reset tracking to prevent immediate re-triggering
         const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
         platformAdapter.reportInput?.();
-        this._lastPointerInputTime = Date.now();
 
         // Let plugin clean up DOM/Animation
         if (this._activePlugin) {
