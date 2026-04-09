@@ -398,9 +398,7 @@ body.lyrics-active .audio-album-art {
    Tizen-Specific Styles
    ========================================================================== */
 
-/* Hide cursor on TV */
-@media (tv) {
-    .player-page * {
-        cursor: none;
-    }
-}
+/* Hide cursor on TV platforms during playback */
+html:not([data-platform="web"]) .player-page * {
+    cursor: none;
+}

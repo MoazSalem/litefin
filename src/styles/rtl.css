@@ -201,6 +201,11 @@
     margin-left: 20px; /* Gap between cards */
 }
 
+[dir="rtl"] .library-grid.view-list .media-card .card-image {
+    border-radius: 0 12px 12px 0 !important;
+}
+
+
 /* ================== COMPONENTS ================== */
 [dir="rtl"] .metadata-item {
     margin-right: 0;
@@ -292,6 +297,29 @@
 
 [dir="rtl"] .btn-icon-text .icon {
     margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .trailer-option-icon {
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+[dir="rtl"] .subtitle-search-row > * {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .media-info-stream-header .stream-type-badge {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .media-info-grid .media-info-row:nth-child(even) {
+    margin-right: 12px;
+}
+
+[dir="rtl"] .media-info-grid .media-info-row:nth-child(odd) {
     margin-left: 12px;
 }
 
@@ -522,4 +550,36 @@
 /* ================== SYNCPLAY NOTIFICATIONS ================== */
 [dir="rtl"] .osd-syncplay-notification-glass {
     padding: 16px 24px 16px 32px;
+}
+
+/* ================== HERO CAROUSEL ================== */
+[dir="rtl"] .hero-indicators {
+    right: auto;
+    left: 80px;
+}
+
+/* Mirror the progress bar growth direction for the dots */
+[dir="rtl"] .hero-dot-progress {
+    left: auto;
+    right: 0;
+}
+
+[dir="rtl"] .hero-carousel-container.banner .hero-indicators {
+    right: auto;
+    left: 40px;
+}
+
+[dir="rtl"] .hero-carousel-container.banner.compact .hero-indicators {
+    right: auto;
+    left: 30px;
+}
+
+[dir="rtl"] .hero-meta-item {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .hero-dot {
+    margin-right: 0;
+    margin-left: 12px;
 }

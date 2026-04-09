@@ -99,8 +99,9 @@ class LayoutManager {
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
 
-        // Stamp the tier
+        // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
+        document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
         log.info(
             `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`

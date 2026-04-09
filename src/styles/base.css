@@ -498,9 +498,9 @@ body {
 
 /* 
  * By default on TV Platforms we hide the cursor unless the Magic Remote 
- * (pointer mode) is active. The WebOSAdapter handles toggling this class.
+ * (pointer mode) is active. The web platform (PC browsers) always shows it.
  */
-body:not(.webos-cursor-active) {
+html:not([data-platform="web"]) body:not(.webos-cursor-active) {
     cursor: none !important;
 }
 

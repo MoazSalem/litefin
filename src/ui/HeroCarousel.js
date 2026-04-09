@@ -177,15 +177,21 @@ class HeroCarousel {
      * @private
      */
     _onMove(direction) {
-        if (direction === 'left') {
+        const isRtl = document.documentElement.dir === 'rtl';
+        
+        // Map physical directions to logical navigation based on current layout
+        const backDir = isRtl ? 'right' : 'left';
+        const forwardDir = isRtl ? 'left' : 'right';
+
+        if (direction === backDir) {
             if (this._currentIndex > 0) {
                 this.previous();
                 return true; // Handled internally
             }
-            return false; // Leave left (to sidebar)
+            return false; // Leave towards sidebar (Left in LTR, Right in RTL)
         }
 
-        if (direction === 'right') {
+        if (direction === forwardDir) {
             this.next();
             return true; // Handled internally
         }

@@ -40,9 +40,9 @@ class ImageService {
             low: {
                 poster: 240,
                 backdrop: 640,
-                // card-backdrop: sized for a ~400px card slot, not the full screen.
-                // 360px is plenty at low quality (cards are small, sharp detail wasted).
                 'card-backdrop': 360,
+                'hero-banner': 800,
+                'hero-immersive': 960,
                 thumb: 320,
                 banner: 480,
                 avatar: 160,
@@ -51,10 +51,9 @@ class ImageService {
             medium: {
                 poster: 360,
                 backdrop: 1080,
-                // card-backdrop: 600px is 1.5× the 400px card slot for retina sharpness.
-                // Compared to 1080, this cuts per-image payload by ~66% — major for
-                // Tizen hardware that struggles with large JPEG decode on the main thread.
                 'card-backdrop': 600,
+                'hero-banner': 1280,
+                'hero-immersive': 1440,
                 thumb: 480,
                 banner: 800,
                 avatar: 240,
@@ -63,9 +62,9 @@ class ImageService {
             high: {
                 poster: 500,
                 backdrop: 1920,
-                // card-backdrop: 800px covers 2× the card slot at high quality,
-                // which is more than enough even on high-DPI TV panels.
                 'card-backdrop': 800,
+                'hero-banner': 1662,
+                'hero-immersive': 1820,
                 thumb: 640,
                 banner: 1280,
                 avatar: 320,
@@ -73,10 +72,10 @@ class ImageService {
             },
             ultra: {
                 poster: 800,
-                backdrop: 3840, // 4K
-                // card-backdrop at ultra quality: match the high-quality landscape card
-                // CSS width precisely (1280px ~ 1.5× of 880px scaled card on 4K panel).
+                backdrop: 3840,
                 'card-backdrop': 1280,
+                'hero-banner': 1920,
+                'hero-immersive': 2560,
                 thumb: 1280,
                 banner: 1920,
                 avatar: 600,

@@ -149,11 +149,6 @@
     margin-right: 16px;
 }
 
-[dir="rtl"] .hero-meta-item {
-    margin-right: 0;
-    margin-left: 16px;
-}
-
 .hero-meta-item:last-child {
     margin-right: 0;
     margin-left: 0;
@@ -201,11 +196,6 @@
                 background 0.3s ease,
                 transform 0.3s ease;
     overflow: hidden;
-}
-
-[dir="rtl"] .hero-dot {
-    margin-right: 0;
-    margin-left: 12px;
 }
 
 .hero-dot:last-child {
@@ -334,7 +324,7 @@
 .hero-carousel-container.banner .hero-item::after {
     background: linear-gradient(to top, 
         rgba(0, 0, 0, 0.9) 0%, 
-        rgba(0, 0, 0, 0.5) 40%, 
+        rgba(0, 0, 0, 0.5) 20%, 
         transparent 80%);
 }
 
@@ -366,20 +356,4 @@
 
 .hero-dot.active .hero-dot-progress {
     animation: heroProgress 8s linear;
-}
-
-/* RTL Support */
-[dir="rtl"] .hero-indicators {
-    right: auto;
-    left: 80px;
-}
-
-[dir="rtl"] .hero-content {
-    padding: 0 80px;
-    align-items: flex-end;
-    text-align: right;
-}
-
-[dir="rtl"] .hero-item::before {
-    background: linear-gradient(to left, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
 }
