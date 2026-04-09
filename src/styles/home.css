@@ -70,6 +70,10 @@
     margin-right: 12px;
     margin-left: 12px;
     /* More spacing between cards */
+    
+    /* Align cards to the top of the row when metadata is missing */
+    align-self: flex-start;
+    vertical-align: top;
 
     /* NO per-card GPU layers by default — creating a compositor layer for every
        card on the page (50-100+) exhausts Tizen VRAM and slows the GPU compositor.
