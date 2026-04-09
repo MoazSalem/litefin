@@ -424,8 +424,8 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 /* Standard 2:3 portrait card. Each card fixes at 320px — exactly 5 per 1080p row. 
    Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
 .library-grid:not([class*="view-"]) {
-    max-width: 1705px;
-    min-width: 1705px;
+    max-width: 1720px;
+    min-width: 1720px;
 }
 
 .library-grid:not([class*="view-"]) .media-card {
@@ -434,7 +434,6 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     /* 30px gap between cards, compatible with Tizen 4 margin logic.
        Calculated: (1820 total width - 100 content padding) = 1720.
        5 * 320px + 4 * 30px = 1600 + 120 = 1720px exactly. */
-    margin-right: 20px;
     margin-bottom: 30px;
     
     /* Premium Apple-style spring transition for focus 'pop' */
@@ -473,23 +472,16 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     border-radius: calc(var(--jf-border-radius-lg) - 3px);
 }
 
-/* Ensure the 5th item in every row doesn't have extra margin to maintain perfect alignment 
-   ONLY when no other view mode modifier is present. */
-.library-grid:not([class*="view-"]) .media-card:nth-child(5n) {
-    margin-right: 0;
-}
-
 /* ── View mode: Small Poster ─────────────────────────────────────── */
 /* Tighter portrait cards (160px) — exactly 9 per 1080p row. 
    Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
 .library-grid.view-small-poster {
-    max-width: 1645px;
-    min-width: 1645px;
+    max-width: 1664px;
+    min-width: 1664px;
 }
 
 .library-grid.view-small-poster .media-card {
     width: 160px !important;
-    margin-right: 20px !important;
     margin-bottom: 25px !important;
 }
 
@@ -509,27 +501,18 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     padding: 10px 4px 0 4px !important; /* Tighter padding for density */
 }
 
-/* Ensure the 9th item in every row doesn't have extra margin in Small mode */
-.library-grid.view-small-poster .media-card:nth-child(9n) {
-    margin-right: 0 !important;
-}
-
-/* Reset any inherited 5n logic from the base grid */
-.library-grid.view-small-poster .media-card:nth-child(5n) {
-    margin-right: 20px; 
-}
-
 /* ── View mode: Thumb ────────────────────────────────────────────── */
 /* 16:9 landscape cards (390px wide) — exactly 4 per 1080p row. 
    Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
 .library-grid.view-thumb {
-    max-width: 1670px;
-    min-width: 1670px;
+    max-width: 1680px;
+    min-width: 1680px;
 }
 
 .library-grid.view-thumb .media-card {
     width: 390px !important;
-    margin-right: 30px !important;
+    margin-right: 15px !important;
+    margin-left: 15px !important;
     margin-bottom: 45px !important;
 }
 
@@ -548,23 +531,12 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     font-size: 15px;
 }
 
-/* Reset any inherited 5n/9n logic from other grid rules first */
-.library-grid.view-thumb .media-card:nth-child(5n),
-.library-grid.view-thumb .media-card:nth-child(9n) {
-    margin-right: 30px !important;
-}
-
-/* Ensure the 4th item in every row doesn't have extra margin in Thumb mode (Must come last) */
-.library-grid.view-thumb .media-card:nth-child(4n) {
-    margin-right: 0 !important;
-}
-
 /* ── View mode: Banner ───────────────────────────────────────────── */
 /* Horizontal banners (540px wide) — exactly 3 per 1080p row. 
    Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
 .library-grid.view-banner {
-    max-width: 1690px; 
-    min-width: 1690px;
+    max-width: 1695px; 
+    min-width: 1695px;
 }
 
 .library-grid.view-banner .media-card {
@@ -573,7 +545,8 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     width: 545px !important;
     min-width: 545px !important; 
     height: 155px !important;
-    margin-right: 20px !important;
+    margin-right: 10px !important;
+    margin-left: 10px !important;
     margin-bottom: 25px !important;
     border-radius: 20px !important; /* Deeper, more premium Apple-style curve */
     -webkit-border-radius: 20px !important;
@@ -617,17 +590,6 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     text-align: center;
 }
 
-/* Reset any inherited 5n/9n logic from other grid rules first */
-.library-grid.view-banner .media-card:nth-child(5n),
-.library-grid.view-banner .media-card:nth-child(9n) {
-    margin-right: 20px !important;
-}
-
-/* Ensure the 3rd item in every row doesn't have extra margin in Banner mode (Must come last) */
-.library-grid.view-banner .media-card:nth-child(3n) {
-    margin-right: 0 !important;
-}
-
 /* ── View mode: List ─────────────────────────────────────────────── */
 /* One full-width row per item: small poster on the left, rich metadata on the right. */
 .library-grid.view-list .media-card {
@@ -636,6 +598,7 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     width: 100% !important;
     height: 110px !important; 
     margin-right: 0 !important;
+    margin-left: 0 !important;
     margin-bottom: 22px !important; /* Slightly more vertical air */
     align-items: center !important;
     padding: 0 !important; 

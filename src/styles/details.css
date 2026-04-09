@@ -757,7 +757,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     /* Manual sizing instead of grid */
     width: calc(20% - 26px) !important;
     /* 5 items per row approx */
-    margin-right: 24px !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
     margin-bottom: 24px !important;
     flex: none !important;
     max-width: unset !important;
@@ -776,25 +777,12 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     height: 225px !important; /* 16:9 approx for landscape cards */
 }
 
-.person-grid .media-card:nth-child(5n) {
-    margin-right: 0 !important;
-}
-
 /* Landscape Grid (Episodes on Season/Details Page) */
 .person-grid.landscape-grid .media-card {
     width: calc(33.33% - 26px) !important;
     /* 3 items per row for better visibility/detail */
-    margin-right: 24px !important;
-}
-
-/* 1. First, restore margins for items that would have been cleared by the base 5-column rule */
-.person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-right: 24px !important;
-}
-
-/* 2. Then, apply the actual 3-column clearing (this must come AFTER the 5n reset to win conflicts at 15n) */
-.person-grid.landscape-grid .media-card:nth-child(3n) {
-    margin-right: 0 !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
 }
 
 /* Reset media-card margin for first item on row titles if needed */

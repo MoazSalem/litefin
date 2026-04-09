@@ -67,7 +67,8 @@
     overflow: visible;
     cursor: pointer;
     text-align: left;
-    margin-right: 24px;
+    margin-right: 12px;
+    margin-left: 12px;
     /* More spacing between cards */
 
     /* NO per-card GPU layers by default — creating a compositor layer for every
@@ -244,4 +245,4 @@ html[data-layout-tier="ultra-legacy"] .media-card.focused .card-overlay-label {
     /* Scale only, no translate */
     transform: scale(1.05);
     -webkit-transform: scale(1.05);
-}
+}

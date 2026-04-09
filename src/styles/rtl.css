@@ -280,20 +280,8 @@
 }
 
 [dir="rtl"] .person-grid .media-card {
-    margin-right: 0 !important;
-    margin-left: 24px !important;
-}
-
-[dir="rtl"] .person-grid .media-card:nth-child(5n) {
-    margin-left: 0 !important;
-}
-
-[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-left: 24px !important;
-}
-
-[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(3n) {
-    margin-left: 0 !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
 }
 
 [dir="rtl"] .btn-icon-text .icon {
