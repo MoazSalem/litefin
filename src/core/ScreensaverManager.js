@@ -16,6 +16,7 @@ import { auth } from '../api/index.js';
 import { logger } from '../utils/Logger.js';
 import { LogoScreensaver } from './screensaver/LogoScreensaver.js';
 import { BackdropScreensaver } from './screensaver/BackdropScreensaver.js';
+import { BlackScreensaver } from './screensaver/BlackScreensaver.js';
 
 const log = logger.create('ScreensaverManager');
 
@@ -33,8 +34,6 @@ class ScreensaverManager {
         this._pluginType = storage.getItem('pref:screensaverType') || 'backdrop';
 
         this._hideBound = this.hide.bind(this);
-        this._onPointerMoveBound = this._onPointerMove.bind(this);
-        this._lastPointerInputTime = Date.now();
     }
 
     init() {
@@ -69,10 +68,6 @@ class ScreensaverManager {
         eventBus.on('pref:screensaverDelay', () => this._updateConfig());
         eventBus.on('pref:screensaverType', () => this._updateConfig());
 
-        // Setup mouse listeners for non-tv pointers
-        document.addEventListener('mousemove', this._onPointerMoveBound, { passive: true });
-        document.addEventListener('pointermove', this._onPointerMoveBound, { passive: true });
-
         this._initialized = true;
         log.info('Initialized with delay:', this._delaySeconds, 's');
     }
@@ -102,33 +97,21 @@ class ScreensaverManager {
         }
     }
 
-    _onPointerMove() {
-        this._lastPointerInputTime = Date.now();
-        if (this.isShowing) {
-            this.hide();
-        }
-    }
 
     _checkIdleTime() {
         if (this.isShowing) return;
         if (this._delaySeconds <= 0) return;
 
         // If currently playing video, never show screensaver
-        // Audio playback can show screensaver (like JF web does)
         if (this._isVideoPlaying) return;
 
+        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
         const minIdleTimeMs = this._delaySeconds * 1000;
 
-        // Check platform keys (TV remote)
-        const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
-        if (platformAdapter.idleTime < minIdleTimeMs) return;
-
-        // Check pointer (Magic Remote / Web mouse)
-        const pointerIdleTimeMs = Date.now() - this._lastPointerInputTime;
-        if (pointerIdleTimeMs < minIdleTimeMs) return;
-
-        log.info('System idle time reached limit, showing screensaver');
-        this.show();
+        if (platformAdapter.idleTime >= minIdleTimeMs) {
+            log.info('System idle time reached limit, showing screensaver');
+            this.show();
+        }
     }
 
     get isShowing() {
@@ -144,10 +127,15 @@ class ScreensaverManager {
         // Select plugin
         let pluginToRun = null;
 
-        // Fallback to logo if backdrop requested but not authenticated
-        if (this._pluginType === 'backdrop' && auth.isAuthenticated()) {
+        // Choose plugin based on user preference
+        if (this._pluginType === 'black') {
+            // New "Completely Black" screensaver option
+            pluginToRun = new BlackScreensaver();
+        } else if (this._pluginType === 'backdrop' && auth.isAuthenticated()) {
+            // Backdrop slideshow (requires auth)
             pluginToRun = new BackdropScreensaver();
         } else {
+            // Bouncing app logo (default fallback or unauthenticated)
             pluginToRun = new LogoScreensaver();
         }
 
@@ -184,7 +172,6 @@ class ScreensaverManager {
         // Reset tracking to prevent immediate re-triggering
         const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
         platformAdapter.reportInput?.();
-        this._lastPointerInputTime = Date.now();
 
         // Let plugin clean up DOM/Animation
         if (this._activePlugin) {

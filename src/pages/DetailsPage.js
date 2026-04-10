@@ -21,6 +21,7 @@ import SubtitleEditorModal from '../components/SubtitleEditorModal.js';
 import MediaGrid from '../components/MediaGrid.js';
 import MediaInfoModal from '../components/MediaInfoModal.js';
 import TrailerDialog from '../components/TrailerDialog.js';
+import { TrailerPlayer } from '../components/TrailerPlayer.js';
 
 import BackdropManager from '../utils/BackdropManager.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
@@ -227,6 +228,30 @@ class DetailsPage extends Page {
             // Mark the page as rendered, fulfilling the Promise for NavigationState
             // to restore scroll/focus natively
             this.markReady();
+
+            // ----------------------------------------------------------------
+            // Auto-chain check: did we just return from a local trailer that
+            // was launched as part of an auto-chain sequence?
+            //
+            // _playLocalTrailerThenChain() writes 'details:autoChainRemote'
+            // to state (an in-memory singleton that outlives page instances)
+            // before navigating to the player. When the player finishes and
+            // router.back() brings us back here as a fresh DetailsPage, we
+            // check for that flag and open the remote trailer automatically.
+            //
+            // We only consume the flag if the item ID matches — in case the
+            // user somehow navigated to a different details page in between.
+            // ----------------------------------------------------------------
+            const pendingChain = state.get('details:autoChainRemote');
+            if (pendingChain && pendingChain === this._itemId) {
+                // Consume the flag immediately so it won't re-fire on next visit
+                state.delete('details:autoChainRemote');
+                log.info('[AutoChain] Detected pending remote chain for item', this._itemId, '— opening remote trailer');
+
+                // Short delay: let the page settle visually before slamming the
+                // overlay on top. Prevents a jarring instant transition.
+                setTimeout(() => this._showRemoteTrailerPlayer(), 300);
+            }
         } catch (err) {
             log.error('onInit failed', err);
         }
@@ -2795,7 +2820,17 @@ class DetailsPage extends Page {
         const hasRemote = this._hasRemoteTrailers;
 
         if (hasLocal && hasRemote) {
-            // Both available — let the user choose
+            // ----------------------------------------------------------------
+            // Auto-chain mode: skip the dialog entirely and play the local
+            // trailer immediately via the native player. When it ends (or the
+            // user presses Next on the OSD), the remote player opens instead.
+            // ----------------------------------------------------------------
+            if (PlayerSettings.get('trailerAutoChain')) {
+                this._playLocalTrailerThenChain();
+                return;
+            }
+
+            // Both available and auto-chain is OFF — let the user choose
             TrailerDialog.show(
                 { hasLocal, hasRemote },
                 this,
@@ -2830,6 +2865,32 @@ class DetailsPage extends Page {
             }
 
             const trailerItem = trailers[0];
+            const parentName = this._item?.Name || this._item?.OriginalTitle || 'Video';
+
+            // Jellyfin often names local trailers generically (e.g. "Trailer" or "Trailers").
+            // Prefix it with the parent item's name so it looks good in the OSD title.
+            // e.g. "Inception - Trailer (2010)" instead of "Trailers (2010)".
+            if (trailerItem.Name) {
+                // If it's just "trailer" or "trailers", or starts with the parent name, clean it up.
+                if (/^(trailer|trailers|official trailer)s?$/i.test(trailerItem.Name.trim())) {
+                    trailerItem.Name = `${parentName} - Trailer`;
+                } else if (!trailerItem.Name.toLowerCase().startsWith(parentName.toLowerCase())) {
+                    // Capitalize 'trailers' if it's oddly lowercased by the backend
+                    let tName = trailerItem.Name;
+                    if (tName === 'trailers') tName = 'Trailer';
+                    trailerItem.Name = `${parentName} - ${tName}`;
+                }
+            } else {
+                trailerItem.Name = `${parentName} - Trailer`;
+            }
+
+            // Sync the year so the OSD displays the Movie's year, not the trailer file's metadata year
+            if (this._item && this._item.ProductionYear) {
+                trailerItem.ProductionYear = this._item.ProductionYear;
+            } else {
+                delete trailerItem.ProductionYear;
+            }
+
             log.info(`Playing local trailer "${trailerItem.Name}" (${trailerItem.Id})`);
 
             // Reuse the backdrop from the parent item for a smooth visual transition
@@ -2851,34 +2912,114 @@ class DetailsPage extends Page {
         }
     }
 
-    _showRemoteTrailerPlayer() {
-        Promise.all([
-            import('../components/TrailerPlayer.js'),
-            import('../utils/PlayerSettings.js')
-        ]).then(([ { TrailerPlayer }, { PlayerSettings } ]) => {
-            const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
-            
-            let trailers = this._item.RemoteTrailers || [];
-            if (this._isProxyFallback && trailers.length === 0) {
-                trailers = [{
-                    Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
-                    Url: '',
-                    IsProxyFallback: true,
-                    TmdbId: this._item.ProviderIds?.Tmdb,
-                    ItemName: this._item.OriginalTitle || this._item.Name,
-                    ItemYear: this._item.ProductionYear,
-                    ItemType: this._item.Type
-                }];
+    /**
+     * Auto-chain mode entry point.
+     *
+     * Writes a pending-chain intent to StateManager (a global in-memory
+     * singleton that persists across page instances), then launches the local
+     * trailer via the standard native player pipeline.
+     *
+     * When the local trailer finishes, the router calls router.back() which
+     * destroys PlayerPage and creates a fresh DetailsPage instance. onInit()
+     * on that fresh instance reads and clears the state flag, then calls
+     * _showRemoteTrailerPlayer() automatically.
+     *
+     * Navigation stack:
+     *   Details page (at rest)
+     *     → PlayerPage  (/player/<localTrailerId>/false)
+     *       → router.back() destroys PlayerPage, creates DetailsPage
+     *     ← DetailsPage.onInit() detects flag → _showRemoteTrailerPlayer()
+     *       → user presses Back in remote player → overlay closes
+     *       → Details page (at rest) ✅
+     */
+    async _playLocalTrailerThenChain() {
+        try {
+            const trailers = await api.getLocalTrailers(this._itemId);
+
+            if (!trailers || trailers.length === 0) {
+                log.warn('getLocalTrailers returned empty for item', this._itemId);
+                toast.show(i18n.t('NoLocalTrailersFound') || 'No local trailers found.');
+                return;
             }
 
-            if (mode === 'external') {
-                TrailerPlayer.launchExternal(trailers, this);
-            } else if (mode === 'internal_iframe') {
-                TrailerPlayer.showLegacy(trailers, this);
+            const trailerItem = trailers[0];
+            const parentName = this._item?.Name || this._item?.OriginalTitle || 'Video';
+
+            // Override generic local trailer names with the parent item's name
+            // so it reads cleanly in the player OSD.
+            if (trailerItem.Name) {
+                // If it's just "trailer" or "trailers", or starts with the parent name, clean it up.
+                if (/^(trailer|trailers|official trailer)s?$/i.test(trailerItem.Name.trim())) {
+                    trailerItem.Name = `${parentName} - Trailer`;
+                } else if (!trailerItem.Name.toLowerCase().startsWith(parentName.toLowerCase())) {
+                    // Capitalize 'trailers' if it's oddly lowercased by the backend
+                    let tName = trailerItem.Name;
+                    if (tName === 'trailers') tName = 'Trailer';
+                    trailerItem.Name = `${parentName} - ${tName}`;
+                }
             } else {
-                TrailerPlayer.show(trailers, this);
+                trailerItem.Name = `${parentName} - Trailer`;
             }
-        });
+
+            // Sync the year so the OSD displays the Movie's year, not the trailer file's metadata year
+            if (this._item && this._item.ProductionYear) {
+                trailerItem.ProductionYear = this._item.ProductionYear;
+            } else {
+                delete trailerItem.ProductionYear;
+            }
+
+            log.info(`[AutoChain] Playing local trailer "${trailerItem.Name}" (${trailerItem.Id}), remote will follow`);
+
+            const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
+                maxWidth: 3840,
+                quality: 90
+            });
+
+            // ----------------------------------------------------------------
+            // Write the chain intent to persistent in-memory state BEFORE
+            // navigating. The router will destroy this DetailsPage instance
+            // during navigation, so we cannot use an instance-level flag or
+            // EventBus listener. StateManager is a global singleton that
+            // outlives any individual page, making it the correct tool here.
+            // ----------------------------------------------------------------
+            state.set('details:autoChainRemote', this._itemId);
+            log.info('[AutoChain] Wrote state flag for item', this._itemId);
+
+            // Kick off the native player via the standard pipeline
+            eventBus.emit('player:play', {
+                item: trailerItem,
+                resume: false,
+                backdropUrl
+            });
+        } catch (err) {
+            log.error('[AutoChain] Failed to load local trailer for chain', err);
+            toast.show(i18n.t('ErrorFetchingTrailers') || 'Could not load trailers.');
+        }
+    }
+
+    _showRemoteTrailerPlayer() {
+        const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
+        
+        let trailers = this._item.RemoteTrailers || [];
+        if (this._isProxyFallback && trailers.length === 0) {
+            trailers = [{
+                Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
+                Url: '',
+                IsProxyFallback: true,
+                TmdbId: this._item.ProviderIds?.Tmdb,
+                ItemName: this._item.OriginalTitle || this._item.Name,
+                ItemYear: this._item.ProductionYear,
+                ItemType: this._item.Type
+            }];
+        }
+
+        if (mode === 'external') {
+            TrailerPlayer.launchExternal(trailers, this);
+        } else if (mode === 'internal_iframe') {
+            TrailerPlayer.showLegacy(trailers, this);
+        } else {
+            TrailerPlayer.show(trailers, this);
+        }
     }
 
     // ============================================================================

@@ -372,12 +372,45 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLibraryPageSize">${i18n.t('LabelLibraryPageSize') || 'Items per page (Library)'}</span>
+                        <span class="setting-description" data-i18n="LibraryPageSizeDescription">${i18n.t('LibraryPageSizeDescription') || 'Choose how many items to load at once in the grid view.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'library-page-size-select',
+                            [
+                                { value: 25, label: '25' },
+                                { value: 50, label: '50' },
+                                { value: 75, label: '75' },
+                                { value: 100, label: '100' },
+                                { value: 150, label: '150' }
+                            ],
+                            storage.getItem('pref:libraryPageSize') || 100
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
                                 id="toggle-rounded-corners" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowRandomButton">${i18n.t('LabelShowRandomButton')}</span>
+                        <span class="setting-description" data-i18n="ShowRandomButtonDescription">${i18n.t('ShowRandomButtonDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showRandomButton') !== 'false' ? 'active' : ''}" 
+                                id="toggle-random-button" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -458,14 +491,15 @@ class SettingsPage extends Page {
                             'screensaver-type-select',
                             [
                                 { value: 'backdrop', label: i18n.t('Backdrop') || 'Backdrop' },
-                                { value: 'logo', label: i18n.t('Logo') || 'Logo' }
+                                { value: 'logo', label: i18n.t('Logo') || 'Logo' },
+                                { value: 'black', label: i18n.t('ScreensaverBlack') || 'Black' }
                             ],
                             storage.getItem('pref:screensaverType') || 'backdrop'
                         )}
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-dim-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-dim-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropDimmer">${i18n.t('BackdropDimmer') || 'Backdrop dim level'}</span>
                         <span class="setting-description" data-i18n="BackdropDimmerDescription">${i18n.t('BackdropDimmerDescription') || 'How dark the backdrop screensaver should be'}</span>
@@ -490,7 +524,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-hide-text-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-hide-text-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropHideText">${i18n.t('BackdropHideText') || 'Hide title and catchphrase'}</span>
                         <span class="setting-description" data-i18n="BackdropHideTextDescription">${i18n.t('BackdropHideTextDescription') || 'Do not show any text over the backdrop screensaver images'}</span>
@@ -503,7 +537,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <div class="setting-item ${storage.getItem('pref:screensaverType') === 'logo' ? 'hidden' : ''}" id="screensaver-include-music-item">
+                <div class="setting-item ${storage.getItem('pref:screensaverType') !== 'backdrop' ? 'hidden' : ''}" id="screensaver-include-music-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BackdropIncludeMusic">${i18n.t('BackdropIncludeMusic') || 'Include music library'}</span>
                         <span class="setting-description" data-i18n="BackdropIncludeMusicDescription">${i18n.t('BackdropIncludeMusicDescription') || 'Show backdrops from music artists in the screensaver'}</span>
@@ -633,6 +667,64 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <h3 class="setting-section-title" data-i18n="HeroCarousel" style="margin-top: 40px;">${i18n.t('HeroCarousel') || 'Hero Carousel'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHeroCarousel">${i18n.t('EnableHeroCarousel') || 'Hero Carousel'}</span>
+                        <span class="setting-description" data-i18n="EnableHeroCarouselDescription">${i18n.t('EnableHeroCarouselDescription') || 'Show a featured carousel at the top of the home screen.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarousel') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-style-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroStyle">${i18n.t('HeroStyle')}</span>
+                        <span class="setting-description" data-i18n="HeroStyleDescription">${i18n.t('HeroStyleDescription') || 'Visual style of the hero carousel'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-style-select',
+                            [
+                                { value: 'banner', label: i18n.t('StyleBanner') || 'Banner' },
+                                { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
+                            ],
+                            storage.getItem('pref:heroCarouselStyle') || 'banner'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselTextTitleDescription">${i18n.t('HeroCarouselTextTitleDescription') || 'Prefer text titles over logos in the hero carousel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselTextTitle') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-text-title" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-compact-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselCompact">${i18n.t('HeroCarouselCompact') || 'Compact Mode'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselCompactDescription">${i18n.t('HeroCarouselCompactDescription') || 'Reduces the height of the hero section to improve scroll performance.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselCompact') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-compact" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="LayoutOrder" style="margin-top: 40px;">${i18n.t('LayoutOrder') || 'Home Screen Layout'}</h3>
                 <!-- 
                      Loaded dynamically via _setupHomeLayoutUI. 
@@ -744,6 +836,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="TrailerAutoChain">${i18n.t('TrailerAutoChain') || 'Auto-play local, then online'}</span>
+                        <span class="setting-description" data-i18n="TrailerAutoChainDescription">${i18n.t('TrailerAutoChainDescription') || 'Plays the server-side trailer first, then jumps straight to the online trailer when it ends. No picking required.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('trailerAutoChain') ? 'active' : ''}"
+                                id="toggle-trailer-auto-chain"
+                                data-setting="trailerAutoChain"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableBackgroundService">${i18n.t('EnableBackgroundService') || 'Enable Background Service'}</span>
                         <span class="setting-description" data-i18n="EnableBackgroundServiceDescription">${i18n.t('EnableBackgroundServiceDescription') || 'Enable the background Node.js service for Discovery and Proxy playback. Disable if you experience performance issues.'}</span>
                     </div>
@@ -847,17 +953,17 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'osd-focus-mode-select',
                             [
-                                /* Keep the last button the user navigated to — the legacy behaviour */
-                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
+                                /* Always snap to Play/Pause on every OSD reveal */
+                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' },
                                 /* Reset to Play/Pause only if idle for ≥ 10 s */
                                 {
                                     value: 'timeout',
                                     label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
                                 },
-                                /* Always snap to Play/Pause on every OSD reveal */
-                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' }
+                                /* Keep the last button the user navigated to — the legacy behaviour */
+                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' }
                             ],
-                            PlayerSettings.get('osdFocusRestoreMode') || 'remember'
+                            PlayerSettings.get('osdFocusRestoreMode') || 'always'
                         )}
                     </div>
                 </div>
@@ -1039,6 +1145,34 @@ class SettingsPage extends Page {
                 `
                         : ''
                 }
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableFmp4HlsContainer">${i18n.t('EnableFmp4HlsContainer') || 'Prefer fMP4 HLS Container'}</span>
+                        <span class="setting-description" data-i18n="EnableFmp4HlsContainerDescription">${i18n.t('EnableFmp4HlsContainerDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableFmp4HlsContainer') ? 'active' : ''}" 
+                                id="toggle-enable-fmp4-hls" 
+                                data-setting="enableFmp4HlsContainer"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ForceFmp4HlsContainer">${i18n.t('ForceFmp4HlsContainer') || 'Force fMP4 HLS Container'}</span>
+                        <span class="setting-description" data-i18n="ForceFmp4HlsContainerDescription">${i18n.t('ForceFmp4HlsContainerDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('forceFmp4HlsContainer') ? 'active' : ''}" 
+                                id="toggle-force-fmp4-hls" 
+                                data-setting="forceFmp4HlsContainer"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1854,8 +1988,8 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="ClearAllCachesDescription">${i18n.t('ClearAllCachesDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-danger" id="btn-clear-all-storage" tabindex="0" style="width: auto; min-width: 120px;" data-i18n="ClearAll">
-                            ${i18n.t('ClearAll')}
+                        <button class="btn btn-danger" id="btn-clear-all-storage" tabindex="0" style="width: auto; min-width: 120px; padding: 12px 24px; font-size: 1.2rem;" data-i18n="Clear">
+                            ${i18n.t('Clear')}
                         </button>
                     </div>
                 </div>
@@ -2005,6 +2139,69 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Random Button
+        const randomBtnToggle = this.$('#toggle-random-button');
+        if (randomBtnToggle) {
+            randomBtnToggle.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showRandomButton') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showRandomButton', newValue);
+                randomBtnToggle.classList.toggle('active', newValue);
+                
+                // Notify components (like Sidebar) to update
+                eventBus.emit('prefChanged:showRandomButton', newValue);
+                
+                log.info(`Random Button set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel
+        const heroCarouselBtn = this.$('#toggle-hero-carousel');
+        if (heroCarouselBtn) {
+            heroCarouselBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarousel') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarousel', newValue.toString());
+                heroCarouselBtn.classList.toggle('active', newValue);
+
+                // Toggle visibility of dependent settings (style, text title, compact)
+                const textTitleItem = this.$('#hero-carousel-text-title-item');
+                const compactItem = this.$('#hero-carousel-compact-item');
+                const styleItem = this.$('#hero-carousel-style-item');
+
+                if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
+                if (compactItem) compactItem.style.display = newValue ? '' : 'none';
+                if (styleItem) styleItem.style.display = newValue ? '' : 'none';
+
+                focusManager.invalidateCache('settings-content');
+                log.info(`Hero Carousel set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel Text Title
+        const heroCarouselTextBtn = this.$('#toggle-hero-carousel-text-title');
+        if (heroCarouselTextBtn) {
+            heroCarouselTextBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselTextTitle') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselTextTitle', newValue.toString());
+                heroCarouselTextBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Text Title set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel Compact Mode
+        const heroCarouselCompactBtn = this.$('#toggle-hero-carousel-compact');
+        if (heroCarouselCompactBtn) {
+            heroCarouselCompactBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselCompact') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselCompact', newValue.toString());
+                heroCarouselCompactBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Compact Mode set to: ${newValue}`);
             });
         }
 
@@ -2185,6 +2382,9 @@ class SettingsPage extends Page {
             'toggle-enable-vp9',
             'toggle-enable-dts',
             'toggle-enable-truehd',
+            'toggle-enable-flac-in-video',
+            'toggle-enable-fmp4-hls',
+            'toggle-force-fmp4-hls',
             'toggle-force-transcode',
             'toggle-background-service'
         ];
@@ -2452,19 +2652,21 @@ class SettingsPage extends Page {
                             let badge = '';
                             if (opt.completeness !== undefined) {
                                 const percentage = Math.floor(opt.completeness);
+                                let innerBadge = '';
                                 if (percentage === 0) {
-                                    badge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-danger">0%</span>`;
                                 } else if (percentage < 85) {
-                                    badge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-warning">${percentage}%</span>`;
                                 } else {
-                                    badge = `<span class="track-badge lang-badge badge-success">100%</span>`;
+                                    innerBadge = `<span class="track-badge lang-badge badge-success">100%</span>`;
                                 }
+                                badge = `<span class="track-badges">${innerBadge}</span>`;
                             }
                             return `
                         <button class="modal-option-btn ${String(opt.value) === String(currentValue) ? 'selected' : ''}" 
                                 data-value="${opt.value}"
                                 tabindex="0">
-                            <span>${i18n.ensureBiDi(opt.label)}</span>
+                            <span style="margin-right: 12px;">${i18n.ensureBiDi(opt.label)}</span>
                             ${badge}
                         </button>
                     `;
@@ -2659,9 +2861,10 @@ class SettingsPage extends Page {
              */
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
-            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
-            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' }
+            'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
+            'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
+            'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2718,17 +2921,17 @@ class SettingsPage extends Page {
                             if (id === 'screensaver-type-select') {
                                 const dimContainer = document.getElementById('screensaver-dim-item');
                                 const hideTextContainer = document.getElementById('screensaver-hide-text-item');
-                                const isLogo = newValue === 'logo';
+                                const musicContainer = document.getElementById('screensaver-include-music-item');
+                                const isBackdrop = newValue === 'backdrop';
 
                                 if (dimContainer) {
-                                    dimContainer.classList.toggle('hidden', isLogo);
+                                    dimContainer.classList.toggle('hidden', !isBackdrop);
                                 }
                                 if (hideTextContainer) {
-                                    hideTextContainer.classList.toggle('hidden', isLogo);
+                                    hideTextContainer.classList.toggle('hidden', !isBackdrop);
                                 }
-                                const musicContainer = document.getElementById('screensaver-include-music-item');
                                 if (musicContainer) {
-                                    musicContainer.classList.toggle('hidden', isLogo);
+                                    musicContainer.classList.toggle('hidden', !isBackdrop);
                                 }
                                 focusManager.invalidateCache('settings-content');
                             }
@@ -2847,6 +3050,19 @@ class SettingsPage extends Page {
                 storage.setItem('pref:confirmExit', newValue);
                 confirmExitToggle.classList.toggle('active', newValue);
                 log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+
+        // Toggle Switch for Trailer Auto-Chain
+        const trailerAutoChainToggle = this.$('#toggle-trailer-auto-chain');
+        if (trailerAutoChainToggle) {
+            trailerAutoChainToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('trailerAutoChain');
+                const newValue = !currentValue;
+                PlayerSettings.set('trailerAutoChain', newValue);
+                trailerAutoChainToggle.classList.toggle('active', newValue);
+                log.info(`Trailer Auto-Chain set to: ${newValue}`);
             });
         }
 

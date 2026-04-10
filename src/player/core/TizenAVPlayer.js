@@ -860,7 +860,6 @@ export class TizenAVPlayer {
                 this._isTizenPlaying = true;
                 log.info('Native play() executed (Double-Gate Strategy: Prepared & Buffered)');
 
-                // ================================================================
                 // IMPROVEMENT D: Proactively silence AVPlay's auto-track behavior.
                 //
                 // Many Tizen firmwares automatically enable the first internal TEXT
@@ -883,8 +882,13 @@ export class TizenAVPlayer {
                     // If a specific track was already successfully applied eagerly during READY state,
                     // the proactive silence just muted it. Unmute it to restore visibility.
                     if (this._activeTizenSubtitleIndex !== null && this._activeTizenSubtitleIndex !== -1) {
+                        try {
+                            // Re-assert the track selection. This acts as a pipeline flush
+                            // for backwards seeks where AVPlay's internal text buffer gets corrupted.
+                            this._avplay.setSelectTrack('TEXT', this._activeTizenSubtitleIndex);
+                        } catch(e) {}
                         this._avplay.setSilentSubtitle(false);
-                        log.debug('Restored silence state (unmuted) for active eager TEXT track');
+                        log.debug('Restored silence state (unmuted) for active TEXT track');
                     }
                 } catch (silenceErr) {
                     // Non-fatal — older firmware may throw in early PLAYING phase.
@@ -1364,6 +1368,7 @@ export class TizenAVPlayer {
                 // -1 = disable subtitles
                 this._avplay.setSilentSubtitle(true);
                 this._currentSubtitleStreamIndex = index;
+                this._activeTizenSubtitleIndex = -1;
             } else {
                 const playability = this._getSubtitlePlayability(index);
                 
@@ -1371,11 +1376,13 @@ export class TizenAVPlayer {
                     // External subtitles handled via HTML, disable native.
                     this._avplay.setSilentSubtitle(true);
                     this._currentSubtitleStreamIndex = index;
+                    this._activeTizenSubtitleIndex = -1;
                     return;
                 } else if (playability === 'INTERNAL_BITMAP') {
                     // Unsupported natively. Fast-fail to trigger fallback.
                     this._avplay.setSilentSubtitle(true);
                     this._currentSubtitleStreamIndex = index;
+                    this._activeTizenSubtitleIndex = -1;
                     this.onEvent({
                         type: 'subtitlefallback',
                         data: { index: index }
@@ -1394,10 +1401,24 @@ export class TizenAVPlayer {
                  */
                 const tizenSubIndex = this._findTizenSubtitleIndex(index);
                 if (tizenSubIndex !== null) {
+                    let avplayState = 'UNKNOWN';
+                    try { avplayState = this._avplay.getState(); } catch (e) {}
+
+                    // Tizen 4.0+ firmwares ignore setSelectTrack when PAUSED/buffering.
+                    // If we didn't force the pause ourselves for the legacy workaround, defer it.
+                    if (!needsPauseForSubSwitch && avplayState !== 'PLAYING' && avplayState !== 'READY') {
+                        this._pendingSubtitleIndex = index;
+                        this._currentSubtitleStreamIndex = index;
+                        log.debug(`setSubtitleStreamIndex: Player state is ${avplayState}. Deferring TEXT track ${tizenSubIndex}.`);
+                        return;
+                    }
+
                     this._avplay.setSelectTrack('TEXT', tizenSubIndex);
                     this._avplay.setSilentSubtitle(true);
                     this._avplay.setSilentSubtitle(false);
                     this._currentSubtitleStreamIndex = index;
+                    this._activeTizenSubtitleIndex = tizenSubIndex;
+                    this._pendingSubtitleIndex = null;
                     log.debug(`setSubtitleStreamIndex: Jellyfin ${index} → Tizen TEXT ${tizenSubIndex}`);
                 } else {
                     log.warn(`setSubtitleStreamIndex: Could not map Jellyfin index ${index} to Tizen TEXT track`);

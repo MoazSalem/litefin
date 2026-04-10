@@ -93,12 +93,20 @@ class Logger {
      */
     _captureConsole() {
         const methods = ['log', 'info', 'warn', 'error', 'debug'];
-        const originalConsole = { ...console };
 
         methods.forEach((method) => {
+            // Must save directly, because { ...console } fails on old WebKit 
+            // since host object properties are non-enumerable
+            const originalMethod = console[method] || console.log || function(){};
+
             console[method] = (...args) => {
                 // 1. Call original method (so DevTools still see it)
-                originalConsole[method].apply(console, args);
+                // Old WebKit native console methods don't inherit from Function.prototype, lacking .apply()
+                if (typeof originalMethod.apply === 'function') {
+                    originalMethod.apply(console, args);
+                } else {
+                    Function.prototype.apply.call(originalMethod, console, args);
+                }
 
                 // 2. If this log came from us (Logger._log), ignore it to prevent duplicates
                 // The _isLogging flag is set during our own _log calls

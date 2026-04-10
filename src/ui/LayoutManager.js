@@ -99,8 +99,9 @@ class LayoutManager {
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
 
-        // Stamp the tier
+        // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
+        document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
         log.info(
             `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`
@@ -194,54 +195,82 @@ class LayoutManager {
         }
     }
 
-    /**
-     * Internal method to calculate and inject dynamic CSS variables
-     */
     _applyDynamicTheme() {
-        const root = document.documentElement;
         const accents = themeUtils.getAccentVariants(this._themeColor);
-        
-        // 1. Apply core accent variables directly to element style
-        // This ensures they override any static CSS or index.html boot styles
-        root.style.setProperty('--jf-accent', accents.accent);
-        root.style.setProperty('--jf-accent-rgb', accents.accentRgb);
-        root.style.setProperty('--jf-accent-hover', accents.accentHover);
-        root.style.setProperty('--jf-accent-active', accents.accentActive);
-        root.style.setProperty('--jf-accent-light', accents.accentLight);
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
-        root.style.setProperty('--jf-accent-content-color', contrastColor);
-        root.style.setProperty('--jf-primary-btn-color', contrastColor);
-        root.style.setProperty('--jf-switch-handle', contrastColor);
-        root.style.setProperty('--jf-action-btn-active-border', contrastColor);
-        root.style.setProperty('--jf-button-border-focus', contrastColor);
-        root.style.setProperty('--jf-focus-border-color', accents.accent);
+        const contrastRgb = themeUtils.hexToRgb(contrastColor);
+        const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
+        
+        // Remove any inline flash-prevention variables injected by index.html
+        // so that our dynamic stylesheet (which has lower specificity than inline style)
+        // can successfully cascade and take full control.
+        const rootStyle = document.documentElement.style;
+        rootStyle.removeProperty('--jf-accent');
+        rootStyle.removeProperty('--jf-background');
+        rootStyle.removeProperty('--jf-text-primary');
+        rootStyle.removeProperty('--jf-text-secondary');
+
+        // 1. Build style rules for native and polyfill consumption
+        // Use html[data-theme-mode="..."] to ensure 0,1,1 specificity, which beats
+        // lazily loaded :root chunks and regular [data-theme-mode] (0,1,0) rules.
+        let dynamicCss = `html[data-theme-mode="${this._themeMode}"] {
+            --jf-accent: ${accents.accent};
+            --jf-accent-rgb: ${accents.accentRgb};
+            --jf-accent-hover: ${accents.accentHover};
+            --jf-accent-active: ${accents.accentActive};
+            --jf-accent-light: ${accents.accentLight};
+            --jf-accent-content-color: ${contrastColor};
+            --jf-accent-content-color-rgb: ${contrastRgbStr};
+            --jf-primary-btn-color: ${contrastColor};
+            --jf-primary-btn-color-rgb: ${contrastRgbStr};
+            --jf-switch-handle: ${contrastColor};
+            --jf-action-btn-active-border: ${contrastColor};
+            --jf-button-border-focus: ${contrastColor};
+            --jf-focus-border-color: ${accents.accent};`;
+
+        // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
+        // Only inject base text colors if NOT tinted. Tinted mode handles its own 
+        // transparent text colors in tinted.css, which we shouldn't override globally.
+        if (this._themeMode !== THEME_MODES.TINTED) {
+            const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
+            dynamicCss += `
+            --jf-text-primary: ${isLight ? '#101010' : '#ffffff'};
+            --jf-text-secondary: ${isLight ? '#666666' : '#999999'};
+            --jf-text-tertiary: ${isLight ? '#888888' : '#666666'};
+            
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+        } else {
+            // For tinted mode, just pass through the custom aliases
+            dynamicCss += `
+            --text-primary: var(--jf-text-primary);
+            --text-secondary: var(--jf-text-secondary);
+            --text-muted: var(--jf-text-secondary);`;
+        }
 
         // 2. Clear or apply tinted background variables
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
-            root.style.setProperty('--jf-background', tints.background);
-            root.style.setProperty('--jf-background-alt', tints.backgroundAlt);
-            root.style.setProperty('--jf-surface', tints.surface);
-            root.style.setProperty('--jf-card-bg', tints.cardBg);
-            root.style.setProperty('--jf-card-bg-hover', tints.cardBgHover);
-            root.style.setProperty('--jf-divider', tints.divider);
-            root.style.setProperty('--jf-navbar-bg', tints.background);
-        } else {
-            // Remove tinted variables so theme CSS can take over
-            root.style.removeProperty('--jf-background');
-            root.style.removeProperty('--jf-background-alt');
-            root.style.removeProperty('--jf-surface');
-            root.style.removeProperty('--jf-card-bg');
-            root.style.removeProperty('--jf-card-bg-hover');
-            root.style.removeProperty('--jf-divider');
-            root.style.removeProperty('--jf-navbar-bg');
+            dynamicCss += `
+            --jf-background: ${tints.background};
+            --jf-background-alt: ${tints.backgroundAlt};
+            --jf-surface: ${tints.surface};
+            --jf-card-bg: ${tints.cardBg};
+            --jf-card-bg-hover: ${tints.cardBgHover};
+            --jf-divider: ${tints.divider};
+            --jf-navbar-bg: ${tints.background};`;
         }
 
-        // Clean up legacy style element if it exists from previous versions
-        if (this._dynamicStyleEl) {
-            this._dynamicStyleEl.remove();
-            this._dynamicStyleEl = null;
+        dynamicCss += `\n        }`;
+
+        // Create or update the dynamic style element
+        if (!this._dynamicStyleEl) {
+            this._dynamicStyleEl = document.createElement('style');
+            this._dynamicStyleEl.id = 'litefin-dynamic-theme-vars';
+            document.head.appendChild(this._dynamicStyleEl);
         }
+        this._dynamicStyleEl.textContent = dynamicCss;
 
         // Polyfill update for legacy Tizen
         cssVarsPolyfill.update();

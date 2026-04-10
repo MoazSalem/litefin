@@ -43,6 +43,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { imageCache } from '../utils/ImageCache.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { versionChecker } from '../utils/VersionChecker.js';
+import { globalClock } from '../ui/GlobalClock.js';
 
 const log = logger.create('App');
 
@@ -140,6 +141,9 @@ class App {
         // Must be initialized after StorageService so it can read delay preferences.
         const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
+
+        // Initialize Global Clock — persistent time display above all UI
+        globalClock.init();
 
         // Get container element
         if (typeof options.container === 'string') {
@@ -468,6 +472,16 @@ class App {
             // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
             state.set('player:contextType', itemToPlay?.contextType || null);
             state.set('player:contextId', itemToPlay?.contextId || null);
+
+            // Store explicit trailer metadata overrides since the player re-fetches the item
+            // and loses the parent context injected by DetailsPage.
+            if (itemToPlay && itemToPlay.Type === 'Trailer') {
+                state.set('player:overrideName', itemToPlay.Name || null);
+                state.set('player:overrideYear', itemToPlay.ProductionYear !== undefined ? itemToPlay.ProductionYear : 'NONE');
+            } else {
+                state.set('player:overrideName', null);
+                state.set('player:overrideYear', null);
+            }
 
             // Store backdrop URL for loading screen transition
             state.set('player:backdropUrl', backdropUrl || null);

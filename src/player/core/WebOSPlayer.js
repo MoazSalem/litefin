@@ -12,7 +12,10 @@
  *   - Playback rate clamped to values WebOS reliably supports (0.5, 1, 2, 4)
  *   - Fullscreen is always a no-op (WebOS TV apps run fullscreen by definition)
  *   - supportsNativeAudioTracks() returns true (WebOS audioTracks API is stable)
- *   - Buffer stall recovery kick identical to HtmlVideoPlayer for consistency
+ *   - Buffer-aware stall recovery: only kicks forward when genuinely starved (< 5s
+ *     of buffer ahead). Segment-boundary micro-stalls are allowed to self-recover
+ *     silently, eliminating the user-visible choppiness caused by kicking during
+ *     a full-buffer decoder hiccup.
  *
  * @module core/WebOSPlayer
  */
@@ -956,22 +959,44 @@ export class WebOSPlayer {
     }
 
     /**
-     * Track progress events to emit buffer state info for the UI.
-     * The buffered range is logged for diagnostics; a future enhancement
-     * could expose it via a getBandwidth() or getBufferedSeconds() API.
+     * Returns the number of seconds of data buffered ahead of the current playhead.
+     *
+     * We deliberately iterate buffered ranges to find the one CONTAINING the
+     * playhead rather than taking buffered.end(last). The naive approach reports
+     * the very last downloaded segment's end — which can be 40+ s ahead — even
+     * when there is a zero-byte gap sitting 2 s in front of the playhead. That gap
+     * is what actually causes a decoder stall. This version returns 0 in that case,
+     * making the root cause immediately visible in logs and recovery decisions.
+     *
+     * @private
+     * @returns {number} Seconds of continue data ahead of currentTime, or 0 if gapped/empty.
+     */
+    _getBufferAhead() {
+        const video = this._videoElement;
+        if (!video || !video.buffered) return 0;
+        const ct = video.currentTime;
+        try {
+            for (let i = 0; i < video.buffered.length; i++) {
+                // Find the range that contains our current playhead
+                if (video.buffered.start(i) <= ct && ct < video.buffered.end(i)) {
+                    return Math.max(0, video.buffered.end(i) - ct);
+                }
+            }
+        } catch (e) {
+            // Benign — buffered may be momentarily empty between segments
+        }
+        return 0;
+    }
+
+    /**
+     * Track progress events to log buffer state. Uses _getBufferAhead() for
+     * accurate gap-aware reporting.
      * @private
      */
     _onProgress() {
         const video = this._videoElement;
         if (!video || !video.buffered || video.buffered.length === 0) return;
-        try {
-            // Amount of video currently buffered ahead of playback head
-            const bufferedEnd     = video.buffered.end(video.buffered.length - 1);
-            const secondsAhead    = Math.max(0, bufferedEnd - video.currentTime);
-            log.debug('WebOSPlayer: Buffer ahead', secondsAhead.toFixed(1), 's');
-        } catch (e) {
-            // Benign — buffered may be empty between segments
-        }
+        log.debug('WebOSPlayer: Buffer ahead', this._getBufferAhead().toFixed(1), 's');
     }
 
     /** @private */
@@ -1075,23 +1100,67 @@ export class WebOSPlayer {
     // ========================================================================
 
     /**
-     * Start a timer that kicks the video with a tiny seek if playback stays
-     * stalled for more than 5 seconds. This is a last-resort recovery for
-     * WebOS buffer under-run scenarios with adaptive streams.
+     * Start a 2.5-second timer that fires a recovery kick ONLY if the buffer
+     * is genuinely starved (< 5 s ahead) when it expires.
+     *
+     * WHY THE BUFFER GATE:
+     *   The WebOS native HLS player fires a 'waiting' or 'stalled' event at
+     *   every MPEG-TS segment boundary while the decoder pipeline is transitioning
+     *   to the next IDR frame — even when 28+ seconds of data are already buffered.
+     *   Before this change, we kicked the playhead +0.5 s unconditionally, which:
+     *     1. Skipped visible content (audible/visual jump every 6-7 s on DV content).
+     *     2. Invalidated the pre-buffered window (dropping from 28 s → 7 s).
+     *     3. Immediately re-triggered another 'waiting' event → another stall check
+     *        → infinite choppiness loop.
+     *
+     *   With the gate, we let the native decoder self-recover at segment
+     *   boundaries (it always does, in < 500 ms). The kick is reserved for genuine
+     *   buffer underruns (network drop, server-side transcode lag) where < 5 s
+     *   of data remain and a larger skip is the only way to resume cleanly.
+     *
+     * KICK MAGNITUDE (kept at 0.5 s):
+     *   A 10 ms nudge often lands inside the same decoded frame and is silently
+     *   ignored by the WebOS native media engine on high-bitrate HEVC streams.
+     *   A 500 ms nudge crosses at least one HLS segment boundary, forcing a
+     *   clean IDR re-init — which is what actually clears a genuine underrun.
+     *
      * @private
      */
     _startStallCheck() {
         this._clearStallCheck();
         this._stallTimer = setTimeout(() => {
-            if (this._videoElement && !this._videoElement.paused && this._started) {
-                log.warn('WebOSPlayer: Still stalled after 5s — attempting recovery kick');
-                try {
-                    this._videoElement.currentTime += 0.01;
-                } catch (e) {
-                    log.error('WebOSPlayer: Stall recovery kick failed', e);
-                }
+            if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+            const bufferAhead = this._getBufferAhead();
+
+            // ----------------------------------------------------------------
+            // Buffer gate: if the pipeline has plenty of data, this is a
+            // decoder micro-stall at a segment boundary — not a real underrun.
+            // The native engine will self-recover; kicking forward would skip
+            // content and restart the choppiness cycle. Just bail.
+            // ----------------------------------------------------------------
+            if (bufferAhead > 5) {
+                log.debug(
+                    'WebOSPlayer: Stall timer fired with',
+                    bufferAhead.toFixed(1),
+                    's buffered — segment-boundary micro-stall, letting decoder self-recover'
+                );
+                return;
             }
-        }, 5000);
+
+            // Genuine underrun — kick forward half a second to force the
+            // pipeline to seek to the next clean IDR frame.
+            log.warn(
+                'WebOSPlayer: Still stalled after 2.5s (buffer:',
+                bufferAhead.toFixed(1),
+                's) — recovery kick (+0.5s)'
+            );
+            try {
+                this._videoElement.currentTime += 0.5;
+            } catch (e) {
+                log.error('WebOSPlayer: Recovery kick failed', e);
+            }
+        }, 2500);
     }
 
     /** @private */

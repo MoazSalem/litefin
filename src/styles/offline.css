@@ -76,7 +76,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -93,8 +95,10 @@
 .offline-actions .btn.focused {
     outline: none;
     z-index: 2;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
+
 
 .offline-actions .btn-primary:focus,
 .offline-actions .btn-primary.focused {
@@ -122,7 +126,9 @@
     padding: 12px 32px;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -130,7 +136,22 @@
 .exit-btn.focused {
     color: var(--jf-text-primary);
     background: rgba(255, 255, 255, 0.05);
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
+}
+
+
+@-webkit-keyframes offlineFadeIn {
+    from { 
+        opacity: 0; 
+        -webkit-transform: scale(0.95) translateY(30px); 
+        transform: scale(0.95) translateY(30px); 
+    }
+    to { 
+        opacity: 1; 
+        -webkit-transform: scale(1) translateY(0); 
+        transform: scale(1) translateY(0); 
+    }
 }
 
 @keyframes offlineFadeIn {
@@ -143,3 +164,68 @@
         transform: scale(1) translateY(0); 
     }
 }
+
+
+/* ============================================================================
+   Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x)
+   ============================================================================ */
+
+html[data-layout-tier="ultra-legacy"] .offline-page {
+    display: block;
+    text-align: center;
+    height: 100vh;
+    width: 100vw;
+    line-height: 100vh; /* Force vertical centering for inline-block children */
+    font-size: 0; /* Kill horizontal whitespace gaps */
+}
+
+/* Skip the ghost element as line-height on the parent is more robust for Chrome 32 */
+html[data-layout-tier="ultra-legacy"] .offline-page::before {
+    display: none;
+}
+
+html[data-layout-tier="ultra-legacy"] .offline-container {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: normal; /* Reset line-height for content */
+    text-align: center;
+    max-width: 90%;
+    padding: 40px;
+    animation: none;
+    font-size: 1rem;
+}
+
+
+
+html[data-layout-tier="ultra-legacy"] .offline-title {
+    font-size: 2.8rem; /* Scale down for legacy fonts/engines */
+}
+
+html[data-layout-tier="ultra-legacy"] .offline-actions {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .offline-actions .btn {
+    display: inline-block;
+    vertical-align: middle;
+    width: 280px; /* Fixed width is safer than flex-basis/min-width */
+    margin: 10px;
+}
+
+html[data-layout-tier="ultra-legacy"] .offline-footer {
+    position: absolute;
+    bottom: 80px;
+    left: 0;
+    right: 0;
+    text-align: center;
+    line-height: normal; /* Reset massive parent line-height */
+    height: auto;
+    z-index: 100; /* Ensure it stays above the centering ghost/line if they overlap */
+}
+
+html[data-layout-tier="ultra-legacy"] .exit-btn {
+    display: inline-block;
+}
+
+

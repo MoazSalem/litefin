@@ -19,8 +19,9 @@ class PlatformInfo {
 
         /*
          * Layout tier controls which CSS rendering path is used.
-         *   'modern' — Chrome 57+: CSS Grid is available (Tizen 5.0+)
-         *   'legacy' — Chrome <57: CSS Grid is unsupported (Tizen 3.0 / 4.0)
+         *   'modern'       — Chrome 57+:  CSS Grid available (Tizen 5.0+)
+         *   'legacy'       — Chrome 47–56: No CSS Grid but flexbox works fine (Tizen 3.0 / 4.0)
+         *   'ultra-legacy' — Chrome <47:  Broken flex, no CSS vars, no Grid (Tizen 2.x / WebOS 1.x)
          * Stamped onto <html data-layout-tier> by LayoutManager.init().
          */
         this._layoutTier = 'modern'; // Safe default
@@ -88,8 +89,18 @@ class PlatformInfo {
             chromeVersion = 999; // Assume modern if totally unknown (e.g. Firefox/Safari Desktop)
         }
 
-        // Chrome 57+ has CSS Grid support; anything below falls back to flex-wrap.
-        this._layoutTier = chromeVersion >= 57 ? 'modern' : 'legacy';
+        // Three-tier CSS rendering path:
+        //   Chrome 57+ → modern   (CSS Grid + native custom properties)
+        //   Chrome 47–56 → legacy (flexbox only, no CSS Grid; Tizen 3.0 / 4.0)
+        //   Chrome <47 → ultra-legacy (broken flex in many contexts, no CSS vars,
+        //                              no CSS Grid; Tizen 2.x / WebOS 1.x / Chrome 32)
+        if (chromeVersion >= 57) {
+            this._layoutTier = 'modern';
+        } else if (chromeVersion >= 47) {
+            this._layoutTier = 'legacy';
+        } else {
+            this._layoutTier = 'ultra-legacy';
+        }
         log.info(`Layout tier: ${this._layoutTier} (Chrome ${chromeVersion === 999 ? 'unknown' : chromeVersion})`);
     }
 
@@ -115,7 +126,10 @@ class PlatformInfo {
 
     /**
      * The CSS layout tier for this device.
-     * @returns {'modern'|'legacy'} 'modern' if CSS Grid is supported (Chrome 57+), 'legacy' otherwise.
+     * @returns {'modern'|'legacy'|'ultra-legacy'}
+     *   'modern'       — Chrome 57+, CSS Grid + native custom properties
+     *   'legacy'       — Chrome 47–56, flexbox only (Tizen 3.0 / 4.0)
+     *   'ultra-legacy' — Chrome <47, fallen-back rendering (Tizen 2.x / WebOS 1.x)
      */
     get layoutTier() {
         return this._layoutTier;

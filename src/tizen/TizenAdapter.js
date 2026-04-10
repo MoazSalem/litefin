@@ -113,6 +113,10 @@ class TizenAdapter {
         // Setup key event handler
         this._setupKeyHandler();
 
+        // Setup mouse listeners for non-tv pointers or browser mode
+        document.addEventListener('mousemove', () => this.reportInput(), { passive: true });
+        document.addEventListener('mousedown', () => this.reportInput(), { passive: true });
+
         // Get device info
         this._getDeviceInfo();
 

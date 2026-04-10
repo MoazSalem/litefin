@@ -54,9 +54,13 @@
 
     /* PERFORMANCE: Remove border transition, use transform only */
     border: none;
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transition: transform 0.2s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+
+
     text-align: left;
     /* KEEP: Interactive element needs layer for smooth scaling */
+    -webkit-transform: translateZ(0);
     transform: translateZ(0);
     will-change: transform;
 }
@@ -79,11 +83,13 @@
 
 .episode-row-card:focus,
 .episode-row-card.focused {
+    -webkit-transform: scale(1.02);
     transform: scale(1.02);
     /* Make it pop slightly less than grid cards */
     background: var(--jf-card-bg-hover);
     z-index: 10;
     outline: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
 }
 
 .episode-row-card:focus::after,
@@ -201,8 +207,11 @@
     color: var(--jf-text-primary);
     cursor: pointer;
     /* PERFORMANCE: Simplified transition */
+    -webkit-transition: -webkit-transform 0.15s ease-out, background-color 0.15s, border-color 0.15s;
     transition: transform 0.15s ease-out, background-color 0.15s, border-color 0.15s;
+
     margin-right: 12px;
+
     /* REPLACES gap: 12px */
 }
 
@@ -226,6 +235,8 @@
     border-color: var(--jf-button-border-focus) !important;
     color: var(--jf-primary-btn-color) !important;
     outline: none;
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
 }
 
 .episode-action-btn svg {

@@ -118,8 +118,8 @@ class LoginPage extends Page {
                                 readonly
                                 tabindex="0"
                             >
-                            <button type="button" class="btn btn-primary connect-btn" tabindex="0" data-i18n="Connect">
-                                Connect
+                            <button type="button" class="btn btn-primary connect-btn" tabindex="0">
+                                <span data-i18n="Connect">Connect</span>
                             </button>
                         </div>
                         <p class="login-error" id="server-error"></p>
@@ -152,14 +152,14 @@ class LoginPage extends Page {
                         </div>
                         <p class="login-error" id="users-error"></p>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0" data-i18n="QuickConnect">
-                                Quick Connect
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
+                                <span data-i18n="QuickConnect">Quick Connect</span>
                             </button>
-                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0" data-i18n="ButtonManualLogin">
-                                Manual Login
+                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0">
+                                <span data-i18n="ButtonManualLogin">Manual Login</span>
                             </button>
-                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="ButtonChangeServer">
-                                Log out of server
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                                <span data-i18n="ButtonChangeServer">Log out of server</span>
                             </button>
                         </div>
                     </div>
@@ -188,17 +188,17 @@ class LoginPage extends Page {
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0" data-i18n="ButtonSignIn">
-                                Sign In
+                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
+                                <span data-i18n="ButtonSignIn">Sign In</span>
                             </button>
-                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0" data-i18n="QuickConnect">
-                                Quick Connect
+                            <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
+                                <span data-i18n="QuickConnect">Quick Connect</span>
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
-                                Back
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonBack">Back</span>
                             </button>
-                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0" data-i18n="ButtonChangeServer">
-                                Change Server
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                                <span data-i18n="ButtonChangeServer">Change Server</span>
                             </button>
                         </div>
                         <p class="login-error" id="manual-error"></p>
@@ -223,11 +223,11 @@ class LoginPage extends Page {
                             >
                         </div>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-primary login-btn" tabindex="0" data-i18n="ButtonSignIn">
-                                Sign In
+                            <button type="button" class="btn btn-primary login-btn" tabindex="0">
+                                <span data-i18n="ButtonSignIn">Sign In</span>
                             </button>
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonBack">
-                                Back
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonBack">Back</span>
                             </button>
                         </div>
                         <p class="login-error" id="password-error"></p>
@@ -245,8 +245,8 @@ class LoginPage extends Page {
                         <p class="quick-connect-status" id="quick-connect-status" data-i18n="WaitingForAuthorization">Waiting for authorization…</p>
                         <p class="login-error" id="quick-connect-error"></p>
                         <div class="login-actions">
-                            <button type="button" class="btn btn-secondary back-btn" tabindex="0" data-i18n="ButtonCancel">
-                                Cancel
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonCancel">Cancel</span>
                             </button>
                         </div>
                     </div>

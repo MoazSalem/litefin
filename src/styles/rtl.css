@@ -135,6 +135,11 @@
     margin-right: 8px;
 }
 
+[dir="rtl"] .global-clock {
+    right: auto;
+    left: 50px;
+}
+
 /* ================== PLAYER OSD ================== */
 [dir="rtl"] .osd-btn {
     margin-left: 0;
@@ -171,24 +176,35 @@
 }
 
 /* ================== LIBRARY / ROW ITEMS ================== */
+
+[dir="rtl"] .library-content.horizontal-rows {
+    padding-left: 0;
+    padding-right: 60px;
+}
+
 [dir="rtl"] .row-title {
     margin-left: 0;
-    margin-right: -20px;
+    margin-right: 0;
     padding-left: 0;
-    padding-right: 20px;
+    padding-right: 60px;
     border-left: none;
     border-right: 3px solid transparent;
 }
 
 [dir="rtl"] .media-row {
     padding-left: 0;
-    padding-right: 60px;
+    padding-right: 0;
 }
 
 [dir="rtl"] .virtual-card {
     margin-right: 0;
     margin-left: 20px; /* Gap between cards */
 }
+
+[dir="rtl"] .library-grid.view-list .media-card .card-image {
+    border-radius: 0 12px 12px 0 !important;
+}
+
 
 /* ================== COMPONENTS ================== */
 [dir="rtl"] .metadata-item {
@@ -275,24 +291,35 @@
 }
 
 [dir="rtl"] .person-grid .media-card {
-    margin-right: 0 !important;
-    margin-left: 24px !important;
-}
-
-[dir="rtl"] .person-grid .media-card:nth-child(5n) {
-    margin-left: 0 !important;
-}
-
-[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-left: 24px !important;
-}
-
-[dir="rtl"] .person-grid.landscape-grid .media-card:nth-child(3n) {
-    margin-left: 0 !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
 }
 
 [dir="rtl"] .btn-icon-text .icon {
     margin-right: 0;
+    margin-left: 12px;
+}
+
+[dir="rtl"] .trailer-option-icon {
+    margin-right: 0;
+    margin-left: 20px;
+}
+
+[dir="rtl"] .subtitle-search-row > * {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .media-info-stream-header .stream-type-badge {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .media-info-grid .media-info-row:nth-child(even) {
+    margin-right: 12px;
+}
+
+[dir="rtl"] .media-info-grid .media-info-row:nth-child(odd) {
     margin-left: 12px;
 }
 
@@ -465,17 +492,20 @@
 /* ================== MODAL OPTIONS ================== */
 [dir="rtl"] .modal-option-btn {
     text-align: right;
-    justify-content: flex-start;
 }
 
 [dir="rtl"] .modal-option-btn .check-icon {
-    margin-left: 10px;
-    margin-right: auto;
+    margin-right: 0;
+    margin-left: 1.25em;
 }
 
-[dir="rtl"] .track-badge {
-    margin-left: 0;
-    margin-right: 10px;
+[dir="rtl"] .modal-option-btn .track-badges,
+[dir="rtl"] .modal-option-btn .subtitle-track-meta,
+[dir="rtl"] .track-option .track-badges,
+[dir="rtl"] .modal-option-btn .track-badge:not(.track-badges .track-badge):not(.subtitle-track-meta .track-badge) {
+    right: auto;
+    left: 30px;
+    margin: 0;
 }
 
 [dir="rtl"] .identity-card {
@@ -520,4 +550,36 @@
 /* ================== SYNCPLAY NOTIFICATIONS ================== */
 [dir="rtl"] .osd-syncplay-notification-glass {
     padding: 16px 24px 16px 32px;
+}
+
+/* ================== HERO CAROUSEL ================== */
+[dir="rtl"] .hero-indicators {
+    right: auto;
+    left: 80px;
+}
+
+/* Mirror the progress bar growth direction for the dots */
+[dir="rtl"] .hero-dot-progress {
+    left: auto;
+    right: 0;
+}
+
+[dir="rtl"] .hero-carousel-container.banner .hero-indicators {
+    right: auto;
+    left: 40px;
+}
+
+[dir="rtl"] .hero-carousel-container.banner.compact .hero-indicators {
+    right: auto;
+    left: 30px;
+}
+
+[dir="rtl"] .hero-meta-item {
+    margin-right: 0;
+    margin-left: 16px;
+}
+
+[dir="rtl"] .hero-dot {
+    margin-right: 0;
+    margin-left: 12px;
 }

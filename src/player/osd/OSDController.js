@@ -64,10 +64,6 @@ export default class OSDController extends Component {
         this._updateTimer = null;
         this._isDraggingSeekbar = false;
         
-        // Cached Seek Durations
-        this._cachedSkipBackMs = this._config.seekStepBack * 1000;
-        this._cachedSkipFwdMs = this._config.seekStepForward * 1000;
-        
         // Seek Session
         this._seekTargetTicks = null;
         this._seekStartTime = null;
@@ -315,6 +311,16 @@ export default class OSDController extends Component {
         // Initial cache
         this._cacheFocusableElements();
         
+        // Pin the initial focus index to the actual play/pause button position.
+        // The constructor defaults _currentFocusIndex=2 as a static guess, but that
+        // drifts whenever buttons are disabled/enabled (prev track, chapter nav, etc.).
+        // Resolving it now guarantees showAndFocusPlayPause() lands correctly on startup.
+        const initialPlayIdx = this._findActionIndex('togglePlay');
+        if (initialPlayIdx !== -1) {
+            this._currentFocusRow = 1;
+            this._currentFocusIndex = initialPlayIdx;
+        }
+
         // Start hidden
         this.hide();
     }
@@ -805,7 +811,7 @@ export default class OSDController extends Component {
             this._focusResetTimer = null;
         }
 
-        const mode = PlayerSettings.get('osdFocusRestoreMode') || 'remember';
+        const mode = PlayerSettings.get('osdFocusRestoreMode') || 'always';
 
         if (mode === 'always') {
             // Park immediately — next OK press ghost-click hits Play/Pause
@@ -1455,12 +1461,14 @@ export default class OSDController extends Component {
                 this.updatePlayPauseButton();
                 break;
             case 'rewind': {
-                this._performDebouncedSeek(-this._cachedSkipBackMs * 10000);
+                const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack; 
+                this._performDebouncedSeek(-skipBackMs * 10000);
                 this.resetAutoHide();
                 break;
             }
             case 'fastForward': {
-                this._performDebouncedSeek(this._cachedSkipFwdMs * 10000);
+                const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
+                this._performDebouncedSeek(skipFwdMs * 10000);
                 this.resetAutoHide();
                 break;
             }
@@ -2344,11 +2352,6 @@ export default class OSDController extends Component {
     setMetadata(item) {
         this._currentItem = item;
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
-        
-        // Cache the formatted skip duration for this specific item once
-        const isTrailer = item?.Type === 'Trailer';
-        this._cachedSkipBackMs = isTrailer ? 5000 : (PlayerSettings.get('skipBackLength') || this._config.seekStepBack * 1000);
-        this._cachedSkipFwdMs = isTrailer ? 5000 : (PlayerSettings.get('skipForwardLength') || this._config.seekStepForward * 1000);
         
         const titleEl = this._osdEl.querySelector('#osdTitle');
         if (titleEl) titleEl.textContent = this._getFormattedTitle(item);

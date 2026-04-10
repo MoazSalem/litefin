@@ -25,7 +25,6 @@
     padding: 0 32px;
     box-sizing: border-box;
     line-height: normal;
-    /* Let padding center it */
     display: flex;
     align-items: center;
     font-size: 1.4rem;
@@ -35,10 +34,25 @@
     border: 2px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
     /* Match nav button border */
     border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
     /* Half of 72px */
     /* Rounded full */
     color: var(--jf-text-primary);
 }
+
+/*
+ * ── Ultra-Legacy Overrides: Search (Chrome <47 / Tizen 2.x) ───────────────
+ */
+html[data-layout-tier="ultra-legacy"] .search-controls {
+    display: block;
+    text-align: left;
+}
+
+html[data-layout-tier="ultra-legacy"] .search-input {
+    display: inline-block;
+    vertical-align: middle;
+}
+
 
 .search-input:focus,
 .search-input.focused {

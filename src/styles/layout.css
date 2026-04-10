@@ -8,7 +8,6 @@
     width: 100%;
     height: 100vh;
     position: relative;
-    position: relative;
     overflow: hidden;
     background: var(--jf-background);
     display: flex;
@@ -27,7 +26,7 @@
     align-items: center;
 }
 
-.header-left>*:not(:last-child) {
+.header-left > *:not(:last-child) {
     margin-right: 20px;
 }
 
@@ -36,18 +35,19 @@
     align-items: center;
 }
 
-.header-logo>*:not(:last-child) {
+.header-logo > *:not(:last-child) {
     margin-right: 12px;
 }
 
 .header-mid {
     position: absolute;
     left: 50%;
+    -webkit-transform: translateX(-50%);
     transform: translateX(-50%);
     display: flex;
 }
 
-.header-mid>*:not(:last-child) {
+.header-mid > *:not(:last-child) {
     margin-right: 15px;
 }
 
@@ -61,8 +61,91 @@
     display: flex;
 }
 
-.header-nav>*:not(:last-child) {
+.header-nav > *:not(:last-child) {
     margin-right: 12px;
+}
+
+/*
+ * ── Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x) ──────────────────────────
+ * Chrome 32 has broken flex alignment in many contexts.
+ * Replace flex with inline-block + ghost ::before centering trick.
+ * These rules deliberately override the flex defaults above.
+ */
+html[data-layout-tier="ultra-legacy"] .header-left {
+    display: inline-block;
+    vertical-align: middle;
+    height: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 20px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-left > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-logo {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-logo > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 12px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-logo > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid {
+    display: inline-block;
+    vertical-align: middle;
+    height: 100%;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 15px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-mid > *:last-child {
+    margin-right: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav {
+    display: inline-block;
+    vertical-align: middle;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav > * {
+    display: inline-block;
+    vertical-align: middle;
+    margin-right: 12px;
+}
+
+html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
+    margin-right: 0;
 }
 
 .header-clock {
@@ -73,6 +156,22 @@
     color: var(--jf-text-primary);
     margin-left: 8px;
     white-space: nowrap;
+}
+
+.global-clock {
+    position: fixed;
+    top: 32px;
+    right: 50px;
+    z-index: 100000; /* Above everything including screensaver */
+    font-size: 1.4rem;
+    font-weight: 500;
+    color: var(--jf-text-primary);
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    pointer-events: none;
+    letter-spacing: 0.05em;
+    font-family: inherit;
+    opacity: 0.9;
+    transition: opacity 0.3s ease;
 }
 
 .page-content {
@@ -123,13 +222,16 @@
 .row-items-track {
     position: relative; /* GUARANTEE offsetParent for JS calculation */
     display: inline-flex;
-    padding-left: 60px;
-    padding-right: 60px; /* Spacer to allow last item to clear screen edge */
+    padding-left: 0;
+    padding-right: 0; /* Spacer managed by JS for virtual rows */
     
+    -webkit-transform: translateZ(0); /* Hardware accelerate */
     transform: translateZ(0); /* Hardware accelerate */
     will-change: transform;
+    -webkit-transition: -webkit-transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transition: transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
 
 /* ============================================================================
  * Sidebar Layout Support

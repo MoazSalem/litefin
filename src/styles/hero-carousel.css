@@ -1,0 +1,421 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Hero Carousel Styles
+ * ============================================================================
+ * Apple TV inspired hero section for the home screen.
+ * ============================================================================
+ */
+
+.hero-carousel {
+    position: relative;
+    width: 100%;
+    height: 70vh; /* Adjust height as needed for TV screens */
+    min-height: 500px;
+    overflow: hidden;
+    /* Composite layer for smooth performance */
+    transform: translateZ(0);
+}
+
+.hero-carousel-container.compact .hero-carousel {
+    height: 50vh;
+    min-height: 400px;
+}
+
+.hero-carousel-container.compact .hero-item {
+    padding-bottom: 80px;
+}
+
+.hero-carousel-container.compact .hero-backdrop {
+    /* REFINED: Using a slightly offset top-heavy anchor to keep actor faces 
+       visible in the narrow 50vh viewport. */
+    background-position: 50% 20%;
+}
+
+.hero-carousel-container.compact .hero-logo-container {
+    height: 80px;
+}
+
+.hero-carousel-container.compact .hero-item-title {
+    font-size: 3rem;
+}
+
+.hero-carousel-track {
+    position: relative;
+    width: 100%;
+    height: 100%;
+}
+
+.hero-item {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    opacity: 0;
+    z-index: 1;
+    transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
+    display: flex;
+    align-items: flex-end;
+    padding-bottom: 120px; /* Space for indicators and breathing room */
+    overflow: hidden; /* Contain the scaled backdrop */
+}
+
+.hero-item.active {
+    opacity: 1;
+    z-index: 2;
+}
+
+.hero-backdrop {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: -1;
+    background-size: cover;
+    background-position: top;
+    background-repeat: no-repeat;
+    /* Transformation handled via animation on the .active class */
+}
+
+/* Gradients for readability */
+.hero-item::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Left-to-right dark mask for text overlay */
+    background: linear-gradient(to right, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
+    z-index: 1;
+}
+
+.hero-item::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    /* Bottom-to-top mask to blend with rows */
+    background: linear-gradient(to top,var(--jf-background) 6%,rgba(0,0,0,0.8) 15%,transparent 30%);
+    z-index: 2;
+}
+
+.hero-content {
+    position: relative;
+    z-index: 10;
+    padding: 0 80px;
+    max-width: 1600px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    opacity: 0;
+    -webkit-transform: translateY(20px);
+    transform: translateY(20px);
+    -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
+    transition: transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
+}
+
+
+.hero-item.active .hero-content {
+    opacity: 1;
+    -webkit-transform: translateY(0);
+    transform: translateY(0);
+}
+
+
+/* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop ONLY */
+.hero-item.active .hero-backdrop {
+    /* CSS Animation ensures it triggers even on the very first initial mount */
+    -webkit-animation: hero-ken-burns 12000ms linear forwards;
+    animation: hero-ken-burns 12000ms linear forwards;
+}
+
+@-webkit-keyframes hero-ken-burns {
+    from { -webkit-transform: scale(1); }
+    to   { -webkit-transform: scale(1.08); }
+}
+
+@keyframes hero-ken-burns {
+    from { transform: scale(1); }
+    to   { transform: scale(1.08); }
+}
+
+
+.hero-logo-container {
+    height: 120px;
+    margin-bottom: 24px;
+    display: flex;
+    align-items: flex-end;
+}
+
+.hero-logo {
+    max-height: 100%;
+    max-width: 400px;
+    object-fit: contain;
+}
+
+.hero-item-title {
+    font-size: 4rem;
+    font-weight: 800;
+    color: #fff;
+    margin: 0 0 16px 0;
+    line-height: 1;
+    letter-spacing: -2px;
+    text-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.hero-meta-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 24px;
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.9);
+    font-weight: 500;
+}
+
+.hero-meta-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 16px;
+}
+
+.hero-meta-item:last-child {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+.hero-meta-badge {
+    padding: 2px 8px;
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: 4px;
+    font-weight: 700;
+    font-size: 1.1rem;
+}
+
+.hero-description {
+    font-size: 1.4rem;
+    line-height: 1.5;
+    color: rgba(255, 255, 255, 0.8);
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    margin-bottom: 40px;
+    /* Removed text-shadow for performance during transitions */
+}
+
+/* Indicators (Dots) */
+.hero-indicators {
+    position: absolute;
+    bottom: 40px;
+    right: 80px;
+    display: flex;
+    z-index: 20;
+}
+
+.hero-dot {
+    position: relative;
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    width: 8px;
+    height: 8px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.2);
+    margin-right: 12px;
+    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                background 0.3s ease,
+                transform 0.3s ease;
+    overflow: hidden;
+}
+
+.hero-dot:last-child {
+    margin-right: 0;
+    margin-left: 0;
+}
+
+.hero-dot.active {
+    width: 32px;
+    background: var(--jf-accent-content-color);
+}
+
+/* Focus State */
+.hero-carousel-container {
+    position: relative;
+    overflow: hidden;
+}
+
+.hero-carousel-container::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* REFINED: Removed expensive mask-image. Using a smarter gradient for performance. */
+    background: linear-gradient(to top, 
+        transparent 0%, 
+        rgba(0, 0, 0, 0) 5%, 
+        var(--jf-accent) 20%, 
+        transparent 100%);
+    opacity: 0;
+    transition: opacity 0.5s ease;
+    pointer-events: none;
+    z-index: 100;
+}
+
+.hero-carousel-container:focus,
+.hero-carousel-container.focused {
+    outline: none;
+}
+
+.hero-carousel-container:focus::after,
+.hero-carousel-container.focused::after {
+    opacity: 0.15;
+}
+
+/* ============================================================================
+   Carousel Styles: Banner Mode
+   ============================================================================ */
+
+.hero-carousel-container.banner {
+    margin: 90px 75px 30px 75px; /* Perfectly aligned with media grid (40px page + 60px row offset) */
+    border-radius: var(--jf-border-radius-lg);
+    background: #000;
+    border: 4px solid transparent; /* 4px (thinned) persistent border */
+    background-clip: padding-box;
+    transition: transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), 
+                margin 0.5s ease,
+                border-color 0.4s ease;
+    /* PERFORMANCE: Force overflow clipping for banner mode */
+    overflow: hidden !important;
+    /* Legacy WebKit Hack: Force border-radius clipping on children */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+/* Ensure inner carousel respects container radius */
+.hero-carousel-container.banner .hero-carousel {
+    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
+    height: 60vh; /* Slightly shorter in banner mode for better proportions */
+    overflow: hidden;
+    /* Legacy WebKit Hack: Ensure child items are clipped */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+/* Explicitly round children in banner mode as some legacy engines ignore overflow:hidden radius */
+.hero-carousel-container.banner .hero-item,
+.hero-carousel-container.banner .hero-backdrop {
+    border-radius: calc(var(--jf-border-radius-lg) - 4px);
+}
+
+.hero-carousel-container.banner.compact {
+    margin: 90px 75px 20px 75px; /* Mantaining 100px horizontal alignment in compact mode */
+}
+
+.hero-carousel-container.banner.compact .hero-carousel {
+    height: 40vh; /* Scaled down from 60vh to allow next rows to peak through */
+    min-height: 320px;
+}
+
+/* Internal scaling for banner + compact */
+.hero-carousel-container.banner.compact .hero-logo-container {
+    height: 60px;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.banner.compact .hero-item-title {
+    font-size: 2.2rem;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.banner.compact .hero-description {
+    font-size: 1.15rem;
+    margin-bottom: 20px;
+    -webkit-line-clamp: 2; /* Fewer lines of detail in compact mode */
+    line-clamp: 2;
+}
+
+.hero-carousel-container.banner.compact .hero-indicators {
+    bottom: 20px;
+    right: 30px;
+}
+
+/* Banner Focus State: Performant Accent Ring (Sharp 1:1 Scale to prevent blurring) */
+.hero-carousel-container.banner:focus,
+.hero-carousel-container.banner.focused {
+    border-color: var(--jf-accent); /* Sharp, high-contrast brand color */
+    z-index: 1000;
+}
+
+/* Subtle inner glow for depth (using border for performance) */
+.hero-carousel-container.banner::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    pointer-events: none;
+    z-index: 5;
+    transition: border-color 0.5s ease;
+}
+
+.hero-carousel-container.banner:focus::before,
+.hero-carousel-container.banner.focused::before {
+    border-color: rgba(255, 255, 255, 0.3);
+}
+
+/* Adjust gradients for banner mode (more self-contained) */
+.hero-carousel-container.banner .hero-item::after {
+    background: linear-gradient(to top, 
+        rgba(0, 0, 0, 0.9) 0%, 
+        rgba(0, 0, 0, 0.5) 20%, 
+        transparent 80%);
+}
+
+/* Compact specific gradient optimization: 
+   Pull the mask further down to prevent washing out the restricted image area. */
+.hero-carousel-container.compact .hero-item::after {
+    background: linear-gradient(to top, 
+        var(--jf-background) 0%, 
+        rgba(0, 0, 0, 0.5) 10%, 
+        transparent 25%);
+}
+
+.hero-carousel-container.banner .hero-indicators {
+    bottom: 30px;
+    right: 40px;
+}
+
+[dir="rtl"] .hero-carousel-container.banner .hero-indicators {
+    right: auto;
+    left: 40px;
+}
+
+/* Animation for Auto-Scroll */
+@-webkit-keyframes heroProgress {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+@keyframes heroProgress {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
+
+.hero-dot-progress {
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: var(--jf-accent);
+    border-radius: 4px; /* Explicitly match dot radius for perfect rounding */
+    width: 0;
+}
+
+.hero-dot.active .hero-dot-progress {
+    -webkit-animation: heroProgress 8s linear;
+    animation: heroProgress 8s linear;
+}

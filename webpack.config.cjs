@@ -253,7 +253,26 @@ const ultraLegacyConfig = {
     name: 'ultra-legacy',
     target: ['web', 'es5'],
     mode: 'production',
-    entry: ['whatwg-fetch', 'url-search-params-polyfill', './src/index.js'],
+    entry: [
+        /*
+         * POLYFILL LOAD ORDER — CRITICAL for Chrome 32 / Tizen 2.x:
+         * These must come first so Symbol, Promise, Map, and Set are
+         * already on the global scope before the regenerator-runtime
+         * chunk executes. If core-js is split into a lazy chunk that
+         * loads AFTER regenerator-runtime, you get:
+         *   "TypeError: undefined is not a function"
+         * because regenerator-runtime internally calls Symbol() and
+         * iterates with for-of (which needs Symbol.iterator).
+         */
+        'core-js/es/symbol',          // Symbol — used by regenerator-runtime
+        'core-js/es/promise',         // Promise — async/await transpilation target
+        'core-js/es/map',             // Map — used by several core-js internals
+        'core-js/es/set',             // Set — used by several core-js internals
+        'core-js/es/array/from',      // Array.from — spread/iterator polyfill
+        'whatwg-fetch',               // fetch() for Tizen 2.x / WebOS 1.x
+        'url-search-params-polyfill', // URLSearchParams for Chrome 32
+        './src/index.js'
+    ],
 
     output: {
         path: path.resolve(__dirname, 'dist/ultra-legacy'),
@@ -287,7 +306,16 @@ const ultraLegacyConfig = {
                     }
                 }
             },
-            { test: /\.css$/, use: [MiniCssExtractPlugin.loader, 'css-loader'] },
+            /*
+             * style-loader is used here (not MiniCssExtractPlugin) because:
+             * Ultra-legacy apps run off the file:// protocol (local install).
+             * MiniCssExtractPlugin creates a separate main.css file that the
+             * css-vars-ponyfill tries to fetch via XMLHttpRequest, which is
+             * blocked by strict CORS rules on file:// in these ancient runtimes.
+             * style-loader bundles the CSS directly into the JS chunks as
+             * inline <style> tags — no network request, no CORS problem.
+             */
+            { test: /\.css$/, use: ['style-loader', 'css-loader'] },
             {
                 test: /\.(woff|woff2|eot|ttf|otf)$/i,
                 type: 'asset/resource',

@@ -314,6 +314,7 @@
 .play-btn.focused,
 .resume-btn:focus,
 .resume-btn.focused {
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color);
@@ -321,6 +322,7 @@
     outline: none !important;
     border: 2px solid var(--jf-button-border-focus) !important;
 }
+
 
 /* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */
 .play-btn svg,
@@ -365,13 +367,69 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 
-.btn-icon svg {
+.btn-icon svg,
+.details-actions .btn-icon svg {
     width: 28px;
     height: 28px;
     min-width: 28px;
     min-height: 28px;
     flex-shrink: 0;
     stroke-width: 2.5;
+    margin: 0;
+}
+
+/*
+ * ── Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x) ────────────────────────
+ * Chrome 32 can't reliably center content in flex containers.
+ * Use ghost element (::before) + inline-block technique instead.
+ */
+html[data-layout-tier="ultra-legacy"] .details-actions .btn {
+    display: block;
+    text-align: center;
+    padding: 0 32px;
+    font-size: 0; /* Collapse whitespace between inline-blocks */
+    line-height: normal;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .details-actions .btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+    width: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .details-actions .btn > * {
+    display: inline-block;
+    vertical-align: middle;
+    font-size: 1.5rem;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon,
+html[data-layout-tier="ultra-legacy"] .person-actions-row .btn-icon {
+    display: block;
+    text-align: center;
+    font-size: 0;
+    line-height: normal;
+    white-space: nowrap;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon::before,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
+    width: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .btn-icon svg,
+html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
+    display: inline-block;
+    vertical-align: middle;
+    margin: 0;
 }
 
 /* Active State (Heart Filled / Checked) */
@@ -385,12 +443,14 @@
 /* Focus State (Unified) */
 .btn-icon:focus,
 .btn-icon.focused {
+    -webkit-transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
     transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color) !important;
     border-color: var(--jf-button-border-focus) !important;
     outline: none !important;
 }
+
 
 /* 
  * Active + Focused State: 
@@ -409,7 +469,15 @@
  * Added via JS temporarily during toggle to provide "something happened" feedback.
  */
 .btn-icon.pulse-trigger svg {
+    -webkit-animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+
+@-webkit-keyframes jf-pulse {
+    0% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(1.5); transform: scale(1.5); }
+    100% { -webkit-transform: scale(1); transform: scale(1); }
 }
 
 @keyframes jf-pulse {
@@ -417,6 +485,7 @@
     50% { transform: scale(1.5); }
     100% { transform: scale(1); }
 }
+
 
 .details-overview {
     margin-bottom: 0;
@@ -563,13 +632,17 @@
     border-color: var(--jf-button-border-focus);
     color: var(--jf-primary-btn-color);
     outline: none !important;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
 
+
 /* Smooth focus for cast/similar items (matches Home scaling) */
 .media-card {
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     justify-self: center;
+
 
     /* PERFORMANCE: Layout isolation without compositor promotion.
        home.css already handles the will-change: transform on :focus.
@@ -631,6 +704,8 @@
     z-index: 10;
     /* Promote only the focused card to its own compositor layer */
     will-change: transform;
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
 }
 
 .episode-thumb {
@@ -701,7 +776,8 @@
     /* Manual sizing instead of grid */
     width: calc(20% - 26px) !important;
     /* 5 items per row approx */
-    margin-right: 24px !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
     margin-bottom: 24px !important;
     flex: none !important;
     max-width: unset !important;
@@ -720,27 +796,12 @@
     height: 225px !important; /* 16:9 approx for landscape cards */
 }
 
-.person-grid .media-card:nth-child(5n) {
-    margin-right: 0 !important;
-}
-
 /* Landscape Grid (Episodes on Season/Details Page) */
 .person-grid.landscape-grid .media-card {
     width: calc(33.33% - 26px) !important;
     /* 3 items per row for better visibility/detail */
-}
-
-/* Reset the 5n clearing from the base grid */
-.person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-right: 24px !important;
-}
-
-.person-grid.landscape-grid .media-card:nth-child(3n) {
-    margin-right: 0 !important;
-}
-
-.person-grid.landscape-grid .media-card:nth-child(5n) {
-    margin-right: 24px !important;
+    margin-right: 12px !important;
+    margin-left: 12px !important;
 }
 
 /* Reset media-card margin for first item on row titles if needed */

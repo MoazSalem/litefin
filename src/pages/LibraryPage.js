@@ -38,7 +38,7 @@ class LibraryPage extends Page {
 
             // Pagination
             startIndex: 0,
-            limit: 100, // Per user requirement
+            limit: parseInt(storage.getItem('pref:libraryPageSize') || 100, 10),
             totalRecordCount: 0,
 
             // Data Cache
@@ -527,9 +527,14 @@ class LibraryPage extends Page {
                     return;
                 }
 
-                // Default: navigate to item details
-                log.info('Navigating to item details:', itemId);
-                router.navigate(`/details/${itemId}`);
+                // Default: navigate to folder or item details
+                if (itemType === 'Folder' || itemType === 'CollectionFolder') {
+                    log.info('Navigating into folder:', itemId);
+                    router.navigate(`/library/${itemId}`);
+                } else {
+                    log.info('Navigating to item details:', itemId);
+                    router.navigate(`/details/${itemId}`);
+                }
             }
         });
     }
@@ -624,6 +629,15 @@ class LibraryPage extends Page {
                 }
             }
 
+            // Flag this as a folder-based library if it matches 'folders' type 
+            // or is a generic collection without a specific media type.
+            this.state.isFolderLibrary = 
+                item.CollectionType === 'folders' || 
+                (!item.CollectionType && (item.Type === 'CollectionFolder' || item.Type === 'UserView' || item.Type === 'Folder'));
+
+            // If the item fetched is a Folder, we are in a sub-folder view.
+            this.state.isSubFolder = item.Type === 'Folder' || (item.Type === 'CollectionFolder' && !item.CollectionType && item.ParentId);
+
             this.state.libraryInfo = item;
             this.$('#library-title').textContent = item.Name;
             this.title = item.Name; // Update Page title
@@ -702,6 +716,12 @@ class LibraryPage extends Page {
                 ImageTypeLimit: 1,
                 EnableImageTypes: 'Primary,Backdrop,Thumb'
             };
+
+            // If it's a folder-based library (generic/Home Videos) or we are explicitly 
+            // in a "Folders" tab, disable recursion so we can browse the hierarchy.
+            if (this.state.isFolderLibrary || this.state.viewType === 'Folders') {
+                params.Recursive = false;
+            }
 
             // Apply Filters
             if (this.state.nameStartsWith) {
@@ -1210,6 +1230,10 @@ class LibraryPage extends Page {
                 params.IncludeItemTypes = 'Playlist';
                 params.Recursive = true;
                 result = await api.getItems(params);
+            } else if (viewType === 'Folders') {
+                // Explicitly handled Folders tab – always non-recursive
+                params.Recursive = false;
+                result = await api.getItems(params);
             }
 
             // Guard: Check if we are still on the same tab before rendering grid
@@ -1385,9 +1409,10 @@ class LibraryPage extends Page {
         return !!(
             this.params.genreId ||
             this.params.studioId ||
+            this.params.year ||
             this.params.personId ||
             this.params.tagName ||
-            this.params.year
+            this.state.isSubFolder
         );
     }
 
@@ -1438,12 +1463,11 @@ class LibraryPage extends Page {
                 { id: 'MusicGenres', label: 'Genres' }
             ];
         } else {
-            // Generic fallback
+            // Generic fallback (Generic Folders, Home Videos, Music Videos, etc.)
             tabs = [
                 { id: 'Items', label: 'Folders' },
                 { id: 'Suggestions', label: 'Suggestions' },
-                { id: 'Genres', label: 'Genres' },
-                { id: 'Folders', label: 'Folders' }
+                { id: 'Genres', label: 'Genres' }
             ];
         }
 
@@ -3344,8 +3368,6 @@ class LibraryPage extends Page {
         const isMovieMain = collectionType === 'movies' && viewType === 'Items';
         const isTVMain = collectionType === 'tvshows' && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
-        // Music grid views (Albums, Artists, AlbumArtists, Songs, Playlists) need controls too
-        // MusicGenres and Suggestions use horizontal rows — they DON'T need controls
         const isMusicMain =
             collectionType === 'music' &&
             (viewType === 'Albums' ||
@@ -3353,7 +3375,11 @@ class LibraryPage extends Page {
                 viewType === 'AlbumArtists' ||
                 viewType === 'Songs' ||
                 viewType === 'Playlists');
-        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain;
+
+        const isCollections = collectionType === 'boxsets' && viewType === 'Items';
+        const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
+
+        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain;
 
         const isSubView = this._isSubView();
         const isControlsVisible = shouldShow || isSubView;

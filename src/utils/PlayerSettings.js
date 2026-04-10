@@ -15,6 +15,7 @@
 
 import { logger } from './Logger.js';
 import { storage } from './StorageService.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('PlayerSettings');
 
@@ -193,12 +194,42 @@ const DEFAULTS = {
     // Force all content to transcode (emergency/debug fallback)
     forceTranscode: false,
 
+    // -------------------------------------------------------------------------
+    // fMP4 HLS CONTAINER PREFERENCES
+    // -------------------------------------------------------------------------
+    // When enabled, the device profile will advertise an fMP4 (ISOBMFF) HLS
+    // transcoding profile in addition to (or instead of) the classic MPEG-TS
+    // one. fMP4 unlocks HEVC and AV1 copy-stream remuxing over HLS, which
+    // MPEG-TS cannot carry reliably on many TV platforms.
+    //
+    //   enableFmp4HlsContainer — Master switch. When false the fMP4 HLS profile
+    //     is never advertised, regardless of the hardware version gate.
+    //     Default: false — tests showed fMP4 does NOT activate Dolby Vision on
+    //     WebOS; only MPEG-TS reliably triggers the DV pipeline. fMP4 is
+    //     therefore opt-in rather than opt-out.
+    //
+    //   forceFmp4HlsContainer — When true, completely bypasses the hardware
+    //     version gate (webosVersion >= 6) and promotes the fMP4 profile to be
+    //     the PRIMARY HLS transcode. Only use this if you have confirmed your
+    //     TV handles fMP4 HLS correctly and you don't need DV passthrough.
+    //     Ignored when enableFmp4HlsContainer is false.
+    //     Default: false.
+    enableFmp4HlsContainer: false,
+    forceFmp4HlsContainer: false,
+
     // =========================================================================
     // PLAYBACK SETTINGS
     // =========================================================================
 
     // Trailer playback mode ('internal_proxy', 'internal_iframe', 'external')
     trailerPlaybackMode: 'internal_proxy',
+
+    // Auto-chain mode: when both local AND remote trailers exist and this is
+    // true, the TrailerDialog selection screen is skipped entirely. Instead,
+    // the local trailer plays immediately via the native player. When it ends
+    // (or the user presses Next), the remote trailer player opens automatically.
+    // Pressing Back at any point returns to the Details page cleanly.
+    trailerAutoChain: false,
 
     // Enable background Node.js service (for Discovery and Proxy)
     enableBackgroundService: true,
@@ -233,7 +264,7 @@ const DEFAULTS = {
      *   'always'   — Always land on Play/Pause whenever the OSD re-appears,
      *                no matter how short the hide was.
      */
-    osdFocusRestoreMode: 'remember',
+    osdFocusRestoreMode: 'always',
 
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total'
@@ -288,6 +319,9 @@ export const PlayerSettings = {
 
         storage.setItem(STORAGE_PREFIX + key, String(value));
         log.debug(`Saved ${key}: ${value}`);
+        
+        // Notify subscribers that a setting has changed
+        eventBus.emit(`pref:${key}`, value);
     },
 
     /**

@@ -15,6 +15,10 @@ import { logger } from '../utils/Logger.js';
 
 const log = logger.create('WebOSAdapter');
 
+// Minimum pixel movement to consider as an interaction. 
+// Filters out gyro noise from LG Magic Remotes.
+const MOVEMENT_THRESHOLD = 5;
+
 /**
  * Key code mappings for LG WebOS remotes
  * Based on LG Developer Documentation and Jellyfin's input mapping.
@@ -52,6 +56,10 @@ class WebOSAdapter {
         this._deviceInfo = null;
         this._cursorActive = false;
         this._lastInteractionTime = Date.now();
+
+        // Track mouse position to filter out minor gyro noise
+        this._lastMouseX = -1;
+        this._lastMouseY = -1;
 
         // Immediate platform detection via User Agent or Global
         this._detectPlatform();
@@ -234,7 +242,18 @@ class WebOSAdapter {
      * @private
      */
     _setupCursorTracking() {
-        document.addEventListener('mousemove', () => {
+        document.addEventListener('mousemove', (e) => {
+            // Check if movement is significant enough to count as interaction
+            const deltaX = Math.abs(e.clientX - this._lastMouseX);
+            const deltaY = Math.abs(e.clientY - this._lastMouseY);
+
+            if (deltaX < MOVEMENT_THRESHOLD && deltaY < MOVEMENT_THRESHOLD) {
+                return;
+            }
+
+            this._lastMouseX = e.clientX;
+            this._lastMouseY = e.clientY;
+
             this._lastInteractionTime = Date.now();
             if (!this._cursorActive) {
                 this._setCursorActive(true);

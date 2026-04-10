@@ -114,12 +114,6 @@ function copySignatures(buildDir) {
 // ============================================================================
 
 async function createWgt(buildDir, outputName) {
-    // Tizen packages should not include LG WebOS's appinfo.json
-    const appinfoPath = path.join(buildDir, 'appinfo.json');
-    if (existsSync(appinfoPath)) {
-        await del([appinfoPath]);
-    }
-
     return new Promise((resolve, reject) => {
         const output = createWriteStream(outputName);
         const archive = archiver('zip', { zlib: { level: 9 } });
@@ -132,7 +126,15 @@ async function createWgt(buildDir, outputName) {
         archive.on('error', (err) => reject(err));
 
         archive.pipe(output);
-        archive.directory(buildDir + '/', false);
+        
+        // Tizen packages should not include LG WebOS's appinfo.json.
+        // We use glob with an ignore rule instead of deleting the file from disk,
+        // because WebOS packaging tasks are running in parallel against the exact same buildDir.
+        archive.glob('**/*', {
+            cwd: buildDir,
+            ignore: ['appinfo.json']
+        });
+
         if (existsSync('services')) {
             archive.directory('services/', 'services');
         }
@@ -247,6 +249,15 @@ async function packageES6() {
 async function packageNormal() {
     const buildDir = 'dist/normal';
     const wgtName = `Litefin-${version}.wgt`; // Default, no suffix
+
+    copySignatures(buildDir);
+    console.info(`Creating ${wgtName}...`);
+    await createWgt(buildDir, wgtName);
+}
+
+async function packageTest() {
+    const buildDir = 'dist/normal';
+    const wgtName = `litefin.wgt`; // test output
 
     copySignatures(buildDir);
     console.info(`Creating ${wgtName}...`);
@@ -372,6 +383,7 @@ const buildPackage = gulp.series(
 // Individual Tizen build+package tasks
 const buildPackageES6 = gulp.series(syncVersion, cleanDist, webpackES6, packageES6);
 const buildPackageNormal = gulp.series(syncVersion, cleanDist, webpackNormal, packageNormal);
+const buildPackageTest = gulp.series(syncVersion, cleanDist, webpackNormal, packageTest);
 const buildPackageLegacy = gulp.series(syncVersion, cleanDist, webpackLegacy, packageLegacy);
 const buildPackageUltraLegacy = gulp.series(syncVersion, cleanDist, webpackUltraLegacy, packageUltraLegacy);
 const buildPackageDebug = gulp.series(syncVersion, webpackDebug, packageDebug);
@@ -410,6 +422,7 @@ export {
     // Tizen WGT packaging
     packageES6,
     packageNormal,
+    packageTest,
     packageLegacy,
     packageUltraLegacy,
     packageDebug,
@@ -422,6 +435,7 @@ export {
     buildPackage,
     buildPackageES6,
     buildPackageNormal,
+    buildPackageTest,
     buildPackageLegacy,
     buildPackageUltraLegacy,
     buildPackageDebug,

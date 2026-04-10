@@ -9,6 +9,11 @@ body.screensaver-active {
     overflow: hidden !important;
 }
 
+/* Hide the global clock during screensaver to prevent OLED burn-in */
+body.screensaver-active .global-clock {
+    display: none !important;
+}
+
 /* ============================================================================
    Logo Screensaver
    ============================================================================ */
@@ -101,11 +106,34 @@ body.screensaver-active {
 }
 
 .screensaver-text-tagline {
+    font-size: 20px;
+    opacity: 0.7;
+    margin-top: 5px;
+}
+
+/* Black Screensaver */
+.black-screensaver {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000000;
+    z-index: 99999;
+}
+
+.screensaver-text-tagline {
     font-size: 1.25rem;
     opacity: 0.8;
+}
+
+@-webkit-keyframes fadeIn {
+    from { opacity: 0; -webkit-transform: translateY(10px); }
+    to { opacity: 1; -webkit-transform: translateY(0); }
 }
 
 @keyframes fadeIn {
     from { opacity: 0; transform: translateY(10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+

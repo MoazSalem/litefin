@@ -16,6 +16,7 @@ import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
 import { pluginManager } from '../plugins/PluginManager.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('Sidebar');
 
@@ -82,6 +83,20 @@ class Sidebar extends Component {
 
                 <!-- Scrollable Sidebar Content -->
                 <div class="sidebar-content">
+                    <button class="sidebar-item" id="sidebar-random" tabindex="0" style="display: ${storage.getItem('pref:showRandomButton') !== 'false' ? '' : 'none'}">
+                        <div class="item-icon">
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+                                <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="7.8" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="16.2" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="16.2" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="7.8" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
+                            </svg>
+                        </div>
+                        <span class="item-text" data-i18n="Random">Random</span>
+                    </button>
+
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
                         <div class="item-icon">
                             <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -165,6 +180,17 @@ class Sidebar extends Component {
         //. but fallback to false if it hasn't started yet.
         this._updateSyncPlayBtn(window.__syncPlayManager?.isActive || false);
 
+        // Listen for Random Button setting changes
+        this._onRandomPrefChanged = (enabled) => {
+            const btn = this.el.querySelector('#sidebar-random');
+            if (btn) {
+                btn.style.display = enabled ? '' : 'none';
+                // Invalidate focus manager cache to ensure it's focusable
+                focusManager.invalidateCache('sidebar');
+            }
+        };
+        eventBus.on('prefChanged:showRandomButton', this._onRandomPrefChanged);
+
         // Register focus
         focusManager.register('sidebar', this.el, {
             orientation: 'vertical',
@@ -231,6 +257,11 @@ class Sidebar extends Component {
         // Remove SyncPlay listeners
         if (this._onSyncPlayEnabled)  eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
         if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
+
+        // Remove Random Pref listener
+        if (this._onRandomPrefChanged) {
+            eventBus.off('prefChanged:showRandomButton', this._onRandomPrefChanged);
+        }
     }
 
     /**
@@ -331,6 +362,8 @@ class Sidebar extends Component {
                 } else if (item.id === 'sidebar-syncplay') {
                     // Open the SyncPlay group menu overlay (works from any screen)
                     syncPlayGroupMenu.open();
+                } else if (item.id === 'sidebar-random') {
+                    this._onRandomClick();
                 }
             };
         });
@@ -506,12 +539,16 @@ class Sidebar extends Component {
 
             if (forceInstant) {
                 // Force an instant snap
+                indicator.style.webkitTransition = 'none';
                 indicator.style.transition = 'none';
+                indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
                 indicator.offsetHeight;
+                indicator.style.webkitTransition = '';
                 indicator.style.transition = '';
             } else {
+                indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
             }
 
@@ -522,6 +559,27 @@ class Sidebar extends Component {
             if (this.el.classList.contains('has-focus')) {
                 this.el.classList.remove('has-focus');
             }
+        }
+    }
+
+    /**
+     * Handle the 'Random' button click.
+     * Fetches a random item using the API and navigates to its details page.
+     * @private
+     */
+    async _onRandomClick() {
+        try {
+            log.info('Fetching random item...');
+            const item = await api.getRandomItem();
+            if (item) {
+                log.info(`Random item found: ${item.Name} (${item.Id})`);
+                router.navigate(`/details/${item.Id}`);
+            } else {
+                log.warn('No random item found.');
+                // Optional: Show a toast/notification if no items are found
+            }
+        } catch (e) {
+            log.error('Failed to fetch random item', e);
         }
     }
 }

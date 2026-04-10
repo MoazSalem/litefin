@@ -103,6 +103,8 @@
     transform: translate3d(0, 0, 0);
 }
 
+
+
 /* ============================================================================
    Modal header
    ============================================================================ */
@@ -308,9 +310,10 @@
 }
 
 @keyframes playing-dot-pulse {
-    0%, 100% { opacity: 1; -webkit-transform: scale(1); transform: scale(1); }
-    50%       { opacity: 0.5; -webkit-transform: scale(0.75); transform: scale(0.75); }
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%       { opacity: 0.5; transform: scale(0.75); }
 }
+
 
 .chapter-row__info {
     display: -webkit-box;

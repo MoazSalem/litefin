@@ -57,8 +57,11 @@
     width: 100%;
     height: 100%;
     z-index: 40; /* Above video (0) but below OSD (50) */
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
     background: #000;
     overflow: hidden;
@@ -92,10 +95,13 @@
     background-position: center;
     box-shadow: 0 20px 50px rgba(0,0,0,0.6);
     z-index: 2;
-    transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+    -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+    transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+
 }
 
 body.lyrics-active .audio-album-art {
+    -webkit-transform: translateX(-15vw);
     transform: translateX(-15vw);
 }
 
@@ -115,13 +121,17 @@ body.lyrics-active .audio-album-art {
     left: 0;
     right: 0;
     bottom: 0;
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
     background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.9));
     z-index: 2100;
     /* Above player container */
     opacity: 0;
+    -webkit-transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     transition: opacity 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }
@@ -144,22 +154,32 @@ body.lyrics-active .audio-album-art {
     border-radius: var(--jf-border-radius-lg);
     background: var(--jf-action-btn-bg, rgba(30, 30, 30, 0.9));
     border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-align-items: center;
     align-items: center;
     text-align: center;
     box-shadow: var(--jf-shadow-lg);
+    -webkit-transform: translateY(20px);
     transform: translateY(20px);
+    -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+
 }
 
 .player-error:not(.hidden) .error-panel {
+    -webkit-transform: translateY(0);
     transform: translateY(0);
 }
 
 .error-content {
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-align-items: center;
     align-items: center;
     width: 100%;
 }
@@ -174,8 +194,11 @@ body.lyrics-active .audio-album-art {
     background: var(--jf-accent-light);
     color: var(--jf-error, #f44336);
     border-radius: 50%;
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -204,8 +227,10 @@ body.lyrics-active .audio-album-art {
 }
 
 .error-actions {
+    display: -webkit-flex;
     display: flex;
     width: 100%;
+    -webkit-justify-content: center;
     justify-content: center;
 }
 
@@ -215,8 +240,11 @@ body.lyrics-active .audio-album-art {
     border-radius: var(--jf-border-radius-lg);
     font-size: 24px;
     font-weight: 600;
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     margin: 0 10px;
     /* Use margin instead of gap for Tizen compatibility */
@@ -319,7 +347,9 @@ body.lyrics-active .audio-album-art {
 
 /* Time Display */
 .osd-time {
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
     font-size: 14px;
     color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
@@ -328,8 +358,11 @@ body.lyrics-active .audio-album-art {
 
 /* Control Buttons */
 .osd-controls {
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -352,7 +385,9 @@ body.lyrics-active .audio-album-art {
     position: absolute;
     right: 60px;
     bottom: 160px;
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 
@@ -398,9 +433,7 @@ body.lyrics-active .audio-album-art {
    Tizen-Specific Styles
    ========================================================================== */
 
-/* Hide cursor on TV */
-@media (tv) {
-    .player-page * {
-        cursor: none;
-    }
-}
+/* Hide cursor on TV platforms during playback */
+html:not([data-platform="web"]) .player-page * {
+    cursor: none;
+}

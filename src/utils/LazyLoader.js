@@ -225,17 +225,6 @@ class LazyLoader {
     observe(container) {
         if (!container) return;
 
-        // If no observer (older browser?), just load immediately
-        if (!this.observer) {
-            const images = container.querySelectorAll('img[data-src]');
-            images.forEach((img) => {
-                img.src = img.dataset.src;
-                img.removeAttribute('data-src');
-            });
-            return;
-        }
-
-        // Observe individual images (vertical grids)
         const images = container.querySelectorAll('img[data-src]');
 
         // LEGACY FIX: Eagerly load the first 25 images in the container.
@@ -248,6 +237,12 @@ class LazyLoader {
 
         for (let i = 0; i < Math.min(images.length, eagerLoadCount); i++) {
             this.forceLoad(images[i]);
+        }
+
+        // If no observer (older browser?), we are done. 
+        // Focus-driven event handler will load the rest as the user navigates.
+        if (!this.observer) {
+            return;
         }
 
         images.forEach((img) => {
@@ -272,7 +267,7 @@ class LazyLoader {
         if (!img || !img.dataset.src) return;
 
         if (!this.observer) {
-            img.src = img.dataset.src;
+            this.forceLoad(img);
             return;
         }
 

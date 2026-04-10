@@ -43,7 +43,19 @@
     letter-spacing: -1px;
     margin: 0;
     /* Subtle fade-up entrance */
+    -webkit-animation: profiles-fade-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     animation: profiles-fade-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@-webkit-keyframes profiles-fade-up {
+    from {
+        opacity: 0;
+        -webkit-transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        -webkit-transform: translateY(0);
+    }
 }
 
 @keyframes profiles-fade-up {
@@ -56,6 +68,7 @@
         transform: translateY(0);
     }
 }
+
 
 /* ============================================================================
    Profile Grid
@@ -72,6 +85,7 @@
     padding: 0 40px;
     box-sizing: border-box;
     /* Stagger the grid in slightly after the title */
+    -webkit-animation: profiles-fade-up 0.5s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
     animation: profiles-fade-up 0.5s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
@@ -106,8 +120,11 @@
      * Spring animation — cubic-bezier with an overshoot coefficient (1.56)
      * gives the card a satisfying "pop" on focus, akin to a physical spring.
      */
+    -webkit-transition: -webkit-transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 0.22s ease-out;
     transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
-                border-color 0.18s ease;
+                opacity 0.22s ease-out;
+
     will-change: transform;
 }
 
@@ -133,6 +150,7 @@
 
 .profiles-card:focus,
 .profiles-card.focused {
+    -webkit-transform: scale(1.07);
     transform: scale(1.07);
     outline: none;
     z-index: 10;
@@ -212,6 +230,10 @@
      * and let ::after provide the consistent focus ring.
      */
     border-color: transparent;
+    -webkit-transform: scale(1.07);
+    transform: scale(1.07);
+    z-index: 2;
+    background: rgba(255, 255, 255, 0.1);
 }
 
 .profiles-add-icon {
@@ -237,6 +259,7 @@
     padding-top: 0;
     display: flex;
     justify-content: center;
+    -webkit-animation: profiles-fade-up 0.5s 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
     animation: profiles-fade-up 0.5s 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
@@ -253,6 +276,10 @@
     padding: 16px 40px;
     border-radius: var(--jf-border-radius, 10px);
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                color 0.18s ease,
+                border-color 0.18s ease;
     transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
                 background-color 0.18s ease,
                 color 0.18s ease,
@@ -266,8 +293,10 @@
     color: var(--jf-text-primary);
     border-color: rgba(255, 255, 255, 0.45);
     outline: none;
+    -webkit-transform: scale(1.04);
     transform: scale(1.04);
 }
+
 
 /* ============================================================================
    Switch Server Confirmation Dialog
@@ -330,6 +359,9 @@
     border-radius: var(--jf-border-radius, 10px);
     cursor: pointer;
     border: 3px solid transparent; /* Match app button style */
+    -webkit-transition: -webkit-transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
+                background-color 0.18s ease,
+                border-color 0.18s ease;
     transition: transform 0.22s cubic-bezier(0.34, 1.56, 0.64, 1),
                 background-color 0.18s ease,
                 border-color 0.18s ease;
@@ -344,11 +376,12 @@
 
 .profiles-dialog-cancel:focus,
 .profiles-dialog-cancel.focused {
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color, white);
     border-color: var(--jf-button-border-focus);
     outline: none;
-    transform: scale(1.05);
 }
 
 /* Confirm — destructive red */
@@ -364,5 +397,17 @@
     border-color: var(--jf-button-border-focus);
     color: white;
     outline: none;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
+}
+
+
+/* Perfect centering for icons/initials without flexbox */
+html[data-layout-tier="ultra-legacy"] .profiles-card-initial,
+html[data-layout-tier="ultra-legacy"] .profiles-add-icon {
+    display: block;
+    width: 100%;
+    height: 100%;
+    line-height: 160px; /* Force vertical centering based on card height */
+    text-align: center;
 }

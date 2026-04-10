@@ -145,12 +145,6 @@
     margin: 0;
 }
 
-.osd-clock {
-    font-size: 1.44em;
-    /* 1.2em * 1.2 */
-    font-weight: bold;
-    opacity: 0.9;
-}
 
 .osd-sync-icon {
     opacity: 0.8;
@@ -174,7 +168,9 @@
     background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 6em 2.4em 3em;
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 
@@ -184,8 +180,11 @@
 
 /* Controls Row (above slider) */
 .osd-controls-row {
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
     margin-bottom: 0.6em;
     /* 0.5em * 1.2 */
@@ -193,7 +192,9 @@
 
 .osd-controls-left,
 .osd-controls-right {
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -221,8 +222,11 @@
 
 
 .osd-btn {
+    display: -webkit-inline-flex;
     display: inline-flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     width: 58px;
     height: 58px;
@@ -237,9 +241,23 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 0;
     margin: 0;
-    /* No permanent will-change — the OSD has ~11 buttons and the whole
-       .player-osd container is already a compositor layer via translateZ(0).
-       Each button gets its own layer only when it's actively focused. */
+}
+
+/* 
+ * ── Ultra-Legacy Overrides: OSD Buttons ────────────────────────────────────
+ * Chromium 32 has buggy flexbox/inline-flex centering.
+ * We fallback to a robust block + padding + margin: 0 auto centering strategy.
+ */
+html[data-layout-tier="ultra-legacy"] .osd-btn {
+    display: block !important;
+    text-align: center;
+    padding: 12.2px 0; /* (58px height - 33.6px icon) / 2 */
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
+    display: block;
+    margin: 0 auto;
 }
 
 .osd-btn:hover {
@@ -255,6 +273,7 @@
     color: var(--jf-primary-btn-color) !important;
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    -webkit-transform: scale(1.15);
     transform: scale(1.15);
     /* Promote only the focused button */
     will-change: transform;
@@ -273,7 +292,14 @@
 
 /* Pulse Animation Trigger */
 .osd-btn.pulse-trigger svg {
+    -webkit-animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@-webkit-keyframes jf-pulse {
+    0% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(1.4); transform: scale(1.4); }
+    100% { -webkit-transform: scale(1); transform: scale(1); }
 }
 
 @keyframes jf-pulse {
@@ -281,6 +307,7 @@
     50% { transform: scale(1.4); }
     100% { transform: scale(1); }
 }
+
 
 .osd-btn .osd-icon {
     width: 33.6px;
@@ -291,8 +318,11 @@
 /* SyncPlay Indicators */
 .osd-syncplay-icon-wrap {
     position: relative;
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     width: 100%;
     height: 100%;
@@ -317,11 +347,25 @@
 .osd-syncplay-dot.visible {
     opacity: 1;
     transform: scale(1);
+    -webkit-animation: osd-syncplay-pulse 2s ease-in-out infinite;
     animation: osd-syncplay-pulse 2s ease-in-out infinite;
 }
 
+
 .osd-btn.syncplay-active:not(:focus):not(.focused) {
     color: #32D74B;
+}
+
+@-webkit-keyframes osd-syncplay-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(50, 215, 75, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(50, 215, 75, 0);
+    }
 }
 
 @keyframes osd-syncplay-pulse {
@@ -335,6 +379,7 @@
         box-shadow: 0 0 0 0 rgba(50, 215, 75, 0);
     }
 }
+
 
 /* Back button - circular, accent color on focus */
 .osd-back-btn {
@@ -712,9 +757,7 @@
 .track-menu {
     background: transparent;
     padding: 1.8em;
-    /* 1.5em * 1.2 */
-    min-width: 480px;
-    /* 400px * 1.2 */
+    min-width: 600px;
     max-width: 90vw;
     max-height: 70vh;
     overflow-y: auto;
@@ -740,6 +783,7 @@
 }
 
 .track-option {
+    position: relative; /* Ensure absolute children (badges) are scoped to each item */
     display: flex;
     align-items: center;
     padding: 0.96em 1.44em;
@@ -754,6 +798,8 @@
     font-weight: bold;
     cursor: pointer;
     text-align: left;
+    width: 100%;
+    box-sizing: border-box;
     transition: background 0.15s;
 }
 
@@ -790,6 +836,27 @@
 
 .track-option-label {
     flex: 1;
+    display: flex;
+    align-items: center;
+    min-width: 0;
+    width: 100%;
+}
+
+.track-option .track-label-text {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap; /* Single line for OSD tracks */
+    margin-right: 20px;
+}
+
+.track-option .track-badges {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    gap: 10px;
+    margin-left: auto !important; /* Forces badges to the far right on Tizen 4.0 */
 }
 
 .track-option-content {
@@ -1125,6 +1192,22 @@
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.osd-badge {
+    padding: 6px 14px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-right: 12px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+}
+
 .osd-offset-close .osd-icon {
     width: 22px;
     height: 22px;
@@ -1161,7 +1244,9 @@
     z-index: 2000;
     transform: translateX(100%);
     pointer-events: none;
+    -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+
     border-left: 1px solid rgba(255, 255, 255, 0.05);
     opacity: 0;
 }
@@ -1335,8 +1420,11 @@ body.lyrics-active .subtitle-overlay {
 }
 
 .osd-syncplay-notification-text {
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-justify-content: center;
     justify-content: center;
 }
 
@@ -1367,7 +1455,21 @@ body.lyrics-active .subtitle-overlay {
 
 .osd-syncplay-visible .osd-syncplay-notification-glass {
     /* CSS Spring: overshoot and settle */
+    -webkit-animation: syncplay-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     animation: syncplay-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@-webkit-keyframes syncplay-pop {
+    0% {
+        opacity: 0;
+        -webkit-transform: scale(0.8) translateY(-30px);
+        transform: scale(0.8) translateY(-30px);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: scale(1) translateY(0);
+        transform: scale(1) translateY(0);
+    }
 }
 
 @keyframes syncplay-pop {
@@ -1381,12 +1483,20 @@ body.lyrics-active .subtitle-overlay {
     }
 }
 
+
 /* Special modifiers based on the data-action attribute */
 .osd-syncplay-notification[data-action="buffering"] .osd-syncplay-notification-icon svg {
+    -webkit-animation: syncplay-spin 2s linear infinite;
     animation: syncplay-spin 2s linear infinite;
+}
+
+@-webkit-keyframes syncplay-spin {
+    0% { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
 }
 
 @keyframes syncplay-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+

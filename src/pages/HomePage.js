@@ -43,6 +43,7 @@ import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
+import HeroCarousel from '../ui/HeroCarousel.js';
 
 const log = logger.create('HomePage');
 
@@ -121,6 +122,12 @@ class HomePage extends Page {
          * @type {Array}
          */
         this._libraries = [];
+
+        /**
+         * Hero Carousel instance
+         * @type {HeroCarousel}
+         */
+        this._hero = null;
     }
 
     render() {
@@ -128,6 +135,7 @@ class HomePage extends Page {
             <div class="page home-page">
                 <main class="page-content" id="home-content">
                     <div class="page-error" style="display: none;"></div>
+                    <div id="home-hero-placeholder"></div>
                     <div class="home-rows" id="home-rows">
                         <!-- Rows are progressively injected here by _loadAndRenderRow() -->
                     </div>
@@ -155,6 +163,10 @@ class HomePage extends Page {
 
     onDestroyed() {
         this._isMounted = false;
+        if (this._hero) {
+            this._hero.destroy();
+            this._hero = null;
+        }
     }
 
     // =========================================================================
@@ -237,9 +249,9 @@ class HomePage extends Page {
                 const res = await api.getNextUp(params);
                 if (!res?.Items?.length) return null;
 
-                // Filter out items that have playback progress, as they should 
+                // Filter out items that have playback progress, as they should
                 // only appear in the "Continue Watching" row to avoid duplication.
-                const filtered = res.Items.filter(item => {
+                const filtered = res.Items.filter((item) => {
                     const position = item.UserData?.PlaybackPositionTicks || 0;
                     return position === 0;
                 });
@@ -327,10 +339,11 @@ class HomePage extends Page {
             // stays in localStorage forever. We run a quick Set-lookup against
             // the IDs we just fetched and evict any orphaned keys via StorageService
             // (which correctly updates the in-memory cache, not just disk).
-            const currentLibraryIds = new Set(this._libraries.map(l => l.Id));
-            storage.keys()
-                .filter(k => k.startsWith('libThumb:'))
-                .forEach(k => {
+            const currentLibraryIds = new Set(this._libraries.map((l) => l.Id));
+            storage
+                .keys()
+                .filter((k) => k.startsWith('libThumb:'))
+                .forEach((k) => {
                     const id = k.replace('libThumb:', '');
                     if (!currentLibraryIds.has(id)) {
                         log.info(`Pruning stale libThumb for removed library: ${id}`);
@@ -342,6 +355,13 @@ class HomePage extends Page {
             const thumbMode = storage.getItem('pref:libraryThumbMode') || 'off';
             if ((thumbMode === 'static' || thumbMode === 'dynamic') && this._libraries.length > 0) {
                 await this._enrichLibrariesWithDynamicThumbs(this._libraries, thumbMode);
+                if (!this._isMounted) return;
+            }
+
+            // ─── Step 2b: Hero Carousel ──────────────────────────────────────
+            const enableHero = storage.getItem('pref:heroCarousel') !== 'false';
+            if (enableHero) {
+                await this._loadHeroCarousel();
                 if (!this._isMounted) return;
             }
 
@@ -781,18 +801,24 @@ class HomePage extends Page {
 
             // ─── Default: focus the first card in the first rendered row ──────
             if (!restoredFocus) {
-                // Find the first non-skeleton section that has a card
-                const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
-                if (firstSection) {
-                    const rowId = firstSection.getAttribute('data-row-id');
-                    this.setActiveSection(`home-row-${rowId}`, false);
+                // Prioritize the hero carousel if it exists
+                if (this._hero && this.$('#hero-carousel-container')) {
+                    this.setActiveSection('home-hero', false);
+                    focusManager.focusElement(this.$('#hero-carousel-container'), { instantScroll: true });
+                } else {
+                    // Find the first non-skeleton section that has a card
+                    const firstSection = container.querySelector('section[data-row-id]:not(.media-row--skeleton)');
+                    if (firstSection) {
+                        const rowId = firstSection.getAttribute('data-row-id');
+                        this.setActiveSection(`home-row-${rowId}`, false);
 
-                    if (!focusManager.getFocused()) {
-                        const firstCard = firstSection.querySelector('.media-card');
-                        if (firstCard) {
-                            focusManager.focusElement(firstCard, { instantScroll: true });
-                        } else {
-                            this.setActiveSection('sidebar');
+                        if (!focusManager.getFocused()) {
+                            const firstCard = firstSection.querySelector('.media-card');
+                            if (firstCard) {
+                                focusManager.focusElement(firstCard, { instantScroll: true });
+                            } else {
+                                this.setActiveSection('sidebar');
+                            }
                         }
                     }
                 }
@@ -836,7 +862,12 @@ class HomePage extends Page {
             } else {
                 // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;
-                if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                if (
+                    itemType === 'Person' ||
+                    itemType === 'MusicArtist' ||
+                    itemType === 'Artist' ||
+                    itemType === 'AlbumArtist'
+                ) {
                     log.info('Navigating to PersonPage:', card.dataset.itemId);
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
@@ -914,6 +945,58 @@ class HomePage extends Page {
         if (nextEl) {
             const nextConfig = focusManager.getSectionConfig(sId(nextEl));
             if (nextConfig) nextConfig.leaveUp = `home-row-${rowId}`;
+        }
+
+        // Special Case: If this is now the first row, link its leaveUp to the hero carousel
+        if (idx === 0 && this._hero) {
+            const firstRowConfig = focusManager.getSectionConfig(`home-row-${rowId}`);
+            if (firstRowConfig) {
+                firstRowConfig.leaveUp = 'home-hero';
+
+                // Also link hero leaveDown to this row
+                const heroConfig = focusManager.getSectionConfig('home-hero');
+                if (heroConfig) {
+                    heroConfig.leaveDown = `home-row-${rowId}`;
+                }
+            }
+        }
+    }
+
+    /**
+     * Loads items for the hero carousel and initializes the component.
+     * Picks 5 random items from the user's libraries.
+     */
+    async _loadHeroCarousel() {
+        try {
+            log.info('Loading Hero Carousel items...');
+            const response = await api.getItems({
+                SortBy: 'Random',
+                Recursive: true,
+                Limit: 5,
+                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
+                EnableImageTypes: 'Primary,Backdrop,Logo',
+                IncludeItemTypes: 'Movie,Series',
+                Filters: 'HasBackdrop'
+            });
+
+            if (!this._isMounted) return;
+
+            const items = response.Items || [];
+            if (items.length === 0) {
+                log.info('No hero items found, skipping carousel.');
+                return;
+            }
+
+            // Initialize the carousel component
+            this._hero = new HeroCarousel({ items });
+
+            const placeholder = this.$('#home-hero-placeholder');
+            if (placeholder) {
+                placeholder.innerHTML = this._hero.render();
+                this._hero.init(placeholder.firstElementChild);
+            }
+        } catch (e) {
+            log.error('Failed to load Hero Carousel', e);
         }
     }
 

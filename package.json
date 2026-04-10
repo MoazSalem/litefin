@@ -1,6 +1,6 @@
 {
     "name": "litefin-tizen",
-    "version": "0.20.0",
+    "version": "0.30.0",
     "description": "Native Jellyfin client for Samsung Tizen TVs",
     "main": "src/index.js",
     "type": "module",
@@ -23,6 +23,7 @@
         "package:webos-ultra-legacy": "gulp buildPackageWebosUltraLegacy",
         "package:es6": "gulp buildPackageES6",
         "package:normal": "gulp buildPackageNormal",
+        "package:test": "gulp buildPackageTest",
         "package:legacy": "gulp buildPackageLegacy",
         "package:ultra-legacy": "gulp buildPackageUltraLegacy",
         "package:debug": "gulp buildPackageDebug",

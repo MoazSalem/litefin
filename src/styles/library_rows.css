@@ -25,7 +25,19 @@
 
 /* Fade-in animation for lazy-loaded content - uses opacity only for GPU performance */
 .library-row.loaded .media-card {
+    -webkit-animation: fadeInCard 0.2s ease-out forwards;
     animation: fadeInCard 0.2s ease-out forwards;
+}
+
+
+@-webkit-keyframes fadeInCard {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes fadeInCard {
@@ -37,6 +49,7 @@
         opacity: 1;
     }
 }
+
 
 /* Row Header - Container */
 .library-row-header {
@@ -163,21 +176,24 @@
 }
 
 /*
- * Tizen 3.0 / 4.0 (Chrome < 57): CSS Grid is unavailable.
+ * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid is unavailable.
  * Replicate the auto-fill grid with flex-wrap and explicit card widths.
- * Cards already have forced widths (240px / 400px) so the visual result is identical.
+ * Ultra-legacy (Chrome <47) inherits this too — no CSS Grid either.
  */
-html[data-layout-tier="legacy"] .genre-grid-items {
+html[data-layout-tier="legacy"] .genre-grid-items,
+html[data-layout-tier="ultra-legacy"] .genre-grid-items {
     display: flex;
     flex-wrap: wrap;
     gap: 0; /* Remove grid gap; spacing comes from card margins below */
 }
 
-html[data-layout-tier="legacy"] .genre-grid-items .media-card {
+html[data-layout-tier="legacy"] .genre-grid-items .media-card,
+html[data-layout-tier="ultra-legacy"] .genre-grid-items .media-card {
     /* Re-enable margin since grid gap no longer applies */
     margin: 0 32px 32px 0 !important;
 }
 
-html[data-layout-tier="legacy"] .genre-grid-items.landscape .media-card {
+html[data-layout-tier="legacy"] .genre-grid-items.landscape .media-card,
+html[data-layout-tier="ultra-legacy"] .genre-grid-items.landscape .media-card {
     margin: 0 32px 32px 0 !important;
 }

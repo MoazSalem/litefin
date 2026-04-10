@@ -28,7 +28,7 @@ export class ServerUnreachableError extends Error {
 }
 
 // API request timeout (ms)
-const REQUEST_TIMEOUT = 10000;
+const REQUEST_TIMEOUT = 30000; // Increased from 10s to 30s for weaker hardware (Tizen/WebOS)
 
 // ============================================================================
 // ApiClient Class
@@ -210,11 +210,13 @@ export class ApiClient {
 
         try {
             // Create abort controller for timeout
+            // Support per-request timeout override via options.timeout
+            const timeout = options.timeout || REQUEST_TIMEOUT;
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT);
+            const timeoutId = setTimeout(() => controller.abort(), timeout);
             fetchOptions.signal = controller.signal;
 
-            log.debug(`Fetching ${url}...`);
+            log.debug(`Fetching ${url} (timeout: ${timeout}ms)...`);
             const response = await fetch(url, fetchOptions);
             clearTimeout(timeoutId);
 
@@ -249,8 +251,9 @@ export class ApiClient {
             const isNetworkError = error instanceof TypeError;
 
             if (isTimeout || isNetworkError) {
+                const timeout = options.timeout || REQUEST_TIMEOUT;
                 const msg = isTimeout
-                    ? `Connection timed out after ${REQUEST_TIMEOUT / 1000}s`
+                    ? `Connection timed out after ${timeout / 1000}s`
                     : `Server unreachable at ${this._serverUrl}`;
 
                 log.error(`${msg}:`, error.message);
@@ -273,12 +276,34 @@ export class ApiClient {
     async _handleError(response) {
         let message = `HTTP ${response.status}`;
 
-        // Try to parse error message from response
+        // Try to parse the server's error description from the response body.
+        // Jellyfin returns JSON on most errors, but schema-validation 400s can
+        // return plain text. We try JSON first and fall back to raw text so the
+        // actual server reason (e.g. "MaxAudioChannels must be an integer") is
+        // visible in the debug overlay instead of being silently discarded.
         try {
-            const data = await response.json();
-            message = data.message || data.Message || message;
+            const bodyText = await response.text();
+            if (bodyText) {
+                try {
+                    const data = JSON.parse(bodyText);
+                    message = data.message || data.Message || message;
+                } catch {
+                    // Not JSON — use raw text as the error message (trim to 200 chars max)
+                    const trimmed = bodyText.trim();
+                    if (trimmed) {
+                        message = trimmed.length > 200 ? trimmed.slice(0, 200) + '…' : trimmed;
+                    }
+                }
+            }
         } catch {
-            // Response wasn't JSON, use status code
+            // Could not read body at all — keep the "HTTP N" default
+        }
+
+        // Log 400s at error level so they are always visible in the debug overlay
+        // even when general logging is disabled. The server reason is included so
+        // the developer can diagnose schema issues without needing DevTools.
+        if (response.status === 400) {
+            log.error(`Server rejected request (400 Bad Request): ${message}`);
         }
 
         // Handle specific status codes
@@ -455,6 +480,20 @@ export class ApiClient {
         };
 
         return this.get('/Items', { ...defaults, ...params });
+    }
+
+    /**
+     * Get a single random item (Movie or Series) from the user's library.
+     * @returns {Promise<Object|null>} A random item object or null if none found.
+     */
+    async getRandomItem() {
+        const result = await this.getItems({
+            IncludeItemTypes: 'Movie,Series',
+            SortBy: 'Random',
+            Limit: 1,
+            Recursive: true
+        });
+        return result && result.Items && result.Items.length > 0 ? result.Items[0] : null;
     }
 
     /**
