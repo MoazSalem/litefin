@@ -59,6 +59,7 @@
         "postinstall-postinstall": "^2.1.0",
         "prettier": "^3.8.1",
         "rimraf": "^5.0.5",
+        "style-loader": "^4.0.0",
         "webostvjs": "^1.2.12",
         "webpack": "^5.88.2",
         "webpack-cli": "^5.1.4"

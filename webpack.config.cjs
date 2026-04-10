@@ -211,6 +211,13 @@ const legacyConfig = {
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
+    resolve: {
+        alias: {
+            // Use the pre-transpiled ES5 build to avoid Babel OOM during legacy transpilation
+            'hls.js': 'hls.js/dist/hls.min.js'
+        }
+    },
+
     module: {
         rules: [
             {
@@ -285,11 +292,18 @@ const ultraLegacyConfig = {
         minimizer: ['...', new CssMinimizerPlugin()]
     },
 
+    resolve: {
+        alias: {
+            // Use the pre-transpiled ES5 build to avoid Babel OOM during legacy transpilation
+            'hls.js': 'hls.js/dist/hls.min.js'
+        }
+    },
+
     module: {
         rules: [
             {
                 test: /\.m?js$/,
-                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|hls\.js|libpgs)[\\/])/,
+                exclude: /node_modules[\\/](?!(screenfull|css-vars-ponyfill|libpgs)[\\/])/,
                 use: {
                     loader: 'babel-loader',
                     options: {

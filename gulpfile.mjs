@@ -1,12 +1,43 @@
 import gulp from 'gulp';
 import { deleteAsync as del } from 'del';
 import { readFileSync, createWriteStream, copyFileSync, existsSync, renameSync, cpSync, mkdirSync } from 'fs';
-import { exec } from 'child_process';
+import { exec, spawn } from 'child_process';
 import { promisify } from 'util';
 import archiver from 'archiver';
 import path from 'path';
 
-const execAsync = promisify(exec);
+/*
+ * exec() buffers ALL stdout + stderr in the parent process's RAM.
+ * For non-webpack commands (ares-package, etc.) that's fine — output is small.
+ * We still bump maxBuffer to 10 MB as a safety net.
+ */
+const _execAsync = promisify(exec);
+const execAsync = (cmd, opts = {}) =>
+    _execAsync(cmd, { maxBuffer: 10 * 1024 * 1024, ...opts });
+
+/*
+ * For webpack builds we use spawn() with stdio: 'inherit'.
+ * This streams output directly to the parent's terminal with ZERO buffering
+ * in the parent process, which is critical on CI runners where the combined
+ * parent + child memory can exceed the runner's ~7 GB limit.
+ */
+function spawnAsync(command, opts = {}) {
+    return new Promise((resolve, reject) => {
+        const child = spawn(command, {
+            stdio: 'inherit',
+            shell: true,
+            ...opts
+        });
+        child.on('close', (code) => {
+            if (code !== 0) {
+                reject(new Error(`Command "${command}" exited with code ${code}`));
+            } else {
+                resolve();
+            }
+        });
+        child.on('error', reject);
+    });
+}
 
 console.info('Building Litefin Tizen app');
 
@@ -44,43 +75,55 @@ function cleanIpk() {
 }
 
 // ============================================================================
-// Build tasks (webpack)
+// Build tasks (webpack) — all use spawnAsync to avoid buffering output in RAM
 // ============================================================================
+
+/** Base webpack command shared by every build */
+const WP = 'npx webpack --config webpack.config.cjs';
 
 async function webpackES6() {
     console.info('Building ES6 bundle (No Transpilation)...');
-    await execAsync('npx webpack --config webpack.config.cjs --config-name es6');
+    await spawnAsync(`${WP} --config-name es6`);
     console.info('ES6 build complete');
 }
 
 async function webpackNormal() {
     console.info('Building Normal bundle (Chromium 63, Partialy transpilied)...');
-    await execAsync('npx webpack --config webpack.config.cjs --config-name normal');
+    await spawnAsync(`${WP} --config-name normal`);
     console.info('Normal build complete');
 }
 
 async function webpackDebug() {
     // Debug build: same as ES6 but with source maps — for on-device debugging via sdb
     console.info('Building Debug bundle (ES6 + source maps)...');
-    await execAsync('npx webpack --config webpack.config.cjs --config-name debug');
+    await spawnAsync(`${WP} --config-name debug`);
     console.info('Debug build complete');
 }
 
 async function webpackLegacy() {
     console.info('Building legacy bundle (Fully Transpiled To ES5)...');
-    await execAsync('npx webpack --config webpack.config.cjs --config-name legacy');
+    // Raise the heap cap — legacy Babel + Terser is very RAM-hungry on CI
+    await spawnAsync(`${WP} --config-name legacy`, {
+        env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' }
+    });
     console.info('Legacy build complete');
 }
 
 async function webpackUltraLegacy() {
     console.info('Building ultra-legacy bundle (Tizen 2.3 / Chrome 38)...');
-    await execAsync('npx webpack --config webpack.config.cjs --config-name ultra-legacy');
+    // Ultra-legacy churns through the most Babel + polyfill code — needs ample heap room
+    await spawnAsync(`${WP} --config-name ultra-legacy`, {
+        env: { ...process.env, NODE_OPTIONS: '--max-old-space-size=4096' }
+    });
     console.info('Ultra-Legacy build complete');
 }
 
 async function webpackAll() {
-    console.info('Building all bundles...');
-    await execAsync('npx webpack --config webpack.config.cjs');
+    console.info('Building all bundles sequentially to prevent OOM...');
+    await webpackES6();
+    await webpackNormal();
+    await webpackLegacy();
+    await webpackUltraLegacy();
     console.info('All builds complete');
 }
 
