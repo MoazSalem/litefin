@@ -406,7 +406,13 @@ class AuthManager {
             // Call the Jellyfin authenticate endpoint
             const result = await api.post('/Users/AuthenticateByName', {
                 Username: username,
-                Pw: password
+                Pw: password,
+                // Newer Jellyfin versions (10.9+) strictly validate IAuthenticationRequest
+                // parameters in the POST body rather than relying on the Auth header
+                App: api.clientName,
+                Device: api.deviceName,
+                DeviceId: api.deviceId,
+                Version: api.clientVersion
             });
 
             // Unpack response
