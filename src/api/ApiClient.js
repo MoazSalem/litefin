@@ -51,6 +51,17 @@ export class ApiClient {
     }
 
     // ========================================================================
+    // Properties
+    // ========================================================================
+    get clientName() { return this._clientName; }
+    get deviceName() { return this._deviceName; }
+    get deviceId() { return this._deviceId; }
+    get clientVersion() { return this._clientVersion; }
+    get serverUrl() { return this._serverUrl; }
+    get accessToken() { return this._accessToken; }
+    get userId() { return this._userId; }
+
+    // ========================================================================
     // Configuration Methods
     // ========================================================================
 
@@ -435,7 +446,13 @@ export class ApiClient {
      * @param {string} secret - The authorized Secret from the Quick Connect flow
      */
     async authenticateWithQuickConnect(secret) {
-        return this.post('/Users/AuthenticateWithQuickConnect', { Secret: secret });
+        return this.post('/Users/AuthenticateWithQuickConnect', {
+            Secret: secret,
+            App: this.clientName,
+            Device: this.deviceName,
+            DeviceId: this.deviceId,
+            Version: this.clientVersion
+        });
     }
 
     /**
