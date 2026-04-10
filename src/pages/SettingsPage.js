@@ -953,17 +953,17 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'osd-focus-mode-select',
                             [
-                                /* Keep the last button the user navigated to — the legacy behaviour */
-                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
+                                /* Always snap to Play/Pause on every OSD reveal */
+                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' },
                                 /* Reset to Play/Pause only if idle for ≥ 10 s */
                                 {
                                     value: 'timeout',
                                     label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
                                 },
-                                /* Always snap to Play/Pause on every OSD reveal */
-                                { value: 'always', label: i18n.t('OsdFocusAlways') || 'Always return to Play/Pause' }
+                                /* Keep the last button the user navigated to — the legacy behaviour */
+                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' }
                             ],
-                            PlayerSettings.get('osdFocusRestoreMode') || 'remember'
+                            PlayerSettings.get('osdFocusRestoreMode') || 'always'
                         )}
                     </div>
                 </div>

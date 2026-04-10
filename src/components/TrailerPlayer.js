@@ -217,7 +217,15 @@ export class TrailerPlayer extends Component {
         // Start player hidden natively and let user interactions trigger the OSD
         this._hideOsd();
         focusManager.setActiveSection('trailer-player');
-        focusManager.focusElement(this._playPauseBtn);
+
+        // Defer the initial focus assignment by one rendering frame.
+        // This is critical on TV platforms: calling focusElement() synchronously
+        // immediately after register() can fail because the browser's internal
+        // accessibility / focus tree has not yet settled after the DOM was modified.
+        // requestAnimationFrame gives the engine one frame to commit the layout.
+        requestAnimationFrame(() => {
+            focusManager.focusElement(this._playPauseBtn);
+        });
         
         this._loadCurrentTrailer();
     }
@@ -806,11 +814,12 @@ export class TrailerPlayer extends Component {
         this._osdEl.classList.remove('osd-is-hidden');
         this._osdEl.querySelector('.osd-main').classList.remove('osd-hidden');
         
-        // Trap focus into OSD
-        if (focusManager.getActiveSection() !== 'trailer-player') {
-            focusManager.setActiveSection('trailer-player');
-            focusManager.focusElement(this._playPauseBtn);
-        }
+        // Always lock the section and move focus to the play/pause button when
+        // the OSD becomes visible. Without the unconditional re-focus, a situation
+        // where the section is already 'trailer-player' but focus is on another
+        // button (e.g. Back) would leave focus in the wrong place after resume.
+        focusManager.setActiveSection('trailer-player');
+        focusManager.focusElement(this._playPauseBtn);
         
         this._resetAutoHide();
     }

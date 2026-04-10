@@ -264,7 +264,7 @@ const DEFAULTS = {
      *   'always'   — Always land on Play/Pause whenever the OSD re-appears,
      *                no matter how short the hide was.
      */
-    osdFocusRestoreMode: 'remember',
+    osdFocusRestoreMode: 'always',
 
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total'

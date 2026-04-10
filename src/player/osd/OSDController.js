@@ -2,12 +2,10 @@ import Component from '../../core/Component.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { playQueue } from '../../core/PlayQueue.js';
-import { state } from '../../core/StateManager.js';
 import { i18n } from '../../utils/i18n.js';
 import { api } from '../../api/index.js';
 import { ICONS } from './icons.js';
 import { TrickplayManager } from './TrickplayManager.js';
-import { globalClock } from '../../ui/GlobalClock.js';
 
 import TrackMenu from './TrackMenu.js';
 import SettingsMenu from './SettingsMenu.js';
@@ -65,10 +63,6 @@ export default class OSDController extends Component {
         this._autoHideTimer = null;
         this._updateTimer = null;
         this._isDraggingSeekbar = false;
-        
-        // Cached Seek Durations
-        this._cachedSkipBackMs = this._config.seekStepBack * 1000;
-        this._cachedSkipFwdMs = this._config.seekStepForward * 1000;
         
         // Seek Session
         this._seekTargetTicks = null;
@@ -317,6 +311,16 @@ export default class OSDController extends Component {
         // Initial cache
         this._cacheFocusableElements();
         
+        // Pin the initial focus index to the actual play/pause button position.
+        // The constructor defaults _currentFocusIndex=2 as a static guess, but that
+        // drifts whenever buttons are disabled/enabled (prev track, chapter nav, etc.).
+        // Resolving it now guarantees showAndFocusPlayPause() lands correctly on startup.
+        const initialPlayIdx = this._findActionIndex('togglePlay');
+        if (initialPlayIdx !== -1) {
+            this._currentFocusRow = 1;
+            this._currentFocusIndex = initialPlayIdx;
+        }
+
         // Start hidden
         this.hide();
     }
@@ -372,6 +376,7 @@ export default class OSDController extends Component {
                         <span class="osd-title" id="osdTitle"></span>
                     </div>
                     <div class="osd-header-right">
+                        <span class="osd-clock" id="osdClock"></span>
                     </div>
                 </div>
 
@@ -440,6 +445,7 @@ export default class OSDController extends Component {
         this._osdTotalTimeEl = this._osdEl.querySelector('#osdTotalTime');
         this._osdPositionFillEl = this._osdEl.querySelector('#osdPositionFill');
         this._osdPositionSliderEl = this._osdEl.querySelector('#osdPositionSlider');
+        this._osdClockEl = this._osdEl.querySelector('#osdClock');
         this._osdPlayPauseBtnEl = this._osdEl.querySelector('#osdPlayPauseBtn');
 
         /* Cache trickplay tooltip sub-elements to avoid repeated queries during seek */
@@ -523,9 +529,6 @@ export default class OSDController extends Component {
         if (this._osdEl) this._osdEl.classList.remove('osd-is-hidden');
         this._isOsdVisible = true;
 
-        // Show the global clock when OSD is active
-        globalClock.setVisibility(true);
-
         // Start background polling when OSD becomes visible
         this._startUpdates();
 
@@ -606,12 +609,6 @@ export default class OSDController extends Component {
         
         const hasPrev = playQueue.hasPrevious();
         const hasNext = playQueue.hasNext();
-
-        // In auto-chain trailer mode the queue only contains the local trailer,
-        // so hasNext() is always false. But pressing Next should still work —
-        // it exits the local trailer and opens the remote player. Treat the
-        // chain flag as an implicit "there is something after this" signal.
-        const hasNextOrChain = hasNext || !!state.get('details:autoChainRemote');
         
         const prevBtn = this._osdEl.querySelector('[data-action="previousTrack"]');
         if (prevBtn) {
@@ -626,7 +623,7 @@ export default class OSDController extends Component {
 
         const nextBtn = this._osdEl.querySelector('[data-action="nextTrack"]');
         if (nextBtn) {
-            if (hasNextOrChain) {
+            if (hasNext) {
                 nextBtn.classList.remove('osd-btn-disabled');
                 nextBtn.setAttribute('tabindex', '0');
             } else {
@@ -634,9 +631,6 @@ export default class OSDController extends Component {
                 nextBtn.setAttribute('tabindex', '-1');
             }
         }
-
-        // Re-cache focusable elements so FocusManager picks up tabindex changes
-        this._cacheFocusableElements();
     }
 
     _updateChapterButtons() {
@@ -783,9 +777,6 @@ export default class OSDController extends Component {
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
 
-        // Hide the global clock when OSD hides
-        globalClock.setVisibility(false);
-
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
         if (!this.activeMenu && !this.upNextDialog?.isVisible) {
@@ -820,7 +811,7 @@ export default class OSDController extends Component {
             this._focusResetTimer = null;
         }
 
-        const mode = PlayerSettings.get('osdFocusRestoreMode') || 'remember';
+        const mode = PlayerSettings.get('osdFocusRestoreMode') || 'always';
 
         if (mode === 'always') {
             // Park immediately — next OK press ghost-click hits Play/Pause
@@ -1470,12 +1461,14 @@ export default class OSDController extends Component {
                 this.updatePlayPauseButton();
                 break;
             case 'rewind': {
-                this._performDebouncedSeek(-this._cachedSkipBackMs * 10000);
+                const skipBackMs = PlayerSettings.get('skipBackLength') || this._config.seekStepBack; 
+                this._performDebouncedSeek(-skipBackMs * 10000);
                 this.resetAutoHide();
                 break;
             }
             case 'fastForward': {
-                this._performDebouncedSeek(this._cachedSkipFwdMs * 10000);
+                const skipFwdMs = PlayerSettings.get('skipForwardLength') || this._config.seekStepForward;
+                this._performDebouncedSeek(skipFwdMs * 10000);
                 this.resetAutoHide();
                 break;
             }
@@ -1712,6 +1705,7 @@ export default class OSDController extends Component {
             }
 
             this._updateTimeDisplay(this._player);
+            this._updateClock();
             
             if (!this._isDraggingSeekbar) {
                 this._updatePositionSlider(this._player);
@@ -1762,7 +1756,8 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0) {
             const remaining = duration - current;
             const endTime = new Date(Date.now() + (remaining / 10000));
-            const endStr = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
+            // Use 24h format or localized string
+            const endStr = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
             if (endsAtEl.textContent !== endStr) {
                 endsAtEl.textContent = endStr;
             }
@@ -1787,6 +1782,18 @@ export default class OSDController extends Component {
         if (Math.abs(currentVal - percent) > 0.01) {
             this._osdPositionSliderEl.value = percent;
             this._osdPositionFillEl.style.width = percent + '%';
+        }
+    }
+
+    /**
+     * Update the wall clock on the OSD.
+     * @private
+     */
+    _updateClock() {
+        if (!this._osdClockEl) return;
+        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (this._osdClockEl.textContent !== timeStr) {
+            this._osdClockEl.textContent = timeStr;
         }
     }
 
@@ -2345,11 +2352,6 @@ export default class OSDController extends Component {
     setMetadata(item) {
         this._currentItem = item;
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
-        
-        // Cache the formatted skip duration for this specific item once
-        const isTrailer = item?.Type === 'Trailer';
-        this._cachedSkipBackMs = isTrailer ? 5000 : (PlayerSettings.get('skipBackLength') || this._config.seekStepBack * 1000);
-        this._cachedSkipFwdMs = isTrailer ? 5000 : (PlayerSettings.get('skipForwardLength') || this._config.seekStepForward * 1000);
         
         const titleEl = this._osdEl.querySelector('#osdTitle');
         if (titleEl) titleEl.textContent = this._getFormattedTitle(item);
