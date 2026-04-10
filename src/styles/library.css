@@ -1136,18 +1136,33 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     width: 90vw;
     max-width: 1100px;
     height: 80vh;
-}
-
-.filter-split-container {
     display: flex;
-    flex: 1;
-    overflow: hidden;
+    flex-direction: column;
 }
 
-.filter-sidebar,
+/*
+ * CRITICAL: Use .library-modal prefix to boost specificity above the
+ * base rules in components.css. Webpack's splitChunks can reorder CSS
+ * chunks, so components.css may load AFTER library.css. Without the
+ * specificity boost, components.css `.filter-split-container { height: 450px }`
+ * would override our `flex: 1`, collapsing the container.
+ */
+.library-modal .filter-split-container {
+    display: flex !important;
+    flex-direction: row !important; 
+    flex-wrap: nowrap !important;
+    align-items: stretch !important; /* Force sidebar and main to be full height */
+    flex: 1 !important;
+    overflow: hidden !important;
+    min-height: 0 !important; 
+    height: auto !important; 
+}
+
+.library-modal .filter-sidebar,
 .settings-sidebar-ref {
     /* Re-use logic from settings if needed */
-    width: 350px;
+    width: 350px !important;
+    flex: 0 0 350px !important; 
     background: rgba(0, 0, 0, 0.2);
     border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.1));
     display: flex;
@@ -1195,39 +1210,33 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     will-change: transform;
 }
 
-/* Main Content Panel */
-.filter-main {
-    flex: 1;
-    padding: 30px 40px;
-    overflow-y: auto;
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    grid-auto-rows: max-content;
-    /* Redundant gap removed, using margin on children for Tizen */
-    grid-gap: 12px; /* Legacy fallback */
-    gap: 12px;
-    align-content: start;
-}
-
-/*
- * Tizen 3.0 / 4.0 (Chrome 47–56): CSS Grid is unavailable.
- * filter-main is the filter modal's checkbox grid. Use flex-wrap with
- * fixed ~220px widths to match the auto-fill column intent.
- * Ultra-legacy (Chrome <47) inherits this and also gets the float-based
- * layout override in components.css that replaces even flex with floats.
+/* Main Content Panel — Flexbox wrap layout
+ * CSS Grid's `repeat(auto-fill, minmax())` has rendering bugs on Chromium 69
+ * (Tizen 5.5) where grid items collapse to 0 width inside flex containers.
+ * Flexbox-wrap is proven stable across all Chromium versions.
+ *
+ * Using .library-modal prefix for specificity insurance against
+ * webpack chunk reordering (components.css may load after library.css).
  */
-html[data-layout-tier="legacy"] .filter-main,
-html[data-layout-tier="ultra-legacy"] .filter-main {
-    display: flex;
-    flex-wrap: wrap;
-    align-content: flex-start;
+.library-modal .filter-main {
+    flex: 1 !important;
+    width: 0 !important; 
+    height: auto !important; /* It stretches vertically because of align-items: stretch on parent */
+    min-width: 0 !important; 
+    min-height: 0 !important;    
+    padding: 30px 40px !important;
+    overflow-y: auto !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-content: flex-start !important;
 }
 
-html[data-layout-tier="legacy"] .filter-main > *,
-html[data-layout-tier="ultra-legacy"] .filter-main > * {
-    /* Match the minmax target at typical 1080p widths */
-    width: 220px;
-    margin-right: 20px;
+/* Fixed-width children to simulate auto-fill grid columns */
+.library-modal .filter-main > * {
+    width: 288px;
+    flex: 0 0 288px; 
+    margin-right: 10px;
+    margin-left: 10px;
     margin-bottom: 12px;
 }
 

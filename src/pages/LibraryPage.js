@@ -3089,7 +3089,7 @@ class LibraryPage extends Page {
             this.registerFocusSection('filter-items', container, {
                 orientation: 'grid', // Switch to grid for side-by-side items
                 leaveLeft: 'filter-sidebar',
-                leaveUp: 'filter-actions',
+                leaveRight: 'filter-actions', // Restore Right -> Apply jump
                 leaveDown: 'filter-actions',
                 selector: '.modal-option-btn'
             });
