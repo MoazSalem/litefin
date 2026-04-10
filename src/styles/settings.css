@@ -63,7 +63,9 @@
     -webkit-border-radius: var(--jf-border-radius);
     overflow: hidden;
     background-clip: padding-box;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
+
     /* will-change on :focus only — ~8 sidebar buttons */
 }
 
@@ -216,7 +218,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     min-width: 100px;
     text-align: center;
     color: var(--jf-text-primary, rgb(229, 231, 235));
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+
     /* will-change on :focus only — can be 10+ option buttons per setting row */
 }
 
@@ -261,7 +265,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     color: var(--jf-text-primary, rgb(229, 231, 235));
     cursor: pointer;
     outline: none;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+
     /* will-change on :focus only */
 }
 
@@ -282,7 +288,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     display: flex;
     align-items: center;
     opacity: 0.6;
+    -webkit-transition: -webkit-transform 0.3s ease;
     transition: transform 0.3s ease;
+
 }
 
 .select-btn:focus .btn-icon,
@@ -293,7 +301,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 
 
 .custom-select-trigger .chevron {
+    -webkit-transition: -webkit-transform 0.3s ease;
     transition: transform 0.3s ease;
+
 }
 
 .custom-select-container.open .custom-select-trigger .chevron {
@@ -332,7 +342,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     text-align: left;
     cursor: pointer;
     margin-bottom: 4px;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+
     /* will-change on :focus only — dropdown can have 10-20 options */
 }
 
@@ -437,7 +449,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     border-radius: var(--jf-border-radius-lg);
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+
     /* will-change on :focus only */
 }
 
@@ -458,7 +472,9 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     margin-top: 20px;
     margin-bottom: 60px;
     border: 2px solid var(--jf-action-btn-border)!important;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+
     /* Singleton, but follow the same focus-only pattern */
 }
 
@@ -567,7 +583,9 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
     cursor: pointer;
     border: 2px solid transparent;
     outline: none;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
+
     /* No permanent will-change — the playback settings tab has 15+ toggles.
        Promoting each to a compositor layer would exhaust VRAM on Tizen. */
 }
@@ -829,7 +847,9 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     min-height: 52px !important; /* Ensure min-height override on Tizen */
     background: rgba(255, 255, 255, 0.05);
     border-radius: var(--jf-border-radius-lg);
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, opacity 0.3s ease;
     transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, opacity 0.3s ease;
+
     border: 2px solid transparent;
     box-sizing: border-box;
 }
@@ -877,7 +897,9 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     align-items: center;
     justify-content: center;
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, color 0.2s ease;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.2s ease, color 0.2s ease;
+
     padding: 0;
 }
 
@@ -943,7 +965,9 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     border-color: rgba(255, 255, 255, 0.2); 
     background-color: transparent;
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
     transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), border-color 0.2s ease, box-shadow 0.2s ease;
+
     padding: 2px;
     position: relative;
     outline: none;

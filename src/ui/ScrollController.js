@@ -498,7 +498,7 @@ class ScrollController {
                         // at the target position. This skips the forced-layout reflow path
                         // entirely when navigating vertically (the card is already centered).
                         // track.offsetHeight is a synchronous layout and is expensive on Tizen.
-                        const currentTransform = track.style.transform || '';
+                        const currentTransform = track.style.transform || track.style.webkitTransform || '';
                         const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
                         const currentTransformX = match ? parseFloat(match[1]) : 0;
                         const alreadyCentered = Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
@@ -511,14 +511,18 @@ class ScrollController {
                             // and restore transition asynchronously on the next frame once the
                             // browser has committed the no-transition paint.
                             track.style.transition = 'none';
+                            track.style.webkitTransition = 'none';
                             if (isRtl) {
+                                track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
                                 track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
                             } else {
+                                track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
                                 track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
                             }
                             // Restore transition property on the next frame (after the browser
                             // has committed the transform snap) — zero layout reads needed.
                             requestAnimationFrame(() => {
+                                track.style.webkitTransition = '';
                                 track.style.transition = '';
                             });
                         }
@@ -527,14 +531,16 @@ class ScrollController {
                         // .row-items-track has a 150ms CSS transition on transform — writing
                         // the same value triggers a useless animated "wobble" on every vertical
                         // row-enter even though the horizontal position hasn't changed at all.
-                        const currentTransform = track.style.transform || '';
+                        const currentTransform = track.style.transform || track.style.webkitTransform || '';
                         const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
                         const currentTransformX = match ? parseFloat(match[1]) : 0;
                         if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
                             if (isRtl) {
                                 // In RTL, moving track right reveals further elements on the left
+                                track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
                                 track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
                             } else {
+                                track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
                                 track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
                             }
                         }

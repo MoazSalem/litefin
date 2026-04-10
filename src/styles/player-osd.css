@@ -249,6 +249,7 @@
     color: var(--jf-primary-btn-color) !important;
     outline: none !important;
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    -webkit-transform: scale(1.15);
     transform: scale(1.15);
     /* Promote only the focused button */
     will-change: transform;
@@ -1200,7 +1201,9 @@
     z-index: 2000;
     transform: translateX(100%);
     pointer-events: none;
+    -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
     transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1), opacity 0.4s ease;
+
     border-left: 1px solid rgba(255, 255, 255, 0.05);
     opacity: 0;
 }

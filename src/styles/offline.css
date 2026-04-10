@@ -76,7 +76,9 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -93,8 +95,10 @@
 .offline-actions .btn.focused {
     outline: none;
     z-index: 2;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
+
 
 .offline-actions .btn-primary:focus,
 .offline-actions .btn-primary.focused {
@@ -122,7 +126,9 @@
     padding: 12px 32px;
     border-radius: var(--jf-border-radius);
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -130,8 +136,10 @@
 .exit-btn.focused {
     color: var(--jf-text-primary);
     background: rgba(255, 255, 255, 0.05);
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
+
 
 @-webkit-keyframes offlineFadeIn {
     from { 

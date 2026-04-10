@@ -107,7 +107,9 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     font-size: 1.75rem;
     border-radius: var(--jf-border-radius);
     color: var(--jf-text-primary, #fff);
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+
     will-change: transform;
 }
 
@@ -129,7 +131,9 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     border-radius: var(--jf-border-radius);
     cursor: pointer;
     margin: 0;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -167,7 +171,9 @@ html[data-layout-tier="ultra-legacy"] .login-logo {
     background: rgba(255, 255, 255, 0.12);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: var(--jf-text-primary);
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, border-color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -326,7 +332,9 @@ body.app-splash-active .loading-section .loading-spinner {
     border-radius: var(--jf-border-radius);
     margin-bottom: 12px;
     cursor: pointer;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease;
+
     will-change: transform;
 }
 
@@ -442,7 +450,8 @@ html[data-layout-tier="ultra-legacy"] .user-card {
 
 .user-card:focus,
 .user-card.focused {
-    transform: scale(1.04);
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
     outline: none;
     z-index: 10;
 }

@@ -112,14 +112,19 @@
     flex-direction: column;
     justify-content: center;
     opacity: 0;
+    -webkit-transform: translateY(20px);
     transform: translateY(20px);
+    -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
     transition: transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
 }
 
+
 .hero-item.active .hero-content {
     opacity: 1;
+    -webkit-transform: translateY(0);
     transform: translateY(0);
 }
+
 
 /* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop ONLY */
 .hero-item.active .hero-backdrop {

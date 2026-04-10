@@ -13,9 +13,11 @@
     border-radius: var(--jf-border-radius);
     cursor: pointer;
     margin: 12px;
+    -webkit-transition: -webkit-transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     will-change: transform;
 }
+
 
 .btn-primary {
     background: var(--jf-accent);
@@ -30,8 +32,10 @@
     border-color: var(--jf-button-border-focus);
     outline: none;
     color: var(--jf-primary-btn-color);
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
+
 
 .btn-secondary {
     background: var(--jf-button-bg);

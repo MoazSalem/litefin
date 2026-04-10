@@ -439,7 +439,11 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     margin-bottom: 30px;
     
     /* Premium Apple-style spring transition for focus 'pop' */
+    /* Premium Apple-style spring transition for focus 'pop'
+       Mandatory -webkit- prefixing for Chromium 32 compatibility. */
+    -webkit-transition: -webkit-transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
     transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease;
+
     
     /* Isolate each card's layout/paint for smoother focus transitions */
     contain: layout style paint;
@@ -612,13 +616,13 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     border-radius: 12px !important; 
     -webkit-border-radius: 12px !important;
     
-    /* UNIVERSAL ZERO-SPACE: No borders or padding in any state */
     border: none !important;
     border-width: 0 !important;
     outline: none !important;
     box-shadow: none !important;
     
-    transition: background-color 0.2s ease, transform 0.2s ease;
+    -webkit-transition: -webkit-transform 0.2s ease, background-color 0.2s ease;
+    transition: transform 0.2s ease, background-color 0.2s ease;
     position: relative !important; 
     overflow: hidden !important; 
 }
@@ -626,10 +630,12 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 .library-grid.view-list .media-card:focus,
 .library-grid.view-list .media-card.focused {
     background: rgba(255, 255, 255, 0.15) !important;
+    -webkit-transform: scale(1.02);
     transform: scale(1.02); /* Slight pop to show selection */
     box-shadow: 0 0 0 3px var(--jf-accent) !important; /* BOLD OUTER Focus Ring */
     z-index: 10;
 }
+
 
 /* Strip double-focus: ensure only the whole row gets the highlight */
 .library-grid.view-list .media-card:focus .card-image,

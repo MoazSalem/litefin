@@ -32,6 +32,8 @@
     -webkit-transition: -webkit-transform 0.25s cubic-bezier(0.2, 0, 0, 1);
     transition: transform 0.25s cubic-bezier(0.2, 0, 0, 1);
 
+
+
     overflow: hidden;
     /* Hide overflow text when collapsed */
     padding: 20px 0;
@@ -71,6 +73,8 @@
     /* Default: No transform transition while hidden/inactive to prevent "reset" slides */
     -webkit-transition: -webkit-transform 0s, opacity 0.15s ease;
     transition: transform 0s, opacity 0.15s ease;
+
+
     will-change: transform, opacity;
 }
 
@@ -78,6 +82,8 @@
     /* Smooth sliding only when expanded and already visible */
     -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
     transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
+
+
 }
 
 .sidebar.has-focus .sidebar-focus-indicator {
@@ -431,7 +437,10 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     background: #32D74B; /* Apple green */
     border: 2px solid var(--sidebar-bg, #101010); /* Knockout border to sit above bg */
     opacity: 0;
-    transform: scale(0);
+    -webkit-transform: scale(0.9);
+    transform: scale(0.9);
+    opacity: 0.8 !important;
+    -webkit-transition: opacity 0.2s ease, -webkit-transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     transition: opacity 0.2s ease, transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     pointer-events: none;
 }
@@ -439,6 +448,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 /* Dot becomes visible when a group is active */
 .sidebar-syncplay-dot.visible {
     opacity: 1;
+    -webkit-transform: scale(1);
     transform: scale(1);
     -webkit-animation: sidebar-syncplay-dot-pulse 2s ease-in-out infinite;
     animation: sidebar-syncplay-pulse 2s ease-in-out infinite;

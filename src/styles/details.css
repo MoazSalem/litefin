@@ -314,6 +314,7 @@
 .play-btn.focused,
 .resume-btn:focus,
 .resume-btn.focused {
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color);
@@ -321,6 +322,7 @@
     outline: none !important;
     border: 2px solid var(--jf-button-border-focus) !important;
 }
+
 
 /* Fallback for Play/Resume spacing on browsers without flex-gap (Tizen < 6.5) */
 .play-btn svg,
@@ -441,12 +443,14 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
 /* Focus State (Unified) */
 .btn-icon:focus,
 .btn-icon.focused {
+    -webkit-transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
     transform: scale(1.15); /* Slightly larger than standard OSD for prominence */
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color) !important;
     border-color: var(--jf-button-border-focus) !important;
     outline: none !important;
 }
+
 
 /* 
  * Active + Focused State: 
@@ -628,13 +632,17 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     border-color: var(--jf-button-border-focus);
     color: var(--jf-primary-btn-color);
     outline: none !important;
+    -webkit-transform: scale(1.05);
     transform: scale(1.05);
 }
 
+
 /* Smooth focus for cast/similar items (matches Home scaling) */
 .media-card {
+    -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     transition: transform 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
     justify-self: center;
+
 
     /* PERFORMANCE: Layout isolation without compositor promotion.
        home.css already handles the will-change: transform on :focus.
@@ -696,6 +704,8 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     z-index: 10;
     /* Promote only the focused card to its own compositor layer */
     will-change: transform;
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
 }
 
 .episode-thumb {

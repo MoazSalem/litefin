@@ -225,10 +225,13 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     padding-left: 0;
     padding-right: 0; /* Spacer managed by JS for virtual rows */
     
+    -webkit-transform: translateZ(0); /* Hardware accelerate */
     transform: translateZ(0); /* Hardware accelerate */
     will-change: transform;
+    -webkit-transition: -webkit-transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
     transition: transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
+
 
 /* ============================================================================
  * Sidebar Layout Support

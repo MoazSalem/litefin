@@ -64,9 +64,9 @@
     -webkit-transform: scale(0.9) translateY(20px);
     transform: scale(0.9) translateY(20px);
     -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
-                        opacity 0.4s ease;
+                opacity 0.6s ease;
     transition: transform 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275),
-                opacity 0.4s ease;
+                opacity 0.6s ease;
     opacity: 0;
     box-sizing: border-box;
     -webkit-box-sizing: border-box;
