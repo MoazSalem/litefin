@@ -63,6 +63,15 @@ const TALL_ROW_MULTIPLIER = 2.0;
 // elements taller are bottom-aligned. (Increased to 0.9 so large grid cards center properly)
 const SMALL_ELEMENT_FRACTION = 0.9;
 
+// Fraction of viewport height: if a single scroll delta exceeds this fraction,
+// snap instantly instead of animating. Hero carousel ↔ row transitions on
+// the home page produce 500-750px deltas that exceed the Tizen GPU's compositing
+// budget — each intermediate frame must repaint the hero (Ken Burns animation,
+// gradient overlays, backdrop layer) AND the content rows (per-row translateZ(0)
+// compositor layers), causing visible frame drops. Instant-snapping large deltas
+// matches Apple TV's behavior for hero-to-content transitions.
+const LARGE_SCROLL_SNAP_FRACTION = 0.45;
+
 class ScrollController {
     constructor() {
         // ====================================================================
@@ -420,8 +429,14 @@ class ScrollController {
             // This prevents micro-jitter on horizontal nav within the same row,
             // and avoids unnecessary scrolls between tightly packed items
             // (e.g. genre header → genre grid within the same .media-row).
-            if (Math.abs(targetScroll - currentScroll) > SCROLL_ALIGN_THRESHOLD) {
-                this.smoothScrollTo(pageContent, targetScroll, options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL);
+            const scrollDelta = Math.abs(targetScroll - currentScroll);
+            if (scrollDelta > SCROLL_ALIGN_THRESHOLD) {
+                // PERFORMANCE: For scroll distances exceeding ~45% of the viewport
+                // (e.g. hero carousel ↔ first content row), snap instantly. The
+                // Tizen compositor can't smoothly animate 500+ pixel scrolls without
+                // dropping frames. Normal row-to-row deltas (~250px) remain smooth.
+                const forceInstant = scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+                this.smoothScrollTo(pageContent, targetScroll, (options.instantScroll || forceInstant) ? 0 : SCROLL_DURATION_VERTICAL);
             }
         }
 
@@ -603,11 +618,16 @@ class ScrollController {
                 }
 
                 // Apply vertical scroll with smooth easing
-                if (Math.abs(finalScrollTop - currentScroll) > SCROLL_SNAP_THRESHOLD) {
+                const scrollDelta = Math.abs(finalScrollTop - currentScroll);
+                if (scrollDelta > SCROLL_SNAP_THRESHOLD) {
+                    // PERFORMANCE: Large vertical jumps (e.g. returning to the hero
+                    // carousel from a scrolled position) snap instantly to avoid
+                    // GPU-induced frame drops on Tizen hardware.
+                    const forceInstant = scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
                     this.smoothScrollTo(
                         activePageContent,
                         finalScrollTop,
-                        options.instantScroll ? 0 : SCROLL_DURATION_VERTICAL
+                        (options.instantScroll || forceInstant) ? 0 : SCROLL_DURATION_VERTICAL
                     );
                 }
             }
