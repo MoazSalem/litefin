@@ -57,8 +57,11 @@
     width: 100%;
     height: 100%;
     z-index: 40; /* Above video (0) but below OSD (50) */
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
     background: #000;
     overflow: hidden;
@@ -118,8 +121,11 @@ body.lyrics-active .audio-album-art {
     left: 0;
     right: 0;
     bottom: 0;
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
     background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.9));
     z-index: 2100;
@@ -148,8 +154,11 @@ body.lyrics-active .audio-album-art {
     border-radius: var(--jf-border-radius-lg);
     background: var(--jf-action-btn-bg, rgba(30, 30, 30, 0.9));
     border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-align-items: center;
     align-items: center;
     text-align: center;
     box-shadow: var(--jf-shadow-lg);
@@ -166,8 +175,11 @@ body.lyrics-active .audio-album-art {
 }
 
 .error-content {
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-align-items: center;
     align-items: center;
     width: 100%;
 }
@@ -182,8 +194,11 @@ body.lyrics-active .audio-album-art {
     background: var(--jf-accent-light);
     color: var(--jf-error, #f44336);
     border-radius: 50%;
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -212,8 +227,10 @@ body.lyrics-active .audio-album-art {
 }
 
 .error-actions {
+    display: -webkit-flex;
     display: flex;
     width: 100%;
+    -webkit-justify-content: center;
     justify-content: center;
 }
 
@@ -223,8 +240,11 @@ body.lyrics-active .audio-album-art {
     border-radius: var(--jf-border-radius-lg);
     font-size: 24px;
     font-weight: 600;
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     margin: 0 10px;
     /* Use margin instead of gap for Tizen compatibility */
@@ -327,7 +347,9 @@ body.lyrics-active .audio-album-art {
 
 /* Time Display */
 .osd-time {
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
     font-size: 14px;
     color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
@@ -336,8 +358,11 @@ body.lyrics-active .audio-album-art {
 
 /* Control Buttons */
 .osd-controls {
+    display: -webkit-flex;
     display: flex;
+    -webkit-justify-content: center;
     justify-content: center;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -360,7 +385,9 @@ body.lyrics-active .audio-album-art {
     position: absolute;
     right: 60px;
     bottom: 160px;
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 

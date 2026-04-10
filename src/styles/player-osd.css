@@ -168,7 +168,9 @@
     background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 6em 2.4em 3em;
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
 }
 
@@ -178,8 +180,11 @@
 
 /* Controls Row (above slider) */
 .osd-controls-row {
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: space-between;
     justify-content: space-between;
     margin-bottom: 0.6em;
     /* 0.5em * 1.2 */
@@ -187,7 +192,9 @@
 
 .osd-controls-left,
 .osd-controls-right {
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
 }
 
@@ -215,8 +222,11 @@
 
 
 .osd-btn {
+    display: -webkit-inline-flex;
     display: inline-flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     width: 58px;
     height: 58px;
@@ -231,9 +241,23 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 0;
     margin: 0;
-    /* No permanent will-change — the OSD has ~11 buttons and the whole
-       .player-osd container is already a compositor layer via translateZ(0).
-       Each button gets its own layer only when it's actively focused. */
+}
+
+/* 
+ * ── Ultra-Legacy Overrides: OSD Buttons ────────────────────────────────────
+ * Chromium 32 has buggy flexbox/inline-flex centering.
+ * We fallback to a robust block + padding + margin: 0 auto centering strategy.
+ */
+html[data-layout-tier="ultra-legacy"] .osd-btn {
+    display: block !important;
+    text-align: center;
+    padding: 12.2px 0; /* (58px height - 33.6px icon) / 2 */
+    box-sizing: border-box;
+}
+
+html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
+    display: block;
+    margin: 0 auto;
 }
 
 .osd-btn:hover {
@@ -294,8 +318,11 @@
 /* SyncPlay Indicators */
 .osd-syncplay-icon-wrap {
     position: relative;
+    display: -webkit-flex;
     display: flex;
+    -webkit-align-items: center;
     align-items: center;
+    -webkit-justify-content: center;
     justify-content: center;
     width: 100%;
     height: 100%;
@@ -1165,6 +1192,22 @@
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
+.osd-badge {
+    padding: 6px 14px;
+    border-radius: 4px;
+    background: rgba(0, 0, 0, 0.4);
+    font-size: 14px;
+    font-weight: 700;
+    color: #fff;
+    margin-right: 12px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+}
+
 .osd-offset-close .osd-icon {
     width: 22px;
     height: 22px;
@@ -1377,8 +1420,11 @@ body.lyrics-active .subtitle-overlay {
 }
 
 .osd-syncplay-notification-text {
+    display: -webkit-flex;
     display: flex;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-justify-content: center;
     justify-content: center;
 }
 

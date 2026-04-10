@@ -316,6 +316,17 @@
     -webkit-box-sizing: border-box;
 }
 
+/* 
+ * ── Ultra-Legacy Overrides: SyncPlay Buttons ────────────────────────────────
+ * Chromium 32 has buggy flex centering for buttons.
+ */
+html[data-layout-tier="ultra-legacy"] .syncplay-btn {
+    display: block !important;
+    text-align: center;
+    line-height: normal;
+    padding: 16px 0;
+}
+
 .syncplay-btn-primary {
     background: var(--jf-primary-btn-color, #fff);
     color: var(--jf-accent, #007AFF);

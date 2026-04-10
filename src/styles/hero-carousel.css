@@ -289,12 +289,25 @@
     transition: transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), 
                 margin 0.5s ease,
                 border-color 0.4s ease;
+    /* PERFORMANCE: Force overflow clipping for banner mode */
+    overflow: hidden !important;
+    /* Legacy WebKit Hack: Force border-radius clipping on children */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
 /* Ensure inner carousel respects container radius */
 .hero-carousel-container.banner .hero-carousel {
     border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
     height: 60vh; /* Slightly shorter in banner mode for better proportions */
+    overflow: hidden;
+    /* Legacy WebKit Hack: Ensure child items are clipped */
+    -webkit-mask-image: -webkit-radial-gradient(white, black);
+}
+
+/* Explicitly round children in banner mode as some legacy engines ignore overflow:hidden radius */
+.hero-carousel-container.banner .hero-item,
+.hero-carousel-container.banner .hero-backdrop {
+    border-radius: calc(var(--jf-border-radius-lg) - 4px);
 }
 
 .hero-carousel-container.banner.compact {
