@@ -465,7 +465,15 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
  * Added via JS temporarily during toggle to provide "something happened" feedback.
  */
 .btn-icon.pulse-trigger svg {
+    -webkit-animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+
+@-webkit-keyframes jf-pulse {
+    0% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(1.5); transform: scale(1.5); }
+    100% { -webkit-transform: scale(1); transform: scale(1); }
 }
 
 @keyframes jf-pulse {
@@ -473,6 +481,7 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     50% { transform: scale(1.5); }
     100% { transform: scale(1); }
 }
+
 
 .details-overview {
     margin-bottom: 0;

@@ -322,8 +322,10 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     align-items: center;
     justify-content: center;
     padding: 60px;
+    -webkit-animation: fadeIn 0.4s ease-out;
     animation: fadeIn 0.4s ease-out;
 }
+
 
 .empty-state.hidden {
     display: none !important;
@@ -1056,6 +1058,20 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     margin: 8px auto 0 auto;
 }
 
+@-webkit-keyframes pulse {
+    0% {
+        opacity: 0.6;
+    }
+
+    50% {
+        opacity: 1;
+    }
+
+    100% {
+        opacity: 0.6;
+    }
+}
+
 @keyframes pulse {
     0% {
         opacity: 0.6;
@@ -1070,9 +1086,12 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     }
 }
 
+
 .pulse {
+    -webkit-animation: pulse 1.5s infinite ease-in-out;
     animation: pulse 1.5s infinite ease-in-out;
 }
+
 
 /* ==========================================================================
    Library Modals - Unified Design System
@@ -1385,7 +1404,10 @@ html[data-layout-tier="ultra-legacy"] .filter-main > * {
 
 .sort-column:last-child {
     border-right: none;
+    -webkit-animation: pulse 1.5s ease-in-out infinite;
+    animation: pulse 1.5s ease-in-out infinite;
 }
+
 
 .sort-column .modal-title {
     padding: 20px 30px;

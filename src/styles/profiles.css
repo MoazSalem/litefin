@@ -43,7 +43,19 @@
     letter-spacing: -1px;
     margin: 0;
     /* Subtle fade-up entrance */
+    -webkit-animation: profiles-fade-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
     animation: profiles-fade-up 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+}
+
+@-webkit-keyframes profiles-fade-up {
+    from {
+        opacity: 0;
+        -webkit-transform: translateY(12px);
+    }
+    to {
+        opacity: 1;
+        -webkit-transform: translateY(0);
+    }
 }
 
 @keyframes profiles-fade-up {
@@ -56,6 +68,7 @@
         transform: translateY(0);
     }
 }
+
 
 /* ============================================================================
    Profile Grid
@@ -72,6 +85,7 @@
     padding: 0 40px;
     box-sizing: border-box;
     /* Stagger the grid in slightly after the title */
+    -webkit-animation: profiles-fade-up 0.5s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
     animation: profiles-fade-up 0.5s 0.08s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 
@@ -237,6 +251,7 @@
     padding-top: 0;
     display: flex;
     justify-content: center;
+    -webkit-animation: profiles-fade-up 0.5s 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
     animation: profiles-fade-up 0.5s 0.15s cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
 }
 

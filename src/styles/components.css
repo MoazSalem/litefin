@@ -382,7 +382,21 @@ progress.card-progress::-webkit-progress-value {
 .pulse {
     /* Keeping pulse as a secondary subtle animation if needed, 
        but we mainly use skeleton-shimmer now */
+    -webkit-animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
     animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+
+@-webkit-keyframes pulse {
+
+    0%,
+    100% {
+        opacity: 1;
+    }
+
+    50% {
+        opacity: 0.5;
+    }
 }
 
 @keyframes pulse {
@@ -396,6 +410,7 @@ progress.card-progress::-webkit-progress-value {
         opacity: 0.5;
     }
 }
+
 
 /* ==========================================================================
    Consolidated Modal Styles (Shared)

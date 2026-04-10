@@ -25,7 +25,19 @@
 
 /* Fade-in animation for lazy-loaded content - uses opacity only for GPU performance */
 .library-row.loaded .media-card {
+    -webkit-animation: fadeInCard 0.2s ease-out forwards;
     animation: fadeInCard 0.2s ease-out forwards;
+}
+
+
+@-webkit-keyframes fadeInCard {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @keyframes fadeInCard {
@@ -37,6 +49,7 @@
         opacity: 1;
     }
 }
+
 
 /* Row Header - Container */
 .library-row-header {

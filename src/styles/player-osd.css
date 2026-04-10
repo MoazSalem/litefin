@@ -267,7 +267,14 @@
 
 /* Pulse Animation Trigger */
 .osd-btn.pulse-trigger svg {
+    -webkit-animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
     animation: jf-pulse 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@-webkit-keyframes jf-pulse {
+    0% { -webkit-transform: scale(1); transform: scale(1); }
+    50% { -webkit-transform: scale(1.4); transform: scale(1.4); }
+    100% { -webkit-transform: scale(1); transform: scale(1); }
 }
 
 @keyframes jf-pulse {
@@ -275,6 +282,7 @@
     50% { transform: scale(1.4); }
     100% { transform: scale(1); }
 }
+
 
 .osd-btn .osd-icon {
     width: 33.6px;
@@ -311,11 +319,25 @@
 .osd-syncplay-dot.visible {
     opacity: 1;
     transform: scale(1);
+    -webkit-animation: osd-syncplay-pulse 2s ease-in-out infinite;
     animation: osd-syncplay-pulse 2s ease-in-out infinite;
 }
 
+
 .osd-btn.syncplay-active:not(:focus):not(.focused) {
     color: #32D74B;
+}
+
+@-webkit-keyframes osd-syncplay-pulse {
+    0% {
+        box-shadow: 0 0 0 0 rgba(50, 215, 75, 0.7);
+    }
+    70% {
+        box-shadow: 0 0 0 10px rgba(50, 215, 75, 0);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(50, 215, 75, 0);
+    }
 }
 
 @keyframes osd-syncplay-pulse {
@@ -329,6 +351,7 @@
         box-shadow: 0 0 0 0 rgba(50, 215, 75, 0);
     }
 }
+
 
 /* Back button - circular, accent color on focus */
 .osd-back-btn {
@@ -1383,7 +1406,21 @@ body.lyrics-active .subtitle-overlay {
 
 .osd-syncplay-visible .osd-syncplay-notification-glass {
     /* CSS Spring: overshoot and settle */
+    -webkit-animation: syncplay-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
     animation: syncplay-pop 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+@-webkit-keyframes syncplay-pop {
+    0% {
+        opacity: 0;
+        -webkit-transform: scale(0.8) translateY(-30px);
+        transform: scale(0.8) translateY(-30px);
+    }
+    100% {
+        opacity: 1;
+        -webkit-transform: scale(1) translateY(0);
+        transform: scale(1) translateY(0);
+    }
 }
 
 @keyframes syncplay-pop {
@@ -1397,12 +1434,20 @@ body.lyrics-active .subtitle-overlay {
     }
 }
 
+
 /* Special modifiers based on the data-action attribute */
 .osd-syncplay-notification[data-action="buffering"] .osd-syncplay-notification-icon svg {
+    -webkit-animation: syncplay-spin 2s linear infinite;
     animation: syncplay-spin 2s linear infinite;
+}
+
+@-webkit-keyframes syncplay-spin {
+    0% { -webkit-transform: rotate(0deg); transform: rotate(0deg); }
+    100% { -webkit-transform: rotate(360deg); transform: rotate(360deg); }
 }
 
 @keyframes syncplay-spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
 }
+

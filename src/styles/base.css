@@ -222,8 +222,8 @@ body.app-splash-active .page-loading .loading-spinner {
             rgba(255, 255, 255, 0) 0%,
             rgba(255, 255, 255, 0.04) 50%,
             rgba(255, 255, 255, 0) 100%);
-    animation: shimmer-gpu 1.5s infinite linear;
     -webkit-animation: webkit-shimmer-gpu 1.5s infinite linear;
+    animation: shimmer-gpu 1.5s infinite linear;
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -239,6 +239,7 @@ body.app-splash-active .page-loading .loading-spinner {
     to { -webkit-transform: translateX(100%); }
 }
 
+
 .loading-spinner {
     width: 48px;
     height: 48px;
@@ -251,8 +252,9 @@ body.app-splash-active .page-loading .loading-spinner {
     color: #FFF;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
-    -webkit-animation: webkit-rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
     /* TIZEN PERF: Promote to its own compositor layer */
+
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
@@ -268,8 +270,9 @@ body.app-splash-active .page-loading .loading-spinner {
     color: #FFF;
     box-sizing: border-box;
     animation: rotation 1s linear infinite;
-    -webkit-animation: webkit-rotation 1s linear infinite;
+    -webkit-animation: rotation 1s linear infinite;
     transform: translateZ(0);
+
     -webkit-transform: translateZ(0);
 }
 
@@ -287,8 +290,9 @@ body.app-splash-active .page-loading .loading-spinner {
     border-radius: 50%;
     background-color: #FFF;
     animation: animloader-gpu 1s infinite ease-in-out;
-    -webkit-animation: webkit-animloader-gpu 1s infinite ease-in-out;
+    -webkit-animation: animloader-gpu 1s infinite ease-in-out;
     will-change: transform;
+
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
 }
@@ -313,26 +317,34 @@ body.app-splash-active .page-loading .loading-spinner {
     100% { transform: translateZ(0) rotate(360deg); }
 }
 
-@-webkit-keyframes webkit-rotation {
+@-webkit-keyframes rotation {
     0% { -webkit-transform: translateZ(0) rotate(0deg); }
     100% { -webkit-transform: translateZ(0) rotate(360deg); }
 }
+
 
 @keyframes animloader-gpu {
     0%, 100% { transform: translateZ(0) scale(0.5); }
     50% { transform: translateZ(0) scale(1); }
 }
 
-@-webkit-keyframes webkit-animloader-gpu {
+@-webkit-keyframes animloader-gpu {
     0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
     50% { -webkit-transform: translateZ(0) scale(1); }
 }
+
 
 /* Base Animations */
 @keyframes fadeIn {
     from { opacity: 0; }
     to { opacity: 1; }
 }
+
+@-webkit-keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
 
 @-webkit-keyframes webkit-fadeIn {
     from { opacity: 0; }

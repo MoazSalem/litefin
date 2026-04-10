@@ -124,13 +124,20 @@
 /* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop ONLY */
 .hero-item.active .hero-backdrop {
     /* CSS Animation ensures it triggers even on the very first initial mount */
+    -webkit-animation: hero-ken-burns 12000ms linear forwards;
     animation: hero-ken-burns 12000ms linear forwards;
+}
+
+@-webkit-keyframes hero-ken-burns {
+    from { -webkit-transform: scale(1); }
+    to   { -webkit-transform: scale(1.08); }
 }
 
 @keyframes hero-ken-burns {
     from { transform: scale(1); }
     to   { transform: scale(1.08); }
 }
+
 
 .hero-logo-container {
     height: 120px;
@@ -369,10 +376,16 @@
 }
 
 /* Animation for Auto-Scroll */
+@-webkit-keyframes heroProgress {
+    from { width: 0; }
+    to { width: 100%; }
+}
+
 @keyframes heroProgress {
     from { width: 0; }
     to { width: 100%; }
 }
+
 
 .hero-dot-progress {
     position: absolute;
@@ -385,5 +398,6 @@
 }
 
 .hero-dot.active .hero-dot-progress {
+    -webkit-animation: heroProgress 8s linear;
     animation: heroProgress 8s linear;
 }
