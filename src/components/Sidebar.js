@@ -400,6 +400,8 @@ class Sidebar extends Component {
     }
 
     async _loadLibraries() {
+        if (!auth.isAuthenticated()) return;
+
         try {
             const views = await api.getUserViews();
             const items = views.Items || [];

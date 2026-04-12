@@ -9,10 +9,13 @@
     <!--
         WebOS SDK — must load before any app JS so that window.webOS and
         window.webOS.service are available when ApiClient runs its Luna check.
-        On Tizen and standard browsers this script detects a non-WebOS environment
-        and is effectively a no-op.
+        Loaded dynamically to prevent PalmServiceBridge console errors on non-LG devices.
     -->
-    <script src="js/webOSTV.js"></script>
+    <script>
+        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
+            document.write('<script src="js/webOSTV.js"><\\/script>');
+        }
+    </script>
 
     <script>
         // ====================================================================
