@@ -718,6 +718,18 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
+                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-snap-large-scrolls" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
                 <!-- 
@@ -2273,6 +2285,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselCompact', newValue.toString());
                 heroCarouselCompactBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Compact Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Reduce Motion (Large Scrolls)
+        const snapLargeScrollsBtn = this.$('#toggle-snap-large-scrolls');
+        if (snapLargeScrollsBtn) {
+            snapLargeScrollsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:snapLargeScrolls') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:snapLargeScrolls', newValue.toString());
+                snapLargeScrollsBtn.classList.toggle('active', newValue);
+                log.info(`Snap Large Scrolls set to: ${newValue}`);
             });
         }
 

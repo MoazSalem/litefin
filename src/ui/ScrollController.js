@@ -20,6 +20,8 @@
  * ============================================================================
  */
 
+import { storage } from '../utils/StorageService.js';
+
 // ============================================================================
 // Constants — all tunable values in one place for easy TV hardware tweaking
 // ============================================================================
@@ -435,7 +437,9 @@ class ScrollController {
                 // (e.g. hero carousel ↔ first content row), snap instantly. The
                 // Tizen compositor can't smoothly animate 500+ pixel scrolls without
                 // dropping frames. Normal row-to-row deltas (~250px) remain smooth.
-                const forceInstant = scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+                // This is optional and controlled by pref:snapLargeScrolls.
+                const snapEnabled = storage.getItem('pref:snapLargeScrolls') !== 'false';
+                const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
                 this.smoothScrollTo(pageContent, targetScroll, (options.instantScroll || forceInstant) ? 0 : SCROLL_DURATION_VERTICAL);
             }
         }
@@ -623,7 +627,8 @@ class ScrollController {
                     // PERFORMANCE: Large vertical jumps (e.g. returning to the hero
                     // carousel from a scrolled position) snap instantly to avoid
                     // GPU-induced frame drops on Tizen hardware.
-                    const forceInstant = scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
+                    const snapEnabled = storage.getItem('pref:snapLargeScrolls') !== 'false';
+                    const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
                     this.smoothScrollTo(
                         activePageContent,
                         finalScrollTop,

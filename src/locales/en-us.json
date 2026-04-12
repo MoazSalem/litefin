@@ -429,6 +429,8 @@
     "HeroCarouselTextTitleDescription": "Prefer text titles over logos in the hero carousel.",
     "HeroStyle": "Hero Style",
     "HeroStyleDescription": "Visual style of the hero carousel",
+    "ReduceMotionLargeScrolls": "Reduce Motion (Large Scrolls)",
+    "ReduceMotionLargeScrollsDescription": "Instantly snap to the target instead of animating when scrolling long distances that would cause frame drops (improves performance).",
     "HEVCDescription": "Direct play HEVC content (supported on all Tizen 4+ TVs)",
     "HideLibraryLabels": "Hide Library Labels",
     "HideLibraryLabelsDescription": "Hide the text label beneath library cards on the home screen",
