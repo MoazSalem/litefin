@@ -25,6 +25,7 @@ import { availableLanguages } from '../locales/languages.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
+import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
 
@@ -79,6 +80,11 @@ class SettingsPage extends Page {
                 id: 'appearance',
                 label: i18n.t('Display'),
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
+            },
+            {
+                id: 'sidebar',
+                label: i18n.t('Sidebar') || 'Sidebar',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
             },
             {
                 id: 'home',
@@ -157,6 +163,8 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
+            case 'sidebar':
+                return this._renderSidebarTab();
             case 'home':
                 return this._renderHomeTab();
             case 'player':
@@ -402,20 +410,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowRandomButton">${i18n.t('LabelShowRandomButton')}</span>
-                        <span class="setting-description" data-i18n="ShowRandomButtonDescription">${i18n.t('ShowRandomButtonDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:showRandomButton') !== 'false' ? 'active' : ''}" 
-                                id="toggle-random-button" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -547,6 +541,49 @@ class SettingsPage extends Page {
                                  id="toggle-backdrop-include-music" 
                                  tabindex="0">
                         </button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+    /**
+     * Render Sidebar tab with layout customizations and initial focus
+     */
+    _renderSidebarTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
+
+                <!-- Default Focus Section -->
+                <h3 class="setting-section-title" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</span>
+                        <span class="setting-description" data-i18n="InitialSidebarFocusDescription">${i18n.t('InitialSidebarFocusDescription') || 'Select which item gets focused first when opening the sidebar.'}</span>
+                    </div>
+                    <div class="setting-control" id="sidebar-focus-select-container">
+                        <div class="loading-spinner small"></div>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
+                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
+                <div class="home-layout-container" id="sidebar-layout-container">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <div class="loading-spinner small"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="MyMediaOrder" style="margin-top: 40px;">${i18n.t('MyMediaOrder') || 'My Media Order'}</h3>
+                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
+                <div class="home-layout-container" id="sidebar-lib-layout-container">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <div class="loading-spinner small"></div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -725,7 +762,7 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <h3 class="setting-section-title" data-i18n="LayoutOrder" style="margin-top: 40px;">${i18n.t('LayoutOrder') || 'Home Screen Layout'}</h3>
+                <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
                 <!-- 
                      Loaded dynamically via _setupHomeLayoutUI. 
                      Each row inside will be a distinct .setting-item .layout-row
@@ -2150,10 +2187,10 @@ class SettingsPage extends Page {
                 const newValue = !isEnabled;
                 storage.setItem('pref:showRandomButton', newValue);
                 randomBtnToggle.classList.toggle('active', newValue);
-                
+
                 // Notify components (like Sidebar) to update
                 eventBus.emit('prefChanged:showRandomButton', newValue);
-                
+
                 log.info(`Random Button set to: ${newValue}`);
             });
         }
@@ -3053,7 +3090,6 @@ class SettingsPage extends Page {
             });
         }
 
-
         // Toggle Switch for Trailer Auto-Chain
         const trailerAutoChainToggle = this.$('#toggle-trailer-auto-chain');
         if (trailerAutoChainToggle) {
@@ -3257,6 +3293,8 @@ class SettingsPage extends Page {
 
             if (tabId === 'home') {
                 this._setupHomeLayoutUI();
+            } else if (tabId === 'sidebar') {
+                this._setupSidebarLayoutUI();
             }
 
             // Populate the live storage usage display whenever the debug tab is opened.
@@ -3271,6 +3309,190 @@ class SettingsPage extends Page {
             if (focusContent) {
                 focusManager.setActiveSection('settings-content', true);
             }
+        }
+    }
+
+    async _setupSidebarLayoutUI() {
+        const topContainer = this.$('#sidebar-layout-container');
+        const libContainer = this.$('#sidebar-lib-layout-container');
+        const focusSelectContainer = this.$('#sidebar-focus-select-container');
+        if (!topContainer) return;
+
+        try {
+            // 1. Fetch live views explicitly so we build the layout config correctly
+            const viewsResponse = await api.getUserViews();
+            const views = viewsResponse.Items || [];
+
+            // Build base list of live items (static ones)
+            const liveStaticItems = sidebarLayoutManager
+                .getStaticItems()
+                .map((s) => ({ ...s, label: i18n.t(s.label) || s.label }));
+            // Build live libraries
+            const liveLibraries = views.map((lib) => ({ id: `lib-${lib.Id}`, label: lib.Name }));
+
+            // 2. Extract configs
+            const layoutVars = sidebarLayoutManager.buildSettingsLayout(liveStaticItems);
+            const libraryVars = sidebarLayoutManager.buildLibrarySettingsLayout(liveLibraries);
+
+            const buildListHtml = (vars) => {
+                return vars
+                    .map((item, index) => {
+                        const isFirst = index === 0;
+                        const isLast = index === vars.length - 1;
+                        const isLocked = item.locked; // 'home' is locked
+                        return `
+                    <div class="setting-item layout-row ${item.hidden && !isLocked ? 'layout-row-hidden' : ''}" data-id="${item.id}" data-index="${index}">
+                        <div class="setting-label">
+                            <span class="setting-name layout-row-title">${item.label}</span>
+                        </div>
+                        <div class="setting-control layout-btns" dir="ltr">
+                            <button class="btn btn-icon layout-btn-up" tabindex="0" ${isFirst ? 'disabled' : ''} aria-label="Move Up">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
+                            </button>
+                            <button class="btn btn-icon layout-btn-down" tabindex="0" ${isLast ? 'disabled' : ''} aria-label="Move Down">
+                                <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
+                            </button>
+                            <button class="btn btn-icon layout-btn-toggle" tabindex="0" ${isLocked ? 'disabled style="opacity:0.3"' : ''} aria-label="${!item.hidden || isLocked ? 'Hide' : 'Show'}">
+                                ${
+                                    !item.hidden || isLocked
+                                        ? '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>'
+                                        : '<svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/></svg>'
+                                }
+                            </button>
+                        </div>
+                    </div>`;
+                    })
+                    .join('');
+            };
+
+            const bindContainerEvents = (containerDOM, varsArray, renderCallback) => {
+                const saveAndNotify = () => {
+                    const config = sidebarLayoutManager.getSavedConfig() || { defaultFocus: 'home' };
+                    config.items = layoutVars.map(({ id, hidden, order }) => ({ id, hidden, order }));
+                    config.libraryItems = libraryVars.map(({ id, hidden, order }) => ({ id, hidden, order }));
+                    sidebarLayoutManager.saveConfig(config);
+                    eventBus.emit('prefChanged:sidebarLayout');
+                };
+
+                containerDOM.querySelectorAll('.layout-btn-up').forEach((btn) => {
+                    btn.addEventListener('click', (e) => {
+                        const row = e.target.closest('.layout-row');
+                        const idx = parseInt(row.dataset.index, 10);
+                        if (idx > 0) {
+                            const temp = varsArray[idx - 1];
+                            varsArray[idx - 1] = varsArray[idx];
+                            varsArray[idx] = temp;
+                            saveAndNotify();
+                            renderCallback();
+                            setTimeout(() => {
+                                const newRow = containerDOM.querySelector(`.layout-row[data-index="${idx - 1}"]`);
+                                if (newRow) focusManager.focusElement(newRow.querySelector('.layout-btn-up'));
+                            }, 50);
+                        }
+                    });
+                });
+
+                containerDOM.querySelectorAll('.layout-btn-down').forEach((btn) => {
+                    btn.addEventListener('click', (e) => {
+                        const row = e.target.closest('.layout-row');
+                        const idx = parseInt(row.dataset.index, 10);
+                        if (idx < varsArray.length - 1) {
+                            const temp = varsArray[idx + 1];
+                            varsArray[idx + 1] = varsArray[idx];
+                            varsArray[idx] = temp;
+                            saveAndNotify();
+                            renderCallback();
+                            setTimeout(() => {
+                                const newRow = containerDOM.querySelector(`.layout-row[data-index="${idx + 1}"]`);
+                                if (newRow) focusManager.focusElement(newRow.querySelector('.layout-btn-down'));
+                            }, 50);
+                        }
+                    });
+                });
+
+                containerDOM.querySelectorAll('.layout-btn-toggle').forEach((btn) => {
+                    btn.addEventListener('click', (e) => {
+                        const row = e.target.closest('.layout-row');
+                        const idx = parseInt(row.dataset.index, 10);
+                        if (varsArray[idx].locked) return; // double check
+
+                        varsArray[idx].hidden = !varsArray[idx].hidden;
+
+                        if (varsArray[idx].hidden) {
+                            const currentFocus = sidebarLayoutManager.getDefaultFocus();
+                            if (currentFocus === varsArray[idx].id) {
+                                const config = sidebarLayoutManager.getSavedConfig() || {};
+                                config.defaultFocus = 'home';
+                                sidebarLayoutManager.saveConfig(config);
+                            }
+                        }
+
+                        saveAndNotify();
+                        renderCallback();
+                        setTimeout(() => {
+                            const newRow = containerDOM.querySelector(`.layout-row[data-index="${idx}"]`);
+                            if (newRow) focusManager.focusElement(newRow.querySelector('.layout-btn-toggle'));
+                        }, 50);
+                    });
+                });
+            };
+
+            const renderUI = () => {
+                if (layoutVars.length === 0) {
+                    topContainer.innerHTML = `<span class="setting-description">No layout configuration available.</span>`;
+                    return;
+                }
+
+                // Render default focus dropdown using currently visible items
+                if (focusSelectContainer) {
+                    // Combine both lists for the focus target choices
+                    const visibleItems = layoutVars.filter((v) => !v.hidden || v.locked);
+                    const visibleLibs = libraryVars.filter((v) => !v.hidden || v.locked);
+
+                    const defaultFocus = sidebarLayoutManager.getDefaultFocus();
+
+                    // Filter out the "Libraries" grouping block header as we don't focus it, we focus its children
+                    const validTargets = [...visibleItems.filter((v) => v.id !== 'librariesContainer'), ...visibleLibs];
+
+                    const options = validTargets.map((item) => ({ value: item.id, label: item.label }));
+
+                    focusSelectContainer.innerHTML = this._renderDropdown(
+                        'sidebar-default-focus-select',
+                        options,
+                        defaultFocus
+                    );
+
+                    const selectEl = focusSelectContainer.querySelector('select');
+                    if (selectEl) {
+                        selectEl.addEventListener('change', (e) => {
+                            const config = sidebarLayoutManager.getSavedConfig() || {
+                                items: layoutVars,
+                                libraryItems: libraryVars
+                            };
+                            config.defaultFocus = e.target.value;
+                            sidebarLayoutManager.saveConfig(config);
+                            eventBus.emit('prefChanged:sidebarLayout');
+                        });
+                    }
+                }
+
+                // Render both reorderable lists
+                topContainer.innerHTML = `<div class="home-layout-list">${buildListHtml(layoutVars)}</div>`;
+                if (libContainer) {
+                    libContainer.innerHTML = `<div class="home-layout-list">${buildListHtml(libraryVars)}</div>`;
+                    bindContainerEvents(libContainer, libraryVars, renderUI);
+                }
+
+                bindContainerEvents(topContainer, layoutVars, renderUI);
+
+                // Clear layout focus cache
+                focusManager.invalidateCache('settings-content');
+            };
+
+            renderUI();
+        } catch (e) {
+            log.error('Failed to load sidebar layouts', e);
+            topContainer.innerHTML = `<span class="setting-description">Error loading layouts.</span>`;
         }
     }
 
