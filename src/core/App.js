@@ -261,6 +261,15 @@ class App {
             this.sidebar.setMode('hidden');
         } else {
             document.body.classList.remove('no-sidebar');
+            
+            // Handle Sidebar Modes (Always Hidden or Mixed)
+            const sidebarMode = storage.getItem('pref:sidebarMode') || 'shown';
+            if (sidebarMode === 'hidden' || (sidebarMode === 'mixed' && path.startsWith('/details'))) {
+                document.body.classList.add('sidebar-mode-hidden');
+            } else {
+                document.body.classList.remove('sidebar-mode-hidden');
+            }
+            
             this.sidebar.setMode('visible');
         }
     }

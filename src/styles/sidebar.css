@@ -59,6 +59,12 @@
     /* Shift to reveal full sidebar */
 }
 
+/* Sidebar Mode: Always Hidden */
+body.sidebar-mode-hidden .sidebar:not(.expanded) {
+    -webkit-transform: translate3d(-100%, 0, 0);
+    transform: translate3d(-100%, 0, 0);
+}
+
 /* Sliding Focus Indicator - Snappy, GPU-accelerated highlight */
 .sidebar-focus-indicator {
     position: absolute;

@@ -769,6 +769,25 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+                
+                <!-- Sidebar Mode Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarMode">${i18n.t('SidebarMode') || 'Sidebar Mode'}</span>
+                        <span class="setting-description" data-i18n="SidebarModeDescription">${i18n.t('SidebarModeDescription') || 'Choose how the sidebar behaves when collapsed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'sidebar-mode-select',
+                            [
+                                { value: 'shown', label: i18n.t('AlwaysShown') || 'Always Shown' },
+                                { value: 'hidden', label: i18n.t('AlwaysHidden') || 'Always Hidden' },
+                                { value: 'mixed', label: i18n.t('MixedMode') || 'Hidden in Details' }
+                            ],
+                            storage.getItem('pref:sidebarMode') || 'shown'
+                        )}
+                    </div>
+                </div>
 
                 <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
                 <!-- Loaded dynamically via _setupSidebarLayoutUI -->
@@ -2916,7 +2935,8 @@ class SettingsPage extends Page {
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
-            'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' }
+            'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
+            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -2945,6 +2965,11 @@ class SettingsPage extends Page {
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
+                        } else if (id === 'sidebar-mode-select') {
+                            storage.setItem('pref:sidebarMode', newValue);
+                            document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
+                            focusManager.invalidateCache('sidebar');
+                            focusManager.invalidateCache('home');
                         } else if (settingConfig.type === 'local') {
                             storage.setItem(settingConfig.key, newValue);
 

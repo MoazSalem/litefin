@@ -287,3 +287,15 @@ body.no-sidebar #sidebar-container {
 body.no-sidebar #page-container {
     left: 0;
 }
+
+/* ============================================================================
+ * Sidebar Hidden Mode Support
+ * ============================================================================ */
+
+body.sidebar-mode-hidden #sidebar-container {
+    width: 0;
+}
+
+body.sidebar-mode-hidden #page-container {
+    left: 0;
+}
