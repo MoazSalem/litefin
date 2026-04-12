@@ -580,6 +580,8 @@
     "Random": "এলোমেলো",
     "RandomDynamic": "এলোমেলো ব্যাকড্রপ (ডায়নামিক)",
     "RandomStatic": "এলোমেলো ব্যাকড্রপ (স্ট্যাটিক)",
+    "ReduceMotionLargeScrolls": "গতি হ্রাস করুন (দীর্ঘ স্ক্রোল)",
+    "ReduceMotionLargeScrollsDescription": "দীর্ঘ দূরত্ব স্ক্রোল করার সময় ফ্রেম ড্রপ এড়াতে এবং কর্মক্ষমতা উন্নত করতে অ্যানিমেশনের পরিবর্তে সরাসরি লক্ষ্যে চলে যান।",
     "Regenerate": "পুনরায় তৈরি করুন",
     "RegenerateThumbnails": "থাম্বনেল পুনরায় তৈরি করুন",
     "RegenerateThumbnailsDescription": "লাইব্রেরি কার্ডের জন্য নতুন এলোমেলো থাম্বনেল বেছে নিন",

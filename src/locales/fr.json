@@ -578,6 +578,8 @@
     "Random": "Aléatoire",
     "RandomDynamic": "Arrière-plan aléatoire (dynamique)",
     "RandomStatic": "Arrière-plan aléatoire (statique)",
+    "ReduceMotionLargeScrolls": "Réduire les animations (Défilement long)",
+    "ReduceMotionLargeScrollsDescription": "Se positionne instantanément sur la cible au lieu d'animer lors de longs défilements qui pourraient causer des saccades (améliore les performances).",
     "Regenerate": "Régénérer",
     "RegenerateThumbnails": "Régénérer les vignettes",
     "RegenerateThumbnailsDescription": "Choisir de nouvelles vignettes aléatoires pour les cartes de bibliothèque",

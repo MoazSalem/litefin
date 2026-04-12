@@ -578,6 +578,8 @@
     "Random": "무작위",
     "RandomDynamic": "랜덤 배경 (동적)",
     "RandomStatic": "랜덤 배경 (정적)",
+    "ReduceMotionLargeScrolls": "동작 줄이기 (긴 스크롤)",
+    "ReduceMotionLargeScrollsDescription": "프레임 드롭을 유발할 수 있는 긴 거리 스크롤 시 애니메이션 대신 즉시 대상을 표시하여 성능을 개선합니다.",
     "Regenerate": "재생성",
     "RegenerateThumbnails": "썸네일 재생성",
     "RegenerateThumbnailsDescription": "라이브러리 카드를 위해 새로운 랜덤 썸네일을 선택합니다",

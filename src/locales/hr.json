@@ -580,6 +580,8 @@
     "Random": "Nasumično",
     "RandomDynamic": "Nasumična pozadina (dinamična)",
     "RandomStatic": "Nasumična pozadina (statična)",
+    "ReduceMotionLargeScrolls": "Smanjenje pokreta (Dugo listanje)",
+    "ReduceMotionLargeScrollsDescription": "Trenutno skoči na cilj umjesto animacije prilikom listanja na velike udaljenosti koje bi mogle uzrokovati padove sličica (poboljšava performanse).",
     "Regenerate": "Regeneriraj",
     "RegenerateThumbnails": "Regeneriraj sličice",
     "RegenerateThumbnailsDescription": "Odaberite nove nasumične sličice za kartice knjižnica",

@@ -578,6 +578,8 @@
     "Random": "Casuale",
     "RandomDynamic": "Sfondo Casuale (Dinamico)",
     "RandomStatic": "Sfondo Casuale (Statico)",
+    "ReduceMotionLargeScrolls": "Riduci movimento (Scorrimento lungo)",
+    "ReduceMotionLargeScrollsDescription": "Passa istantaneamente all'obiettivo invece di animare quando si scorre su lunghe distanze che potrebbero causare cali di frame (migliora le prestazioni).",
     "Regenerate": "Rigenera",
     "RegenerateThumbnails": "Rigenera Miniature",
     "RegenerateThumbnailsDescription": "Scegli nuove miniature casuali per le schede delle librerie",

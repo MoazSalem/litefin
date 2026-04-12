@@ -578,6 +578,8 @@
     "Random": "Ngẫu nhiên",
     "RandomDynamic": "Nền ngẫu nhiên (Động)",
     "RandomStatic": "Nền ngẫu nhiên (Tĩnh)",
+    "ReduceMotionLargeScrolls": "Giảm chuyển động (Cuộn dài)",
+    "ReduceMotionLargeScrollsDescription": "Ngay lập tức chuyển tới đích thay vì tạo hình động khi cuộn quãng đường dài có thể gây mất khung hình (cải thiện hiệu suất).",
     "Regenerate": "Tái tạo",
     "RegenerateThumbnails": "Tái tạo hình dán (Thumbnails)",
     "RegenerateThumbnailsDescription": "Chọn hình dán ngẫu nhiên mới cho các thẻ thư viện",

@@ -578,6 +578,8 @@
     "Random": "Willekeurig",
     "RandomDynamic": "Willekeurige achtergrond (dynamisch)",
     "RandomStatic": "Willekeurige achtergrond (statisch)",
+    "ReduceMotionLargeScrolls": "Beweging verminderen (Lang scrollen)",
+    "ReduceMotionLargeScrollsDescription": "Springt direct naar het doel in plaats van te animeren bij het scrollen over lange afstanden die framedrops kunnen veroorzaken (verbetert prestaties).",
     "Regenerate": "Regenereren",
     "RegenerateThumbnails": "Thumbnails regenereren",
     "RegenerateThumbnailsDescription": "Kies nieuwe willekeurige thumbnails voor bibliotheekkaarten",

@@ -578,6 +578,8 @@
     "Random": "Slumpa",
     "RandomDynamic": "Slumpmässig bakgrund (Dynamisk)",
     "RandomStatic": "Slumpmässig bakgrund (Statisk)",
+    "ReduceMotionLargeScrolls": "Minska rörelse (Lång rullning)",
+    "ReduceMotionLargeScrollsDescription": "Hoppar direkt till målet istället för att animera vid rullning över långa avstånd som kan orsaka bildrutebortfall (förbättrar prestanda).",
     "Regenerate": "Regenerera",
     "RegenerateThumbnails": "Regenerera miniatyrer",
     "RegenerateThumbnailsDescription": "Välj nya slumpmässiga miniatyrer för bibliotekskort",

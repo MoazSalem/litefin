@@ -578,6 +578,8 @@
     "Random": "عشوائي",
     "RandomDynamic": "خلفية عشوائية (ديناميكية)",
     "RandomStatic": "خلفية عشوائية (ثابتة)",
+    "ReduceMotionLargeScrolls": "تقليل الحركة (التمرير الطويل)",
+    "ReduceMotionLargeScrollsDescription": "الانتقال الفوري إلى الهدف بدلاً من التحريك عند التمرير لمسافات طويلة التي قد تسبب انخفاضاً في سلاسة العرض (يحسن الأداء).",
     "Regenerate": "تجديد",
     "RegenerateThumbnails": "تجديد الصور المصغرة",
     "RegenerateThumbnailsDescription": "اختر صورًا مصغرة عشوائية جديدة لبطاقات المكتبات",

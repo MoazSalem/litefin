@@ -580,6 +580,8 @@
     "Random": "Random",
     "RandomDynamic": "Random Backdrop (Dynamic)",
     "RandomStatic": "Random Backdrop (Static)",
+    "ReduceMotionLargeScrolls": "Reduce Motion (Large Scrolls)",
+    "ReduceMotionLargeScrollsDescription": "Instantly snap to the target instead of animating when scrolling long distances that would cause frame drops (improves performance).",
     "Regenerate": "Regenerate",
     "RegenerateThumbnails": "Regenerate Thumbnails",
     "RegenerateThumbnailsDescription": "Pick new random thumbnails for libraries cards",

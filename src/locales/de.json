@@ -578,6 +578,8 @@
     "Random": "Zufällig",
     "RandomDynamic": "Zufälliges Hintergrundbild (dynamisch)",
     "RandomStatic": "Zufälliges Hintergrundbild (statisch)",
+    "ReduceMotionLargeScrolls": "Bewegung reduzieren (Langes Scrollen)",
+    "ReduceMotionLargeScrollsDescription": "Springt sofort zum Ziel anstatt zu animieren, wenn über lange Strecken gescrollt wird, die Framedrops verursachen könnten (verbessert die Leistung).",
     "Regenerate": "Regenerieren",
     "RegenerateThumbnails": "Vorschaubilder regenerieren",
     "RegenerateThumbnailsDescription": "Wählen Sie neue zufällige Vorschaubilder für Bibliothekskarten",

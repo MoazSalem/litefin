@@ -578,6 +578,8 @@
     "Random": "Losowo",
     "RandomDynamic": "Losowe tło (dynamiczne)",
     "RandomStatic": "Losowe tło (statyczne)",
+    "ReduceMotionLargeScrolls": "Redukuj ruch (Długie przewijanie)",
+    "ReduceMotionLargeScrollsDescription": "Natychmiast przeskakuje do celu zamiast animacji podczas przewijania na duże odległości, które mogłyby powodować spadki klatek (poprawia wydajność).",
     "Regenerate": "Wygeneruj ponownie",
     "RegenerateThumbnails": "Wygeneruj ponownie miniatury",
     "RegenerateThumbnailsDescription": "Wybierz nowe losowe miniatury dla kart bibliotek",

@@ -578,6 +578,8 @@
     "Random": "ランダム",
     "RandomDynamic": "ランダムな背景 (動的)",
     "RandomStatic": "ランダムな背景 (静的)",
+    "ReduceMotionLargeScrolls": "視覚効果を減らす (長いスクロール)",
+    "ReduceMotionLargeScrollsDescription": "コマ落ちの原因となる長い距離のスクロール時に、アニメーションを省略して即座にターゲットへ移動します (パフォーマンスが向上します)。",
     "Regenerate": "再生成",
     "RegenerateThumbnails": "サムネイルを再生成",
     "RegenerateThumbnailsDescription": "ライブラリカードのサムネイルをランダムに再選択します",

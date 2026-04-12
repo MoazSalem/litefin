@@ -578,6 +578,8 @@
     "Random": "随机",
     "RandomDynamic": "随机背景（动态）",
     "RandomStatic": "随机背景（静态）",
+    "ReduceMotionLargeScrolls": "减少运动 (长距离滚动)",
+    "ReduceMotionLargeScrollsDescription": "在长距离滚动可能导致掉帧时，立即跳转到目标位置而不进行动画处理 (提升性能)。",
     "Regenerate": "重新生成",
     "RegenerateThumbnails": "重新生成缩略图",
     "RegenerateThumbnailsDescription": "为主页媒体库卡片随机选择新的缩略图",

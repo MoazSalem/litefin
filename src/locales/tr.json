@@ -578,6 +578,8 @@
     "Random": "Rastgele",
     "RandomDynamic": "Rastgele Arka Plan (Dinamik)",
     "RandomStatic": "Rastgele Arka Plan (Statik)",
+    "ReduceMotionLargeScrolls": "Hareketi Azalt (Uzun Kaydırma)",
+    "ReduceMotionLargeScrollsDescription": "Kare düşmesine neden olabilecek uzun mesafeli kaydırmalarda animasyon yerine anında hedefe atlar (performansı artırır).",
     "Regenerate": "Yeniden Oluştur",
     "RegenerateThumbnails": "Küçük Resimleri Yeniden Oluştur",
     "RegenerateThumbnailsDescription": "Kitaplık kartları için yeni rastgele küçük resimler seçin",

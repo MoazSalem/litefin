@@ -578,6 +578,8 @@
     "Random": "Aleatorio",
     "RandomDynamic": "Fondo aleatorio (dinámico)",
     "RandomStatic": "Fondo aleatorio (estático)",
+    "ReduceMotionLargeScrolls": "Reducir movimiento (Desplazamientos largos)",
+    "ReduceMotionLargeScrollsDescription": "Salta instantáneamente al objetivo en lugar de animar al desplazarse largas distancias que podrían causar caídas de cuadros (mejora el rendimiento).",
     "Regenerate": "Regenerar",
     "RegenerateThumbnails": "Regenerar miniaturas",
     "RegenerateThumbnailsDescription": "Elegir nuevas miniaturas aleatorias para las tarjetas de bibliotecas",
