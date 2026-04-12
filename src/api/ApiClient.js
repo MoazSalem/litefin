@@ -188,8 +188,11 @@ export class ApiClient {
         this.lastUrl = url;
 
         // Build headers
+        const authHeader = this.getAuthHeader();
         const headers = {
-            'X-Emby-Authorization': this.getAuthHeader(),
+            'X-Emby-Authorization': authHeader,
+            'Authorization': authHeader,      // Standard header for modern servers/proxies
+            'Accept': 'application/json',     // Explicitly request JSON response
             ...options.headers
         };
 
