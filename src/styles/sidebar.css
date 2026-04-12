@@ -168,6 +168,8 @@
     display: flex;
     align-items: center;
     height: 72px;
+    min-height: 72px; /* Prevent squishing */
+    flex-shrink: 0;
     /* Large touch targets */
     width: 100%;
     background: transparent;
@@ -371,6 +373,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     display: flex;
     flex-direction: column;
     width: 100%;
+    flex-shrink: 0;
 }
 
 .sidebar-section-header {
@@ -381,6 +384,7 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     color: var(--jf-text-tertiary);
     font-weight: 600;
     opacity: 0.7;
+    flex-shrink: 0;
 }
 
 /* Hide divider as we use the header now */
@@ -390,7 +394,9 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 
 .library-item {
     height: 72px;
+    min-height: 72px;
     width: 100%;
+    flex-shrink: 0;
 }
 
 .library-item .item-text {

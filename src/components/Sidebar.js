@@ -317,6 +317,11 @@ class Sidebar extends Component {
                 const focusedItem = this.el.querySelector('.sidebar-item.focused');
                 const hasFocus = !!focusedItem;
 
+                if (focusedItem) {
+                    // Automatically scroll the sidebar container so the newly focused item is in view
+                    focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+
                 // Update indicator FIRST while transition is still disabled (collapsed state)
                 // to ensure it snaps to the correct position before we expand.
                 this._updateIndicator(focusedItem);
@@ -375,15 +380,15 @@ class Sidebar extends Component {
         });
 
         // Sync indicator during scrolling
-        const wrapper = this.el.querySelector('.sidebar-libraries-wrapper');
-        if (wrapper) {
-            wrapper.onscroll = () => {
+        const contentContainer = this.el.querySelector('.sidebar-content');
+        if (contentContainer) {
+            contentContainer.addEventListener('scroll', () => {
                 const focused = this.el.querySelector('.sidebar-item.focused');
-                // Only sync if the focused element is actually INSIDE the scrolling wrapper
-                if (focused && wrapper.contains(focused)) {
+                // Only sync if the focused element is actually INSIDE the scrolling container
+                if (focused && contentContainer.contains(focused)) {
                     this._updateIndicator(focused, { instant: true });
                 }
-            };
+            });
         }
     }
 
