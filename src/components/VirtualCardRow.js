@@ -171,22 +171,27 @@ export class VirtualCardRow {
         }
         // ── End boot-render path ────────────────────────────────────────────
 
-        let start = Math.max(0, centerIndex - this.bufferZone);
-        let end = Math.min(this.totalItems - 1, centerIndex + this.bufferZone);
+        let start, end;
 
-        // Ensure we always render exactly visibleCount items if possible.
-        // The previous bug was caused by nested boundary conditionals failing to shift the window.
-        // We simply check the current window size, and if it's too small, we symmetrically expand it
-        // to the right (if we hit the left bound) or to the left (if we hit the right bound).
-        const currentSize = end - start + 1;
-        if (currentSize < this.visibleCount && this.totalItems >= this.visibleCount) {
-            const deficit = this.visibleCount - currentSize;
-            if (start === 0) {
-                // Expanding to the right
-                end = Math.min(this.totalItems - 1, end + deficit);
-            } else if (end === this.totalItems - 1) {
-                // Expanding to the left
-                start = Math.max(0, start - deficit);
+        if (this.totalItems <= this.visibleCount) {
+            // If the row is small enough to fit within the visible bounds entirely, 
+            // just render everything simultaneously so bounds clipping is never an issue.
+            start = 0;
+            end = this.totalItems - 1;
+        } else {
+            start = Math.max(0, centerIndex - this.bufferZone);
+            end = Math.min(this.totalItems - 1, centerIndex + this.bufferZone);
+
+            // Ensure we always render exactly visibleCount items if possible.
+            // Symmetrically expand it to the right (if bounded left) or left (if bounded right).
+            const currentSize = end - start + 1;
+            if (currentSize < this.visibleCount) {
+                const deficit = this.visibleCount - currentSize;
+                if (start === 0) {
+                    end = Math.min(this.totalItems - 1, end + deficit);
+                } else if (end === this.totalItems - 1) {
+                    start = Math.max(0, start - deficit);
+                }
             }
         }
 
