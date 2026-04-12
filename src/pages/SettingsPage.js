@@ -82,14 +82,14 @@ class SettingsPage extends Page {
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
             },
             {
-                id: 'sidebar',
-                label: i18n.t('Sidebar') || 'Sidebar',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
-            },
-            {
                 id: 'home',
                 label: i18n.t('Home') || 'Home',
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+            },
+            {
+                id: 'sidebar',
+                label: i18n.t('Sidebar') || 'Sidebar',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
             },
             {
                 id: 'player',
@@ -163,10 +163,10 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
-            case 'sidebar':
-                return this._renderSidebarTab();
             case 'home':
                 return this._renderHomeTab();
+            case 'sidebar':
+                return this._renderSidebarTab();
             case 'player':
                 return this._renderPlayerTab();
             case 'subtitles':
@@ -546,49 +546,6 @@ class SettingsPage extends Page {
             </div>
         `;
     }
-    /**
-     * Render Sidebar tab with layout customizations and initial focus
-     */
-    _renderSidebarTab() {
-        return `
-            <div class="settings-tab-content">
-                <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
-
-                <!-- Default Focus Section -->
-                <h3 class="setting-section-title" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</h3>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</span>
-                        <span class="setting-description" data-i18n="InitialSidebarFocusDescription">${i18n.t('InitialSidebarFocusDescription') || 'Select which item gets focused first when opening the sidebar.'}</span>
-                    </div>
-                    <div class="setting-control" id="sidebar-focus-select-container">
-                        <div class="loading-spinner small"></div>
-                    </div>
-                </div>
-
-                <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
-                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
-                <div class="home-layout-container" id="sidebar-layout-container">
-                    <div class="setting-item">
-                        <div class="setting-label">
-                            <div class="loading-spinner small"></div>
-                        </div>
-                    </div>
-                </div>
-
-                <h3 class="setting-section-title" data-i18n="MyMediaOrder" style="margin-top: 40px;">${i18n.t('MyMediaOrder') || 'My Media Order'}</h3>
-                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
-                <div class="home-layout-container" id="sidebar-lib-layout-container">
-                    <div class="setting-item">
-                        <div class="setting-label">
-                            <div class="loading-spinner small"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-    }
 
     /**
      * Render Home tab with layout customizations and library thumbnails
@@ -768,6 +725,50 @@ class SettingsPage extends Page {
                      Each row inside will be a distinct .setting-item .layout-row
                 -->
                 <div class="home-layout-container" id="home-layout-container">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <div class="loading-spinner small"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Render Sidebar tab with layout customizations and initial focus
+     */
+    _renderSidebarTab() {
+        return `
+            <div class="settings-tab-content">
+                <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
+
+                <!-- Default Focus Section -->
+                <h3 class="setting-section-title" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</span>
+                        <span class="setting-description" data-i18n="InitialSidebarFocusDescription">${i18n.t('InitialSidebarFocusDescription') || 'Select which item gets focused first when opening the sidebar.'}</span>
+                    </div>
+                    <div class="setting-control" id="sidebar-focus-select-container">
+                        <div class="loading-spinner small"></div>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="SidebarLayoutOrder" style="margin-top: 40px;">${i18n.t('SidebarLayoutOrder') || 'Sidebar Layout'}</h3>
+                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
+                <div class="home-layout-container" id="sidebar-layout-container">
+                    <div class="setting-item">
+                        <div class="setting-label">
+                            <div class="loading-spinner small"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <h3 class="setting-section-title" data-i18n="MyMediaOrder" style="margin-top: 40px;">${i18n.t('MyMediaOrder') || 'My Media Order'}</h3>
+                <!-- Loaded dynamically via _setupSidebarLayoutUI -->
+                <div class="home-layout-container" id="sidebar-lib-layout-container">
                     <div class="setting-item">
                         <div class="setting-label">
                             <div class="loading-spinner small"></div>
@@ -3451,8 +3452,8 @@ class SettingsPage extends Page {
 
                     const defaultFocus = sidebarLayoutManager.getDefaultFocus();
 
-                    // Filter out the "Libraries" grouping block header as we don't focus it, we focus its children
-                    const validTargets = [...visibleItems.filter((v) => v.id !== 'librariesContainer'), ...visibleLibs];
+                    // Only static items are valid targets for initial focus, excluding the libraries container itself
+                    const validTargets = visibleItems.filter((v) => v.id !== 'librariesContainer');
 
                     const options = validTargets.map((item) => ({ value: item.id, label: item.label }));
 
@@ -3462,16 +3463,26 @@ class SettingsPage extends Page {
                         defaultFocus
                     );
 
-                    const selectEl = focusSelectContainer.querySelector('select');
-                    if (selectEl) {
-                        selectEl.addEventListener('change', (e) => {
-                            const config = sidebarLayoutManager.getSavedConfig() || {
-                                items: layoutVars,
-                                libraryItems: libraryVars
-                            };
-                            config.defaultFocus = e.target.value;
-                            sidebarLayoutManager.saveConfig(config);
-                            eventBus.emit('prefChanged:sidebarLayout');
+                    const btn = focusSelectContainer.querySelector('.select-btn');
+                    if (btn) {
+                        btn.addEventListener('click', () => {
+                            const title = i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus';
+                            this._renderSelectionModal(title, options, btn.dataset.value, (newValue) => {
+                                // Update button UI
+                                const newLabel = options.find((o) => String(o.value) === String(newValue))?.label;
+                                const labelSpan = btn.querySelector('.btn-label');
+                                if (labelSpan) labelSpan.innerText = newLabel;
+                                btn.dataset.value = newValue;
+
+                                // Save Setting
+                                const config = sidebarLayoutManager.getSavedConfig() || {
+                                    items: layoutVars,
+                                    libraryItems: libraryVars
+                                };
+                                config.defaultFocus = newValue;
+                                sidebarLayoutManager.saveConfig(config);
+                                eventBus.emit('prefChanged:sidebarLayout');
+                            });
                         });
                     }
                 }
