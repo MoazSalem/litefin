@@ -17,6 +17,7 @@ import { i18n } from '../utils/i18n.js';
 import { syncPlayGroupMenu } from '../core/syncplay/SyncPlayGroupMenu.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { storage } from '../utils/StorageService.js';
+import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 
 const log = logger.create('Sidebar');
 
@@ -33,7 +34,7 @@ class Sidebar extends Component {
         return `
             <nav class="sidebar collapsed" id="main-sidebar">
                 <!-- Logo Section -->
-                <div class="sidebar-header">
+                <div class="sidebar-header" id="sidebar-logo-header">
                     <div class="logo-icon">
                         <svg viewBox="0 0 100 100" width="40" height="40" class="sidebar-logo-svg" preserveAspectRatio="xMidYMid meet">
                             <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
@@ -57,44 +58,30 @@ class Sidebar extends Component {
                     <span class="logo-text">Litefin</span>
                 </div>
 
-                <!-- SyncPlay Button (above user profile) -->
-                <button class="sidebar-item sidebar-syncplay-btn" id="sidebar-syncplay" tabindex="0">
-                    <div class="item-icon sidebar-syncplay-icon-wrap">
-                        <!-- User Provided Icon (3 people) -->
-                        <svg class="icon-outline" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
-                            <path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/>
-                        </svg>
-                        <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12,12.75c1.63,0 3.07,0.39 4.24,0.9c1.08,0.48 1.76,1.56 1.76,2.73L18,18H6l0,-1.61c0,-1.18 0.68,-2.26 1.76,-2.73C8.93,13.14 10.37,12.75 12,12.75zM4,13c1.1,0 2,-0.9 2,-2c0,-1.1 -0.9,-2 -2,-2s-2,0.9 -2,2C2,12.1 2.9,13 4,13zM5.13,14.1C4.76,14.04 4.39,14 4,14c-0.99,0 -1.93,0.21 -2.78,0.58C0.48,14.9 0,15.62 0,16.43V18l4.5,0v-1.61C4.5,15.56 4.73,14.78 5.13,14.1zM20,13c1.1,0 2,-0.9 2,-2c0,-1.1 -0.9,-2 -2,-2s-2,0.9 -2,2C18,12.1 18.9,13 20,13zM24,16.43c0,-0.81 -0.48,-1.53 -1.22,-1.85C21.93,14.21 20.99,14 20,14c-0.39,0 -0.76,0.04 -1.13,0.1c0.4,0.68 0.63,1.46 0.63,2.29V18l4.5,0V16.43zM12,6c1.66,0 3,1.34 3,3c0,1.66 -1.34,3 -3,3s-3,-1.34 -3,-3C9,7.34 10.34,6 12,6z"/>
-                        </svg>
-                        <!-- Pulsing dot — visible only when in a group -->
-                        <span class="sidebar-syncplay-dot" id="sidebar-syncplay-dot"></span>
-                    </div>
-                    <span class="item-text sidebar-syncplay-label" id="sidebar-syncplay-label">SyncPlay</span>
-                </button>
-
-                <!-- User Profile -->
-                <button class="sidebar-item user-profile-btn" id="sidebar-user" tabindex="0">
-                    <div class="item-icon user-avatar-container">
-                        ${this._renderUserAvatar()}
-                    </div>
-                    <span class="item-text user-name">${this._getUserName()}</span>
-                </button>
-
                 <!-- Scrollable Sidebar Content -->
                 <div class="sidebar-content">
-                    <button class="sidebar-item" id="sidebar-random" tabindex="0" style="display: ${storage.getItem('pref:showRandomButton') !== 'false' ? '' : 'none'}">
-                        <div class="item-icon">
-                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
-                                <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
-                                <circle cx="7.8" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
-                                <circle cx="16.2" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
-                                <circle cx="16.2" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
-                                <circle cx="7.8" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
+                    <!-- SyncPlay Section -->
+                    <button class="sidebar-item sidebar-syncplay-btn" id="sidebar-syncplay" tabindex="0">
+                        <div class="item-icon sidebar-syncplay-icon-wrap">
+                            <!-- User Provided Icon (3 people) -->
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 -960 960 960" fill="currentColor">
+                                <path d="M0-240v-63q0-43 44-70t116-27q13 0 25 .5t23 2.5q-14 21-21 44t-7 48v65H0Zm240 0v-65q0-32 17.5-58.5T307-410q32-20 76.5-30t96.5-10q53 0 97.5 10t76.5 30q32 20 49 46.5t17 58.5v65H240Zm540 0v-65q0-26-6.5-49T754-397q11-2 22.5-2.5t23.5-.5q72 0 116 26.5t44 70.5v63H780Zm-455-80h311q-10-20-55.5-35T480-370q-55 0-100.5 15T325-320ZM160-440q-33 0-56.5-23.5T80-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T160-440Zm640 0q-33 0-56.5-23.5T720-520q0-34 23.5-57t56.5-23q34 0 57 23t23 57q0 33-23 56.5T800-440Zm-320-40q-50 0-85-35t-35-85q0-51 35-85.5t85-34.5q51 0 85.5 34.5T600-600q0 50-34.5 85T480-480Zm0-80q17 0 28.5-11.5T520-600q0-17-11.5-28.5T480-640q-17 0-28.5 11.5T440-640q-17 0-28.5 11.5T440-600q0 17 11.5 28.5T480-560Zm1 240Zm-1-280Z"/>
                             </svg>
+                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12,12.75c1.63,0 3.07,0.39 4.24,0.9c1.08,0.48 1.76,1.56 1.76,2.73L18,18H6l0,-1.61c0,-1.18 0.68,-2.26 1.76,-2.73C8.93,13.14 10.37,12.75 12,12.75zM4,13c1.1,0 2,-0.9 2,-2c0,-1.1 -0.9,-2 -2,-2s-2,0.9 -2,2C2,12.1 2.9,13 4,13zM5.13,14.1C4.76,14.04 4.39,14 4,14c-0.99,0 -1.93,0.21 -2.78,0.58C0.48,14.9 0,15.62 0,16.43V18l4.5,0v-1.61C4.5,15.56 4.73,14.78 5.13,14.1zM20,13c1.1,0 2,-0.9 2,-2c0,-1.1 -0.9,-2 -2,-2s-2,0.9 -2,2C18,12.1 18.9,13 20,13zM24,16.43c0,-0.81 -0.48,-1.53 -1.22,-1.85C21.93,14.21 20.99,14 20,14c-0.39,0 -0.76,0.04 -1.13,0.1c0.4,0.68 0.63,1.46 0.63,2.29V18l4.5,0V16.43zM12,6c1.66,0 3,1.34 3,3c0,1.66 -1.34,3 -3,3s-3,-1.34 -3,-3C9,7.34 10.34,6 12,6z"/>
+                            </svg>
+                            <!-- Pulsing dot — visible only when in a group -->
+                            <span class="sidebar-syncplay-dot" id="sidebar-syncplay-dot"></span>
                         </div>
-                        <span class="item-text" data-i18n="Random">Random</span>
+                        <span class="item-text sidebar-syncplay-label" id="sidebar-syncplay-label">SyncPlay</span>
+                    </button>
+
+                    <!-- User Profile -->
+                    <button class="sidebar-item user-profile-btn" id="sidebar-user" tabindex="0">
+                        <div class="item-icon user-avatar-container">
+                            ${this._renderUserAvatar()}
+                        </div>
+                        <span class="item-text user-name">${this._getUserName()}</span>
                     </button>
 
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
@@ -108,6 +95,20 @@ class Sidebar extends Component {
                             </svg>
                         </div>
                         <span class="item-text" data-i18n="Home">Home</span>
+                    </button>
+
+                    <button class="sidebar-item" id="sidebar-random" tabindex="0">
+                        <div class="item-icon">
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="3.5" y="3.5" width="17" height="17" rx="3" />
+                                <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="7.8" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="16.2" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="16.2" cy="7.8" r="1.6" fill="currentColor" stroke="none" />
+                                <circle cx="7.8" cy="16.2" r="1.6" fill="currentColor" stroke="none" />
+                            </svg>
+                        </div>
+                        <span class="item-text" data-i18n="Random">Random</span>
                     </button>
 
                     <button class="sidebar-item" id="sidebar-favorites" tabindex="0" data-path="/favorites">
@@ -144,10 +145,6 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="Settings">Settings</span>
                     </button>
-
-                    <div class="sidebar-libraries" id="sidebar-libraries">
-                        <!-- Filled dynamically -->
-                    </div>
                 </div>
 
                 <!-- Sliding Focus Indicator -->
@@ -180,23 +177,33 @@ class Sidebar extends Component {
         //. but fallback to false if it hasn't started yet.
         this._updateSyncPlayBtn(window.__syncPlayManager?.isActive || false);
 
-        // Listen for Random Button setting changes
-        this._onRandomPrefChanged = (enabled) => {
-            const btn = this.el.querySelector('#sidebar-random');
-            if (btn) {
-                btn.style.display = enabled ? '' : 'none';
-                // Invalidate focus manager cache to ensure it's focusable
-                focusManager.invalidateCache('sidebar');
-            }
+        // Sidebar Logo clickability configuration
+        this._updateLogoSettings();
+        this._onLogoSettingsChanged = () => this._updateLogoSettings();
+        eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
+
+        // ── Sidebar Layout customization ──────────────────────────────────────
+        // Hot-reload the sidebar layout when the user saves changes in Settings.
+        this._onSidebarLayoutChanged = () => {
+            // Re-apply order/visibility and update the default focus target
+            this._applySidebarLayout();
         };
-        eventBus.on('prefChanged:showRandomButton', this._onRandomPrefChanged);
+        eventBus.on('prefChanged:sidebarLayout', this._onSidebarLayoutChanged);
+
+        // Resolve the default focus item from saved prefs (falls back to 'home')
+        const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
 
         // Register focus
         focusManager.register('sidebar', this.el, {
             orientation: 'vertical',
             selector: '.sidebar-item',
-            // Always land on the Home button when entering the sidebar
-            defaultFocusSelector: '#sidebar-home',
+            /*
+             * Use the saved default focus preference. The defaultFocusSelector is
+             * stored on the section config and re-read each time focus enters the
+             * sidebar, so updating it via _applySidebarLayout() also takes effect
+             * immediately without re-registering the entire section.
+             */
+            defaultFocusSelector: `#sidebar-${defaultFocusId}`,
             onMove: (direction, focusedEl) => {
                 const isRtl = document.documentElement.dir === 'rtl';
                 const exitDirection = isRtl ? 'left' : 'right';
@@ -234,6 +241,10 @@ class Sidebar extends Component {
             }
         });
 
+        // Apply the layout immediately after registration so the first render
+        // already reflects the user's saved order and visibility prefs.
+        this._applySidebarLayout();
+
         // Listen for route changes
         eventBus.on('router:navigate', this._onNavigate.bind(this));
 
@@ -258,9 +269,13 @@ class Sidebar extends Component {
         if (this._onSyncPlayEnabled)  eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
         if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
-        // Remove Random Pref listener
-        if (this._onRandomPrefChanged) {
-            eventBus.off('prefChanged:showRandomButton', this._onRandomPrefChanged);
+        // Remove sidebar layout hot-reload listener
+        if (this._onSidebarLayoutChanged) {
+            eventBus.off('prefChanged:sidebarLayout', this._onSidebarLayoutChanged);
+        }
+
+        if (this._onLogoSettingsChanged) {
+            eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
         }
     }
 
@@ -303,6 +318,29 @@ class Sidebar extends Component {
         this.el.classList.toggle('hidden', mode === 'hidden');
     }
 
+    _updateLogoSettings() {
+        const logoHeader = this.el.querySelector('#sidebar-logo-header');
+        const settingsBtn = this.el.querySelector('#sidebar-settings');
+        
+        if (!logoHeader) return;
+        
+        const enabled = storage.getItem('pref:logoSettings') === 'true';
+        if (enabled) {
+            logoHeader.classList.add('sidebar-item');
+            logoHeader.tabIndex = 0;
+            logoHeader.dataset.path = '/settings';
+            if (settingsBtn) settingsBtn.classList.add('hidden');
+        } else {
+            logoHeader.classList.remove('sidebar-item');
+            logoHeader.removeAttribute('tabindex');
+            delete logoHeader.dataset.path;
+            if (settingsBtn) settingsBtn.classList.remove('hidden');
+        }
+
+        // Must invalidate so SpatialNavigator re-evaluates focusable items
+        focusManager.invalidateCache('sidebar');
+    }
+
     _bindEvents() {
         // Expand on focus - Use MutationObserver since FocusManager disables native focus
         // and manages the .focused class manually.
@@ -310,6 +348,11 @@ class Sidebar extends Component {
             this._focusObserver = new MutationObserver(() => {
                 const focusedItem = this.el.querySelector('.sidebar-item.focused');
                 const hasFocus = !!focusedItem;
+
+                if (focusedItem) {
+                    // Automatically scroll the sidebar container so the newly focused item is in view
+                    focusedItem.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
 
                 // Update indicator FIRST while transition is still disabled (collapsed state)
                 // to ensure it snaps to the correct position before we expand.
@@ -339,10 +382,23 @@ class Sidebar extends Component {
             }
         });
 
-        // Navigation Clicks
+        // Logo click handler (Needs explicit binding due to dynamic DOM class mutation)
+        const logoHeader = this.el.querySelector('#sidebar-logo-header');
+        if (logoHeader) {
+            logoHeader.onclick = () => {
+                if (logoHeader.classList.contains('sidebar-item')) {
+                    router.navigate('/settings');
+                }
+            };
+        }
+
+        // Navigation Clicks for other standard items
         const items = this.el.querySelectorAll('.sidebar-item');
         items.forEach((item) => {
+            if (item.id === 'sidebar-logo-header') return; // Handled above
+
             item.onclick = () => {
+
                 const path = item.dataset.path;
                 if (path) {
                     if (path === '/home') {
@@ -369,15 +425,15 @@ class Sidebar extends Component {
         });
 
         // Sync indicator during scrolling
-        const wrapper = this.el.querySelector('.sidebar-libraries-wrapper');
-        if (wrapper) {
-            wrapper.onscroll = () => {
+        const contentContainer = this.el.querySelector('.sidebar-content');
+        if (contentContainer) {
+            contentContainer.addEventListener('scroll', () => {
                 const focused = this.el.querySelector('.sidebar-item.focused');
-                // Only sync if the focused element is actually INSIDE the scrolling wrapper
-                if (focused && wrapper.contains(focused)) {
+                // Only sync if the focused element is actually INSIDE the scrolling container
+                if (focused && contentContainer.contains(focused)) {
                     this._updateIndicator(focused, { instant: true });
                 }
-            };
+            });
         }
     }
 
@@ -400,36 +456,52 @@ class Sidebar extends Component {
     }
 
     async _loadLibraries() {
+        if (!auth.isAuthenticated()) return;
+
         try {
             const views = await api.getUserViews();
             const items = views.Items || [];
 
-            const container = this.el.querySelector('#sidebar-libraries');
-            if (!container) return;
-            container.innerHTML = '';
+            const sidebarContent = this.el.querySelector('.sidebar-content');
+            if (!sidebarContent) return;
+            
+            // Remove any previously rendered libraries and headers to allow clean reloading
+            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach(el => el.remove());
 
-            // Add Segment Header
-            const header = document.createElement('div');
-            header.className = 'sidebar-section-header';
-            header.dataset.i18n = 'HeaderMyMedia';
-            header.textContent = i18n.t('HeaderMyMedia');
-            container.appendChild(header);
+            if (items.length > 0) {
+                // Determine header label based on layout block ('My Media')
+                const header = document.createElement('div');
+                header.className = 'sidebar-section-header';
+                header.id = 'section-header';
+                header.dataset.i18n = 'HeaderMyMedia';
+                header.textContent = i18n.t('HeaderMyMedia');
+                sidebarContent.appendChild(header);
+            }
 
             items.forEach((lib) => {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
+                // Attach both the path (for nav) AND a layout-id so _applySidebarLayout
+                // can match this button against the saved config (id: 'lib-{Id}')
                 btn.dataset.path = `/library/${lib.Id}`;
-                // No Icon, just text
+                btn.dataset.layoutId = `lib-${lib.Id}`;
                 btn.innerHTML = `
                     <span class="item-text">${lib.Name}</span>
                 `;
 
                 btn.onclick = () => router.navigate(`/library/${lib.Id}`);
 
-                container.appendChild(btn);
+                sidebarContent.appendChild(btn);
             });
-            
+
+            /*
+             * After building all library buttons, re-apply the sidebar layout so
+             * newly loaded library items are placed in their saved position and
+             * any that the user has hidden are correctly suppressed.
+             */
+            this._applySidebarLayout();
+
             // Invalidate focus manager cache to discover dynamically added libraries
             focusManager.resetDOMCache();
         } catch (e) {
@@ -543,6 +615,7 @@ class Sidebar extends Component {
                 indicator.style.transition = 'none';
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+                indicator.style.height = `${targetRect.height}px`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
                 indicator.offsetHeight;
                 indicator.style.webkitTransition = '';
@@ -550,6 +623,7 @@ class Sidebar extends Component {
             } else {
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+                indicator.style.height = `${targetRect.height}px`;
             }
 
             if (!this.el.classList.contains('has-focus')) {
@@ -560,6 +634,72 @@ class Sidebar extends Component {
                 this.el.classList.remove('has-focus');
             }
         }
+    }
+
+    /**
+     * Apply the saved sidebar layout to the live DOM.
+     *
+     * This method:
+     *   1. Collects all sidebar-item elements from within .sidebar-content
+     *   2. Asks SidebarLayoutManager to order and annotate them.
+     *   3. Re-inserts them into .sidebar-content in the new sequential order.
+     *   4. Toggles visibility (display: none) based on the `hidden` flag.
+     *   5. Updates the FocusManager's defaultFocusSelector for this section.
+     *
+     * It is safe to call at any time (mount, library load, hot-reload from settings).
+     * @private
+     */
+    _applySidebarLayout() {
+        const sidebarEl = this.el.id === 'main-sidebar' ? this.el : this.el.querySelector('#main-sidebar');
+        if (!sidebarEl) return;
+
+        const sidebarContent = sidebarEl.querySelector('.sidebar-content');
+        if (!sidebarContent) return;
+
+        /* ── 1. Collect all sidebar items with their layout IDs ────────────── */
+        const allItems = [];
+
+        // Collect everything flatly from .sidebar-content
+        const items = sidebarContent.querySelectorAll(':scope > .sidebar-item, :scope > .sidebar-section-header');
+        items.forEach((el) => {
+            if (el.classList.contains('library-item')) {
+                // It's a dynamically injected library
+                allItems.push({ id: el.dataset.layoutId, el: el });
+            } else if (el.id === 'section-header') {
+                // It's the library section header
+                allItems.push({ id: 'section-header', el: el });
+            } else {
+                // It's a static navigation item
+                const rawId = el.id ? el.id.replace('sidebar-', '') : null;
+                if (rawId) allItems.push({ id: rawId, el: el });
+            }
+        });
+
+        /* ── 2. Ask the manager to order and annotate items ────────────────── */
+        const ordered = sidebarLayoutManager.applyLayout(allItems);
+
+        /* ── 3. Re-insert items and apply visibility ───────────────────────── */
+        ordered.forEach(({ id, el, hidden }) => {
+            const isSyncPlay = id === 'syncplay';
+            const pluginHidden = isSyncPlay && !pluginManager.isEnabled('syncplay');
+            const shouldHide = hidden || pluginHidden;
+
+            // Apply visibility
+            el.style.display = shouldHide ? 'none' : '';
+
+            // Sequentially append back into the shared container
+            sidebarContent.appendChild(el);
+        });
+
+        /* ── 4. Update the FocusManager's defaultFocusSelector ─────────────── */
+        const defaultFocusId = sidebarLayoutManager.getDefaultFocus();
+        const sectionConfig = focusManager.getSectionConfig('sidebar');
+        if (sectionConfig) {
+            sectionConfig.defaultFocusSelector = `#sidebar-${defaultFocusId}`;
+        }
+
+        // Invalidate the focus cache so the updated DOM structure is re-scanned
+        focusManager.invalidateCache('sidebar');
     }
 
     /**

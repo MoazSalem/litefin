@@ -104,6 +104,20 @@
     right: 0;
 }
 
+/* Sidebar Hidden Mode Support */
+[dir="rtl"] body.sidebar-mode-hidden #sidebar-container {
+    left: auto;
+    right: 0;
+}
+
+[dir="rtl"] body.sidebar-mode-hidden #page-container {
+    right: 0;
+}
+
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:not(.expanded) {
+    transform: translate3d(100%, 0, 0);
+}
+
 [dir="rtl"] .header-left > *:not(:last-child) {
     margin-right: 0;
     margin-left: 20px;

@@ -91,7 +91,7 @@
     min-width: unset !important;
 
     /* Pill shape */
-    padding: 0.6em 1.4em;
+    padding: 0.7em 1.8em !important;
     border-radius: var(--jf-border-radius-lg);
 
     /* Inverted Mode (White BG, Blue Text) */
@@ -102,6 +102,7 @@
     /* Typography */
     font-size: 1.3em;
     font-weight: 600;
+    line-height: 1;      /* Ensure vertical centering stays tight on TV */
     letter-spacing: 0.02em;
     white-space: nowrap;
 
@@ -137,7 +138,8 @@
     /* Triangular "play" arrow — animated on focus to reinforce the CTA */
     display: inline-block;
     font-size: 0.8em;
-    margin-left: 0.6em;   /* Replaces gap: 0.5em for Tizen compatibility */
+    margin-left: 0.8em !important;   /* Increased for Tizen spacing comfort */
+    flex-shrink: 0;                /* Don't let long text squeeze the arrow */
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -159,8 +161,8 @@
 
 [dir="rtl"] .skip-intro-arrow {
     /* Move gap from left to right for RTL layout */
-    margin-left: 0;
-    margin-right: 0.6em;
+    margin-left: 0 !important;
+    margin-right: 0.8em !important;
 }
 
 [dir="rtl"] .skip-intro-btn.focused .skip-intro-arrow,
