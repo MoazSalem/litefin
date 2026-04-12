@@ -34,7 +34,7 @@ class Sidebar extends Component {
         return `
             <nav class="sidebar collapsed" id="main-sidebar">
                 <!-- Logo Section -->
-                <div class="sidebar-header">
+                <div class="sidebar-header" id="sidebar-logo-header">
                     <div class="logo-icon">
                         <svg viewBox="0 0 100 100" width="40" height="40" class="sidebar-logo-svg" preserveAspectRatio="xMidYMid meet">
                             <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
@@ -177,6 +177,11 @@ class Sidebar extends Component {
         //. but fallback to false if it hasn't started yet.
         this._updateSyncPlayBtn(window.__syncPlayManager?.isActive || false);
 
+        // Sidebar Logo clickability configuration
+        this._updateLogoSettings();
+        this._onLogoSettingsChanged = () => this._updateLogoSettings();
+        eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -268,6 +273,10 @@ class Sidebar extends Component {
         if (this._onSidebarLayoutChanged) {
             eventBus.off('prefChanged:sidebarLayout', this._onSidebarLayoutChanged);
         }
+
+        if (this._onLogoSettingsChanged) {
+            eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
+        }
     }
 
     /**
@@ -307,6 +316,29 @@ class Sidebar extends Component {
      */
     setMode(mode) {
         this.el.classList.toggle('hidden', mode === 'hidden');
+    }
+
+    _updateLogoSettings() {
+        const logoHeader = this.el.querySelector('#sidebar-logo-header');
+        const settingsBtn = this.el.querySelector('#sidebar-settings');
+        
+        if (!logoHeader) return;
+        
+        const enabled = storage.getItem('pref:logoSettings') === 'true';
+        if (enabled) {
+            logoHeader.classList.add('sidebar-item');
+            logoHeader.tabIndex = 0;
+            logoHeader.dataset.path = '/settings';
+            if (settingsBtn) settingsBtn.classList.add('hidden');
+        } else {
+            logoHeader.classList.remove('sidebar-item');
+            logoHeader.removeAttribute('tabindex');
+            delete logoHeader.dataset.path;
+            if (settingsBtn) settingsBtn.classList.remove('hidden');
+        }
+
+        // Must invalidate so SpatialNavigator re-evaluates focusable items
+        focusManager.invalidateCache('sidebar');
     }
 
     _bindEvents() {
@@ -350,10 +382,23 @@ class Sidebar extends Component {
             }
         });
 
-        // Navigation Clicks
+        // Logo click handler (Needs explicit binding due to dynamic DOM class mutation)
+        const logoHeader = this.el.querySelector('#sidebar-logo-header');
+        if (logoHeader) {
+            logoHeader.onclick = () => {
+                if (logoHeader.classList.contains('sidebar-item')) {
+                    router.navigate('/settings');
+                }
+            };
+        }
+
+        // Navigation Clicks for other standard items
         const items = this.el.querySelectorAll('.sidebar-item');
         items.forEach((item) => {
+            if (item.id === 'sidebar-logo-header') return; // Handled above
+
             item.onclick = () => {
+
                 const path = item.dataset.path;
                 if (path) {
                     if (path === '/home') {
@@ -570,6 +615,7 @@ class Sidebar extends Component {
                 indicator.style.transition = 'none';
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+                indicator.style.height = `${targetRect.height}px`;
                 // Force reflow to ensure the style is applied before transition is re-enabled
                 indicator.offsetHeight;
                 indicator.style.webkitTransition = '';
@@ -577,6 +623,7 @@ class Sidebar extends Component {
             } else {
                 indicator.style.webkitTransform = `translate3d(0, ${y}px, 0)`;
                 indicator.style.transform = `translate3d(0, ${y}px, 0)`;
+                indicator.style.height = `${targetRect.height}px`;
             }
 
             if (!this.el.classList.contains('has-focus')) {

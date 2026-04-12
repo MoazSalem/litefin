@@ -744,8 +744,8 @@ class SettingsPage extends Page {
                 <h2 class="content-title" data-i18n="Sidebar">${i18n.t('Sidebar') || 'Sidebar'}</h2>
 
                 <!-- Default Focus Section -->
-                <h3 class="setting-section-title" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</h3>
-                
+                <h3 class="setting-section-title" data-i18n="SidebarOptions">${i18n.t('SidebarOptions') || 'Sidebar Options'}</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="InitialSidebarFocus">${i18n.t('InitialSidebarFocus') || 'Initial Sidebar Focus'}</span>
@@ -753,6 +753,20 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control" id="sidebar-focus-select-container">
                         <div class="loading-spinner small"></div>
+                    </div>
+                </div>
+
+                <!-- Clickable Logo Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SidebarLogoSettings">${i18n.t('SidebarLogoSettings') || 'Clickable Logo'}</span>
+                        <span class="setting-description" data-i18n="SidebarLogoSettingsDescription">${i18n.t('SidebarLogoSettingsDescription') || 'Allow the top Litefin logo to be selected to open settings.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:logoSettings') === 'true' ? 'active' : ''}" 
+                                 id="toggle-sidebar-logo-settings" 
+                                 tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -3088,6 +3102,19 @@ class SettingsPage extends Page {
                 storage.setItem('pref:confirmExit', newValue);
                 confirmExitToggle.classList.toggle('active', newValue);
                 log.info(`Confirm Exit set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Sidebar Clickable Logo
+        const logoSettingsToggle = this.$('#toggle-sidebar-logo-settings');
+        if (logoSettingsToggle) {
+            logoSettingsToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:logoSettings') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:logoSettings', newValue.toString());
+                logoSettingsToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:logoSettings', newValue);
+                log.info(`Clickable Logo set to: ${newValue}`);
             });
         }
 
