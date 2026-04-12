@@ -399,6 +399,11 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     flex-shrink: 0;
 }
 
+.sidebar:not(.expanded) .sidebar-section-header,
+.sidebar:not(.expanded) .library-item {
+    display: none;
+}
+
 /* Hide divider as we use the header now */
 .sidebar-divider {
     display: none;

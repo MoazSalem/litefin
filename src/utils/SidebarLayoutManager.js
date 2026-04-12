@@ -27,14 +27,13 @@ const STATIC_ITEMS = [
     { id: 'syncplay',  label: 'SyncPlay' },
     /* User Profile */
     { id: 'user',      label: 'User Profile' },
-    /* Main library group block */
-    { id: 'librariesContainer', label: 'Libraries' },
     /* Core navigation items — displayed inside .sidebar-content */
-    { id: 'random',   label: 'Random' },
     { id: 'home',     label: 'Home' },
+    { id: 'random',   label: 'Random' },
     { id: 'favorites',label: 'Favorites' },
     { id: 'search',   label: 'Search' },
     { id: 'settings', label: 'Settings' },
+    { id: 'librariesContainer', label: 'Libraries' },
 ];
 
 /**
@@ -123,7 +122,9 @@ class SidebarLayoutManager {
             staticItems.push({ id: 'librariesContainer', el: null, virtual: true });
         }
 
-        const orderedStatic = this._applyOrder(staticItems, config ? config.items : null);
+        // Build a fallback config from STATIC_ITEMS so the initial unsaved layout matches the canonical order
+        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({ id: item.id, hidden: false, order: index }));
+        const orderedStatic = this._applyOrder(staticItems, config && config.items ? config.items : fallbackConfig);
         const orderedLibs = this._applyOrder(libraryItems, config ? config.libraryItems : null);
 
         const result = [];

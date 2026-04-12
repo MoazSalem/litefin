@@ -84,6 +84,19 @@ class Sidebar extends Component {
                         <span class="item-text user-name">${this._getUserName()}</span>
                     </button>
 
+                    <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
+                        <div class="item-icon">
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
+                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
+                            </svg>
+                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2L3 9v11a2 2 0 0 0 2 2h4v-8h6v8h4a2 2 0 0 0 2-2V9L12 2z"/>
+                            </svg>
+                        </div>
+                        <span class="item-text" data-i18n="Home">Home</span>
+                    </button>
+
                     <button class="sidebar-item" id="sidebar-random" tabindex="0">
                         <div class="item-icon">
                             <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
@@ -96,19 +109,6 @@ class Sidebar extends Component {
                             </svg>
                         </div>
                         <span class="item-text" data-i18n="Random">Random</span>
-                    </button>
-
-                    <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
-                        <div class="item-icon">
-                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"></path>
-                                <polyline points="9 22 9 12 15 12 15 22"></polyline>
-                            </svg>
-                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2L3 9v11a2 2 0 0 0 2 2h4v-8h6v8h4a2 2 0 0 0 2-2V9L12 2z"/>
-                            </svg>
-                        </div>
-                        <span class="item-text" data-i18n="Home">Home</span>
                     </button>
 
                     <button class="sidebar-item" id="sidebar-favorites" tabindex="0" data-path="/favorites">
