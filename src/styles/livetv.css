@@ -5,63 +5,140 @@
  */
 
 .livetv-page {
-    padding-top: 20px;
+    padding-top: 0;
+    background: linear-gradient(135deg, var(--jf-background) 0%, #0a0a0a 100%);
 }
 
 .livetv-page .page-header {
-    padding: 0 60px;
-    margin-bottom: 30px;
+    padding: 60px 60px 30px 60px;
+    margin-bottom: 20px;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    background: var(--jf-background);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center-align title and tabs */
+    text-align: center;
 }
 
 .livetv-page h1 {
-    font-size: 3rem;
-    font-weight: 700;
-    margin: 0 0 20px 0;
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin: 0 0 35px 0;
     color: var(--jf-text-primary);
+    letter-spacing: -2px;
 }
 
-.tab-header {
+/* Namespaced Tab Container (ltv prefix) */
+.ltv-tab-header {
     display: flex;
-    gap: 30px;
-    border-bottom: 2px solid var(--jf-divider);
-    padding-bottom: 10px;
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px;
+    border-radius: 100px;
+    width: fit-content;
+    border: none !important;
+    margin: 0 auto; /* Ensure horizontal centering */
 }
 
-.tab-btn {
-    background: none;
-    border: none;
-    padding: 10px 0;
-    font-size: 1.4rem;
-    font-weight: 600;
+/* Sliding Indicator Pill */
+.ltv-tab-indicator {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    height: calc(100% - 12px);
+    background: var(--jf-accent);
+    border-radius: 100px;
+    /* Use transform to coordinate both position and scale */
+    transform: translateX(var(--indicator-x, 0)) scale(1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.3s ease;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transform-origin: center;
+}
+
+.ltv-tab-btn {
+    background: transparent !important;
+    border: 2px solid transparent !important;
+    padding: 12px 35px !important;
+    font-size: 1.25rem;
+    font-weight: 700;
     color: var(--jf-text-secondary);
     cursor: pointer;
     position: relative;
-    transition: color 0.2s ease;
+    z-index: 2;
+    /* Match timing with indicator */
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                color 0.25s ease, 
+                border-color 0.25s ease;
+    border-radius: 100px !important;
+    margin-right: 4px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    outline: none !important;
+    letter-spacing: -0.2px;
+    box-sizing: border-box;
+    transform-origin: center;
 }
 
-.tab-btn:focus,
-.tab-btn.focused {
+.ltv-tab-btn:last-child {
+    margin-right: 0 !important;
+}
+
+.ltv-tab-btn.active {
+    color: var(--jf-primary-btn-color) !important;
+    opacity: 1;
+}
+
+/* Unify all interaction scales to 1.05 for perfect sync with the indicator */
+.ltv-tab-btn.focused{
     color: var(--jf-text-primary);
-    outline: none;
+    transform: scale(1.05) !important; 
+    opacity: 1;
+    outline: none !important;
+    position: relative;
 }
 
-.tab-btn.active {
-    color: var(--jf-accent);
+.ltv-tab-btn:active {
+    transform: scale(0.98) !important;
 }
 
-.tab-btn.active::after {
+/* Slimmer focus pill for inactive tabs */
+.ltv-tab-btn.focused:not(.active)::before{
     content: '';
     position: absolute;
-    bottom: -12px;
-    left: 0;
-    width: 100%;
-    height: 4px;
-    background: var(--jf-accent);
-    border-radius: 2px;
+    top: 4px;
+    bottom: 4px;
+    left: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 100px;
+    z-index: -1;
+}
+
+/* Clear focus border when focusing the already active purple pill */
+.ltv-tab-btn.active.focused{
+    background: transparent !important;
+    transform: scale(1.05) !important;
+    border: 2px solid var(--jf-action-btn-active-border) !important;
+    box-shadow: none !important;
+    z-index: 3;
+}
+.ltv-tab-header button::-moz-focus-inner {
+    border: 0 !important;
 }
 
 .tab-content {
     min-height: 400px;
+    padding: 0 60px;
+    animation: fadeIn 0.5s ease-out;
 }
 
 /* ============================================================================
@@ -189,12 +266,13 @@
     position: absolute;
     height: calc(100% - 10px);
     top: 5px;
-    background: var(--jf-background-alt);
-    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.08); /* More modern semi-transparent base */
+    border-radius: var(--jf-border-radius); /* Use global setting */
     padding: 10px 15px;
     overflow: hidden;
-    border: 3px solid transparent;
-    transition: background 0.2s ease;
+    border: 2px solid transparent;
+    transition: background 0.25s ease, border-color 0.25s ease;
+    will-change: background, border-color;
 }
 
 .epg-program:focus,
@@ -238,4 +316,60 @@
     height: 16px;
     border-radius: 50%;
     background: var(--jf-accent);
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 100px 20px;
+    text-align: center;
+    animation: fadeIn 0.8s ease-in-out;
+}
+
+.empty-icon {
+    margin-bottom: 24px;
+    color: var(--jf-text-secondary);
+    opacity: 0.4;
+}
+
+.empty-icon svg {
+    width: 120px;
+    height: 120px;
+    display: block;
+}
+
+.empty-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.empty-description {
+    font-size: 1.3rem;
+    color: var(--jf-text-secondary);
+    max-width: 500px;
+    line-height: 1.5;
+}
+
+/* Apple-style subtle pulse for the recording dot */
+.record-dot {
+    animation: heartBeat 2s infinite ease-in-out;
+}
+
+@keyframes heartBeat {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
 }
