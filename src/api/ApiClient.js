@@ -1023,12 +1023,124 @@ export class ApiClient {
     // Playback Endpoints
     // ========================================================================
 
-    async getPlaybackInfo(itemId, deviceProfile) {
-        return this.post(`/Items/${itemId}/PlaybackInfo`, {
+    async getPlaybackInfo(itemId, deviceProfile, options = {}) {
+        const defaults = {
             UserId: this._userId,
             DeviceProfile: deviceProfile,
             AutoOpenLiveStream: true
-        });
+        };
+        return this.post(`/Items/${itemId}/PlaybackInfo`, { ...defaults, ...options });
+    }
+
+    // ========================================================================
+    // Live TV Endpoints
+    // ========================================================================
+
+    async getLiveTvChannels(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            EnableUserData: true,
+            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            EnableTotalRecordCount: false
+        };
+        return this.get('/LiveTv/Channels', { ...defaults, ...params });
+    }
+
+    async getLiveTvPrograms(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            EnableUserData: true,
+            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            EnableTotalRecordCount: false
+        };
+        return this.get('/LiveTv/Programs', { ...defaults, ...params });
+    }
+
+    async getLiveTvRecommendedPrograms(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            IsAiring: true,
+            EnableUserData: true,
+            Fields: 'PrimaryImageAspectRatio,CanSelfRecord',
+            EnableTotalRecordCount: false,
+            Limit: 24
+        };
+        return this.get('/LiveTv/Programs/Recommended', { ...defaults, ...params });
+    }
+
+    async getLiveTvRecordings(params = {}) {
+        const defaults = {
+            UserId: this._userId,
+            Fields: 'PrimaryImageAspectRatio,CanSelfRecord,Status',
+            EnableTotalRecordCount: false
+        };
+        return this.get('/LiveTv/Recordings', { ...defaults, ...params });
+    }
+
+    async getLiveTvRecording(recordingId) {
+        return this.get(`/LiveTv/Recordings/${recordingId}`, { UserId: this._userId });
+    }
+
+    async getNewTimerDefaults(params = {}) {
+        return this.get('/LiveTv/Timers/Defaults', params);
+    }
+
+    async createTimer(timer) {
+        return this.post('/LiveTv/Timers', timer);
+    }
+
+    async cancelTimer(timerId) {
+        return this.delete(`/LiveTv/Timers/${timerId}`);
+    }
+
+    async getSeriesTimers(params = {}) {
+        return this.get('/LiveTv/SeriesTimers', params);
+    }
+
+    async getSeriesTimer(timerId) {
+        return this.get(`/LiveTv/SeriesTimers/${timerId}`);
+    }
+
+    async createSeriesTimer(timer) {
+        return this.post('/LiveTv/SeriesTimers', timer);
+    }
+
+    async cancelSeriesTimer(timerId) {
+        return this.delete(`/LiveTv/SeriesTimers/${timerId}`);
+    }
+
+    /**
+     * Open a live stream for a channel.
+     * This is required before playback of any Live TV channel.
+     * @param {Object} options - Playback options
+     * @returns {Promise<Object>} Live stream result with MediaSource
+     */
+    async openLiveStream(options) {
+        const body = {
+            DeviceProfile: options.DeviceProfile,
+            UserId: this._userId,
+            OpenToken: options.OpenToken,
+            PlaySessionId: options.PlaySessionId,
+            MaxStreamingBitrate: options.MaxStreamingBitrate,
+            StartTimeTicks: options.StartTimeTicks,
+            AudioStreamIndex: options.AudioStreamIndex,
+            SubtitleStreamIndex: options.SubtitleStreamIndex,
+            DirectPlayProtocols: options.DirectPlayProtocols
+        };
+
+        const url = options.ItemId 
+            ? `/LiveStreams/Open?ItemId=${options.ItemId}` 
+            : '/LiveStreams/Open';
+
+        return this.post(url, body);
+    }
+
+    /**
+     * Close an active live stream.
+     * @param {string} liveStreamId - The ID returned by openLiveStream
+     */
+    async closeLiveStream(liveStreamId) {
+        return this.post('/LiveStreams/Close', { LiveStreamId: liveStreamId });
     }
 
     /**
