@@ -276,6 +276,14 @@ class TizenAdapter {
                     eventBus.emit('key:options', e);
                     break;
 
+                case TIZEN_KEYS.CHANNEL_UP:
+                    eventBus.emit('key:channelUp', e);
+                    break;
+
+                case TIZEN_KEYS.CHANNEL_DOWN:
+                    eventBus.emit('key:channelDown', e);
+                    break;
+
                 default:
                     // Emit generic key event with code
                     eventBus.emit('key:any', { keyCode, event: e });

@@ -29,6 +29,7 @@ const STATIC_ITEMS = [
     { id: 'user',      label: 'User Profile' },
     /* Core navigation items — displayed inside .sidebar-content */
     { id: 'home',     label: 'Home' },
+    { id: 'livetv',   label: 'Live TV' },
     { id: 'random',   label: 'Random' },
     { id: 'favorites',label: 'Favorites' },
     { id: 'search',   label: 'Search' },

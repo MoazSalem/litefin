@@ -96,6 +96,19 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="Home">Home</span>
                     </button>
+                    
+                    <button class="sidebar-item" id="sidebar-livetv" tabindex="0" data-path="/livetv">
+                        <div class="item-icon">
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+                                <polyline points="17 2 12 7 7 2"></polyline>
+                            </svg>
+                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M21,6h-7.59l3.29-3.29c0.39-0.39,0.39-1.02,0-1.41c-0.39-0.39-1.02-0.39-1.41,0L12,4.59L8.71,1.3c-0.39-0.39-1.02-0.39-1.41,0  c-0.39,0.39-0.39,1.02,0,1.41L10.59,6H3C1.9,6,1,6.9,1,8v12c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2V8C23,6.9,22.1,6,21,6z M21,20H3V8h18  V20z"/>
+                            </svg>
+                        </div>
+                        <span class="item-text" data-i18n="LiveTV">Live TV</span>
+                    </button>
 
                     <button class="sidebar-item" id="sidebar-random" tabindex="0">
                         <div class="item-icon">

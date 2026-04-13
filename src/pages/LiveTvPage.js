@@ -33,10 +33,9 @@ class LiveTvPage extends Page {
         this._isMounted = false;
     }
 
-    onInit() {
-        this._isMounted = true;
-        this.el.innerHTML = `
-            <div class="livetv-page">
+    render() {
+        return `
+            <div class="livetv-page page">
                 <div class="page-header">
                     <h1 data-i18n="LiveTV">${i18n.t('LiveTV')}</h1>
                     <div class="tab-header" id="livetv-tabs">
@@ -51,7 +50,10 @@ class LiveTvPage extends Page {
                 </div>
             </div>
         `;
+    }
 
+    onInit() {
+        this._isMounted = true;
         this._setupTabHandlers();
         this._loadTab(this._currentTab);
         this.markReady();

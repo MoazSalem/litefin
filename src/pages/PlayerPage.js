@@ -220,6 +220,11 @@ class PlayerPage extends Page {
             this._item = itemResult;
             this.title = this._item.Name;
 
+            // Update title for Live TV items to show current program
+            if (this._item.Type === 'TvChannel') {
+                this._updateLiveTvTitle();
+            }
+
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
@@ -515,6 +520,22 @@ class PlayerPage extends Page {
                 this._osd._updateFavoriteButton(this._item);
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
+
+            this._onRemotePlayPause = () => {
+                if (this._player?.paused) {
+                    this._player.play();
+                } else {
+                    this._reportPlaybackProgress('pause');
+                }
+            };
+            eventBus.on('remote:playPause', this._onRemotePlayPause);
+
+            // Channel Up/Down for Live TV
+            this._onChannelUp = () => this._handleChannelChange(1);
+            eventBus.on('key:channelUp', this._onChannelUp);
+
+            this._onChannelDown = () => this._handleChannelChange(-1);
+            eventBus.on('key:channelDown', this._onChannelDown);
 
             // ================================================================
             // PHYSICAL REMOTE CONTROL HANDLERS (WebOS/Tizen)
@@ -1969,6 +1990,15 @@ class PlayerPage extends Page {
                 }
             }
 
+            // 2.6 Close Live Stream if applicable
+            if (mediaSource?.LiveStreamId) {
+                log.info('Closing Live Stream:', mediaSource.LiveStreamId);
+                // Call asynchronously to avoid blocking the stopped report
+                api.closeLiveStream(mediaSource.LiveStreamId).catch(err => {
+                    log.warn('Failed to close live stream:', err);
+                });
+            }
+
             // 3. Send report
             if (isSync) {
                 log.info('Reporting playback stopped (sync), position:', positionTicks);
@@ -2151,6 +2181,8 @@ class PlayerPage extends Page {
         if (this._onRemoteSubtitle) eventBus.off('remote:subtitle', this._onRemoteSubtitle);
         if (this._onRemoteQueueUpdate) eventBus.off('remote:queueupdate', this._onRemoteQueueUpdate);
         if (this._onRemoteUserDataChanged) eventBus.off('remote:userdatachanged', this._onRemoteUserDataChanged);
+        if (this._onChannelUp) eventBus.off('key:channelUp', this._onChannelUp);
+        if (this._onChannelDown) eventBus.off('key:channelDown', this._onChannelDown);
 
         // Clean up focus sections
         focusManager.unregister('player-error');
@@ -2179,6 +2211,146 @@ class PlayerPage extends Page {
         log.info('destroy() complete');
         super.destroy();
     }
+    // ========================================================================
+    // Live TV Handlers
+    // ========================================================================
+
+    /**
+     * Update the page title and OSD for Live TV to show current program info.
+     * TV Channels use the channel name as base, but for UX we want to show
+     * the specific show/program that is currently airing.
+     * @private
+     */
+    async _updateLiveTvTitle() {
+        if (!this._item || this._item.Type !== 'TvChannel') return;
+
+        try {
+            log.info('Fetching current program for channel:', this._item.Name);
+            const programs = await api.getLiveTvPrograms({
+                ChannelIds: this._item.Id,
+                IsAiring: true,
+                Limit: 1
+            });
+
+            if (programs && programs.Items && programs.Items.length > 0) {
+                const program = programs.Items[0];
+                log.info('Current program:', program.Name);
+                
+                // Set the page title to "Channel: Program"
+                this.title = `${this._item.Name}: ${program.Name}`;
+                
+                // Update OSD if it exists
+                if (this._osd) {
+                    this._osd.updateItem(program);
+                }
+            }
+        } catch (err) {
+            log.warn('Failed to fetch current program info:', err);
+        }
+    }
+
+    /**
+     * Handle physical channel up/down button presses.
+     * @param {number} direction - 1 for Up, -1 for Down
+     * @private
+     */
+    async _handleChannelChange(direction) {
+        if (this._isSwitching) return;
+        if (!this._item || this._item.Type !== 'TvChannel') {
+            log.debug('Channel change ignored - current item is not a Live TV channel');
+            return;
+        }
+
+        this._isSwitching = true;
+        this._showLoading(true);
+
+        try {
+            // 1. Ensure we have the channel list
+            if (!this._channels) {
+                log.info('Fetching channel list for navigation...');
+                const result = await api.getLiveTvChannels();
+                this._channels = result.Items || [];
+            }
+
+            if (this._channels.length <= 1) {
+                log.info('Only one channel available - nothing to switch to');
+                this._showLoading(false);
+                this._isSwitching = false;
+                return;
+            }
+
+            // 2. Find current channel index
+            const currentIndex = this._channels.findIndex(c => c.Id === this._item.Id);
+            if (currentIndex === -1) {
+                // Not in current list (maybe list updated?), just take first
+                await this._switchChannel(this._channels[0]);
+                return;
+            }
+
+            // 3. Calculate next index (with wrapping)
+            let nextIndex = currentIndex + direction;
+            if (nextIndex < 0) nextIndex = this._channels.length - 1;
+            if (nextIndex >= this._channels.length) nextIndex = 0;
+
+            const nextChannel = this._channels[nextIndex];
+            log.info(`Switching channel ${direction > 0 ? 'UP' : 'DOWN'} to: ${nextChannel.Name}`);
+
+            // 4. Perform the switch
+            await this._switchChannel(nextChannel);
+        } catch (err) {
+            log.error('Channel switch error:', err);
+            this._showError('Failed to switch channel');
+        } finally {
+            this._isSwitching = false;
+        }
+    }
+
+    /**
+     * Perform an in-place channel switch.
+     * This handles stopping the current stream and initializing the new one.
+     * @param {Object} nextChannel - The channel iten to play
+     * @private
+     */
+    async _switchChannel(nextChannel) {
+        try {
+            // Stop current playback cleanly
+            if (this._player?.stop) {
+                // Capture current info for reporting
+                const mediaSource = this._player.getCurrentMediaSource();
+                const positionTicks = this._player.getCurrentPositionTicks();
+
+                await this._player.stop();
+                await this._reportPlaybackStopped(mediaSource, positionTicks, false);
+            }
+
+            // Briefly settle hardware
+            await new Promise(r => setTimeout(r, 300));
+
+            // Update state for new channel
+            this._item = nextChannel;
+            this.title = nextChannel.Name;
+            this._resumePosition = 0;
+            this._hasReportedStart = false;
+            this._cachedMediaSource = null;
+
+            // Fetch current program info asynchronously so we don't block start
+            this._updateLiveTvTitle();
+
+            // Notify OSD
+            if (this._osd) {
+                this._osd.updateItem(nextChannel);
+                this._osd.resetUpNext();
+            }
+
+            // Start new playback
+            await this._startPlayback();
+            
+            this._showLoading(false);
+        } catch (err) {
+            throw err;
+        }
+    }
 }
 
 export default PlayerPage;
+
