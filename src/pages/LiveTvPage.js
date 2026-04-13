@@ -36,19 +36,21 @@ class LiveTvPage extends Page {
     render() {
         return `
             <div class="livetv-page page">
-                <div class="page-header">
-                    <h1 data-i18n="LiveTV">${i18n.t('LiveTV')}</h1>
-                    <div class="ltv-tab-header" id="livetv-tabs">
-                        <div class="ltv-tab-indicator" id="ltv-tab-indicator"></div>
-                        <button class="ltv-tab-btn active" data-tab="suggestions" tabindex="0">${i18n.t('Suggestions')}</button>
-                        <button class="ltv-tab-btn" data-tab="guide" tabindex="0">${i18n.t('Guide')}</button>
-                        <button class="ltv-tab-btn" data-tab="channels" tabindex="0">${i18n.t('Channels')}</button>
-                        <button class="ltv-tab-btn" data-tab="recordings" tabindex="0">${i18n.t('Recordings')}</button>
+                <main class="page-content" id="livetv-scroll-container">
+                    <div class="page-header">
+                        <h1 data-i18n="LiveTV">${i18n.t('LiveTV')}</h1>
+                        <div class="ltv-tab-header" id="livetv-tabs">
+                            <div class="ltv-tab-indicator" id="ltv-tab-indicator"></div>
+                            <button class="ltv-tab-btn active" data-tab="suggestions" tabindex="0">${i18n.t('Suggestions')}</button>
+                            <button class="ltv-tab-btn" data-tab="guide" tabindex="0">${i18n.t('Guide')}</button>
+                            <button class="ltv-tab-btn" data-tab="channels" tabindex="0">${i18n.t('Channels')}</button>
+                            <button class="ltv-tab-btn" data-tab="recordings" tabindex="0">${i18n.t('Recordings')}</button>
+                        </div>
                     </div>
-                </div>
-                <div class="tab-content" id="livetv-content">
-                    <div class="page-loading"><div class="loading-spinner"></div></div>
-                </div>
+                    <div class="tab-content" id="livetv-content">
+                        <div class="page-loading"><div class="loading-spinner"></div></div>
+                    </div>
+                </main>
             </div>
         `;
     }
@@ -93,10 +95,24 @@ class LiveTvPage extends Page {
             }
         });
 
-        // Focus registration for tabs
+        // Focus registration for tabs — wire leave edges to sidebar and content
+        // Use onMove to dynamically determine the target content section, since
+        // the guide tab uses 'epg-grid' while other tabs use 'livetv-content-section'
         this.registerFocusSection('livetv-tabs', tabs, {
             orientation: 'horizontal',
-            selector: '.ltv-tab-btn'
+            selector: '.ltv-tab-btn',
+            leaveLeft: 'sidebar', // D-pad Left at first tab → goes to sidebar
+            onMove: (direction) => {
+                if (direction === 'down') {
+                    // Pick the active content section dynamically
+                    const targetSection = this._currentTab === 'guide'
+                        ? 'epg-grid'
+                        : 'livetv-content-section';
+                    focusManager.setActiveSection(targetSection);
+                    return true; // Handled
+                }
+                return false; // Let default horizontal logic handle left/right
+            }
         });
 
         // Sync indicator scale with active tab focus
@@ -283,7 +299,9 @@ class LiveTvPage extends Page {
         if (gridItemsEl) {
             this.registerFocusSection('livetv-content-section', gridItemsEl, {
                 orientation: 'both',
-                selector: '.media-card'
+                selector: '.media-card',
+                leaveUp: 'livetv-tabs',   // D-pad Up from top row → back to tabs
+                leaveLeft: 'sidebar'      // D-pad Left → sidebar
             });
         }
     }
@@ -330,7 +348,9 @@ class LiveTvPage extends Page {
         if (gridItemsEl) {
             this.registerFocusSection('livetv-content-section', gridItemsEl, {
                 orientation: 'both',
-                selector: '.media-card'
+                selector: '.media-card',
+                leaveUp: 'livetv-tabs', // D-pad Up from top row → back to tabs
+                leaveLeft: 'sidebar'    // D-pad Left → sidebar
             });
         }
     }
@@ -339,8 +359,14 @@ class LiveTvPage extends Page {
         const container = this.$('#livetv-content');
         container.innerHTML = '<div class="epg-grid-container" id="epg-container"></div>';
 
-        const epg = new EpgGrid(container.querySelector('#epg-container'));
+        const epg = new EpgGrid(container.querySelector('#epg-container'), {
+            // Wire up Out-of-bounds exits for D-pad navigation
+            leaveUp: 'livetv-tabs',
+            leaveLeft: 'sidebar'
+        });
         await epg.init();
+        // _focusNow() inside epg.init() will call focusManager.focusElement on a program,
+        // which auto-syncs the active section to 'epg-grid' via the focusin listener.
 
         this._virtualRows.push(epg);
     }

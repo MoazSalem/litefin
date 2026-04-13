@@ -12,10 +12,7 @@
 .livetv-page .page-header {
     padding: 60px 60px 30px 60px;
     margin-bottom: 20px;
-    position: sticky;
-    top: 0;
-    z-index: 100;
-    background: var(--jf-background);
+    background: transparent;
     border-bottom: 1px solid rgba(255, 255, 255, 0.05);
     display: flex;
     flex-direction: column;
@@ -136,9 +133,19 @@
 }
 
 .tab-content {
-    min-height: 400px;
-    padding: 0 60px;
+    flex: 1;
+    display: flex;
+    flex-direction: column;
     animation: fadeIn 0.5s ease-out;
+    position: relative;
+    /* Do not set height/min-height here, let it grow naturally with content
+       or let EPG Grid fill the viewport via its own height management */
+}
+
+/* Ensure the shared scroll container doesn't show multiple scrollbars */
+.livetv-page .page-content {
+    overflow-x: hidden;
+    overflow-y: auto;
 }
 
 /* ============================================================================
@@ -146,7 +153,9 @@
    ============================================================================ */
 .epg-grid-container {
     padding: 0;
-    height: calc(100vh - 250px);
+    /* To maintain virtualization, the grid needs a fixed height relative to the screen. 
+       Since the parent scrolls, we size it to the viewport minus the tab area. */
+    height: calc(100vh - 100px); 
     overflow: hidden;
     position: relative;
     display: flex;

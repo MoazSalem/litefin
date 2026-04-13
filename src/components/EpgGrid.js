@@ -13,6 +13,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { imageService } from '../utils/ImageService.js';
+import { scrollController } from '../ui/ScrollController.js';
 
 const log = logger.create('EpgGrid');
 
@@ -41,6 +42,8 @@ class EpgGrid {
         this.scrollY = 0;
         this.visibleRows = 0;
         this.visibleWidth = 0;
+        // Set a sane default height so the grid renders even before layout is measured
+        this.visibleHeight = 600;
         
         this.domNodes = new Map(); // channelId -> { rowEl, channelEl, programNodes: Map<programId, node> }
         
@@ -66,7 +69,9 @@ class EpgGrid {
             this._setupFocus();
             this._setupEventListeners();
             
-            // 4. Initial Load & Start rendering loop
+            // 4. Measure visible area AFTER DOM is painted, then load and render
+            // requestAnimationFrame ensures the container has been laid out by the browser
+            await new Promise(resolve => requestAnimationFrame(resolve));
             this._updateVisibleDimensions();
             await this._loadPrograms();
             this._startRenderLoop();
@@ -262,12 +267,20 @@ class EpgGrid {
         focusManager.register('epg-grid', this.container.querySelector('.epg-grid-container'), {
             selector: '.epg-program',
             orientation: 'both',
-            indices: false,
+            // Wire up boundary exits using options passed from LiveTvPage
+            leaveUp: this.options.leaveUp || null,
+            leaveLeft: this.options.leaveLeft || null,
             onMove: (direction) => {
                 const nextEl = this._handleMove(direction);
                 if (nextEl) {
                     focusManager.focusElement(nextEl);
-                    return true;
+                    
+                    // Since we return 'true' to handle focus internally, FocusManager's 
+                    // default scrollIntoView is skipped. We must manually trigger 
+                    // the parent page-content to scroll so the header pushes out.
+                    scrollController.scrollIntoView(this.container); 
+
+                    return true; 
                 }
                 return false;
             }
@@ -454,10 +467,12 @@ class EpgGrid {
     }
 
     _updateVisibleDimensions() {
-        const container = this.container.querySelector('.epg-grid-container');
-        if (container) {
-            this.visibleHeight = container.clientHeight - 60; // Less header
-            this.visibleWidth = container.clientWidth - 250; // Less channels sidebar
+        // The container can be nested—measure from the direct epg-grid-container child
+        const gridContainer = this.container.querySelector('.epg-grid-container');
+        const el = gridContainer || this.container;
+        if (el) {
+            this.visibleHeight = (el.clientHeight || 600) - 60; // Subtract timeline header
+            this.visibleWidth = (el.clientWidth || 1280) - 250;   // Subtract channels sidebar
         }
     }
 

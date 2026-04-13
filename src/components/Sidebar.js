@@ -180,9 +180,9 @@ class Sidebar extends Component {
         eventBus.on('auth:restored', this._onAuthChange.bind(this));
 
         // Listen for SyncPlay state changes to update the sidebar button
-        this._onSyncPlayEnabled  = () => this._updateSyncPlayBtn(true);
+        this._onSyncPlayEnabled = () => this._updateSyncPlayBtn(true);
         this._onSyncPlayDisabled = () => this._updateSyncPlayBtn(false);
-        eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
+        eventBus.on('syncplay:enabled', this._onSyncPlayEnabled);
         eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Initialize visibility in case the plugin is disabled at startup
@@ -279,7 +279,7 @@ class Sidebar extends Component {
         eventBus.off('auth:restored', this._onAuthChange.bind(this));
 
         // Remove SyncPlay listeners
-        if (this._onSyncPlayEnabled)  eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
+        if (this._onSyncPlayEnabled) eventBus.off('syncplay:enabled', this._onSyncPlayEnabled);
         if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Remove sidebar layout hot-reload listener
@@ -334,9 +334,9 @@ class Sidebar extends Component {
     _updateLogoSettings() {
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
         const settingsBtn = this.el.querySelector('#sidebar-settings');
-        
+
         if (!logoHeader) return;
-        
+
         const enabled = storage.getItem('pref:logoSettings') === 'true';
         if (enabled) {
             logoHeader.classList.add('sidebar-item');
@@ -411,7 +411,6 @@ class Sidebar extends Component {
             if (item.id === 'sidebar-logo-header') return; // Handled above
 
             item.onclick = () => {
-
                 const path = item.dataset.path;
                 if (path) {
                     if (path === '/home') {
@@ -477,9 +476,9 @@ class Sidebar extends Component {
 
             const sidebarContent = this.el.querySelector('.sidebar-content');
             if (!sidebarContent) return;
-            
+
             // Remove any previously rendered libraries and headers to allow clean reloading
-            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach(el => el.remove());
+            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
 
             if (items.length > 0) {
                 // Determine header label based on layout block ('My Media')
@@ -556,8 +555,8 @@ class Sidebar extends Component {
      * @private
      */
     _updateSyncPlayBtn(active) {
-        const btn   = this.el.querySelector('#sidebar-syncplay');
-        const dot   = this.el.querySelector('#sidebar-syncplay-dot');
+        const btn = this.el.querySelector('#sidebar-syncplay');
+        const dot = this.el.querySelector('#sidebar-syncplay-dot');
         const label = this.el.querySelector('#sidebar-syncplay-label');
         if (!btn) return;
 
