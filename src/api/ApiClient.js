@@ -1120,12 +1120,15 @@ export class ApiClient {
             DeviceProfile: options.DeviceProfile,
             UserId: this._userId,
             OpenToken: options.OpenToken,
-            PlaySessionId: options.PlaySessionId,
+            PlaySessionId: options.PlaySessionId || Math.random().toString(36).substring(2, 15),
             MaxStreamingBitrate: options.MaxStreamingBitrate,
             StartTimeTicks: options.StartTimeTicks,
             AudioStreamIndex: options.AudioStreamIndex,
             SubtitleStreamIndex: options.SubtitleStreamIndex,
-            DirectPlayProtocols: options.DirectPlayProtocols
+            DirectPlayProtocols: options.DirectPlayProtocols,
+            EnableDirectPlay: options.EnableDirectPlay,
+            EnableDirectStream: options.EnableDirectStream,
+            ItemId: options.ItemId
         };
 
         const url = options.ItemId 

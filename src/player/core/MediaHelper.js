@@ -36,11 +36,21 @@ export const MediaHelper = {
         let isHls = false;
 
         if (playMethod === 'DirectPlay' || playMethod === 'DirectStream') {
+            // ----------------------------------------------------------------
+            // SPECIAL CASE: Remote/external HTTP sources (Live TV, IPTV)
+            // These have Protocol="Http" and a direct Path URL. They must be
+            // played directly from the source — NOT proxied through Jellyfin's
+            // /Videos/.../stream endpoint, which would cause CORS failures since
+            // the browser can't read the resulting cross-origin response.
+            // ----------------------------------------------------------------
+            if (mediaSource.IsRemote && mediaSource.Protocol === 'Http' && mediaSource.Path) {
+                url = mediaSource.Path;
+                isHls = url.includes('.m3u8') || mediaSource.Container === 'hls';
             // For DirectStream, always prefer the server-provided TranscodingUrl —
             // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
             // baked in.  For DirectPlay, build the static URL directly (TranscodingUrl
             // may be an HLS manifest the native player can't handle).
-            if (playMethod === 'DirectStream' && mediaSource.TranscodingUrl) {
+            } else if (playMethod === 'DirectStream' && mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
                 isHls = url.includes('.m3u8');
             } else if (mediaSource.SupportsDirectStream) {

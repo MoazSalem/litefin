@@ -193,9 +193,13 @@ class EpgGrid {
         channelEl.style.top = `${index * this.ROW_HEIGHT}px`;
         channelEl.style.width = '100%';
         
-        const logoUrl = imageService.getItemImageUrl(channel, { type: 'Primary', width: 80 });
+        let logoUrl = '';
+        if (channel.ImageTags && channel.ImageTags.Primary) {
+            logoUrl = api.getImageUrl(channel.Id, 'Primary', { maxWidth: 80, quality: 70, tag: channel.ImageTags.Primary });
+        }
+        
         channelEl.innerHTML = `
-            <img class="epg-channel-logo" src="${logoUrl}" />
+            ${logoUrl ? `<img class="epg-channel-logo" src="${logoUrl}" loading="lazy" />` : '<div class="epg-channel-logo fallback-logo"></div>'}
             <div class="epg-channel-info">
                 <div class="epg-channel-name">${channel.Name}</div>
                 <div class="epg-channel-number">${channel.Number || ''}</div>
@@ -255,17 +259,19 @@ class EpgGrid {
     // =========================================================================
 
     _setupFocus() {
-        focusManager.registerSection('epg-grid', this.container.querySelector('.epg-grid-container'), {
+        focusManager.register('epg-grid', this.container.querySelector('.epg-grid-container'), {
             selector: '.epg-program',
             orientation: 'both',
-            indices: false
+            indices: false,
+            onMove: (direction) => {
+                const nextEl = this._handleMove(direction);
+                if (nextEl) {
+                    focusManager.focusElement(nextEl);
+                    return true;
+                }
+                return false;
+            }
         });
-
-        // Custom handlers for EPG-specific movement
-        focusManager.setHandler('epg-grid', 'left', () => this._handleMove('left'));
-        focusManager.setHandler('epg-grid', 'right', () => this._handleMove('right'));
-        focusManager.setHandler('epg-grid', 'up', () => this._handleMove('up'));
-        focusManager.setHandler('epg-grid', 'down', () => this._handleMove('down'));
     }
 
     _setupEventListeners() {

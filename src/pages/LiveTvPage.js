@@ -103,7 +103,7 @@ class LiveTvPage extends Page {
         
         // Reset virtual rows
         this._virtualRows = [];
-        focusManager.removeSection('livetv-content-section');
+        focusManager.unregister('livetv-content-section');
 
         try {
             switch (tabId) {
@@ -176,10 +176,13 @@ class LiveTvPage extends Page {
         container.innerHTML = grid.render();
         grid.onMounted();
 
-        this.registerFocusSection('livetv-content-section', this.$('#livetv-channels-grid-items'), {
-            orientation: 'both',
-            selector: '.media-card'
-        });
+        const gridItemsEl = this.$('#livetv-channels-grid-items');
+        if (gridItemsEl) {
+            this.registerFocusSection('livetv-content-section', gridItemsEl, {
+                orientation: 'both',
+                selector: '.media-card'
+            });
+        }
     }
 
     async _renderRecordings() {
@@ -204,10 +207,13 @@ class LiveTvPage extends Page {
         container.innerHTML = grid.render();
         grid.onMounted();
 
-        this.registerFocusSection('livetv-content-section', this.$('#livetv-recordings-grid-items'), {
-            orientation: 'both',
-            selector: '.media-card'
-        });
+        const gridItemsEl = this.$('#livetv-recordings-grid-items');
+        if (gridItemsEl) {
+            this.registerFocusSection('livetv-content-section', gridItemsEl, {
+                orientation: 'both',
+                selector: '.media-card'
+            });
+        }
     }
 
     async _renderGuide() {

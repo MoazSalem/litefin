@@ -639,8 +639,12 @@ export class JellyfinPlayer extends EventEmitter {
                 throw new Error('No media sources available');
             }
 
-            // Select best media source
-            const mediaSource = options.mediaSourceId
+            // Select best media source:
+            // For Live TV channels, the server dynamically generates the media source ID
+            // when it opens the tuner — it will NEVER match options.mediaSourceId (which is
+            // the channel item ID). Always pick the first source for live channels.
+            const isLiveChannel = options.item?.Type === 'TvChannel';
+            const mediaSource = (!isLiveChannel && options.mediaSourceId)
                 ? playbackInfo.MediaSources.find((ms) => ms.Id === options.mediaSourceId)
                 : playbackInfo.MediaSources[0];
 
@@ -1729,12 +1733,15 @@ export class JellyfinPlayer extends EventEmitter {
         // Deep clone the device profile so we can mutilate it to trick the server without affecting future calls
         const clonedProfile = JSON.parse(JSON.stringify(deviceProfile || buildJellyfinProfile(maxBitrate)));
 
+
+
         const requestBody = {
             DeviceProfile: clonedProfile,
             UserId: options.userId,
             MaxStreamingBitrate: maxBitrate,
             StartTimeTicks: options.startPositionTicks || 0,
             AutoOpenLiveStream: true,
+            IsPlayback: true,
             // Default to true for both, let server profiles decide unless strictly overridden below
             EnableDirectPlay: true,
             EnableDirectStream: true
@@ -1805,7 +1812,12 @@ export class JellyfinPlayer extends EventEmitter {
                 break;
         }
 
-        if (options.mediaSourceId) {
+        // IMPORTANT: For Live TV channels, do NOT pass MediaSourceId in the PlaybackInfo request.
+        // The server dynamically generates a MediaSourceId when it opens the tuner; passing the
+        // channel's ItemId as MediaSourceId causes the server's source-matching logic to fail
+        // with "NoCompatibleStream" because it tries to find a pre-existing specific source.
+        const isLiveChannel = options.item?.Type === 'TvChannel';
+        if (options.mediaSourceId && !isLiveChannel) {
             requestBody.MediaSourceId = options.mediaSourceId;
         }
 
@@ -1818,12 +1830,12 @@ export class JellyfinPlayer extends EventEmitter {
             requestBody.AudioStreamIndex = options.audioStreamIndex;
         }
 
+
         if (!isAudioItem) {
             if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
                 requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
             }
         }
-
 
         const response = await fetch(url, {
             method: 'POST',
@@ -1842,7 +1854,7 @@ export class JellyfinPlayer extends EventEmitter {
             throw new Error(`Failed to get playback info: ${response.status} - ${errorText}`);
         }
 
-        return response.json();
+        return await response.json();
     }
 
     // ========================================================================
