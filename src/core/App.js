@@ -33,6 +33,7 @@ import FavoritesPage from '../pages/FavoritesPage.js';
 import OfflinePage from '../pages/OfflinePage.js';
 import PlayerPage from '../pages/PlayerPage.js';
 import ProfilesPage from '../pages/ProfilesPage.js';
+import LiveTvPage from '../pages/LiveTvPage.js';
 import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
@@ -654,6 +655,7 @@ class App {
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
+        router.register('/livetv',   LiveTvPage);
         router.register('/offline', OfflinePage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
 

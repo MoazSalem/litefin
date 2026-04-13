@@ -1,0 +1,241 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Live TV Styles
+ * ============================================================================
+ */
+
+.livetv-page {
+    padding-top: 20px;
+}
+
+.livetv-page .page-header {
+    padding: 0 60px;
+    margin-bottom: 30px;
+}
+
+.livetv-page h1 {
+    font-size: 3rem;
+    font-weight: 700;
+    margin: 0 0 20px 0;
+    color: var(--jf-text-primary);
+}
+
+.tab-header {
+    display: flex;
+    gap: 30px;
+    border-bottom: 2px solid var(--jf-divider);
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    background: none;
+    border: none;
+    padding: 10px 0;
+    font-size: 1.4rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary);
+    cursor: pointer;
+    position: relative;
+    transition: color 0.2s ease;
+}
+
+.tab-btn:focus,
+.tab-btn.focused {
+    color: var(--jf-text-primary);
+    outline: none;
+}
+
+.tab-btn.active {
+    color: var(--jf-accent);
+}
+
+.tab-btn.active::after {
+    content: '';
+    position: absolute;
+    bottom: -12px;
+    left: 0;
+    width: 100%;
+    height: 4px;
+    background: var(--jf-accent);
+    border-radius: 2px;
+}
+
+.tab-content {
+    min-height: 400px;
+}
+
+/* ============================================================================
+   EPG Grid Styles
+   ============================================================================ */
+.epg-grid-container {
+    padding: 0;
+    height: calc(100vh - 250px);
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.epg-header {
+    height: 60px;
+    background: var(--jf-background);
+    display: flex;
+    z-index: 10;
+    border-bottom: 2px solid var(--jf-divider);
+}
+
+.epg-channel-header-spacer {
+    width: 250px; /* Width of channel sidebar */
+    flex-shrink: 0;
+    border-right: 2px solid var(--jf-divider);
+    background: var(--jf-background-alt);
+}
+
+.epg-timeline {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.epg-timeline-track {
+    position: absolute;
+    height: 100%;
+    display: flex;
+}
+
+.epg-time-slot {
+    width: 300px; /* 30 minutes = 300px (10px per minute) */
+    flex-shrink: 0;
+    border-right: 1px solid var(--jf-divider);
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary);
+}
+
+.epg-body {
+    flex-grow: 1;
+    display: flex;
+    overflow: hidden;
+}
+
+.epg-channels {
+    width: 250px;
+    flex-shrink: 0;
+    overflow: hidden;
+    border-right: 2px solid var(--jf-divider);
+    background: var(--jf-background-alt);
+    z-index: 5;
+}
+
+.epg-channels-track {
+    position: relative;
+}
+
+.epg-channel-row {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.epg-channel-logo {
+    width: 80px;
+    height: 60px;
+    object-fit: contain;
+    margin-right: 15px;
+}
+
+.epg-channel-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.epg-channel-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.epg-channel-number {
+    font-size: 1rem;
+    color: var(--jf-text-secondary);
+}
+
+.epg-programs {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.epg-programs-track {
+    position: relative;
+}
+
+.epg-row {
+    height: 100px;
+    position: absolute;
+    left: 0;
+    width: 100%;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.epg-program {
+    position: absolute;
+    height: calc(100% - 10px);
+    top: 5px;
+    background: var(--jf-background-alt);
+    border-radius: 8px;
+    padding: 10px 15px;
+    overflow: hidden;
+    border: 3px solid transparent;
+    transition: background 0.2s ease;
+}
+
+.epg-program:focus,
+.epg-program.focused {
+    background: var(--jf-background-lighter);
+    border-color: var(--jf-focus-border-color);
+    outline: none;
+    z-index: 20;
+}
+
+.epg-program-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.epg-program-time {
+    font-size: 0.9rem;
+    color: var(--jf-text-secondary);
+    margin-top: 4px;
+}
+
+.epg-indicator {
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--jf-accent);
+    z-index: 100;
+    box-shadow: 0 0 10px var(--jf-accent);
+}
+
+.epg-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--jf-accent);
+}
