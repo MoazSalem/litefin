@@ -208,7 +208,17 @@ class HomePage extends Page {
                 cardType: 'library',
                 contextType: 'library',
                 // Libraries are loaded upfront; fetchFn is a synchronous-style wrapper
-                fetchFn: async () => (this._libraries.length > 0 ? this._libraries : null)
+                fetchFn: async () => {
+                    if (this._libraries.length === 0) return null;
+
+                    // Filter out Live TV if the user has disabled it in settings
+                    const hideLiveTv = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                    if (hideLiveTv) {
+                        return this._libraries.filter((lib) => lib.CollectionType !== 'livetv');
+                    }
+
+                    return this._libraries;
+                }
             });
         }
 
@@ -858,7 +868,12 @@ class HomePage extends Page {
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
-                router.navigate(`/library/${card.dataset.itemId}`);
+                // Special handling for Live TV: redirect to the unified Live TV page
+                if (card.dataset.collectionType === 'livetv') {
+                    router.navigate('/livetv');
+                } else {
+                    router.navigate(`/library/${card.dataset.itemId}`);
+                }
             } else {
                 // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;

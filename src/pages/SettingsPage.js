@@ -589,6 +589,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
+                        <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideLiveTvInMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-livetv-home" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
                         <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
                     </div>
@@ -2222,6 +2235,18 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Hide Live TV in My Media
+        const hideLiveTvBtn = this.$('#toggle-hide-livetv-home');
+        if (hideLiveTvBtn) {
+            hideLiveTvBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideLiveTvInMyMedia', newValue);
+                hideLiveTvBtn.classList.toggle('active', newValue);
+                log.info(`Hide Live TV in My Media set to: ${newValue}`);
             });
         }
 
