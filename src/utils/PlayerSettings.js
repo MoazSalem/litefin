@@ -267,7 +267,30 @@ const DEFAULTS = {
     osdFocusRestoreMode: 'always',
 
     // Time display mode ('total', 'remaining')
-    osdTimeDisplayMode: 'total'
+    osdTimeDisplayMode: 'total',
+
+    // =========================================================================
+    // SEGMENT SKIP SETTINGS
+    // Controls what happens when playback enters a detected media segment.
+    // Requires the intro-skipper server plugin to function.
+    //
+    // Possible values (mirrors jellyfin-web's MediaSegmentAction enum):
+    //   'None'       — Segment is ignored entirely. No button, no auto-skip.
+    //   'AskToSkip'  — Show a skip button on-screen; user presses OK to skip.
+    //   'Skip'       — Automatically seek past the segment end without any UI.
+    // =========================================================================
+
+    // Intro segment action (e.g. opening credits / title card)
+    skipActionIntro: 'AskToSkip',
+
+    // Credits/outro segment action (e.g. end-of-episode roll)
+    skipActionOutro: 'AskToSkip',
+
+    // Recap segment action (e.g. "previously on…")
+    skipActionRecap: 'None',
+
+    // Preview/next-episode teaser segment action
+    skipActionPreview: 'None'
 };
 
 /**
