@@ -224,7 +224,7 @@ class SidebarLayoutManager {
                 result.push({
                     id: live.id,
                     label: live.label,
-                    hidden: false,
+                    hidden: live.hidden || false,
                     locked: LOCKED_ITEM_IDS.includes(live.id),
                     order: nextOrder++
                 });

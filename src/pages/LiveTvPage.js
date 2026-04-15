@@ -20,6 +20,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import MediaGrid from '../components/MediaGrid.js';
 import EpgGrid from '../components/EpgGrid.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('LiveTvPage');
 
@@ -31,6 +32,14 @@ class LiveTvPage extends Page {
         this._tabData = new Map(); // Cache data for tabs
         this._virtualRows = [];
         this._isMounted = false;
+
+        // Pagination State
+        this._startIndex = 0;
+        this._totalCount = 0;
+        this._limit = Number(storage.getItem('pref:libraryPageSize')) || 100;
+
+        // Handlers
+        this._onPageChange = this._handlePageChange.bind(this);
     }
 
     render() {
@@ -50,6 +59,21 @@ class LiveTvPage extends Page {
                     <div class="tab-content" id="livetv-content">
                         <div class="page-loading"><div class="loading-spinner"></div></div>
                     </div>
+
+                    <!-- Pagination Footer -->
+                    <div class="pagination-footer hidden" id="livetv-pagination-container">
+                        <div class="pagination-controls" id="livetv-pagination">
+                            <button id="btn-prev" class="pagination-btn" tabindex="0">
+                                <i class="fa-solid fa-chevron-left"></i>
+                                <span>${i18n.t('Previous')}</span>
+                            </button>
+                            <span id="pagination-info" class="pagination-info"></span>
+                            <button id="btn-next" class="pagination-btn" tabindex="0">
+                                <span>${i18n.t('Next')}</span>
+                                <i class="fa-solid fa-chevron-right"></i>
+                            </button>
+                        </div>
+                    </div>
                 </main>
             </div>
         `;
@@ -58,6 +82,7 @@ class LiveTvPage extends Page {
     onInit() {
         this._isMounted = true;
         this._setupTabHandlers();
+        this._setupPaginationHandlers();
         this._loadTab(this._currentTab);
 
         // Initial selector position
@@ -146,6 +171,11 @@ class LiveTvPage extends Page {
         });
     }
 
+    _setupPaginationHandlers() {
+        this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
+        this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
+    }
+
     _switchTab(tabId) {
         if (this._currentTab === tabId) return;
 
@@ -157,6 +187,7 @@ class LiveTvPage extends Page {
         if (newTab) newTab.classList.add('active');
 
         this._currentTab = tabId;
+        this._startIndex = 0; // Reset pagination for new tab
         this._loadTab(tabId);
         this._updateTabSelector();
     }
@@ -261,10 +292,15 @@ class LiveTvPage extends Page {
         const container = this.$('#livetv-content');
         const channels = await api.getLiveTvChannels({
             userId: api.userId,
+            startIndex: this._startIndex,
+            limit: this._limit,
             enableImageTypes: 'Primary,Thumb,Backdrop'
         });
 
         if (!this._isMounted) return;
+
+        this._totalCount = channels.TotalRecordCount || 0;
+        this._updatePaginationUI();
 
         if (!channels.Items || channels.Items.length === 0) {
             container.innerHTML = `
@@ -289,7 +325,8 @@ class LiveTvPage extends Page {
             title: '',
             items: channels.Items || [],
             type: 'square',
-            limit: 50
+            limit: this._limit,
+            allowSeeMore: false
         });
 
         container.innerHTML = grid.render();
@@ -301,6 +338,7 @@ class LiveTvPage extends Page {
                 orientation: 'both',
                 selector: '.media-card',
                 leaveUp: 'livetv-tabs',   // D-pad Up from top row → back to tabs
+                leaveDown: 'livetv-pagination',
                 leaveLeft: 'sidebar'      // D-pad Left → sidebar
             });
         }
@@ -310,11 +348,15 @@ class LiveTvPage extends Page {
         const container = this.$('#livetv-content');
         const recordings = await api.getLiveTvRecordings({
             userId: api.userId,
-            limit: 50,
+            startIndex: this._startIndex,
+            limit: this._limit,
             enableImageTypes: 'Primary,Thumb,Backdrop'
         });
 
         if (!this._isMounted) return;
+
+        this._totalCount = recordings.TotalRecordCount || 0;
+        this._updatePaginationUI();
 
         if (!recordings.Items || recordings.Items.length === 0) {
             container.innerHTML = `
@@ -338,7 +380,8 @@ class LiveTvPage extends Page {
             items: recordings.Items || [],
             type: 'thumb',
             isLandscape: true,
-            limit: 50
+            limit: this._limit,
+            allowSeeMore: false
         });
 
         container.innerHTML = grid.render();
@@ -350,6 +393,7 @@ class LiveTvPage extends Page {
                 orientation: 'both',
                 selector: '.media-card',
                 leaveUp: 'livetv-tabs', // D-pad Up from top row → back to tabs
+                leaveDown: 'livetv-pagination',
                 leaveLeft: 'sidebar'    // D-pad Left → sidebar
             });
         }
@@ -369,6 +413,81 @@ class LiveTvPage extends Page {
         // which auto-syncs the active section to 'epg-grid' via the focusin listener.
 
         this._virtualRows.push(epg);
+
+        // Hide pagination for guide
+        const pagContainer = this.$('#livetv-pagination-container');
+        if (pagContainer) pagContainer.classList.add('hidden');
+    }
+
+    _updatePaginationUI() {
+        const container = this.$('#livetv-pagination-container');
+        if (!container) return;
+
+        // Suggestions tab doesn't use standard pagination footer
+        if (this._currentTab === 'suggestions' || this._currentTab === 'guide') {
+            container.classList.add('hidden');
+            focusManager.unregister('livetv-pagination');
+            return;
+        }
+
+        const moreThanOnePage = this._totalCount > this._limit;
+        if (!moreThanOnePage) {
+            container.classList.add('hidden');
+            focusManager.unregister('livetv-pagination');
+            return;
+        }
+
+        container.classList.remove('hidden');
+
+        const btnPrev = this.$('#btn-prev');
+        const btnNext = this.$('#btn-next');
+        const info = this.$('#pagination-info');
+
+        const hasPrev = this._startIndex > 0;
+        const hasNext = this._startIndex + this._limit < this._totalCount;
+
+        if (btnPrev) {
+            btnPrev.disabled = !hasPrev;
+            btnPrev.classList.toggle('disabled', !hasPrev);
+        }
+        if (btnNext) {
+            btnNext.disabled = !hasNext;
+            btnNext.classList.toggle('disabled', !hasNext);
+        }
+
+        if (info) {
+            const start = this._startIndex + 1;
+            const end = Math.min(this._startIndex + this._limit, this._totalCount);
+            info.textContent = i18n.t('ListPaging', [start, end, this._totalCount]);
+        }
+
+        // Register for focus
+        focusManager.register('livetv-pagination', this.$('#livetv-pagination'), {
+            orientation: 'horizontal',
+            leaveUp: 'livetv-content-section',
+            leaveLeft: 'sidebar',
+            selector: 'button:not(.disabled)',
+            enterTo: 'active-element'
+        });
+    }
+
+    async _handlePageChange(direction) {
+        const nextIndex = this._startIndex + direction * this._limit;
+
+        if (nextIndex < 0 || nextIndex >= this._totalCount) return;
+
+        this._startIndex = nextIndex;
+        await this._loadTab(this._currentTab);
+
+        // Scroll back to top
+        const scrollContainer = this.$('#livetv-scroll-container');
+        if (scrollContainer) scrollContainer.scrollTop = 0;
+
+        // Try to focus the first item in the new page
+        const firstItem = this.$('#livetv-content .media-card');
+        if (firstItem) {
+            focusManager.focusElement(firstItem);
+        }
     }
 
     // =========================================================================
