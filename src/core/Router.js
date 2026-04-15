@@ -247,8 +247,7 @@ class Router {
                 // Add to history as an object with path and state
                 // Skip if: back navigation via replace (path already at top)
                 if (this._isBackNavigation) {
-                    // Clear the flag and skip the push
-                    this._isBackNavigation = false;
+                    // We DO NOT clear the flag here. Page.js will consume it and clear it.
                 } else {
                     const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
                     if (fullPath !== topPath) {
@@ -297,6 +296,30 @@ class Router {
      */
     canGoBack() {
         return this._history.length > 1;
+    }
+
+    /**
+     * Reload the current route in-place
+     * Useful for resuming the app after sleep to fetch fresh data
+     */
+    reload() {
+        if (!this._currentPage) return;
+        
+        log.info('Reloading current route');
+        
+        // Capture current state to preserve scroll/focus during the reload
+        const capturedState = navigationState.captureState(this._currentPage);
+        const currentEntry = this._history[this._history.length - 1];
+        if (currentEntry && typeof currentEntry === 'object') {
+            currentEntry.state = capturedState;
+        }
+        
+        // Flag as back navigation temporarily so the newly instantiated page
+        // will pick up the stored state, and we don't push duplicate history.
+        this._isBackNavigation = true;
+        this._pendingRestoreState = capturedState;
+        
+        this._onHashChange();
     }
 }
 

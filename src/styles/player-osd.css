@@ -132,6 +132,14 @@
     margin-left: 1.8em;
 }
 
+.osd-clock {
+    font-size: 1.4rem;
+    font-weight: 500;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+    letter-spacing: 0.05em;
+    opacity: 0.9;
+}
+
 .osd-title {
     font-size: 1.8em;
     /* 1.5em * 1.2 */

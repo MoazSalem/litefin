@@ -718,6 +718,18 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
+                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-snap-large-scrolls" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
                 <!-- 
@@ -1052,6 +1064,94 @@ class SettingsPage extends Page {
                                 { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
                             ],
                             PlayerSettings.get('osdTimeDisplayMode') || 'total'
+                        )}
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     SEGMENT SKIPPING
+                     Per-type setting for what happens when the player enters
+                     a detected segment (intro, credits, recap, preview).
+                     Only applies when the skip-intro plugin is active.
+                     ============================================================ -->
+                <h3 class="setting-section-title" data-i18n="SegmentSkipping" style="margin-top: 40px;">${i18n.t('SegmentSkipping') || 'Segment Skipping'}</h3>
+
+                <!-- Section description — gives context about the dependency -->
+                <p class="setting-section-description" style="
+                    font-size: 0.82rem;
+                    color: var(--text-color-secondary, rgba(255,255,255,0.5));
+                    margin: -12px 0 20px 0;
+                    line-height: 1.4;
+                ">${i18n.t('SegmentSkippingDescription') || 'Choose what happens when playback enters a detected segment. Requires the intro-skipper server plugin.'}</p>
+
+                <!-- Intro segment action -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSegmentActionIntro">${i18n.t('LabelSegmentActionIntro') || 'Intro Segment'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'segment-action-intro-select',
+                            [
+                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
+                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                            ],
+                            PlayerSettings.get('skipActionIntro') || 'AskToSkip'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Credits / outro segment action -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSegmentActionOutro">${i18n.t('LabelSegmentActionOutro') || 'Credits Segment'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'segment-action-outro-select',
+                            [
+                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
+                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                            ],
+                            PlayerSettings.get('skipActionOutro') || 'AskToSkip'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Recap segment action -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSegmentActionRecap">${i18n.t('LabelSegmentActionRecap') || 'Recap Segment'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'segment-action-recap-select',
+                            [
+                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
+                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                            ],
+                            PlayerSettings.get('skipActionRecap') || 'None'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Preview / next-episode teaser segment action -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSegmentActionPreview">${i18n.t('LabelSegmentActionPreview') || 'Preview Segment'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'segment-action-preview-select',
+                            [
+                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
+                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                            ],
+                            PlayerSettings.get('skipActionPreview') || 'None'
                         )}
                     </div>
                 </div>
@@ -2276,6 +2376,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Reduce Motion (Large Scrolls)
+        const snapLargeScrollsBtn = this.$('#toggle-snap-large-scrolls');
+        if (snapLargeScrollsBtn) {
+            snapLargeScrollsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:snapLargeScrolls') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:snapLargeScrolls', newValue.toString());
+                snapLargeScrollsBtn.classList.toggle('active', newValue);
+                log.info(`Snap Large Scrolls set to: ${newValue}`);
+            });
+        }
+
         // Toggle Hide Played in Latest
         const hidePlayedLatestBtn = this.$('#toggle-hide-played-latest');
         if (hidePlayedLatestBtn) {
@@ -2932,6 +3044,13 @@ class SettingsPage extends Page {
              */
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
+
+            // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
+            'segment-action-intro-select':   { type: 'player', key: 'skipActionIntro' },
+            'segment-action-outro-select':   { type: 'player', key: 'skipActionOutro' },
+            'segment-action-recap-select':   { type: 'player', key: 'skipActionRecap' },
+            'segment-action-preview-select': { type: 'player', key: 'skipActionPreview' },
+
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
