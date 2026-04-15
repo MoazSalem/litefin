@@ -191,12 +191,24 @@ class EpgGrid {
     }
 
     _renderRow(index, channel) {
-        // Render Channel Node
+        // =====================================================================
+        // Channel Node (left column)
+        // Made focusable so the user can navigate to channels that have no
+        // programs in the schedule yet. Pressing Right from a channel row
+        // will jump to the current/next program; Enter/OK will play the channel.
+        // =====================================================================
         const channelEl = document.createElement('div');
         channelEl.className = 'epg-channel-row';
         channelEl.style.position = 'absolute';
         channelEl.style.top = `${index * this.ROW_HEIGHT}px`;
         channelEl.style.width = '100%';
+        // Make the channel cell keyboard/D-pad focusable
+        channelEl.tabIndex = 0;
+        channelEl.dataset.channelId = channel.Id;
+        channelEl.dataset.rowIndex = String(index);
+        // Clicking/pressing OK on a channel plays it directly
+        channelEl.onclick = () => this._handleChannelClick(channel);
+        channelEl.onfocus = () => this._handleChannelFocus(channelEl);
         
         let logoUrl = '';
         if (channel.ImageTags && channel.ImageTags.Primary) {
@@ -265,10 +277,13 @@ class EpgGrid {
 
     _setupFocus() {
         focusManager.register('epg-grid', this.container.querySelector('.epg-grid-container'), {
-            selector: '.epg-program',
+            // Include both program cells AND channel-column items in the selector so
+            // FocusManager is aware of both types of focusable nodes in this section.
+            selector: '.epg-program, .epg-channel-row',
             orientation: 'both',
             // Wire up boundary exits using options passed from LiveTvPage
             leaveUp: this.options.leaveUp || null,
+            // Channel rows handle their own leaveLeft (to sidebar) via _handleMove
             leaveLeft: this.options.leaveLeft || null,
             onMove: (direction) => {
                 const nextEl = this._handleMove(direction);
@@ -292,41 +307,110 @@ class EpgGrid {
     }
 
     _handleMove(direction) {
-        const current = focusManager.getCurrentElement();
-        if (!current || !current.classList.contains('epg-program')) return null;
+        const current = document.activeElement;
+        if (!current) return null;
 
-        const program = current.__programData;
+        const isChannelRow = current.classList.contains('epg-channel-row');
+        const isProgram = current.classList.contains('epg-program');
+
+        if (!isChannelRow && !isProgram) return null;
+
         const channelId = current.dataset.channelId;
         const rowIndex = parseInt(current.dataset.rowIndex, 10);
-        
+
+        // =================================================================
+        // Movement from the LEFT CHANNEL COLUMN
+        // =================================================================
+        if (isChannelRow) {
+            if (direction === 'up' || direction === 'down') {
+                // Navigate between channel rows
+                const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
+                if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
+                    const nextChannel = this.channels[nextRowIndex];
+                    const data = this.domNodes.get(nextChannel.Id);
+                    if (data && data.channelEl) {
+                        this._scrollChannelIntoView(nextRowIndex);
+                        return data.channelEl;
+                    }
+                }
+            } else if (direction === 'right') {
+                // Jump into the program grid — find the current or next program
+                // for this same channel row so focus lands on something sensible.
+                const programs = this.programsMap.get(channelId) || [];
+                const now = Date.now();
+                const target =
+                    // First: prefer the program airing right now
+                    programs.find(p => now >= new Date(p.StartDate).getTime() && now < new Date(p.EndDate).getTime()) ||
+                    // Second: the next upcoming program
+                    programs.find(p => new Date(p.StartDate).getTime() > now) ||
+                    // Last resort: the very first program in the list
+                    programs[0];
+
+                if (target) {
+                    const el = this._findProgramEl(channelId, target.Id);
+                    if (el) {
+                        this._scrollIntoView(el);
+                        return el;
+                    }
+                }
+                // No programs at all — stay on the channel element (don't move)
+                return null;
+            }
+            // 'left' from a channel row — let FocusManager handle leaveLeft (→ sidebar)
+            return null;
+        }
+
+        // =================================================================
+        // Movement from the PROGRAM GRID
+        // =================================================================
+        const program = current.__programData;
         let nextEl = null;
 
-        if (direction === 'left' || direction === 'right') {
-            // Find next/prev program in the same row
-            const programs = this.programsMap.get(channelId);
+        if (direction === 'left') {
+            // Find prev program in the same row
+            const programs = this.programsMap.get(channelId) || [];
             const idx = programs.findIndex(p => p.Id === program.Id);
-            const nextIdx = direction === 'right' ? idx + 1 : idx - 1;
-            
-            if (nextIdx >= 0 && nextIdx < programs.length) {
-                nextEl = this._findProgramEl(channelId, programs[nextIdx].Id);
+            if (idx > 0) {
+                nextEl = this._findProgramEl(channelId, programs[idx - 1].Id);
+            } else {
+                // At the leftmost program — jump back to the channel column
+                const data = this.domNodes.get(channelId);
+                if (data && data.channelEl) {
+                    this._scrollChannelIntoView(rowIndex);
+                    return data.channelEl;
+                }
+            }
+        } else if (direction === 'right') {
+            // Find next program in the same row
+            const programs = this.programsMap.get(channelId) || [];
+            const idx = programs.findIndex(p => p.Id === program.Id);
+            if (idx >= 0 && idx + 1 < programs.length) {
+                nextEl = this._findProgramEl(channelId, programs[idx + 1].Id);
             }
         } else {
-            // Moving Up/Down
+            // Up / Down — move to program in adjacent row that overlaps current time
             const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
             if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
                 const nextChannel = this.channels[nextRowIndex];
-                // Find program in next row that overlaps with current time
                 const nextRowPrograms = this.programsMap.get(nextChannel.Id) || [];
-                const currentTime = new Date(program.StartDate).getTime() + (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
-                
+                const midTime = new Date(program.StartDate).getTime()
+                    + (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
+
                 const overlapping = nextRowPrograms.find(p => {
                     const start = new Date(p.StartDate).getTime();
                     const end = new Date(p.EndDate).getTime();
-                    return currentTime >= start && currentTime < end;
+                    return midTime >= start && midTime < end;
                 });
-                
+
                 if (overlapping) {
                     nextEl = this._findProgramEl(nextChannel.Id, overlapping.Id);
+                } else if (nextRowPrograms.length === 0) {
+                    // No programs in that row — skip to the channel label instead
+                    const data = this.domNodes.get(nextChannel.Id);
+                    if (data && data.channelEl) {
+                        this._scrollChannelIntoView(nextRowIndex);
+                        return data.channelEl;
+                    }
                 }
             }
         }
@@ -351,9 +435,41 @@ class EpgGrid {
     }
 
     _handleProgramFocus(el) {
-        // Optional: Update some side panel or footer with program details
+        // Broadcast program details in case any side panel wants to display them
         const program = el.__programData;
         eventBus.emit('epg:programFocused', program);
+    }
+
+    // Called when a channel label cell receives focus
+    _handleChannelFocus(el) {
+        const channel = this.channels[parseInt(el.dataset.rowIndex, 10)];
+        if (channel) {
+            // Let any listener (e.g. an info panel) know which channel is highlighted
+            eventBus.emit('epg:channelFocused', channel);
+        }
+    }
+
+    // Emit a play event for a channel when the user presses OK on its label
+    _handleChannelClick(channel) {
+        log.info('Channel clicked from EPG column:', channel.Name);
+        eventBus.emit('player:play', {
+            item: { Id: channel.Id, Type: 'TvChannel' }
+        });
+    }
+
+    /**
+     * Scroll the virtual grid so the requested channel row index is visible.
+     * Used when focus moves to a channel label in the left column.
+     */
+    _scrollChannelIntoView(rowIndex) {
+        const top = rowIndex * this.ROW_HEIGHT;
+        const paddingY = 50;
+
+        if (top < this.scrollY + paddingY) {
+            this.scrollY = Math.max(0, top - paddingY);
+        } else if (top + this.ROW_HEIGHT > this.scrollY + this.visibleHeight - paddingY) {
+            this.scrollY = top + this.ROW_HEIGHT - this.visibleHeight + paddingY;
+        }
     }
 
     _scrollIntoView(el) {
@@ -381,11 +497,15 @@ class EpgGrid {
     }
 
     _focusNow() {
-        // Find the program covering "now" in the first visible channel
+        // Find the program covering "now" in the first visible channel.
+        // If no programs are loaded (e.g. sparse schedules or API gaps), fall
+        // back to focusing the channel label itself so the user isn't left
+        // with nothing focusable in the guide.
         const now = new Date();
         const startRow = Math.floor(this.scrollY / this.ROW_HEIGHT);
         const channel = this.channels[startRow] || this.channels[0];
-        
+        if (!channel) return;
+
         const programs = this.programsMap.get(channel.Id) || [];
         const current = programs.find(p => {
             const start = new Date(p.StartDate).getTime();
@@ -395,7 +515,17 @@ class EpgGrid {
 
         if (current) {
             const el = this._findProgramEl(channel.Id, current.Id);
-            if (el) focusManager.focusElement(el);
+            if (el) {
+                focusManager.focusElement(el);
+                return;
+            }
+        }
+
+        // No current program found — focus the channel label in the left column
+        // so the user can at least navigate and play the channel directly.
+        const data = this.domNodes.get(channel.Id);
+        if (data && data.channelEl) {
+            focusManager.focusElement(data.channelEl);
         }
     }
 
@@ -404,27 +534,57 @@ class EpgGrid {
     // =========================================================================
 
     async _loadPrograms() {
-        // Fetch programs for all channels for the next 24 hours
-        // In a real app, I'd fetch this in chunks, but for now 24h for all is fine
-        const channelIds = this.channels.map(c => c.Id).join(',');
-        const result = await api.getLiveTvPrograms({
-            userId: api.userId,
-            channelIds: channelIds,
-            hasStartDate: true,
-            hasEndDate: true,
-            startDate: this.startTime.toISOString(),
-            endDate: this.endTime.toISOString(),
-            fields: 'Overview,PrimaryImageAspectRatio'
-        });
-        
-        // Group by channel
+        // =====================================================================
+        // Batched Programs Fetch
+        //
+        // The naive approach — joining ALL channel IDs into a single URL — causes
+        // net::ERR_FAILED on large installations with 100+ channels. HTTP has a
+        // practical URL length limit of ~8KB (enforced by browsers and reverse
+        // proxies). With 500+ channel IDs, the query string alone can exceed 20KB.
+        //
+        // Fix: split channels into chunks of BATCH_SIZE and fire them concurrently
+        // with Promise.all(). This keeps each URL within safe limits while keeping
+        // the total load time the same as a single request (parallel execution).
+        // =====================================================================
+        const BATCH_SIZE = 50;
+        const allChannelIds = this.channels.map(c => c.Id);
+
+        // Slice the array into batches of BATCH_SIZE
+        const batches = [];
+        for (let i = 0; i < allChannelIds.length; i += BATCH_SIZE) {
+            batches.push(allChannelIds.slice(i, i + BATCH_SIZE));
+        }
+
+        log.debug(`[EPG] Fetching programs for ${allChannelIds.length} channels in ${batches.length} batch(es) of ${BATCH_SIZE}`);
+
+        // Fire all batch requests concurrently — much faster than sequential
+        const batchResults = await Promise.all(
+            batches.map(batchIds =>
+                api.getLiveTvPrograms({
+                    userId: api.userId,
+                    channelIds: batchIds.join(','),
+                    hasStartDate: true,
+                    hasEndDate: true,
+                    startDate: this.startTime.toISOString(),
+                    endDate: this.endTime.toISOString(),
+                    fields: 'Overview,PrimaryImageAspectRatio'
+                })
+            )
+        );
+
+        // Merge all batch results into the programs map, grouped by channelId
         this.programsMap.clear();
-        result.Items.forEach(item => {
-            if (!this.programsMap.has(item.ChannelId)) {
-                this.programsMap.set(item.ChannelId, []);
+        for (const result of batchResults) {
+            if (!result || !result.Items) continue;
+            for (const item of result.Items) {
+                if (!this.programsMap.has(item.ChannelId)) {
+                    this.programsMap.set(item.ChannelId, []);
+                }
+                this.programsMap.get(item.ChannelId).push(item);
             }
-            this.programsMap.get(item.ChannelId).push(item);
-        });
+        }
+
+        log.debug(`[EPG] Programs loaded. ${this.programsMap.size} channels have program data.`);
     }
 
     // =========================================================================

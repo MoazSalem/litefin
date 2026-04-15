@@ -153,9 +153,9 @@
    ============================================================================ */
 .epg-grid-container {
     padding: 0;
-    /* To maintain virtualization, the grid needs a fixed height relative to the screen. 
-       Since the parent scrolls, we size it to the viewport minus the tab area. */
-    height: calc(100vh - 100px); 
+    /* To maintain virtualization, we need a fixed height.
+       calc(100vh - 230px) accounts for the h1 title, tabs, and header padding. */
+    height: calc(100vh - 230px); 
     overflow: hidden;
     position: relative;
     display: flex;
@@ -164,9 +164,11 @@
 
 .epg-header {
     height: 60px;
+    flex-shrink: 0; /* Prevent header from collapsing in flex container */
     background: var(--jf-background);
     display: flex;
-    z-index: 10;
+    position: relative;
+    z-index: 100; /* Above virtualized rows */
     border-bottom: 2px solid var(--jf-divider);
 }
 
@@ -202,7 +204,7 @@
 }
 
 .epg-body {
-    flex-grow: 1;
+    flex: 1; /* Occupy remaining height in the grid container */
     display: flex;
     overflow: hidden;
 }
@@ -211,6 +213,7 @@
     width: 250px;
     flex-shrink: 0;
     overflow: hidden;
+    position: relative;
     border-right: 2px solid var(--jf-divider);
     background: var(--jf-background-alt);
     z-index: 5;
@@ -226,6 +229,18 @@
     align-items: center;
     padding: 0 20px;
     border-bottom: 1px solid var(--jf-divider);
+    border-left: 4px solid transparent; /* Apple-style selection indicator */
+    transition: background 0.25s ease, border-left-color 0.25s ease, transform 0.2s ease;
+    will-change: background, border-left-color;
+    box-sizing: border-box;
+}
+
+.epg-channel-row:focus,
+.epg-channel-row.focused {
+    background: rgba(255, 255, 255, 0.12);
+    border-left-color: var(--jf-accent);
+    outline: none;
+    z-index: 10;
 }
 
 .epg-channel-logo {
@@ -251,6 +266,11 @@
 .epg-channel-number {
     font-size: 1rem;
     color: var(--jf-text-secondary);
+    transition: color 0.2s ease;
+}
+
+.epg-channel-row.focused .epg-channel-number {
+    color: var(--jf-text-primary);
 }
 
 .epg-programs {

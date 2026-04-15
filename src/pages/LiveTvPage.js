@@ -83,7 +83,19 @@ class LiveTvPage extends Page {
         this._isMounted = true;
         this._setupTabHandlers();
         this._setupPaginationHandlers();
+        
+        // Load the initial tab (usually Suggestions)
         this._loadTab(this._currentTab);
+
+        /**
+         * =====================================================================
+         * INITIAL FOCUS
+         * =====================================================================
+         * When entering the page via forward navigation (e.g., from Home),
+         * we explicitly set focus to the tab switcher so the user has immediate
+         * feedback and control.
+         */
+        this.setActiveSection('livetv-tabs');
 
         // Initial selector position
         setTimeout(() => this._updateTabSelector(), 200);
@@ -93,6 +105,13 @@ class LiveTvPage extends Page {
         window.addEventListener('resize', this._resizeHandler);
 
         this.markReady();
+
+        /**
+         * Handle back-navigation state restoration (if any).
+         * If the user is returning to this page, this will restore their
+         * previous scroll position and focused element.
+         */
+        this.restoreScrollFocusWhenReady();
     }
 
     onDestroy() {
@@ -401,9 +420,9 @@ class LiveTvPage extends Page {
 
     async _renderGuide() {
         const container = this.$('#livetv-content');
-        container.innerHTML = '<div class="epg-grid-container" id="epg-container"></div>';
+        container.innerHTML = '<div id="epg-mount"></div>';
 
-        const epg = new EpgGrid(container.querySelector('#epg-container'), {
+        const epg = new EpgGrid(container.querySelector('#epg-mount'), {
             // Wire up Out-of-bounds exits for D-pad navigation
             leaveUp: 'livetv-tabs',
             leaveLeft: 'sidebar'
