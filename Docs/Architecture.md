@@ -28,3 +28,5 @@ Litefin supports modular extensions to enhance the core experience:
 ## Localization
 
 The **Translation Manager** handles multi-language support, including dynamic key mapping from Jellyfin Web and full support for Right-to-Left (RTL) layouts.
+
+[**Localization guide**](./Localization.md) is a handy doc for translation contributions

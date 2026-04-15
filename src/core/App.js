@@ -364,6 +364,14 @@ class App {
                 if (state.get('user:authenticated')) {
                     api.openWebSocket();
                 }
+
+                // Force a reload of the current view to fetch fresh data 
+                // e.g., when the Tizen TV turns on from suspended sleep state.
+                // We skip reloading if the user is in the player to avoid interrupting playback.
+                const currentPath = router.getCurrentPath?.() || '';
+                if (!currentPath.startsWith('/player')) {
+                    router.reload();
+                }
             }
         });
 

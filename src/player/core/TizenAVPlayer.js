@@ -391,19 +391,29 @@ export class TizenAVPlayer {
             if (options.playerStartPositionTicks) {
                 const startMs = options.playerStartPositionTicks / 10000;
 
-                // Seek to the exact requested position. AVPlay will snap to the
-                // nearest keyframe before the target, which is a small natural offset
-                // that SyncPlay's drift correction handles automatically.
-                // The old -10s KEYFRAME_REWIND_MS hack made things worse — we were
-                // seeking 10s early and then reporting that fake position to SyncPlay,
-                // causing the group to wait 10s for Tizen to catch up.
-                try {
-                    log.info(`Initial seek to ${startMs}ms (before native play)`);
-                    this._avplay.seekTo(startMs);
-                } catch (e) {
-                    log.warn('Pre-play seek failed, will retry after play:', e);
-                    this._pendingSeekMs = startMs;
-                }
+                // ── Deferred resume seek (subtitle-first ordering) ─────────────────────────────
+                //
+                // We intentionally skip seekTo() here in the READY state.
+                //
+                // Seeking before play() initializes the VIDEO decoder from the
+                // correct position, but leaves Tizen's SUBTITLE cue parser at
+                // position 0. When AVPlay then renders frames at e.g. 51 minutes,
+                // the subtitle parser is looking for cues near 0:00 that will never
+                // arrive — so subtitles are completely silent on resume.
+                //
+                // The fix: store startMs in _pendingSeekMs and let the flow go:
+                //   1.  play() from 0:00  →  subtitle decoder initializes at start
+                //   2.  first frame renders  →  _applyPendingTracks selects subtitle
+                //   3.  seekTo(startMs)  →  video jumps to resume position
+                //   4.  200ms later  →  subtitle re-applied (seek can reset it)
+                //   5.  4s confirm timer  →  final belt-and-suspenders re-apply
+                //
+                // If there is NO native subtitle pending (_pendingSubtitleIndex is
+                // null or -1), the seek is applied at first-frame render instead,
+                // which preserves the fast "seek once, play from target" behaviour.
+                // ────────────────────────────────────────────────────────────────────────────
+                log.info(`Deferring resume seek to ${startMs}ms until after subtitle track is confirmed`);
+                this._pendingSeekMs = startMs;
             }
 
             // Metadata is now loaded, display is ready, and seek position is set.
@@ -531,15 +541,22 @@ export class TizenAVPlayer {
                     this._firstFrameRendered = true;
                     this._firstFrameTimeMs = Date.now();
 
-                    // Fallback: if the pre-play seekTo failed, retry now that playback has started
-                    if (this._pendingSeekMs !== null) {
+                    // Apply the deferred resume seek only if there is NO native subtitle
+                    // track pending. If a subtitle IS pending, the seek is deferred further
+                    // to _applyPendingTracks where it fires AFTER the track is confirmed
+                    // applied — this guarantees the subtitle cue parser initialises before
+                    // the decoder jumps to the resume position.
+                    //
+                    // If there's no subtitle (or it's set to -1/disabled), seek normally.
+                    if (this._pendingSeekMs !== null &&
+                        (this._pendingSubtitleIndex === null || this._pendingSubtitleIndex === -1)) {
                         const seekMs = this._pendingSeekMs;
                         this._pendingSeekMs = null;
                         try {
-                            log.info(`Fallback seek to ${seekMs}ms (post first frame)`);
+                            log.info(`Resume seek to ${seekMs}ms (post first frame, no subtitle pending)`);
                             this._avplay.seekTo(seekMs);
                         } catch (e) {
-                            log.warn('Fallback seek also failed:', e);
+                            log.warn('Resume seek failed:', e);
                         }
                     }
                 }
@@ -599,6 +616,20 @@ export class TizenAVPlayer {
                                     type: 'subtitlefallback',
                                     data: { index: failedSubIndex }
                                 });
+                            }
+
+                            // Subtitle failed — flush the deferred seek now so the user
+                            // isn't stranded at 0:00. No subtitle re-apply needed since
+                            // we just gave up on the native track.
+                            if (this._pendingSeekMs !== null) {
+                                const stuckSeekMs = this._pendingSeekMs;
+                                this._pendingSeekMs = null;
+                                try {
+                                    log.warn(`[SubtitleSeek] Subtitle timed out — flushing deferred seek to ${stuckSeekMs}ms`);
+                                    this._avplay.seekTo(stuckSeekMs);
+                                } catch (e) {
+                                    log.warn('[SubtitleSeek] Deferred seek after subtitle timeout failed:', e);
+                                }
                             }
                         }
                     }
@@ -756,6 +787,73 @@ export class TizenAVPlayer {
                             log.info(`TEXT track ${tizenSubIndex} applied in ${avplayState} state`);
                             this._pendingSubtitleIndex = null; // Clear so we don't spam oncurrentplaytime
                             this._activeTizenSubtitleIndex = tizenSubIndex; // Track active selection
+
+                            // ── 4-second confirmation re-apply ──────────────────────────────────────────
+                            //
+                            // Some Tizen firmware silently ignores setSelectTrack() during the early
+                            // READY/buffering phase — the call doesn't throw but the decoder ignores it.
+                            // After 4 seconds the hardware is fully settled and a second unconditional
+                            // re-apply guarantees the correct track is active.
+                            //
+                            // No pause/resume — just the exact same raw setSelectTrack + setSilentSubtitle
+                            // toggle that ran above, repeated once more. The timer is cancelled if the
+                            // user picks a different track or playback stops before it fires.
+                            // ────────────────────────────────────────────────────────────────────────────
+                            if (this._subtitleConfirmTimerId !== null) clearTimeout(this._subtitleConfirmTimerId);
+                            const _confirmedTizenIndex = tizenSubIndex; // capture for closure
+                            this._subtitleConfirmTimerId = setTimeout(() => {
+                                this._subtitleConfirmTimerId = null;
+
+                                // Bail out if the session ended or the user changed tracks since we queued
+                                if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
+                                if (this._activeTizenSubtitleIndex !== _confirmedTizenIndex) return;
+
+                                try {
+                                    log.info(`[SubtitleConfirm] Re-applying TEXT track ${_confirmedTizenIndex} at +4s to ensure hardware compliance`);
+                                    this._avplay.setSelectTrack('TEXT', _confirmedTizenIndex);
+                                    this._avplay.setSilentSubtitle(true);
+                                    this._avplay.setSilentSubtitle(false);
+                                } catch (e) {
+                                    log.warn('[SubtitleConfirm] Re-apply failed:', e.message || e);
+                                }
+                            }, 4000);
+
+                            // ── Deferred resume seek (fires once subtitle is confirmed) ───────────────
+                            //
+                            // The deferred seek was held here to allow Tizen's subtitle cue
+                            // parser to initialize from position 0 before we jump to the
+                            // resume timestamp. Now that the track is selected, do the seek.
+                            // seekTo() sometimes resets Tizen's TEXT track selection, so we
+                            // schedule a 200ms re-apply immediately after to restore it.
+                            // ─────────────────────────────────────────────────────────────────────────
+                            if (this._pendingSeekMs !== null) {
+                                const seekMs = this._pendingSeekMs;
+                                const seekSubIndex = tizenSubIndex; // capture for post-seek closure
+                                this._pendingSeekMs = null; // consume now to prevent double-apply
+                                try {
+                                    log.info(`[SubtitleSeek] Subtitle confirmed — seeking to resume position ${seekMs}ms`);
+                                    this._avplay.seekTo(seekMs);
+
+                                    // Re-apply the subtitle track 200ms after seekTo.
+                                    // seekTo() can internally reset the active TEXT track on some
+                                    // Tizen firmware. The 200ms window gives the decoder time to
+                                    // stabilize before we re-assert the selection.
+                                    setTimeout(() => {
+                                        if (!this._avplay || !this._isPrepared || !this._isPlaying) return;
+                                        if (this._activeTizenSubtitleIndex !== seekSubIndex) return;
+                                        try {
+                                            log.info(`[SubtitleSeek] Post-seek re-apply of TEXT track ${seekSubIndex}`);
+                                            this._avplay.setSelectTrack('TEXT', seekSubIndex);
+                                            this._avplay.setSilentSubtitle(true);
+                                            this._avplay.setSilentSubtitle(false);
+                                        } catch (e) {
+                                            log.warn('[SubtitleSeek] Post-seek subtitle re-apply failed:', e.message || e);
+                                        }
+                                    }, 200);
+                                } catch (e) {
+                                    log.warn('[SubtitleSeek] Deferred resume seek failed:', e.message || e);
+                                }
+                            }
                         } catch (e) {
                             // If Tizen returns InvalidStateError, keep trying in the loop.
                             if (e.name === 'InvalidStateError' || e.code === 11) {
