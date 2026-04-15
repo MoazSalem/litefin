@@ -63,8 +63,42 @@ export const MediaHelper = {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;
                 }
             } else if (mediaSource.SupportsDirectPlay && mediaSource.Path) {
-                // Local/SMB file path (native-app only, not used in browser)
-                url = mediaSource.Path;
+                // ====================================================================
+                // Live TV / m3u Playlist guard:
+                // Jellyfin sets Protocol='Http' for media sources that originate from
+                // an m3u playlist or Live TV stream. The `Path` it returns is its own
+                // internal loopback address (e.g. http://127.0.0.1:8096/LiveTv/...).
+                // That address is unreachable from a TV on the network.
+                //
+                // The official Jellyfin web client avoids this by calling the
+                // `/Videos/{id}/live.m3u8` endpoint which proxies the stream through
+                // the server's public address and returns a proper HLS manifest.
+                //
+                // We detect this case by checking:
+                //   1. Protocol is 'Http' (set by Jellyfin for all HTTP-sourced streams)
+                //   2. The Path points to a loopback address (127.0.0.1 or localhost)
+                //      OR the Path contains LiveStreamFiles (another reliable marker)
+                // ====================================================================
+                const isLoopbackPath = mediaSource.Path &&
+                    (mediaSource.Path.includes('127.0.0.1') ||
+                     mediaSource.Path.includes('localhost') ||
+                     mediaSource.Path.includes('LiveStreamFiles'));
+
+                if (mediaSource.Protocol === 'Http' && isLoopbackPath) {
+                    // Redirect through the server's public live.m3u8 HLS proxy endpoint.
+                    // This matches the official Jellyfin web client's behavior exactly.
+                    url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
+                    url += `?Container=m3u8`;
+                    url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                    if (playSessionId) {
+                        url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                    }
+                    url += `&api_key=${encodeURIComponent(authToken)}`;
+                    isHls = true;
+                } else {
+                    // Local/SMB file path (native-app only, not used in browser)
+                    url = mediaSource.Path;
+                }
             }
         } else {
             // Transcode: HLS from server or HTTP stream (for audio).
