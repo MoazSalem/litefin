@@ -9,6 +9,8 @@
    ============================================================================ */
 
 .upnext-dialog {
+    font-size: 1.25rem;
+    
     /*
      * Position: absolute within .osd-overlays (which fills the full player).
      * Sits 13.5em above the bottom to clear the OSD seekbar/controls AND
@@ -358,13 +360,3 @@
     }
 }
 
-/* 4K Scaling Strategy:
-   On Tizen 4K displays (typically 1920 logical px but rendering at 4K), 
-   the base font size of 16px can feel too small for OSD cards.
-   We bump the dialog's local font-size to 24px (1.5x) to ensure legibility.
-*/
-@media (min-width: 2500px) {
-    .upnext-dialog {
-        font-size: 28px;
-    }
-}
