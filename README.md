@@ -22,6 +22,7 @@ Comprehensive documentation is available in the `Docs` directory:
 - [**UI & UX**](./Docs/UI_UX.md): Design system, components, and animation principles.
 - [**Screenshots**](./Docs/Screenshots.md): Visual previews of the application.
 - [**Development**](./Docs/Development.md): Build pipeline, variants, and deployment guide.
+- [**Localization**](./Docs/Localization.md) A doc for translation contributions
 
 ## Quick Start (Development)
 

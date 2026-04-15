@@ -27,6 +27,7 @@
         "package:legacy": "gulp buildPackageLegacy",
         "package:ultra-legacy": "gulp buildPackageUltraLegacy",
         "package:debug": "gulp buildPackageDebug",
+        "locale:check": "node scripts/check-locale.js",
         "postinstall": "patch-package"
     },
     "keywords": [
