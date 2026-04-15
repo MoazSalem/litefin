@@ -225,8 +225,12 @@ export function buildJellyfinProfile(options = {}) {
     // always contains FLAC so .flac containers DirectPlay regardless of this setting.
     const enableFlacInVideo = PlayerSettings.get('enableFlacInVideo');
 
-    // Base codec list shared by all audio contexts
-    const baseAudioCodecs = ['aac', 'mp3', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    // Base codec list shared by all audio contexts.
+    // mp2 (MPEG-1 Layer 2) is included because it is the standard audio codec for
+    // broadcast Live TV (DVB/MPEG-TS) streams in Europe and elsewhere. Without it,
+    // Jellyfin will set AudioCodecNotSupported and force a full transcode for Live TV.
+    // AVPlay handles mp2 natively in TS containers — no transcode needed.
+    const baseAudioCodecs = ['aac', 'mp3', 'mp2', 'mp1l2', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.ac3) baseAudioCodecs.push('ac3');
     if (caps.eac3) baseAudioCodecs.push('eac3');
     if (caps.tizenVersion >= 6.5) baseAudioCodecs.push('ac4');
@@ -556,13 +560,25 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                // Tizen AVPlay HLS parser does NOT support interlaced H264 streams (1080i).
-                // FFmpeg with -c:v copy passes the interlaced flag through to the TS segments,
-                // and AVPlay immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it detects
-                // the interlaced scan type in the H264 SPS. HLS streams must be progressive.
-                // IsRequired: true forces Jellyfin to transcode (not copy) interlaced content,
-                // at which point FFmpeg applies bwdif deinterlacing to produce clean progressive output.
-                { Condition: 'Equals', Property: 'IsInterlaced', Value: 'false', IsRequired: true },
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    // ----------------------------------------------------------------
+                    // IsRequired: false — advisory, not blocking.
+                    //
+                    // With 'true': Jellyfin blocks DirectPlay of ALL interlaced H264,
+                    // including raw TS streams from Live TV where AVPlay's hardware
+                    // deinterlace engine handles 1080i perfectly.
+                    //
+                    // With 'false': Jellyfin PREFERS progressive H264 for HLS stream
+                    // copying, but does NOT prevent DirectPlay of interlaced content.
+                    // Live TV channels (1080i H264 in raw TS) can DirectPlay, while
+                    // HLS transcode path still benefits from server-side bwdif
+                    // deinterlacing when a full encode is required for other reasons.
+                    // ----------------------------------------------------------------
+                    IsRequired: false
+                },
                 ...hdrCondition
             ]
         },
