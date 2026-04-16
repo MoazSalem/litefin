@@ -161,7 +161,13 @@ export function getDeviceCapabilities() {
 
     // HDR10: Use WebOS Adapter's detected hardware value if available.
     // Otherwise rely strictly on the UHD detection. MSE probing natively fails across WebOS.
-    const hdr10 = hdr10Hw !== null ? hdr10Hw : uhd;
+    //
+    // IMPORTANT: Every Dolby Vision display also supports HDR10 — DV Profile 7/8 content
+    // carries an HDR10 base layer that acts as the SDR/HDR10 fallback. Some LG WebOS
+    // builds report `hdr10: false` in deviceInfo while still reporting `dolbyVision: true`.
+    // In that case the explicit hdr10Hw:false would wrongly disable HDR10 capability.
+    // We force hdr10 = true whenever dolbyVision is confirmed by hardware info.
+    const hdr10 = (hdr10Hw !== null ? hdr10Hw : uhd) || dolbyVision;
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
@@ -632,6 +638,25 @@ export function buildJellyfinProfile(options = {}) {
         }
     ];
 
+    // ---------------------------------------------------------------------------
+    // HEVC VideoRangeType allowed list.
+    //
+    // This string controls which HDR range types the server is permitted to
+    // direct-play or remux without re-encoding the video stream.
+    //
+    // When the user enables DV, we MUST also include the plain HDR10 / HLG
+    // subtypes here — otherwise a file whose VideoRangeType is 'HDR10' (not
+    // a DV subtype) hits the DV encouragement CodecProfile below, fails the
+    // DOVI-only EqualsAny match, and Jellyfin reports VideoRangeTypeNotSupported
+    // — triggering a slow full video transcode for what should be a direct-play.
+    //
+    // Rule: include ALL range types that both HDR and DV paths need.
+    // Mirror of TizenProfile's hevcVideoRangeTypes.
+    // ---------------------------------------------------------------------------
+    const hevcVideoRangeTypes = enableHDR
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus'
+        : 'SDR|DOVIWithSDR';
+
     if (enableHEVC) {
         codecProfiles.push({
             Type: 'Video',
@@ -641,6 +666,16 @@ export function buildJellyfinProfile(options = {}) {
                     Condition: 'EqualsAny',
                     Property: 'VideoProfile',
                     Value: enableHDR ? 'main|main 10' : 'main',
+                    IsRequired: false
+                },
+                {
+                    // Explicitly enumerate accepted VideoRangeTypes so Jellyfin knows
+                    // we can handle HDR10 and all DV sub-flavours without transcoding.
+                    // Without this, enabling DV causes HDR10-only files (VideoRangeType=HDR10)
+                    // to fall through with VideoRangeTypeNotSupported.
+                    Condition: 'EqualsAny',
+                    Property: 'VideoRangeType',
+                    Value: hevcVideoRangeTypes,
                     IsRequired: false
                 },
                 {
