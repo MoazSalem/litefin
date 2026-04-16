@@ -17,6 +17,8 @@
    <tizen:privilege name="http://developer.samsung.com/privilege/network.public"/>
    <tizen:privilege name="http://developer.samsung.com/privilege/avplay"/>
    <tizen:privilege name="http://tizen.org/privilege/network"/>
+   <tizen:privilege name="http://developer.samsung.com/privilege/preview"/>
+   <tizen:privilege name="http://tizen.org/privilege/messageport"/>
    <feature name="http://tizen.org/feature/screen.size.all"/>
    <feature name="http://tizen.org/feature/network.internet"/>
    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"></tizen:setting>

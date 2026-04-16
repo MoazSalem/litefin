@@ -44,6 +44,7 @@ import { imageCache } from '../utils/ImageCache.js';
 import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { versionChecker } from '../utils/VersionChecker.js';
 import { globalClock } from '../ui/GlobalClock.js';
+import { smartHubManager } from '../tizen/SmartHubManager.js';
 
 const log = logger.create('App');
 
@@ -126,7 +127,14 @@ class App {
         // 4. Try to restore auth session
         await auth.init();
 
-        // 4.5. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
+        // 4.5. Initialize Smart Hub Preview (Tizen 4+ only — gracefully no-ops on older
+        //      hardware or other platforms. Must run after auth.init() so the manager can
+        //      read the restored auth state and start the refresh cycle immediately.)
+        if (platformInfo.isTizen) {
+            smartHubManager.init();
+        }
+
+        // 4.6. Initialize Plugin Manager and Screensaver if user is authenticated (session restores).
         if (state.get('user:authenticated')) {
             pluginManager
                 .init({
