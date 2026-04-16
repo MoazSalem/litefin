@@ -61,11 +61,17 @@ export const MediaHelper = {
 
             if (mediaSource.Protocol === 'Http' && isLoopbackPath) {
                 // Route through the server's public HLS proxy endpoint.
+                // The LiveStreamId is critical — without it the server cannot identify
+                // which open live stream to serve HLS segments from. This matches the
+                // exact parameter set used by the official Jellyfin web client.
                 url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
                 url += `?Container=m3u8`;
                 url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
                 if (playSessionId) {
                     url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                }
+                if (mediaSource.LiveStreamId) {
+                    url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
                 }
                 url += `&api_key=${encodeURIComponent(authToken)}`;
                 isHls = true;
