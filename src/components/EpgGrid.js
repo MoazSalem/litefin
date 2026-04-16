@@ -47,6 +47,11 @@ class EpgGrid {
         
         this.domNodes = new Map(); // channelId -> { rowEl, channelEl, programNodes: Map<programId, node> }
         
+        // Track which EPG element is currently "focused" for navigation.
+        // FocusManager routes keypresses internally without setting real DOM focus,
+        // so document.activeElement is always BODY — we must maintain our own pointer.
+        this._focusedEl = null;
+        
         this._isMounted = false;
         this._isDestroyed = false;
     }
@@ -76,8 +81,11 @@ class EpgGrid {
             await this._loadPrograms();
             this._startRenderLoop();
             
-            // 5. Initial Scroll to "Now"
+            // 5. Start render loop and do one synchronous render to pre-populate
+            //    domNodes before _focusNow() tries to look up the initial element.
+            //    Without this, domNodes is empty and _focusedEl is never set.
             this._scrollToNow();
+            this._renderVirtualGrid(); // Synchronous initial render
             
             // 6. Focus initial program
             this._focusNow();
@@ -156,9 +164,15 @@ class EpgGrid {
     }
 
     _renderVirtualGrid() {
-        // 1. Calculate window
-        const startRow = Math.floor(this.scrollY / this.ROW_HEIGHT);
-        const endRow = Math.min(this.channels.length - 1, Math.ceil((this.scrollY + this.visibleHeight) / this.ROW_HEIGHT));
+        // 1. Calculate window with OVERSCAN so adjacent rows always exist in DOM.
+        //    Without overscan, navigating to a row that hasn't been rendered yet
+        //    causes domNodes.get() to return null, deadlocking scroll updates.
+        const OVERSCAN = 3;
+        const startRow = Math.max(0, Math.floor(this.scrollY / this.ROW_HEIGHT) - OVERSCAN);
+        const endRow = Math.min(
+            this.channels.length - 1,
+            Math.ceil((this.scrollY + this.visibleHeight) / this.ROW_HEIGHT) + OVERSCAN
+        );
         
         
         // 2. Clear nodes outside window
@@ -286,13 +300,10 @@ class EpgGrid {
             onMove: (direction) => {
                 const nextEl = this._handleMove(direction);
                 if (nextEl) {
+                    // Update our internal focus pointer BEFORE calling focusManager
+                    // so _handleMove has the correct context on the very next keypress.
+                    this._focusedEl = nextEl;
                     focusManager.focusElement(nextEl);
-                    
-                    // Since we return 'true' to handle focus internally, FocusManager's 
-                    // default scrollIntoView is skipped. We must manually trigger 
-                    // the parent page-content to scroll so the header pushes out.
-                    scrollController.scrollIntoView(this.container); 
-
                     return true; 
                 }
                 return false;
@@ -305,7 +316,9 @@ class EpgGrid {
     }
 
     _handleMove(direction) {
-        const current = document.activeElement;
+        // Use our internal tracked element — document.activeElement is always BODY
+        // because FocusManager routes keys internally without setting real DOM focus.
+        const current = this._focusedEl;
         if (!current) return null;
 
         const isChannelRow = current.classList.contains('epg-channel-row');
@@ -323,11 +336,30 @@ class EpgGrid {
             if (direction === 'up' || direction === 'down') {
                 // Navigate between channel rows
                 const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
-                if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
+                
+                // At the top boundary — hand off to the tabs section
+                if (nextRowIndex < 0) {
+                    if (this.options.leaveUp) {
+                        focusManager.setActiveSection(this.options.leaveUp);
+                    }
+                    return null;
+                }
+                
+                if (nextRowIndex < this.channels.length) {
+                    // CRITICAL: Update scrollY FIRST so the virtualization window shifts.
+                    this._scrollChannelIntoView(nextRowIndex);
+                    
                     const nextChannel = this.channels[nextRowIndex];
+                    
+                    // Force-render the target row synchronously if virtualization
+                    // hasn't created it yet. Without this, domNodes.get() returns null
+                    // and we'd need two button presses per row to actually navigate.
+                    if (!this.domNodes.has(nextChannel.Id)) {
+                        this._renderRow(nextRowIndex, nextChannel);
+                    }
+                    
                     const data = this.domNodes.get(nextChannel.Id);
                     if (data && data.channelEl) {
-                        this._scrollChannelIntoView(nextRowIndex);
                         return data.channelEl;
                     }
                 }
@@ -353,8 +385,16 @@ class EpgGrid {
                 }
                 // No programs at all — stay on the channel element (don't move)
                 return null;
+            } else if (direction === 'left') {
+                // Pressing Left from the channel column — navigate to the sidebar.
+                // We handle this explicitly because FocusManager's leaveLeft exit
+                // relies on real DOM focus, which is always BODY in our case.
+                if (this.options.leaveLeft) {
+                    focusManager.setActiveSection(this.options.leaveLeft);
+                }
+                return null;
             }
-            // 'left' from a channel row — let FocusManager handle leaveLeft (→ sidebar)
+            // Any other direction from channel column — nothing to do
             return null;
         }
 
@@ -390,6 +430,14 @@ class EpgGrid {
             const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
             if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
                 const nextChannel = this.channels[nextRowIndex];
+                
+                // Scroll and force-render the target row synchronously so domNodes
+                // is populated before we try to query it for the program element.
+                this._scrollChannelIntoView(nextRowIndex);
+                if (!this.domNodes.has(nextChannel.Id)) {
+                    this._renderRow(nextRowIndex, nextChannel);
+                }
+                
                 const nextRowPrograms = this.programsMap.get(nextChannel.Id) || [];
                 const midTime = new Date(program.StartDate).getTime()
                     + (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
@@ -403,10 +451,9 @@ class EpgGrid {
                 if (overlapping) {
                     nextEl = this._findProgramEl(nextChannel.Id, overlapping.Id);
                 } else if (nextRowPrograms.length === 0) {
-                    // No programs in that row — skip to the channel label instead
+                    // No programs in that row — focus the channel label instead
                     const data = this.domNodes.get(nextChannel.Id);
                     if (data && data.channelEl) {
-                        this._scrollChannelIntoView(nextRowIndex);
                         return data.channelEl;
                     }
                 }
@@ -433,16 +480,18 @@ class EpgGrid {
     }
 
     _handleProgramFocus(el) {
-        // Broadcast program details in case any side panel wants to display them
+        // Update our internal focus tracker and broadcast program details
+        this._focusedEl = el;
         const program = el.__programData;
         eventBus.emit('epg:programFocused', program);
     }
 
     // Called when a channel label cell receives focus
     _handleChannelFocus(el) {
+        // Update our internal focus tracker and broadcast channel details
+        this._focusedEl = el;
         const channel = this.channels[parseInt(el.dataset.rowIndex, 10)];
         if (channel) {
-            // Let any listener (e.g. an info panel) know which channel is highlighted
             eventBus.emit('epg:channelFocused', channel);
         }
     }
@@ -512,6 +561,7 @@ class EpgGrid {
         if (current) {
             const el = this._findProgramEl(channel.Id, current.Id);
             if (el) {
+                this._focusedEl = el;
                 focusManager.focusElement(el);
                 return;
             }
@@ -521,6 +571,7 @@ class EpgGrid {
         // so the user can at least navigate and play the channel directly.
         const data = this.domNodes.get(channel.Id);
         if (data && data.channelEl) {
+            this._focusedEl = data.channelEl;
             focusManager.focusElement(data.channelEl);
         }
     }
