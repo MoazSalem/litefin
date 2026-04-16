@@ -589,6 +589,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelMergeResumeNextUp">${i18n.t('LabelMergeResumeNextUp')}</span>
+                        <span class="setting-description" data-i18n="LabelMergeResumeNextUpDescription">${i18n.t('LabelMergeResumeNextUpDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:mergeResumeNextUp') === 'true' ? 'active' : ''}" 
+                                 id="toggle-merge-resume-nextup" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
                         <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
                     </div>
@@ -2313,6 +2327,25 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Merge Resume and Next Up
+        const mergeResumeNextUpBtn = this.$('#toggle-merge-resume-nextup');
+        if (mergeResumeNextUpBtn) {
+            mergeResumeNextUpBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:mergeResumeNextUp') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:mergeResumeNextUp', newValue);
+                mergeResumeNextUpBtn.classList.toggle('active', newValue);
+                log.info(`Merge Resume and Next Up set to: ${newValue}`);
+
+                // Refresh the home layout UI so "Next Up" disappears/reappears
+                // This ensures the user doesn't see conflicting options.
+                this._setupHomeLayoutUI();
+
+                // Invalidate focus cache to keep navigation stable
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
         // Toggle Random Button
         const randomBtnToggle = this.$('#toggle-random-button');
         if (randomBtnToggle) {
@@ -3688,11 +3721,17 @@ class SettingsPage extends Page {
             const views = viewsResponse.Items || [];
 
             // Build the base descriptors
+            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
             const descriptors = [
                 { id: 'my-media', title: i18n.t('HeaderMyMedia') },
-                { id: 'resume', title: i18n.t('HeaderContinueWatching') },
-                { id: 'next-up', title: i18n.t('NextUp') }
+                { id: 'resume', title: i18n.t('HeaderContinueWatching') }
             ];
+
+            // If merging is enabled, 'next-up' is handled as part of 'resume' row,
+            // so we hide it from the standalone layout sorting to avoid confusion.
+            if (!mergeResumeNextUp) {
+                descriptors.push({ id: 'next-up', title: i18n.t('NextUp') });
+            }
 
             views.forEach((lib) => {
                 descriptors.push({

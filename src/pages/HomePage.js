@@ -212,53 +212,99 @@ class HomePage extends Page {
             });
         }
 
-        // ── Priority 1: Continue Watching ─────────────────────────────────────
-        descriptors.push({
-            id: 'resume',
-            title: i18n.t('HeaderContinueWatching'),
-            priority: 1,
-            layout: 'landscape',
-            cardType: 'resume',
-            contextType: 'resume',
-            fetchFn: async () => {
-                const res = await api.getResumeItems();
-                return res?.Items?.length > 0 ? res.Items : null;
-            }
-        });
+        // ── Priority 1: Continue Watching & Next Up ──────────────────────────
+        const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
 
-        // ── Priority 1: Next Up (runs in parallel with Resume) ────────────────
-        descriptors.push({
-            id: 'next-up',
-            title: i18n.t('NextUp'),
-            priority: 1,
-            layout: 'landscape',
-            cardType: 'episode',
-            contextType: 'nextUp',
-            fetchFn: async () => {
-                const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                // Default to 365 days if not set, or use 0 for unlimited
-                const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+        if (mergeResumeNextUp) {
+            descriptors.push({
+                id: 'resume',
+                title: i18n.t('HeaderContinueWatching'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'resume',
+                contextType: 'resume',
+                fetchFn: async () => {
+                    const [resumeRes, nextUpRes] = await Promise.all([
+                        api.getResumeItems(),
+                        (async () => {
+                            const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                            const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                            const params = {};
+                            if (daysLimit > 0) {
+                                const cutoff = new Date();
+                                cutoff.setDate(cutoff.getDate() - daysLimit);
+                                params.NextUpDateCutoff = cutoff.toISOString();
+                            }
+                            return api.getNextUp(params);
+                        })()
+                    ]);
 
-                const params = {};
-                if (daysLimit > 0) {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - daysLimit);
-                    params.NextUpDateCutoff = cutoff.toISOString();
+                    const resumeItems = resumeRes?.Items || [];
+                    const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
+                        const position = item.UserData?.PlaybackPositionTicks || 0;
+                        return position === 0;
+                    });
+
+                    // Merge Resume items first, then Next Up
+                    const combined = [...resumeItems, ...nextUpItems];
+                    
+                    // Deduplicate based on Id
+                    const seen = new Set();
+                    const deduplicated = combined.filter(item => {
+                        if (seen.has(item.Id)) return false;
+                        seen.add(item.Id);
+                        return true;
+                    });
+
+                    return deduplicated.length > 0 ? deduplicated : null;
                 }
+            });
+        } else {
+            // Priority 1: Continue Watching (Separate)
+            descriptors.push({
+                id: 'resume',
+                title: i18n.t('HeaderContinueWatching'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'resume',
+                contextType: 'resume',
+                fetchFn: async () => {
+                    const res = await api.getResumeItems();
+                    return res?.Items?.length > 0 ? res.Items : null;
+                }
+            });
 
-                const res = await api.getNextUp(params);
-                if (!res?.Items?.length) return null;
+            // Priority 1: Next Up (Separate)
+            descriptors.push({
+                id: 'next-up',
+                title: i18n.t('NextUp'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'episode',
+                contextType: 'nextUp',
+                fetchFn: async () => {
+                    const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                    const daysLimit = isNaN(maxDays) ? 365 : maxDays;
 
-                // Filter out items that have playback progress, as they should
-                // only appear in the "Continue Watching" row to avoid duplication.
-                const filtered = res.Items.filter((item) => {
-                    const position = item.UserData?.PlaybackPositionTicks || 0;
-                    return position === 0;
-                });
+                    const params = {};
+                    if (daysLimit > 0) {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - daysLimit);
+                        params.NextUpDateCutoff = cutoff.toISOString();
+                    }
 
-                return filtered.length > 0 ? filtered : null;
-            }
-        });
+                    const res = await api.getNextUp(params);
+                    if (!res?.Items?.length) return null;
+
+                    const filtered = res.Items.filter((item) => {
+                        const position = item.UserData?.PlaybackPositionTicks || 0;
+                        return position === 0;
+                    });
+
+                    return filtered.length > 0 ? filtered : null;
+                }
+            });
+        }
 
         // ── Priority 2: Latest per library ───────────────────────────────────
         // Each library gets its own descriptor so they can render independently
