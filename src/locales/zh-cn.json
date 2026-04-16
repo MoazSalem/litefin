@@ -456,6 +456,8 @@
     "LabelFrameRate": "帧率",
     "LabelLibraryPageSize": "每页项目数 (媒体库)",
     "LabelMaxDaysForNextUp": "“即将播放”的最长保留天数",
+    "LabelMergeResumeNextUp": "合并继续观看和下一集",
+    "LabelMergeResumeNextUpDescription": "将进行中的项目和下一集在主屏幕上合并为一行。",
     "LabelNoSubtitles": "未找到字幕轨道。",
     "LabelOsdTimeDisplay": "OSD 时间显示",
     "LabelPgsPlaybackMode": "PGS 字幕引擎",

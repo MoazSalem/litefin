@@ -456,6 +456,8 @@
     "LabelFrameRate": "Bildfrequenz",
     "LabelLibraryPageSize": "Einträge pro Seite (Bibliothek)",
     "LabelMaxDaysForNextUp": "Max. Tage für „Nächste Folge“",
+    "LabelMergeResumeNextUp": "Fortsetzen & Nächste Folge zusammenführen",
+    "LabelMergeResumeNextUpDescription": "Kombiniert laufende Elemente und nächste Folgen in einer einzigen Reihe auf der Startseite.",
     "LabelNoSubtitles": "Keine Untertitelspuren gefunden.",
     "LabelOsdTimeDisplay": "OSD-Zeitanzeige",
     "LabelPgsPlaybackMode": "PGS-Untertitel-Engine",

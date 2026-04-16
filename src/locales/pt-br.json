@@ -456,6 +456,8 @@
     "LabelFrameRate": "Taxa de quadros",
     "LabelLibraryPageSize": "Itens por página (Biblioteca)",
     "LabelMaxDaysForNextUp": "Máximo de dias para \"Próximos\"",
+    "LabelMergeResumeNextUp": "Mesclar Continuar assistindo e Próximos",
+    "LabelMergeResumeNextUpDescription": "Combina itens em andamento e próximos episódios em uma única linha na tela inicial.",
     "LabelNoSubtitles": "Nenhuma faixa de legenda encontrada.",
     "LabelOsdTimeDisplay": "Exibição de tempo no OSD",
     "LabelPgsPlaybackMode": "Mecanismo de legendas PGS",

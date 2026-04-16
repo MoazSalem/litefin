@@ -456,6 +456,8 @@
     "LabelFrameRate": "Frekvencija sličica",
     "LabelLibraryPageSize": "Broj stavki po stranici (Biblioteka)",
     "LabelMaxDaysForNextUp": "Maksimalni broj dana za \"Sljedeće\"",
+    "LabelMergeResumeNextUp": "Spoji Nastavi gledati i Sljedeće",
+    "LabelMergeResumeNextUpDescription": "Kombinirajte stavke u tijeku i sljedeće epizode u jedan redak na početnom zaslonu.",
     "LabelNoSubtitles": "Nisu pronađeni titlovi.",
     "LabelOsdTimeDisplay": "OSD prikaz vremena",
     "LabelPgsPlaybackMode": "PGS engine titlova",

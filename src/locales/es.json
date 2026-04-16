@@ -456,6 +456,8 @@
     "LabelFrameRate": "Tasa de fotogramas",
     "LabelLibraryPageSize": "Elementos por página (Biblioteca)",
     "LabelMaxDaysForNextUp": "Máximo de días para \"Siguiente\"",
+    "LabelMergeResumeNextUp": "Fusionar Seguir viendo y Próximo",
+    "LabelMergeResumeNextUpDescription": "Combina elementos en curso y próximos episodios en una sola fila en la pantalla de inicio.",
     "LabelNoSubtitles": "No se encontraron pistas de subtítulos.",
     "LabelOsdTimeDisplay": "Visualización de tiempo en OSD",
     "LabelPgsPlaybackMode": "Motor de subtítulos PGS",

@@ -456,6 +456,8 @@
     "LabelFrameRate": "Beeldsnelheid",
     "LabelLibraryPageSize": "Items per pagina (Bibliotheek)",
     "LabelMaxDaysForNextUp": "Max. dagen voor 'Volgende'",
+    "LabelMergeResumeNextUp": "Verder kijken & Volgende samenvoegen",
+    "LabelMergeResumeNextUpDescription": "Combineer items die in uitvoering zijn en volgende afleveringen in één rij op het startscherm.",
     "LabelNoSubtitles": "Geen ondertitelingssporen gevonden.",
     "LabelOsdTimeDisplay": "OSD-tijdsweergave",
     "LabelPgsPlaybackMode": "PGS-ondertitelingsengine",

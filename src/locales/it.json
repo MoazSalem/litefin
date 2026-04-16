@@ -456,6 +456,8 @@
     "LabelFrameRate": "Frequenza fotogrammi",
     "LabelLibraryPageSize": "Elementi per pagina (Libreria)",
     "LabelMaxDaysForNextUp": "Giorni massimi per \"Prossimi\"",
+    "LabelMergeResumeNextUp": "Unisci Continua a guardare e Prossimo",
+    "LabelMergeResumeNextUpDescription": "Combina gli elementi in corso e i prossimi episodi in un'unica riga nella schermata iniziale.",
     "LabelNoSubtitles": "Nessuna traccia di sottotitoli trovata.",
     "LabelOsdTimeDisplay": "Visualizzazione tempo OSD",
     "LabelPgsPlaybackMode": "Motore sottotitoli PGS",

@@ -456,6 +456,8 @@
     "LabelFrameRate": "Tốc độ khung hình",
     "LabelLibraryPageSize": "Số mục mỗi trang (Thư viện)",
     "LabelMaxDaysForNextUp": "Số ngày tối đa cho \"Tiếp theo\"",
+    "LabelMergeResumeNextUp": "Hợp nhất Tiếp tục xem & Tiếp theo",
+    "LabelMergeResumeNextUpDescription": "Kết hợp các mục đang thực hiện và các tập tiếp theo thành một hàng duy nhất trên màn hình chính.",
     "LabelNoSubtitles": "Không tìm thấy bản ghi phụ đề.",
     "LabelOsdTimeDisplay": "Hiển thị thời gian OSD",
     "LabelPgsPlaybackMode": "Công cụ phụ đề PGS",

@@ -456,6 +456,8 @@
     "LabelFrameRate": "Bildfrekvens",
     "LabelLibraryPageSize": "Objekt per sida (Bibliotek)",
     "LabelMaxDaysForNextUp": "Max antal dagar för \"Nästa\"",
+    "LabelMergeResumeNextUp": "Slå ihop Fortsätt titta och Nästa",
+    "LabelMergeResumeNextUpDescription": "Kombinera pågående objekt och nästa avsnitt i en enda rad på hemvyn.",
     "LabelNoSubtitles": "Inga undertextspår hittades.",
     "LabelOsdTimeDisplay": "OSD-tidsvisning",
     "LabelPgsPlaybackMode": "PGS-undertextmotor",

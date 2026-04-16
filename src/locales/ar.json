@@ -456,6 +456,8 @@
     "LabelFrameRate": "معدل الإطارات",
     "LabelLibraryPageSize": "عدد العناصر لكل صفحة (المكتبة)",
     "LabelMaxDaysForNextUp": "أقصى عدد من الأيام لـ \"التالي\"",
+    "LabelMergeResumeNextUp": "دمج المشاهدة المتابعة والتالي",
+    "LabelMergeResumeNextUpDescription": "دمج العناصر قيد التشغيل والحلقات التالية في صف واحد على الصفحة الرئيسية.",
     "LabelNoSubtitles": "لم يتم العثور على مقاطع ترجمة.",
     "LabelOsdTimeDisplay": "عرض وقت OSD",
     "LabelPgsPlaybackMode": "محرك ترجمة PGS",

@@ -456,6 +456,8 @@
     "LabelFrameRate": "Kare hızı",
     "LabelLibraryPageSize": "Sayfa başına öğe (Kitaplık)",
     "LabelMaxDaysForNextUp": "\"Sıradaki\" için Maksimum Gün",
+    "LabelMergeResumeNextUp": "İzlemeye Devam Et ve Sırada'yı Birleştir",
+    "LabelMergeResumeNextUpDescription": "Devam eden öğeleri ve sonraki bölümleri ana ekranda tek bir satırda birleştirin.",
     "LabelNoSubtitles": "Altyazı parçası bulunamadı.",
     "LabelOsdTimeDisplay": "OSD zaman göstergesi",
     "LabelPgsPlaybackMode": "PGS altyazı motoru",

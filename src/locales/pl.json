@@ -456,6 +456,8 @@
     "LabelFrameRate": "Liczba klatek na sekundę",
     "LabelLibraryPageSize": "Elementy na stronę (Biblioteka)",
     "LabelMaxDaysForNextUp": "Maks. liczba dni dla „Następne”",
+    "LabelMergeResumeNextUp": "Połącz Kontynuuj oglądanie i Następne",
+    "LabelMergeResumeNextUpDescription": "Połącz elementy w toku i następne odcinki w jeden rząd na ekranie głównym.",
     "LabelNoSubtitles": "Nie znaleziono ścieżek napisów.",
     "LabelOsdTimeDisplay": "Wyświetlanie czasu OSD",
     "LabelPgsPlaybackMode": "Silnik napisów PGS",

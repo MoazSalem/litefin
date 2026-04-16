@@ -456,6 +456,8 @@
     "LabelFrameRate": "Fréquence d'images",
     "LabelLibraryPageSize": "Éléments par page (Bibliothèque)",
     "LabelMaxDaysForNextUp": "Jours max pour « À suivre »",
+    "LabelMergeResumeNextUp": "Fusionner Reprendre la lecture et À suivre",
+    "LabelMergeResumeNextUpDescription": "Combine les éléments en cours et les prochains épisodes en une seule ligne sur l'écran d'accueil.",
     "LabelNoSubtitles": "Aucune piste de sous-titre trouvée.",
     "LabelOsdTimeDisplay": "Affichage du temps sur l'OSD",
     "LabelPgsPlaybackMode": "Moteur de sous-titres PGS",

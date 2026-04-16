@@ -456,6 +456,8 @@
     "LabelFrameRate": "프레임 속도",
     "LabelLibraryPageSize": "페이지당 항목 수 (라이브러리)",
     "LabelMaxDaysForNextUp": "'다음 시청' 최대 보관일",
+    "LabelMergeResumeNextUp": "시청 중인 항목과 다음 항목 병합",
+    "LabelMergeResumeNextUpDescription": "진행 중인 항목과 다음 에피소드를 홈 화면의 단일 행으로 결합합니다.",
     "LabelNoSubtitles": "자막 트랙을 찾을 수 없습니다.",
     "LabelOsdTimeDisplay": "OSD 시간 표시",
     "LabelPgsPlaybackMode": "PGS 자막 엔진",
