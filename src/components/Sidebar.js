@@ -182,6 +182,10 @@ class Sidebar extends Component {
         this._onLogoSettingsChanged = () => this._updateLogoSettings();
         eventBus.on('prefChanged:logoSettings', this._onLogoSettingsChanged);
 
+        this._updateAnimationMode();
+        this._onAnimationModeChanged = () => this._updateAnimationMode();
+        eventBus.on('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -277,6 +281,10 @@ class Sidebar extends Component {
         if (this._onLogoSettingsChanged) {
             eventBus.off('prefChanged:logoSettings', this._onLogoSettingsChanged);
         }
+
+        if (this._onAnimationModeChanged) {
+            eventBus.off('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
+        }
     }
 
     /**
@@ -319,26 +327,31 @@ class Sidebar extends Component {
     }
 
     _updateLogoSettings() {
+        const isEnabled = storage.getItem('pref:logoSettings') === 'true';
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
-        const settingsBtn = this.el.querySelector('#sidebar-settings');
-        
-        if (!logoHeader) return;
-        
-        const enabled = storage.getItem('pref:logoSettings') === 'true';
-        if (enabled) {
-            logoHeader.classList.add('sidebar-item');
-            logoHeader.tabIndex = 0;
-            logoHeader.dataset.path = '/settings';
-            if (settingsBtn) settingsBtn.classList.add('hidden');
-        } else {
-            logoHeader.classList.remove('sidebar-item');
-            logoHeader.removeAttribute('tabindex');
-            delete logoHeader.dataset.path;
-            if (settingsBtn) settingsBtn.classList.remove('hidden');
-        }
+        if (logoHeader) {
+            logoHeader.classList.toggle('sidebar-item', isEnabled);
+            logoHeader.setAttribute('data-focusable', isEnabled.toString());
+            logoHeader.setAttribute('tabindex', isEnabled ? '0' : '-1');
 
-        // Must invalidate so SpatialNavigator re-evaluates focusable items
-        focusManager.invalidateCache('sidebar');
+            if (isEnabled) {
+                logoHeader.dataset.path = '/settings';
+            } else {
+                delete logoHeader.dataset.path;
+            }
+
+            // Invalidate cache since focusability of a header element changed
+            focusManager.invalidateCache('sidebar');
+        }
+    }
+
+    /**
+     * Update sidebar animation mode based on user preference
+     * @private
+     */
+    _updateAnimationMode() {
+        const disabled = storage.getItem('pref:disableSidebarAnimation') === 'true';
+        this.el.classList.toggle('no-animation', disabled);
     }
 
     _bindEvents() {

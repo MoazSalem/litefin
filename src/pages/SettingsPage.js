@@ -795,6 +795,20 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- Disable Animation Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DisableSidebarAnimation">${i18n.t('DisableSidebarAnimation') || 'Disable Sidebar Animation'}</span>
+                        <span class="setting-description" data-i18n="DisableSidebarAnimationDescription">${i18n.t('DisableSidebarAnimationDescription') || 'Sidebar will open and close instantly without animation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:disableSidebarAnimation') === 'true' ? 'active' : ''}" 
+                                 id="toggle-disable-sidebar-animation" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Sidebar Mode Section -->
                 <div class="setting-item">
@@ -3292,6 +3306,19 @@ class SettingsPage extends Page {
                 logoSettingsToggle.classList.toggle('active', newValue);
                 eventBus.emit('prefChanged:logoSettings', newValue);
                 log.info(`Clickable Logo set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Disable Sidebar Animation
+        const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');
+        if (disableAnimationToggle) {
+            disableAnimationToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:disableSidebarAnimation') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:disableSidebarAnimation', newValue.toString());
+                disableAnimationToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:disableSidebarAnimation', newValue);
+                log.info(`Disable Sidebar Animation set to: ${newValue}`);
             });
         }
 

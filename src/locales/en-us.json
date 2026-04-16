@@ -447,6 +447,8 @@
     "Indigo": "Indigo",
     "Information": "Information",
     "InitialSidebarFocus": "Initial Sidebar Focus",
+    "DisableSidebarAnimation": "Disable Sidebar Animation",
+    "DisableSidebarAnimationDescription": "Sidebar will open and close instantly without animation.",
     "InitialSidebarFocusDescription": "Select which item gets focused first when opening the sidebar.",
     "InstalledPlugins": "Installed Plugins",
     "Internal": "Internal",
