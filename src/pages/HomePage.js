@@ -843,6 +843,20 @@ class HomePage extends Page {
                 // Always clear the saved state after consuming it
                 state.delete('home:lastFocusedItem');
                 state.delete('home:lastFocusedItemId');
+
+                // If we successfully restored focus from home:lastFocusedItem, also
+                // restore any captured scroll offset from NavigationState but then
+                // CONSUME _pendingNavState so that restoreScrollFocusWhenReady() at the
+                // end of the pipeline does NOT run a second focus restoration that would
+                // clobber the row focus we just placed (e.g. jumping back to sidebar).
+                if (restoredFocus && this._pendingNavState) {
+                    const scrollContainer = this.$('.page-content');
+                    if (scrollContainer && this._pendingNavState.scrollTop > 0) {
+                        scrollContainer.scrollTop = this._pendingNavState.scrollTop;
+                    }
+                    // Nullify so restoreScrollFocusWhenReady() becomes a no-op
+                    this._pendingNavState = null;
+                }
             }
 
             // ─── Default: focus the first card in the first rendered row ──────
