@@ -36,16 +36,49 @@ export const MediaHelper = {
         let isHls = false;
 
         if (playMethod === 'DirectPlay' || playMethod === 'DirectStream') {
+            // ================================================================
+            // PRIORITY INTERCEPT: Live TV / IPTV loopback guard.
+            //
+            // Jellyfin sets Protocol='Http' for any media source that originates
+            // from an m3u playlist or Live TV stream. The `Path` it returns is
+            // its own internal loopback proxy address, e.g.:
+            //   http://127.0.0.1:8096/LiveTv/LiveStreamFiles/{id}/stream.ts
+            //
+            // This address is unreachable from a TV on the LAN. To avoid this,
+            // we must detect this case BEFORE checking SupportsDirectStream,
+            // because Jellyfin also sets that flag on Live TV sources, which
+            // would cause us to build a /Videos/{id}/stream.ts URL (wrong).
+            //
+            // The fix: any Http-protocol source whose path is a loopback URL
+            // or contains 'LiveStreamFiles' is routed through the server's public
+            // /Videos/{id}/live.m3u8 HLS proxy — exactly what the official web
+            // client does.
+            // ================================================================
+            const isLoopbackPath = mediaSource.Path &&
+                (mediaSource.Path.includes('127.0.0.1') ||
+                 mediaSource.Path.includes('localhost') ||
+                 mediaSource.Path.includes('LiveStreamFiles'));
+
+            if (mediaSource.Protocol === 'Http' && isLoopbackPath) {
+                // Route through the server's public HLS proxy endpoint.
+                url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
+                url += `?Container=m3u8`;
+                url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                if (playSessionId) {
+                    url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                }
+                url += `&api_key=${encodeURIComponent(authToken)}`;
+                isHls = true;
+
             // ----------------------------------------------------------------
-            // SPECIAL CASE: Remote/external HTTP sources (Live TV, IPTV)
-            // These have Protocol="Http" and a direct Path URL. They must be
-            // played directly from the source — NOT proxied through Jellyfin's
-            // /Videos/.../stream endpoint, which would cause CORS failures since
-            // the browser can't read the resulting cross-origin response.
+            // SPECIAL CASE: Remote/external HTTP sources (e.g. publicly-hosted
+            // IPTV with a direct URL). These are NOT loopback and should be
+            // played directly from the source URL.
             // ----------------------------------------------------------------
-            if (mediaSource.IsRemote && mediaSource.Protocol === 'Http' && mediaSource.Path) {
+            } else if (mediaSource.IsRemote && mediaSource.Protocol === 'Http' && mediaSource.Path) {
                 url = mediaSource.Path;
                 isHls = url.includes('.m3u8') || mediaSource.Container === 'hls';
+
             // For DirectStream, always prefer the server-provided TranscodingUrl —
             // it has AudioStreamIndex, SubtitleStreamIndex, and all session params
             // baked in.  For DirectPlay, build the static URL directly (TranscodingUrl
@@ -53,6 +86,7 @@ export const MediaHelper = {
             } else if (playMethod === 'DirectStream' && mediaSource.TranscodingUrl) {
                 url = serverUrl + mediaSource.TranscodingUrl;
                 isHls = url.includes('.m3u8');
+
             } else if (mediaSource.SupportsDirectStream) {
                 // Static-serve the container file as-is
                 url = `${serverUrl}/Videos/${itemId}/stream.${mediaSource.Container}`;
@@ -62,43 +96,10 @@ export const MediaHelper = {
                 if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
                     url += `&AudioStreamIndex=${audioStreamIndex}`;
                 }
-            } else if (mediaSource.SupportsDirectPlay && mediaSource.Path) {
-                // ====================================================================
-                // Live TV / m3u Playlist guard:
-                // Jellyfin sets Protocol='Http' for media sources that originate from
-                // an m3u playlist or Live TV stream. The `Path` it returns is its own
-                // internal loopback address (e.g. http://127.0.0.1:8096/LiveTv/...).
-                // That address is unreachable from a TV on the network.
-                //
-                // The official Jellyfin web client avoids this by calling the
-                // `/Videos/{id}/live.m3u8` endpoint which proxies the stream through
-                // the server's public address and returns a proper HLS manifest.
-                //
-                // We detect this case by checking:
-                //   1. Protocol is 'Http' (set by Jellyfin for all HTTP-sourced streams)
-                //   2. The Path points to a loopback address (127.0.0.1 or localhost)
-                //      OR the Path contains LiveStreamFiles (another reliable marker)
-                // ====================================================================
-                const isLoopbackPath = mediaSource.Path &&
-                    (mediaSource.Path.includes('127.0.0.1') ||
-                     mediaSource.Path.includes('localhost') ||
-                     mediaSource.Path.includes('LiveStreamFiles'));
 
-                if (mediaSource.Protocol === 'Http' && isLoopbackPath) {
-                    // Redirect through the server's public live.m3u8 HLS proxy endpoint.
-                    // This matches the official Jellyfin web client's behavior exactly.
-                    url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
-                    url += `?Container=m3u8`;
-                    url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
-                    if (playSessionId) {
-                        url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
-                    }
-                    url += `&api_key=${encodeURIComponent(authToken)}`;
-                    isHls = true;
-                } else {
-                    // Local/SMB file path (native-app only, not used in browser)
-                    url = mediaSource.Path;
-                }
+            } else if (mediaSource.SupportsDirectPlay && mediaSource.Path) {
+                // Local/SMB file path (native-app only, not used in browser)
+                url = mediaSource.Path;
             }
         } else {
             // Transcode: HLS from server or HTTP stream (for audio).
