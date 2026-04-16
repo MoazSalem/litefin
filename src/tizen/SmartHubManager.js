@@ -250,7 +250,12 @@ class SmartHubManager {
             /* Cache in memory so future callers can inspect last-known state. */
             this._cachedJson = previewJson;
 
-            log.debug('Preview JSON:', JSON.stringify(previewJson));
+            /* Log a human-readable summary at INFO level so the tile content is
+             * always visible in device logs — no debug mode required. */
+            const sectionSummary = previewJson.sections
+                .map(s => `"${s.title}" (${s.tiles.length} tile${s.tiles.length !== 1 ? 's' : ''})`)
+                .join(', ');
+            log.info(`Preview JSON built — sections: [${sectionSummary || 'EMPTY — nothing to show'}]`);
 
             /* Dispatch the JSON to the ytresolver background service and
              * wait for its ACK before releasing the updating guard. */
@@ -527,12 +532,14 @@ class SmartHubManager {
      *   2. Launch the ytresolver service via ApplicationControl, passing the
      *      JSON as 'SmartHubPreview' AppControl data.
      *   3. The service's onRequest handler calls webapis.preview.setPreviewData()
-     *      and sends a status message back to 'SmartHubAck' when done.
-     *   4. Resolve on ACK or after SERVICE_TIMEOUT_MS — never block indefinitely.
+     *      and then calls exit() (Samsung requires the service to terminate for
+     *      the preview to be committed to the Smart Hub display).
+     *   4. Before exiting, the service sends an ACK to 'SmartHubAck'.
+     *   5. Resolve on ACK or after SERVICE_TIMEOUT_MS — never block indefinitely.
      *
-     * Unlike the jellyfin-tizen reference, we do NOT ask the service to call
-     * exit() after setting preview data — the ytresolver service stays alive
-     * to continue serving the HTTP proxy (trailer lookup, server discovery).
+     * The HTTP proxy restarts automatically on the next app launch because
+     * index.js calls tizen.application.launch for the ytresolver service on
+     * every boot (see the Bootstrap section in index.js).
      *
      * @param {Object} json - Samsung Preview JSON
      * @returns {Promise<void>}

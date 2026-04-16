@@ -21,6 +21,11 @@
    <tizen:privilege name="http://tizen.org/privilege/messageport"/>
    <feature name="http://tizen.org/feature/screen.size.all"/>
    <feature name="http://tizen.org/feature/network.internet"/>
+   <tizen:metadata key="http://samsung.com/tv/metadata/use.preview" value="bg_service"/>
+   <tizen:app-control>
+      <tizen:src name="index.html" reload="disable"/>
+      <tizen:operation name="http://samsung.com/appcontrol/operation/eden_resume"/>
+   </tizen:app-control>
    <tizen:setting screen-orientation="landscape" context-menu="enable" background-support="disable" encryption="disable" install-location="auto" hwkey-event="enable"></tizen:setting>
    <tizen:service id="LitefinApp.ytresolver" type="service">
       <tizen:content src="services/service.js"></tizen:content>
