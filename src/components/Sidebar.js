@@ -494,15 +494,20 @@ class Sidebar extends Component {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
+                
+                // Route livetv to the unified Live TV page
+                const isLiveTv = lib.CollectionType === 'livetv';
+                const buttonPath = isLiveTv ? '/livetv' : `/library/${lib.Id}`;
+
                 // Attach both the path (for nav) AND a layout-id so _applySidebarLayout
                 // can match this button against the saved config (id: 'lib-{Id}')
-                btn.dataset.path = `/library/${lib.Id}`;
+                btn.dataset.path = buttonPath;
                 btn.dataset.layoutId = `lib-${lib.Id}`;
                 btn.innerHTML = `
                     <span class="item-text">${lib.Name}</span>
                 `;
 
-                btn.onclick = () => router.navigate(`/library/${lib.Id}`);
+                btn.onclick = () => router.navigate(buttonPath);
 
                 sidebarContent.appendChild(btn);
             });

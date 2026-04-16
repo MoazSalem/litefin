@@ -482,7 +482,7 @@ class DetailsPage extends Page {
             // Determine Aspect Ratio Type
             let posterType = 'poster';
             if (item.Type === 'Episode') posterType = 'landscape';
-            if (item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio')
+            if (item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio' || item.Type === 'TvChannel')
                 posterType = 'square';
 
             // Apply class for CSS aspect ratio
@@ -1935,7 +1935,7 @@ class DetailsPage extends Page {
     _renderSimilar() {
         if (!this._similar || this._similar.length === 0) return;
 
-        const isMusic = this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio';
+        const useSquare = this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio' || this._item.Type === 'TvChannel';
 
         this._renderVirtualRow({
             sectionId: 'similar-section',
@@ -1943,10 +1943,10 @@ class DetailsPage extends Page {
             items: this._similar,
             isLandscape: false,
             renderCard: (item) => {
-                return this._renderMediaCard(item, false, isMusic ? 'square' : 'poster');
+                return this._renderMediaCard(item, false, useSquare ? 'square' : 'poster');
             },
             focusSectionName: 'details-similar',
-            cardType: isMusic ? 'square' : 'poster'
+            cardType: useSquare ? 'square' : 'poster'
         });
     }
 
