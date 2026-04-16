@@ -12,8 +12,8 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
-import { imageService } from '../utils/ImageService.js';
 import { scrollController } from '../ui/ScrollController.js';
+import { eventBus } from '../core/EventBus.js';
 
 const log = logger.create('EpgGrid');
 
@@ -160,8 +160,6 @@ class EpgGrid {
         const startRow = Math.floor(this.scrollY / this.ROW_HEIGHT);
         const endRow = Math.min(this.channels.length - 1, Math.ceil((this.scrollY + this.visibleHeight) / this.ROW_HEIGHT));
         
-        const startTimeInPx = this.scrollX;
-        const endTimeInPx = this.scrollX + this.visibleWidth;
         
         // 2. Clear nodes outside window
         for (const [channelId, data] of this.domNodes.entries()) {
@@ -463,12 +461,11 @@ class EpgGrid {
      */
     _scrollChannelIntoView(rowIndex) {
         const top = rowIndex * this.ROW_HEIGHT;
-        const paddingY = 50;
 
-        if (top < this.scrollY + paddingY) {
-            this.scrollY = Math.max(0, top - paddingY);
-        } else if (top + this.ROW_HEIGHT > this.scrollY + this.visibleHeight - paddingY) {
-            this.scrollY = top + this.ROW_HEIGHT - this.visibleHeight + paddingY;
+        if (top < this.scrollY + 50) {
+            this.scrollY = Math.max(0, top - 50);
+        } else if (top + this.ROW_HEIGHT > this.scrollY + this.visibleHeight - 50) {
+            this.scrollY = top + this.ROW_HEIGHT - this.visibleHeight + 50;
         }
     }
 
@@ -479,7 +476,6 @@ class EpgGrid {
         const top = rowIndex * this.ROW_HEIGHT;
 
         const paddingX = 100;
-        const paddingY = 100;
 
         // Horizontal scroll
         if (left < this.scrollX + paddingX) {

@@ -456,6 +456,8 @@
     "LabelFrameRate": "Tasa de fotogramas",
     "LabelLibraryPageSize": "Items per page (Library)",
     "LabelMaxDaysForNextUp": "Max days in Next Up",
+    "LabelMergeResumeNextUp": "Merge Continue Watching & Next Up",
+    "LabelMergeResumeNextUpDescription": "Combine in-progress items and next episodes into a single row on the home screen.",
     "LabelNoSubtitles": "No subtitle tracks found.",
     "LabelOsdTimeDisplay": "OSD Time Display",
     "LabelPgsPlaybackMode": "PGS Subtitle Engine",

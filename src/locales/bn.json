@@ -456,6 +456,8 @@
     "LabelFrameRate": "ফ্রেম রেট",
     "LabelLibraryPageSize": "প্রতি পৃষ্ঠায় আইটেম (লাইব্রেরি)",
     "LabelMaxDaysForNextUp": "'পরবর্তী' এর জন্য সর্বোচ্চ দিন",
+    "LabelMergeResumeNextUp": "চালিয়ে যাওয়া দেখা এবং পরবর্তী আপ মার্জ করুন",
+    "LabelMergeResumeNextUpDescription": "হোম স্ক্রিনে একটি একক সারিতে প্রগতিশীল আইটেम এবং পরবর্তী পর্বগুলি একত্রিত করুন।",
     "LabelNoSubtitles": "কোন সাবটাইটেল ট্র্যাক পাওয়া যায়নি।",
     "LabelOsdTimeDisplay": "OSD সময় প্রদর্শন",
     "LabelPgsPlaybackMode": "PGS সাবটাইটেল ইঞ্জিন",

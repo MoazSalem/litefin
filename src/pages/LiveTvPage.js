@@ -13,7 +13,6 @@
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
-import { eventBus } from '../core/EventBus.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 import { VirtualCardRow } from '../components/VirtualCardRow.js';

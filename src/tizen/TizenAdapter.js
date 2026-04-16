@@ -372,6 +372,35 @@ class TizenAdapter {
     }
 
     /**
+     * Get the current Tizen platform version as a float (e.g. 5.0, 4.0, 3.0).
+     *
+     * Reads the platform.version capability once and caches the result on
+     * _tizenVersion (already initialised to null in the constructor) so
+     * subsequent calls are free lookups.
+     *
+     * Returns 0 when not running on Tizen or when the capability API throws.
+     *
+     * @returns {number} Tizen version as a float, or 0 if unavailable.
+     */
+    getTizenVersion() {
+        /* Non-Tizen environment — return sentinel zero immediately. */
+        if (!this._isTizen) return 0;
+
+        /* Return the cached value from a previous call. */
+        if (this._tizenVersion !== null) return this._tizenVersion;
+
+        try {
+            const raw = tizen.systeminfo.getCapability('http://tizen.org/feature/platform.version');
+            this._tizenVersion = parseFloat(raw) || 0;
+        } catch (e) {
+            log.warn('Could not read Tizen platform version:', e);
+            this._tizenVersion = 0;
+        }
+
+        return this._tizenVersion;
+    }
+
+    /**
      * Get device info
      * @returns {Object} Device information
      */

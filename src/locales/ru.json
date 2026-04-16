@@ -456,6 +456,8 @@
     "LabelFrameRate": "Частота кадров",
     "LabelLibraryPageSize": "Элементов на странице (Библиотека)",
     "LabelMaxDaysForNextUp": "Макс. дней для «Далее»",
+    "LabelMergeResumeNextUp": "Объединить 'Продолжить просмотр' и 'Далее'",
+    "LabelMergeResumeNextUpDescription": "Объединяет незавершенные элементы и следующие серии в одну строку на главном экране.",
     "LabelNoSubtitles": "Дорожки субтитров не найдены.",
     "LabelOsdTimeDisplay": "Отображение времени OSD",
     "LabelPgsPlaybackMode": "Движок субтитров PGS",

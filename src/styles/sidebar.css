@@ -59,6 +59,15 @@
     /* Shift to reveal full sidebar */
 }
 
+/* Instant Mode: Remove all transitions when disabled in settings */
+.sidebar.no-animation,
+.sidebar.no-animation *,
+.sidebar.no-animation *::before,
+.sidebar.no-animation *::after {
+    -webkit-transition: none !important;
+    transition: none !important;
+}
+
 /* Sidebar Mode: Always Hidden */
 body.sidebar-mode-hidden .sidebar:not(.expanded) {
     -webkit-transform: translate3d(-100%, 0, 0);
@@ -102,9 +111,10 @@ body.sidebar-mode-hidden .sidebar:not(.expanded) {
     height: 72px;
 }
 
-/* Compensate for translation on ALL content elements to keep them visible at the screen edge */
-.sidebar:not(.expanded) .logo-icon,
-.sidebar:not(.expanded) .item-icon {
+/* Compensate for translation on ALL content elements to keep them visible at the screen edge.
+   Only do this when the sidebar is NOT in a full-hidden mode, otherwise they slide weirdly. */
+body:not(.sidebar-mode-hidden) .sidebar.collapsed .logo-icon,
+body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
     -webkit-transform: translate3d(250px, 0, 0);
     transform: translate3d(250px, 0, 0);
 }

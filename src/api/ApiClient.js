@@ -1489,15 +1489,6 @@ export class ApiClient {
     // Getters
     // ========================================================================
 
-    get serverUrl() {
-        return this._serverUrl;
-    }
-    get userId() {
-        return this._userId;
-    }
-    get accessToken() {
-        return this._accessToken;
-    }
     get isAuthenticated() {
         return !!this._accessToken;
     }

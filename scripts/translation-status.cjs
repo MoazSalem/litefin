@@ -41,6 +41,15 @@ function getStatus() {
     console.log(`\n${c.bold}${c.cyan}Litefin Translation Status${c.reset}`);
     console.log(`${c.grey}Source: en-us.json (${totalKeys} keys)${c.reset}\n`);
 
+    const TECHNICAL_KEYS = [
+        "Option3D", "OptionBluray", "OptionDvd", "OptionIsHD", "OptionIsSD",
+        "AppleTV", "BackendTizen", "BackendWeb", "BackendWebOS", 
+        "BitrateKbps", "BitrateMbps", "DolbyVision", "FHD", 
+        "FontGoogleSans", "FontRoboto", "HD", "Option4K", "Path", 
+        "ResolutionValue", "SpeedValue", "SyncPlay", "TizenValue", 
+        "UHD", "UHD8K", "WebOSValue", "WMC"
+    ];
+
     const results = [];
     // English is always 100%
     results.push({ lang: 'en-us', percent: 100.0, count: totalKeys });
@@ -51,7 +60,10 @@ function getStatus() {
         
         let translatedCount = 0;
         sourceKeys.forEach(key => {
-            if (content[key] && content[key] !== enUs[key]) {
+            const isTechnical = TECHNICAL_KEYS.includes(key);
+            const isTranslated = content[key] && content[key] !== enUs[key];
+            
+            if (content[key] && (isTranslated || isTechnical)) {
                 translatedCount++;
             }
         });

@@ -2312,43 +2312,39 @@ class PlayerPage extends Page {
      * @private
      */
     async _switchChannel(nextChannel) {
-        try {
-            // Stop current playback cleanly
-            if (this._player?.stop) {
-                // Capture current info for reporting
-                const mediaSource = this._player.getCurrentMediaSource();
-                const positionTicks = this._player.getCurrentPositionTicks();
+        // Stop current playback cleanly
+        if (this._player?.stop) {
+            // Capture current info for reporting
+            const mediaSource = this._player.getCurrentMediaSource();
+            const positionTicks = this._player.getCurrentPositionTicks();
 
-                await this._player.stop();
-                await this._reportPlaybackStopped(mediaSource, positionTicks, false);
-            }
-
-            // Briefly settle hardware
-            await new Promise(r => setTimeout(r, 300));
-
-            // Update state for new channel
-            this._item = nextChannel;
-            this.title = nextChannel.Name;
-            this._resumePosition = 0;
-            this._hasReportedStart = false;
-            this._cachedMediaSource = null;
-
-            // Fetch current program info asynchronously so we don't block start
-            this._updateLiveTvTitle();
-
-            // Notify OSD
-            if (this._osd) {
-                this._osd.updateItem(nextChannel);
-                this._osd.resetUpNext();
-            }
-
-            // Start new playback
-            await this._startPlayback();
-            
-            this._showLoading(false);
-        } catch (err) {
-            throw err;
+            await this._player.stop();
+            await this._reportPlaybackStopped(mediaSource, positionTicks, false);
         }
+
+        // Briefly settle hardware
+        await new Promise(r => setTimeout(r, 300));
+
+        // Update state for new channel
+        this._item = nextChannel;
+        this.title = nextChannel.Name;
+        this._resumePosition = 0;
+        this._hasReportedStart = false;
+        this._cachedMediaSource = null;
+
+        // Fetch current program info asynchronously so we don't block start
+        this._updateLiveTvTitle();
+
+        // Notify OSD
+        if (this._osd) {
+            this._osd.updateItem(nextChannel);
+            this._osd.resetUpNext();
+        }
+
+        // Start new playback
+        await this._startPlayback();
+
+        this._showLoading(false);
     }
 }
 

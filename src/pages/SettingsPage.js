@@ -588,7 +588,6 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -600,6 +599,18 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelMergeResumeNextUp">${i18n.t('LabelMergeResumeNextUp')}</span>
+                        <span class="setting-description" data-i18n="LabelMergeResumeNextUpDescription">${i18n.t('LabelMergeResumeNextUpDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:mergeResumeNextUp') === 'true' ? 'active' : ''}" 
+                                 id="toggle-merge-resume-nextup" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
@@ -790,6 +801,20 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:logoSettings') === 'true' ? 'active' : ''}" 
                                  id="toggle-sidebar-logo-settings" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Disable Animation Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DisableSidebarAnimation">${i18n.t('DisableSidebarAnimation') || 'Disable Sidebar Animation'}</span>
+                        <span class="setting-description" data-i18n="DisableSidebarAnimationDescription">${i18n.t('DisableSidebarAnimationDescription') || 'Sidebar will open and close instantly without animation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:disableSidebarAnimation') === 'true' ? 'active' : ''}" 
+                                 id="toggle-disable-sidebar-animation" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -2338,6 +2363,25 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Merge Resume and Next Up
+        const mergeResumeNextUpBtn = this.$('#toggle-merge-resume-nextup');
+        if (mergeResumeNextUpBtn) {
+            mergeResumeNextUpBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:mergeResumeNextUp') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:mergeResumeNextUp', newValue);
+                mergeResumeNextUpBtn.classList.toggle('active', newValue);
+                log.info(`Merge Resume and Next Up set to: ${newValue}`);
+
+                // Refresh the home layout UI so "Next Up" disappears/reappears
+                // This ensures the user doesn't see conflicting options.
+                this._setupHomeLayoutUI();
+
+                // Invalidate focus cache to keep navigation stable
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
         // Toggle Random Button
         const randomBtnToggle = this.$('#toggle-random-button');
         if (randomBtnToggle) {
@@ -3287,6 +3331,19 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for Disable Sidebar Animation
+        const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');
+        if (disableAnimationToggle) {
+            disableAnimationToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:disableSidebarAnimation') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:disableSidebarAnimation', newValue.toString());
+                disableAnimationToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:disableSidebarAnimation', newValue);
+                log.info(`Disable Sidebar Animation set to: ${newValue}`);
+            });
+        }
+
         // Toggle Switch for Trailer Auto-Chain
         const trailerAutoChainToggle = this.$('#toggle-trailer-auto-chain');
         if (trailerAutoChainToggle) {
@@ -3644,7 +3701,6 @@ class SettingsPage extends Page {
                 if (focusSelectContainer) {
                     // Combine both lists for the focus target choices
                     const visibleItems = layoutVars.filter((v) => !v.hidden || v.locked);
-                    const visibleLibs = libraryVars.filter((v) => !v.hidden || v.locked);
 
                     const defaultFocus = sidebarLayoutManager.getDefaultFocus();
 
@@ -3713,11 +3769,17 @@ class SettingsPage extends Page {
             const views = viewsResponse.Items || [];
 
             // Build the base descriptors
+            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
             const descriptors = [
                 { id: 'my-media', title: i18n.t('HeaderMyMedia') },
-                { id: 'resume', title: i18n.t('HeaderContinueWatching') },
-                { id: 'next-up', title: i18n.t('NextUp') }
+                { id: 'resume', title: i18n.t('HeaderContinueWatching') }
             ];
+
+            // If merging is enabled, 'next-up' is handled as part of 'resume' row,
+            // so we hide it from the standalone layout sorting to avoid confusion.
+            if (!mergeResumeNextUp) {
+                descriptors.push({ id: 'next-up', title: i18n.t('NextUp') });
+            }
 
             views.forEach((lib) => {
                 descriptors.push({

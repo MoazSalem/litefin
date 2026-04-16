@@ -456,6 +456,8 @@
     "LabelFrameRate": "フレームレート",
     "LabelLibraryPageSize": "ページあたりの項目数 (ライブラリ)",
     "LabelMaxDaysForNextUp": "「次に観る」の最大日数",
+    "LabelMergeResumeNextUp": "「視聴を続ける」と「次へ」を統合",
+    "LabelMergeResumeNextUpDescription": "進行中のアイテムと次のエピソードをホーム画面の1つの行にまとめます。",
     "LabelNoSubtitles": "字幕トラックが見つかりませんでした。",
     "LabelOsdTimeDisplay": "OSD時間表示",
     "LabelPgsPlaybackMode": "PGS字幕エンジン",
