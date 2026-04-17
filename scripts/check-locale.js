@@ -79,6 +79,8 @@ function resolveLocale(arg) {
 
 // ── Core compare ─────────────────────────────────────────────────────────────
 
+const COMMENT_KEY_PREFIX = '_'; // e.g. "_Litefin Specific Keys"
+
 const TECHNICAL_KEYS = [
     "Option3D", "OptionBluray", "OptionDvd", "OptionIsHD", "OptionIsSD",
     "AppleTV", "BackendTizen", "BackendWeb", "BackendWebOS", 
