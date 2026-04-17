@@ -245,6 +245,7 @@ class LibraryPage extends Page {
             // a preference the user changed while browsing back and forth.
             // ------------------------------------------------------------------
             this._loadPersistedViewMode();
+            this._loadPersistedSortMode();
 
             // 1. Setup UI Components
             this._renderTabs();
@@ -317,6 +318,7 @@ class LibraryPage extends Page {
         // Load persisted view mode now that we know the libraryId and collectionType.
         // This happens before _renderGrid() so the correct mode is active from the start.
         this._loadPersistedViewMode();
+        this._loadPersistedSortMode();
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -1359,6 +1361,25 @@ class LibraryPage extends Page {
         }
 
         log.info(`[ViewMode] Loaded view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
+    }
+
+    _loadPersistedSortMode() {
+        if (this._isSubView()) {
+            return; // Sub-views should fallback to defaults
+        }
+
+        const sortByKey = `pref:library:sortBy:${this.state.libraryId}`;
+        const sortOrderKey = `pref:library:sortOrder:${this.state.libraryId}`;
+
+        const savedSortBy = storage.getItem(sortByKey);
+        const savedSortOrder = storage.getItem(sortOrderKey);
+
+        if (savedSortBy) {
+            this.state.sortBy = savedSortBy;
+        }
+        if (savedSortOrder) {
+            this.state.sortOrder = savedSortOrder;
+        }
     }
 
     /**
@@ -2740,6 +2761,11 @@ class LibraryPage extends Page {
             this.state.sortBy = tempSortBy;
             this.state.sortOrder = tempSortOrder;
             this.state.startIndex = 0;
+
+            if (!this._isSubView()) {
+                storage.setItem(`pref:library:sortBy:${this.state.libraryId}`, tempSortBy);
+                storage.setItem(`pref:library:sortOrder:${this.state.libraryId}`, tempSortOrder);
+            }
 
             // Explicitly trigger reload
             await this._loadItems();
