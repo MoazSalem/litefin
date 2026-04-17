@@ -587,6 +587,8 @@
     "Plugins": "Plugins",
     "Podcasts": "Podcasts",
     "Portuguese": "Português",
+    "PreferEpisodeImages": "Preferir imagens de episódios",
+    "PreferEpisodeImagesDescription": "Usa miniaturas de episódios em vez de imagens de séries para as linhas 'Próximo' e 'Continuar assistindo'.",
     "PreferredAudioLanguage": "Idioma de Áudio Preferido",
     "PreferredAudioLanguageDescription": "Idioma padrão para faixas de áudio",
     "PreferredSubtitleLanguage": "Idioma de Legenda Preferido",

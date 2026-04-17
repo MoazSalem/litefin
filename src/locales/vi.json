@@ -587,6 +587,8 @@
     "Plugins": "Tiện ích",
     "Podcasts": "Podcast",
     "Portuguese": "Tiếng Bồ Đào Nha",
+    "PreferEpisodeImages": "Ưu tiên hình ảnh tập phim",
+    "PreferEpisodeImagesDescription": "Sử dụng hình thu nhỏ của tập phim thay vì hình ảnh bộ phim cho các hàng 'Tiếp theo' và 'Tiếp tục xem'.",
     "PreferredAudioLanguage": "Ngôn ngữ thoại ưa thích",
     "PreferredAudioLanguageDescription": "Ngôn ngữ mặc định cho các đoạn âm thanh",
     "PreferredSubtitleLanguage": "Ngôn ngữ phụ đề ưa thích",

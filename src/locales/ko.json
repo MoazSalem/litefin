@@ -587,6 +587,8 @@
     "Plugins": "플러그인",
     "Podcasts": "팟캐스트",
     "Portuguese": "포르투갈어",
+    "PreferEpisodeImages": "에피소드 이미지 선호",
+    "PreferEpisodeImagesDescription": "'다음 에피소드' 및 '계속 시청' 줄에 시리즈 이미지 대신 에피소드 썸네일을 사용합니다.",
     "PreferredAudioLanguage": "선호하는 오디오 언어",
     "PreferredAudioLanguageDescription": "오디오 트랙의 기본 언어",
     "PreferredSubtitleLanguage": "선호하는 자막 언어",

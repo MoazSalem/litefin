@@ -587,6 +587,8 @@
     "Plugins": "Wtyczki",
     "Podcasts": "Podcasty",
     "Portuguese": "Portugalski",
+    "PreferEpisodeImages": "Preferuj obrazy odcinków",
+    "PreferEpisodeImagesDescription": "Używaj miniatur odcinków zamiast obrazów seriali w wierszach „Następne” i „Kontynuuj oglądanie”.",
     "PreferredAudioLanguage": "Preferowany język audio",
     "PreferredAudioLanguageDescription": "Domyślny język dla ścieżek dźwiękowych",
     "PreferredSubtitleLanguage": "Preferowany język napisów",

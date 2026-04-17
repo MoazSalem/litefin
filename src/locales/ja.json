@@ -587,6 +587,8 @@
     "Plugins": "プラグイン",
     "Podcasts": "ポッドキャスト",
     "Portuguese": "ポルトガル語",
+    "PreferEpisodeImages": "エピソード画像を優先",
+    "PreferEpisodeImagesDescription": "「次へ」および「視聴を続ける」の行で、シリーズ画像の代わりにエピソードのサムネイルを使用します。",
     "PreferredAudioLanguage": "優先オーディオ言語",
     "PreferredAudioLanguageDescription": "オーディオトラックのデフォルト言語",
     "PreferredSubtitleLanguage": "優先字幕言語",

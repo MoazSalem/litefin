@@ -604,6 +604,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferEpisodeImages">${i18n.t('PreferEpisodeImages') || 'Prefer Episode Images'}</span>
+                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || "Use episode thumbnails instead of series images for Next Up and Continue Watching rows."}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:preferEpisodeImagesLocal') === 'true' ? 'active' : ''}" 
+                                 id="toggle-prefer-episode-images" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMergeResumeNextUp">${i18n.t('LabelMergeResumeNextUp')}</span>
                         <span class="setting-description" data-i18n="LabelMergeResumeNextUpDescription">${i18n.t('LabelMergeResumeNextUpDescription')}</span>
                     </div>
@@ -2412,6 +2425,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideLiveTvInMyMedia', newValue);
                 hideLiveTvBtn.classList.toggle('active', newValue);
                 log.info(`Hide Live TV in My Media set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Prefer Episode Images
+        const preferEpisodeImagesBtn = this.$('#toggle-prefer-episode-images');
+        if (preferEpisodeImagesBtn) {
+            preferEpisodeImagesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:preferEpisodeImagesLocal', newValue);
+                preferEpisodeImagesBtn.classList.toggle('active', newValue);
+                log.info(`Prefer Episode Images set to: ${newValue}`);
             });
         }
 

@@ -587,6 +587,8 @@
     "Plugins": "Plugins",
     "Podcasts": "Podcasts",
     "Portuguese": "Portugees",
+    "PreferEpisodeImages": "Afleveringafbeeldingen verkiezen",
+    "PreferEpisodeImagesDescription": "Gebruik miniaturen van afleveringen in plaats van serie-afbeeldingen voor de rijen 'Volgende' en 'Verder kijken'.",
     "PreferredAudioLanguage": "Voorkeurstaal audio",
     "PreferredAudioLanguageDescription": "Standaardtaal voor audiosporen",
     "PreferredSubtitleLanguage": "Voorkeurstaal ondertiteling",

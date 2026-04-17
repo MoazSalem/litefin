@@ -587,6 +587,8 @@
     "Plugins": "Плагіни",
     "Podcasts": "Подкасти",
     "Portuguese": "Португальська",
+    "PreferEpisodeImages": "Надавати перевагу зображенням епізодів",
+    "PreferEpisodeImagesDescription": "Використовувати ескізи епізодів замість зображень серіалів для рядків «Далі» та «Продовжити перегляд».",
     "PreferredAudioLanguage": "Бажана мова аудіо",
     "PreferredAudioLanguageDescription": "Мова за замовчуванням для аудіодоріжок",
     "PreferredSubtitleLanguage": "Бажана мова субтитрів",

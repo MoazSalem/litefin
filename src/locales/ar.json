@@ -587,6 +587,8 @@
     "Plugins": "الإضافات",
     "Podcasts": "بودكاست",
     "Portuguese": "البرتغالية",
+    "PreferEpisodeImages": "تفضيل صور الحلقات",
+    "PreferEpisodeImagesDescription": "استخدام صور الحلقات المصغرة بدلاً من صور السلسلة في صفوف 'التالي' و'متابعة المشاهدة'.",
     "PreferredAudioLanguage": "لغة الصوت المفضلة",
     "PreferredAudioLanguageDescription": "اللغة الافتراضية للمقاطع الصوتية",
     "PreferredSubtitleLanguage": "لغة الترجمة المفضلة",

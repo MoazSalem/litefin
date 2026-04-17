@@ -587,6 +587,8 @@
     "Plugins": "Plugins",
     "Podcasts": "Poddar",
     "Portuguese": "Portugisiska",
+    "PreferEpisodeImages": "Föredra avsnittsbilder",
+    "PreferEpisodeImagesDescription": "Använd miniatyrbilder för avsnitt istället för seriebilder för raderna 'Nästa' och 'Fortsätt titta'.",
     "PreferredAudioLanguage": "Önskat ljudspråk",
     "PreferredAudioLanguageDescription": "Standardspråk för ljudspår",
     "PreferredSubtitleLanguage": "Önskat språk för undertexter",

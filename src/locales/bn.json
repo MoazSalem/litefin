@@ -587,6 +587,8 @@
     "Plugins": "প্লাগইনস",
     "Podcasts": "পডকাস্ট",
     "Portuguese": "পর্তুগীজ",
+    "PreferEpisodeImages": "এপিসোড ছবি পছন্দ করুন",
+    "PreferEpisodeImagesDescription": "'পরবর্তীতে আসছে' এবং 'দেখা চালিয়ে যান' সারির জন্য সিরিজ ছবির পরিবর্তে এপিসোড থাম্বনেল ব্যবহার করুন।",
     "PreferredAudioLanguage": "পছন্দসই অডিও ভাষা",
     "PreferredAudioLanguageDescription": "অডিও ট্র্যাকের জন্য ডিফল্ট ভাষা",
     "PreferredSubtitleLanguage": "পছন্দসই সাবটাইটেল ভাষা",

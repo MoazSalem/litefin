@@ -587,6 +587,8 @@
     "Plugins": "插件",
     "Podcasts": "播客",
     "Portuguese": "葡萄牙语",
+    "PreferEpisodeImages": "优先使用单集封面",
+    "PreferEpisodeImagesDescription": "在“接下来播放”和“继续观看”行中，使用单集缩略图代替剧集海报。",
     "PreferredAudioLanguage": "首选音频语言",
     "PreferredAudioLanguageDescription": "音轨的默认语言",
     "PreferredSubtitleLanguage": "首选字幕语言",

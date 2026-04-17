@@ -587,6 +587,8 @@
     "Plugins": "प्लगइन्स",
     "Podcasts": "पॉडकास्ट",
     "Portuguese": "पुर्तगाली",
+    "PreferEpisodeImages": "एपिसोड छवियों को प्राथमिकता दें",
+    "PreferEpisodeImagesDescription": "'अगला उप' और 'देखना जारी रखें' पंक्तियों के लिए श्रृंखला छवियों के बजाय एपिसोड थंबनेल का उपयोग करें।",
     "PreferredAudioLanguage": "पसंदीदा ऑडियो भाषा",
     "PreferredAudioLanguageDescription": "ऑडियो ट्रैक के लिए डिफ़ॉल्ट भाषा",
     "PreferredSubtitleLanguage": "पसंदीदा उपशीर्षक भाषा",

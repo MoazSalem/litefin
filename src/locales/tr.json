@@ -587,6 +587,8 @@
     "Plugins": "Eklentiler",
     "Podcasts": "Podcast'ler",
     "Portuguese": "Portekizce",
+    "PreferEpisodeImages": "Bölüm Resimlerini Tercih Et",
+    "PreferEpisodeImagesDescription": "'Sıradaki' ve 'İzlemeye Devam Et' satırları için dizi resimleri yerine bölüm küçük resimlerini kullanın.",
     "PreferredAudioLanguage": "Tercih Edilen Ses Dili",
     "PreferredAudioLanguageDescription": "Ses parçaları için varsayılan dil",
     "PreferredSubtitleLanguage": "Tercih Edilen Altyazı Dili",

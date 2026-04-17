@@ -587,6 +587,8 @@
     "Plugins": "Плагины",
     "Podcasts": "Подкасты",
     "Portuguese": "Португальский",
+    "PreferEpisodeImages": "Предпочитать изображения эпизодов",
+    "PreferEpisodeImagesDescription": "Использовать эскизы эпизодов вместо изображений сериалов для строк «Далее» и «Продолжить просмотр».",
     "PreferredAudioLanguage": "Предпочитаемый язык аудио",
     "PreferredAudioLanguageDescription": "Язык аудиодорожек по умолчанию",
     "PreferredSubtitleLanguage": "Предпочитаемый язык субтитров",

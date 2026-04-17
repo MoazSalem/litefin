@@ -587,6 +587,8 @@
     "Plugins": "Dodaci",
     "Podcasts": "Podcasti",
     "Portuguese": "Portugalski",
+    "PreferEpisodeImages": "Prednost slikama epizoda",
+    "PreferEpisodeImagesDescription": "Koristi minijature epizoda umjesto slika serije za retke 'Sljedeće' i 'Nastavi gledati'.",
     "PreferredAudioLanguage": "Poželjni audio jezik",
     "PreferredAudioLanguageDescription": "Zadani jezik za audio zapise",
     "PreferredSubtitleLanguage": "Poželjni jezik titlova",

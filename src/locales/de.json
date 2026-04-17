@@ -587,6 +587,8 @@
     "Plugins": "Plugins",
     "Podcasts": "Podcasts",
     "Portuguese": "Portugiesisch",
+    "PreferEpisodeImages": "Folgenbilder bevorzugen",
+    "PreferEpisodeImagesDescription": "Verwendet Vorschaubilder der Folgen anstelle von Serienbildern für die Zeilen 'Nächstes Video' und 'Weiter ansehen'.",
     "PreferredAudioLanguage": "Bevorzugte Audiosprache",
     "PreferredAudioLanguageDescription": "Standardsprache für Audiospuren",
     "PreferredSubtitleLanguage": "Bevorzugte Untertitelsprache",

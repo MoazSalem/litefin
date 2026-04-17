@@ -118,7 +118,8 @@ class CardRenderer {
 
             if (item.Type === 'Episode') {
                 // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
-                const isSpoilerFree = ['nextUp', 'upcoming', 'resume'].includes(contextType);
+                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                const isSpoilerFree = !preferEpisodeImages && ['nextUp', 'upcoming', 'resume'].includes(contextType);
 
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
                 // If spoiler free, skip Primary logic unless nothing else exists
@@ -267,7 +268,8 @@ class CardRenderer {
                 const params = imageService.getParams('thumb');
 
                 // Spoiler Prevention for Episodes
-                if (item.Type === 'Episode' && item.SeriesId) {
+                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                if (!preferEpisodeImages && item.Type === 'Episode' && item.SeriesId) {
                     // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
                     if (item.SeriesPrimaryImageTag) {
                         imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
