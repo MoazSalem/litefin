@@ -423,7 +423,9 @@ class SettingsPage extends Page {
                             'image-quality-select',
                             [
                                 { value: 'low', label: i18n.t('Low') },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
                                 { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
                                 { value: 'high', label: i18n.t('High') },
                                 { value: 'ultra', label: i18n.t('Ultra') }
                             ],
@@ -714,6 +716,28 @@ class SettingsPage extends Page {
                                 { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
                             ],
                             storage.getItem('pref:heroCarouselStyle') || 'banner'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-image-quality-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroImageQuality">${i18n.t('HeroImageQuality') || 'Hero Background Quality'}</span>
+                        <span class="setting-description" data-i18n="HeroImageQualityDescription">${i18n.t('HeroImageQualityDescription') || 'Set the image quality specifically for hero backgrounds. Lower quality can improve performance.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-image-quality-select',
+                            [
+                                { value: 'default', label: i18n.t('Default') || 'Default' },
+                                { value: 'low', label: i18n.t('Low') || 'Low' },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                                { value: 'high', label: i18n.t('High') || 'High' },
+                                { value: 'ultra', label: i18n.t('Ultra') || 'Ultra' }
+                            ],
+                            storage.getItem('pref:heroImageQuality') || 'default'
                         )}
                     </div>
                 </div>
@@ -2426,11 +2450,13 @@ class SettingsPage extends Page {
                 const compactItem = this.$('#hero-carousel-compact-item');
                 const styleItem = this.$('#hero-carousel-style-item');
                 const zoomItem = this.$('#hero-carousel-zoom-item');
+                const heroQualityItem = this.$('#hero-image-quality-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
+                if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -3152,6 +3178,7 @@ class SettingsPage extends Page {
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
+            'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
