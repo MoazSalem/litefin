@@ -24,16 +24,17 @@ const log = logger.create('SidebarLayoutManager');
  */
 const STATIC_ITEMS = [
     /* The SyncPlay button — sits above the nav group */
-    { id: 'syncplay',  label: 'SyncPlay' },
+    { id: 'syncplay', label: 'SyncPlay' },
     /* User Profile */
-    { id: 'user',      label: 'User Profile' },
+    { id: 'user', label: 'User Profile' },
     /* Core navigation items — displayed inside .sidebar-content */
-    { id: 'home',     label: 'Home' },
-    { id: 'random',   label: 'Random' },
-    { id: 'favorites',label: 'Favorites' },
-    { id: 'search',   label: 'Search' },
+    { id: 'home', label: 'Home' },
+    { id: 'livetv', label: 'Live TV', hidden: true },
+    { id: 'random', label: 'Random' },
+    { id: 'favorites', label: 'Favorites' },
+    { id: 'search', label: 'Search' },
     { id: 'settings', label: 'Settings' },
-    { id: 'librariesContainer', label: 'Libraries' },
+    { id: 'librariesContainer', label: 'Libraries' }
 ];
 
 /**
@@ -77,10 +78,10 @@ class SidebarLayoutManager {
      */
     saveConfig(config) {
         if (config.items) {
-            config.items.forEach((item, index) => item.order = index);
+            config.items.forEach((item, index) => (item.order = index));
         }
         if (config.libraryItems) {
-            config.libraryItems.forEach((item, index) => item.order = index);
+            config.libraryItems.forEach((item, index) => (item.order = index));
         }
         storage.setItem(this._storageKey, JSON.stringify(config));
         log.info('Sidebar layout saved.');
@@ -97,7 +98,7 @@ class SidebarLayoutManager {
      */
     getDefaultFocus() {
         const config = this.getSavedConfig();
-        return (config && config.defaultFocus) ? config.defaultFocus : 'home';
+        return config && config.defaultFocus ? config.defaultFocus : 'home';
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -112,29 +113,29 @@ class SidebarLayoutManager {
     applyLayout(liveItems) {
         const config = this.getSavedConfig();
 
-        const staticItems = liveItems.filter(i => !i.id.startsWith('lib-') && i.id !== 'section-header');
-        const libraryItems = liveItems.filter(i => i.id.startsWith('lib-'));
-        const headerItem = liveItems.find(i => i.id === 'section-header');
+        const staticItems = liveItems.filter((i) => !i.id.startsWith('lib-') && i.id !== 'section-header');
+        const libraryItems = liveItems.filter((i) => i.id.startsWith('lib-'));
+        const headerItem = liveItems.find((i) => i.id === 'section-header');
 
         // Introduce the proxy virtual group block into the static items if it doesn't physically exist
         // so that the _applyOrder pass can locate and position it.
-        if (!staticItems.find(i => i.id === 'librariesContainer')) {
+        if (!staticItems.find((i) => i.id === 'librariesContainer')) {
             staticItems.push({ id: 'librariesContainer', el: null, virtual: true });
         }
 
         // Build a fallback config from STATIC_ITEMS so the initial unsaved layout matches the canonical order
-        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({ id: item.id, hidden: false, order: index }));
+        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({ id: item.id, hidden: item.hidden || false, order: index }));
         const orderedStatic = this._applyOrder(staticItems, config && config.items ? config.items : fallbackConfig);
         const orderedLibs = this._applyOrder(libraryItems, config ? config.libraryItems : null);
 
         const result = [];
-        orderedStatic.forEach(item => {
+        orderedStatic.forEach((item) => {
             if (item.id === 'librariesContainer') {
                 if (headerItem && orderedLibs.length > 0) {
                     result.push({ ...headerItem, hidden: false });
                 }
                 // Even if "librariesContainer" was somehow marked hidden, we respect its children's own hide states
-                orderedLibs.forEach(lib => result.push(lib));
+                orderedLibs.forEach((lib) => result.push(lib));
             } else if (!item.virtual) {
                 result.push(item);
             }
@@ -148,10 +149,10 @@ class SidebarLayoutManager {
      */
     _applyOrder(liveSubset, savedConfigList) {
         if (!savedConfigList || savedConfigList.length === 0) {
-            return liveSubset.map(item => ({ ...item, hidden: false }));
+            return liveSubset.map((item) => ({ ...item, hidden: false }));
         }
 
-        const savedMap = new Map(savedConfigList.map(item => [item.id, item]));
+        const savedMap = new Map(savedConfigList.map((item) => [item.id, item]));
         const positioned = [];
         const newItems = [];
 
@@ -161,7 +162,7 @@ class SidebarLayoutManager {
                 const forceVisible = LOCKED_ITEM_IDS.includes(liveItem.id);
                 positioned.push({
                     ...liveItem,
-                    hidden: forceVisible ? false : (saved.hidden || false),
+                    hidden: forceVisible ? false : saved.hidden || false,
                     _order: saved.order
                 });
             } else {
@@ -170,10 +171,7 @@ class SidebarLayoutManager {
         }
 
         positioned.sort((a, b) => a._order - b._order);
-        return [
-            ...positioned.map(({ _order, ...rest }) => rest),
-            ...newItems
-        ];
+        return [...positioned.map(({ _order, ...rest }) => rest), ...newItems];
     }
 
     // ─────────────────────────────────────────────────────────────────────────
@@ -194,7 +192,7 @@ class SidebarLayoutManager {
      */
     buildSettingsLayout(liveItems) {
         const config = this.getSavedConfig();
-        const savedItems = config ? (config.items || []) : [];
+        const savedItems = config ? config.items || [] : [];
         const savedMap = new Map(savedItems.map((item) => [item.id, item]));
 
         const result = [];
@@ -209,8 +207,8 @@ class SidebarLayoutManager {
             if (live) {
                 result.push({
                     id: live.id,
-                    label: live.label,   // Use fresh label in case it was renamed
-                    hidden: LOCKED_ITEM_IDS.includes(saved.id) ? false : (saved.hidden || false),
+                    label: live.label, // Use fresh label in case it was renamed
+                    hidden: LOCKED_ITEM_IDS.includes(saved.id) ? false : saved.hidden || false,
                     locked: LOCKED_ITEM_IDS.includes(saved.id),
                     order: nextOrder++
                 });
@@ -226,7 +224,7 @@ class SidebarLayoutManager {
                 result.push({
                     id: live.id,
                     label: live.label,
-                    hidden: false,
+                    hidden: live.hidden || false,
                     locked: LOCKED_ITEM_IDS.includes(live.id),
                     order: nextOrder++
                 });
@@ -241,7 +239,7 @@ class SidebarLayoutManager {
      */
     buildLibrarySettingsLayout(liveLibraries) {
         const config = this.getSavedConfig();
-        const savedItems = config ? (config.libraryItems || []) : [];
+        const savedItems = config ? config.libraryItems || [] : [];
         const savedMap = new Map(savedItems.map((item) => [item.id, item]));
 
         const result = [];

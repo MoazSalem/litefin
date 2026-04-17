@@ -2376,6 +2376,21 @@ export default class OSDController extends Component {
 
     _getFormattedTitle(item) {
         if (!item) return '';
+
+        // Live TV: Channel/Program handling
+        if (item.Type === 'TvChannel' || item.ChannelId) {
+            const channelNumber = item.Number || item.ChannelNumber || '';
+            const channelName = item.ChannelName || (item.Type === 'TvChannel' ? item.Name : '');
+            const programName = item.Type === 'TvChannel' ? '' : item.Name;
+
+            let text = '';
+            if (channelNumber) text += `${channelNumber} `;
+            if (channelName) text += `${channelName}`;
+            if (programName) text += ` - ${programName}`;
+            
+            return text.trim() || item.Name || '';
+        }
+
         if (item.SeriesName) {
             let text = item.SeriesName;
             if (item.IndexNumber !== undefined) {

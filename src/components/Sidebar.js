@@ -96,6 +96,19 @@ class Sidebar extends Component {
                         </div>
                         <span class="item-text" data-i18n="Home">Home</span>
                     </button>
+                    
+                    <button class="sidebar-item" id="sidebar-livetv" tabindex="0" data-path="/livetv">
+                        <div class="item-icon">
+                            <svg class="icon-outline" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                                <rect x="2" y="7" width="20" height="15" rx="2" ry="2"></rect>
+                                <polyline points="17 2 12 7 7 2"></polyline>
+                            </svg>
+                            <svg class="icon-filled" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M21,6h-7.59l3.29-3.29c0.39-0.39,0.39-1.02,0-1.41c-0.39-0.39-1.02-0.39-1.41,0L12,4.59L8.71,1.3c-0.39-0.39-1.02-0.39-1.41,0  c-0.39,0.39-0.39,1.02,0,1.41L10.59,6H3C1.9,6,1,6.9,1,8v12c0,1.1,0.9,2,2,2h18c1.1,0,2-0.9,2-2V8C23,6.9,22.1,6,21,6z M21,20H3V8h18  V20z"/>
+                            </svg>
+                        </div>
+                        <span class="item-text" data-i18n="LiveTV">Live TV</span>
+                    </button>
 
                     <button class="sidebar-item" id="sidebar-random" tabindex="0">
                         <div class="item-icon">
@@ -167,9 +180,9 @@ class Sidebar extends Component {
         eventBus.on('auth:restored', this._onAuthChange.bind(this));
 
         // Listen for SyncPlay state changes to update the sidebar button
-        this._onSyncPlayEnabled  = () => this._updateSyncPlayBtn(true);
+        this._onSyncPlayEnabled = () => this._updateSyncPlayBtn(true);
         this._onSyncPlayDisabled = () => this._updateSyncPlayBtn(false);
-        eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
+        eventBus.on('syncplay:enabled', this._onSyncPlayEnabled);
         eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Initialize visibility in case the plugin is disabled at startup
@@ -270,7 +283,7 @@ class Sidebar extends Component {
         eventBus.off('auth:restored', this._onAuthChange.bind(this));
 
         // Remove SyncPlay listeners
-        if (this._onSyncPlayEnabled)  eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
+        if (this._onSyncPlayEnabled) eventBus.off('syncplay:enabled', this._onSyncPlayEnabled);
         if (this._onSyncPlayDisabled) eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Remove sidebar layout hot-reload listener
@@ -329,6 +342,8 @@ class Sidebar extends Component {
     _updateLogoSettings() {
         const isEnabled = storage.getItem('pref:logoSettings') === 'true';
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
+        const settingsBtn = this.el.querySelector('#sidebar-settings');
+
         if (logoHeader) {
             logoHeader.classList.toggle('sidebar-item', isEnabled);
             logoHeader.setAttribute('data-focusable', isEnabled.toString());
@@ -336,8 +351,10 @@ class Sidebar extends Component {
 
             if (isEnabled) {
                 logoHeader.dataset.path = '/settings';
+                if (settingsBtn) settingsBtn.classList.add('hidden');
             } else {
                 delete logoHeader.dataset.path;
+                if (settingsBtn) settingsBtn.classList.remove('hidden');
             }
 
             // Invalidate cache since focusability of a header element changed
@@ -411,7 +428,6 @@ class Sidebar extends Component {
             if (item.id === 'sidebar-logo-header') return; // Handled above
 
             item.onclick = () => {
-
                 const path = item.dataset.path;
                 if (path) {
                     if (path === '/home') {
@@ -477,9 +493,9 @@ class Sidebar extends Component {
 
             const sidebarContent = this.el.querySelector('.sidebar-content');
             if (!sidebarContent) return;
-            
+
             // Remove any previously rendered libraries and headers to allow clean reloading
-            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach(el => el.remove());
+            sidebarContent.querySelectorAll('.library-item, .sidebar-section-header').forEach((el) => el.remove());
 
             if (items.length > 0) {
                 // Determine header label based on layout block ('My Media')
@@ -495,15 +511,20 @@ class Sidebar extends Component {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
+                
+                // Route livetv to the unified Live TV page
+                const isLiveTv = lib.CollectionType === 'livetv';
+                const buttonPath = isLiveTv ? '/livetv' : `/library/${lib.Id}`;
+
                 // Attach both the path (for nav) AND a layout-id so _applySidebarLayout
                 // can match this button against the saved config (id: 'lib-{Id}')
-                btn.dataset.path = `/library/${lib.Id}`;
+                btn.dataset.path = buttonPath;
                 btn.dataset.layoutId = `lib-${lib.Id}`;
                 btn.innerHTML = `
                     <span class="item-text">${lib.Name}</span>
                 `;
 
-                btn.onclick = () => router.navigate(`/library/${lib.Id}`);
+                btn.onclick = () => router.navigate(buttonPath);
 
                 sidebarContent.appendChild(btn);
             });
@@ -556,8 +577,8 @@ class Sidebar extends Component {
      * @private
      */
     _updateSyncPlayBtn(active) {
-        const btn   = this.el.querySelector('#sidebar-syncplay');
-        const dot   = this.el.querySelector('#sidebar-syncplay-dot');
+        const btn = this.el.querySelector('#sidebar-syncplay');
+        const dot = this.el.querySelector('#sidebar-syncplay-dot');
         const label = this.el.querySelector('#sidebar-syncplay-label');
         if (!btn) return;
 

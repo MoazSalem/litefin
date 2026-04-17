@@ -59,8 +59,8 @@ class FavoritesPage extends Page {
             const userId = typeof api.userId === 'function' ? api.userId() : api._userId;
             if (!userId) throw new Error('User not authenticated');
 
-            // Parallel fetch of all favorite types, including music
-            const [movies, shows, seasons, episodes, people, artists, albums, songs] = await Promise.all([
+            // Parallel fetch of all favorite types, including music and live tv
+            const [movies, shows, seasons, episodes, channels, people, artists, albums, songs] = await Promise.all([
                 api.getItems({
                     Filters: 'IsFavorite',
                     IncludeItemTypes: 'Movie',
@@ -92,6 +92,14 @@ class FavoritesPage extends Page {
                     SortOrder: 'Descending',
                     Limit: 50,
                     Fields: 'PrimaryImageAspectRatio,ParentTitle,Overview,RunTimeTicks,IndexNumber,ParentIndexNumber'
+                }),
+                api.getItems({
+                    Filters: 'IsFavorite',
+                    IncludeItemTypes: 'TvChannel',
+                    SortBy: 'SortName',
+                    SortOrder: 'Ascending',
+                    Limit: 50,
+                    Fields: 'PrimaryImageAspectRatio'
                 }),
                 api.get('/Persons', {
                     Filters: 'IsFavorite',
@@ -153,6 +161,13 @@ class FavoritesPage extends Page {
                     title: i18n.t('Episodes'),
                     items: episodes.Items,
                     type: 'episode'
+                });
+            if (channels.TotalRecordCount > 0)
+                sectionsData.push({ 
+                    id: 'fav-channel', 
+                    title: i18n.t('LiveTv'), 
+                    items: channels.Items, 
+                    type: 'square' 
                 });
             if (people.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-person', title: i18n.t('People'), items: people.Items, type: 'person' });

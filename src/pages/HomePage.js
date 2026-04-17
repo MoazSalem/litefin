@@ -208,7 +208,17 @@ class HomePage extends Page {
                 cardType: 'library',
                 contextType: 'library',
                 // Libraries are loaded upfront; fetchFn is a synchronous-style wrapper
-                fetchFn: async () => (this._libraries.length > 0 ? this._libraries : null)
+                fetchFn: async () => {
+                    if (this._libraries.length === 0) return null;
+
+                    // Filter out Live TV if the user has disabled it in settings
+                    const hideLiveTv = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                    if (hideLiveTv) {
+                        return this._libraries.filter((lib) => lib.CollectionType !== 'livetv');
+                    }
+
+                    return this._libraries;
+                }
             });
         }
 
@@ -316,9 +326,9 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music libraries use square cards, everything else uses portrait
-                layout: lib.CollectionType === 'music' ? 'square' : 'portrait',
-                cardType: lib.CollectionType === 'music' ? 'square' : 'poster',
+                // Music and Live TV libraries use square cards, everything else uses portrait
+                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv') ? 'square' : 'portrait',
+                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv') ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -918,7 +928,12 @@ class HomePage extends Page {
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
-                router.navigate(`/library/${card.dataset.itemId}`);
+                // Special handling for Live TV: redirect to the unified Live TV page
+                if (card.dataset.collectionType === 'livetv') {
+                    router.navigate('/livetv');
+                } else {
+                    router.navigate(`/library/${card.dataset.itemId}`);
+                }
             } else {
                 // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;

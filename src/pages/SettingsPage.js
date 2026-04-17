@@ -588,6 +588,18 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-item">
+                        <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
+                        <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideLiveTvInMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-livetv-home" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMergeResumeNextUp">${i18n.t('LabelMergeResumeNextUp')}</span>
                         <span class="setting-description" data-i18n="LabelMergeResumeNextUpDescription">${i18n.t('LabelMergeResumeNextUpDescription')}</span>
@@ -599,8 +611,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
@@ -2341,6 +2351,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Hide Live TV in My Media
+        const hideLiveTvBtn = this.$('#toggle-hide-livetv-home');
+        if (hideLiveTvBtn) {
+            hideLiveTvBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideLiveTvInMyMedia', newValue);
+                hideLiveTvBtn.classList.toggle('active', newValue);
+                log.info(`Hide Live TV in My Media set to: ${newValue}`);
+            });
+        }
+
         // Toggle Merge Resume and Next Up
         const mergeResumeNextUpBtn = this.$('#toggle-merge-resume-nextup');
         if (mergeResumeNextUpBtn) {
@@ -3679,7 +3701,6 @@ class SettingsPage extends Page {
                 if (focusSelectContainer) {
                     // Combine both lists for the focus target choices
                     const visibleItems = layoutVars.filter((v) => !v.hidden || v.locked);
-                    const visibleLibs = libraryVars.filter((v) => !v.hidden || v.locked);
 
                     const defaultFocus = sidebarLayoutManager.getDefaultFocus();
 

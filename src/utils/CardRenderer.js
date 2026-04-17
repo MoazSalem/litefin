@@ -210,6 +210,34 @@ class CardRenderer {
                     });
                 }
             }
+        } else if (item.Type === 'TvChannel') {
+            // Live TV Channel: Primary (Logo) -> Thumb
+            const params = imageService.getParams('square'); // Channels are usually square logos
+            if (item.ImageTags && item.ImageTags.Primary) {
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            }
+        } else if (item.Type === 'Program') {
+            // Live TV Program: Primary (usually backdrop) -> Channel Primary (Logo)
+            const params = isLandscape ? imageService.getParams('card-backdrop') : imageService.getParams('poster');
+            if (item.ImageTags && item.ImageTags.Primary) {
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            } else if (item.ChannelPrimaryImageTag && item.ChannelId) {
+                // Use Channel Logo as fallback
+                const logoParams = imageService.getParams('square');
+                imageUrl = api.getImageUrl(item.ChannelId, 'Primary', {
+                    maxWidth: logoParams.maxWidth,
+                    quality: logoParams.quality,
+                    tag: item.ChannelPrimaryImageTag
+                });
+            }
         } else {
             // Portrait (Poster) Preference
             if (type === 'season') {
@@ -373,6 +401,12 @@ class CardRenderer {
             } else {
                 titleText = i18n.t('SeasonValue', [item.IndexNumber]);
             }
+        } else if (item.Type === 'TvChannel') {
+            titleText = i18n.ensureBiDi(item.Number ? `${item.Number} - ${item.Name}` : item.Name);
+            subtitleText = i18n.ensureBiDi(item.CurrentProgram?.Name || '');
+        } else if (item.Type === 'Program') {
+            titleText = i18n.ensureBiDi(item.Name);
+            subtitleText = i18n.ensureBiDi(item.ChannelName || '');
         } else {
             // Movies/Shows - show year and role if available
             const parts = [];
@@ -451,7 +485,7 @@ class CardRenderer {
         `;
 
         return `
-            <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-context-type="${finalContextType}" tabindex="0">
+            <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
