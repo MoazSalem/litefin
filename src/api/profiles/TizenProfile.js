@@ -560,19 +560,12 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                // ----------------------------------------------------------------
-                // IsInterlaced condition intentionally OMITTED.
-                //
-                // Even with IsRequired:false, Jellyfin's server-side PlaybackInfo
-                // evaluation uses this condition to set SupportsDirectPlay=false on
-                // interlaced streams (e.g. 1080i broadcast TS), forcing a full
-                // CPU/GPU transcode before we even see the response.
-                //
-                // Tizen AVPlay has a hardware deinterlacer that handles 1080i H264
-                // natively — there is no need to signal any interlace limitation.
-                // By omitting this condition entirely, Jellyfin treats interlaced
-                // H264 as fully compatible and allows DirectPlay of Live TV streams.
-                // ----------------------------------------------------------------
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: true,
+                },
                 ...hdrCondition
             ]
         },
