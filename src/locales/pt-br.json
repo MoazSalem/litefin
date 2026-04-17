@@ -749,6 +749,8 @@
     "Ultra": "Ultra",
     "Unfavorite": "Desfavoritar",
     "Unlimited": "Ilimitado",
+    "UnlockMyMediaOrder": "Desbloquear ordem de Minha mídia",
+    "UnlockMyMediaOrderDescription": "Permite que 'Minha mídia' seja movida da posição superior. AVISO: Isso pode causar quebras no layout de foco em dispositivos antigos.",
     "Upcoming": "Em breve",
     "UpdateCheckFailed": "Não foi possível verificar atualizações.",
     "Updates": "Atualizações",

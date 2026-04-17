@@ -749,6 +749,8 @@
     "Ultra": "ウルトラ",
     "Unfavorite": "お気に入り解除",
     "Unlimited": "無制限",
+    "UnlockMyMediaOrder": "マイメディアの順序をロック解除",
+    "UnlockMyMediaOrderDescription": "「マイメディア」を最上部から移動できるようにします。警告：これにより、古いデバイスでフォーカスレイアウトが崩れる可能性があります。",
     "Upcoming": "近日公開",
     "UpdateCheckFailed": "アップデートの確認ができませんでした。",
     "Updates": "アップデート",

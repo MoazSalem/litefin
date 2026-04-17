@@ -749,6 +749,8 @@
     "Ultra": "Ultra",
     "Unfavorite": "Favorit entfernen",
     "Unlimited": "Unbegrenzt",
+    "UnlockMyMediaOrder": "Reihenfolge von 'Meine Medien' entsperren",
+    "UnlockMyMediaOrderDescription": "Ermöglicht das Verschieben von 'Meine Medien' von der obersten Position. WARNUNG: Dies kann auf älteren Geräten zu Fehlern im Fokus-Layout führen.",
     "Upcoming": "Demnächst",
     "UpdateCheckFailed": "Update-Prüfung fehlgeschlagen.",
     "Updates": "Updates",

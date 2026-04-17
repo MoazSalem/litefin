@@ -794,6 +794,20 @@ class SettingsPage extends Page {
                 </div>
 
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UnlockMyMediaOrder">${i18n.t('UnlockMyMediaOrder') || 'Unlock My Media Order'}</span>
+                        <span class="setting-description" data-i18n="UnlockMyMediaOrderDescription">${i18n.t('UnlockMyMediaOrderDescription') || 'Allow "My Media" to be moved from the top position. WARNING: This may cause focus layout breaks on older devices.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:unlockMyMediaOrder') === 'true' ? 'active' : ''}" 
+                                 id="toggle-unlock-my-media-order" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 
                      Loaded dynamically via _setupHomeLayoutUI. 
                      Each row inside will be a distinct .setting-item .layout-row
@@ -3431,6 +3445,19 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for Unlock My Media Order
+        const unlockMyMediaOrderToggle = this.$('#toggle-unlock-my-media-order');
+        if (unlockMyMediaOrderToggle) {
+            unlockMyMediaOrderToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:unlockMyMediaOrder') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:unlockMyMediaOrder', newValue.toString());
+                unlockMyMediaOrderToggle.classList.toggle('active', newValue);
+                this._setupHomeLayoutUI();
+                log.info(`Unlock My Media Order set to: ${newValue}`);
+            });
+        }
+
         // Initial Visibility Check for Background Opacity
         const bgContainer = document.getElementById('subtitle-bg-opacity-container');
         if (bgContainer) {
@@ -3854,8 +3881,9 @@ class SettingsPage extends Page {
 
                 const listHtml = layoutVars
                     .map((item, index) => {
-                        const isFirst = index === 0;
-                        const isLast = index === layoutVars.length - 1;
+                        const isLocked = item.locked;
+                        const isFirst = index === 0 || (index > 0 && layoutVars[index - 1].locked);
+                        const isLast = index === layoutVars.length - 1 || (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
 
                         return `
                         <div class="setting-item layout-row ${item.hidden ? 'layout-row-hidden' : ''}" data-id="${item.id}" data-index="${index}">
@@ -3863,10 +3891,10 @@ class SettingsPage extends Page {
                                 <span class="setting-name layout-row-title">${item.title}</span>
                             </div>
                             <div class="setting-control layout-btns" dir="ltr">
-                                <button class="btn btn-icon layout-btn-up" tabindex="0" ${isFirst ? 'disabled' : ''} aria-label="Move Up">
+                                <button class="btn btn-icon layout-btn-up" tabindex="0" ${isFirst || isLocked ? 'disabled style="opacity:0.3"' : ''} aria-label="Move Up">
                                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
                                 </button>
-                                <button class="btn btn-icon layout-btn-down" tabindex="0" ${isLast ? 'disabled' : ''} aria-label="Move Down">
+                                <button class="btn btn-icon layout-btn-down" tabindex="0" ${isLast || isLocked ? 'disabled style="opacity:0.3"' : ''} aria-label="Move Down">
                                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                                 </button>
                                 <button class="btn btn-icon layout-btn-toggle" tabindex="0" aria-label="${item.hidden ? 'Show' : 'Hide'}">
@@ -3889,7 +3917,7 @@ class SettingsPage extends Page {
                     btn.addEventListener('click', (e) => {
                         const row = e.target.closest('.layout-row');
                         const idx = parseInt(row.dataset.index, 10);
-                        if (idx > 0) {
+                        if (idx > 0 && !layoutVars[idx].locked && !layoutVars[idx - 1].locked) {
                             // Swap with preceding
                             const temp = layoutVars[idx - 1];
                             layoutVars[idx - 1] = layoutVars[idx];
@@ -3910,7 +3938,7 @@ class SettingsPage extends Page {
                     btn.addEventListener('click', (e) => {
                         const row = e.target.closest('.layout-row');
                         const idx = parseInt(row.dataset.index, 10);
-                        if (idx < layoutVars.length - 1) {
+                        if (idx < layoutVars.length - 1 && !layoutVars[idx].locked && !layoutVars[idx + 1].locked) {
                             // Swap with succeeding
                             const temp = layoutVars[idx + 1];
                             layoutVars[idx + 1] = layoutVars[idx];

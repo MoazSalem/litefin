@@ -749,6 +749,8 @@
     "Ultra": "超强",
     "Unfavorite": "取消收藏",
     "Unlimited": "无限制",
+    "UnlockMyMediaOrder": "解锁“我的媒体”排序",
+    "UnlockMyMediaOrderDescription": "允许将“我的媒体”从顶位移动。警告：这可能会导致旧设备上的焦点布局异常。",
     "Upcoming": "即将到来",
     "UpdateCheckFailed": "无法检查更新。",
     "Updates": "更新",

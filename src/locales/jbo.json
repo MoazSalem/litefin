@@ -749,6 +749,8 @@
     "Ultra": "Ultra",
     "Unfavorite": "Unfavorite",
     "Unlimited": "Unlimited",
+    "UnlockMyMediaOrder": "Unlock My Media Order",
+    "UnlockMyMediaOrderDescription": "Allow \"My Media\" to be moved from the top position. WARNING: This may cause focus layout breaks on older devices.",
     "Upcoming": "Upcoming",
     "UpdateCheckFailed": "Could not check for updates.",
     "Updates": "Updates",

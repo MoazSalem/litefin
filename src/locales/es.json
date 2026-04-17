@@ -749,6 +749,8 @@
     "Ultra": "Ultra",
     "Unfavorite": "Eliminar de favoritos",
     "Unlimited": "Ilimitado",
+    "UnlockMyMediaOrder": "Desbloquear orden de Mis medios",
+    "UnlockMyMediaOrderDescription": "Permite que 'Mis medios' se mueva de la posición superior. ADVERTENCIA: Esto puede causar errores de diseño de enfoque en dispositivos antiguos.",
     "Upcoming": "Próximos",
     "UpdateCheckFailed": "No se pudo buscar actualizaciones.",
     "Updates": "Actualizaciones",

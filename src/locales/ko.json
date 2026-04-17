@@ -749,6 +749,8 @@
     "Ultra": "울트라",
     "Unfavorite": "즐겨찾기 해제",
     "Unlimited": "제한 없음",
+    "UnlockMyMediaOrder": "내 미디어 순서 잠금 해제",
+    "UnlockMyMediaOrderDescription": "'내 미디어'를 최상단 위치에서 이동할 수 있도록 허용합니다. 경고: 오래된 장치에서 포커스 레이아웃이 깨질 수 있습니다.",
     "Upcoming": "예정",
     "UpdateCheckFailed": "업데이트를 확인할 수 없습니다.",
     "Updates": "업데이트",

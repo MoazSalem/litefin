@@ -749,6 +749,8 @@
     "Ultra": "Ultra",
     "Unfavorite": "Ta bort favorit",
     "Unlimited": "Obegränsad",
+    "UnlockMyMediaOrder": "Lås upp ordningen för Mina medier",
+    "UnlockMyMediaOrderDescription": "Tillåt att 'Mina medier' flyttas från den översta positionen. VARNING: Detta kan orsaka problem med fokuslayouten på äldre enheter.",
     "Upcoming": "Kommande",
     "UpdateCheckFailed": "Kunde inte kontrollera uppdateringar.",
     "Updates": "Uppdateringar",
