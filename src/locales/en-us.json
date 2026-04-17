@@ -425,6 +425,8 @@
     "HeroCarousel": "Hero Carousel",
     "HeroCarouselCompact": "Compact Mode",
     "HeroCarouselCompactDescription": "Reduces the height of the hero section to improve scroll performance.",
+    "HeroCarouselZoom": "Enable Background Motion",
+    "HeroCarouselZoomDescription": "Enable the slow background motion effect on the hero carousel backdrops.",
     "HeroCarouselTextTitle": "Use Text Titles",
     "HeroCarouselTextTitleDescription": "Prefer text titles over logos in the hero carousel.",
     "HeroStyle": "Hero Style",

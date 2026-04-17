@@ -588,6 +588,7 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -738,6 +739,19 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:heroCarouselCompact') !== 'false' ? 'active' : ''}" 
                                  id="toggle-hero-carousel-compact" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-zoom-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselZoom">${i18n.t('HeroCarouselZoom') || 'Enable Zoom Effect'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselZoomDescription">${i18n.t('HeroCarouselZoomDescription') || 'Adds a subtle zoom animation when focusing the hero section.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselZoom') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-zoom" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -2411,10 +2425,12 @@ class SettingsPage extends Page {
                 const textTitleItem = this.$('#hero-carousel-text-title-item');
                 const compactItem = this.$('#hero-carousel-compact-item');
                 const styleItem = this.$('#hero-carousel-style-item');
+                const zoomItem = this.$('#hero-carousel-zoom-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
+                if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -2442,6 +2458,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselCompact', newValue.toString());
                 heroCarouselCompactBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Compact Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel Zoom Effect
+        const heroCarouselZoomBtn = this.$('#toggle-hero-carousel-zoom');
+        if (heroCarouselZoomBtn) {
+            heroCarouselZoomBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselZoom', newValue.toString());
+                heroCarouselZoomBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Zoom Effect set to: ${newValue}`);
             });
         }
 
