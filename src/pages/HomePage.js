@@ -795,6 +795,15 @@ class HomePage extends Page {
     _tryInitializeFocus(container) {
         this._focusInitialized = true; // Prevent double-initialization
 
+        // [RACE CONDITION FIX] Capture and clear _pendingNavState synchronously!
+        // The render pipeline yields via Promise (microtasks), so if data is cached, 
+        // the pipeline reaches Step 7 and calls NavigationState BEFORE this requestAnimationFrame
+        // can clear the state. That leads to NavigationState firing a 50ms fallback timeout
+        // which clobbers our correct focus back to "sidebar" or whatever just as the user
+        // starts navigating.
+        const pendingNav = this._pendingNavState;
+        this._pendingNavState = null;
+
         // Defer the focus setup to after the browser has painted this first row
         requestAnimationFrame(() => {
             if (!this._isMounted) return;
@@ -854,18 +863,14 @@ class HomePage extends Page {
                 state.delete('home:lastFocusedItem');
                 state.delete('home:lastFocusedItemId');
 
-                // If we successfully restored focus from home:lastFocusedItem, also
-                // restore any captured scroll offset from NavigationState but then
-                // CONSUME _pendingNavState so that restoreScrollFocusWhenReady() at the
-                // end of the pipeline does NOT run a second focus restoration that would
-                // clobber the row focus we just placed (e.g. jumping back to sidebar).
-                if (restoredFocus && this._pendingNavState) {
+                // Restore any captured scroll offset from NavigationState.
+                // Since we nullified this._pendingNavState synchronously above,
+                // restoreScrollFocusWhenReady() at the end of the pipeline is safely a no-op.
+                if (restoredFocus && pendingNav) {
                     const scrollContainer = this.$('.page-content');
-                    if (scrollContainer && this._pendingNavState.scrollTop > 0) {
-                        scrollContainer.scrollTop = this._pendingNavState.scrollTop;
+                    if (scrollContainer && pendingNav.scrollTop > 0) {
+                        scrollContainer.scrollTop = pendingNav.scrollTop;
                     }
-                    // Nullify so restoreScrollFocusWhenReady() becomes a no-op
-                    this._pendingNavState = null;
                 }
             }
 
