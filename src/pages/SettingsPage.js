@@ -1282,6 +1282,31 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                ${
+                    platformInfo.isTizen
+                        ? `
+                <!-- Interlaced content backend fallback toggle.
+                     Only meaningful on Tizen/AVPlay — when AVPlay encounters interlaced H264
+                     inside an HLS stream it crashes. This toggle makes the player automatically
+                     detect that and retry using the HTML5 (Chromium) backend instead.
+                     HTML5 decodes interlaced natively, no server transcode needed. -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="InterlacedBackendFallback">${i18n.t('InterlacedBackendFallback') || 'Auto-Switch for Interlaced Content'}</span>
+                        <span class="setting-description" data-i18n="InterlacedBackendFallbackDescription">${i18n.t('InterlacedBackendFallbackDescription') || 'Automatically use the HTML5 player for interlaced video (1080i) when AVPlay is active.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('interlacedBackendFallback') ? 'active' : ''}"
+                                id="toggle-interlaced-backend-fallback"
+                                data-setting="interlacedBackendFallback"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                `
+                        : ''
+                }
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableHEVC">${i18n.t('EnableHEVC')}</span>
@@ -2731,7 +2756,12 @@ class SettingsPage extends Page {
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
             'toggle-force-transcode',
-            'toggle-background-service'
+            'toggle-background-service',
+            // Interlaced content fallback — auto-switch to HTML5 when AVPlay
+            // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
+            // cache invalidation needed (device caps don't change), but keeping
+            // it in this list wires the click → PlayerSettings.set() for us.
+            'toggle-interlaced-backend-fallback'
         ];
         profileToggles.forEach((toggleId) => {
             const btn = this.$(`#${toggleId}`);

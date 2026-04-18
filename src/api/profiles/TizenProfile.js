@@ -560,12 +560,25 @@ export function buildJellyfinProfile(options = {}) {
                 { Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'VideoBitDepth', Value: '8', IsRequired: false },
                 { Condition: 'LessThanEqual', Property: 'RefFrames', Value: '16', IsRequired: false },
-                {
+                /*
+                 * Interlaced H264 restriction — AVPlay-only:
+                 *
+                 * Samsung's AVPlay HLS parser crashes (PLAYER_ERROR_NOT_SUPPORTED_FORMAT) when
+                 * it encounters interlaced H264 frames inside an HLS TS stream. The fix is to
+                 * require IsInterlaced=false in the CodecProfile so that Jellyfin will transcode
+                 * (deinterlace) before delivering the stream.
+                 *
+                 * The HTML5/Chromium backend Software H264 decoder is fully spec-compliant and
+                 * handles interlaced content natively — no deinterlacing transcode needed there.
+                 * We therefore skip this condition when the caller has indicated html5 backend,
+                 * allowing the server to direct-stream (or direct-play) interlaced content.
+                 */
+                ...(!isHtml5 ? [{
                     Condition: 'Equals',
                     Property: 'IsInterlaced',
                     Value: 'false',
                     IsRequired: true,
-                },
+                }] : []),
                 ...hdrCondition
             ]
         },
