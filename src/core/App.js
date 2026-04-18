@@ -34,6 +34,7 @@ import OfflinePage from '../pages/OfflinePage.js';
 import PlayerPage from '../pages/PlayerPage.js';
 import ProfilesPage from '../pages/ProfilesPage.js';
 import LiveTvPage from '../pages/LiveTvPage.js';
+import SlideshowPage from '../pages/SlideshowPage.js';
 import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
@@ -263,7 +264,7 @@ class App {
         // ProfilesPage is intentionally fullscreen — it IS the user switcher, so
         // showing the sidebar (which contains the active user's name) would be inconsistent.
         const fullScreenRoutes = ['/login', '/offline', '/profiles'];
-        const isFullScreen = fullScreenRoutes.includes(path) || path.startsWith('/player');
+        const isFullScreen = fullScreenRoutes.includes(path) || path.startsWith('/player') || path.startsWith('/slideshow');
 
         if (isFullScreen) {
             document.body.classList.add('no-sidebar');
@@ -673,6 +674,7 @@ class App {
         router.register('/settings', SettingsPage);
         router.register('/livetv',   LiveTvPage);
         router.register('/offline', OfflinePage);
+        router.register('/slideshow/:photoId', SlideshowPage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
 
         // Season redirect (for backward compatibility or deep links)

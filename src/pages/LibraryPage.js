@@ -529,6 +529,20 @@ class LibraryPage extends Page {
                     return;
                 }
 
+                // Special handling for Photos: open Slideshow
+                if (itemType === 'Photo') {
+                    log.info('Navigating to Slideshow:', itemId);
+                    router.navigate(`/slideshow/${itemId}?parentId=${this.params.id || this.state.libraryId}`);
+                    return;
+                }
+
+                // Special handling for PhotoAlbums: navigate to standard LibraryPage
+                if (itemType === 'PhotoAlbum') {
+                    log.info('Navigating into PhotoAlbum:', itemId);
+                    router.navigate(`/library/${itemId}`);
+                    return;
+                }
+
                 // Default: navigate to folder or item details
                 if (itemType === 'Folder' || itemType === 'CollectionFolder') {
                     log.info('Navigating into folder:', itemId);

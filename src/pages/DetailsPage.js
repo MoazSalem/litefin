@@ -332,7 +332,8 @@ class DetailsPage extends Page {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
                 // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete'
+                // We also request Photo EXIF fields so they are available immediately.
+                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete,Width,Height,CameraMake,CameraModel,ExposureTime,FocalLength,Aperture,Altitude'
             });
             this._item = item;
             log.debug('Item loaded:', item);
@@ -1020,6 +1021,44 @@ class DetailsPage extends Page {
             htmlParts.push(createRow('Tags', item.Tags));
         }
 
+        // Photo EXIF Data
+        if (item.Type === 'Photo') {
+            const createTextRow = (label, value) => {
+                if (!value) return '';
+                return `
+                    <div class="rich-meta-row">
+                        <div class="meta-label">${label}</div>
+                        <div class="meta-value-text">${value}</div>
+                    </div>
+                `;
+            };
+
+            const esc = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            
+            let dateStr = '';
+            if (item.DateCreated) {
+                try { dateStr = new Date(item.DateCreated).toLocaleDateString(); } catch (_) { dateStr = item.DateCreated; }
+            } else if (item.ProductionYear) {
+                dateStr = String(item.ProductionYear);
+            }
+
+            const camera = [item.CameraMake, item.CameraModel].filter(Boolean).join(' ');
+            const aperture = item.Aperture ? `f/${item.Aperture}` : null;
+            let exposure = null;
+            if (item.ExposureTime) {
+                exposure = item.ExposureTime < 1 ? `1/${Math.round(1 / item.ExposureTime)} s` : `${item.ExposureTime} s`;
+            }
+            const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
+            const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
+
+            htmlParts.push(createTextRow(i18n.t('ExifDate') || 'Date', esc(dateStr)));
+            htmlParts.push(createTextRow(i18n.t('ExifCamera') || 'Camera', esc(camera)));
+            htmlParts.push(createTextRow(i18n.t('ExifAperture') || 'Aperture', aperture));
+            htmlParts.push(createTextRow(i18n.t('ExifExposure') || 'Exposure', exposure));
+            htmlParts.push(createTextRow(i18n.t('ExifFocalLength') || 'Focal Length', focal));
+            htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
+        }
+
         const container = this.$('#rich-meta');
         if (container) {
             container.innerHTML = htmlParts.join('');
@@ -1200,7 +1239,12 @@ class DetailsPage extends Page {
 
         let runtimeText = '';
         let endsAtText = '';
-        if (item.RunTimeTicks) {
+
+        if (item.Type === 'Photo') {
+            if (item.Width && item.Height) {
+                runtimeText = `${item.Width} × ${item.Height}`;
+            }
+        } else if (item.RunTimeTicks) {
             const totalMinutes = Math.round(item.RunTimeTicks / 600000000);
             const hours = Math.floor(totalMinutes / 60);
             const minutes = totalMinutes % 60;
@@ -1414,7 +1458,32 @@ class DetailsPage extends Page {
                 resetBtn.classList.add('hidden');
                 resetBtn.setAttribute('tabindex', '-1');
             }
-        } // Upgrade to primary style
+        }
+
+        // Photo overrides for Action Buttons
+        if (item.Type === 'Photo') {
+            if (playBtn) {
+                const playIcon = `<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`;
+                playBtn.innerHTML = `${playIcon} <span>${i18n.t('ViewPhoto') || 'View Photo'}</span>`;
+                playBtn.onclick = () => {
+                    const parentId = this._item.LibraryId || this._item.ParentId || state.get('activeLibraryId') || '';
+                    router.navigate(`/slideshow/${this._itemId}?parentId=${parentId}`);
+                };
+            }
+            
+            const audioBtn = this.$('.audio-btn');
+            if (audioBtn) {
+                audioBtn.classList.add('hidden');
+                audioBtn.setAttribute('tabindex', '-1');
+            }
+            const subBtn = this.$('.subtitle-btn');
+            if (subBtn) {
+                subBtn.classList.add('hidden');
+                subBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // Upgrade to primary style
         resumeBtn.classList.remove('btn-secondary');
         resumeBtn.classList.add('btn-primary');
 
@@ -1435,7 +1504,20 @@ class DetailsPage extends Page {
         const shuffleBtn = this.$('.shuffle-btn');
         if (shuffleBtn) {
             const isShuffleable = ['Series', 'Season', 'BoxSet'].includes(item.Type);
-            if (isShuffleable) {
+            if (item.Type === 'Photo') {
+                shuffleBtn.classList.remove('hidden');
+                shuffleBtn.setAttribute('tabindex', '0');
+                shuffleBtn.setAttribute('aria-label', i18n.t('Slideshow') || 'Slideshow');
+                const playIcon = `<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
+                shuffleBtn.innerHTML = playIcon;
+                shuffleBtn.onclick = () => {
+                    // Slideshow auto-starts via query param if we wanted, but right now SlideshowPage 
+                    // doesn't have an auto start param, user can press play themselves. Thus we just open it.
+                    // Wait, we can pass autoPlay=true!
+                    const parentId = this._item.LibraryId || this._item.ParentId || state.get('activeLibraryId') || '';
+                    router.navigate(`/slideshow/${this._itemId}?parentId=${parentId}&autoPlay=true`);
+                };
+            } else if (isShuffleable) {
                 shuffleBtn.classList.remove('hidden');
                 shuffleBtn.setAttribute('tabindex', '0');
             } else {
