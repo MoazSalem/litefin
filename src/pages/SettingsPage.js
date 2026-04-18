@@ -750,7 +750,7 @@ class SettingsPage extends Page {
                                 { value: 'high', label: i18n.t('High') || 'High' },
                                 { value: 'ultra', label: i18n.t('Ultra') || 'Ultra' }
                             ],
-                            storage.getItem('pref:heroImageQuality') || 'default'
+                            storage.getItem('pref:heroImageQuality') || 'medium-low'
                         )}
                     </div>
                 </div>

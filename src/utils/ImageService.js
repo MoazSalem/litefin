@@ -35,7 +35,7 @@ class ImageService {
      * @returns {string} default | low | medium-low | medium | medium-high | high | ultra
      */
     getHeroPreset() {
-        return storage.getItem('pref:heroImageQuality') || 'default';
+        return storage.getItem('pref:heroImageQuality') || 'medium-low';
     }
 
     /**
