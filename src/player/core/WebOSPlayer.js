@@ -460,15 +460,20 @@ export class WebOSPlayer {
     _applyInitialTracks(options, hls) {
         // ---- Audio track ----
         if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
+            // Convert Jellyfin stream index (e.g. 1) to 0-based audio-only list index (e.g. 0)
+            // so it maps correctly onto hls.audioTracks / video.audioTracks arrays.
+            const audioStreams = (options.mediaSource?.MediaStreams || []).filter(s => s.Type === 'Audio');
+            const listIndex = audioStreams.findIndex(s => s.Index === options.audioStreamIndex);
+            const resolvedIndex = listIndex >= 0 ? listIndex : 0;
+
             if (hls) {
-                // Hls.js uses 0-based audioTrack index
-                if (options.audioStreamIndex < hls.audioTracks.length) {
-                    hls.audioTrack = options.audioStreamIndex;
-                    log.debug('WebOSPlayer: Hls.js audio track set to', options.audioStreamIndex);
+                if (resolvedIndex < hls.audioTracks.length) {
+                    hls.audioTrack = resolvedIndex;
+                    log.debug('WebOSPlayer: Hls.js audio track set to', resolvedIndex);
                 }
             } else {
                 // Native: toggle HTML5 AudioTrack objects
-                this.setAudioStreamIndex(options.audioStreamIndex);
+                this.setAudioStreamIndex(resolvedIndex);
             }
         }
 
@@ -757,8 +762,8 @@ export class WebOSPlayer {
         if (!video) return;
 
         const audioTracks = video.audioTracks;
-        if (!audioTracks || audioTracks.length < 2) {
-            log.debug('WebOSPlayer: Native audioTracks not available or single-track');
+        if (!audioTracks || audioTracks.length === 0) {
+            log.debug('WebOSPlayer: Native audioTracks not available');
             return;
         }
 

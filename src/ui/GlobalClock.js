@@ -10,6 +10,7 @@
 import { eventBus } from '../core/EventBus.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 
 const log = logger.create('GlobalClock');
 
@@ -39,6 +40,7 @@ class GlobalClock {
 
         // 3. Initial update
         this.update();
+        this._applyFormatVisibility();
 
         // 4. Start update timer (on the minute boundary for accuracy)
         this._startTimer();
@@ -48,6 +50,7 @@ class GlobalClock {
         eventBus.on('pref:timeFormat', () => {
             log.debug('Time format changed, updating clock...');
             this.update();
+            this._applyFormatVisibility();
         });
 
         // Toggle visibility based on player states if needed
@@ -79,13 +82,25 @@ class GlobalClock {
     }
 
     /**
+     * Hide the clock when timeFormat is 'none', show it otherwise.
+     * @private
+     */
+    _applyFormatVisibility() {
+        const hidden = PlayerSettings.get('timeFormat') === 'none';
+        if (this._element) {
+            this._element.style.display = hidden ? 'none' : '';
+        }
+    }
+
+    /**
      * Show or hide the global clock
-     * @param {boolean} visible 
+     * @param {boolean} visible
      */
     setVisibility(visible) {
         this._isVisible = visible;
         if (this._element) {
-            this._element.style.display = visible ? '' : 'none';
+            const formatHidden = PlayerSettings.get('timeFormat') === 'none';
+            this._element.style.display = (visible && !formatHidden) ? '' : 'none';
         }
     }
 }

@@ -343,7 +343,8 @@ class SettingsPage extends Page {
                                 { value: 'console', label: i18n.t('Console') },
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
-                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -445,7 +446,8 @@ class SettingsPage extends Page {
                             'time-format-select',
                             [
                                 { value: '12h', label: i18n.t('TimeFormat12h') || '12-hour' },
-                                { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' }
+                                { value: '24h', label: i18n.t('TimeFormat24h') || '24-hour' },
+                                { value: 'none', label: i18n.t('TimeFormatNone') || 'Hidden' }
                             ],
                             PlayerSettings.get('timeFormat') || '12h'
                         )}
@@ -1482,7 +1484,8 @@ class SettingsPage extends Page {
                                 { value: 'console', label: i18n.t('Console') },
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
-                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -1754,7 +1757,8 @@ class SettingsPage extends Page {
                                 { value: 'console', label: i18n.t('Console') },
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
-                                { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                                { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

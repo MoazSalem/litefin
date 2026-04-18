@@ -629,7 +629,7 @@ export class HtmlVideoPlayer {
         if (!video) return;
 
         const audioTracks = video.audioTracks;
-        if (!audioTracks || audioTracks.length < 2) return;
+        if (!audioTracks || audioTracks.length === 0) return;
 
         for (let i = 0; i < audioTracks.length; i++) {
             // Enable only the track at the requested list index
