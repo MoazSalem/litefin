@@ -139,6 +139,7 @@
     "OptionTrackName": "Track Name",
     "People": "People",
     "Photos": "Photos",
+    "PhotoAlbums": "Photo Albums",
     "Play": "Play",
     "PlaybackData": "Playback Info",
     "PlaybackRate": "Playback Speed",
@@ -210,6 +211,7 @@
     "Unknown": "Unknown",
     "Unplayed": "Unplayed",
     "Video": "Video",
+    "Videos": "Videos",
     "Writer": "Writer",
     "Writers": "Writers",
 

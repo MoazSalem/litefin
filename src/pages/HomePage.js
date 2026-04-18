@@ -326,9 +326,9 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music and Live TV libraries use square cards, everything else uses portrait
-                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv') ? 'square' : 'portrait',
-                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv') ? 'square' : 'poster',
+                // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
+                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'portrait',
+                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {

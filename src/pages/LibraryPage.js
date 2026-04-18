@@ -1236,6 +1236,18 @@ class LibraryPage extends Page {
                 // Explicitly handled Folders tab – always non-recursive
                 params.Recursive = false;
                 result = await api.getItems(params);
+            } else if (viewType === 'Photos') {
+                params.IncludeItemTypes = 'Photo';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'PhotoAlbums') {
+                params.IncludeItemTypes = 'PhotoAlbum';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'Videos') {
+                params.IncludeItemTypes = 'Video';
+                params.Recursive = true;
+                result = await api.getItems(params);
             }
 
             // Guard: Check if we are still on the same tab before rendering grid
@@ -1400,10 +1412,10 @@ class LibraryPage extends Page {
             return 'backdrop';
         }
 
-        // Music library always shows album-cover square cards regardless of view mode
+        // Music and Home Video libraries always show album-cover square cards regardless of view mode
         // (Thumb and Banner still use a landscape image for music, but that's a
         //  reasonable concession — music art is usually square anyway.)
-        if (this.state.libraryInfo?.CollectionType === 'music') {
+        if (this.state.libraryInfo?.CollectionType === 'music' || this.state.libraryInfo?.CollectionType === 'homevideos') {
             // For thumb/banner, use backdrop if available; fall back gracefully
             if (this.state.viewMode === 'thumb' || this.state.viewMode === 'banner') {
                 return 'backdrop';
@@ -1483,8 +1495,15 @@ class LibraryPage extends Page {
                 { id: 'Songs', label: 'Songs' },
                 { id: 'MusicGenres', label: 'Genres' }
             ];
+        } else if (collectionType === 'homevideos') {
+            tabs = [
+                { id: 'Folders', label: 'Folders' },
+                { id: 'Photos', label: 'Photos' },
+                { id: 'PhotoAlbums', label: 'PhotoAlbums' },
+                { id: 'Videos', label: 'Videos' }
+            ];
         } else {
-            // Generic fallback (Generic Folders, Home Videos, Music Videos, etc.)
+            // Generic fallback (Generic Folders, Music Videos, etc.)
             tabs = [
                 { id: 'Items', label: 'Folders' },
                 { id: 'Suggestions', label: 'Suggestions' },
