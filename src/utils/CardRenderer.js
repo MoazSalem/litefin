@@ -118,7 +118,8 @@ class CardRenderer {
 
             if (item.Type === 'Episode') {
                 // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
-                const isSpoilerFree = ['nextUp', 'upcoming', 'resume'].includes(contextType);
+                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                const isSpoilerFree = !preferEpisodeImages && ['nextUp', 'upcoming', 'resume'].includes(contextType);
 
                 // Episodes: Primary (Episode Thumb) -> Series Thumb -> Parent Thumb -> Backdrop
                 // If spoiler free, skip Primary logic unless nothing else exists
@@ -210,6 +211,34 @@ class CardRenderer {
                     });
                 }
             }
+        } else if (item.Type === 'TvChannel') {
+            // Live TV Channel: Primary (Logo) -> Thumb
+            const params = imageService.getParams('square'); // Channels are usually square logos
+            if (item.ImageTags && item.ImageTags.Primary) {
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            }
+        } else if (item.Type === 'Program') {
+            // Live TV Program: Primary (usually backdrop) -> Channel Primary (Logo)
+            const params = isLandscape ? imageService.getParams('card-backdrop') : imageService.getParams('poster');
+            if (item.ImageTags && item.ImageTags.Primary) {
+                imageUrl = api.getImageUrl(itemId, 'Primary', {
+                    maxWidth: params.maxWidth,
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
+                });
+            } else if (item.ChannelPrimaryImageTag && item.ChannelId) {
+                // Use Channel Logo as fallback
+                const logoParams = imageService.getParams('square');
+                imageUrl = api.getImageUrl(item.ChannelId, 'Primary', {
+                    maxWidth: logoParams.maxWidth,
+                    quality: logoParams.quality,
+                    tag: item.ChannelPrimaryImageTag
+                });
+            }
         } else {
             // Portrait (Poster) Preference
             if (type === 'season') {
@@ -239,7 +268,8 @@ class CardRenderer {
                 const params = imageService.getParams('thumb');
 
                 // Spoiler Prevention for Episodes
-                if (item.Type === 'Episode' && item.SeriesId) {
+                const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                if (!preferEpisodeImages && item.Type === 'Episode' && item.SeriesId) {
                     // Prefer Series Primary/Thumb for Resume episodes to avoid spoilers
                     if (item.SeriesPrimaryImageTag) {
                         imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
@@ -373,6 +403,12 @@ class CardRenderer {
             } else {
                 titleText = i18n.t('SeasonValue', [item.IndexNumber]);
             }
+        } else if (item.Type === 'TvChannel') {
+            titleText = i18n.ensureBiDi(item.Number ? `${item.Number} - ${item.Name}` : item.Name);
+            subtitleText = i18n.ensureBiDi(item.CurrentProgram?.Name || '');
+        } else if (item.Type === 'Program') {
+            titleText = i18n.ensureBiDi(item.Name);
+            subtitleText = i18n.ensureBiDi(item.ChannelName || '');
         } else {
             // Movies/Shows - show year and role if available
             const parts = [];
@@ -451,7 +487,7 @@ class CardRenderer {
         `;
 
         return `
-            <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-context-type="${finalContextType}" tabindex="0">
+            <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}

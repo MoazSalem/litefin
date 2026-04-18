@@ -202,11 +202,26 @@ async function createIpk(buildDir, outputDir, finalName) {
     console.info(`Staging WebOS build: ${buildDir} → ${stagingDir}`);
     cpSync(buildDir, stagingDir, { recursive: true });
 
-    // Remove Tizen-specific files that ares-package doesn't recognise
-    const configPath = path.join(stagingDir, 'config.xml');
-    if (existsSync(configPath)) {
-        await del([configPath]);
-    }
+    /*
+     * Remove Tizen-specific files that ares-package doesn't recognise and
+     * that must NOT appear inside a WebOS IPK package.
+     *
+     * When `buildPackage` runs, all Tizen and WebOS packaging tasks execute in
+     * parallel via gulp.parallel(). The Tizen tasks call copySignatures(buildDir)
+     * which writes author-signature.xml / signature1.xml directly into the shared
+     * buildDir (e.g. dist/es6/). If our cpSync above runs AFTER those files land,
+     * they get dragged into the IPK — which is why `npm run package` produces a
+     * larger IPK than `npm run package:webos-es6` (where no signatures are written).
+     *
+     * Deleting them here from the staging copy is the safest fix; it mirrors what
+     * we already do for config.xml and does not touch the original buildDir.
+     */
+    const tizenOnlyFiles = [
+        path.join(stagingDir, 'config.xml'),
+        path.join(stagingDir, 'author-signature.xml'),
+        path.join(stagingDir, 'signature1.xml')
+    ];
+    await del(tizenOnlyFiles.filter(f => existsSync(f)));
 
     /*
      * Copy WebOS-specific icon and splash assets from the project root.

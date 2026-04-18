@@ -81,6 +81,15 @@ function resolveLocale(arg) {
 
 const COMMENT_KEY_PREFIX = '_'; // e.g. "_Litefin Specific Keys"
 
+const TECHNICAL_KEYS = [
+    "Option3D", "OptionBluray", "OptionDvd", "OptionIsHD", "OptionIsSD",
+    "AppleTV", "BackendTizen", "BackendWeb", "BackendWebOS", 
+    "BitrateKbps", "BitrateMbps", "DolbyVision", "FHD", 
+    "FontGoogleSans", "FontPixelart", "FontRoboto", "HD", "Option4K", "Path", 
+    "ResolutionValue", "SpeedValue", "SyncPlay", "TizenValue", 
+    "UHD", "UHD8K", "WebOSValue", "WMC"
+];
+
 function compareLocales(sourcePath, targetPath, opts = {}) {
     const source = loadJson(sourcePath);
     const target = loadJson(targetPath);
@@ -102,8 +111,10 @@ function compareLocales(sourcePath, targetPath, opts = {}) {
             const srcVal = source[key];
             const tgtVal = target[key];
             const isSameAsSource = srcVal !== '' && srcVal === tgtVal;
+            const isTechnical = TECHNICAL_KEYS.includes(key);
             const passesShortFilter = opts.skipShort ? isMultiWord(srcVal) : true;
-            if (isSameAsSource && passesShortFilter) {
+
+            if (isSameAsSource && passesShortFilter && !isTechnical) {
                 untranslated.push({ key, value: srcVal });
             }
         }

@@ -43,11 +43,12 @@ class HeroCarousel {
         const dotsHtml = this._items.map((_, index) => `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`).join('');
         
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+        const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
 
         // Apply compact to the container to manage external margins (Banner Mode)
-        // and internal scaling (Immersive Mode).
+        // Use with-zoom to conditionally apply the focus transform
         return `
-            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} focusable" tabindex="0">
+            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} focusable" tabindex="0">
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         ${itemsHtml}

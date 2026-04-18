@@ -1,6 +1,6 @@
 {
     "name": "litefin-tizen",
-    "version": "0.31.3",
+    "version": "0.35.0",
     "description": "Native Jellyfin client for Samsung Tizen TVs",
     "main": "src/index.js",
     "type": "module",
@@ -28,6 +28,13 @@
         "package:ultra-legacy": "gulp buildPackageUltraLegacy",
         "package:debug": "gulp buildPackageDebug",
         "locale:check": "node scripts/check-locale.js",
+        "locale:sync": "node scripts/sync-locales.cjs",
+        "locale:status": "node scripts/translation-status.cjs",
+        "locale:update": "node scripts/translation-status.cjs --update",
+        "local:check": "npm run locale:check",
+        "local:sync": "npm run locale:sync",
+        "local:status": "npm run locale:status",
+        "local:update": "npm run locale:update",
         "postinstall": "patch-package"
     },
     "keywords": [

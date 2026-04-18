@@ -424,7 +424,9 @@ class SettingsPage extends Page {
                             'image-quality-select',
                             [
                                 { value: 'low', label: i18n.t('Low') },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
                                 { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
                                 { value: 'high', label: i18n.t('High') },
                                 { value: 'ultra', label: i18n.t('Ultra') }
                             ],
@@ -591,6 +593,44 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
+                        <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideLiveTvInMyMedia') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-livetv-home" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PreferEpisodeImages">${i18n.t('PreferEpisodeImages') || 'Prefer Episode Images'}</span>
+                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || "Use episode thumbnails instead of series images for Next Up and Continue Watching rows."}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:preferEpisodeImagesLocal') === 'true' ? 'active' : ''}" 
+                                 id="toggle-prefer-episode-images" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelMergeResumeNextUp">${i18n.t('LabelMergeResumeNextUp')}</span>
+                        <span class="setting-description" data-i18n="LabelMergeResumeNextUpDescription">${i18n.t('LabelMergeResumeNextUpDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:mergeResumeNextUp') === 'true' ? 'active' : ''}" 
+                                 id="toggle-merge-resume-nextup" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelMaxDaysForNextUp">${i18n.t('LabelMaxDaysForNextUp')}</span>
                         <span class="setting-description" data-i18n="MaxDaysForNextUpDescription">${i18n.t('MaxDaysForNextUpDescription')}</span>
                     </div>
@@ -695,6 +735,28 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="hero-image-quality-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroImageQuality">${i18n.t('HeroImageQuality') || 'Hero Background Quality'}</span>
+                        <span class="setting-description" data-i18n="HeroImageQualityDescription">${i18n.t('HeroImageQualityDescription') || 'Set the image quality specifically for hero backgrounds. Lower quality can improve performance.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-image-quality-select',
+                            [
+                                { value: 'default', label: i18n.t('Default') || 'Default' },
+                                { value: 'low', label: i18n.t('Low') || 'Low' },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                                { value: 'high', label: i18n.t('High') || 'High' },
+                                { value: 'ultra', label: i18n.t('Ultra') || 'Ultra' }
+                            ],
+                            storage.getItem('pref:heroImageQuality') || 'medium-low'
+                        )}
+                    </div>
+                </div>
+
                 <div class="setting-item" id="hero-carousel-text-title-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HeroCarouselTextTitle">${i18n.t('HeroCarouselTextTitle') || 'Use Text Titles'}</span>
@@ -720,6 +782,19 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item" id="hero-carousel-zoom-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselZoom">${i18n.t('HeroCarouselZoom') || 'Enable Zoom Effect'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselZoomDescription">${i18n.t('HeroCarouselZoomDescription') || 'Adds a subtle zoom animation when focusing the hero section.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselZoom') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-zoom" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
@@ -734,6 +809,20 @@ class SettingsPage extends Page {
                 </div>
 
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UnlockMyMediaOrder">${i18n.t('UnlockMyMediaOrder') || 'Unlock My Media Order'}</span>
+                        <span class="setting-description" data-i18n="UnlockMyMediaOrderDescription">${i18n.t('UnlockMyMediaOrderDescription') || 'Allow "My Media" to be moved from the top position. WARNING: This may cause focus layout breaks on older devices.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:unlockMyMediaOrder') === 'true' ? 'active' : ''}" 
+                                 id="toggle-unlock-my-media-order" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- 
                      Loaded dynamically via _setupHomeLayoutUI. 
                      Each row inside will be a distinct .setting-item .layout-row
@@ -779,6 +868,20 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:logoSettings') === 'true' ? 'active' : ''}" 
                                  id="toggle-sidebar-logo-settings" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Disable Animation Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DisableSidebarAnimation">${i18n.t('DisableSidebarAnimation') || 'Disable Sidebar Animation'}</span>
+                        <span class="setting-description" data-i18n="DisableSidebarAnimationDescription">${i18n.t('DisableSidebarAnimationDescription') || 'Sidebar will open and close instantly without animation.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:disableSidebarAnimation') === 'true' ? 'active' : ''}" 
+                                 id="toggle-disable-sidebar-animation" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -1180,6 +1283,31 @@ class SettingsPage extends Page {
                         })()}
                     </div>
                 </div>
+
+                ${
+                    platformInfo.isTizen
+                        ? `
+                <!-- Interlaced content backend fallback toggle.
+                     Only meaningful on Tizen/AVPlay — when AVPlay encounters interlaced H264
+                     inside an HLS stream it crashes. This toggle makes the player automatically
+                     detect that and retry using the HTML5 (Chromium) backend instead.
+                     HTML5 decodes interlaced natively, no server transcode needed. -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="InterlacedBackendFallback">${i18n.t('InterlacedBackendFallback') || 'Auto-Switch for Interlaced Content'}</span>
+                        <span class="setting-description" data-i18n="InterlacedBackendFallbackDescription">${i18n.t('InterlacedBackendFallbackDescription') || 'Automatically use the HTML5 player for interlaced video (1080i) when AVPlay is active.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('interlacedBackendFallback') ? 'active' : ''}"
+                                id="toggle-interlaced-backend-fallback"
+                                data-setting="interlacedBackendFallback"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                `
+                        : ''
+                }
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -2317,6 +2445,49 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Hide Live TV in My Media
+        const hideLiveTvBtn = this.$('#toggle-hide-livetv-home');
+        if (hideLiveTvBtn) {
+            hideLiveTvBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideLiveTvInMyMedia', newValue);
+                hideLiveTvBtn.classList.toggle('active', newValue);
+                log.info(`Hide Live TV in My Media set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Prefer Episode Images
+        const preferEpisodeImagesBtn = this.$('#toggle-prefer-episode-images');
+        if (preferEpisodeImagesBtn) {
+            preferEpisodeImagesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:preferEpisodeImagesLocal', newValue);
+                preferEpisodeImagesBtn.classList.toggle('active', newValue);
+                log.info(`Prefer Episode Images set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Merge Resume and Next Up
+        const mergeResumeNextUpBtn = this.$('#toggle-merge-resume-nextup');
+        if (mergeResumeNextUpBtn) {
+            mergeResumeNextUpBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:mergeResumeNextUp') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:mergeResumeNextUp', newValue);
+                mergeResumeNextUpBtn.classList.toggle('active', newValue);
+                log.info(`Merge Resume and Next Up set to: ${newValue}`);
+
+                // Refresh the home layout UI so "Next Up" disappears/reappears
+                // This ensures the user doesn't see conflicting options.
+                this._setupHomeLayoutUI();
+
+                // Invalidate focus cache to keep navigation stable
+                focusManager.invalidateCache('settings-content');
+            });
+        }
+
         // Toggle Random Button
         const randomBtnToggle = this.$('#toggle-random-button');
         if (randomBtnToggle) {
@@ -2346,10 +2517,14 @@ class SettingsPage extends Page {
                 const textTitleItem = this.$('#hero-carousel-text-title-item');
                 const compactItem = this.$('#hero-carousel-compact-item');
                 const styleItem = this.$('#hero-carousel-style-item');
+                const zoomItem = this.$('#hero-carousel-zoom-item');
+                const heroQualityItem = this.$('#hero-image-quality-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
+                if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
+                if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -2377,6 +2552,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselCompact', newValue.toString());
                 heroCarouselCompactBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Compact Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel Zoom Effect
+        const heroCarouselZoomBtn = this.$('#toggle-hero-carousel-zoom');
+        if (heroCarouselZoomBtn) {
+            heroCarouselZoomBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselZoom', newValue.toString());
+                heroCarouselZoomBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Zoom Effect set to: ${newValue}`);
             });
         }
 
@@ -2573,7 +2760,12 @@ class SettingsPage extends Page {
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
             'toggle-force-transcode',
-            'toggle-background-service'
+            'toggle-background-service',
+            // Interlaced content fallback — auto-switch to HTML5 when AVPlay
+            // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
+            // cache invalidation needed (device caps don't change), but keeping
+            // it in this list wires the click → PlayerSettings.set() for us.
+            'toggle-interlaced-backend-fallback'
         ];
         profileToggles.forEach((toggleId) => {
             const btn = this.$(`#${toggleId}`);
@@ -3059,6 +3251,7 @@ class SettingsPage extends Page {
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
+            'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
@@ -3266,6 +3459,19 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Switch for Disable Sidebar Animation
+        const disableAnimationToggle = this.$('#toggle-disable-sidebar-animation');
+        if (disableAnimationToggle) {
+            disableAnimationToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:disableSidebarAnimation') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:disableSidebarAnimation', newValue.toString());
+                disableAnimationToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:disableSidebarAnimation', newValue);
+                log.info(`Disable Sidebar Animation set to: ${newValue}`);
+            });
+        }
+
         // Toggle Switch for Trailer Auto-Chain
         const trailerAutoChainToggle = this.$('#toggle-trailer-auto-chain');
         if (trailerAutoChainToggle) {
@@ -3295,6 +3501,19 @@ class SettingsPage extends Page {
         if (manualUpdateBtn) {
             manualUpdateBtn.addEventListener('click', () => {
                 versionChecker.checkUpdate(true);
+            });
+        }
+
+        // Toggle Switch for Unlock My Media Order
+        const unlockMyMediaOrderToggle = this.$('#toggle-unlock-my-media-order');
+        if (unlockMyMediaOrderToggle) {
+            unlockMyMediaOrderToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:unlockMyMediaOrder') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:unlockMyMediaOrder', newValue.toString());
+                unlockMyMediaOrderToggle.classList.toggle('active', newValue);
+                this._setupHomeLayoutUI();
+                log.info(`Unlock My Media Order set to: ${newValue}`);
             });
         }
 
@@ -3623,7 +3842,6 @@ class SettingsPage extends Page {
                 if (focusSelectContainer) {
                     // Combine both lists for the focus target choices
                     const visibleItems = layoutVars.filter((v) => !v.hidden || v.locked);
-                    const visibleLibs = libraryVars.filter((v) => !v.hidden || v.locked);
 
                     const defaultFocus = sidebarLayoutManager.getDefaultFocus();
 
@@ -3692,11 +3910,17 @@ class SettingsPage extends Page {
             const views = viewsResponse.Items || [];
 
             // Build the base descriptors
+            const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
             const descriptors = [
                 { id: 'my-media', title: i18n.t('HeaderMyMedia') },
-                { id: 'resume', title: i18n.t('HeaderContinueWatching') },
-                { id: 'next-up', title: i18n.t('NextUp') }
+                { id: 'resume', title: i18n.t('HeaderContinueWatching') }
             ];
+
+            // If merging is enabled, 'next-up' is handled as part of 'resume' row,
+            // so we hide it from the standalone layout sorting to avoid confusion.
+            if (!mergeResumeNextUp) {
+                descriptors.push({ id: 'next-up', title: i18n.t('NextUp') });
+            }
 
             views.forEach((lib) => {
                 descriptors.push({
@@ -3716,8 +3940,9 @@ class SettingsPage extends Page {
 
                 const listHtml = layoutVars
                     .map((item, index) => {
-                        const isFirst = index === 0;
-                        const isLast = index === layoutVars.length - 1;
+                        const isLocked = item.locked;
+                        const isFirst = index === 0 || (index > 0 && layoutVars[index - 1].locked);
+                        const isLast = index === layoutVars.length - 1 || (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
 
                         return `
                         <div class="setting-item layout-row ${item.hidden ? 'layout-row-hidden' : ''}" data-id="${item.id}" data-index="${index}">
@@ -3725,10 +3950,10 @@ class SettingsPage extends Page {
                                 <span class="setting-name layout-row-title">${item.title}</span>
                             </div>
                             <div class="setting-control layout-btns" dir="ltr">
-                                <button class="btn btn-icon layout-btn-up" tabindex="0" ${isFirst ? 'disabled' : ''} aria-label="Move Up">
+                                <button class="btn btn-icon layout-btn-up" tabindex="0" ${isFirst || isLocked ? 'disabled style="opacity:0.3"' : ''} aria-label="Move Up">
                                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 15.41L12 10.83l4.59 4.58L18 14l-6-6-6 6z"/></svg>
                                 </button>
-                                <button class="btn btn-icon layout-btn-down" tabindex="0" ${isLast ? 'disabled' : ''} aria-label="Move Down">
+                                <button class="btn btn-icon layout-btn-down" tabindex="0" ${isLast || isLocked ? 'disabled style="opacity:0.3"' : ''} aria-label="Move Down">
                                     <svg viewBox="0 0 24 24"><path fill="currentColor" d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/></svg>
                                 </button>
                                 <button class="btn btn-icon layout-btn-toggle" tabindex="0" aria-label="${item.hidden ? 'Show' : 'Hide'}">
@@ -3751,7 +3976,7 @@ class SettingsPage extends Page {
                     btn.addEventListener('click', (e) => {
                         const row = e.target.closest('.layout-row');
                         const idx = parseInt(row.dataset.index, 10);
-                        if (idx > 0) {
+                        if (idx > 0 && !layoutVars[idx].locked && !layoutVars[idx - 1].locked) {
                             // Swap with preceding
                             const temp = layoutVars[idx - 1];
                             layoutVars[idx - 1] = layoutVars[idx];
@@ -3772,7 +3997,7 @@ class SettingsPage extends Page {
                     btn.addEventListener('click', (e) => {
                         const row = e.target.closest('.layout-row');
                         const idx = parseInt(row.dataset.index, 10);
-                        if (idx < layoutVars.length - 1) {
+                        if (idx < layoutVars.length - 1 && !layoutVars[idx].locked && !layoutVars[idx + 1].locked) {
                             // Swap with succeeding
                             const temp = layoutVars[idx + 1];
                             layoutVars[idx + 1] = layoutVars[idx];

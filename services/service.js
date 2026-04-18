@@ -544,3 +544,168 @@ var proxyServer = http.createServer(handler);
 proxyServer.listen(PORT, LISTEN_HOST, function() { 
     console.log('[Litefin Proxy] Server listening on ' + LISTEN_HOST + ':' + PORT);
 });
+
+// ============================================================================
+// Tizen Service Lifecycle Hooks — Smart Hub Preview
+// ============================================================================
+//
+// These module.exports callbacks are called by the Tizen service framework
+// when the ytresolver service receives an ApplicationControl request.
+//
+// The HTTP proxy started above continues running independently — we do NOT
+// call tizen.application.getCurrentApplication().exit() here (unlike the
+// jellyfin-tizen reference implementation) because the ytresolver service
+// must remain alive to handle trailer and discovery HTTP requests.
+//
+// When SmartHubManager.js sends a 'SmartHubPreview' ApplicationControl:
+//   1. Tizen calls module.exports.onRequest on this service.
+//   2. handleTizenAppControl() reads the JSON from AppControl data.
+//   3. webapis.preview.setPreviewData() registers the tiles with Samsung.
+//   4. On completion, sendSmartHubAck() sends a status message back to the
+//      main Litefin app's 'SmartHubAck' MessagePort so the Promise resolves.
+// ============================================================================
+
+if (!isWebOS) {
+
+    /**
+     * Read the package ID once and cache it — tizen.application is synchronous
+     * but calling it repeatedly is wasteful in a hot callback path.
+     * @type {string|null}
+     */
+    var _tizenPkgId = null;
+    function getTizenPkgId() {
+        if (!_tizenPkgId) {
+            _tizenPkgId = tizen.application.getCurrentApplication().appInfo.packageId;
+        }
+        return _tizenPkgId;
+    }
+
+    /**
+     * Send an ACK message back to the main Litefin app through the named
+     * 'SmartHubAck' MessagePort registered by SmartHubManager._sendToService().
+     *
+     * The app's port listener resolves the pending Promise on receipt, which
+     * releases the refresh cycle's updating guard.
+     *
+     * @param {string} status - Short status string to log on the app side.
+     */
+    function sendSmartHubAck(status) {
+        try {
+            var pkgId  = getTizenPkgId();
+            /* Application ID format: packageId + '.Litefin' (matches config.xml) */
+            var appId  = pkgId + '.Litefin';
+            var port   = tizen.messageport.requestRemoteMessagePort(appId, 'SmartHubAck');
+            port.sendMessage([{ key: 'status', value: status }]);
+            console.log('[Litefin Service] SmartHub ACK sent: ' + status);
+        } catch (e) {
+            /* Non-fatal — the main app has a safety timeout that fires if the ACK
+             * never arrives, so a failure here doesn't deadlock the refresh cycle. */
+            console.log('[Litefin Service] Failed to send SmartHub ACK: ' + e.message);
+        }
+    }
+
+    /**
+     * Parse the incoming ApplicationControl data and dispatch to the correct
+     * handler for each recognised key.
+     *
+     * Currently handles one key:
+     *   'SmartHubPreview' — JSON string of the Samsung Preview schema sent
+     *                       by SmartHubManager.js in the main app.
+     */
+    function handleTizenAppControl() {
+        try {
+            var app        = tizen.application.getCurrentApplication();
+            var reqControl = app.getRequestedAppControl();
+
+            if (!reqControl) {
+                console.log('[Litefin Service] onRequest: no AppControl data');
+                return;
+            }
+
+            var data = reqControl.appControl.data;
+
+            for (var i = 0; i < data.length; i++) {
+                var key   = data[i].key;
+                var value = data[i].value;
+
+                if (key === 'SmartHubPreview') {
+                    /* Parse the Samsung Preview JSON forwarded by SmartHubManager. */
+                    var previewJson;
+                    try {
+                        previewJson = JSON.parse(value[0]);
+                    } catch (parseErr) {
+                        console.log('[Litefin Service] Failed to parse SmartHubPreview JSON: ' + parseErr.message);
+                        sendSmartHubAck('error:parse');
+                        return;
+                    }
+
+                    console.log('[Litefin Service] Setting Smart Hub preview data...');
+
+                    try {
+                        webapis.preview.setPreviewData(
+                            JSON.stringify(previewJson),
+                            function () {
+                                /* Success — Samsung accepted the preview tiles. */
+                                console.log('[Litefin Service] Smart Hub preview set successfully');
+                                sendSmartHubAck('success');
+                                /*
+                                 * Exit the service after committing preview data.
+                                 *
+                                 * Samsung's Smart Hub system requires the service process to
+                                 * terminate before it commits and renders the new preview tiles
+                                 * on the home screen. If the service stays alive, the preview
+                                 * update is buffered but may never be displayed.
+                                 *
+                                 * The ytresolver HTTP proxy will restart automatically on the
+                                 * next launchAppControl from the main app (Bootstrap in index.js
+                                 * re-launches it on every app start, so trailer/discovery
+                                 * functionality is unaffected).
+                                 */
+                                tizen.application.getCurrentApplication().exit();
+                            },
+                            function (e) {
+                                /* Samsung rejected the data (API error). */
+                                console.log('[Litefin Service] setPreviewData error: ' + e.message);
+                                sendSmartHubAck('error:' + e.message);
+                            }
+                        );
+                    } catch (apiErr) {
+                        console.log('[Litefin Service] setPreviewData threw: ' + apiErr.message);
+                        sendSmartHubAck('exception:' + apiErr.message);
+                    }
+
+                    /* Stop scanning — only one preview key expected per request. */
+                    return;
+                }
+            }
+
+            /* No recognised key in this AppControl request — ignore silently. */
+            console.log('[Litefin Service] onRequest: no handled key found');
+
+        } catch (e) {
+            console.log('[Litefin Service] handleTizenAppControl exception: ' + e.message);
+        }
+    }
+
+    /* ── Tizen service lifecycle exports ─────────────────────────────────── */
+
+    module.exports.onStart = function () {
+        console.log('[Litefin Service] Tizen service started');
+        /* The HTTP proxy is already listening (started above). Nothing extra needed. */
+    };
+
+    module.exports.onRequest = function () {
+        /* Tizen calls this whenever an ApplicationControl is routed to this service. */
+        console.log('[Litefin Service] Tizen onRequest received');
+        handleTizenAppControl();
+    };
+
+    module.exports.onStop = function () {
+        console.log('[Litefin Service] Tizen service stopping');
+    };
+
+    module.exports.onExit = function () {
+        console.log('[Litefin Service] Tizen service exiting');
+    };
+}
+

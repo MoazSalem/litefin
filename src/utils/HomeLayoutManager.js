@@ -74,11 +74,18 @@ class HomeLayoutManager {
         // First pass: Filter and attach order value
         const processedDescriptors = [];
         const newDescriptors = []; // Descriptors without a saved preference
+        let myMediaDesc = null;
+        const unlockMyMediaOrder = storage.getItem('pref:unlockMyMediaOrder') === 'true';
 
         for (const desc of descriptors) {
-            // Ensure priority is respected for initial loading batching
-            // even if they moved the row down the list visually.
-            // We just override the final display order, not the batching priority.
+            // Priority 0 check: "my-media" is ALWAYS forced to the very first position
+            // unless the user explicitly unlocked it in settings.
+            if (desc.id === 'my-media' && !unlockMyMediaOrder) {
+                const config = layoutMap.get(desc.id);
+                if (config && config.hidden) continue;
+                myMediaDesc = desc;
+                continue;
+            }
 
             const config = layoutMap.get(desc.id);
 
@@ -108,7 +115,12 @@ class HomeLayoutManager {
             return clean;
         });
 
-        return [...finalDescriptors, ...newDescriptors];
+        const allOthers = [...finalDescriptors, ...newDescriptors];
+
+        if (myMediaDesc) {
+            return [myMediaDesc, ...allOthers];
+        }
+        return allOthers;
     }
 
     /**
@@ -153,6 +165,22 @@ class HomeLayoutManager {
                     order: nextOrder++
                 });
             }
+        });
+
+        const unlockMyMediaOrder = storage.getItem('pref:unlockMyMediaOrder') === 'true';
+
+        if (!unlockMyMediaOrder) {
+            const myMediaIdx = settingsList.findIndex((item) => item.id === 'my-media');
+            if (myMediaIdx !== -1) {
+                const [myMediaItem] = settingsList.splice(myMediaIdx, 1);
+                myMediaItem.locked = true;
+                settingsList.unshift(myMediaItem);
+            }
+        }
+
+        // Ensure order values are sequential and correct after any manipulation
+        settingsList.forEach((item, index) => {
+            item.order = index;
         });
 
         return settingsList;

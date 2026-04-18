@@ -282,8 +282,9 @@ class SearchPage extends Page {
         try {
             const mediaParams = {
                 Limit: 50,
-                // Music types included so artists/albums/songs show up in results
-                IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,MusicAlbum,Audio',
+                // Music types included so artists/albums/songs show up in results.
+                // TvChannel included for live TV channel search.
+                IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,MusicAlbum,Audio,TvChannel',
                 MediaTypes: null
             };
 
@@ -342,6 +343,7 @@ class SearchPage extends Page {
         // Include both Series and BoxSets (Collections) as "Shows/Collections" or just Series
         const series = this._results.filter((i) => i.Type === 'Series');
         const episodes = this._results.filter((i) => i.Type === 'Episode');
+        const channels = this._results.filter((i) => i.Type === 'TvChannel');
         // Music types - merge MusicArtist and Artist for better coverage
         const artists = this._results.filter((i) => i.Type === 'MusicArtist' || i.Type === 'Artist');
         const albums = this._results.filter((i) => i.Type === 'MusicAlbum');
@@ -389,6 +391,20 @@ class SearchPage extends Page {
                 onSeeMore: () => this._registerSearchFocus()
             });
             this._grids.episodes.mount(container);
+        }
+
+        // Live TV Channels
+        if (channels.length > 0) {
+            this._grids.channels = new MediaGrid({
+                id: 'search-channels',
+                title: i18n.t('LiveTv'),
+                items: channels,
+                type: 'square',
+                limit: 10,
+                onClick: (card) => this._saveStateAndNavigate('search-channels-items', card),
+                onSeeMore: () => this._registerSearchFocus()
+            });
+            this._grids.channels.mount(container);
         }
 
         // 4. Music Artists
@@ -453,7 +469,7 @@ class SearchPage extends Page {
 
     _registerSearchFocus() {
         // Must match all rendered grid keys so the focus chain is complete
-        const sectionOrder = ['movies', 'series', 'episodes', 'artists', 'albums', 'songs', 'people'];
+        const sectionOrder = ['movies', 'series', 'episodes', 'channels', 'artists', 'albums', 'songs', 'people'];
         const activeTypes = sectionOrder.filter((type) => this._grids[type]);
 
         if (activeTypes.length === 0) return;

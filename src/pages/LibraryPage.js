@@ -245,6 +245,7 @@ class LibraryPage extends Page {
             // a preference the user changed while browsing back and forth.
             // ------------------------------------------------------------------
             this._loadPersistedViewMode();
+            this._loadPersistedSortMode();
 
             // 1. Setup UI Components
             this._renderTabs();
@@ -317,6 +318,7 @@ class LibraryPage extends Page {
         // Load persisted view mode now that we know the libraryId and collectionType.
         // This happens before _renderGrid() so the correct mode is active from the start.
         this._loadPersistedViewMode();
+        this._loadPersistedSortMode();
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -524,6 +526,21 @@ class LibraryPage extends Page {
                 if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
                     log.info('Navigating to PersonPage:', itemId);
                     router.navigate(`/person/${itemId}`);
+                    return;
+                }
+
+                // Special handling for Photos and Home Videos: open Slideshow
+                if (itemType === 'Photo' || itemType === 'Video') {
+                    log.info('Navigating to Slideshow:', itemId);
+                    const parentArg = this.params.id || this.state.libraryId;
+                    router.navigate(`/slideshow/${itemId}?parentId=${parentArg}&sortBy=${this.state.sortBy}&sortOrder=${this.state.sortOrder}`);
+                    return;
+                }
+
+                // Special handling for PhotoAlbums: navigate to standard LibraryPage
+                if (itemType === 'PhotoAlbum') {
+                    log.info('Navigating into PhotoAlbum:', itemId);
+                    router.navigate(`/library/${itemId}`);
                     return;
                 }
 
@@ -1234,6 +1251,18 @@ class LibraryPage extends Page {
                 // Explicitly handled Folders tab – always non-recursive
                 params.Recursive = false;
                 result = await api.getItems(params);
+            } else if (viewType === 'Photos') {
+                params.IncludeItemTypes = 'Photo,Video';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'PhotoAlbums') {
+                params.IncludeItemTypes = 'PhotoAlbum';
+                params.Recursive = true;
+                result = await api.getItems(params);
+            } else if (viewType === 'Videos') {
+                params.IncludeItemTypes = 'Video';
+                params.Recursive = true;
+                result = await api.getItems(params);
             }
 
             // Guard: Check if we are still on the same tab before rendering grid
@@ -1361,6 +1390,25 @@ class LibraryPage extends Page {
         log.info(`[ViewMode] Loaded view mode: ${this.state.viewMode} for library ${this.state.libraryId}`);
     }
 
+    _loadPersistedSortMode() {
+        if (this._isSubView()) {
+            return; // Sub-views should fallback to defaults
+        }
+
+        const sortByKey = `pref:library:sortBy:${this.state.libraryId}`;
+        const sortOrderKey = `pref:library:sortOrder:${this.state.libraryId}`;
+
+        const savedSortBy = storage.getItem(sortByKey);
+        const savedSortOrder = storage.getItem(sortOrderKey);
+
+        if (savedSortBy) {
+            this.state.sortBy = savedSortBy;
+        }
+        if (savedSortOrder) {
+            this.state.sortOrder = savedSortOrder;
+        }
+    }
+
     /**
      * Resolve the CardRenderer card type string based on the active viewMode,
      * viewType override (Episodes, Networks), and library collection type.
@@ -1379,10 +1427,10 @@ class LibraryPage extends Page {
             return 'backdrop';
         }
 
-        // Music library always shows album-cover square cards regardless of view mode
+        // Music and Home Video libraries always show album-cover square cards regardless of view mode
         // (Thumb and Banner still use a landscape image for music, but that's a
         //  reasonable concession — music art is usually square anyway.)
-        if (this.state.libraryInfo?.CollectionType === 'music') {
+        if (this.state.libraryInfo?.CollectionType === 'music' || this.state.libraryInfo?.CollectionType === 'homevideos') {
             // For thumb/banner, use backdrop if available; fall back gracefully
             if (this.state.viewMode === 'thumb' || this.state.viewMode === 'banner') {
                 return 'backdrop';
@@ -1462,8 +1510,15 @@ class LibraryPage extends Page {
                 { id: 'Songs', label: 'Songs' },
                 { id: 'MusicGenres', label: 'Genres' }
             ];
+        } else if (collectionType === 'homevideos') {
+            tabs = [
+                { id: 'Folders', label: 'Folders' },
+                { id: 'Photos', label: 'Photos' },
+                { id: 'PhotoAlbums', label: 'PhotoAlbums' },
+                { id: 'Videos', label: 'Videos' }
+            ];
         } else {
-            // Generic fallback (Generic Folders, Home Videos, Music Videos, etc.)
+            // Generic fallback (Generic Folders, Music Videos, etc.)
             tabs = [
                 { id: 'Items', label: 'Folders' },
                 { id: 'Suggestions', label: 'Suggestions' },
@@ -2740,6 +2795,11 @@ class LibraryPage extends Page {
             this.state.sortBy = tempSortBy;
             this.state.sortOrder = tempSortOrder;
             this.state.startIndex = 0;
+
+            if (!this._isSubView()) {
+                storage.setItem(`pref:library:sortBy:${this.state.libraryId}`, tempSortBy);
+                storage.setItem(`pref:library:sortOrder:${this.state.libraryId}`, tempSortOrder);
+            }
 
             // Explicitly trigger reload
             await this._loadItems();

@@ -208,57 +208,113 @@ class HomePage extends Page {
                 cardType: 'library',
                 contextType: 'library',
                 // Libraries are loaded upfront; fetchFn is a synchronous-style wrapper
-                fetchFn: async () => (this._libraries.length > 0 ? this._libraries : null)
+                fetchFn: async () => {
+                    if (this._libraries.length === 0) return null;
+
+                    // Filter out Live TV if the user has disabled it in settings
+                    const hideLiveTv = storage.getItem('pref:hideLiveTvInMyMedia') === 'true';
+                    if (hideLiveTv) {
+                        return this._libraries.filter((lib) => lib.CollectionType !== 'livetv');
+                    }
+
+                    return this._libraries;
+                }
             });
         }
 
-        // ── Priority 1: Continue Watching ─────────────────────────────────────
-        descriptors.push({
-            id: 'resume',
-            title: i18n.t('HeaderContinueWatching'),
-            priority: 1,
-            layout: 'landscape',
-            cardType: 'resume',
-            contextType: 'resume',
-            fetchFn: async () => {
-                const res = await api.getResumeItems();
-                return res?.Items?.length > 0 ? res.Items : null;
-            }
-        });
+        // ── Priority 1: Continue Watching & Next Up ──────────────────────────
+        const mergeResumeNextUp = storage.getItem('pref:mergeResumeNextUp') === 'true';
 
-        // ── Priority 1: Next Up (runs in parallel with Resume) ────────────────
-        descriptors.push({
-            id: 'next-up',
-            title: i18n.t('NextUp'),
-            priority: 1,
-            layout: 'landscape',
-            cardType: 'episode',
-            contextType: 'nextUp',
-            fetchFn: async () => {
-                const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
-                // Default to 365 days if not set, or use 0 for unlimited
-                const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+        if (mergeResumeNextUp) {
+            descriptors.push({
+                id: 'resume',
+                title: i18n.t('HeaderContinueWatching'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'resume',
+                contextType: 'resume',
+                fetchFn: async () => {
+                    const [resumeRes, nextUpRes] = await Promise.all([
+                        api.getResumeItems(),
+                        (async () => {
+                            const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                            const daysLimit = isNaN(maxDays) ? 365 : maxDays;
+                            const params = {};
+                            if (daysLimit > 0) {
+                                const cutoff = new Date();
+                                cutoff.setDate(cutoff.getDate() - daysLimit);
+                                params.NextUpDateCutoff = cutoff.toISOString();
+                            }
+                            return api.getNextUp(params);
+                        })()
+                    ]);
 
-                const params = {};
-                if (daysLimit > 0) {
-                    const cutoff = new Date();
-                    cutoff.setDate(cutoff.getDate() - daysLimit);
-                    params.NextUpDateCutoff = cutoff.toISOString();
+                    const resumeItems = resumeRes?.Items || [];
+                    const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
+                        const position = item.UserData?.PlaybackPositionTicks || 0;
+                        return position === 0;
+                    });
+
+                    // Merge Resume items first, then Next Up
+                    const combined = [...resumeItems, ...nextUpItems];
+                    
+                    // Deduplicate based on Id
+                    const seen = new Set();
+                    const deduplicated = combined.filter(item => {
+                        if (seen.has(item.Id)) return false;
+                        seen.add(item.Id);
+                        return true;
+                    });
+
+                    return deduplicated.length > 0 ? deduplicated : null;
                 }
+            });
+        } else {
+            // Priority 1: Continue Watching (Separate)
+            descriptors.push({
+                id: 'resume',
+                title: i18n.t('HeaderContinueWatching'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'resume',
+                contextType: 'resume',
+                fetchFn: async () => {
+                    const res = await api.getResumeItems();
+                    return res?.Items?.length > 0 ? res.Items : null;
+                }
+            });
 
-                const res = await api.getNextUp(params);
-                if (!res?.Items?.length) return null;
+            // Priority 1: Next Up (Separate)
+            descriptors.push({
+                id: 'next-up',
+                title: i18n.t('NextUp'),
+                priority: 1,
+                layout: 'landscape',
+                cardType: 'episode',
+                contextType: 'nextUp',
+                fetchFn: async () => {
+                    const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
+                    const daysLimit = isNaN(maxDays) ? 365 : maxDays;
 
-                // Filter out items that have playback progress, as they should
-                // only appear in the "Continue Watching" row to avoid duplication.
-                const filtered = res.Items.filter((item) => {
-                    const position = item.UserData?.PlaybackPositionTicks || 0;
-                    return position === 0;
-                });
+                    const params = {};
+                    if (daysLimit > 0) {
+                        const cutoff = new Date();
+                        cutoff.setDate(cutoff.getDate() - daysLimit);
+                        params.NextUpDateCutoff = cutoff.toISOString();
+                    }
 
-                return filtered.length > 0 ? filtered : null;
-            }
-        });
+                    const res = await api.getNextUp(params);
+                    if (!res?.Items?.length) return null;
+
+                    const filtered = res.Items.filter((item) => {
+                        const position = item.UserData?.PlaybackPositionTicks || 0;
+                        return position === 0;
+                    });
+
+                    return filtered.length > 0 ? filtered : null;
+                }
+            });
+        }
 
         // ── Priority 2: Latest per library ───────────────────────────────────
         // Each library gets its own descriptor so they can render independently
@@ -270,9 +326,9 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music libraries use square cards, everything else uses portrait
-                layout: lib.CollectionType === 'music' ? 'square' : 'portrait',
-                cardType: lib.CollectionType === 'music' ? 'square' : 'poster',
+                // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
+                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'portrait',
+                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -739,6 +795,15 @@ class HomePage extends Page {
     _tryInitializeFocus(container) {
         this._focusInitialized = true; // Prevent double-initialization
 
+        // [RACE CONDITION FIX] Capture and clear _pendingNavState synchronously!
+        // The render pipeline yields via Promise (microtasks), so if data is cached, 
+        // the pipeline reaches Step 7 and calls NavigationState BEFORE this requestAnimationFrame
+        // can clear the state. That leads to NavigationState firing a 50ms fallback timeout
+        // which clobbers our correct focus back to "sidebar" or whatever just as the user
+        // starts navigating.
+        const pendingNav = this._pendingNavState;
+        this._pendingNavState = null;
+
         // Defer the focus setup to after the browser has painted this first row
         requestAnimationFrame(() => {
             if (!this._isMounted) return;
@@ -797,6 +862,16 @@ class HomePage extends Page {
                 // Always clear the saved state after consuming it
                 state.delete('home:lastFocusedItem');
                 state.delete('home:lastFocusedItemId');
+
+                // Restore any captured scroll offset from NavigationState.
+                // Since we nullified this._pendingNavState synchronously above,
+                // restoreScrollFocusWhenReady() at the end of the pipeline is safely a no-op.
+                if (restoredFocus && pendingNav) {
+                    const scrollContainer = this.$('.page-content');
+                    if (scrollContainer && pendingNav.scrollTop > 0) {
+                        scrollContainer.scrollTop = pendingNav.scrollTop;
+                    }
+                }
             }
 
             // ─── Default: focus the first card in the first rendered row ──────
@@ -858,7 +933,12 @@ class HomePage extends Page {
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
-                router.navigate(`/library/${card.dataset.itemId}`);
+                // Special handling for Live TV: redirect to the unified Live TV page
+                if (card.dataset.collectionType === 'livetv') {
+                    router.navigate('/livetv');
+                } else {
+                    router.navigate(`/library/${card.dataset.itemId}`);
+                }
             } else {
                 // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;

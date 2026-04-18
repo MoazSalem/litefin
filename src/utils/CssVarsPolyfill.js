@@ -223,10 +223,10 @@ class CssVarsPolyfill {
         // <style id="litefin-dynamic-theme-vars"> tag injected into <head>.
         // We also read the root.style directly for any overrides set via JS.
         if (root.style) {
-            for (var j = 0; j < root.style.length; j++) {
-                var prop = root.style[j];
+            for (let j = 0; j < root.style.length; j++) {
+                const prop = root.style[j];
                 if (prop && prop.indexOf('--') === 0) {
-                    var value = root.style.getPropertyValue(prop);
+                    const value = root.style.getPropertyValue(prop);
                     if (value) vars[prop] = value.trim();
                 }
             }

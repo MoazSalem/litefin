@@ -1756,8 +1756,8 @@ export default class OSDController extends Component {
         if (endsAtEl && duration > 0) {
             const remaining = duration - current;
             const endTime = new Date(Date.now() + (remaining / 10000));
-            // Use 24h format or localized string
-            const endStr = i18n.t('EndsAtValue', [endTime.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })]);
+            // Use 12h/24h format based on user preference via i18n helper
+            const endStr = i18n.t('EndsAtValue', [i18n.formatLocalTime(endTime)]);
             if (endsAtEl.textContent !== endStr) {
                 endsAtEl.textContent = endStr;
             }
@@ -1791,12 +1791,13 @@ export default class OSDController extends Component {
      */
     _updateClock() {
         if (!this._osdClockEl) return;
+
         if (PlayerSettings.get('timeFormat') === 'none') {
             this._osdClockEl.style.display = 'none';
             return;
         }
         this._osdClockEl.style.display = '';
-        const timeStr = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const timeStr = i18n.formatLocalTime(new Date());
         if (this._osdClockEl.textContent !== timeStr) {
             this._osdClockEl.textContent = timeStr;
         }
@@ -2381,6 +2382,21 @@ export default class OSDController extends Component {
 
     _getFormattedTitle(item) {
         if (!item) return '';
+
+        // Live TV: Channel/Program handling
+        if (item.Type === 'TvChannel' || item.ChannelId) {
+            const channelNumber = item.Number || item.ChannelNumber || '';
+            const channelName = item.ChannelName || (item.Type === 'TvChannel' ? item.Name : '');
+            const programName = item.Type === 'TvChannel' ? '' : item.Name;
+
+            let text = '';
+            if (channelNumber) text += `${channelNumber} `;
+            if (channelName) text += `${channelName}`;
+            if (programName) text += ` - ${programName}`;
+            
+            return text.trim() || item.Name || '';
+        }
+
         if (item.SeriesName) {
             let text = item.SeriesName;
             if (item.IndexNumber !== undefined) {

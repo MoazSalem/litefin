@@ -30,6 +30,7 @@ class MediaGrid extends Component {
         this.contextType = config.contextType || null;
         this.isLandscape = config.isLandscape || false;
         this.gridClass = config.gridClass || '';
+        this.allowSeeMore = config.allowSeeMore !== undefined ? config.allowSeeMore : true;
 
         // State
         this.expanded = false;
@@ -162,7 +163,7 @@ class MediaGrid extends Component {
     }
 
     _shouldShowButton() {
-        return this.items.length > this.limit;
+        return this.allowSeeMore && this.items.length > this.limit;
     }
 
     _updateButtonVisibility() {

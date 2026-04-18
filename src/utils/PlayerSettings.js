@@ -182,6 +182,24 @@ const DEFAULTS = {
     // Player backend ('auto', 'avplay', 'webos', 'html5')
     playerBackend: 'auto',
 
+    /*
+     * Interlaced Content Backend Fallback
+     * ------------------------------------
+     * When enabled and the active backend is AVPlay (Tizen native), the player
+     * will automatically detect interlaced video streams (e.g. 1080i DVB broadcasts)
+     * and transparently restart playback using the HTML5/Chromium backend instead.
+     *
+     * Why: Samsung's AVPlay HLS parser cannot handle interlaced H264 inside HLS TS
+     * segments (throws PLAYER_ERROR_NOT_SUPPORTED_FORMAT). The HTML5 backend
+     * (Chromium's software decoder) handles interlaced H264 natively and perfectly.
+     *
+     * Trade-off: Software decoding uses more CPU on the TV SoC vs AVPlay hardware
+     * acceleration, but for standard 1080i broadcast content this is well within range.
+     *
+     * Default: true — best experience out of the box for Live TV users.
+     */
+    interlacedBackendFallback: true,
+
     // Enable Dolby Vision pass-through (auto-detected via avinfo API)
     enableDolbyVision: true,
 

@@ -126,11 +126,18 @@
 }
 
 
-/* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop ONLY */
-.hero-item.active .hero-backdrop {
+/* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop.
+   Controlled by the 'Enable Zoom Effect' setting (.with-zoom class). */
+.hero-carousel-container.with-zoom .hero-item.active .hero-backdrop {
     /* CSS Animation ensures it triggers even on the very first initial mount */
     -webkit-animation: hero-ken-burns 12000ms linear forwards;
     animation: hero-ken-burns 12000ms linear forwards;
+}
+
+/* Explicitly disable animation when zoom is off to ensure a static backdrop */
+.hero-carousel-container:not(.with-zoom) .hero-backdrop {
+    -webkit-animation: none !important;
+    animation: none !important;
 }
 
 @-webkit-keyframes hero-ken-burns {
@@ -347,6 +354,8 @@
 .hero-carousel-container.banner.focused {
     border-color: var(--jf-accent); /* Sharp, high-contrast brand color */
     z-index: 1000;
+    -webkit-transform: scale(1.025); /* Restored: snappy focus pop is now always on by default */
+    transform: scale(1.025);
 }
 
 /* Subtle inner glow for depth (using border for performance) */
@@ -382,6 +391,8 @@
         rgba(0, 0, 0, 0.5) 10%, 
         transparent 25%);
 }
+
+/* Conditional Focus Zoom was previously here, but focus pop is now restored to base rules */
 
 .hero-carousel-container.banner .hero-indicators {
     bottom: 30px;

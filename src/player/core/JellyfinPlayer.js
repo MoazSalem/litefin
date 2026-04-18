@@ -563,8 +563,10 @@ export class JellyfinPlayer extends EventEmitter {
                 profilePlaybackMode = 'remux';
             }
 
-            // Build device profile once (avoids duplicate logs/work)
-            const deviceProfile = buildJellyfinProfile({
+            // Build device profile once (avoids duplicate logs/work).
+            // On an interlaced fallback retry, a pre-built html5 profile is passed in
+            // via options._deviceProfile so we don't rebuild with the wrong settings.
+            const deviceProfile = options._deviceProfile || buildJellyfinProfile({
                  manualBitrate: this._manualBitrate, 
                  playbackMode: profilePlaybackMode,
                  backend: this._backendType
@@ -639,8 +641,12 @@ export class JellyfinPlayer extends EventEmitter {
                 throw new Error('No media sources available');
             }
 
-            // Select best media source
-            const mediaSource = options.mediaSourceId
+            // Select best media source:
+            // For Live TV channels, the server dynamically generates the media source ID
+            // when it opens the tuner — it will NEVER match options.mediaSourceId (which is
+            // the channel item ID). Always pick the first source for live channels.
+            const isLiveChannel = options.item?.Type === 'TvChannel';
+            const mediaSource = (!isLiveChannel && options.mediaSourceId)
                 ? playbackInfo.MediaSources.find((ms) => ms.Id === options.mediaSourceId)
                 : playbackInfo.MediaSources[0];
 
@@ -704,6 +710,74 @@ export class JellyfinPlayer extends EventEmitter {
             // Attach play session ID to media source
             if (playbackInfo.PlaySessionId) {
                 mediaSource.PlaySessionId = playbackInfo.PlaySessionId;
+            }
+
+            // ================================================================
+            // Interlaced Backend Fallback — AVPlay Auto-Switch
+            //
+            // Samsung's AVPlay HLS parser crashes with PLAYER_ERROR_NOT_SUPPORTED_FORMAT
+            // when the video stream contains interlaced H264 frames (e.g. 1080i DVB/ATSC
+            // broadcasts). The Chromium software decoder in the HTML5 backend handles
+            // interlaced H264 natively, so we transparently restart the session on HTML5
+            // when all of the following conditions are met:
+            //
+            //   1. We are currently on the AVPlay (tizen) backend
+            //   2. The user has 'interlacedBackendFallback' enabled in settings
+            //   3. The video stream is flagged IsInterlaced=true by Jellyfin
+            //   4. A non-HTML5 restart has not already been attempted (guard flag)
+            //
+            // No server-side transcoding happens — the device profile built for HTML5
+            // omits the IsInterlaced=false CodecProfile condition, so the server will
+            // direct-stream or direct-play the interlaced content as-is.
+            // ================================================================
+            if (
+                this._backendType === 'tizen' &&
+                PlayerSettings.get('interlacedBackendFallback') &&
+                !options._interlacedFallbackAttempted
+            ) {
+                const isInterlaced = videoStream && videoStream.IsInterlaced === true;
+                if (isInterlaced) {
+                    log.info(
+                        `[InterlacedFallback] Interlaced video detected (${videoStream.Width}x${videoStream.Height}i). ` +
+                        'AVPlay cannot handle interlaced HLS — restarting on HTML5 backend.'
+                    );
+
+                    // Stop the current backend before switching — it hasn't started playing yet,
+                    // but belt-and-suspenders in case prepareAsync was triggered internally.
+                    try {
+                        await this._backend.stop();
+                    } catch (stopErr) {
+                        log.warn('[InterlacedFallback] Backend stop() threw during pre-switch cleanup:', stopErr);
+                    }
+
+                    // Switch backend to HTML5 in-place (no page reload needed).
+                    // HtmlVideoPlayer is already statically imported at the top of this module,
+                    // so we just construct a new instance directly.
+                    this._backend = new HtmlVideoPlayer({
+                        container: this.container,
+                        settings: PlayerSettings,
+                        onEvent: this._handleBackendEvent.bind(this)
+                    });
+                    this._backendType = 'html5';
+                    log.info('[InterlacedFallback] Backend switched to html5. Rebuilding profile and restarting...');
+
+                    // Rebuild with html5 backend so the profile omits IsInterlaced=false,
+                    // allowing the server to direct-stream the interlaced content unchanged.
+                    const html5Profile = buildJellyfinProfile({
+                        manualBitrate: this._manualBitrate,
+                        playbackMode: profilePlaybackMode,
+                        backend: 'html5'
+                    });
+
+                    // Re-request PlaybackInfo with the html5 profile so the server
+                    // knows it no longer needs to deinterlace, then start playback.
+                    // Set the guard flag so we never loop if html5 also somehow fails.
+                    return this.play({
+                        ...options,
+                        _interlacedFallbackAttempted: true,
+                        _deviceProfile: html5Profile
+                    });
+                }
             }
 
             this._currentMediaSource = mediaSource;
@@ -1729,12 +1803,15 @@ export class JellyfinPlayer extends EventEmitter {
         // Deep clone the device profile so we can mutilate it to trick the server without affecting future calls
         const clonedProfile = JSON.parse(JSON.stringify(deviceProfile || buildJellyfinProfile(maxBitrate)));
 
+
+
         const requestBody = {
             DeviceProfile: clonedProfile,
             UserId: options.userId,
             MaxStreamingBitrate: maxBitrate,
             StartTimeTicks: options.startPositionTicks || 0,
             AutoOpenLiveStream: true,
+            IsPlayback: true,
             // Default to true for both, let server profiles decide unless strictly overridden below
             EnableDirectPlay: true,
             EnableDirectStream: true
@@ -1805,7 +1882,12 @@ export class JellyfinPlayer extends EventEmitter {
                 break;
         }
 
-        if (options.mediaSourceId) {
+        // IMPORTANT: For Live TV channels, do NOT pass MediaSourceId in the PlaybackInfo request.
+        // The server dynamically generates a MediaSourceId when it opens the tuner; passing the
+        // channel's ItemId as MediaSourceId causes the server's source-matching logic to fail
+        // with "NoCompatibleStream" because it tries to find a pre-existing specific source.
+        const isLiveChannel = options.item?.Type === 'TvChannel';
+        if (options.mediaSourceId && !isLiveChannel) {
             requestBody.MediaSourceId = options.mediaSourceId;
         }
 
@@ -1818,12 +1900,12 @@ export class JellyfinPlayer extends EventEmitter {
             requestBody.AudioStreamIndex = options.audioStreamIndex;
         }
 
+
         if (!isAudioItem) {
             if (options.subtitleStreamIndex !== undefined && options.subtitleStreamIndex !== null) {
                 requestBody.SubtitleStreamIndex = options.subtitleStreamIndex;
             }
         }
-
 
         const response = await fetch(url, {
             method: 'POST',
@@ -1842,7 +1924,7 @@ export class JellyfinPlayer extends EventEmitter {
             throw new Error(`Failed to get playback info: ${response.status} - ${errorText}`);
         }
 
-        return response.json();
+        return await response.json();
     }
 
     // ========================================================================

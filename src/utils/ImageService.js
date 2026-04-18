@@ -20,11 +20,31 @@ class ImageService {
 
     /**
      * Set quality preset and save to storage
-     * @param {string} preset - low | medium | high | ultra
+     * @param {string} preset - low | medium-low | medium | medium-high | high | ultra
      */
     setPreset(preset) {
-        if (['low', 'medium', 'high', 'ultra'].includes(preset)) {
+        if (['low', 'medium-low', 'medium', 'medium-high', 'high', 'ultra'].includes(preset)) {
             storage.setItem('pref:imageQuality', preset);
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Get hero-specific quality preset dynamically.
+     * @returns {string} default | low | medium-low | medium | medium-high | high | ultra
+     */
+    getHeroPreset() {
+        return storage.getItem('pref:heroImageQuality') || 'medium-low';
+    }
+
+    /**
+     * Set hero-specific quality preset and save to storage
+     * @param {string} preset - default | low | medium-low | medium | medium-high | high | ultra
+     */
+    setHeroPreset(preset) {
+        if (['default', 'low', 'medium-low', 'medium', 'medium-high', 'high', 'ultra'].includes(preset)) {
+            storage.setItem('pref:heroImageQuality', preset);
             return true;
         }
         return false;
@@ -48,6 +68,17 @@ class ImageService {
                 avatar: 160,
                 quality: 70
             },
+            'medium-low': {
+                poster: 300,
+                backdrop: 860,
+                'card-backdrop': 480,
+                'hero-banner': 1100,
+                'hero-immersive': 1200,
+                thumb: 400,
+                banner: 640,
+                avatar: 200,
+                quality: 75
+            },
             medium: {
                 poster: 360,
                 backdrop: 1080,
@@ -58,6 +89,17 @@ class ImageService {
                 banner: 800,
                 avatar: 240,
                 quality: 80
+            },
+            'medium-high': {
+                poster: 430,
+                backdrop: 1500,
+                'card-backdrop': 700,
+                'hero-banner': 1790,
+                'hero-immersive': 1870,
+                thumb: 560,
+                banner: 1040,
+                avatar: 280,
+                quality: 85
             },
             high: {
                 poster: 500,
@@ -83,7 +125,15 @@ class ImageService {
             }
         };
 
-        const currentScale = presets[this.getPreset()] || presets.medium;
+        let targetPreset = this.getPreset();
+        if (type.startsWith('hero-')) {
+            const heroPreset = this.getHeroPreset();
+            if (heroPreset !== 'default') {
+                targetPreset = heroPreset;
+            }
+        }
+
+        const currentScale = presets[targetPreset] || presets.medium;
 
         const maxWidth = currentScale[type] || 300;
 

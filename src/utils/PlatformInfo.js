@@ -78,10 +78,22 @@ class PlatformInfo {
         // on legacy hardware.
         // -------------------------------------------------------------------
         const chromeMatch = navigator.userAgent.match(/Chrome\/(\d+)/);
+        const altChromeMatch = navigator.userAgent.match(/like Gecko\)\s+(\d+)\.\d+\.\d+\.\d+/);
         
         let chromeVersion;
         if (chromeMatch) {
             chromeVersion = parseInt(chromeMatch[1], 10);
+        } else if (altChromeMatch) {
+            // Modern Tizen (e.g., Tizen 9.0) user agents omit the "Chrome/" string but keep the raw 
+            // Chromium version right after the Gecko token. 
+            // Example: ... (KHTML, like Gecko) 120.0.6099.5/9.0 TV Safari/...
+            chromeVersion = parseInt(altChromeMatch[1], 10);
+        } else if (/Tizen (\d+)\./i.test(navigator.userAgent)) {
+            // Fallback: Infer from Tizen version if browser version is completely obscured.
+            const tizenVer = parseInt(navigator.userAgent.match(/Tizen (\d+)\./i)[1], 10);
+            if (tizenVer >= 5) chromeVersion = 69; // Tizen 5.0+ supports Grid
+            else if (tizenVer >= 3) chromeVersion = 47; // Tizen 3/4 support Flexbox
+            else chromeVersion = 34; // Tizen 2.x
         } else if (/Tizen|WebO?S|NetCast|LG[ -]?Browser/i.test(navigator.userAgent)) {
             // Ancient Tizen (2.4) and WebOS (1.x/2.x) use pure WebKit without Chrome branding
             chromeVersion = 34;

@@ -102,3 +102,45 @@ Source of truth: src/locales/en-us.json
 ```
 
 The script exits with code `1` if any issues are found, making it suitable for use in CI pipelines.
+
+## Maintenance & Synchronization
+
+Beyond checking for errors, Litefin provides tools to automatically maintain the structure and metadata of locale files.
+
+### 1. Synchronization (Structural Parity)
+
+The `locale:sync` command ensures that all non-English locale files exactly match the structure, grouping, and ordering of `en-us.json`.
+
+```sh
+# Synchronizes all 100+ locales with the English master
+npm run locale:sync
+# or
+npm run local:sync
+```
+
+**What it does:**
+-   **Enforces Order**: Alphabetizes keys within their specific sections (Shared vs. Specific).
+-   **Maintains Markers**: Preserves file comments like `_Litefin Specific Keys`.
+-   **Injects Missing Keys**: Adds keys present in English but missing from a locale, using the English string as a temporary fallback.
+-   **Preserves Translations**: Does **not** overwrite existing translations.
+
+### 2. Translation Status & Progress
+
+The `locale:status` command provides a summary report of how much of each language has been translated.
+
+```sh
+# View progress report for all languages
+npm run locale:status
+# or
+npm run local:status
+
+# View report and UPDATE src/locales/languages.js with latest percentages
+npm run locale:update
+# or
+npm run local:update
+```
+
+**What it does:**
+-   **Heuristic Calculation**: Calculates "completeness" based on keys that have a value different from the English source.
+-   **Mapping Update**: With the `:update` or `--update` flag, it programmatically updates the `completeness` field in `src/locales/languages.js`, which controls the percentage displayed in the app's settings.
+

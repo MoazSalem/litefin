@@ -1,0 +1,472 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Live TV Styles
+ * ============================================================================
+ */
+
+.livetv-page {
+    padding-top: 0;
+    background: linear-gradient(135deg, var(--jf-background) 0%, #0a0a0a 100%);
+}
+
+.livetv-page .page-header {
+    padding: 60px 60px 30px 60px;
+    margin-bottom: 20px;
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    flex-direction: column;
+    align-items: center; /* Center-align title and tabs */
+    text-align: center;
+}
+
+.livetv-page h1 {
+    font-size: 3.5rem;
+    font-weight: 800;
+    margin: 0 0 35px 0;
+    color: var(--jf-text-primary);
+    letter-spacing: -2px;
+}
+
+/* Namespaced Tab Container (ltv prefix) */
+.ltv-tab-header {
+    display: flex;
+    position: relative;
+    background: rgba(255, 255, 255, 0.05);
+    padding: 6px;
+    border-radius: 100px;
+    width: fit-content;
+    border: none !important;
+    margin: 0 auto; /* Ensure horizontal centering */
+}
+
+/* Sliding Indicator Pill */
+.ltv-tab-indicator {
+    position: absolute;
+    top: 6px;
+    left: 0;
+    height: calc(100% - 12px);
+    background: var(--jf-accent);
+    border-radius: 100px;
+    /* Use transform to coordinate both position and scale */
+    transform: translateX(var(--indicator-x, 0)) scale(1);
+    transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1), 
+                width 0.35s cubic-bezier(0.4, 0, 0.2, 1),
+                background-color 0.3s ease;
+    z-index: 1;
+    pointer-events: none;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+    transform-origin: center;
+}
+
+.ltv-tab-btn {
+    background: transparent !important;
+    border: 2px solid transparent !important;
+    padding: 12px 35px !important;
+    font-size: 1.25rem;
+    font-weight: 700;
+    color: var(--jf-text-secondary);
+    cursor: pointer;
+    position: relative;
+    z-index: 2;
+    /* Match timing with indicator */
+    transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), 
+                color 0.25s ease, 
+                border-color 0.25s ease;
+    border-radius: 100px !important;
+    margin-right: 4px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: none !important;
+    outline: none !important;
+    letter-spacing: -0.2px;
+    box-sizing: border-box;
+    transform-origin: center;
+}
+
+.ltv-tab-btn:last-child {
+    margin-right: 0 !important;
+}
+
+.ltv-tab-btn.active {
+    color: var(--jf-primary-btn-color) !important;
+    opacity: 1;
+}
+
+/* Unify all interaction scales to 1.05 for perfect sync with the indicator */
+.ltv-tab-btn.focused{
+    color: var(--jf-text-primary);
+    transform: scale(1.05) !important; 
+    opacity: 1;
+    outline: none !important;
+    position: relative;
+}
+
+.ltv-tab-btn:active {
+    transform: scale(0.98) !important;
+}
+
+/* Slimmer focus pill for inactive tabs */
+.ltv-tab-btn.focused:not(.active)::before{
+    content: '';
+    position: absolute;
+    top: 4px;
+    bottom: 4px;
+    left: 8px;
+    right: 8px;
+    background: rgba(255, 255, 255, 0.12);
+    border-radius: 100px;
+    z-index: -1;
+}
+
+/* Clear focus border when focusing the already active purple pill */
+.ltv-tab-btn.active.focused{
+    background: transparent !important;
+    transform: scale(1.05) !important;
+    border: 2px solid var(--jf-action-btn-active-border) !important;
+    box-shadow: none !important;
+    z-index: 3;
+}
+.ltv-tab-header button::-moz-focus-inner {
+    border: 0 !important;
+}
+
+.tab-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    animation: fadeIn 0.5s ease-out;
+    position: relative;
+    /* Do not set height/min-height here, let it grow naturally with content
+       or let EPG Grid fill the viewport via its own height management */
+}
+
+/* Ensure the shared scroll container doesn't show multiple scrollbars */
+.livetv-page .page-content {
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* ============================================================================
+   EPG Grid Styles
+   ============================================================================ */
+.epg-grid-container {
+    padding: 0;
+    /* To maintain virtualization, we need a fixed height.
+       calc(100vh - 230px) accounts for the h1 title, tabs, and header padding. */
+    height: calc(100vh - 230px); 
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+.epg-header {
+    height: 60px;
+    flex-shrink: 0; /* Prevent header from collapsing in flex container */
+    background: var(--jf-background);
+    display: flex;
+    position: relative;
+    z-index: 100; /* Above virtualized rows */
+    border-bottom: 2px solid var(--jf-divider);
+}
+
+.epg-channel-header-spacer {
+    width: 250px; /* Width of channel sidebar */
+    flex-shrink: 0;
+    border-right: 2px solid var(--jf-divider);
+    background: var(--jf-background-alt);
+}
+
+.epg-timeline {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.epg-timeline-track {
+    position: absolute;
+    height: 100%;
+    display: flex;
+}
+
+.epg-time-slot {
+    width: 300px; /* 30 minutes = 300px (10px per minute) */
+    flex-shrink: 0;
+    border-right: 1px solid var(--jf-divider);
+    padding: 0 10px;
+    display: flex;
+    align-items: center;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--jf-text-secondary);
+}
+
+.epg-body {
+    flex: 1; /* Occupy remaining height in the grid container */
+    display: flex;
+    overflow: hidden;
+}
+
+.epg-channels {
+    width: 250px;
+    flex-shrink: 0;
+    overflow: hidden;
+    position: relative;
+    border-right: 2px solid var(--jf-divider);
+    background: var(--jf-background-alt);
+    z-index: 5;
+}
+
+.epg-channels-track {
+    position: relative;
+}
+
+.epg-channel-row {
+    height: 100px;
+    display: flex;
+    align-items: center;
+    padding: 0 20px;
+    border-bottom: 1px solid var(--jf-divider);
+    border-left: 4px solid transparent; /* Apple-style selection indicator */
+    transition: background 0.25s ease, border-left-color 0.25s ease, transform 0.2s ease;
+    will-change: background, border-left-color;
+    box-sizing: border-box;
+}
+
+.epg-channel-row:focus,
+.epg-channel-row.focused {
+    background: rgba(255, 255, 255, 0.12);
+    border-left-color: var(--jf-accent);
+    outline: none;
+    z-index: 10;
+}
+
+.epg-channel-logo {
+    width: 80px;
+    height: 60px;
+    object-fit: contain;
+    margin-right: 15px;
+}
+
+.epg-channel-info {
+    flex-grow: 1;
+    overflow: hidden;
+}
+
+.epg-channel-name {
+    font-size: 1.2rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.epg-channel-number {
+    font-size: 1rem;
+    color: var(--jf-text-secondary);
+    transition: color 0.2s ease;
+}
+
+.epg-channel-row.focused .epg-channel-number {
+    color: var(--jf-text-primary);
+}
+
+.epg-programs {
+    flex-grow: 1;
+    overflow: hidden;
+    position: relative;
+}
+
+.epg-programs-track {
+    position: relative;
+}
+
+.epg-row {
+    height: 100px;
+    position: absolute;
+    left: 0;
+    width: 100%;
+    border-bottom: 1px solid var(--jf-divider);
+}
+
+.epg-program {
+    position: absolute;
+    height: calc(100% - 10px);
+    top: 5px;
+    background: rgba(255, 255, 255, 0.08); /* More modern semi-transparent base */
+    border-radius: var(--jf-border-radius); /* Use global setting */
+    padding: 10px 15px;
+    overflow: hidden;
+    border: 2px solid transparent;
+    transition: background 0.25s ease, border-color 0.25s ease;
+    will-change: background, border-color;
+}
+
+.epg-program:focus,
+.epg-program.focused {
+    background: var(--jf-background-lighter);
+    border-color: var(--jf-focus-border-color);
+    outline: none;
+    z-index: 20;
+}
+
+.epg-program-title {
+    font-size: 1.1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.epg-program-time {
+    font-size: 0.9rem;
+    color: var(--jf-text-secondary);
+    margin-top: 4px;
+}
+
+.epg-indicator {
+    position: absolute;
+    top: 0;
+    width: 4px;
+    height: 100%;
+    background: var(--jf-accent);
+    z-index: 100;
+    box-shadow: 0 0 10px var(--jf-accent);
+}
+
+.epg-indicator::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -6px;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--jf-accent);
+}
+
+/* ============================================================================
+   Empty State
+   ============================================================================ */
+.empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 100px 20px;
+    text-align: center;
+    animation: fadeIn 0.8s ease-in-out;
+}
+
+.empty-icon {
+    margin-bottom: 24px;
+    color: var(--jf-text-secondary);
+    opacity: 0.4;
+}
+
+.empty-icon svg {
+    width: 120px;
+    height: 120px;
+    display: block;
+}
+
+.empty-title {
+    font-size: 2.2rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    margin-bottom: 12px;
+    letter-spacing: -0.5px;
+}
+
+.empty-description {
+    font-size: 1.3rem;
+    color: var(--jf-text-secondary);
+    max-width: 500px;
+    line-height: 1.5;
+}
+
+/* Apple-style subtle pulse for the recording dot */
+.record-dot {
+    animation: heartBeat 2s infinite ease-in-out;
+}
+
+@keyframes heartBeat {
+    0% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+    100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* ============================================================================
+   Pagination Styles
+   ============================================================================ */
+.pagination-footer {
+    padding: 60px 60px 80px 60px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pagination-footer.hidden {
+    display: none !important;
+}
+
+.pagination-controls {
+    display: flex;
+    align-items: center;
+}
+
+.pagination-btn {
+    padding: 20px 48px;
+    margin: 0 20px;
+    background-color: rgba(60, 60, 60, 0.8);
+    color: var(--jf-text-primary);
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    border-radius: var(--jf-border-radius-lg);
+    -webkit-border-radius: var(--jf-border-radius-lg);
+    overflow: hidden;
+    background-clip: padding-box;
+    font-size: 24px;
+    font-weight: 700;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), 
+                background-color 0.18s ease, 
+                color 0.18s ease, 
+                border-color 0.18s ease;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pagination-btn i {
+    margin: 0 10px;
+}
+
+.pagination-btn:disabled {
+    opacity: 0.3 !important;
+    cursor: not-allowed;
+    background-color: rgba(40, 40, 40, 0.4) !important;
+}
+
+.pagination-btn:not(:disabled):focus,
+.pagination-btn.focused {
+    background-color: var(--jf-accent) !important;
+    border-color: var(--jf-accent) !important;
+    color: var(--jf-primary-btn-color) !important;
+    transform: scale(1.1);
+    outline: none !important;
+    will-change: transform;
+}
+
+.pagination-info {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    margin: 0 30px;
+}
