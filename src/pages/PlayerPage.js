@@ -521,14 +521,6 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
 
-            this._onRemotePlayPause = () => {
-                if (this._player?.paused) {
-                    this._player.play();
-                } else {
-                    this._reportPlaybackProgress('pause');
-                }
-            };
-            eventBus.on('remote:playPause', this._onRemotePlayPause);
 
             // Channel Up/Down for Live TV
             this._onChannelUp = () => this._handleChannelChange(1);

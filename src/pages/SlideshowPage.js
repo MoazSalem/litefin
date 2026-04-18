@@ -198,33 +198,46 @@ class SlideshowPage extends Page {
         this.setLoading(true);
 
         try {
-            /* ── 1. Fetch all photos in the containing folder / album ── */
-            await this._fetchPhotos(photoId, parentId);
+            /*
+             * ── Fast-path: returning from the video player ──
+             * setNavigationState() stashes the photos array and the index we
+             * were at before navigating away. Skip the network round-trip and
+             * restore directly so the user lands back on the same slide instantly.
+             */
+            if (this._restoredState && this._restoredState.photos?.length > 0) {
+                log.debug('Restoring slideshow from navigation state (no re-fetch needed)');
+                this._photos = this._restoredState.photos;
+                this._currentIndex = this._restoredState.currentIndex || 0;
+                this._restoredState = null; /* consume the snapshot */
+            } else {
+                /* ── Normal cold-start: fetch all photos in the album ── */
+                await this._fetchPhotos(photoId, parentId);
 
-            if (this._photos.length === 0) {
-                log.warn('No photos found for slideshow');
-                router.back();
-                return;
+                if (this._photos.length === 0) {
+                    log.warn('No photos found for slideshow');
+                    router.back();
+                    return;
+                }
+
+                /* Find the starting index (the photo the user tapped) */
+                const startIdx = this._photos.findIndex((p) => p.Id === photoId);
+                this._currentIndex = startIdx !== -1 ? startIdx : 0;
             }
 
-            /* ── 2. Find the starting index (the photo the user tapped) ── */
-            const startIdx = this._photos.findIndex((p) => p.Id === photoId);
-            this._currentIndex = startIdx !== -1 ? startIdx : 0;
-
-            /* ── 3. Show the first image synchronously ── */
+            /* ── Show the current image (no crossfade on first display) ── */
             await this._showPhoto(this._currentIndex, false /* no transition */);
 
-            /* ── 4. Wire up keyboard handling ── */
+            /* ── Wire up keyboard handling ── */
             document.addEventListener('keydown', this._keyHandler, true /* capture */);
 
-            /* ── 5. Set focus to our invisible trap so the page receives keys ── */
+            /* ── Set focus to our invisible trap so the page receives keys ── */
             const trap = this.$('#slideshow-focus-trap');
             if (trap) trap.focus();
 
-            /* ── 6. Signal page ready ── */
+            /* ── Signal page ready ── */
             this.markReady();
 
-            /* ── 7. Auto-play if requested via query param ── */
+            /* ── Auto-play if requested via query param ── */
             if (this.params.autoPlay === 'true') {
                 this._startAutoAdvance();
             }
@@ -251,6 +264,41 @@ class SlideshowPage extends Page {
         super.destroy();
 
         log.debug('SlideshowPage destroyed');
+    }
+
+    // ──────────────────────────────────────────────────────────────────────────
+    // Navigation State — persists current index across player round-trips
+    // ──────────────────────────────────────────────────────────────────────────
+
+    /**
+     * Called by NavigationState.captureState() just before the router
+     * pushes a new page (e.g. the video player). We save enough data so
+     * that setNavigationState() can restore the exact slide without a
+     * re-fetch.
+     * @returns {Object}
+     */
+    getNavigationState() {
+        return {
+            currentIndex: this._currentIndex,
+            /*
+             * Persist the photos array so we can restore the view without
+             * reissuing the full API call. The array size is bounded (≤ 5000
+             * lightweight DTOs) and is already in memory, so this is safe.
+             */
+            photos: this._photos
+        };
+    }
+
+    /**
+     * Called by NavigationState.restorePageState() at the start of onInit()
+     * when the user navigates back from the player.
+     * We stash the state for consumption by onInit() after the DOM is ready.
+     * @param {Object} state
+     */
+    setNavigationState(state) {
+        if (!state) return;
+        /* Stash it — onInit() will pick it up instead of re-fetching */
+        this._restoredState = state;
     }
 
     // ──────────────────────────────────────────────────────────────────────────
