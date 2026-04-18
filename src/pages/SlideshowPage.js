@@ -23,6 +23,7 @@
 import Page from './Page.js';
 import { api } from '../api/index.js';
 import { router } from '../core/Router.js';
+import { eventBus } from '../core/EventBus.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
 
@@ -135,6 +136,13 @@ class SlideshowPage extends Page {
                         alt=""
                         aria-hidden="true"
                     />
+                </div>
+
+                <!-- ── Center Video Indicator (hidden for photos) ── -->
+                <div class="slideshow-video-play hidden" id="video-play-indicator" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
                 </div>
 
                 <!-- ── Top-right counter: "4 / 47" ── -->
@@ -281,12 +289,15 @@ class SlideshowPage extends Page {
             return;
         }
 
-        /* Fetch all Photo items from the parent, sorted by capture date */
+        const sortBy = this.params.sortBy || 'SortName';
+        const sortOrder = this.params.sortOrder || 'Ascending';
+
+        /* Fetch all Photo and Video items from the parent, sorted according to params */
         const response = await api.getItems({
             ParentId: resolvedParentId,
-            IncludeItemTypes: 'Photo',
-            SortBy: 'DateCreated,SortName',
-            SortOrder: 'Ascending',
+            IncludeItemTypes: 'Photo,Video',
+            SortBy: sortBy,
+            SortOrder: sortOrder,
             Recursive: false,    /* Direct children only for speed */
             Fields: PHOTO_FIELDS,
             Limit: 5000          /* Reasonable upper bound for large albums */
@@ -319,9 +330,12 @@ class SlideshowPage extends Page {
 
         const photo = this._photos[index];
         const imageUrl = api.getImageUrl(photo.Id, 'Primary', {
-            /* Request the full native resolution — we let CSS scale it down.
-               Avoid a maxWidth cap here; photos are the focus, quality matters. */
-            quality: 95
+            /* Request bounded resolution: Tizen UI renders at 1080p maximum.
+               Failing to limit this causes Jellyfin to re-encode a 20MP original at 100% scale,
+               taking 5-10 seconds per image and destroying responsiveness! */
+            maxWidth: 1920,
+            maxHeight: 1080,
+            quality: 90
         });
 
         /* Reference to the two stage layers */
@@ -389,6 +403,16 @@ class SlideshowPage extends Page {
         /* ── Update the counter ── */
         this._updateCounter();
 
+        /* ── Update Video Indicator ── */
+        const videoIndicator = this.$('#video-play-indicator');
+        if (videoIndicator) {
+            if (photo.Type === 'Video') {
+                videoIndicator.classList.remove('hidden');
+            } else {
+                videoIndicator.classList.add('hidden');
+            }
+        }
+
         /* ── Update EXIF overlay content if it's open ── */
         if (this._exifVisible) {
             this._renderExifContent(photo);
@@ -414,7 +438,7 @@ class SlideshowPage extends Page {
         /* Previous photo */
         const prevPhoto = this._photos[index - 1];
         if (prevPhoto) {
-            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', { quality: 90 });
+            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', { maxWidth: 1920, maxHeight: 1080, quality: 90 });
         } else {
             this._preloadSlots.prev.src = '';
         }
@@ -422,7 +446,7 @@ class SlideshowPage extends Page {
         /* Next photo */
         const nextPhoto = this._photos[index + 1];
         if (nextPhoto) {
-            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', { quality: 90 });
+            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', { maxWidth: 1920, maxHeight: 1080, quality: 90 });
         } else {
             this._preloadSlots.next.src = '';
         }
@@ -672,12 +696,18 @@ class SlideshowPage extends Page {
                 break;
 
             /*
-             * OK / Enter — toggle EXIF metadata overlay.
+             * OK / Enter — if Video, open player. If Photo, toggle EXIF.
              */
             case 'Enter':
                 e.preventDefault();
                 e.stopPropagation();
-                this._toggleExif();
+                if (this._photos[this._currentIndex]?.Type === 'Video') {
+                    // Stop auto advance just in case
+                    this._stopAutoAdvance();
+                    eventBus.emit('player:play', { item: this._photos[this._currentIndex] });
+                } else {
+                    this._toggleExif();
+                }
                 break;
 
             /*
@@ -689,7 +719,12 @@ class SlideshowPage extends Page {
             case 'p':
                 e.preventDefault();
                 e.stopPropagation();
-                this._toggleAutoAdvance();
+                if (this._photos[this._currentIndex]?.Type === 'Video') {
+                    this._stopAutoAdvance();
+                    eventBus.emit('player:play', { item: this._photos[this._currentIndex] });
+                } else {
+                    this._toggleAutoAdvance();
+                }
                 break;
 
             /*

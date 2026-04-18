@@ -529,10 +529,11 @@ class LibraryPage extends Page {
                     return;
                 }
 
-                // Special handling for Photos: open Slideshow
-                if (itemType === 'Photo') {
+                // Special handling for Photos and Home Videos: open Slideshow
+                if (itemType === 'Photo' || itemType === 'Video') {
                     log.info('Navigating to Slideshow:', itemId);
-                    router.navigate(`/slideshow/${itemId}?parentId=${this.params.id || this.state.libraryId}`);
+                    const parentArg = this.params.id || this.state.libraryId;
+                    router.navigate(`/slideshow/${itemId}?parentId=${parentArg}&sortBy=${this.state.sortBy}&sortOrder=${this.state.sortOrder}`);
                     return;
                 }
 
@@ -1251,7 +1252,7 @@ class LibraryPage extends Page {
                 params.Recursive = false;
                 result = await api.getItems(params);
             } else if (viewType === 'Photos') {
-                params.IncludeItemTypes = 'Photo';
+                params.IncludeItemTypes = 'Photo,Video';
                 params.Recursive = true;
                 result = await api.getItems(params);
             } else if (viewType === 'PhotoAlbums') {
