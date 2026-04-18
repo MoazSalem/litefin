@@ -85,7 +85,7 @@ const TECHNICAL_KEYS = [
     "Option3D", "OptionBluray", "OptionDvd", "OptionIsHD", "OptionIsSD",
     "AppleTV", "BackendTizen", "BackendWeb", "BackendWebOS", 
     "BitrateKbps", "BitrateMbps", "DolbyVision", "FHD", 
-    "FontGoogleSans", "FontRoboto", "HD", "Option4K", "Path", 
+    "FontGoogleSans", "FontPixelart", "FontRoboto", "HD", "Option4K", "Path", 
     "ResolutionValue", "SpeedValue", "SyncPlay", "TizenValue", 
     "UHD", "UHD8K", "WebOSValue", "WMC"
 ];
