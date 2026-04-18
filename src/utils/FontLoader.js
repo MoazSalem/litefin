@@ -25,7 +25,8 @@ class FontLoader {
             casual: 'Patrick Hand',
             smallcaps: 'Cinzel',
             poppins: 'Poppins',
-            'noto-arabic': 'Noto Sans Arabic'
+            'noto-arabic': 'Noto Sans Arabic',
+            pixelart: 'Silkscreen'
         };
     }
 

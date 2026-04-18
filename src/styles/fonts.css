@@ -95,6 +95,15 @@
     font-display: swap;
 }
 
+/* Silkscreen - Pixel art style */
+@font-face {
+    font-family: 'Silkscreen';
+    src: url('../assets/fonts/Silkscreen.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -125,6 +134,7 @@
 .font-cursive { font-family: 'Dancing Script', cursive; }
 .font-casual { font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
 .font-smallcaps { font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
+.font-pixelart { font-family: 'Silkscreen', 'Courier New', monospace; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif; }
 

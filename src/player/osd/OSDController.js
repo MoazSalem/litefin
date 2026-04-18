@@ -1791,6 +1791,12 @@ export default class OSDController extends Component {
      */
     _updateClock() {
         if (!this._osdClockEl) return;
+
+        if (PlayerSettings.get('timeFormat') === 'none') {
+            this._osdClockEl.style.display = 'none';
+            return;
+        }
+        this._osdClockEl.style.display = '';
         const timeStr = i18n.formatLocalTime(new Date());
         if (this._osdClockEl.textContent !== timeStr) {
             this._osdClockEl.textContent = timeStr;
