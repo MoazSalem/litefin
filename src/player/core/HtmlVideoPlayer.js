@@ -127,6 +127,7 @@ export class HtmlVideoPlayer {
             seeking: this._onSeeking.bind(this),
             seeked: this._onSeeked.bind(this),
             volumechange: this._onVolumeChange.bind(this),
+            durationchange: this._onDurationChange.bind(this),
             loadedmetadata: this._onLoadedMetadata.bind(this)
         };
 
@@ -294,12 +295,66 @@ export class HtmlVideoPlayer {
                 }
             });
 
+            // ================================================================
+            // LEVEL_UPDATED — fired every time the manifest playlist is
+            // fetched and parsed (live: every ~4s; VOD: once at the end).
+            //
+            // When details.live === false the server has appended #EXT-X-ENDLIST
+            // to the manifest, which means the Jellyfin transcoder has finished
+            // encoding the entire file. At that point details.totalduration is
+            // the accurate total, and we can lock in the OSD to the right value.
+            //
+            // We store it on the HLS player instance and dispatch a synthetic
+            // durationchange on the video element so JellyfinPlayer's existing
+            // durationchange handler picks it up automatically.
+            // ================================================================
+            hls.on(Hls.Events.LEVEL_UPDATED, (event, data) => {
+                const details = data?.details;
+                if (!details) return;
+
+                if (!details.live && details.totalduration > 0) {
+                    // Manifest is complete — store duration for JellyfinPlayer to read
+                    log.info(`[HLS] Manifest complete (EXT-X-ENDLIST). Total duration: ${details.totalduration.toFixed(1)}s`);
+                    this._hlsManifestDuration = details.totalduration;
+
+                    // Dispatch durationchange on the video element so the OSD
+                    // refreshes without needing a separate polling mechanism.
+                    video.dispatchEvent(new Event('durationchange'));
+                }
+            });
+
             hls.on(Hls.Events.ERROR, (event, data) => {
                 // Filter out benign buffer stall errors
                 if (data.details === 'bufferStalledError' && !data.fatal) {
                     log.warn('HLS buffer low (non-fatal):', data.buffer);
                     return;
                 }
+
+                if (!data.fatal) {
+                    // ============================================================
+                    // Non-fatal fragment load error — the most common cause is
+                    // seeking ahead of the Jellyfin transcoder: segment N hasn't
+                    // been encoded yet, so the server returns an empty response.
+                    //
+                    // Immediately calling startLoad() would hammer the server.
+                    // Wait 2 seconds so the transcoder has time to produce the
+                    // next segment, then tell HLS.js to retry loading.
+                    // ============================================================
+                    if (data.details === 'fragLoadError') {
+                        log.warn('[HLS] Non-fatal fragLoadError — waiting 2s for transcoder, then retrying');
+                        setTimeout(() => {
+                            if (this._hlsPlayer === hls) {
+                                hls.startLoad();
+                            }
+                        }, 2000);
+                        return;
+                    }
+
+                    // All other non-fatal errors — log but let HLS.js handle automatically
+                    log.warn('HLS non-fatal error:', data);
+                    return;
+                }
+
                 log.error('HLS error:', data);
 
                 if (data.fatal) {
@@ -327,6 +382,7 @@ export class HtmlVideoPlayer {
             hls.attachMedia(video);
 
             this._hlsPlayer = hls;
+            this._hlsManifestDuration = null; // Reset for this session
 
             // Failsafe timeout
             setTimeout(() => {
@@ -777,12 +833,34 @@ export class HtmlVideoPlayer {
     }
 
     /**
+     * Get the accurate total duration (in seconds) derived from a completed HLS.js manifest.
+     *
+     * Jellyfin transcodes HLS as a rolling live stream, so `video.duration` grows
+     * chunk by chunk. Once the Jellyfin transcoder finishes encoding the entire file,
+     * it appends `#EXT-X-ENDLIST` to the manifest and HLS.js fires LEVEL_UPDATED with
+     * `details.live === false`. At that point `details.totalduration` is the real total,
+     * which we cache in `_hlsManifestDuration` and expose here.
+     *
+     * Returns null if the manifest has not yet completed (still a live stream window).
+     *
+     * @returns {number|null} Accurate total duration in seconds, or null if not yet known
+     */
+    getHlsManifestDuration() {
+        // `_hlsManifestDuration` is set inside the LEVEL_UPDATED handler when
+        // the server has finished transcoding (details.live === false).
+        return (this._hlsManifestDuration != null && this._hlsManifestDuration > 0)
+            ? this._hlsManifestDuration
+            : null;
+    }
+
+    /**
      * Get start position in ticks
      * @returns {number}
      */
     getStartPositionTicks() {
         return this._currentPlayOptions?.playerStartPositionTicks || 0;
     }
+
 
     /**
      * Check if paused
@@ -963,6 +1041,11 @@ export class HtmlVideoPlayer {
     _onLoadedMetadata() {
         log.debug('Metadata loaded');
         this.onEvent({ type: 'loadedmetadata', data: { duration: this.getDuration() } });
+    }
+
+    /** @private */
+    _onDurationChange() {
+        this.onEvent({ type: 'durationchange', data: { duration: this.getDuration() } });
     }
 
     // ========================================================================

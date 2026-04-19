@@ -637,6 +637,15 @@ export class ApiClient {
     }
 
     /**
+     * Get pre-roll intro items for a given media item.
+     * @param {string} itemId - The target media item ID
+     * @returns {Promise<Object>} Object containing Items array and TotalRecordCount
+     */
+    async getIntros(itemId) {
+        return this.get(`/Users/${this._userId}/Items/${itemId}/Intros`);
+    }
+
+    /**
      * Get local trailers for an item.
      *
      * Jellyfin stores locally-managed trailers as full BaseItemDto objects,
@@ -648,6 +657,17 @@ export class ApiClient {
      */
     async getLocalTrailers(itemId) {
         return this.get(`/Users/${this._userId}/Items/${itemId}/LocalTrailers`);
+    }
+
+    /**
+     * Get special features (extras) for an item.
+     * Includes trailers, featurettes, behind the scenes, etc.
+     *
+     * @param {string} itemId - The parent item's ID
+     * @returns {Promise<BaseItemDto[]>} Array of special feature items
+     */
+    async getSpecialFeatures(itemId) {
+        return this.get(`/Users/${this._userId}/Items/${itemId}/SpecialFeatures`);
     }
 
     async getSimilar(itemId, params = {}) {
@@ -672,7 +692,7 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters',
             IsVirtualUnaired: false,
             IsMissing: false,
             ...params
@@ -1143,7 +1163,7 @@ export class ApiClient {
      * @param {string} liveStreamId - The ID returned by openLiveStream
      */
     async closeLiveStream(liveStreamId) {
-        return this.post('/LiveStreams/Close', { LiveStreamId: liveStreamId });
+        return this.post('/LiveStreams/Close', null, { params: { liveStreamId } });
     }
 
     /**

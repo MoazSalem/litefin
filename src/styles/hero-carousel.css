@@ -3,16 +3,31 @@
  * Litefin Tizen - Hero Carousel Styles
  * ============================================================================
  * Apple TV inspired hero section for the home screen.
+ *
+ * PERFORMANCE NOTES (Tizen/WebKit):
+ *   - NO -webkit-mask-image: it forces a software compositing pass that
+ *     serializes ALL sibling animations through the CPU. Use overflow:hidden
+ *     + translateZ(0) instead for border-radius clipping.
+ *   - NO margin transitions: margin changes trigger layout reflow on every
+ *     frame. Use transform:translate instead (GPU-only, no reflow).
+ *   - will-change tells the compositor to pre-allocate a GPU layer so the
+ *     very first animation frame is already on the GPU.
+ *   - contain:layout style paint isolates the carousel's repaint from the
+ *     rest of the page, preventing the sidebar from being invalidated.
  * ============================================================================
  */
+
+/* ============================================================================
+   Base Carousel wrapper
+   ============================================================================ */
 
 .hero-carousel {
     position: relative;
     width: 100%;
-    height: 70vh; /* Adjust height as needed for TV screens */
+    height: 70vh;
     min-height: 500px;
     overflow: hidden;
-    /* Composite layer for smooth performance */
+    /* Promote to its own GPU composite layer */
     transform: translateZ(0);
 }
 
@@ -26,8 +41,6 @@
 }
 
 .hero-carousel-container.compact .hero-backdrop {
-    /* REFINED: Using a slightly offset top-heavy anchor to keep actor faces 
-       visible in the narrow 50vh viewport. */
     background-position: 50% 20%;
 }
 
@@ -45,6 +58,10 @@
     height: 100%;
 }
 
+/* ============================================================================
+   Hero items — slides
+   ============================================================================ */
+
 .hero-item {
     position: absolute;
     top: 0;
@@ -56,14 +73,21 @@
     transition: opacity 1000ms cubic-bezier(0.4, 0, 0.2, 1);
     display: flex;
     align-items: flex-end;
-    padding-bottom: 120px; /* Space for indicators and breathing room */
-    overflow: hidden; /* Contain the scaled backdrop */
+    padding-bottom: 120px;
+    overflow: hidden;
+    /* Pre-promote inactive slides too so the cross-fade is GPU-only */
+    transform: translateZ(0);
+    will-change: opacity;
 }
 
 .hero-item.active {
     opacity: 1;
     z-index: 2;
 }
+
+/* ============================================================================
+   Backdrop image layer
+   ============================================================================ */
 
 .hero-backdrop {
     position: absolute;
@@ -75,10 +99,15 @@
     background-size: cover;
     background-position: top;
     background-repeat: no-repeat;
-    /* Transformation handled via animation on the .active class */
+    /* Isolate the backdrop's own GPU layer for the Ken Burns animation */
+    transform: translateZ(0);
 }
 
-/* Gradients for readability */
+/* ============================================================================
+   Gradient overlays
+   (::before — left-to-right text mask | ::after — bottom blend)
+   ============================================================================ */
+
 .hero-item::before {
     content: '';
     position: absolute;
@@ -86,9 +115,9 @@
     left: 0;
     width: 100%;
     height: 100%;
-    /* Left-to-right dark mask for text overlay */
     background: linear-gradient(to right, rgba(0, 0, 0, 0.9) 0%, rgba(0, 0, 0, 0.4) 40%, transparent 100%);
     z-index: 1;
+    /* Static pseudo-element — no will-change needed */
 }
 
 .hero-item::after {
@@ -98,10 +127,13 @@
     left: 0;
     width: 100%;
     height: 100%;
-    /* Bottom-to-top mask to blend with rows */
-    background: linear-gradient(to top,var(--jf-background) 6%,rgba(0,0,0,0.8) 15%,transparent 30%);
+    background: linear-gradient(to top, var(--jf-background) 6%, rgba(0,0,0,0.8) 15%, transparent 30%);
     z-index: 2;
 }
+
+/* ============================================================================
+   Content (logo / title / meta / description)
+   ============================================================================ */
 
 .hero-content {
     position: relative;
@@ -112,44 +144,49 @@
     flex-direction: column;
     justify-content: center;
     opacity: 0;
-    -webkit-transform: translateY(20px);
     transform: translateY(20px);
-    -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
-    transition: transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1), opacity 800ms ease;
+    -webkit-transform: translateY(20px);
+    transition: transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                opacity 800ms ease;
+    -webkit-transition: -webkit-transform 800ms cubic-bezier(0.34, 1.56, 0.64, 1),
+                        opacity 800ms ease;
+    will-change: transform, opacity;
 }
-
 
 .hero-item.active .hero-content {
     opacity: 1;
-    -webkit-transform: translateY(0);
     transform: translateY(0);
+    -webkit-transform: translateY(0);
 }
 
+/* ============================================================================
+   Ken Burns effect — only when explicitly enabled via .with-zoom
+   ============================================================================ */
 
-/* Premium 'Ken Burns' Effect: Subtle slow-zoom on active backdrop.
-   Controlled by the 'Enable Zoom Effect' setting (.with-zoom class). */
 .hero-carousel-container.with-zoom .hero-item.active .hero-backdrop {
-    /* CSS Animation ensures it triggers even on the very first initial mount */
     -webkit-animation: hero-ken-burns 12000ms linear forwards;
     animation: hero-ken-burns 12000ms linear forwards;
+    will-change: transform;
 }
 
-/* Explicitly disable animation when zoom is off to ensure a static backdrop */
 .hero-carousel-container:not(.with-zoom) .hero-backdrop {
     -webkit-animation: none !important;
     animation: none !important;
 }
 
 @-webkit-keyframes hero-ken-burns {
-    from { -webkit-transform: scale(1); }
-    to   { -webkit-transform: scale(1.08); }
+    from { -webkit-transform: scale(1) translateZ(0); }
+    to   { -webkit-transform: scale(1.08) translateZ(0); }
 }
 
 @keyframes hero-ken-burns {
-    from { transform: scale(1); }
-    to   { transform: scale(1.08); }
+    from { transform: scale(1) translateZ(0); }
+    to   { transform: scale(1.08) translateZ(0); }
 }
 
+/* ============================================================================
+   Logo / title / meta / description
+   ============================================================================ */
 
 .hero-logo-container {
     height: 120px;
@@ -212,10 +249,12 @@
     -webkit-box-orient: vertical;
     overflow: hidden;
     margin-bottom: 40px;
-    /* Removed text-shadow for performance during transitions */
 }
 
-/* Indicators (Dots) */
+/* ============================================================================
+   Dot indicators
+   ============================================================================ */
+
 .hero-indicators {
     position: absolute;
     bottom: 40px;
@@ -232,9 +271,9 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
     margin-right: 12px;
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
-                background 0.3s ease,
-                transform 0.3s ease;
+    /* width + background are cheap GPU ops — short duration for responsiveness */
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.2s ease;
     overflow: hidden;
 }
 
@@ -248,12 +287,26 @@
     background: var(--jf-accent-content-color);
 }
 
-/* Focus State */
+/* ============================================================================
+   Container base
+   ============================================================================ */
+
 .hero-carousel-container {
     position: relative;
     overflow: hidden;
+    /*
+     * CRITICAL: contain:layout + paint prevents the carousel's own
+     * repaints from cascading into the sidebar or row sections.
+     * This is what makes opening the sidebar feel instant even while
+     * the Ken Burns or cross-fade animation is running.
+     */
+    contain: layout style paint;
 }
 
+/*
+ * Accent ring overlay — fades in on focus.
+ * Uses a simple gradient rather than mask-image for GPU compositing.
+ */
 .hero-carousel-container::after {
     content: '';
     position: absolute;
@@ -261,14 +314,13 @@
     left: 0;
     right: 0;
     bottom: 0;
-    /* REFINED: Removed expensive mask-image. Using a smarter gradient for performance. */
-    background: linear-gradient(to top, 
-        transparent 0%, 
-        rgba(0, 0, 0, 0) 5%, 
-        var(--jf-accent) 20%, 
+    background: linear-gradient(to top,
+        transparent 0%,
+        rgba(0, 0, 0, 0) 5%,
+        var(--jf-accent) 20%,
         transparent 100%);
     opacity: 0;
-    transition: opacity 0.5s ease;
+    transition: opacity 0.3s ease;
     pointer-events: none;
     z-index: 100;
 }
@@ -283,50 +335,57 @@
     opacity: 0.15;
 }
 
+/* 
+ * Remove the focus glow in banner mode — the border ring is enough. 
+ * We keep it for immersive mode where there is no border.
+ */
+.hero-carousel-container.banner::after {
+    display: none !important;
+}
+
 /* ============================================================================
-   Carousel Styles: Banner Mode
+   Banner mode
    ============================================================================ */
 
 .hero-carousel-container.banner {
-    margin: 90px 75px 30px 75px; /* Perfectly aligned with media grid (40px page + 60px row offset) */
+    margin: 90px 75px 30px 75px;
     border-radius: var(--jf-border-radius-lg);
     background: #000;
-    border: 4px solid transparent; /* 4px (thinned) persistent border */
+    border: 4px solid transparent;
     background-clip: padding-box;
-    transition: transform 0.5s cubic-bezier(0.2, 1, 0.3, 1), 
-                margin 0.5s ease,
-                border-color 0.4s ease;
-    /* PERFORMANCE: Force overflow clipping for banner mode */
+    /* Faster border transition — 0.2s is plenty for TV focus ring */
+    transition: border-color 0.2s ease;
     overflow: hidden !important;
-    /* Legacy WebKit Hack: Force border-radius clipping on children */
-    -webkit-mask-image: -webkit-radial-gradient(white, black);
 }
 
-/* Ensure inner carousel respects container radius */
+/* Inner carousel — no scale on focus, border ring on outer container is sufficient */
 .hero-carousel-container.banner .hero-carousel {
-    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
-    height: 60vh; /* Slightly shorter in banner mode for better proportions */
+    border-radius: calc(var(--jf-border-radius-lg) - 4px);
+    height: 60vh;
     overflow: hidden;
-    /* Legacy WebKit Hack: Ensure child items are clipped */
-    -webkit-mask-image: -webkit-radial-gradient(white, black);
+    /* Static transform to promote to its own GPU layer without causing
+       a compositing merge whenever the outer container's border changes */
+    transform: translateZ(0);
 }
 
-/* Explicitly round children in banner mode as some legacy engines ignore overflow:hidden radius */
+/* Remove the two lines that scaled the inner carousel on focus — now dead code */
+
+/* Round children explicitly for legacy WebKit (overflow:hidden alone isn't
+   enough on older Tizen versions — but avoid mask-image!) */
 .hero-carousel-container.banner .hero-item,
 .hero-carousel-container.banner .hero-backdrop {
     border-radius: calc(var(--jf-border-radius-lg) - 4px);
 }
 
 .hero-carousel-container.banner.compact {
-    margin: 90px 75px 20px 75px; /* Mantaining 100px horizontal alignment in compact mode */
+    margin: 90px 75px 20px 75px;
 }
 
 .hero-carousel-container.banner.compact .hero-carousel {
-    height: 40vh; /* Scaled down from 60vh to allow next rows to peak through */
+    height: 40vh;
     min-height: 320px;
 }
 
-/* Internal scaling for banner + compact */
 .hero-carousel-container.banner.compact .hero-logo-container {
     height: 60px;
     margin-bottom: 12px;
@@ -340,7 +399,7 @@
 .hero-carousel-container.banner.compact .hero-description {
     font-size: 1.15rem;
     margin-bottom: 20px;
-    -webkit-line-clamp: 2; /* Fewer lines of detail in compact mode */
+    -webkit-line-clamp: 2;
     line-clamp: 2;
 }
 
@@ -349,25 +408,26 @@
     right: 30px;
 }
 
-/* Banner Focus State: Performant Accent Ring (Sharp 1:1 Scale to prevent blurring) */
+/* ============================================================================
+   Banner focus: border ring (no transform on outer container = no reflow)
+   ============================================================================ */
+
 .hero-carousel-container.banner:focus,
 .hero-carousel-container.banner.focused {
-    border-color: var(--jf-accent); /* Sharp, high-contrast brand color */
+    border-color: var(--jf-accent);
     z-index: 1000;
-    -webkit-transform: scale(1.025); /* Restored: snappy focus pop is now always on by default */
-    transform: scale(1.025);
 }
 
-/* Subtle inner glow for depth (using border for performance) */
+/* Inner glow rim — static pseudo, no animation cost */
 .hero-carousel-container.banner::before {
     content: '';
     position: absolute;
     inset: 0;
-    border-radius: calc(var(--jf-border-radius-lg) - 4px); /* Adjusted for 4px border */
+    border-radius: calc(var(--jf-border-radius-lg) - 4px);
     border: 2px solid rgba(255, 255, 255, 0.1);
     pointer-events: none;
     z-index: 5;
-    transition: border-color 0.5s ease;
+    transition: border-color 0.4s ease;
 }
 
 .hero-carousel-container.banner:focus::before,
@@ -375,25 +435,23 @@
     border-color: rgba(255, 255, 255, 0.3);
 }
 
-/* Adjust gradients for banner mode (more self-contained) */
+/* Banner-specific gradient override */
 .hero-carousel-container.banner .hero-item::after {
-    background: linear-gradient(to top, 
-        rgba(0, 0, 0, 0.9) 0%, 
-        rgba(0, 0, 0, 0.5) 20%, 
+    background: linear-gradient(to top,
+        rgba(0, 0, 0, 0.9) 0%,
+        rgba(0, 0, 0, 0.5) 20%,
         transparent 80%);
 }
 
-/* Compact specific gradient optimization: 
-   Pull the mask further down to prevent washing out the restricted image area. */
+/* Compact gradient override */
 .hero-carousel-container.compact .hero-item::after {
-    background: linear-gradient(to top, 
-        var(--jf-background) 0%, 
-        rgba(0, 0, 0, 0.5) 10%, 
+    background: linear-gradient(to top,
+        var(--jf-background) 0%,
+        rgba(0, 0, 0, 0.5) 10%,
         transparent 25%);
 }
 
-/* Conditional Focus Zoom was previously here, but focus pop is now restored to base rules */
-
+/* Banner indicators */
 .hero-carousel-container.banner .hero-indicators {
     bottom: 30px;
     right: 40px;
@@ -404,17 +462,19 @@
     left: 40px;
 }
 
-/* Animation for Auto-Scroll */
+/* ============================================================================
+   Dot progress animation
+   ============================================================================ */
+
 @-webkit-keyframes heroProgress {
     from { width: 0; }
-    to { width: 100%; }
+    to   { width: 100%; }
 }
 
 @keyframes heroProgress {
     from { width: 0; }
-    to { width: 100%; }
+    to   { width: 100%; }
 }
-
 
 .hero-dot-progress {
     position: absolute;
@@ -422,11 +482,24 @@
     left: 0;
     height: 100%;
     background: var(--jf-accent);
-    border-radius: 4px; /* Explicitly match dot radius for perfect rounding */
+    border-radius: 4px;
     width: 0;
+    /* Pre-promote so width animation runs on GPU */
+    will-change: width;
 }
 
 .hero-dot.active .hero-dot-progress {
     -webkit-animation: heroProgress 8s linear;
     animation: heroProgress 8s linear;
+}
+
+/* 
+ * Disabled Indicator Animation
+ * When the setting is off, the progress bar is simply shown at 100% width
+ * instantly for the active slide.
+ */
+.hero-carousel-container.no-indicator-animation .hero-dot.active .hero-dot-progress {
+    width: 100%;
+    -webkit-animation: none !important;
+    animation: none !important;
 }

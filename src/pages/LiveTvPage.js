@@ -544,16 +544,35 @@ class LiveTvPage extends Page {
         this.registerFocusSection(sectionId, track, {
             orientation: 'horizontal',
             selector: '.media-card',
-            indices: true
+            indices: true,
+            // Handle horizontal navigation within the virtual row
+            onMove: (direction, currentElement) => {
+                if (!currentElement || currentElement.dataset.virtualIndex === undefined) {
+                    return false; // Let spatial nav take over
+                }
+                const idx = parseInt(currentElement.dataset.virtualIndex, 10);
+                const nextNode = virtualRow.handleMove(direction, idx);
+                if (nextNode) {
+                    focusManager.focusElement(nextNode);
+                    return true;
+                }
+                return false;
+            },
+            // Restore last-focused position in this row when entering from another row
+            onEnter: (fromElement, options) => {
+                if (fromElement && options && (options.direction === 'up' || options.direction === 'down')) {
+                    const existingNode = virtualRow.domNodes.get(virtualRow.currentIndex);
+                    if (existingNode && existingNode.isConnected) {
+                        return existingNode;
+                    }
+                    virtualRow._updateWindow(virtualRow.currentIndex);
+                    return virtualRow.domNodes.get(virtualRow.currentIndex);
+                }
+                return null;
+            },
+            // Restore specific virtual index
+            onRestoreIndex: (index) => virtualRow.focusByIndex(index)
         });
-
-        // Bind horizontal movement
-        focusManager.setHandler(sectionId, 'left', () =>
-            virtualRow.handleMove('left', focusManager.getSelectedIndex(sectionId))
-        );
-        focusManager.setHandler(sectionId, 'right', () =>
-            virtualRow.handleMove('right', focusManager.getSelectedIndex(sectionId))
-        );
 
         return virtualRow;
     }

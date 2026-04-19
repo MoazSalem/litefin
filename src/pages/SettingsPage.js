@@ -401,6 +401,24 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelScoreVisibility">${i18n.t('LabelScoreVisibility') || 'Score Visibility'}</span>
+                        <span class="setting-description" data-i18n="ScoreVisibilityDescription">${i18n.t('ScoreVisibilityDescription') || 'Control how community and critic scores are displayed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'score-visibility-select',
+                            [
+                                { value: 'all', label: i18n.t('OptionScoreAll') || 'Show All' },
+                                { value: 'mystery', label: i18n.t('OptionScoreMystery') || 'Mystery Mode (Hide All)' },
+                                { value: 'watched', label: i18n.t('OptionScoreWatched') || 'Watched Items Only' }
+                            ],
+                            storage.getItem('pref:scoreVisibility') || 'all'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
                         <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
                     </div>
@@ -795,13 +813,26 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item" id="hero-carousel-indicator-animation-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselIndicatorAnimation">${i18n.t('HeroCarouselIndicatorAnimation') || 'Indicator Animation'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIndicatorAnimationDescription">${i18n.t('HeroCarouselIndicatorAnimationDescription') || 'Enable the progress bar animation for the carousel dots.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-indicator-animation" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
                         <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') !== 'false' ? 'active' : ''}" 
+                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') === 'true' ? 'active' : ''}" 
                                  id="toggle-snap-large-scrolls" 
                                  tabindex="0">
                         </button>
@@ -2519,12 +2550,14 @@ class SettingsPage extends Page {
                 const styleItem = this.$('#hero-carousel-style-item');
                 const zoomItem = this.$('#hero-carousel-zoom-item');
                 const heroQualityItem = this.$('#hero-image-quality-item');
+                const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
                 if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
+                if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -2567,11 +2600,23 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Hero Carousel Indicator Animation
+        const heroCarouselIndicatorBtn = this.$('#toggle-indicator-animation');
+        if (heroCarouselIndicatorBtn) {
+            heroCarouselIndicatorBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselIndicatorAnimation', newValue.toString());
+                heroCarouselIndicatorBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Indicator Animation set to: ${newValue}`);
+            });
+        }
+
         // Toggle Reduce Motion (Large Scrolls)
         const snapLargeScrollsBtn = this.$('#toggle-snap-large-scrolls');
         if (snapLargeScrollsBtn) {
             snapLargeScrollsBtn.addEventListener('click', () => {
-                const isEnabled = storage.getItem('pref:snapLargeScrolls') !== 'false';
+                const isEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const newValue = !isEnabled;
                 storage.setItem('pref:snapLargeScrolls', newValue.toString());
                 snapLargeScrollsBtn.classList.toggle('active', newValue);
@@ -3249,6 +3294,7 @@ class SettingsPage extends Page {
 
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
+            'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },

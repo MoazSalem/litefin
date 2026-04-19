@@ -611,12 +611,18 @@ export class JellyfinPlayer extends EventEmitter {
                     // 3. Fallback: Fetch item details to get chapters
                     log.info('Chapters missing. Fetching item details...');
                     try {
-                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay' });
+                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks' });
                         if (itemDetails && itemDetails.Chapters) {
                             chapters = itemDetails.Chapters;
                             log.info('Chapters fetched from API:', chapters.length);
                         } else {
                             log.info('No chapters found in API response.');
+                        }
+                        // Also back-fill RunTimeTicks onto options.item if it was missing
+                        // so the mediaSource back-fill below can pick it up.
+                        if (itemDetails?.RunTimeTicks && options.item && !options.item.RunTimeTicks) {
+                            log.info(`[Duration] Back-filling RunTimeTicks onto item from chapter fetch: ${itemDetails.RunTimeTicks}`);
+                            options.item.RunTimeTicks = itemDetails.RunTimeTicks;
                         }
                     } catch (e) {
                         log.warn('Failed to fetch item details for chapters:', e);
@@ -782,6 +788,29 @@ export class JellyfinPlayer extends EventEmitter {
 
             this._currentMediaSource = mediaSource;
             this._currentItem = options.item || { Id: options.itemId };
+
+            // ================================================================
+            // Duration Resolution — back-fill from item metadata
+            //
+            // Jellyfin's PlaybackInfo often omits RunTimeTicks on the
+            // MediaSource for transcoded HLS streams, even though the item's
+            // own API response carries it. We copy it over here so that
+            // getDurationTicks() can find it without needing a second API call.
+            //
+            // If BOTH sources lack RunTimeTicks (server has genuinely never
+            // scanned/stored duration for this file), we fall through. In that
+            // case getDurationTicks() will try to read the HLS.js manifest
+            // duration once the transcoder finishes encoding, then fall back to
+            // the growing backend value as a last resort.
+            // ================================================================
+            if (!this._currentMediaSource.RunTimeTicks && this._currentItem?.RunTimeTicks) {
+                log.info(`[Duration] Back-filling RunTimeTicks from item metadata: ${this._currentItem.RunTimeTicks} ticks`);
+                this._currentMediaSource.RunTimeTicks = this._currentItem.RunTimeTicks;
+            }
+
+            if (!this._currentMediaSource.RunTimeTicks) {
+                log.warn('[Duration] MediaSource and item both lack RunTimeTicks — will rely on HLS manifest or backend duration');
+            }
 
             // Set up the SubtitleManager with the current media context
             // This tells it what item/source we're playing and what backend we're using
@@ -1713,11 +1742,79 @@ export class JellyfinPlayer extends EventEmitter {
     }
 
     /**
-     * Get total duration in ticks
-     * @returns {number}
+     * Get total duration in ticks.
+     *
+     * Resolution priority:
+     *   1. MediaSource.RunTimeTicks  — most authoritative; set from Jellyfin metadata at
+     *                                  play() time. Also used as a latch once Priority 3
+     *                                  populates a valid value (so subsequent calls are free).
+     *   2. HLS.js manifest duration  — set by getHlsManifestDuration() after LEVEL_UPDATED
+     *                                  fires with details.live===false (transcoder done).
+     *   3. Backend video.duration    — for DirectPlay this is the container-header duration
+     *                                  (accurate from metadata load). For live HLS this is
+     *                                  Infinity (rejected). Once a valid value is found here
+     *                                  it is cached onto MediaSource so Priority 1 wins next time.
+     *
+     * @returns {number} Duration in 100-nanosecond ticks
      */
     getDurationTicks() {
-        return this._currentMediaSource?.RunTimeTicks ?? 0;
+        // ====================================================================
+        // Priority 1: Jellyfin metadata (MediaSource or Item RunTimeTicks).
+        //   This is the most reliable source — set at play() time, including
+        //   the back-fill from item metadata when PlaybackInfo omits it.
+        // ====================================================================
+        const metadataTicks = this._currentMediaSource?.RunTimeTicks || this._currentItem?.RunTimeTicks || 0;
+        if (metadataTicks > 0) {
+            return metadataTicks;
+        }
+
+        // ====================================================================
+        // Priority 2: HLS.js manifest-derived duration.
+        //
+        // When Jellyfin finishes transcoding the entire file it appends
+        // #EXT-X-ENDLIST to the HLS playlist. HLS.js detects this via the
+        // LEVEL_UPDATED event (details.live === false) and stores the accurate
+        // total in _hlsManifestDuration via getHlsManifestDuration(). Once
+        // available this is perfectly accurate — far better than the growing
+        // video.duration value we'd get before the manifest is complete.
+        //
+        // This is only available for HtmlVideoPlayer (HLS.js backend). On
+        // TizenAVPlayer the native media engine reports duration directly.
+        // ====================================================================
+        if (this._backend && typeof this._backend.getHlsManifestDuration === 'function') {
+            const hlsDur = this._backend.getHlsManifestDuration();
+            if (hlsDur !== null) {
+                log.debug(`[Duration] Using HLS manifest duration: ${hlsDur.toFixed(1)}s`);
+                // Cache it on the MediaSource so subsequent calls skip this lookup
+                if (this._currentMediaSource) {
+                    this._currentMediaSource.RunTimeTicks = Math.floor(hlsDur * 10000000);
+                }
+                return this._currentMediaSource.RunTimeTicks;
+            }
+        }
+
+        // ====================================================================
+        // Priority 3 (last resort): Backend-reported duration.
+        //   For DirectPlay, video.duration is read accurately from the
+        //   container header (MKV/MP4/etc.) once metadata loads.
+        //   For live TV this may be Infinity, and for HLS transcoding it may
+        //   grow as segments are encoded — both are rejected below.
+        //   Once a valid finite value is found it is cached onto the
+        //   MediaSource so subsequent calls hit Priority 1 directly.
+        // ====================================================================
+        if (this._backend && typeof this._backend.getDuration === 'function') {
+            const backendDur = this._backend.getDuration();
+            if (backendDur > 0 && isFinite(backendDur) && !isNaN(backendDur)) {
+                const ticks = Math.floor(backendDur * 10000000);
+                // Latch the value so the OSD never has to re-read video.duration
+                if (this._currentMediaSource) {
+                    this._currentMediaSource.RunTimeTicks = ticks;
+                }
+                return ticks;
+            }
+        }
+
+        return 0;
     }
 
     /**

@@ -648,20 +648,6 @@ if (!isWebOS) {
                                 /* Success — Samsung accepted the preview tiles. */
                                 console.log('[Litefin Service] Smart Hub preview set successfully');
                                 sendSmartHubAck('success');
-                                /*
-                                 * Exit the service after committing preview data.
-                                 *
-                                 * Samsung's Smart Hub system requires the service process to
-                                 * terminate before it commits and renders the new preview tiles
-                                 * on the home screen. If the service stays alive, the preview
-                                 * update is buffered but may never be displayed.
-                                 *
-                                 * The ytresolver HTTP proxy will restart automatically on the
-                                 * next launchAppControl from the main app (Bootstrap in index.js
-                                 * re-launches it on every app start, so trailer/discovery
-                                 * functionality is unaffected).
-                                 */
-                                tizen.application.getCurrentApplication().exit();
                             },
                             function (e) {
                                 /* Samsung rejected the data (API error). */

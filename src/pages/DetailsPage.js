@@ -31,6 +31,7 @@ import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { shouldShowScore } from '../utils/visibility.js';
 
 const log = logger.create('DetailsPage');
 
@@ -177,6 +178,12 @@ class DetailsPage extends Page {
                     <section class="details-people media-row hidden" id="people-section">
                         <h2 class="row-title" data-i18n="HeaderCastAndCrew">Cast & Crew</h2>
                         <div class="people-row row-items" id="people-row"></div>
+                    </section>
+
+                    <!-- Special Features -->
+                    <section class="details-special-features media-row hidden" id="special-features-section">
+                        <h2 class="row-title" data-i18n="SpecialFeatures">Special Features</h2>
+                        <div class="special-features-row row-items" id="special-features-row"></div>
                     </section>
 
                     <!-- Songs (for albums) -->
@@ -550,6 +557,11 @@ class DetailsPage extends Page {
             this._renderPeople();
         }
 
+        // Special Features
+        if (['Movie', 'Series', 'Season', 'Episode', 'Trailer', 'MusicVideo'].includes(this._item.Type)) {
+            await this._loadSpecialFeatures();
+        }
+
         // Load Artists (Music/Albums)
         await this._loadArtists();
 
@@ -707,6 +719,7 @@ class DetailsPage extends Page {
             'details-songs',
             'more-from-season-section',
             'details-people',
+            'details-special-features',
             'artists-section',
             'guest-stars-section',
             'details-similar'
@@ -1257,8 +1270,8 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating ? `★ ${item.CommunityRating.toFixed(1)}` : '';
-        const criticRating = item.CriticRating ? `🍅 ${item.CriticRating}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;
@@ -1724,6 +1737,34 @@ class DetailsPage extends Page {
         });
     }
 
+    async _loadSpecialFeatures() {
+        try {
+            const features = await api.getSpecialFeatures(this._itemId);
+            this._specialFeatures = features || [];
+
+            if (this._specialFeatures.length > 0) {
+                this._renderSpecialFeatures();
+            }
+        } catch (error) {
+            log.warn('Failed to load special features', error);
+            const section = this.$('#special-features-section');
+            if (section) section.classList.add('hidden');
+        }
+    }
+
+    _renderSpecialFeatures() {
+        if (!this._specialFeatures || this._specialFeatures.length === 0) return;
+
+        this._renderVirtualRow({
+            sectionId: 'special-features-section',
+            listId: 'special-features-row',
+            items: this._specialFeatures,
+            isLandscape: true,
+            renderCard: (item) => this._renderMediaCard(item, true, 'thumb'),
+            focusSectionName: 'details-special-features'
+        });
+    }
+
     _checkOverviewTruncation() {
         const overviewEl = this.$('.overview-text');
         const seeMoreBtn = this.$('.see-more-btn');
@@ -1813,6 +1854,11 @@ class DetailsPage extends Page {
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
+                name: 'details-special-features',
+                elementId: '#special-features-row',
+                isVisible: () => isNotHidden('#special-features-section')
+            },
+            {
                 name: 'artists-section',
                 elementId: '#artists-row',
                 isVisible: () => isNotHidden('#artists-section')
@@ -1858,6 +1904,11 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#artists-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            {
+                name: 'details-special-features',
+                elementId: '#special-features-row',
+                isVisible: () => isNotHidden('#special-features-section')
+            },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
@@ -2111,6 +2162,42 @@ class DetailsPage extends Page {
                     target = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
                 }
                 itemToPlay = { ...target };
+            } else {
+                try {
+                    const fields = 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters';
+                    if (isShufflePlay) {
+                        const randomEp = await api.getItems({
+                            ParentId: this._item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Episode',
+                            Limit: 1,
+                            SortBy: 'Random',
+                            Fields: fields
+                        });
+                        if (randomEp && randomEp.Items && randomEp.Items.length > 0) {
+                            itemToPlay = randomEp.Items[0];
+                        } else {
+                            return;
+                        }
+                    } else {
+                        const firstEp = await api.getItems({
+                            ParentId: this._item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Episode',
+                            Limit: 1,
+                            SortBy: 'SortName',
+                            Fields: fields
+                        });
+                        if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
+                            itemToPlay = firstEp.Items[0];
+                        } else {
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve season fallback playback', e);
+                    return;
+                }
             }
             // Attach context so PlayQueue knows this is a season play
             itemToPlay.contextType = 'season';
@@ -2863,7 +2950,7 @@ class DetailsPage extends Page {
 
         // Fallback Crawler Activation: Force remote trailers flag for standard media
         // if the node proxy is enabled, since the crawler can fetch them dynamically.
-        const isStandardMedia = ['Movie', 'Series'].includes(item.Type);
+        const isStandardMedia = ['Movie', 'Series', 'Season'].includes(item.Type);
         const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
         const isProxyEnabled = mode === 'internal_proxy' && PlayerSettings.get('enableBackgroundService') !== false;
 

@@ -17,6 +17,7 @@ Comprehensive documentation is available in the `Docs` directory:
 
 - [**Overview**](./Docs/Overview.md): Project introduction and the 8x build strategy.
 - [**Architecture**](./Docs/Architecture.md): Framework details (EventBus, FocusManager, Plugins).
+- [**Plugins**](./Docs/Plugins.md): How the plugin system works and how to create them.
 - [**Playback**](./Docs/Playback.md): Tizen AVPlay, web-OS adapters, and Subtitle Manager.
 - [**Features**](./Docs/Features.md): Categorized list of all implemented functionality.
 - [**UI & UX**](./Docs/UI_UX.md): Design system, components, and animation principles.

@@ -269,7 +269,91 @@ class PlayQueue {
             this.setShuffleMode(true);
         }
 
-        log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+    log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+    }
+
+    /**
+     * Insert one or more items immediately after the current index.
+     * Useful for pre-roll intros and adding items "up next".
+     * @param {Object|Object[]} items - Item(s) to insert
+     */
+    insertNext(items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        log.debug('PlayQueue.insertNext', { count: toInsert.length, afterIndex: this._currentIndex });
+
+        // Stamp every item with a session-unique PlaylistItemId
+        toInsert.forEach(_stampPlaylistItemId);
+
+        // Splice into the queue starting at the position AFTER current index
+        const insertIndex = this._currentIndex + 1;
+        this._queue.splice(insertIndex, 0, ...toInsert);
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
+    }
+
+    /**
+     * Insert one or more items at a specific index.
+     * If safeIndex <= _currentIndex, the _currentIndex is shifted right.
+     * @param {number} index - Desired index to insert at
+     * @param {Object|Object[]} items - Item(s) to insert
+     */
+    insertAt(index, items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        const safeIndex = Math.max(0, Math.min(index, this._queue.length));
+        log.debug('PlayQueue.insertAt', { count: toInsert.length, atIndex: safeIndex });
+
+        toInsert.forEach(_stampPlaylistItemId);
+
+        this._queue.splice(safeIndex, 0, ...toInsert);
+
+        // If we inserted before the current item, we must shift the index to maintain track continuity
+        if (safeIndex <= this._currentIndex) {
+            this._currentIndex += toInsert.length;
+        }
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
+    }
+
+    /**
+     * Inject one or more pre-roll items at the CURRENT index.
+     * The old item at the current index (and everything after it) is shifted right.
+     * Since the index is not modified, playback seamlessly transitions to the first injected item.
+     * @param {Object|Object[]} items - Item(s) to inject
+     */
+    injectPreRoll(items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        log.debug('PlayQueue.injectPreRoll', { count: toInsert.length, atIndex: this._currentIndex });
+
+        toInsert.forEach(_stampPlaylistItemId);
+
+        // Splice exactly at the current active pointer
+        this._queue.splice(this._currentIndex, 0, ...toInsert);
+
+        // We DO NOT modify this._currentIndex! 
+        // It now naturally points to the first injected item.
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
     }
 
     /**
@@ -375,7 +459,7 @@ class PlayQueue {
         // correctly across season boundaries.
         const response = await api.getEpisodes(currentItem.SeriesId, {
             Limit: 500, // large enough for any series
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
         });
 
         log.info(
@@ -411,7 +495,8 @@ class PlayQueue {
                 IncludeItemTypes: 'Movie',
                 SortBy: 'SortName',
                 SortOrder: 'Ascending',
-                Limit: 100
+                Limit: 100,
+                Fields: 'Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -419,7 +504,8 @@ class PlayQueue {
                 IncludeItemTypes: 'Episode',
                 SortBy: 'SortName',
                 SortOrder: 'Ascending',
-                Limit: 100
+                Limit: 100,
+                Fields: 'Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -456,7 +542,7 @@ class PlayQueue {
         // Fetch only episodes for this specific season
         const response = await api.getEpisodes(currentItem.SeriesId, {
             SeasonId: seasonId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
         });
 
         const episodes = response.Items || [];

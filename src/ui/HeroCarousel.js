@@ -15,6 +15,7 @@ import { logger } from '../utils/Logger.js';
 import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
+import { shouldShowScore } from '../utils/visibility.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -44,11 +45,13 @@ class HeroCarousel {
         
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
         const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
+        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
 
         // Apply compact to the container to manage external margins (Banner Mode)
         // Use with-zoom to conditionally apply the focus transform
+        // Use no-indicator-animation to disable the progress bar fill
         return `
-            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} focusable" tabindex="0">
+            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" tabindex="0">
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         ${itemsHtml}
@@ -105,7 +108,7 @@ class HeroCarousel {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
         }
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
@@ -171,6 +174,11 @@ class HeroCarousel {
      */
     destroy() {
         this._stopAutoScroll();
+        // Cancel any in-flight indicator animation frame
+        if (this._indicatorRafId) {
+            cancelAnimationFrame(this._indicatorRafId);
+            this._indicatorRafId = null;
+        }
         if (this._onFocusChanged) {
             eventBus.off('focus:changed', this._onFocusChanged);
         }
@@ -213,7 +221,11 @@ class HeroCarousel {
         if (this._items.length <= 1) return;
         
         // Reset the visual progress bar to stay in sync with the JS timer
-        this._resetIndicatorAnimation();
+        // if animations are enabled.
+        const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        if (isAnimationEnabled) {
+            this._resetIndicatorAnimation();
+        }
 
         this._timer = setInterval(() => {
             this.next();
@@ -232,21 +244,37 @@ class HeroCarousel {
     }
 
     /**
-     * Restart the CSS animation on the current dot
+     * Restart the CSS animation on the current dot.
+     *
+     * IMPORTANT: We must NOT use `void el.offsetWidth` to restart the
+     * animation — that forces a synchronous layout reflow on the main
+     * thread (50-150ms on Tizen) which blocks CSS transitions from
+     * starting on the same frame. Instead we split remove → add across
+     * two animation frames. The browser will commit the 'remove' paint
+     * in frame N and the 'add' in frame N+1, giving CSS a clean state
+     * transition without ever touching layout.
      * @private
      */
     _resetIndicatorAnimation() {
         if (!this._container) return;
-        
+
         const dots = this._container.querySelectorAll('.hero-dot');
         const currentDot = dots[this._currentIndex];
-        
-        if (currentDot) {
-            currentDot.classList.remove('active');
-            // Force reflow to restart animation
-            void currentDot.offsetWidth;
-            currentDot.classList.add('active');
+        if (!currentDot) return;
+
+        // Cancel any pending restart to avoid double-firing on rapid transitions
+        if (this._indicatorRafId) {
+            cancelAnimationFrame(this._indicatorRafId);
         }
+
+        // Frame N: remove the active class (stops the CSS animation)
+        currentDot.classList.remove('active');
+
+        // Frame N+1: add it back — the animation restarts cleanly with no reflow
+        this._indicatorRafId = requestAnimationFrame(() => {
+            this._indicatorRafId = null;
+            currentDot.classList.add('active');
+        });
     }
 
     /**
@@ -276,6 +304,8 @@ class HeroCarousel {
         const items = this._container.querySelectorAll('.hero-item');
         const dots = this._container.querySelectorAll('.hero-dot');
         
+        if (!items[index] || !dots[index]) return;
+
         // Update classes
         items[this._currentIndex].classList.remove('active');
         dots[this._currentIndex].classList.remove('active');
@@ -285,7 +315,8 @@ class HeroCarousel {
         items[this._currentIndex].classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
-        // Restart timer on navigation
+        // Restart timer on navigation. This will also restart the progress 
+        // animation if it is enabled.
         this._startAutoScroll();
     }
 
@@ -301,23 +332,32 @@ class HeroCarousel {
     }
 
     /**
-     * Handle focus
+     * Handle focus — restart auto-scroll and indicator animation
+     * so the progress bar stays in sync with the JS timer.
      * @private
      */
     _handleFocus() {
         this._isFocused = true;
         this._container.classList.add('focused');
+        // Restart the timer AND resync the progress dot animation
         this._startAutoScroll();
     }
 
     /**
-     * Handle blur
+     * Handle blur — remove visual focus state AND pause the auto-scroll timer.
+     *
+     * Stopping the timer here means the carousel does NOT advance while the
+     * user is navigating the sidebar or other rows. The dot progress bar
+     * freezes in place. When focus returns, _handleFocus restarts everything
+     * fresh from index 0 of the timer so the user always sees a full 8-second
+     * cycle from whatever slide is currently shown.
      * @private
      */
     _handleBlur() {
         this._isFocused = false;
         this._container.classList.remove('focused');
-        this._startAutoScroll();
+        // Pause the timer — don't advance slides while user is elsewhere
+        this._stopAutoScroll();
     }
 }
 

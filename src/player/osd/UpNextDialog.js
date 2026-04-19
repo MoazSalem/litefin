@@ -25,6 +25,7 @@
 
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
+import { shouldShowScore } from '../../utils/visibility.js';
 
 /**
  * UpNextDialog
@@ -345,7 +346,7 @@ export default class UpNextDialog extends BaseMenu {
         const ratingEl = this.$el.querySelector('.upnext-rating');
         if (ratingEl) {
             const score = item.CommunityRating;
-            if (score != null && !isNaN(score)) {
+            if (score != null && !isNaN(score) && shouldShowScore(item)) {
                 // Round to one decimal place (e.g. 8.0, 7.4)
                 ratingEl.textContent = `\u2605 ${parseFloat(score).toFixed(1)}`;
                 ratingEl.style.display = '';

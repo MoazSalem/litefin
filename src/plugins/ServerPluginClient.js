@@ -49,6 +49,13 @@ const KNOWN_PROBES = {
         // We detect by checking the full plugin list even for non-admin
         // (this is a fallback — we search for the name in the error body)
         dataEndpoint: (itemId) => `/Items/${itemId}/ExternalIdInfos`
+    },
+
+    // Local Intros (Pre-rolls): https://github.com/jellyfin/jellyfin-plugin-intros
+    'local-intros': {
+        // Core endpoint — exists if intros are supported (virtually always)
+        probeEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`,
+        dataEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`
     }
 };
 
@@ -241,7 +248,8 @@ class ServerPluginClient {
         // Map from our logical IDs to the name strings Jellyfin uses for these plugins
         const NAME_MAP = {
             'intro-skipper': ['intro skipper', 'introskipper'],
-            'open-subtitles': ['open subtitles', 'opensubtitles']
+            'open-subtitles': ['open subtitles', 'opensubtitles'],
+            'local-intros': ['local intros', 'localintros']
         };
 
         const namesToCheck = NAME_MAP[pluginId] || [pluginId.toLowerCase()];
