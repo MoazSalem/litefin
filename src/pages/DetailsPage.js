@@ -31,6 +31,7 @@ import { logger } from '../utils/Logger.js';
 import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
+import { shouldShowScore } from '../utils/visibility.js';
 
 const log = logger.create('DetailsPage');
 
@@ -1257,8 +1258,8 @@ class DetailsPage extends Page {
         }
 
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating ? `★ ${item.CommunityRating.toFixed(1)}` : '';
-        const criticRating = item.CriticRating ? `🍅 ${item.CriticRating}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const criticRating = item.CriticRating && shouldShowScore(item) ? `🍅 ${item.CriticRating}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="meta-item">${year}</span>`;

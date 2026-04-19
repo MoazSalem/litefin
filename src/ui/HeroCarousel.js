@@ -15,6 +15,7 @@ import { logger } from '../utils/Logger.js';
 import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
+import { shouldShowScore } from '../utils/visibility.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -105,7 +106,7 @@ class HeroCarousel {
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
         }
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
