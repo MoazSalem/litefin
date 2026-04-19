@@ -81,9 +81,9 @@ export default {
                     if (!i.Name) i.Name = api.t('LocalIntro');
                 });
 
-                // Prepend to queue so they play first.
-                // This resets the queue index to 0.
-                api.playQueue.prepend(introItems);
+                // Inject the intro right at the current active queue position
+                // so the player seamlessly transitions to it, leaving the rest of the queue intact.
+                api.playQueue.injectPreRoll(introItems);
             }
         } catch (err) {
             log.error('Failed to prepare intros:', err);

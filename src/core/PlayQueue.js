@@ -329,21 +329,24 @@ class PlayQueue {
     }
 
     /**
-     * Prepend one or more items to the start of the queue and reset index to 0.
-     * Usually used for pre-roll intros to play immediately.
-     * @param {Object|Object[]} items - Item(s) to prepend
+     * Inject one or more pre-roll items at the CURRENT index.
+     * The old item at the current index (and everything after it) is shifted right.
+     * Since the index is not modified, playback seamlessly transitions to the first injected item.
+     * @param {Object|Object[]} items - Item(s) to inject
      */
-    prepend(items) {
+    injectPreRoll(items) {
         const toInsert = Array.isArray(items) ? items : [items];
         if (toInsert.length === 0) return;
 
-        log.debug('PlayQueue.prepend', { count: toInsert.length });
+        log.debug('PlayQueue.injectPreRoll', { count: toInsert.length, atIndex: this._currentIndex });
 
         toInsert.forEach(_stampPlaylistItemId);
 
-        // Prepend to queue and reset pointer to start
-        this._queue = [...toInsert, ...this._queue];
-        this._currentIndex = 0;
+        // Splice exactly at the current active pointer
+        this._queue.splice(this._currentIndex, 0, ...toInsert);
+
+        // We DO NOT modify this._currentIndex! 
+        // It now naturally points to the first injected item.
 
         eventBus.emit('playqueue:updated', {
             queue: this._queue,

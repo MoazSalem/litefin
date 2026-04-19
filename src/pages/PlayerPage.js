@@ -231,6 +231,13 @@ class PlayerPage extends Page {
             log.debug('Initializing PlayQueue with context:', { contextType, contextId });
             await playQueue.init(this._item, contextType, contextId);
 
+            // Sync the active item to the instance that PlayQueue just minted.
+            // This prevents duplicate-fetch bugs with plugins like Local Intros.
+            const queueItem = playQueue.getCurrentItem();
+            if (queueItem && queueItem.Id === this._item.Id) {
+                this._item = queueItem;
+            }
+
             // Clear context state so it doesn't leak to next playback
             state.set('player:contextType', null);
             state.set('player:contextId', null);
