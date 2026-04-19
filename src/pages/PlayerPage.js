@@ -193,7 +193,7 @@ class PlayerPage extends Page {
 
             // Parallelize font loading and item details loading
             const fontId = SubtitleStyles.getCurrentFontId();
-            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay' })];
+            const fetchTasks = [api.getItem(itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks,MediaSources' })];
             if (fontId) {
                 fetchTasks.push(FontLoader.loadFont(fontId));
             }

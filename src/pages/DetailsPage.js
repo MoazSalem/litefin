@@ -2111,6 +2111,42 @@ class DetailsPage extends Page {
                     target = this._episodes.find((ep) => !ep.UserData?.Played) || this._episodes[0];
                 }
                 itemToPlay = { ...target };
+            } else {
+                try {
+                    const fields = 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters';
+                    if (isShufflePlay) {
+                        const randomEp = await api.getItems({
+                            ParentId: this._item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Episode',
+                            Limit: 1,
+                            SortBy: 'Random',
+                            Fields: fields
+                        });
+                        if (randomEp && randomEp.Items && randomEp.Items.length > 0) {
+                            itemToPlay = randomEp.Items[0];
+                        } else {
+                            return;
+                        }
+                    } else {
+                        const firstEp = await api.getItems({
+                            ParentId: this._item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Episode',
+                            Limit: 1,
+                            SortBy: 'SortName',
+                            Fields: fields
+                        });
+                        if (firstEp && firstEp.Items && firstEp.Items.length > 0) {
+                            itemToPlay = firstEp.Items[0];
+                        } else {
+                            return;
+                        }
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve season fallback playback', e);
+                    return;
+                }
             }
             // Attach context so PlayQueue knows this is a season play
             itemToPlay.contextType = 'season';

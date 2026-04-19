@@ -672,7 +672,7 @@ export class ApiClient {
         // Omit SeasonId to get episodes across all seasons (cross-season navigation)
         return this.get(`/Shows/${seriesId}/Episodes`, {
             UserId: this._userId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters',
             IsVirtualUnaired: false,
             IsMissing: false,
             ...params
