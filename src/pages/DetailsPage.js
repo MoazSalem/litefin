@@ -558,7 +558,7 @@ class DetailsPage extends Page {
         }
 
         // Special Features
-        if (['Movie', 'Series', 'Episode', 'Trailer', 'MusicVideo'].includes(this._item.Type)) {
+        if (['Movie', 'Series', 'Season', 'Episode', 'Trailer', 'MusicVideo'].includes(this._item.Type)) {
             await this._loadSpecialFeatures();
         }
 
@@ -2950,7 +2950,7 @@ class DetailsPage extends Page {
 
         // Fallback Crawler Activation: Force remote trailers flag for standard media
         // if the node proxy is enabled, since the crawler can fetch them dynamically.
-        const isStandardMedia = ['Movie', 'Series'].includes(item.Type);
+        const isStandardMedia = ['Movie', 'Series', 'Season'].includes(item.Type);
         const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
         const isProxyEnabled = mode === 'internal_proxy' && PlayerSettings.get('enableBackgroundService') !== false;
 
