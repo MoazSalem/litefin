@@ -12,6 +12,7 @@
 // ============================================================================
 
 import { storage } from '../../utils/StorageService.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 export const MediaHelper = {
     /**
@@ -54,27 +55,57 @@ export const MediaHelper = {
             // /Videos/{id}/live.m3u8 HLS proxy — exactly what the official web
             // client does.
             // ================================================================
-            const isLoopbackPath = mediaSource.Path &&
+            // Any source that requires opening or has a live stream ID must be proxied by the server
+            const requiresServerProxy = mediaSource.RequiresOpening || mediaSource.LiveStreamId || (mediaSource.Path &&
                 (mediaSource.Path.includes('127.0.0.1') ||
                  mediaSource.Path.includes('localhost') ||
-                 mediaSource.Path.includes('LiveStreamFiles'));
+                 mediaSource.Path.includes('LiveStreamFiles')));
 
-            if (mediaSource.Protocol === 'Http' && isLoopbackPath) {
-                // Route through the server's public HLS proxy endpoint.
-                // The LiveStreamId is critical — without it the server cannot identify
-                // which open live stream to serve HLS segments from. This matches the
-                // exact parameter set used by the official Jellyfin web client.
-                url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
-                url += `?Container=m3u8`;
-                url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
-                if (playSessionId) {
-                    url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+            if (mediaSource.Protocol === 'Http' && requiresServerProxy) {
+                // Tizen AVPlay has severe limitations with HLS: it cannot decode MPEG-2 video
+                // or interlaced H.264 when wrapped in an .m3u8 payload. However, AVPlay's native
+                // MPEG-TS demuxer perfectly handles raw progressive HTTP TS streams.
+                // HDHomeRun broadcasts ATSC 1.0 in MPEG-2. Thus, we bypass the HLS proxy for them.
+                const videoStream = mediaSource.MediaStreams?.find(s => s.Type === 'Video');
+                const isMpeg2 = videoStream && videoStream.Codec && videoStream.Codec.toLowerCase().includes('mpeg2');
+                const isInterlaced = videoStream && videoStream.IsInterlaced;
+
+                // Check global variable platformInfo if it's imported (we must import it!)
+                const useProgressiveTs = platformInfo.isTizen && (isMpeg2 || isInterlaced);
+
+                if (useProgressiveTs) {
+                    const ext = mediaSource.Container ? `.${mediaSource.Container}` : '.ts';
+                    url = `${serverUrl}/Videos/${itemId}/stream${ext}`;
+                    url += `?Static=true`;
+                    url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                    if (playSessionId) {
+                        url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                    }
+                    if (mediaSource.LiveStreamId) {
+                        url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
+                    }
+                    url += `&api_key=${encodeURIComponent(authToken)}`;
+                    if (audioStreamIndex !== undefined && audioStreamIndex !== null) {
+                        url += `&AudioStreamIndex=${audioStreamIndex}`;
+                    }
+                    isHls = false;
+                } else {
+                    // Route through the server's public HLS proxy endpoint.
+                    // The LiveStreamId is critical — without it the server cannot identify
+                    // which open live stream to serve HLS segments from. This matches the
+                    // exact parameter set used by the official Jellyfin web client.
+                    url = `${serverUrl}/Videos/${itemId}/live.m3u8`;
+                    url += `?Container=m3u8`;
+                    url += `&MediaSourceId=${encodeURIComponent(mediaSource.Id)}`;
+                    if (playSessionId) {
+                        url += `&PlaySessionId=${encodeURIComponent(playSessionId)}`;
+                    }
+                    if (mediaSource.LiveStreamId) {
+                        url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
+                    }
+                    url += `&api_key=${encodeURIComponent(authToken)}`;
+                    isHls = true;
                 }
-                if (mediaSource.LiveStreamId) {
-                    url += `&LiveStreamId=${encodeURIComponent(mediaSource.LiveStreamId)}`;
-                }
-                url += `&api_key=${encodeURIComponent(authToken)}`;
-                isHls = true;
 
             // ----------------------------------------------------------------
             // SPECIAL CASE: Remote/external HTTP sources (e.g. publicly-hosted

@@ -1163,7 +1163,7 @@ export class ApiClient {
      * @param {string} liveStreamId - The ID returned by openLiveStream
      */
     async closeLiveStream(liveStreamId) {
-        return this.post('/LiveStreams/Close', { LiveStreamId: liveStreamId });
+        return this.post('/LiveStreams/Close', null, { params: { liveStreamId } });
     }
 
     /**
