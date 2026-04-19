@@ -647,6 +647,33 @@ class PlayerPage extends Page {
      * Start playback of the current item
      */
     async _startPlayback() {
+        // === Plugin System ===
+        // Allow plugins to perform late-stage preparation before playback actually
+        // initializes. This is where Local Intros injects pre-roll videos into the queue.
+        try {
+            // Note: We pass the current _resumePosition so plugins (like Local Intros) 
+            // can decide whether to skip their logic if the user is resuming a session.
+            await pluginManager.prepareItemPlayback(this._item, {
+                resumePosition: this._resumePosition
+            });
+        } catch (err) {
+            log.error('pluginManager.prepareItemPlayback failed:', err);
+        }
+
+        // Re-sync this._item with the PlayQueue's current pointer.
+        // If a plugin (like Local Intros) prepended items, the "main" item is now
+        // at a later index, and the current pointer (0) is the first intro.
+        const queueItem = playQueue.getCurrentItem();
+        if (queueItem && queueItem.Id !== this._item.Id) {
+            log.info('Play queue modified by plugins — switching current item to:', queueItem.Name);
+            this._item = queueItem;
+
+            // If OSD is already up (restarting playback), update its title/metadata
+            if (this._osd) {
+                this._osd.updateItem(this._item);
+            }
+        }
+
         const item = this._item;
         // Get saved stream preferences from MediaSource
         const mediaSource = item.MediaSources?.[0];
@@ -1477,6 +1504,12 @@ class PlayerPage extends Page {
     async _reportPlaybackStart() {
         if (!this._player || !this._item) return;
 
+        // Never report playback start for intros — we don't want them tracked or in Continue Watching
+        if (this._item.isIntro) {
+            log.info('Skipping PlaybackStart report for intro item');
+            return;
+        }
+
         try {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState();
@@ -1712,6 +1745,11 @@ class PlayerPage extends Page {
     async _reportPlaybackProgress(eventName = 'timeupdate', manualPositionTicks = null) {
         if (!this._player || !this._item) return;
 
+        // Never report progress for intros
+        if (this._item.isIntro) {
+            return;
+        }
+
         try {
             const mediaSource = this._player.getCurrentMediaSource();
             const playerState = this._getPlayerState(manualPositionTicks);
@@ -1919,6 +1957,10 @@ class PlayerPage extends Page {
      * @param {boolean} [isSync=true] - Whether to use synchronous XHR
      */
     async _reportPlaybackStopped(capturedMediaSource = null, capturedPosition = null, isSync = true) {
+        if (this._item?.isIntro) {
+            log.info('Skipping PlaybackStopped report for intro item');
+            return;
+        }
         if (!this._item) return;
 
         try {

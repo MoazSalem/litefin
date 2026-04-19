@@ -61,6 +61,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'syncplay',
         load: () => import('./installed/syncplay/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // Local Intros — pre-roll video support
+    // Server dependency: local-intros
+    // -------------------------------------------------------------------------
+    {
+        id: 'local-intros',
+        load: () => import('./installed/local-intros/index.js')
     }
 ];
 
@@ -129,8 +138,29 @@ class PluginManager {
      * Also sets up the OSD widget host for this playback session.
      *
      * @param {Object} item - The Jellyfin media item
-     * @param {Object} player - JellyfinPlayer instance
-     * @param {Object} osd - OSDController instance
+     * @param {Object} playbackContext - Context containing things like resumePosition
+     */
+    async prepareItemPlayback(item, playbackContext = {}) {
+        log.info(`prepareItemPlayback: ${item?.Name || item?.Id}`);
+
+        // Forward to all enabled plugins
+        for (const [id, entry] of this._plugins) {
+            if (!entry.enabled) continue;
+            try {
+                if (typeof entry.plugin.prepareItemPlayback === 'function') {
+                    await entry.plugin.prepareItemPlayback(item, entry.api, playbackContext);
+                }
+            } catch (err) {
+                log.error(`Plugin '${id}' prepareItemPlayback() threw:`, err);
+            }
+        }
+    }
+
+    /**
+     * Notify all plugins that playback has started for a new media item.
+     * @param {Object} item
+     * @param {Object} player
+     * @param {Object} osd
      */
     async notifyPlayerStart(item, player, osd) {
         this._currentItem = item;
@@ -514,17 +544,24 @@ class PluginManager {
         }
 
         // ------------------------------------------------------------------
-        // Check if the user has manually disabled this plugin via Settings.
-        // Storage key: plugin:enabled:<id> — 'false' means user turned it off.
-        // An absent key means the user hasn't changed the default (enabled).
+        // Determine the plugin's enabled state.
+        // Priority:
+        //  1. User preference from Storage (plugin:enabled:<id>)
+        //  2. Plugin's own defaultEnabled property (defaults to true)
         // ------------------------------------------------------------------
-        let userDisabled = false;
+        let enabled = true;
         try {
             const { storage } = await import('../utils/StorageService.js');
             const stored = storage.getItem(`plugin:enabled:${plugin.id}`);
-            if (stored === 'false') {
-                userDisabled = true;
-                log.info(`Plugin '${plugin.id}' is user-disabled (Settings)`);
+
+            if (stored !== null) {
+                // If the user has explicitly set a preference, use it.
+                enabled = stored === 'true';
+                if (!enabled) log.info(`Plugin '${plugin.id}' is user-disabled (Settings)`);
+            } else {
+                // Otherwise, use the plugin's default (defaults to true).
+                enabled = plugin.defaultEnabled !== false;
+                if (!enabled) log.info(`Plugin '${plugin.id}' is disabled by default`);
             }
         } catch (err) {
             log.warn('Could not read plugin preference:', err);
@@ -533,7 +570,6 @@ class PluginManager {
         // Check server dependency availability.
         // We do this at startup so we can warn early — but non-admin users
         // won't have an itemId yet, so the probe may be deferred.
-        let enabled = !userDisabled; // Start from user preference
         let dependencyDeferred = false;
 
         if (plugin.serverDependency && enabled) {

@@ -269,7 +269,88 @@ class PlayQueue {
             this.setShuffleMode(true);
         }
 
-        log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+    log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+    }
+
+    /**
+     * Insert one or more items immediately after the current index.
+     * Useful for pre-roll intros and adding items "up next".
+     * @param {Object|Object[]} items - Item(s) to insert
+     */
+    insertNext(items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        log.debug('PlayQueue.insertNext', { count: toInsert.length, afterIndex: this._currentIndex });
+
+        // Stamp every item with a session-unique PlaylistItemId
+        toInsert.forEach(_stampPlaylistItemId);
+
+        // Splice into the queue starting at the position AFTER current index
+        const insertIndex = this._currentIndex + 1;
+        this._queue.splice(insertIndex, 0, ...toInsert);
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
+    }
+
+    /**
+     * Insert one or more items at a specific index.
+     * If safeIndex <= _currentIndex, the _currentIndex is shifted right.
+     * @param {number} index - Desired index to insert at
+     * @param {Object|Object[]} items - Item(s) to insert
+     */
+    insertAt(index, items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        const safeIndex = Math.max(0, Math.min(index, this._queue.length));
+        log.debug('PlayQueue.insertAt', { count: toInsert.length, atIndex: safeIndex });
+
+        toInsert.forEach(_stampPlaylistItemId);
+
+        this._queue.splice(safeIndex, 0, ...toInsert);
+
+        // If we inserted before the current item, we must shift the index to maintain track continuity
+        if (safeIndex <= this._currentIndex) {
+            this._currentIndex += toInsert.length;
+        }
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
+    }
+
+    /**
+     * Prepend one or more items to the start of the queue and reset index to 0.
+     * Usually used for pre-roll intros to play immediately.
+     * @param {Object|Object[]} items - Item(s) to prepend
+     */
+    prepend(items) {
+        const toInsert = Array.isArray(items) ? items : [items];
+        if (toInsert.length === 0) return;
+
+        log.debug('PlayQueue.prepend', { count: toInsert.length });
+
+        toInsert.forEach(_stampPlaylistItemId);
+
+        // Prepend to queue and reset pointer to start
+        this._queue = [...toInsert, ...this._queue];
+        this._currentIndex = 0;
+
+        eventBus.emit('playqueue:updated', {
+            queue: this._queue,
+            currentIndex: this._currentIndex,
+            repeatMode: this._repeatMode,
+            shuffleMode: this._shuffleMode
+        });
     }
 
     /**

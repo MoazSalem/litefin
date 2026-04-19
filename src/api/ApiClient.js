@@ -637,6 +637,15 @@ export class ApiClient {
     }
 
     /**
+     * Get pre-roll intro items for a given media item.
+     * @param {string} itemId - The target media item ID
+     * @returns {Promise<Object>} Object containing Items array and TotalRecordCount
+     */
+    async getIntros(itemId) {
+        return this.get(`/Users/${this._userId}/Items/${itemId}/Intros`);
+    }
+
+    /**
      * Get local trailers for an item.
      *
      * Jellyfin stores locally-managed trailers as full BaseItemDto objects,

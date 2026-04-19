@@ -1,0 +1,108 @@
+/**
+ * src/plugins/installed/local-intros/local-intros.css
+ * ============================================================================
+ * Styles for the Local Intros plugin OSD components.
+ * Follows a premium, Apple-inspired TV design language.
+ * ============================================================================
+ */
+
+/**
+ * src/plugins/installed/local-intros/local-intros.css
+ * ============================================================================
+ * Styles for the Local Intros plugin OSD components.
+ * Matches the official Skip Intro (Intro Skipper) plugin design exactly.
+ * ============================================================================
+ */
+
+.plugin-widget.local-intros-widget {
+    position: absolute;
+    bottom: 28%;
+    left: 6%;
+    z-index: 10;
+    width: fit-content;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(12px);
+    transition:
+        opacity 0.25s cubic-bezier(0.34, 1.56, 0.64, 1),
+        transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.plugin-widget.local-intros-widget.visible {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translateY(0);
+}
+
+/* Visibility Sync with OSD */
+.player-osd.osd-is-hidden .plugin-widget.local-intros-widget.sync-osd.visible {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateY(12px);
+}
+
+.local-intros-btn {
+    display: flex;
+    align-items: center;
+    width: auto !important;
+    height: auto !important;
+    min-width: unset !important;
+    padding: 0.7em 1.8em !important;
+    border-radius: var(--jf-border-radius-lg);
+    background: var(--jf-primary-btn-color, #ffffff);
+    color: var(--jf-accent);
+    border: 2px solid var(--jf-primary-btn-color) !important;
+    font-size: 1.3em;
+    font-weight: 600;
+    line-height: 1;
+    letter-spacing: 0.02em;
+    white-space: nowrap;
+    cursor: default;
+    transition:
+        background 0.18s ease,
+        border-color 0.18s ease,
+        transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.local-intros-btn.focused,
+.local-intros-btn:focus {
+    background: var(--osd-accent-color) !important;
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    outline: none !important;
+    color: var(--jf-primary-btn-color) !important;
+}
+
+.local-intros-label {
+    display: inline-block;
+}
+
+.local-intros-arrow {
+    display: inline-block;
+    font-size: 0.8em;
+    margin-left: 0.8em !important;
+    flex-shrink: 0;
+    transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.local-intros-btn.focused .local-intros-arrow,
+.local-intros-btn:focus .local-intros-arrow {
+    transform: translateX(4px);
+}
+
+/* RTL Support */
+[dir="rtl"] .plugin-widget.local-intros-widget {
+    left: auto;
+    right: 6%;
+}
+
+[dir="rtl"] .local-intros-arrow {
+    margin-left: 0 !important;
+    margin-right: 0.8em !important;
+}
+
+[dir="rtl"] .local-intros-btn.focused .local-intros-arrow,
+[dir="rtl"] .local-intros-btn:focus .local-intros-arrow {
+    transform: translateX(-4px);
+}
+
+

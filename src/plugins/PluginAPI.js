@@ -23,6 +23,8 @@ import { eventBus } from '../core/EventBus.js';
 import { storage } from '../utils/StorageService.js';
 import { i18n } from '../utils/i18n.js';
 import { serverPluginClient } from './ServerPluginClient.js';
+import { playQueue } from '../core/PlayQueue.js';
+import { api as jellyfinApi } from '../api/ApiClient.js';
 
 // ============================================================================
 // PluginAPI Class
@@ -57,6 +59,46 @@ class PluginAPI {
 
         // Expose the server plugin client directly (it's already a controlled interface)
         this.serverPlugins = serverPluginClient;
+
+        // Expose the play queue for sequence manipulation (e.g., intros)
+        this.playQueue = playQueue;
+    }
+
+    /**
+     * Trigger the player to skip to the next item in the queue.
+     */
+    playNext() {
+        eventBus.emit('remote:next');
+    }
+
+    /**
+     * Trigger the player to return to the previous item in the queue.
+     */
+    playPrevious() {
+        eventBus.emit('remote:previous');
+    }
+
+    // ========================================================================
+    // Jellyfin API Access
+    // ========================================================================
+
+    /**
+     * Get pre-roll intro items for a given media item.
+     * @param {string} itemId - The target media item ID
+     * @returns {Promise<Object>} Object containing Items array and TotalRecordCount
+     */
+    async getIntros(itemId) {
+        return jellyfinApi.getIntros(itemId);
+    }
+
+    /**
+     * Get a specific media item.
+     * @param {string} itemId - The item ID
+     * @param {Object} [params] - Optional query parameters
+     * @returns {Promise<Object>}
+     */
+    async getItem(itemId, params = {}) {
+        return jellyfinApi.getItem(itemId, params);
     }
 
     // ========================================================================
