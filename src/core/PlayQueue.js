@@ -459,7 +459,7 @@ class PlayQueue {
         // correctly across season boundaries.
         const response = await api.getEpisodes(currentItem.SeriesId, {
             Limit: 500, // large enough for any series
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
         });
 
         log.info(
@@ -495,7 +495,8 @@ class PlayQueue {
                 IncludeItemTypes: 'Movie',
                 SortBy: 'SortName',
                 SortOrder: 'Ascending',
-                Limit: 100
+                Limit: 100,
+                Fields: 'Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -503,7 +504,8 @@ class PlayQueue {
                 IncludeItemTypes: 'Episode',
                 SortBy: 'SortName',
                 SortOrder: 'Ascending',
-                Limit: 100
+                Limit: 100,
+                Fields: 'Trickplay'
             }),
             api.getItems({
                 ParentId: parentId,
@@ -540,7 +542,7 @@ class PlayQueue {
         // Fetch only episodes for this specific season
         const response = await api.getEpisodes(currentItem.SeriesId, {
             SeasonId: seasonId,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources'
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,Chapters,MediaSources,Trickplay'
         });
 
         const episodes = response.Items || [];
