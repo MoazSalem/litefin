@@ -450,6 +450,8 @@
     "HeroCarouselTextTitleDescription": "Prefer text titles over logos in the hero carousel.",
     "HeroCarouselZoom": "Enable Background Motion",
     "HeroCarouselZoomDescription": "Enable the slow background motion effect on the hero carousel backdrops.",
+    "HeroCarouselIndicatorAnimation": "Indicator Animation",
+    "HeroCarouselIndicatorAnimationDescription": "Enable the progress bar animation for the carousel dots.",
     "HeroImageQuality": "Hero Background Quality",
     "HeroImageQualityDescription": "Set the image quality specifically for hero backgrounds. Lower quality can improve performance.",
     "HeroStyle": "Hero Style",

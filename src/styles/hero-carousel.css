@@ -271,9 +271,9 @@
     border-radius: 4px;
     background: rgba(255, 255, 255, 0.2);
     margin-right: 12px;
-    /* Only transition width/background — both are cheap GPU ops */
-    transition: width 0.4s cubic-bezier(0.4, 0, 0.2, 1),
-                background 0.3s ease;
+    /* width + background are cheap GPU ops — short duration for responsiveness */
+    transition: width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+                background 0.2s ease;
     overflow: hidden;
 }
 
@@ -335,6 +335,14 @@
     opacity: 0.15;
 }
 
+/* 
+ * Remove the focus glow in banner mode — the border ring is enough. 
+ * We keep it for immersive mode where there is no border.
+ */
+.hero-carousel-container.banner::after {
+    display: none !important;
+}
+
 /* ============================================================================
    Banner mode
    ============================================================================ */
@@ -343,45 +351,24 @@
     margin: 90px 75px 30px 75px;
     border-radius: var(--jf-border-radius-lg);
     background: #000;
-    /*
-     * IMPORTANT: Use border alone for the unfocused state.
-     * Do NOT animate margin — it causes full page layout reflow each frame.
-     * The focus "pop" is achieved via transform:scale on the inner .hero-carousel
-     * instead of the outer container, keeping layout stable.
-     */
     border: 4px solid transparent;
     background-clip: padding-box;
-    transition: border-color 0.4s ease;
+    /* Faster border transition — 0.2s is plenty for TV focus ring */
+    transition: border-color 0.2s ease;
     overflow: hidden !important;
-    /*
-     * REMOVED: -webkit-mask-image: -webkit-radial-gradient(white, black)
-     * This WebKit "hack" was the primary cause of sidebar open lag and focus
-     * animation jank. It forces software compositing on every child element,
-     * serialising ALL GPU animations through the CPU.
-     * overflow:hidden + translateZ(0) on children achieves the same clipping
-     * without the compositing cost.
-     */
 }
 
-/* Inner carousel handles the focus zoom — NOT the outer container */
+/* Inner carousel — no scale on focus, border ring on outer container is sufficient */
 .hero-carousel-container.banner .hero-carousel {
     border-radius: calc(var(--jf-border-radius-lg) - 4px);
     height: 60vh;
     overflow: hidden;
-    /*
-     * The focus scale happens here on the inner element so the outer
-     * container's layout (margin, border-radius clipping) stays completely
-     * stable. This prevents a reflow cascade when the sidebar opens.
-     */
-    transition: transform 0.35s cubic-bezier(0.2, 1, 0.3, 1);
-    transform: scale(1) translateZ(0);
-    will-change: transform;
+    /* Static transform to promote to its own GPU layer without causing
+       a compositing merge whenever the outer container's border changes */
+    transform: translateZ(0);
 }
 
-.hero-carousel-container.banner.focused .hero-carousel,
-.hero-carousel-container.banner:focus .hero-carousel {
-    transform: scale(1.025) translateZ(0);
-}
+/* Remove the two lines that scaled the inner carousel on focus — now dead code */
 
 /* Round children explicitly for legacy WebKit (overflow:hidden alone isn't
    enough on older Tizen versions — but avoid mask-image!) */
@@ -504,4 +491,15 @@
 .hero-dot.active .hero-dot-progress {
     -webkit-animation: heroProgress 8s linear;
     animation: heroProgress 8s linear;
+}
+
+/* 
+ * Disabled Indicator Animation
+ * When the setting is off, the progress bar is simply shown at 100% width
+ * instantly for the active slide.
+ */
+.hero-carousel-container.no-indicator-animation .hero-dot.active .hero-dot-progress {
+    width: 100%;
+    -webkit-animation: none !important;
+    animation: none !important;
 }
