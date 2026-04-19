@@ -49,7 +49,8 @@ const PHOTO_FIELDS = [
     'ExposureTime',
     'FocalLength',
     'Aperture',
-    'Altitude'
+    'Altitude',
+    'ImageTags'
 ].join(',');
 
 class SlideshowPage extends Page {
@@ -383,7 +384,8 @@ class SlideshowPage extends Page {
                taking 5-10 seconds per image and destroying responsiveness! */
             maxWidth: 1920,
             maxHeight: 1080,
-            quality: 90
+            quality: 90,
+            tag: photo.ImageTags?.Primary
         });
 
         /* Reference to the two stage layers */
@@ -486,7 +488,12 @@ class SlideshowPage extends Page {
         /* Previous photo */
         const prevPhoto = this._photos[index - 1];
         if (prevPhoto) {
-            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', { maxWidth: 1920, maxHeight: 1080, quality: 90 });
+            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', { 
+                maxWidth: 1920, 
+                maxHeight: 1080, 
+                quality: 90, 
+                tag: prevPhoto.ImageTags?.Primary 
+            });
         } else {
             this._preloadSlots.prev.src = '';
         }
@@ -494,7 +501,12 @@ class SlideshowPage extends Page {
         /* Next photo */
         const nextPhoto = this._photos[index + 1];
         if (nextPhoto) {
-            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', { maxWidth: 1920, maxHeight: 1080, quality: 90 });
+            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', { 
+                maxWidth: 1920, 
+                maxHeight: 1080, 
+                quality: 90, 
+                tag: nextPhoto.ImageTags?.Primary 
+            });
         } else {
             this._preloadSlots.next.src = '';
         }
