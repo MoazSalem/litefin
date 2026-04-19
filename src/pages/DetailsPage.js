@@ -180,6 +180,12 @@ class DetailsPage extends Page {
                         <div class="people-row row-items" id="people-row"></div>
                     </section>
 
+                    <!-- Special Features -->
+                    <section class="details-special-features media-row hidden" id="special-features-section">
+                        <h2 class="row-title" data-i18n="SpecialFeatures">Special Features</h2>
+                        <div class="special-features-row row-items" id="special-features-row"></div>
+                    </section>
+
                     <!-- Songs (for albums) -->
                     <section class="details-songs media-row hidden" id="songs-section">
                         <h2 class="row-title songs-title" data-i18n="Songs">Songs</h2>
@@ -551,6 +557,11 @@ class DetailsPage extends Page {
             this._renderPeople();
         }
 
+        // Special Features
+        if (['Movie', 'Series', 'Episode', 'Trailer', 'MusicVideo'].includes(this._item.Type)) {
+            await this._loadSpecialFeatures();
+        }
+
         // Load Artists (Music/Albums)
         await this._loadArtists();
 
@@ -708,6 +719,7 @@ class DetailsPage extends Page {
             'details-songs',
             'more-from-season-section',
             'details-people',
+            'details-special-features',
             'artists-section',
             'guest-stars-section',
             'details-similar'
@@ -1725,6 +1737,34 @@ class DetailsPage extends Page {
         });
     }
 
+    async _loadSpecialFeatures() {
+        try {
+            const features = await api.getSpecialFeatures(this._itemId);
+            this._specialFeatures = features || [];
+
+            if (this._specialFeatures.length > 0) {
+                this._renderSpecialFeatures();
+            }
+        } catch (error) {
+            log.warn('Failed to load special features', error);
+            const section = this.$('#special-features-section');
+            if (section) section.classList.add('hidden');
+        }
+    }
+
+    _renderSpecialFeatures() {
+        if (!this._specialFeatures || this._specialFeatures.length === 0) return;
+
+        this._renderVirtualRow({
+            sectionId: 'special-features-section',
+            listId: 'special-features-row',
+            items: this._specialFeatures,
+            isLandscape: true,
+            renderCard: (item) => this._renderMediaCard(item, true, 'thumb'),
+            focusSectionName: 'details-special-features'
+        });
+    }
+
     _checkOverviewTruncation() {
         const overviewEl = this.$('.overview-text');
         const seeMoreBtn = this.$('.see-more-btn');
@@ -1814,6 +1854,11 @@ class DetailsPage extends Page {
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
+                name: 'details-special-features',
+                elementId: '#special-features-row',
+                isVisible: () => isNotHidden('#special-features-section')
+            },
+            {
                 name: 'artists-section',
                 elementId: '#artists-row',
                 isVisible: () => isNotHidden('#artists-section')
@@ -1859,6 +1904,11 @@ class DetailsPage extends Page {
                 isVisible: () => isNotHidden('#artists-section')
             },
             { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
+            {
+                name: 'details-special-features',
+                elementId: '#special-features-row',
+                isVisible: () => isNotHidden('#special-features-section')
+            },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
