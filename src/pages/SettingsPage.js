@@ -625,7 +625,7 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="PreferEpisodeImages">${i18n.t('PreferEpisodeImages') || 'Prefer Episode Images'}</span>
-                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || "Use episode thumbnails instead of series images for Next Up and Continue Watching rows."}</span>
+                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || 'Use episode thumbnails instead of series images for Next Up and Continue Watching rows.'}</span>
                     </div>
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:preferEpisodeImagesLocal') === 'true' ? 'active' : ''}" 
@@ -824,6 +824,49 @@ class SettingsPage extends Page {
                                  id="toggle-indicator-animation" 
                                  tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-interval-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselInterval">${i18n.t('HeroCarouselInterval') || 'Carousel Switch Timer'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIntervalDescription">${i18n.t('HeroCarouselIntervalDescription') || 'Customize how long each hero slide stays on screen before switching.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-interval-select',
+                            [
+                                { value: '2000', label: i18n.t('Seconds', [2]) || '2 seconds' },
+                                { value: '4000', label: i18n.t('Seconds', [4]) || '4 seconds' },
+                                { value: '5000', label: i18n.t('Seconds', [5]) || '5 seconds' },
+                                { value: '8000', label: i18n.t('Seconds', [8]) || '8 seconds' },
+                                { value: '10000', label: i18n.t('Seconds', [10]) || '10 seconds' },
+                                { value: '15000', label: i18n.t('Seconds', [15]) || '15 seconds' },
+                                { value: '20000', label: i18n.t('Seconds', [20]) || '20 seconds' },
+                                { value: '25000', label: i18n.t('Seconds', [25]) || '25 seconds' },
+                                { value: '30000', label: i18n.t('Seconds', [30]) || '30 seconds' },
+                                { value: '40000', label: i18n.t('Seconds', [40]) || '40 seconds' },
+                                { value: '60000', label: i18n.t('Seconds', [60]) || '60 seconds' }
+                            ],
+                            storage.getItem('pref:heroCarouselInterval') || '8000'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-count-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselCount">${i18n.t('HeroCarouselCount') || 'Carousel Item Count'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselCountDescription">${i18n.t('HeroCarouselCountDescription') || 'Choose how many items to load in the hero carousel (1-10).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-count-select',
+                            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30].map((v) => ({
+                                value: v.toString(),
+                                label: v.toString()
+                            })),
+                            storage.getItem('pref:heroCarouselCount') || '5'
+                        )}
                     </div>
                 </div>
                 <div class="setting-item">
@@ -1229,9 +1272,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-intro-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionIntro') || 'AskToSkip'
                         )}
@@ -1247,9 +1290,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-outro-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionOutro') || 'AskToSkip'
                         )}
@@ -1265,9 +1308,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-recap-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionRecap') || 'None'
                         )}
@@ -1283,9 +1326,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-preview-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionPreview') || 'None'
                         )}
@@ -2551,6 +2594,8 @@ class SettingsPage extends Page {
                 const zoomItem = this.$('#hero-carousel-zoom-item');
                 const heroQualityItem = this.$('#hero-image-quality-item');
                 const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
+                const intervalItem = this.$('#hero-carousel-interval-item');
+                const countItem = this.$('#hero-carousel-count-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
@@ -2558,6 +2603,8 @@ class SettingsPage extends Page {
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
                 if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
+                if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
+                if (countItem) countItem.style.display = newValue ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -3287,9 +3334,9 @@ class SettingsPage extends Page {
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
-            'segment-action-intro-select':   { type: 'player', key: 'skipActionIntro' },
-            'segment-action-outro-select':   { type: 'player', key: 'skipActionOutro' },
-            'segment-action-recap-select':   { type: 'player', key: 'skipActionRecap' },
+            'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
+            'segment-action-outro-select': { type: 'player', key: 'skipActionOutro' },
+            'segment-action-recap-select': { type: 'player', key: 'skipActionRecap' },
             'segment-action-preview-select': { type: 'player', key: 'skipActionPreview' },
 
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
@@ -3298,6 +3345,8 @@ class SettingsPage extends Page {
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
+            'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
+            'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
@@ -3988,7 +4037,9 @@ class SettingsPage extends Page {
                     .map((item, index) => {
                         const isLocked = item.locked;
                         const isFirst = index === 0 || (index > 0 && layoutVars[index - 1].locked);
-                        const isLast = index === layoutVars.length - 1 || (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
+                        const isLast =
+                            index === layoutVars.length - 1 ||
+                            (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
 
                         return `
                         <div class="setting-item layout-row ${item.hidden ? 'layout-row-hidden' : ''}" data-id="${item.id}" data-index="${index}">

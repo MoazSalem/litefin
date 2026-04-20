@@ -26,7 +26,8 @@ class HeroCarousel {
         this._timer = null;
         this._container = null;
         this._isFocused = false;
-        this._autoScrollInterval = 8000; // 8 seconds
+        const savedInterval = storage.getItem('pref:heroCarouselInterval');
+        this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
         
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
@@ -46,19 +47,25 @@ class HeroCarousel {
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
         const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
         // Apply compact to the container to manage external margins (Banner Mode)
         // Use with-zoom to conditionally apply the focus transform
         // Use no-indicator-animation to disable the progress bar fill
         return `
-            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" tabindex="0">
+            <div id="hero-carousel-container" 
+                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" 
+                 style="--indicator-duration: ${intervalInSeconds}"
+                 tabindex="0">
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
+                    ${this._items.length > 1 ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
+                    ` : ''}
                 </div>
             </div>
         `;

@@ -489,8 +489,8 @@
 }
 
 .hero-dot.active .hero-dot-progress {
-    -webkit-animation: heroProgress 8s linear;
-    animation: heroProgress 8s linear;
+    -webkit-animation: heroProgress var(--indicator-duration, 8s) linear;
+    animation: heroProgress var(--indicator-duration, 8s) linear;
 }
 
 /* 

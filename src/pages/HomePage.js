@@ -1049,10 +1049,13 @@ class HomePage extends Page {
     async _loadHeroCarousel() {
         try {
             log.info('Loading Hero Carousel items...');
+            const heroCount = storage.getItem('pref:heroCarouselCount');
+            const limit = heroCount ? parseInt(heroCount, 10) : 5;
+
             const response = await api.getItems({
                 SortBy: 'Random',
                 Recursive: true,
-                Limit: 5,
+                Limit: limit,
                 Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
