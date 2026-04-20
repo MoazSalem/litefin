@@ -159,15 +159,33 @@ export function getDeviceCapabilities() {
         hevc = info.hevc === true || info.hevc === 'true';
     }
 
-    // HDR10: Use WebOS Adapter's detected hardware value if available.
-    // Otherwise rely strictly on the UHD detection. MSE probing natively fails across WebOS.
+    // HDR10: Mirror the HEVC detection pattern — default to true and only deny if hardware
+    // explicitly reports false. This fixes inconsistent HDR10 playback on WebOS.
     //
-    // IMPORTANT: Every Dolby Vision display also supports HDR10 — DV Profile 7/8 content
-    // carries an HDR10 base layer that acts as the SDR/HDR10 fallback. Some LG WebOS
-    // builds report `hdr10: false` in deviceInfo while still reporting `dolbyVision: true`.
-    // In that case the explicit hdr10Hw:false would wrongly disable HDR10 capability.
-    // We force hdr10 = true whenever dolbyVision is confirmed by hardware info.
-    const hdr10 = (hdr10Hw !== null ? hdr10Hw : uhd) || dolbyVision;
+    // WHY THE OLD FALLBACK WAS BROKEN:
+    //   The previous logic was `(hdr10Hw !== null ? hdr10Hw : uhd)`.
+    //   When the webOS.deviceInfo() async callback hasn't fired yet (common on first
+    //   profile build at app startup), hdr10Hw = null → fell through to the UHD screen
+    //   size check (window.screen.width >= 3840). WebOS has a known bug where the screen
+    //   size can report incorrectly at page load, making uhd=false → hdr10=false.
+    //   Result: 'HDR10' gets omitted from hevcVideoRangeTypes → server reports
+    //   VideoRangeTypeNotSupported → remuxes to HLS/TS → WebOS HLS pipeline doesn't get
+    //   a VIDEO-RANGE hint in the .m3u8 → HDR mode never activates on the display.
+    //   This is why forcing direct play "fixed" it: the file streamed as-is with the
+    //   original container's HDR metadata intact, bypassing the profile condition entirely.
+    //
+    // THE FIX:
+    //   Default hdr10 = true (virtually all LG WebOS 4+ TVs support HDR10).
+    //   Only set false when hardware EXPLICITLY denies it via deviceInfo.
+    //   If deviceInfo hasn't arrived yet (null), we optimistically assume true —
+    //   the worst case is that the server allows direct-play of HDR10 on a non-HDR
+    //   panel, which just plays as SDR-tonemapped. Far better than unnecessary remux.
+    //
+    // DOLBY VISION OVERRIDE:
+    //   Every DV display also supports HDR10 (DV Profile 7/8 has an HDR10 base layer).
+    //   Even if hardware explicitly says hdr10=false, we still force true when dolbyVision
+    //   is confirmed — some LG firmware builds report this incorrectly.
+    const hdr10 = hdr10Hw !== false || dolbyVision;
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
@@ -328,12 +346,10 @@ export function buildJellyfinProfile(options = {}) {
         return _buildMinimalProfile(caps);
     }
 
-    // Cap bitrate for TVs to prevent buffer stalls on high-bitrate remuxes.
-    // 80 Mbps is a safe ceiling for most Smart TV decoders.
     let maxBitrate =
-        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 80000000 : 40000000);
-    if (maxBitrate > 80000000) {
-        maxBitrate = 80000000;
+        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 120000000 : 40000000);
+    if (maxBitrate > 120000000) {
+        maxBitrate = 120000000;
     }
     if (!caps.uhd && maxBitrate > 40000000) {
         maxBitrate = 40000000;
@@ -543,9 +559,7 @@ export function buildJellyfinProfile(options = {}) {
             // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
             // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
             // passes the stream through as-is so we must not override it either.
-            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false
-                                : playbackMode === 'remux'    ? false
-                                : false  // always false for TS on WebOS
+            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false // always false for TS on WebOS
         },
         {
             Container: 'aac',
