@@ -793,6 +793,20 @@ class DetailsPage extends Page {
     }
 
     async _loadCollectionItems() {
+        log.info('Loading collection items for:', this._itemId);
+
+        // Determine sort order
+        // Jellyfin DisplayOrder settings: Default, SortName, PremiereDate
+        // User wants default for collections in Litefin to be PremiereDate (Release Date)
+        let sortBy = 'PremiereDate';
+        if (this._item?.DisplayOrder === 'SortName') {
+            sortBy = 'SortName';
+        } else if (this._item?.DisplayOrder === 'Default') {
+            sortBy = 'DateModified';
+        } else if (this._item?.DisplayOrder === 'PremiereDate') {
+            sortBy = 'PremiereDate';
+        }
+
         try {
             const [movies, shows] = await Promise.all([
                 api.getItems({
@@ -800,14 +814,18 @@ class DetailsPage extends Page {
                     IncludeItemTypes: 'Movie',
                     Recursive: true,
                     Fields: 'PrimaryImageAspectRatio,ProductionYear',
-                    Limit: 50 // Rational limit
+                    SortBy: sortBy,
+                    SortOrder: 'Ascending',
+                    Limit: 100 // Increased limit to capture larger collections
                 }),
                 api.getItems({
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Series',
                     Recursive: true,
                     Fields: 'PrimaryImageAspectRatio,ProductionYear',
-                    Limit: 50
+                    SortBy: sortBy,
+                    SortOrder: 'Ascending',
+                    Limit: 100
                 })
             ]);
 
@@ -2562,6 +2580,10 @@ class DetailsPage extends Page {
             options.push({ id: 'select-version', label: i18n.t('SelectVersion') });
         }
 
+        if (this._item?.Type === 'BoxSet') {
+            options.push({ id: 'display-order', label: i18n.t('LabelDisplayOrder') || 'Display order' });
+        }
+
         if (this._item?.MediaSources?.length > 0) {
             options.push({ id: 'media-info', label: i18n.t('MoreMediaInfo') || 'Media Info' });
         }
@@ -2735,6 +2757,24 @@ class DetailsPage extends Page {
                     this._prevSection = versionPrevSection;
 
                     this._showVersionSelectionMenu();
+                } else if (id === 'display-order') {
+                    // Similar to select-version, we close this menu but keep focus state
+                    const versionPrevFocus = this._prevFocus;
+                    const versionPrevSection = this._prevSection;
+
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+                    this._prevFocus = null;
+                    this._prevSection = null;
+                    this.onBack = oldOnBack;
+
+                    this._prevFocus = versionPrevFocus;
+                    this._prevSection = versionPrevSection;
+
+                    this._showDisplayOrderMenu();
                 } else if (id === 'media-info') {
                     // Close menu but DON'T restore focus yet (MediaInfo will take it)
                     this._isMoreMenuOpen = false;
@@ -3019,9 +3059,162 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Show Display Order selection menu
+     */
+    _showDisplayOrderMenu() {
+        const oldOnBack = this.onBack;
+        const prevFocus = this._prevFocus;
+        const prevSection = this._prevSection;
 
+        let overlay = document.getElementById('details-display-order-menu');
+        if (overlay) overlay.remove();
 
-    // ============================================================================
+        overlay = document.createElement('div');
+        overlay.id = 'details-display-order-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        // Options according to jellyfin-web: Default (DateModified), SortName, PremiereDate
+        const options = [
+            { id: 'Default', label: i18n.t('OptionDateModified') || 'Date Modified' },
+            { id: 'SortName', label: i18n.t('OptionSortName') || 'Sort Name' },
+            { id: 'PremiereDate', label: i18n.t('OptionReleaseDate') || 'Release Date' }
+        ];
+
+        const optionsHtml = options
+            .map((opt) => `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `)
+            .join('');
+
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${i18n.t('LabelDisplayOrder') || 'Display Order'}</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-display-order-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
+                </div>
+            </div>
+        `;
+
+        const optionsSection = 'display-order-options';
+        const actionsSection = 'display-order-actions';
+
+        focusManager.register(optionsSection, overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            leaveDown: actionsSection,
+            enterTo: 'last'
+        });
+
+        focusManager.register(actionsSection, overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: optionsSection
+        });
+
+        focusManager.setActiveSection(optionsSection);
+
+        const closeMenu = () => {
+            overlay.classList.remove('visible');
+            focusManager.unregister(optionsSection);
+            focusManager.unregister(actionsSection);
+            setTimeout(() => overlay.remove(), 300);
+
+            this.onBack = oldOnBack;
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        this.onBack = () => {
+            closeMenu();
+            return true;
+        };
+
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                const value = btn.dataset.id;
+                closeMenu();
+                await this._updateDisplayOrder(value);
+            };
+        });
+
+        overlay.querySelector('#btn-display-order-cancel').onclick = (e) => {
+            e.stopPropagation();
+            closeMenu();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeMenu();
+        };
+    }
+
+    /**
+     * Update the display order via API and refresh content
+     */
+    async _updateDisplayOrder(value) {
+        log.info('Updating display order to:', value);
+
+        try {
+            // Update the local state first so the reload uses it immediately
+            this._item.DisplayOrder = value;
+
+            // Construct a clean metadata object to avoid corruption.
+            // We only send the fields that are intended for metadata updates, 
+            // avoiding large, read-only data like MediaSources and MediaStreams.
+            const updateObj = {
+                Id: this._item.Id,
+                Name: this._item.Name,
+                OriginalTitle: this._item.OriginalTitle,
+                ForcedSortName: this._item.ForcedSortName,
+                DisplayOrder: value,
+                Overview: this._item.Overview,
+                PremiereDate: this._item.PremiereDate,
+                ProductionYear: this._item.ProductionYear,
+                Genres: this._item.Genres || [],
+                Tags: this._item.Tags || [],
+                Studios: (this._item.Studios || []).map(s => ({ Name: s.Name || s })),
+                People: (this._item.People || []).map(p => ({
+                    Name: p.Name,
+                    Id: p.Id,
+                    Role: p.Role,
+                    Type: p.Type,
+                    PrimaryImageTag: p.PrimaryImageTag
+                })),
+                LockData: this._item.LockData || false,
+                LockedFields: this._item.LockedFields || [],
+                ProviderIds: this._item.ProviderIds || {},
+                Taglines: this._item.Taglines || [],
+                DateCreated: this._item.DateCreated,
+                Status: this._item.Status
+            };
+
+            await api.updateItem(updateObj);
+
+            log.info('Display order updated on server');
+            
+            eventBus.emit('notify', {
+                text: i18n.t('Success'),
+                type: 'success'
+            });
+
+            // Reload the collection items to reflect the new order
+            this._loadCollectionItems();
+
+        } catch (error) {
+            log.error('Failed to update display order:', error);
+            eventBus.emit('notify', {
+                text: i18n.t('LabelFailed'),
+                type: 'error'
+            });
+        }
+    }
     // ── Trailer Playback ──────────────────────────────────────────────────────
     // Phase 1: button visibility, selection dialog, local trailer playback.
     // Phase 2: remote trailer via iframe (stub in _showRemoteTrailerPlayer).

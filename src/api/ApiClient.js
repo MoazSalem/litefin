@@ -637,6 +637,16 @@ export class ApiClient {
     }
 
     /**
+     * Update item metadata
+     * @param {Object} item - Item object containing the Id and fields to update
+     * @returns {Promise<any>} Result of the update
+     */
+    async updateItem(item) {
+        // Jellyfin metadata update endpoint is POST /Items/{Id}
+        return this.post(`/Items/${item.Id}`, item);
+    }
+
+    /**
      * Get pre-roll intro items for a given media item.
      * @param {string} itemId - The target media item ID
      * @returns {Promise<Object>} Object containing Items array and TotalRecordCount

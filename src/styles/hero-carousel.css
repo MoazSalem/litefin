@@ -242,11 +242,10 @@
 .hero-mdb-item {
     display: inline-flex;
     align-items: center;
-    margin-right: 8px;
+    margin-right: 16px;
     background: hsla(0, 0%, 100%, .2);
-    padding: 2px 8px 2px 4px;
+    padding: 2px 8px;
     border-radius: 6px;
-    border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
 .hero-mdb-icon {
