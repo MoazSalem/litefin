@@ -1,0 +1,187 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Player Description Modal Styles
+ * ============================================================================
+ * Side-panel overlay for viewing video description during playback.
+ * Matches the aesthetics of Chapters and Queue modals but focuses on
+ * readability for long text.
+ * ============================================================================
+ */
+
+.description-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    overflow: hidden;
+    background: rgba(0, 0, 0, 0.4); /* Slightly lighter backdrop to let video bleed through */
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.description-modal-overlay.visible {
+    opacity: 1;
+    pointer-events: all;
+}
+
+.description-modal {
+    position: absolute;
+    top: 0;
+    right: 0;
+    height: 100%;
+    width: 45vw;
+    min-width: 520px;
+    max-width: 800px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    background: rgba(12, 12, 20, 0.98);
+    background-image: -webkit-linear-gradient(top, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+    background-image: linear-gradient(180deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0) 100%);
+    border-left: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: -20px 0 60px rgba(0, 0, 0, 0.8);
+    -webkit-transform: translate3d(100%, 0, 0);
+    transform: translate3d(100%, 0, 0);
+    -webkit-transition: -webkit-transform 0.45s cubic-bezier(0.34, 1.1, 0.64, 1);
+    transition: transform 0.45s cubic-bezier(0.34, 1.1, 0.64, 1);
+}
+
+.description-modal-overlay.visible .description-modal {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
+.description-modal__content {
+    -webkit-box-flex: 1;
+    -webkit-flex: 1;
+    flex: 1;
+    overflow-y: auto;
+    padding: 60px 50px;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
+}
+
+/* Scrollbar styling */
+.description-modal__content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.description-modal__content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+    border-radius: 3px;
+}
+
+.description-modal__title {
+    font-size: 3.2rem;
+    font-weight: 800;
+    line-height: 1.1;
+    margin: 0 0 12px 0;
+    color: #fff;
+    letter-spacing: -0.02em;
+}
+
+.description-modal__original-title {
+    font-size: 1.6rem;
+    color: rgba(255, 255, 255, 0.5);
+    margin: -4px 0 24px 0;
+    font-weight: 500;
+}
+
+.description-modal__episode-info {
+    color: var(--jf-accent, #00A4DC);
+    font-size: 1.6rem;
+    font-weight: 600;
+    margin-bottom: 20px;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+}
+
+.description-modal__meta-row {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+    margin-bottom: 32px;
+    font-size: 1.3rem;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.description-modal__meta-item {
+    margin-right: 20px;
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+.description-modal__meta-badge {
+    background: rgba(255, 255, 255, 0.12);
+    padding: 4px 10px;
+    border-radius: 8px;
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: #eee;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.description-modal__meta-star {
+    color: #f5c518;
+    font-weight: 700;
+}
+
+.description-modal__meta-tomato {
+    color: #fa320a;
+    font-weight: 700;
+}
+
+.description-modal__tagline {
+    font-size: 1.6rem;
+    font-style: italic;
+    color: rgba(255, 255, 255, 0.7);
+    margin: 0 0 20px 0;
+    font-weight: 300;
+    line-height: 1.4;
+    border-left: 3px solid var(--jf-accent, #00A4DC);
+    padding-left: 20px;
+}
+
+.description-modal__overview {
+    font-size: 1.7rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.85);
+    margin: 0;
+    text-align: justify;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+}
+
+/* Close instruction for TV users */
+.description-modal__footer {
+    padding: 20px 50px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05);
+    font-size: 1.1rem;
+    color: rgba(255, 255, 255, 0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    font-weight: 600;
+}
