@@ -65,6 +65,14 @@ class PluginAPI {
     }
 
     /**
+     * Get the base Jellyfin server URL.
+     * @returns {string}
+     */
+    get serverUrl() {
+        return jellyfinApi.serverUrl;
+    }
+
+    /**
      * Trigger the player to skip to the next item in the queue.
      */
     playNext() {

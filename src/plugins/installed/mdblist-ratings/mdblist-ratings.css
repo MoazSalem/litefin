@@ -1,0 +1,113 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - MDBList Ratings Plugin Styles (Apple HIG inspired)
+ * ============================================================================
+ */
+
+.mdblist-ratings-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px; /* Increased gap for a more premium look */
+    margin-bottom: 24px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.mdblist-ratings-row.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Fallback for gap property in Safari older/Tizen TV WebKit */
+.mdblist-ratings-row > div {
+    margin-right: 20px;
+}
+.mdblist-ratings-row > div:last-child {
+    margin-right: 0;
+}
+
+.mdblist-item {
+    display: flex;
+    align-items: center;
+    color: var(--jf-text-primary, #ffffff);
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.provider-icon {
+    margin-right: 8px; /* gap between icon and text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px; /* standard box for all icons */
+    min-width: 28px;
+}
+
+.provider-icon img {
+    height: 100%;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+.provider-icon .star-emoji {
+    font-size: 28px; /* further boosted for visual weight */
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f6c700;
+}
+
+/* Specific sizing to maintain visual weight parity */
+.icon-imdb img {
+    height: 24px;
+}
+
+.icon-tmdb img {
+    height: 22px;
+}
+
+.icon-letterboxd img {
+    height: 24px; /* boosted to 24px as requested for 'last 2' */
+}
+
+.icon-trakt img {
+    height: 26px;
+}
+
+.icon-rt img, 
+.icon-rt-aud img {
+    height: 28px;
+}
+
+.icon-metacritic img,
+.icon-metacritic-user img {
+    height: 26px;
+}
+
+.icon-metacritic-ms img {
+    height: 32px;
+    margin-top: -2px;
+}
+
+.icon-rogerebert img {
+    height: 30px;
+}
+
+.icon-kinopoisk img {
+    height: 26px;
+}
+
+.icon-mal img, 
+.icon-anilist img {
+    height: 26px;
+}
+
+.mdblist-value {
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+    line-height: 32px; /* align with icon row height */
+}

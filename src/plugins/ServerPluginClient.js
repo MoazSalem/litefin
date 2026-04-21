@@ -56,6 +56,12 @@ const KNOWN_PROBES = {
         // Core endpoint — exists if intros are supported (virtually always)
         probeEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`,
         dataEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`
+    },
+
+    // MDBList Ratings Plugin: https://github.com/jellyfin/jellyfin-plugin-mdblist-ratings
+    'mdblist-ratings': {
+        probeEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`,
+        dataEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`
     }
 };
 
@@ -249,7 +255,8 @@ class ServerPluginClient {
         const NAME_MAP = {
             'intro-skipper': ['intro skipper', 'introskipper'],
             'open-subtitles': ['open subtitles', 'opensubtitles'],
-            'local-intros': ['local intros', 'localintros']
+            'local-intros': ['local intros', 'localintros'],
+            'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings']
         };
 
         const namesToCheck = NAME_MAP[pluginId] || [pluginId.toLowerCase()];

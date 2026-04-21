@@ -70,6 +70,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'local-intros',
         load: () => import('./installed/local-intros/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // MDBList Ratings
+    // Server dependency: mdblist-ratings
+    // -------------------------------------------------------------------------
+    {
+        id: 'mdblist-ratings',
+        load: () => import('./installed/mdblist-ratings/index.js')
     }
 ];
 
