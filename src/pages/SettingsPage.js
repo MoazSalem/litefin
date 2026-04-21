@@ -2952,18 +2952,74 @@ class SettingsPage extends Page {
                 const isCurrentlyEnabled = btn.classList.contains('active');
                 const newEnabled = !isCurrentlyEnabled;
 
-                // Optimistically update the toggle UI immediately for responsiveness
-                btn.classList.toggle('active', newEnabled);
-
-                // Update the inline status badge so the user sees feedback right away
+                // Get the status badge element once for reuse
                 const statusEl = btn.closest('.setting-item')?.querySelector('.plugin-status');
-                if (statusEl) {
-                    statusEl.className = `plugin-status plugin-status--${newEnabled ? 'active' : 'disabled'}`;
-                    statusEl.textContent = i18n.t(newEnabled ? 'Active' : 'Disabled');
+
+                // ── Disabling is always immediate, no server check needed ──────
+                if (!newEnabled) {
+                    btn.classList.remove('active');
+                    if (statusEl) {
+                        statusEl.className = 'plugin-status plugin-status--disabled';
+                        statusEl.textContent = i18n.t('Disabled');
+                    }
+                    await pluginManager.setPluginEnabled(pluginId, false);
+                    return;
                 }
 
-                // Propagate change through the plugin manager (may call destroy/init)
-                await pluginManager.setPluginEnabled(pluginId, newEnabled);
+                // ── Enabling: check server dependency first ───────────────────
+                // Check if this plugin requires a Jellyfin server plugin to function.
+                const entry = pluginManager.getPlugin(pluginId);
+                const hasDependency = !!(entry?.plugin?.serverDependency);
+
+                if (hasDependency) {
+                    // Show a "checking..." interim state so the user knows something is happening
+                    btn.disabled = true;
+                    if (statusEl) {
+                        statusEl.className = 'plugin-status plugin-status--pending';
+                        statusEl.textContent = i18n.t('Checking');
+                    }
+
+                    try {
+                        const depCheck = await pluginManager.checkServerDependency(pluginId);
+
+                        if (!depCheck.available && !depCheck.deferred) {
+                            // ── Server plugin is MISSING ─────────────────────
+                            // Revert UI to disabled state and show an error modal
+                            btn.disabled = false;
+                            btn.classList.remove('active');
+                            if (statusEl) {
+                                statusEl.className = 'plugin-status plugin-status--disabled';
+                                statusEl.textContent = i18n.t('Disabled');
+                            }
+
+                            // Show an informational error dialog using the existing modal overlay
+                            this._showPluginDependencyError(entry.plugin.name || pluginId, depCheck.serverPluginName);
+                            return;
+                        }
+
+                        // ── Dependency found (or deferred) — proceed to enable ─
+                        // If deferred, we allow enabling tentatively (consistent with startup flow).
+                        // The dependency will be re-confirmed at next playback.
+                        if (depCheck.deferred) {
+                            log.warn(`Plugin '${pluginId}' dependency check deferred (non-admin, no itemId) — enabling tentatively`);
+                        }
+
+                    } catch (err) {
+                        // Network or unexpected error — fail open (allow enabling)
+                        log.warn(`Plugin '${pluginId}' dependency check failed with error, enabling anyway:`, err);
+                    }
+
+                    btn.disabled = false;
+                }
+
+                // ── All clear — commit the enable ─────────────────────────────
+                // Optimistically update toggle and status badge
+                btn.classList.add('active');
+                if (statusEl) {
+                    statusEl.className = 'plugin-status plugin-status--active';
+                    statusEl.textContent = i18n.t('Active');
+                }
+                await pluginManager.setPluginEnabled(pluginId, true);
             });
         });
     }
@@ -3208,6 +3264,7 @@ class SettingsPage extends Page {
         // Unregister modal focus
         focusManager.unregister('modal-options');
         focusManager.unregister('modal-actions');
+        focusManager.unregister('modal-error-content');
 
         // Restore Section & Focus
         if (this._prevSection) {
@@ -3219,6 +3276,59 @@ class SettingsPage extends Page {
 
         this._prevFocus = null;
         this._prevSection = null;
+    }
+
+    /**
+     * Show an error modal when a plugin requires a server dependency that isn't met.
+     */
+    _showPluginDependencyError(pluginName, dependencyName) {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Store focus context for restoration
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        const title = i18n.t('MissingServerPlugin') || 'Missing Server Plugin';
+        const message = i18n.t('MissingServerPluginMessage', pluginName, dependencyName) || `'${pluginName}' requires the '${dependencyName}' plugin to be installed and enabled on your Jellyfin server. Please install it via the Jellyfin dashboard and try again.`;
+        const btnCloseText = i18n.t('ButtonClose') || 'Close';
+
+        overlay.innerHTML = `
+            <div class="settings-modal modal-error" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${title}</h2>
+                </div>
+                <div class="modal-content" style="padding: 20px; font-size: 1.1em; color: var(--text-secondary); text-align: center; line-height: 1.5;">
+                    ${message}
+                </div>
+                <div class="modal-actions" style="margin-top: 10px;">
+                    <button class="modal-action-btn" id="btn-modal-error-ok" tabindex="0">${btnCloseText}</button>
+                </div>
+            </div>
+        `;
+
+        // Show Overlay
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        // Bind Events
+        const btnOk = overlay.querySelector('#btn-modal-error-ok');
+        btnOk.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._closeSelectionModal();
+        });
+
+        // Register Focus Section just for the action button
+        this.registerFocusSection('modal-error-content', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first'
+        });
+
+        // Set Focus
+        focusManager.setActiveSection('modal-error-content');
+        setTimeout(() => {
+            focusManager.focusElement(btnOk);
+        }, 50);
     }
 
     /**

@@ -475,6 +475,64 @@ class PluginManager {
         }
     }
 
+    /**
+     * Check whether a plugin's declared server dependency is currently available.
+     * This is designed to be called from the Settings UI when the user tries to
+     * enable a plugin — we want a fresh, reliable answer before committing.
+     *
+     * Handles both admin and non-admin users correctly:
+     *   - Admin:     Uses the cached (or freshly-fetched) installed plugin list.
+     *   - Non-admin: Probes the known endpoint for this plugin directly. The
+     *                mdblist-ratings probe doesn't require an itemId, so it resolves
+     *                immediately. Deferred-only probes (intro-skipper) will return
+     *                { available: false, deferred: true } and we surface that.
+     *
+     * @param {string} pluginId - The plugin ID (must be in BUNDLED_PLUGINS)
+     * @returns {Promise<{ available: boolean, deferred: boolean, serverPluginName: string }>}
+     */
+    async checkServerDependency(pluginId) {
+        const entry = this._plugins.get(pluginId);
+        if (!entry) {
+            log.warn(`checkServerDependency: unknown plugin '${pluginId}'`);
+            return { available: false, deferred: false, serverPluginName: pluginId };
+        }
+
+        const dep = entry.plugin.serverDependency;
+        if (!dep) {
+            // Plugin has no server dependency — it's always available
+            return { available: true, deferred: false, serverPluginName: '' };
+        }
+
+        // Clear any stale deferred placeholder so we get a fresh result
+        const cached = serverPluginClient._availabilityCache.get(dep);
+        if (cached?.deferred) {
+            serverPluginClient._availabilityCache.delete(dep);
+        }
+
+        // Re-probe without an itemId (non-admin users will get deferred if the
+        // probe absolutely requires one, but most probes don't)
+        const result = await serverPluginClient.isPluginAvailable(dep);
+
+        // Try to surface a human-friendly server plugin name from the admin list
+        let serverPluginName = dep;
+        const adminList = await serverPluginClient.getInstalledPlugins();
+        if (adminList) {
+            const match = adminList.find((p) => {
+                const n = (p.Name || p.name || '').toLowerCase();
+                return n.includes(dep.replace(/-/g, ' ')) || n.includes(dep.replace(/-/g, ''));
+            });
+            if (match) serverPluginName = match.Name || match.name || dep;
+        }
+
+        log.info(`Dependency check for '${pluginId}' → '${dep}': available=${result.available}, deferred=${!!result.deferred}`);
+        return {
+            available: result.available,
+            deferred: !!result.deferred,
+            serverPluginName
+        };
+    }
+
+
     // ========================================================================
     // OSD Key Forwarding
     // ========================================================================
