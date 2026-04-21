@@ -106,8 +106,69 @@
     height: 26px;
 }
 
+.icon-tvmaze img {
+    height: 20px; /* Reduced to balance visual weight of the wide banner */
+}
+
 .mdblist-value {
     letter-spacing: 0.3px;
     font-variant-numeric: tabular-nums;
     line-height: 32px; /* align with icon row height */
+}
+
+/* ============================================================================
+   Awards Row Styles
+   ============================================================================ */
+
+.mdblist-awards-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    margin-bottom: 24px;
+    opacity: 0;
+    max-width: 95%;
+    transform: translateY(10px);
+    transition: opacity 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition-delay: 0.2s;
+}
+
+.mdblist-awards-row.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.award-item {
+    display: flex;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.award-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px; 
+}
+
+.award-icon img {
+    height: 40px !important;
+    width: auto !important;
+    max-height: 40px;
+    display: block;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+    opacity: 0.95;
+}
+
+/* Tizen focus handling - ensuring row doesn't steal focus unintentionally */
+.mdblist-ratings-row:focus,
+.mdblist-awards-row:focus {
+    outline: none;
 }
