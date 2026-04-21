@@ -869,6 +869,19 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
+
+                <div class="setting-item" id="hero-carousel-mdb-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselMdbList">${i18n.t('HeroCarouselMdbList') || 'Show MDB Ratings & Awards'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselMdbListDescription">${i18n.t('HeroCarouselMdbListDescription') || 'Display premium ratings (IMDb, RT) and awards directly on the home carousel items.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselMdbList') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-mdb" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
@@ -2596,6 +2609,7 @@ class SettingsPage extends Page {
                 const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
                 const intervalItem = this.$('#hero-carousel-interval-item');
                 const countItem = this.$('#hero-carousel-count-item');
+                const mdbItem = this.$('#hero-carousel-mdb-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
@@ -2605,6 +2619,7 @@ class SettingsPage extends Page {
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
+                if (mdbItem) mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -2656,6 +2671,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselIndicatorAnimation', newValue.toString());
                 heroCarouselIndicatorBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Indicator Animation set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel MDBList
+        const heroCarouselMdbBtn = this.$('#toggle-hero-carousel-mdb');
+        if (heroCarouselMdbBtn) {
+            heroCarouselMdbBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselMdbList') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselMdbList', newValue.toString());
+                heroCarouselMdbBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel MDBList set to: ${newValue}`);
             });
         }
 

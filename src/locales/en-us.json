@@ -454,6 +454,8 @@
     "HeroCarouselIndicatorAnimationDescription": "Enable the progress bar animation for the carousel dots.",
     "HeroCarouselInterval": "Carousel Switch Timer",
     "HeroCarouselIntervalDescription": "Customize how long each hero slide stays on screen before switching.",
+    "HeroCarouselMdbList": "Show MDB Ratings",
+    "HeroCarouselMdbListDescription": "Display premium ratings (IMDb, RT, Trakt, etc.) directly on the home carousel items.",
     "HeroCarouselTextTitle": "Use Text Titles",
     "HeroCarouselTextTitleDescription": "Prefer text titles over logos in the hero carousel.",
     "HeroCarouselZoom": "Enable Background Motion",

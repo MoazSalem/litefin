@@ -21,10 +21,12 @@ export default {
         this.api = api;
         this.log = api.log;
         this._awardsEnabledOnServer = true; // Default to true until checked
-        this.log.info('MDBList Ratings plugin initialized');
+        this.log.info('MDBList Ratings plugin initialization started');
 
         // Check if awards are enabled on the server configuration
-        this._checkAwardsCapability(api);
+        // We await this to ensure capability is resolved before any metadata calls occur
+        await this._checkAwardsCapability(api);
+        this.log.info('MDBList Ratings plugin initialization complete');
     },
 
     /**
@@ -60,6 +62,56 @@ export default {
         }
     },
 
+    /**
+     * Public method to fetch ratings and awards for a specific item.
+     * Used by external components like the Hero Carousel.
+     * 
+     * @param {string} itemId - Jellyfin item ID
+     * @param {string} [imdbId] - Optional IMDb ID if already known
+     * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
+     * @returns {Promise<{ ratings: Array, badges: Array, imdbId: string }>}
+     */
+    async getItemMetadata(itemId, imdbId = null, includeAwards = true) {
+        try {
+            // 1. Try to get IDs and ratings from MDBList cache
+            const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            
+            let finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
+
+            // 2. Fallback: If MDBList plugin doesn't have the item in cache, fetch IMDb ID from Jellyfin
+            if (!finalImdbId) {
+                try {
+                    const itemInfo = await this.api.getItem(itemId);
+                    finalImdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
+                } catch (e) {
+                    this.log.warn('Could not fetch IMDb ID from Jellyfin for metadata request:', e);
+                }
+            }
+
+            // 3. Fetch awards if we have an IMDb ID and requested
+            let awards = null;
+            if (includeAwards && finalImdbId && this._awardsEnabledOnServer !== false) {
+                try {
+                    const awardsData = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/AwardsByImdb?imdbId=${finalImdbId}`);
+                    if (awardsData && awardsData.hasAwards) {
+                        awards = awardsData.badges || [];
+                    }
+                } catch (e) {
+                    this.log.debug(`Awards fetch skipped or failed for ${finalImdbId}`);
+                }
+            }
+
+            return {
+                ratings: (data && data.hasCache) ? data.ratings || [] : [],
+                badges: awards || [],
+                imdbId: finalImdbId
+            };
+        } catch (err) {
+            this.log.warn(`MDBList Plugin metadata fetch failed for ${itemId}:`, err);
+            return { ratings: [], badges: [], imdbId };
+        }
+    },
+
     async onPageLoad(pageId, pageEl, api) {
         if (pageId !== 'details') return;
 
@@ -68,33 +120,22 @@ export default {
         if (!match) return;
 
         const itemId = match[1];
+        
         try {
-            // 1. Try to get IDs and ratings from MDBList cache
-            const data = await api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
+            // Use the new public method to get metadata
+            const metadata = await this.getItemMetadata(itemId);
             
-            let imdbId = data?.ids?.imdb || data?.ids?.Imdb;
-
-            // 2. Fallback: If MDBList plugin doesn't have the item in cache, ask Jellyfin directly for the IMDb ID
-            if (!imdbId) {
-                try {
-                    const itemInfo = await api.getItem(itemId);
-                    imdbId = itemInfo?.ProviderIds?.Imdb || itemInfo?.ProviderIds?.imdb;
-                } catch (e) {
-                    this.log.warn('Could not fetch IMDb ID from Jellyfin primary metadata:', e);
-                }
-            }
-
             const tryRender = () => {
                 const metaRow = pageEl.querySelector('.details-meta-row');
                 if (metaRow) {
-                    // Render Ratings (requires cache)
-                    if (data && data.hasCache && data.ratings && data.ratings.length > 0) {
-                        this._renderRatingsRow(pageEl, data.ratings);
+                    // Render Ratings Row
+                    if (metadata.ratings.length > 0) {
+                        this._renderRatingsRow(pageEl, metadata.ratings);
                     }
 
-                    // Fetch Awards (only requires IMDb ID)
-                    if (imdbId) {
-                        this._fetchAndRenderAwards(pageEl, imdbId);
+                    // Render Awards Row
+                    if (metadata.badges.length > 0) {
+                        this._renderAwardsRow(pageEl, metadata.badges);
                     }
                     return true;
                 }
@@ -111,7 +152,7 @@ export default {
                 this._observer.observe(pageEl, { childList: true, subtree: true });
             }
         } catch (err) {
-            this.log.warn('MDBList Plugin interaction failed:', err);
+            this.log.warn('MDBList PageLoad interaction failed:', err);
         }
     },
 

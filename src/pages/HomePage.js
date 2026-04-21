@@ -43,6 +43,7 @@ import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
 
 const log = logger.create('HomePage');
@@ -1056,7 +1057,7 @@ class HomePage extends Page {
                 SortBy: 'Random',
                 Recursive: true,
                 Limit: limit,
-                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
+                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
                 Filters: 'HasBackdrop'
@@ -1070,7 +1071,26 @@ class HomePage extends Page {
                 return;
             }
 
-            // Initialize the carousel component
+            // 1. Enrich with MDBList Metadata if enabled
+            if (storage.getItem('pref:heroCarouselMdbList') !== 'false' && pluginManager.isEnabled('mdblist-ratings')) {
+                const mdblist = pluginManager.getPlugin('mdblist-ratings');
+                if (mdblist && mdblist.plugin) {
+                    log.info('Enriching hero items with MDBList data...');
+                    try {
+                        await Promise.all(items.map(async (item) => {
+                            // Fetch and attach to the item object
+                            // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
+                            // We pass false for includeAwards to optimize for carousel performance.
+                            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                            item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                        }));
+                    } catch (err) {
+                        log.warn('Enriching hero items failed, continuing with partial data', err);
+                    }
+                }
+            }
+
+            // 2. Initialize the carousel component
             this._hero = new HeroCarousel({ items });
 
             const placeholder = this.$('#home-hero-placeholder');

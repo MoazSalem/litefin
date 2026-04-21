@@ -44,10 +44,6 @@
     background-position: 50% 20%;
 }
 
-.hero-carousel-container.compact .hero-logo-container {
-    height: 80px;
-}
-
 .hero-carousel-container.compact .hero-item-title {
     font-size: 3rem;
 }
@@ -239,6 +235,33 @@
     font-size: 1.1rem;
 }
 
+/* ============================================================================
+   MDBList Ratings & Awards Integration
+   ============================================================================ */
+
+.hero-mdb-item {
+    display: inline-flex;
+    align-items: center;
+    margin-right: 8px;
+    background: hsla(0, 0%, 100%, .2);
+    padding: 2px 8px 2px 4px;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.hero-mdb-icon {
+    height: 18px;
+    width: auto;
+    margin-right: 6px;
+    object-fit: contain;
+}
+
+.hero-mdb-value {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: #fff;
+}
+
 .hero-description {
     font-size: 1.4rem;
     line-height: 1.5;
@@ -387,7 +410,7 @@
 }
 
 .hero-carousel-container.banner.compact .hero-logo-container {
-    height: 60px;
+    height: 80px;
     margin-bottom: 12px;
 }
 
