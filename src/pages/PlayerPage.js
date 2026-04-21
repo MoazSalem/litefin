@@ -682,16 +682,21 @@ class PlayerPage extends Page {
         }
 
         const item = this._item;
-        // Get saved stream preferences from MediaSource
-        const mediaSource = item.MediaSources?.[0];
 
-        // 1. Check for pre-selected tracks from DetailsPage (stored in state)
+        // 1. Check for pre-selected tracks/version from DetailsPage (stored in state)
+        const preSelectedMediaSourceId = state.get('player:initialMediaSourceId');
         const preSelectedAudio = state.get('player:initialAudioIndex');
         const preSelectedSubtitle = state.get('player:initialSubtitleIndex');
 
         // Clear state to prevent persistence to future playbacks
+        state.set('player:initialMediaSourceId', null);
         state.set('player:initialAudioIndex', null);
         state.set('player:initialSubtitleIndex', null);
+
+        // Resolve MediaSource to use
+        const mediaSource = preSelectedMediaSourceId
+            ? item.MediaSources?.find((m) => m.Id === preSelectedMediaSourceId) || item.MediaSources?.[0]
+            : item.MediaSources?.[0];
 
         // 2. Fallback to default from MediaSource
         // Handle case where index might be 0 (falsey)

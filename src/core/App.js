@@ -460,7 +460,7 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', async ({ item, resume, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
+        eventBus.on('player:play', async ({ item, resume, mediaSourceId, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
             let itemToPlay = item;
@@ -519,6 +519,10 @@ class App {
             }
 
             // Store track selection in state for PlayerPage to consume
+            if (mediaSourceId !== undefined) {
+                state.set('player:initialMediaSourceId', mediaSourceId);
+                log.debug(`Setting initial media source ID: ${mediaSourceId}`);
+            }
             if (audioStreamIndex !== undefined) {
                 state.set('player:initialAudioIndex', audioStreamIndex);
                 log.debug(`Setting initial audio stream index: ${audioStreamIndex}`);

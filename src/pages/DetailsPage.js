@@ -32,6 +32,7 @@ import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('DetailsPage');
 
@@ -48,7 +49,10 @@ class DetailsPage extends Page {
 
         this._similar = null;
 
-        // Components
+        // Track/Version selection state
+        this._selectedMediaSourceId = null;
+        this._selectedAudioIndex = undefined;
+        this._selectedSubtitleIndex = undefined;
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
@@ -345,6 +349,23 @@ class DetailsPage extends Page {
             this._item = item;
             log.debug('Item loaded:', item);
 
+            // ── Restore persisted version selection ─────────────────────────────────
+            // We key by itemId so each item independently remembers its last version.
+            // Only restore if the saved ID still exists in the current MediaSources list
+            // (the server may have removed a version since the last visit).
+            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
+            if (savedSourceId && item.MediaSources?.some(m => m.Id === savedSourceId)) {
+                this._selectedMediaSourceId = savedSourceId;
+                log.info('Restored persisted media source:', savedSourceId);
+            } else {
+                // Reset — either first visit or the saved source no longer exists
+                this._selectedMediaSourceId = null;
+            }
+
+            // Reset stream selections on every fresh item load (they are version-specific)
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+
             // ────────────────────────────────────────────────────────────────────────
             // 3. Fetch User and Library Context
             // ────────────────────────────────────────────────────────────────────────
@@ -453,6 +474,33 @@ class DetailsPage extends Page {
             this.showError(i18n.t('FailedToLoadDetails'));
             this.setLoading(false);
         }
+    }
+
+    _showVersionSelectionMenu() {
+        if (!this._item?.MediaSources || this._item.MediaSources.length <= 1) return;
+
+        // Map MediaSources to a format compatible with _renderTrackSelectionMenu
+        const sources = this._item.MediaSources.map(s => ({
+            ...s,
+            Index: s.Id, // We use the ID as the index for selection
+            DisplayTitle: s.Name || i18n.t('Version') || 'Version'
+        }));
+
+        const currentId = this._selectedMediaSourceId || this._item.MediaSources[0].Id;
+
+        this._renderTrackSelectionMenu(i18n.t('SelectVersion'), sources, currentId, (id) => {
+            if (this._selectedMediaSourceId === id) return;
+
+            this._selectedMediaSourceId = id;
+            log.info('Selected Media Source ID:', id);
+
+            // Persist the selection so it survives back-navigation and re-visits
+            storage.setItem(`mediaSource:${this._itemId}`, id);
+
+            // Reset track selections when version changes as they are source-specific
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+        });
     }
 
     _loadImages() {
@@ -2263,6 +2311,7 @@ class DetailsPage extends Page {
         eventBus.emit('player:play', {
             item: itemToPlay,
             resume,
+            mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
             backdropUrl
@@ -2275,10 +2324,11 @@ class DetailsPage extends Page {
     }
 
     _showAudioTrackMenu() {
-        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        if (!mediaSource?.MediaStreams) return;
 
         const key = 'Audio';
-        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
 
         // Find current selection (or default)
         let currentIndex = this._selectedAudioIndex;
@@ -2296,14 +2346,15 @@ class DetailsPage extends Page {
     }
 
     _showSubtitleTrackMenu() {
-        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
 
         let currentIndex = this._selectedSubtitleIndex;
         if (currentIndex === undefined) {
-            currentIndex = this._item.MediaSources[0].DefaultSubtitleStreamIndex; // Can be -1/null
+            currentIndex = mediaSource.DefaultSubtitleStreamIndex; // Can be -1/null
         }
 
         // Add "Off" option
@@ -2349,6 +2400,20 @@ class DetailsPage extends Page {
                         <span class="track-badge">${type}</span>
                         <span class="track-badge">${location}</span>
                     `;
+                }
+
+                // For version selection, add resolution and bitrate metadata
+                if (title === i18n.t('SelectVersion') && track.Id) {
+                    const resolution = track.Height ? `${track.Height}p` : '';
+                    const mbps = track.Bitrate ? (track.Bitrate / 1000000).toFixed(1) : null;
+                    const bitrate = mbps ? `${mbps} Mbps` : '';
+                    
+                    if (resolution || bitrate) {
+                        metadataHtml = `
+                            ${resolution ? `<span class="track-badge">${resolution}</span>` : ''}
+                            ${bitrate ? `<span class="track-badge">${bitrate}</span>` : ''}
+                        `;
+                    }
                 }
 
                 return `
@@ -2449,7 +2514,11 @@ class DetailsPage extends Page {
         overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                const index = parseInt(btn.dataset.index);
+                // data-index may be a numeric stream index OR a MediaSource GUID string.
+                // parseInt on a GUID always returns NaN, so we use the raw string value
+                // and only coerce to a number when it is actually numeric.
+                const rawIndex = btn.dataset.index;
+                const index = /^-?\d+$/.test(rawIndex) ? parseInt(rawIndex, 10) : rawIndex;
                 onSelect(index);
                 this._closeTrackMenu();
             };
@@ -2490,6 +2559,10 @@ class DetailsPage extends Page {
             options.push({ id: 'go-to-series', label: i18n.t('GoToSeries') });
         } else if (this._item?.Type === 'Audio' && this._item.AlbumId) {
             options.push({ id: 'go-to-album', label: i18n.t('GoToAlbum') });
+        }
+
+        if (this._item?.MediaSources?.length > 1) {
+            options.push({ id: 'select-version', label: i18n.t('SelectVersion') });
         }
 
         if (this._item?.MediaSources?.length > 0) {
@@ -2642,6 +2715,29 @@ class DetailsPage extends Page {
                 } else if (id === 'go-to-album') {
                     this._closeMoreMenu();
                     router.navigate(`/details/${this._item.AlbumId}`);
+                } else if (id === 'select-version') {
+                    // Snapshot focus state BEFORE closing the more-menu, because
+                    // _closeMoreMenu() nulls out _prevFocus / _prevSection, which
+                    // _renderTrackSelectionMenu would then capture as null — causing
+                    // focus to be lost when the version menu closes.
+                    const versionPrevFocus = this._prevFocus;
+                    const versionPrevSection = this._prevSection;
+
+                    // Tear down the more-menu without the normal focus-restore path
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+                    this._prevFocus = null;
+                    this._prevSection = null;
+                    this.onBack = oldOnBack;
+
+                    // Re-seed focus state so the version menu restores correctly
+                    this._prevFocus = versionPrevFocus;
+                    this._prevSection = versionPrevSection;
+
+                    this._showVersionSelectionMenu();
                 } else if (id === 'media-info') {
                     // Close menu but DON'T restore focus yet (MediaInfo will take it)
                     this._isMoreMenuOpen = false;

@@ -486,6 +486,11 @@ progress.card-progress::-webkit-progress-value {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--jf-text-primary);
+    /* Allow long version/item names to wrap onto a second line instead of being cut off */
+    white-space: normal;
+    overflow-wrap: break-word;
+    word-break: break-word;
+    line-height: 1.4;
 }
 
 .settings-modal .modal-options {
@@ -503,9 +508,10 @@ progress.card-progress::-webkit-progress-value {
     appearance: none;
     -webkit-appearance: none;
     background: rgba(255, 255, 255, 0.05);
-    padding: 0 30px;
-    height: 80px;
-    /* Explicit height for vertical centering on TV */
+    padding: 15px 30px;
+    min-height: 80px;
+    height: auto;
+    /* Explicit min-height for vertical centering on TV, while allowing text to wrap naturally */
     margin-bottom: 12px;
     border: 3px solid transparent;
     /* Layout stability */
@@ -599,8 +605,13 @@ progress.card-progress::-webkit-progress-value {
     flex: 1;
     min-width: 0;
     overflow: hidden;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
+    white-space: normal;
     text-overflow: ellipsis;
-    white-space: nowrap; /* Default: single line for track selection */
+    /* Allow up to 2 lines for track selection (like long Version names) */
 }
 
 .modal-option-btn .track-badges,
