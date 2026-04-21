@@ -139,8 +139,8 @@ class HeroCarousel {
         if (starRating)
             metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
 
-        // Inject MDBList Metadata if present
-        if (item._mdbMetadata) {
+        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
+        if (item._mdbMetadata && shouldShowScore(item)) {
             metaHtml += this._renderMdbMetadata(item._mdbMetadata);
         }
 

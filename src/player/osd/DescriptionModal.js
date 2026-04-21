@@ -10,6 +10,9 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
 import { shouldShowScore } from '../../utils/visibility.js';
+import { api } from '../../api/index.js';
+import { pluginManager } from '../../plugins/PluginManager.js';
+import { storage } from '../../utils/StorageService.js';
 
 export default class DescriptionModal extends BaseMenu {
 
@@ -101,6 +104,8 @@ export default class DescriptionModal extends BaseMenu {
                         ${metaHtml}
                     </div>
 
+                    <div id="description-mdb-row" class="description-modal__mdb-row"></div>
+
                     ${tagline ? `<p class="description-modal__tagline">${tagline}</p>` : ''}
                     
                     <p class="description-modal__overview">${overview}</p>
@@ -117,6 +122,99 @@ export default class DescriptionModal extends BaseMenu {
         }
 
         this.$el = overlay;
+
+        // Load premium ratings in the background
+        this._loadMdbRatings();
+    }
+
+    /**
+     * Fetch and render MDBList ratings if the plugin is enabled.
+     * @private
+     */
+    async _loadMdbRatings() {
+        const item = this._item;
+        if (!item || !shouldShowScore(item)) return;
+
+        // Check if MDBList integration is enabled in settings (reusing carousel toggle for now)
+        if (storage.getItem('pref:heroCarouselMdbList') === 'false') return;
+
+        // Get plugin
+        const pluginEntry = pluginManager.getPlugin('mdblist-ratings');
+        if (!pluginEntry || !pluginEntry.enabled || !pluginEntry.plugin) return;
+
+        try {
+            // Fetch metadata (ratings only, no awards for compact modal)
+            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+            const data = await pluginEntry.plugin.getItemMetadata(item.Id, imdbId, false);
+
+            if (data && data.ratings && data.ratings.length > 0) {
+                const row = this.$el.querySelector('#description-mdb-row');
+                if (!row) return;
+
+                let html = '';
+                const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
+
+                for (const rating of data.ratings) {
+                    if (rating.value === null || rating.value === undefined) continue;
+
+                    const provider = this._getMdbProviderInfo(rating.source, rating.value);
+                    const formattedValue = provider.format ? provider.format(rating.value) : rating.value;
+
+                    if (provider.assetName) {
+                        const iconUrl = `${assetBase}${provider.assetName}`;
+                        html += `
+                            <div class="description-modal__mdb-item">
+                                <img src="${iconUrl}" class="description-modal__mdb-icon" alt="" />
+                                <span class="description-modal__mdb-value">${formattedValue}</span>
+                            </div>
+                        `;
+                    }
+                }
+
+                if (html) {
+                    row.innerHTML = html;
+                    row.classList.add('visible');
+                }
+            }
+        } catch (err) {
+            console.warn('Failed to load MDB ratings for DescriptionModal:', err);
+        }
+    }
+
+    /**
+     * Helper to get provider info for MDBList ratings (reused from HeroCarousel logic).
+     * @private
+     */
+    _getMdbProviderInfo(source, value) {
+        const s = source ? source.toLowerCase() : '';
+        const score = parseFloat(value);
+
+        if (s === 'imdb') {
+            return { assetName: 'IMDb.png' };
+        }
+        if (s === 'tomatoes') {
+            const assetName = score < 60 ? 'Rotten_Tomatoes_rotten.png' : 'Rotten_Tomatoes.png';
+            return { assetName, format: (v) => `${v}%` };
+        }
+        if (s === 'tomatoesaudience' || s === 'popcorn') {
+            const assetName =
+                score < 60 ? 'Rotten_Tomatoes_negative_audience.png' : 'Rotten_Tomatoes_positive_audience.png';
+            return { assetName, format: (v) => `${v}%` };
+        }
+        if (s === 'metacritic') {
+            return { assetName: 'Metacritic.png' };
+        }
+        if (s === 'trakt') {
+            return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
+        }
+        if (s === 'tmdb') {
+            return { assetName: 'TMDB.png', format: (v) => `${Math.round(v)}%` };
+        }
+        if (s === 'letterboxd') {
+            return { assetName: 'letterboxd.png', format: (v) => parseFloat(v).toFixed(1) };
+        }
+
+        return { assetName: null };
     }
 
     handleKey(key) {

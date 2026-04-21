@@ -8,6 +8,7 @@
  */
 
 import './mdblist-ratings.css';
+import { shouldShowScore } from '../../../utils/visibility.js';
 
 export default {
     id: 'mdblist-ratings',
@@ -128,8 +129,9 @@ export default {
             const tryRender = () => {
                 const metaRow = pageEl.querySelector('.details-meta-row');
                 if (metaRow) {
-                    // Render Ratings Row
-                    if (metadata.ratings.length > 0) {
+                    // Render Ratings Row (Respect Score Visibility / Mystery Mode)
+                    const item = api.getCurrentItem();
+                    if (metadata.ratings.length > 0 && shouldShowScore(item)) {
                         this._renderRatingsRow(pageEl, metadata.ratings);
                     }
 

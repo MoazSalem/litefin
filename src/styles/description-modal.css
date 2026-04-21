@@ -144,6 +144,54 @@
     border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
+.description-modal__mdb-row {
+    display: -webkit-box;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+    margin-top: -8px; /* Slightly closer to standard meta row */
+    margin-bottom: 24px; /* Space before tagline/overview */
+    opacity: 0;
+    -webkit-transition: opacity 0.4s ease;
+    transition: opacity 0.4s ease;
+}
+
+.description-modal__mdb-row.visible {
+    opacity: 1;
+}
+
+.description-modal__mdb-item {
+    display: -webkit-inline-box;
+    display: -webkit-inline-flex;
+    display: inline-flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
+    align-items: center;
+    margin-right: 16px;
+    margin-bottom: 12px; /* Vertical gap when wrapped */
+    background: hsla(0, 0%, 100%, .1);
+    padding: 3px 10px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.description-modal__mdb-icon {
+    height: 20px;
+    width: auto;
+    margin-right: 8px;
+    object-fit: contain;
+}
+
+.description-modal__mdb-value {
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: #fff;
+}
+
 .description-modal__meta-star {
     color: #f5c518;
     font-weight: 700;
