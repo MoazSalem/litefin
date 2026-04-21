@@ -2402,16 +2402,13 @@ class DetailsPage extends Page {
                     `;
                 }
 
-                // For version selection, add resolution and bitrate metadata
+                // For version selection, add resolution metadata
                 if (title === i18n.t('SelectVersion') && track.Id) {
                     const resolution = track.Height ? `${track.Height}p` : '';
-                    const mbps = track.Bitrate ? (track.Bitrate / 1000000).toFixed(1) : null;
-                    const bitrate = mbps ? `${mbps} Mbps` : '';
                     
-                    if (resolution || bitrate) {
+                    if (resolution) {
                         metadataHtml = `
-                            ${resolution ? `<span class="track-badge">${resolution}</span>` : ''}
-                            ${bitrate ? `<span class="track-badge">${bitrate}</span>` : ''}
+                            <span class="track-badge">${resolution}</span>
                         `;
                     }
                 }
