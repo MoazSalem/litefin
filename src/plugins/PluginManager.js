@@ -205,12 +205,11 @@ class PluginManager {
             // (available: false, deferred: true). A genuine available: true result — e.g.
             // confirmed by an admin user before this session or by a previous playback probe —
             // should NOT be thrown away. Once we know the plugin exists, we trust that result.
-            const cached = serverPluginClient._availabilityCache.get(entry.plugin.serverDependency);
             if (cached?.deferred) {
                 serverPluginClient._availabilityCache.delete(entry.plugin.serverDependency);
             }
 
-            const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item.Id);
+            const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item);
 
             // Mark dependency as resolved (won't re-check on every episode)
             entry.dependencyDeferred = false;

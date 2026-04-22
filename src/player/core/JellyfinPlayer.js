@@ -859,7 +859,7 @@ export class JellyfinPlayer extends EventEmitter {
 
             // User Request: When transcoding or remuxing, start playback at 0, 
             // and after it's loaded seek to the resume location if it exists
-            if ((playMethod === 'Transcode' || playMethod === 'DirectStream') && originalStartPositionTicks > 0) {
+            if ((playMethod === 'Transcode' || playMethod === 'DirectStream' || playMethod === 'Remux') && originalStartPositionTicks > 0) {
                 log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
                 effectiveStartPositionTicks = 0;
                 isTranscodeSeek = true;
