@@ -381,7 +381,8 @@ const fontClasses = [
     'font-noto-arabic',
     'font-roboto',
     'font-google',
-    'font-pixelart',
+    'font-silkscreen',
+    'font-space-grotesk',
     'font-default'
 ];
 
@@ -446,8 +447,10 @@ export default {
                 return 'font-google';
             case 'noto-arabic':
                 return 'font-noto-arabic';
-            case 'pixelart':
-                return 'font-pixelart';
+            case 'silkscreen':
+                return 'font-silkscreen';
+            case 'space-grotesk':
+                return 'font-space-grotesk';
             default:
                 return 'font-default';
         }
@@ -475,7 +478,7 @@ export default {
                 return 'Google Sans';
             case 'noto-arabic':
                 return 'Noto Sans Arabic';
-            case 'pixelart':
+            case 'silkscreen':
                 return 'Silkscreen';
             default:
                 return 'TizenSans';

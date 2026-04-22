@@ -104,6 +104,15 @@
     font-display: swap;
 }
 
+/* Space Grotesk - Modern geometric sans-serif */
+@font-face {
+    font-family: 'Space Grotesk';
+    src: url('../assets/fonts/SpaceGrotesk.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -134,7 +143,8 @@
 .font-cursive { font-family: 'Dancing Script', cursive; }
 .font-casual { font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
 .font-smallcaps { font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
-.font-pixelart { font-family: 'Silkscreen', 'Courier New', monospace; }
+.font-silkscreen { font-family: 'Silkscreen', 'Courier New', monospace; }
+.font-space-grotesk { font-family: 'Space Grotesk', sans-serif; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif; }
 
