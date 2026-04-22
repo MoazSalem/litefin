@@ -466,14 +466,19 @@ export class WebOSPlayer {
             const listIndex = audioStreams.findIndex(s => s.Index === options.audioStreamIndex);
             const resolvedIndex = listIndex >= 0 ? listIndex : 0;
 
+            // In Transcode/DirectStream mode the server outputs only the selected audio
+            // track at HLS output position 0. The file-level list index (resolvedIndex)
+            // refers to the source file and doesn't apply to the single-track HLS output.
+            const outputIndex = (options.playMethod && options.playMethod !== 'DirectPlay') ? 0 : resolvedIndex;
+
             if (hls) {
-                if (resolvedIndex < hls.audioTracks.length) {
-                    hls.audioTrack = resolvedIndex;
-                    log.debug('WebOSPlayer: Hls.js audio track set to', resolvedIndex);
+                if (outputIndex < hls.audioTracks.length) {
+                    hls.audioTrack = outputIndex;
+                    log.debug('WebOSPlayer: Hls.js audio track set to', outputIndex);
                 }
             } else {
                 // Native: toggle HTML5 AudioTrack objects
-                this.setAudioStreamIndex(resolvedIndex);
+                this.setAudioStreamIndex(outputIndex);
             }
         }
 
@@ -771,6 +776,14 @@ export class WebOSPlayer {
             audioTracks[i].enabled = (i === listIndex);
         }
         log.info('WebOSPlayer: Native audio track → list index', listIndex);
+
+        // WebOS native media pipeline does not apply audioTracks.enabled changes
+        // mid-playback without a seek. A sub-frame back-seek (≤0.1 s) forces the
+        // hardware decoder to reinitialize with the new track state while staying
+        // in DirectPlay mode (preserving Dolby Vision passthrough).
+        if (video.readyState >= 2 /* HAVE_CURRENT_DATA */ && video.currentTime > 0.1) {
+            video.currentTime = video.currentTime - 0.1;
+        }
     }
 
     /**
