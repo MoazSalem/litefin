@@ -478,21 +478,18 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // Always include EAC3 (Dolby Digital Plus) in the safe-to-transmux audio list.
-    // TrueHD and DTS can silently block the Dolby Vision decode pipeline on WebOS,
-    // so we deliberately omit them here and let the DirectPlay audio profiles handle
-    // pass-through when the container allows it.
-    let transAudioCodecs = 'aac,ac3,eac3';
+    // WebOS native: omit AAC so Jellyfin is forced to transcode DTS/TrueHD → AC3/EAC3.
+    // Jellyfin ignores list order and internally prefers AAC; removing it entirely is the
+    // only way to guarantee AC3 output, which actually plays in MPEG-TS HLS on WebOS.
+    // HTML5 (Hls.js): keep AAC as primary for browser compatibility.
+    let transAudioCodecs = isHtml5 ? 'aac,ac3,eac3' : 'ac3,eac3';
 
-    // Full set of video codecs for transcoding/remuxing.
-    // We do NOT restrict this to HEVC-only when DV is enabled because that would
-    // force a heavyweight HEVC transcode for every H.264 file. Instead, DOVI
-    // routing is handled at the per-profile level (HEVC excluded from TS, present
-    // in fMP4) so the server's rank-based selection picks the right container.
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
-        transAudioCodecs = 'copy';
+        // Video copy for quality, audio transcoded via transAudioCodecs above.
+        // AllowAudioStreamCopy=false (set in _getPlaybackInfo remux case) ensures
+        // the server transcodes audio even when the source codec is in the list.
         transVideoCodecs = 'copy';
     }
 
@@ -799,6 +796,22 @@ export function buildJellyfinProfile(options = {}) {
         Codec: 'flac',
         Conditions: [{ Condition: 'LessThanEqual', Property: 'AudioChannels', Value: '2', IsRequired: false }]
     });
+
+    // Impossible condition (channels never = 0) blocks stream-copy of disabled codecs, forcing AAC transcode.
+    if (!enableDts) {
+        codecProfiles.push({
+            Type: 'VideoAudio',
+            Codec: 'dts,dca,dtshd',
+            Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
+        });
+    }
+    if (!enableTrueHd) {
+        codecProfiles.push({
+            Type: 'VideoAudio',
+            Codec: 'truehd',
+            Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
+        });
+    }
 
     // -------------------------------------------------------------------------
     // Dolby Vision MKV — Force Remux on WebOS < 25

@@ -346,23 +346,18 @@ export class WebOSPlayer {
         // MIME types like 'video/x-matroska' causes the Chromium layer to
         // silently reject the source before the media pipeline sees it.
         video.src = options.url;
-        video.autoplay = true;
 
         video.load();
 
         return new Promise((resolve, reject) => {
-            const onLoadedMetadata = () => {
-                video.removeEventListener('loadedmetadata', onLoadedMetadata);
-                this._applyInitialTracks(options);
-            };
-
             const onCanPlay = () => {
                 video.removeEventListener('canplay', onCanPlay);
                 video.removeEventListener('error', onError);
 
-                if (options.playerStartPositionTicks) {
-                    // Pre-seek logic disabled here; robust resume will handle it
-                }
+                // Apply audio/subtitle tracks at canplay — same timing as _playNativeHls.
+                // audioTracks is not reliably populated at loadedmetadata on WebOS native
+                // player, so doing it here (before play()) ensures the array is ready.
+                this._applyInitialTracks(options);
 
                 video.play()
                     .then(() => {
@@ -374,11 +369,9 @@ export class WebOSPlayer {
 
             const onError = () => {
                 video.removeEventListener('canplay', onCanPlay);
-                video.removeEventListener('loadedmetadata', onLoadedMetadata);
                 reject(video.error || new Error('Direct playback load failed'));
             };
 
-            video.addEventListener('loadedmetadata', onLoadedMetadata);
             video.addEventListener('canplay', onCanPlay);
             video.addEventListener('error', onError);
         });
@@ -466,18 +459,16 @@ export class WebOSPlayer {
             const listIndex = audioStreams.findIndex(s => s.Index === options.audioStreamIndex);
             const resolvedIndex = listIndex >= 0 ? listIndex : 0;
 
-            // In Transcode/DirectStream mode the server outputs only the selected audio
-            // track at HLS output position 0. The file-level list index (resolvedIndex)
-            // refers to the source file and doesn't apply to the single-track HLS output.
-            const outputIndex = (options.playMethod && options.playMethod !== 'DirectPlay') ? 0 : resolvedIndex;
-
             if (hls) {
+                // Single-track = Transcode/DirectStream (server picked one); multi-track = Remux/DirectPlay.
+                const outputIndex = hls.audioTracks.length <= 1 ? 0 : resolvedIndex;
                 if (outputIndex < hls.audioTracks.length) {
                     hls.audioTrack = outputIndex;
                     log.debug('WebOSPlayer: Hls.js audio track set to', outputIndex);
                 }
             } else {
-                // Native: toggle HTML5 AudioTrack objects
+                const nativeTracks = this._videoElement?.audioTracks;
+                const outputIndex = (!nativeTracks || nativeTracks.length <= 1) ? 0 : resolvedIndex;
                 this.setAudioStreamIndex(outputIndex);
             }
         }
