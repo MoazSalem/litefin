@@ -219,7 +219,9 @@ async function createIpk(buildDir, outputDir, finalName) {
     const tizenOnlyFiles = [
         path.join(stagingDir, 'config.xml'),
         path.join(stagingDir, 'author-signature.xml'),
-        path.join(stagingDir, 'signature1.xml')
+        path.join(stagingDir, 'signature1.xml'),
+        path.join(stagingDir, 'tile_1920x1080.png'),
+        path.join(stagingDir, 'icon.png')
     ];
     await del(tizenOnlyFiles.filter(f => existsSync(f)));
 
