@@ -10,6 +10,7 @@
     "disableBackHistoryAPI": true,
     "icon": "icon-80.png",
     "largeIcon": "icon-130.png",
+    "supportGIP": true,
     "bgImage": "assets/splash.png",
     "splashBackground": "assets/splash.png",
     "bgColor": "#0f0a14",

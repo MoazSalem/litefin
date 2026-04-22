@@ -697,7 +697,36 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoBitDepth',
                     Value: enableHDR ? '10' : '8',
                     IsRequired: false
-                }
+                },
+                // ---------------------------------------------------------------
+                // HDR10 codec tag gate — prevents VAAPI from stripping HDR metadata
+                // ---------------------------------------------------------------
+                // PROBLEM (confirmed via server FFmpeg logs):
+                //   When Jellyfin's server decides to re-encode HEVC HDR10 content
+                //   via VAAPI (hevc_vaapi), it uses:
+                //       -profile:v:0 main          ← forces 8-bit output
+                //       -vf "setparams=color_primaries=bt709:color_trc=bt709:..."
+                //   This explicitly converts the stream to SDR bt709. The hardware
+                //   encoder doesn't support Main 10 / HDR reliably in VAAPI, so
+                //   Jellyfin silently downgrades to SDR. WebOS receives an SDR stream
+                //   and naturally shows no HDR signal — by design.
+                //
+                // FIX:
+                //   Require VideoCodecTag = 'hvc1' for HDR HEVC. The hvc1 tag is
+                //   only present when the HEVC stream is COPIED verbatim (remux path).
+                //   When the server would re-encode (transcode path), it produces a
+                //   different / no codec tag, failing this condition. Jellyfin then
+                //   falls back to the copy path — preserving all HDR10 SEI metadata
+                //   (mastering display, MaxCLL/MaxFALL, HDR10+) in the output TS segments.
+                //
+                // NOTE: This only applies when HDR is enabled. SDR content is freely
+                //   re-encodable since there is no HDR metadata to preserve.
+                ...(enableHDR ? [{
+                    Condition: 'EqualsAny',
+                    Property: 'VideoCodecTag',
+                    Value: 'hvc1|dvh1|hev1',
+                    IsRequired: false
+                }] : [])
             ]
         });
 
