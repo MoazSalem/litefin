@@ -212,6 +212,9 @@ const DEFAULTS = {
     // Force all content to transcode (emergency/debug fallback)
     forceTranscode: false,
 
+    // Force all content to direct play (override for testing native decoding)
+    forceDirectPlay: false,
+
     // -------------------------------------------------------------------------
     // fMP4 HLS CONTAINER PREFERENCES
     // -------------------------------------------------------------------------

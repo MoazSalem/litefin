@@ -424,6 +424,7 @@
     "FontWeight": "Font Weight",
     "FontWeightDescription": "Subtitle text thickness",
     "ForceDirectPlay": "Force Direct Play",
+    "ForceDirectPlayDescription": "Forces direct play for all media formats. May cause playback failure if the device does not support the format natively.",
     "ForceFmp4HlsContainer": "Force fMP4 HLS Container",
     "ForceFmp4HlsContainerDescription": "⚠ Use fMP4 as the primary container, bypassing hardware version gates. May cause playback failure on older TVs.",
     "ForceRemux": "Force Remux",

@@ -1576,6 +1576,20 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ForceDirectPlay">${i18n.t('ForceDirectPlay') || 'Force Direct Play'}</span>
+                        <span class="setting-description" data-i18n="ForceDirectPlayDescription">${i18n.t('ForceDirectPlayDescription') || 'Forces direct play for all media formats. May cause playback failure if the device does not support the format natively.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('forceDirectPlay') ? 'active' : ''}" 
+                                id="toggle-force-direct-play" 
+                                data-setting="forceDirectPlay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -2882,6 +2896,7 @@ class SettingsPage extends Page {
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
             'toggle-force-transcode',
+            'toggle-force-direct-play',
             'toggle-background-service',
             // Interlaced content fallback — auto-switch to HTML5 when AVPlay
             // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile

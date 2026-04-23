@@ -1896,8 +1896,11 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Strict Playback Mode Enforcement
         const forceTranscodeSetting = PlayerSettings.get('forceTranscode');
-        const currentMode = forceTranscodeSetting ? 'transcode' : this._playbackMode;
-
+        const forceDirectPlaySetting = PlayerSettings.get('forceDirectPlay');
+        
+        let currentMode = this._playbackMode;
+        if (forceTranscodeSetting) currentMode = 'transcode';
+        else if (forceDirectPlaySetting) currentMode = 'directPlay';
         switch (currentMode) {
             case 'directPlay':
                 requestBody.EnableDirectPlay = true;
