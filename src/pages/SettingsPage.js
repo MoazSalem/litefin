@@ -344,7 +344,8 @@ class SettingsPage extends Page {
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
-                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
+                                { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -1700,7 +1701,8 @@ class SettingsPage extends Page {
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
-                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
+                                { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -1973,7 +1975,8 @@ class SettingsPage extends Page {
                                 { value: 'cursive', label: i18n.t('Cursive') },
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
-                                { value: 'pixelart', label: i18n.t('FontPixelart') || 'Pixel Art' }
+                                { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

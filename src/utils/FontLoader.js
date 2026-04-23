@@ -26,7 +26,8 @@ class FontLoader {
             smallcaps: 'Cinzel',
             poppins: 'Poppins',
             'noto-arabic': 'Noto Sans Arabic',
-            pixelart: 'Silkscreen'
+            silkscreen: 'Silkscreen',
+            'space-grotesk': 'Space Grotesk'
         };
     }
 
