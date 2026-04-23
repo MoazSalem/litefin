@@ -457,12 +457,23 @@ export function buildJellyfinProfile(options = {}) {
          * on real WebOS hardware rather than triggering an unnecessary transcode.
          */
         if (!isHtml5) {
+            /*
+             * TS/MPEGTS DirectPlay: enabled for WebOS native backend.
+             *
+             * IMPORTANT — interlaced streams are excluded via a CodecProfile condition
+             * added below. HDHomeRun ATSC channels broadcast interlaced MPEG-2 or H.264.
+             * If we claim DirectPlay for those, Jellyfin opens a 'heavy_' pre-transcode
+             * session, fails with DirectPlayError, and the fallback crashes FFmpeg.
+             * Jellyfin-web applies the same block — the server correctly falls through to
+             * a native 'ContainerNotSupported' HLS transcode which succeeds.
+             */
             directPlayProfiles.push({
                 Container: 'ts,mpegts',
                 Type: 'Video',
                 VideoCodec: tsVideoCodecs.join(','),
                 AudioCodec: audioCodecString
             });
+
             directPlayProfiles.push({
                 Container: 'm2ts',
                 Type: 'Video',
@@ -635,6 +646,34 @@ export function buildJellyfinProfile(options = {}) {
             Codec: 'h264',
             Conditions: [{ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }]
         },
+        // -----------------------------------------------------------------------
+        // Block interlaced TS/MPEGTS from DirectPlay.
+        //
+        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
+        // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
+        // the server evaluates these CodecProfile conditions to determine if
+        // DirectPlay is actually viable. The NotEquals:IsInterlaced:true
+        // condition tells the server "interlaced content is not supported for
+        // direct play in this container".
+        //
+        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
+        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
+        // With this, the server issues ContainerNotSupported immediately and
+        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
+        // what jellyfin-web does and what works correctly.
+        // -----------------------------------------------------------------------
+        {
+            Type: 'Video',
+            Container: 'ts,mpegts',
+            Conditions: [
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: false
+                }
+            ]
+        },
         {
             Type: 'Audio',
             Conditions: [
@@ -648,6 +687,7 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
+
 
     // ---------------------------------------------------------------------------
     // HEVC VideoRangeType allowed list.

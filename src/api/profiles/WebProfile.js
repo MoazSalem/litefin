@@ -376,8 +376,29 @@ export function buildJellyfinProfile(options = {}) {
                     IsRequired: false
                 }
             ]
+        },
+        // -----------------------------------------------------------------------
+        // Block interlaced TS/MPEGTS from DirectPlay.
+        //
+        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
+        // interlaced H.264. This prevents the server from attempting to
+        // DirectPlay these streams if TS were somehow added to the DirectPlay
+        // profiles, forcing it to fall back to a clean HLS transcode.
+        // -----------------------------------------------------------------------
+        {
+            Type: 'Video',
+            Container: 'ts,mpegts',
+            Conditions: [
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: false
+                }
+            ]
         }
     ];
+
 
     if (enableHEVC) {
         codecProfiles.push({
