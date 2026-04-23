@@ -59,8 +59,8 @@ const KNOWN_PROBES = {
     // Local Intros (Pre-rolls): https://github.com/jellyfin/jellyfin-plugin-intros
     'local-intros': {
         // Core endpoint — exists if intros are supported (virtually always)
-        probeEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`,
-        dataEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`
+        probeEndpoint: (itemId) => `/Users/${serverPluginClient._api?._userId}/Items/${itemId}/Intros`,
+        dataEndpoint: (itemId) => `/Users/${serverPluginClient._api?._userId}/Items/${itemId}/Intros`
     },
 
     // MDBList Ratings Plugin: https://github.com/jellyfin/jellyfin-plugin-mdblist-ratings

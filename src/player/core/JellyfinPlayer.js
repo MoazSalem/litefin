@@ -427,7 +427,9 @@ export class JellyfinPlayer extends EventEmitter {
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
             try {
                 // SubtitleManager handles both primary and secondary subtitle ticking
-                this._subtitleManager.tick(event.data.time);
+                if (this._subtitleManager) {
+                    this._subtitleManager.tick(event.data.time);
+                }
             } catch (e) {
                 console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
@@ -439,7 +441,9 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Route embedded subtitle events through SubtitleManager
         if (event.type === 'subtitlechange') {
-            this._subtitleManager.handleEmbeddedSubtitleEvent(event.data);
+            if (this._subtitleManager) {
+                this._subtitleManager.handleEmbeddedSubtitleEvent(event.data);
+            }
             return;
         }
 
