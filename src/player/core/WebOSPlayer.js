@@ -1143,12 +1143,18 @@ export class WebOSPlayer {
             const bufferAhead = this._getBufferAhead();
 
             // ----------------------------------------------------------------
-            // Buffer gate: if the pipeline has plenty of data, this is a
-            // decoder micro-stall at a segment boundary — not a real underrun.
-            // The native engine will self-recover; kicking forward would skip
-            // content and restart the choppiness cycle. Just bail.
+            // Buffer gate: if the pipeline has data, this is a decoder micro-stall
+            // at a segment boundary — not a real underrun.
+            //
+            // NOTE: At very high bitrates (e.g. 96 Mbps 4K HEVC), each 6-second
+            // segment is ~72 MB. Even on a fast home network the native WebOS
+            // player takes 1-2 seconds to fully download a segment. The buffer
+            // at a segment boundary can drop to 0 briefly while the next chunk
+            // loads. We need the gate to be higher than 1 segment (6 s) so we
+            // don't fire a kick mid-download and restart the entire stall cycle.
+            // The native engine always self-recovers at boundaries — let it.
             // ----------------------------------------------------------------
-            if (bufferAhead > 5) {
+            if (bufferAhead > 10) {
                 log.debug(
                     'WebOSPlayer: Stall timer fired with',
                     bufferAhead.toFixed(1),
@@ -1160,7 +1166,7 @@ export class WebOSPlayer {
             // Genuine underrun — kick forward half a second to force the
             // pipeline to seek to the next clean IDR frame.
             log.warn(
-                'WebOSPlayer: Still stalled after 2.5s (buffer:',
+                'WebOSPlayer: Still stalled after 8s (buffer:',
                 bufferAhead.toFixed(1),
                 's) — recovery kick (+0.5s)'
             );
@@ -1169,7 +1175,7 @@ export class WebOSPlayer {
             } catch (e) {
                 log.error('WebOSPlayer: Recovery kick failed', e);
             }
-        }, 2500);
+        }, 8000);
     }
 
     /** @private */
