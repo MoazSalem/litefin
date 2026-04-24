@@ -59,6 +59,19 @@ class ScreensaverManager {
         });
         eventBus.on('player:stopped', () => {
             this._isVideoPlaying = false;
+            /*
+             * Reset the platform idle timer when playback ends.
+             *
+             * During a film the user doesn't press any buttons, so by the time
+             * they return to the details page the platform idle clock has been
+             * ticking for potentially hours. Without this reset the screensaver
+             * would fire almost instantly after router.back() lands.
+             *
+             * reportInput() resets the OS-level idle counter, giving the user a
+             * full delay period before the screensaver can appear again.
+             */
+            const platformAdapter = platformInfo.isWebOS ? webosAdapter : tizenAdapter;
+            platformAdapter.reportInput?.();
         });
         eventBus.on('auth:logout', () => {
             this.hide();
