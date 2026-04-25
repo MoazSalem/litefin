@@ -3,6 +3,7 @@ import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { toast } from '../ui/Toast.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('SubtitleEditor');
 
@@ -108,10 +109,13 @@ class SubtitleEditorModal {
                     : `<p class="subtitle-empty-notice">${i18n.t('LabelNoSubtitles') || 'No subtitle tracks found.'}</p>`;
 
             // Build language options for the search dropdown.
-            const savedLang = localStorage.getItem('litefin:subtitle-language') || '';
+            const savedLang = storage.getItem('litefin:subtitle-language') || '';
+            let prefLang = storage.getItem('pref:subtitleLang') || '';
+            if (prefLang === 'none') prefLang = '';
+            
             const audioLang =
                 detailsPage._item?.MediaSources?.[0]?.MediaStreams?.find((s) => s.Type === 'Audio')?.Language || '';
-            let currentLang = savedLang || audioLang || 'eng';
+            let currentLang = savedLang || prefLang || audioLang || 'eng';
 
             const langOptions = cultures
                 .filter((c) => c.ThreeLetterISOLanguageName) // Only include languages with a valid code
@@ -286,7 +290,7 @@ class SubtitleEditorModal {
             overlay.querySelector('#btn-subtitle-search').onclick = async (e) => {
                 e.stopPropagation();
                 // Persist the selection for next time
-                localStorage.setItem('litefin:subtitle-language', currentLang);
+                storage.setItem('litefin:subtitle-language', currentLang);
 
                 // Close Panel A (without full cleanup) and open results Panel B
                 focusManager.unregister('subtitle-editor-tracks');
