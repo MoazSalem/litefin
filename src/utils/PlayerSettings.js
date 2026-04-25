@@ -66,6 +66,9 @@ const DEFAULTS = {
     // Subtitle mode ('Default', 'Smart', 'OnlyForced', 'Always', 'None')
     subtitleMode: 'Default',
 
+    // Remember tracks for session (automatically carry active audio and subtitle to next episode)
+    rememberTracksForSession: true,
+
     // Subtitle text size ('small', 'medium', 'large', 'larger', 'extralarge', 'custom')
     subtitleSize: 'medium',
 

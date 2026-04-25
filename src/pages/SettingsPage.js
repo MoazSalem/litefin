@@ -1659,6 +1659,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRememberTracksForSession">${i18n.t('LabelRememberTracksForSession') || 'Remember Tracks for Session'}</span>
+                        <span class="setting-description" data-i18n="RememberTracksForSessionDescription">${i18n.t('RememberTracksForSessionDescription') || 'Automatically carry your active audio and subtitle tracks to the next episode.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('rememberTracksForSession') !== false ? 'active' : ''}" 
+                                 id="subtitle-remember-tracks-toggle" 
+                                 data-setting="rememberTracksForSession"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="DisableAssRendering">${i18n.t('DisableAssRendering')}</span>
                         <span class="setting-description" data-i18n="DisableAssRenderingDescription">${i18n.t('DisableAssRenderingDescription')}</span>
                     </div>
@@ -3681,6 +3695,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Remember Tracks
+        const rememberTracksToggle = this.$('#subtitle-remember-tracks-toggle');
+        if (rememberTracksToggle) {
+            rememberTracksToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('rememberTracksForSession') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('rememberTracksForSession', newValue);
+                rememberTracksToggle.classList.toggle('active', newValue);
+                log.info(`Remember Tracks For Session set to: ${newValue}`);
             });
         }
 

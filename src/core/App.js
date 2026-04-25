@@ -74,6 +74,13 @@ class App {
         // This MUST happen before any other service reads from storage
         storage.init();
 
+        // 1.1 Clear session-scoped memory
+        // Ensures track memory doesn't leak across app restarts
+        storage.removeItem('session:lastAudioLang');
+        storage.removeItem('session:lastAudioTitle');
+        storage.removeItem('session:lastSubtitleLang');
+        storage.removeItem('session:lastSubtitleTitle');
+
         // 1.5. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
         platformInfo.init();
 

@@ -25,6 +25,7 @@ import { JellyfinPlayer } from '../player/core/JellyfinPlayer.js';
 import SubtitleStyles from '../utils/SubtitleStyles.js';
 import FontLoader from '../utils/FontLoader.js';
 import { PlayerSettings } from '../utils/PlayerSettings.js';
+import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
@@ -651,6 +652,41 @@ class PlayerPage extends Page {
         // Loading is now handled by 'loadedmetadata' event
     }
     /**
+     * Helper to resolve an audio or subtitle track by language and title.
+     * Tries an exact match on language + title first, then falls back to language only.
+     *
+     * @param {Object} mediaSource - The MediaSource object
+     * @param {string} type - 'Audio' or 'Subtitle'
+     * @param {string} targetLang - The language to look for (e.g., 'eng')
+     * @param {string} targetTitle - The title to look for (e.g., 'English [SDH]')
+     * @returns {number|undefined} The resolved track index, or undefined if no match
+     */
+    _resolveTrackByLang(mediaSource, type, targetLang, targetTitle) {
+        if (!mediaSource || !mediaSource.MediaStreams) return undefined;
+        if (!targetLang) return undefined;
+
+        // If the user explicitly disabled subtitles via session memory
+        if (type === 'Subtitle' && targetLang === 'none') {
+            return -1;
+        }
+
+        const streams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        if (streams.length === 0) return undefined;
+
+        // 1. Try exact match: Language + Title
+        const exactMatch = streams.find(
+            (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
+        );
+        if (exactMatch) return exactMatch.Index;
+
+        // 2. Fall back to Language only
+        const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        if (langMatch) return langMatch.Index;
+
+        return undefined;
+    }
+
+    /**
      * Start playback of the current item
      */
     async _startPlayback() {
@@ -698,17 +734,43 @@ class PlayerPage extends Page {
             ? item.MediaSources?.find((m) => m.Id === preSelectedMediaSourceId) || item.MediaSources?.[0]
             : item.MediaSources?.[0];
 
-        // 2. Fallback to default from MediaSource
-        // Handle case where index might be 0 (falsey)
-        const savedAudioIndex =
-            preSelectedAudio !== null && preSelectedAudio !== undefined
-                ? preSelectedAudio
-                : mediaSource?.DefaultAudioStreamIndex;
+        // 2. Resolve Tracks
+        let savedAudioIndex = preSelectedAudio !== null && preSelectedAudio !== undefined ? preSelectedAudio : undefined;
+        let savedSubtitleIndex = preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
-        const savedSubtitleIndex =
-            preSelectedSubtitle !== null && preSelectedSubtitle !== undefined
-                ? preSelectedSubtitle
-                : undefined;
+        // If no explicit selection from DetailsPage, try to restore from session memory (if enabled)
+        if (PlayerSettings.get('rememberTracksForSession') !== false) {
+            if (savedAudioIndex === undefined) {
+                const sessionAudioLang = storage.getItem('session:lastAudioLang');
+                const sessionAudioTitle = storage.getItem('session:lastAudioTitle');
+                if (sessionAudioLang) {
+                    const resolvedAudio = this._resolveTrackByLang(mediaSource, 'Audio', sessionAudioLang, sessionAudioTitle);
+                    if (resolvedAudio !== undefined) {
+                        savedAudioIndex = resolvedAudio;
+                        log.info(`[Track Memory] Restored Audio: ${sessionAudioLang} - ${sessionAudioTitle} -> Index ${resolvedAudio}`);
+                    }
+                }
+            }
+
+            if (savedSubtitleIndex === undefined) {
+                const sessionSubtitleLang = storage.getItem('session:lastSubtitleLang');
+                const sessionSubtitleTitle = storage.getItem('session:lastSubtitleTitle');
+                if (sessionSubtitleLang) {
+                    const resolvedSubtitle = this._resolveTrackByLang(mediaSource, 'Subtitle', sessionSubtitleLang, sessionSubtitleTitle);
+                    if (resolvedSubtitle !== undefined) {
+                        savedSubtitleIndex = resolvedSubtitle;
+                        log.info(`[Track Memory] Restored Subtitle: ${sessionSubtitleLang} - ${sessionSubtitleTitle} -> Index ${resolvedSubtitle}`);
+                    }
+                }
+            }
+        }
+
+        // 3. Fallback to default from MediaSource for Audio if still undefined
+        if (savedAudioIndex === undefined) {
+            savedAudioIndex = mediaSource?.DefaultAudioStreamIndex;
+        }
+
+        // Note: We leave savedSubtitleIndex as undefined if unresolved, so JellyfinPlayer's SubtitleMode logic handles it.
 
         log.info('Starting playback with resolved preferences:', {
             audio: savedAudioIndex,
@@ -1161,6 +1223,9 @@ class PlayerPage extends Page {
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+            // Capture track preferences for next episode
+            this._captureActiveTrackSelection();
+
             // Notify plugins that old playback stopped
             pluginManager.notifyPlayerStop();
 
@@ -1345,6 +1410,9 @@ class PlayerPage extends Page {
                 const mediaSource = this._player?.getCurrentMediaSource?.();
                 const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
 
+                // Capture track preferences for next episode
+                this._captureActiveTrackSelection();
+
                 // Notify plugins before traversing back
                 pluginManager.notifyPlayerStop();
 
@@ -1383,6 +1451,47 @@ class PlayerPage extends Page {
         } else {
             log.info('No previous item in queue. Restarting current.');
             this._player.seek(0);
+        }
+    }
+
+    /**
+     * Capture the currently active audio and subtitle tracks so they can be
+     * carried forward to the next episode if 'rememberTracksForSession' is on.
+     */
+    _captureActiveTrackSelection() {
+        if (PlayerSettings.get('rememberTracksForSession') === false) return;
+        if (!this._player || !this._item) return;
+
+        const mediaSource = this._player.getCurrentMediaSource?.() || this._item.MediaSources?.[0];
+        if (!mediaSource || !mediaSource.MediaStreams) return;
+
+        // 1. Audio Track Capture
+        const activeAudioIndex = this._player._currentAudioStreamIndex;
+        if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
+            const activeAudioTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.Index === activeAudioIndex);
+            if (activeAudioTrack) {
+                storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'none');
+                storage.setItem('session:lastAudioTitle', activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none');
+                log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
+            }
+        }
+
+        // 2. Subtitle Track Capture
+        const activeSubtitleIndex = this._player._currentSubtitleStreamIndex;
+        if (activeSubtitleIndex !== undefined) {
+            if (activeSubtitleIndex === -1) {
+                // User explicitly disabled subtitles
+                storage.setItem('session:lastSubtitleLang', 'none');
+                storage.setItem('session:lastSubtitleTitle', 'none');
+                log.info(`[Track Memory] Saved Subtitle: none`);
+            } else {
+                const activeSubtitleTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex);
+                if (activeSubtitleTrack) {
+                    storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
+                    storage.setItem('session:lastSubtitleTitle', activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none');
+                    log.info(`[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`);
+                }
+            }
         }
     }
 
@@ -1426,6 +1535,9 @@ class PlayerPage extends Page {
             /* Capture current position before stopping. */
             const mediaSource = this._player?.getCurrentMediaSource?.();
             const positionTicks = this._player?.getCurrentPositionTicks?.() || 0;
+
+            // Capture track preferences for next episode
+            this._captureActiveTrackSelection();
 
             /* Notify plugins that the previous session ended. */
             pluginManager.notifyPlayerStop();
