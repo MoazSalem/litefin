@@ -1244,6 +1244,8 @@ class HomePage extends Page {
                                 return 'BoxSet';
                             case 'photos':
                                 return 'Photo';
+                            case 'playlists':
+                                return 'Playlist';
                             default:
                                 return 'Movie,Series';
                         }
@@ -1287,6 +1289,50 @@ class HomePage extends Page {
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
+                                }
+                            } else if (lib.CollectionType === 'playlists') {
+                                // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
+                                // To get a true landscape backdrop for the home page, we fetch the items 
+                                // inside the playlist and grab a backdrop from one of them.
+                                try {
+                                    const pResponse = await api.getPlaylistItems(item.Id, {
+                                        Limit: 20,
+                                        Fields: 'BackdropImageTags'
+                                    });
+                                    
+                                    const pItems = pResponse?.Items || [];
+                                    // Shuffle locally so the backdrop changes across reloads
+                                    const shuffled = pItems.sort(() => 0.5 - Math.random());
+                                    
+                                    for (const pItem of shuffled) {
+                                        if (pItem.BackdropImageTags?.length > 0) {
+                                            resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {
+                                                maxWidth,
+                                                quality,
+                                                tag: pItem.BackdropImageTags[0]
+                                            });
+                                            break;
+                                        }
+                                    }
+                                } catch (e) {
+                                    log.warn(`Failed to fetch items for playlist ${item.Id} for dynamic thumb`, e);
+                                }
+
+                                // Fallback to the playlist's own primary/backdrop if we couldn't find one inside
+                                if (!resolvedUrl) {
+                                    if (item.BackdropImageTags?.length > 0) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.BackdropImageTags[0]
+                                        });
+                                    } else if (item.ImageTags?.Primary) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.ImageTags.Primary
+                                        });
+                                    }
                                 }
                             } else if (lib.CollectionType === 'boxsets') {
                                 // Collections: Backdrop → Primary

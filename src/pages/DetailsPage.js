@@ -153,6 +153,14 @@ class DetailsPage extends Page {
                         <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
                     </section>
+
+                    <!-- Playlist Items — shown when viewing a Playlist type item.
+                         Uses a landscape MediaGrid to handle the mixed content (movies,
+                         episodes, music videos) that playlists can contain. -->
+                    <section class="details-playlist-items media-row hidden" id="playlist-items-section">
+                        <h2 class="row-title" id="playlist-items-title" data-i18n="PlaylistItems">Items</h2>
+                        <div class="playlist-items-list" id="playlist-items-list"></div>
+                    </section>
                     
                     <!-- Next Up (for series) -->
                     <section class="details-next-up media-row hidden" id="next-up-section">
@@ -597,6 +605,9 @@ class DetailsPage extends Page {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
             await this._loadAlbumSongs();
+        } else if (this._item.Type === 'Playlist') {
+            // Playlist: load the server-ordered item list using the dedicated endpoint
+            await this._loadPlaylistItems();
         }
 
         // Render people if available
@@ -681,6 +692,101 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Fetch all items inside a Jellyfin Playlist using the dedicated endpoint.
+     * Unlike generic getItems(), /Playlists/{id}/Items respects the user's
+     * defined ordering and returns PlaylistItemId per entry for SyncPlay.
+     */
+    async _loadPlaylistItems() {
+        try {
+            const response = await api.getPlaylistItems(this._itemId);
+            this._playlistItems = response?.Items || [];
+
+            if (this._playlistItems.length > 0) {
+                this._renderPlaylistItems();
+            }
+        } catch (error) {
+            log.warn('Failed to load playlist items', error);
+        }
+    }
+
+    /**
+     * Render playlist items using a landscape MediaGrid.
+     *
+     * Playlists can contain mixed media (movies, episodes, music videos,
+     * audio) so we use 'thumb' landscape cards — they work uniformly
+     * regardless of what content type each item is, mirroring how
+     * jellyfin-web renders playlists as a vertical thumb list.
+     *
+     * The section title is updated with the item count so users know
+     * how long the playlist is at a glance.
+     */
+    _renderPlaylistItems() {
+        const container = this.$('#playlist-items-list');
+        const section = this.$('#playlist-items-section');
+        if (!section || !container || !this._playlistItems?.length) return;
+
+        // Reveal the section
+        section.classList.remove('hidden');
+
+        // Update the section header with item count so the user can see
+        // how many entries are in the playlist without scrolling
+        const titleEl = this.$('#playlist-items-title');
+        if (titleEl) {
+            const count = this._playlistItems.length;
+            titleEl.textContent = count === 1
+                ? i18n.t('ItemCountSingle') || '1 Item'
+                : i18n.t('ItemCountValue', [count]) || `${count} Items`;
+        }
+
+        // Build the landscape grid — each card navigates to its own details page
+        this._playlistGrid = new MediaGrid({
+            id: 'playlist-items-grid',
+            items: this._playlistItems,
+            type: 'thumb',           // Landscape thumb aspect ratio
+            contextType: 'playlist-grid',
+            limit: 1000,
+            isLandscape: true,       // Landscape layout for mixed content
+            onClick: (card) => {
+                // Save focus context so Back navigation returns to the same card
+                const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                if (card.dataset.itemId) {
+                    state.set(stateKey, {
+                        itemId: card.dataset.itemId,
+                        sectionId: 'details-playlist-items'
+                    });
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            }
+        });
+
+        container.innerHTML = this._playlistGrid.render();
+        this._playlistGrid.onMounted();
+
+        // Register focus section using the same grid pattern as the Season episode grid
+        const upwardLink = this._getPreviousVisibleSection('details-playlist-items')?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection('details-playlist-items');
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection('details-playlist-items', container, {
+            orientation: 'grid',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar',
+            onEnter: () => {
+                // First entry only: land on the very first card.
+                // After that, FocusManager uses spatial memory.
+                if (!this._hasEnteredPlaylistGrid) {
+                    this._hasEnteredPlaylistGrid = true;
+                    return container.querySelector('.media-card');
+                }
+                return null;
+            }
+        });
+
+        this._updateLeaveDown(upwardLink, 'details-playlist-items');
+    }
+
     _renderAlbumSongs(songs) {
         const container = this.$('#songs-list');
         const section = this.$('#songs-section');
@@ -761,6 +867,7 @@ class DetailsPage extends Page {
             'details-rich-meta',
             'collection-movies-section',
             'collection-shows-section',
+            'details-playlist-items',   // Playlist items grid (Playlist type)
             'details-next-up',
             'details-seasons',
             'details-episodes',
@@ -1582,7 +1689,9 @@ class DetailsPage extends Page {
         // Shuffle Button Visibility
         const shuffleBtn = this.$('.shuffle-btn');
         if (shuffleBtn) {
-            const isShuffleable = ['Series', 'Season', 'BoxSet'].includes(item.Type);
+            // Playlists get shuffle too — they are inherently sequential,
+            // and shuffle is a natural interaction users expect.
+            const isShuffleable = ['Series', 'Season', 'BoxSet', 'Playlist'].includes(item.Type);
             if (item.Type === 'Photo') {
                 shuffleBtn.classList.remove('hidden');
                 shuffleBtn.setAttribute('tabindex', '0');
@@ -1627,6 +1736,21 @@ class DetailsPage extends Page {
                 subtitleBtn.classList.remove('hidden');
                 subtitleBtn.setAttribute('tabindex', '0');
             } else {
+                subtitleBtn.classList.add('hidden');
+                subtitleBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // ── Playlist-specific overrides ──────────────────────────────────────────
+        // A Playlist has no single MediaSource — audio stream and subtitle track
+        // info live on each individual item, not on the container. Showing these
+        // buttons would just open an empty menu, so we hide them.
+        if (item.Type === 'Playlist') {
+            if (audioBtn) {
+                audioBtn.classList.add('hidden');
+                audioBtn.setAttribute('tabindex', '-1');
+            }
+            if (subtitleBtn) {
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
@@ -1900,6 +2024,12 @@ class DetailsPage extends Page {
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
             },
+            // Playlist items — shown when the item is of Type 'Playlist'
+            {
+                name: 'details-playlist-items',
+                elementId: '#playlist-items-list',
+                isVisible: () => isNotHidden('#playlist-items-section')
+            },
             // Standard content rows
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
@@ -1997,6 +2127,12 @@ class DetailsPage extends Page {
                 name: 'collection-shows-section',
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
+            },
+            // Playlist items — reverse position mirrors _getNextVisibleSection
+            {
+                name: 'details-playlist-items',
+                elementId: '#playlist-items-list',
+                isVisible: () => isNotHidden('#playlist-items-section')
             },
             {
                 name: 'collection-movies-section',
@@ -2318,6 +2454,36 @@ class DetailsPage extends Page {
                     return;
                 }
             }
+        }
+
+        // ── Playlist playback ────────────────────────────────────────────────
+        // Playlists have no direct MediaSource, so we resolve the first item
+        // (or a random one for shuffle) and hand contextType:'playlist' to the
+        // PlayQueue so it fetches and sequences the entire list for auto-advance.
+        if (this._item.Type === 'Playlist') {
+            if (this._playlistItems?.length > 0) {
+                // Use the already-fetched items (instant, no extra network round-trip)
+                itemToPlay = isShufflePlay
+                    ? this._playlistItems[Math.floor(Math.random() * this._playlistItems.length)]
+                    : this._playlistItems[0];
+            } else {
+                // Items not yet loaded (user pressed Play before the grid rendered)
+                try {
+                    const result = await api.getPlaylistItems(this._item.Id, { Limit: 1 });
+                    if (result?.Items?.length > 0) {
+                        itemToPlay = result.Items[0];
+                    } else {
+                        log.warn('Playlist is empty, nothing to play');
+                        return;
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve playlist playback item', e);
+                    return;
+                }
+            }
+            // Tag context so PlayQueue._initPlaylistQueue() builds the full ordered list
+            itemToPlay.contextType = 'playlist';
+            itemToPlay.contextId = this._item.Id;
         }
 
         // FORCE HIGH QUALITY for Player transition (must match _loadImages params)

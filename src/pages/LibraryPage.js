@@ -428,7 +428,7 @@ class LibraryPage extends Page {
         // For BoxSets, tabs are hidden, so start at Controls or Grid
         const collectionType = this.state.libraryInfo?.CollectionType;
 
-        if (collectionType === 'boxsets') {
+        if (collectionType === 'boxsets' || collectionType === 'playlists') {
             // Try controls first (Sort/Filter), else Grid
             if (this.$('#library-controls')?.style.display !== 'none') {
                 this.setActiveSection('library-controls');
@@ -854,8 +854,8 @@ class LibraryPage extends Page {
                     params.IncludeItemTypes = 'Series';
                 } else if (this.state.libraryInfo?.CollectionType === 'movies') {
                     params.IncludeItemTypes = 'Movie';
-                } else if (this.state.libraryInfo?.CollectionType === 'boxsets') {
-                    params.IncludeItemTypes = 'BoxSet';
+                } else if (this.state.libraryInfo?.CollectionType === 'boxsets' || this.state.libraryInfo?.CollectionType === 'playlists') {
+                    params.IncludeItemTypes = this.state.libraryInfo.CollectionType === 'boxsets' ? 'BoxSet' : 'Playlist';
                     params.Recursive = true;
                 } else if (this.state.libraryInfo?.CollectionType === 'music' && !this.params.genreId) {
                     // For standard Item fetches in Music libraries without specific subview filters like genre
@@ -1288,7 +1288,7 @@ class LibraryPage extends Page {
             // Especially for BoxSets where tabs are hidden and initial focus might be lost
             if (!document.activeElement || document.activeElement === document.body) {
                 const collectionType = this.state.libraryInfo?.CollectionType;
-                if (collectionType === 'boxsets') {
+                if (collectionType === 'boxsets' || collectionType === 'playlists') {
                     // Force controls or grid
                     if (this.$('#library-controls')?.style.display !== 'none') {
                         this.setActiveSection('library-controls');
@@ -1468,8 +1468,8 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
         const tabsContainer = this.$('#library-tabs');
 
-        // Hide tabs for BoxSets (Collections) library or if we are deep linking into a subview
-        if (collectionType === 'boxsets' || this._isSubView()) {
+        // Hide tabs for BoxSets (Collections) and Playlists libraries or if we are deep linking into a subview
+        if (collectionType === 'boxsets' || collectionType === 'playlists' || this._isSubView()) {
             if (tabsContainer) {
                 tabsContainer.style.display = 'none';
                 tabsContainer.innerHTML = '';
@@ -1659,9 +1659,9 @@ class LibraryPage extends Page {
                     viewType === 'Artists' ||
                     viewType === 'AlbumArtists' ||
                     viewType === 'Songs');
-            const isEpisodes = viewType === 'Episodes';
+            const isPlaylists = collectionType === 'playlists' && viewType === 'Items';
             // Do not show any header controls if we are deep linking to a specific genre/studio
-            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || this._isSubView();
+            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || isPlaylists || this._isSubView();
 
             const btnReset = this.$('#btn-reset-filters');
             if (btnReset) {
@@ -3436,7 +3436,7 @@ class LibraryPage extends Page {
                 viewType === 'Songs' ||
                 viewType === 'Playlists');
 
-        const isCollections = collectionType === 'boxsets' && viewType === 'Items';
+        const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
         const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
 
         const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain;
@@ -3444,7 +3444,9 @@ class LibraryPage extends Page {
         const isSubView = this._isSubView();
         const isControlsVisible = shouldShow || isSubView;
         const isAlphaVisible = shouldShow || isSubView;
-        const isTabsVisible = collectionType !== 'boxsets' && !isSubView;
+
+        const isCollectionsLike = collectionType === 'boxsets' || collectionType === 'playlists';
+        const isTabsVisible = !isCollectionsLike && !isSubView;
 
         const controls = this.$('#library-controls');
         const controlsRow = this.$('.library-controls-row');

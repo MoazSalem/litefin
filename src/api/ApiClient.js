@@ -680,6 +680,28 @@ export class ApiClient {
         return this.get(`/Users/${this._userId}/Items/${itemId}/SpecialFeatures`);
     }
 
+    /**
+     * Get items inside a server-managed Playlist.
+     *
+     * We use the dedicated /Playlists/{id}/Items endpoint rather than the
+     * generic /Items endpoint because:
+     *   - It preserves the user-defined server ordering of playlist items.
+     *   - It returns a PlaylistItemId on each entry, required by SyncPlay's
+     *     stamping mechanism to identify queue slots across sessions.
+     *
+     * @param {string} playlistId - Playlist container item ID
+     * @param {Object} [params]   - Extra query params (e.g. Limit, Fields)
+     * @returns {Promise<Object>} Standard paginated Items response { Items, TotalRecordCount }
+     */
+    async getPlaylistItems(playlistId, params = {}) {
+        return this.get(`/Playlists/${playlistId}/Items`, {
+            UserId: this._userId,
+            Fields: 'PrimaryImageAspectRatio,UserData,RunTimeTicks,BasicSyncInfo',
+            EnableImageTypes: 'Primary,Backdrop,Thumb',
+            ...params
+        });
+    }
+
     async getSimilar(itemId, params = {}) {
         const defaults = {
             UserId: this._userId,

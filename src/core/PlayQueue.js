@@ -181,6 +181,9 @@ class PlayQueue {
             } else if (contextType === 'season' && contextId) {
                 // Season-specific shuffle: fetch only episodes for this season
                 await this._initSeasonQueue(item, contextId);
+            } else if (contextType === 'playlist' && contextId) {
+                // Playlist: fetch ALL items in the user's playlist, preserving server order
+                await this._initPlaylistQueue(item, contextId);
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 await this._initEpisodeQueue(item);
             } else if (item.Type === 'Audio' && item.AlbumId) {
@@ -556,6 +559,57 @@ class PlayQueue {
             this._queue.unshift(currentItem);
             this._currentIndex = 0;
         }
+    }
+
+    /**
+     * Build a play queue from a Jellyfin Playlist.
+     *
+     * Uses the dedicated /Playlists/{id}/Items endpoint so server-defined
+     * ordering is preserved exactly, and each item carries a PlaylistItemId
+     * for SyncPlay queue tracking.
+     *
+     * Unlike BoxSet which is organised by type (Movies, Episodes, Audio),
+     * a Playlist can be mixed media in any user-defined order — we respect
+     * that order faithfully and do NOT re-sort.
+     *
+     * @param {Object} currentItem - The item playback started on
+     * @param {string} playlistId  - The Playlist container item ID
+     */
+    async _initPlaylistQueue(currentItem, playlistId) {
+        log.debug('Building Playlist queue for:', playlistId);
+
+        // Fetch all items from the playlist endpoint — this preserves the
+        // server-defined order and includes PlaylistItemId per entry.
+        // We also request Trickplay and MediaSources for a richer player
+        // experience (chapter thumbnails, stream selection) without a second fetch.
+        const response = await api.getPlaylistItems(playlistId, {
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,Overview,RunTimeTicks,Chapters,MediaSources,Trickplay'
+        });
+
+        const items = response?.Items || [];
+
+        // Stamp every queued item with a session-unique PlaylistItemId so
+        // the NowPlayingQueue payload sent to the server has valid slot IDs.
+        items.forEach(_stampPlaylistItemId);
+
+        this._queue = items;
+
+        // Locate the starting position — match by item Id.
+        // Note: if the user started from a random item (shuffle play), this
+        // finds its natural position in the list; shuffling is then applied
+        // afterwards by PlayQueue.init() if _shuffleMode is true.
+        this._currentIndex = this._queue.findIndex((e) => e.Id === currentItem.Id);
+
+        // Fallback: if the API result didn't include the starting item
+        // (race condition, server mismatch, item removed mid-session),
+        // prepend it so playback still begins correctly.
+        if (this._currentIndex === -1) {
+            _stampPlaylistItemId(currentItem);
+            this._queue.unshift(currentItem);
+            this._currentIndex = 0;
+        }
+
+        log.info(`[PlayQueue] Playlist queue built: ${this._queue.length} items, starting at index ${this._currentIndex}`);
     }
 }
 
