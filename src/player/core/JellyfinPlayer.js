@@ -1252,9 +1252,9 @@ export class JellyfinPlayer extends EventEmitter {
         //
         //   'all'        → server burns EVERY subtitle format. Always restart.
         //
-        //   'allcomplex' → server burns ONLY complex/bitmap formats (PGS,
-        //                   VOBSUB). Text formats (SRT, ASS, VTT) are delivered
-        //                   externally — no restart needed for those.
+        //   'allcomplex' / 'auto' → server burns ONLY complex/bitmap formats (PGS,
+        //                   VOBSUB, ASS, SSA). Simple Text formats (SRT, VTT) are 
+        //                   delivered externally — no restart needed for those.
         //
         // Guards: _playSetupInProgress     → called from play()'s own setup;
         //                                    subtitle index already in server req.
@@ -1265,32 +1265,33 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscodingSession = this._currentPlayMethod === 'Transcode' ||
                                      this._currentPlayMethod === 'DirectStream';
 
-        // In 'allcomplex' mode:
+        // In 'allcomplex' / 'auto' mode:
         //
-        //   Bitmap formats (PGS, VOBSUB): the server burns them in when it
-        //   transcodes. Selecting a PGS subtitle while DIRECT-PLAYING must also
+        //   Complex formats (PGS, VOBSUB, ASS, SSA): the server burns them in when it
+        //   transcodes. Selecting a complex subtitle while DIRECT-PLAYING must also
         //   trigger a restart — the server needs to start transcoding with the
-        //   PGS burned in. So bitmap = ALWAYS restart in allcomplex mode.
+        //   subtitle burned in. So complex = ALWAYS restart in allcomplex mode.
         //
-        //   Text formats (SRT, ASS, VTT): served externally by the server API,
+        //   Simple Text formats (SRT, VTT): served externally by the server API,
         //   so the client can render them without a restart UNLESS we're already
         //   transcoding — in that case the server has a specific SubtitleStreamIndex
         //   locked into the current HLS session and we must restart to change it.
-        const _isAllComplex = burnIn === 'allcomplex';
-        const isBitmapCodec = (() => {
+        const _isAllComplex = burnIn === 'allcomplex' || burnIn === 'auto';
+        const isComplexCodec = (() => {
             if (!_isAllComplex || index === -1) return false;
             const track = this.getSubtitleTracks().find(t => t.Index === index);
             const codec = (track?.Codec || '').toLowerCase();
             return codec === 'pgs' || codec === 'pgssub' ||
-                   codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle';
+                   codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle' ||
+                   codec === 'ass' || codec === 'ssa';
         })();
 
-        // Bitmap in allcomplex: always restart (even from direct play)
-        // Text in allcomplex + transcoding: restart (subtitle locked in stream URL)
-        const isBitmapBurnIn = (_isAllComplex && isBitmapCodec) ||
+        // Complex in allcomplex: always restart (even from direct play)
+        // Simple text in allcomplex + transcoding: restart (subtitle locked in stream URL)
+        const isComplexBurnIn = (_isAllComplex && isComplexCodec) ||
                                (_isAllComplex && isTranscodingSession);
 
-        const needsBurnInRestart = burnIn === 'all' || isBitmapBurnIn;
+        const needsBurnInRestart = burnIn === 'all' || isComplexBurnIn;
 
         if (needsBurnInRestart && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
             log.info(`Burn-in restart (mode: ${burnIn}, track: ${index}) — retranscoding`);
