@@ -212,6 +212,13 @@ class PluginManager {
 
             const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item);
 
+            // If the probe is still deferred (e.g., intro-skipper on a Movie), skip confirmation
+            // but do NOT disable the plugin. It will be checked again on the next playback.
+            if (result.deferred) {
+                log.info(`Plugin '${id}' dependency check still deferred (item unsuitable for probe)`);
+                continue;
+            }
+
             // Mark dependency as resolved (won't re-check on every episode)
             entry.dependencyDeferred = false;
 

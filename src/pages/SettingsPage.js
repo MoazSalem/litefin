@@ -2650,7 +2650,8 @@ class SettingsPage extends Page {
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
-                if (mdbItem) mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
+                if (mdbItem)
+                    mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -3028,7 +3029,7 @@ class SettingsPage extends Page {
                 // ── Enabling: check server dependency first ───────────────────
                 // Check if this plugin requires a Jellyfin server plugin to function.
                 const entry = pluginManager.getPlugin(pluginId);
-                const hasDependency = !!(entry?.plugin?.serverDependency);
+                const hasDependency = !!entry?.plugin?.serverDependency;
 
                 if (hasDependency) {
                     // Show a "checking..." interim state so the user knows something is happening
@@ -3060,9 +3061,10 @@ class SettingsPage extends Page {
                         // If deferred, we allow enabling tentatively (consistent with startup flow).
                         // The dependency will be re-confirmed at next playback.
                         if (depCheck.deferred) {
-                            log.warn(`Plugin '${pluginId}' dependency check deferred (non-admin, no itemId) — enabling tentatively`);
+                            log.warn(
+                                `Plugin '${pluginId}' dependency check deferred (non-admin, no itemId) — enabling tentatively`
+                            );
                         }
-
                     } catch (err) {
                         // Network or unexpected error — fail open (allow enabling)
                         log.warn(`Plugin '${pluginId}' dependency check failed with error, enabling anyway:`, err);
@@ -3349,7 +3351,9 @@ class SettingsPage extends Page {
         this._prevSection = focusManager.getActiveSection();
 
         const title = i18n.t('MissingServerPlugin') || 'Missing Server Plugin';
-        const message = i18n.t('MissingServerPluginMessage', pluginName, dependencyName) || `'${pluginName}' requires the '${dependencyName}' plugin to be installed and enabled on your Jellyfin server. Please install it via the Jellyfin dashboard and try again.`;
+        const message =
+            i18n.t('MissingServerPluginMessage', { pluginName }, { dependencyName }) ||
+            `'${pluginName}' requires the '${dependencyName}' plugin to be installed and enabled on your Jellyfin server. Please install it via the Jellyfin dashboard and try again.`;
         const btnCloseText = i18n.t('ButtonClose') || 'Close';
 
         overlay.innerHTML = `

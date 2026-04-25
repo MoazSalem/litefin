@@ -59,13 +59,19 @@ const KNOWN_PROBES = {
     // Local Intros (Pre-rolls): https://github.com/jellyfin/jellyfin-plugin-intros
     'local-intros': {
         // Core endpoint — exists if intros are supported (virtually always)
-        probeEndpoint: (itemId) => `/Users/${serverPluginClient._api?._userId}/Items/${itemId}/Intros`,
+        probeEndpoint: (item) => {
+            if (!item || !item.Id) return null;
+            return `/Users/${serverPluginClient._api?._userId}/Items/${item.Id}/Intros`;
+        },
         dataEndpoint: (itemId) => `/Users/${serverPluginClient._api?._userId}/Items/${itemId}/Intros`
     },
 
     // MDBList Ratings Plugin: https://github.com/jellyfin/jellyfin-plugin-mdblist-ratings
     'mdblist-ratings': {
-        probeEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`,
+        probeEndpoint: (item) => {
+            if (!item || !item.Id) return null;
+            return `/Plugins/MdbListRatings/CachedByItemId?itemId=${item.Id}`;
+        },
         dataEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`
     }
 };
