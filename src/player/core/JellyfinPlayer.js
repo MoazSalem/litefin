@@ -22,6 +22,7 @@ import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
+import { storage } from '../../utils/StorageService.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -583,6 +584,63 @@ export class JellyfinPlayer extends EventEmitter {
                 deviceProfile.DirectPlayProfiles = [];
             }
 
+            // Apply Subtitle Mode logic before fetching PlaybackInfo
+            // This ensures the server includes the correct subtitle in TranscodingUrls (burn-in)
+            if (options.subtitleStreamIndex === undefined && options.item && options.item.MediaSources) {
+                const fallbackSource = options.item.MediaSources[0];
+                const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+                if (ms && ms.MediaStreams) {
+                    const subtitleMode = PlayerSettings.get('subtitleMode') || 'Default';
+                    const subtitleStreams = ms.MediaStreams.filter(s => s.Type === 'Subtitle');
+                    let chosenIndex = undefined;
+
+                    if (subtitleMode === 'None') {
+                        chosenIndex = -1;
+                    } else if (subtitleMode === 'Default') {
+                        // Use Server's DefaultSubtitleStreamIndex if present
+                        if (ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null) {
+                            chosenIndex = ms.DefaultSubtitleStreamIndex;
+                        } else {
+                            const subStream = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                            if (subStream) chosenIndex = subStream.Index;
+                        }
+                    } else {
+                        const prefLang = storage.getItem('pref:subtitleLang') || 'none';
+                        const audioStreamIndex = options.audioStreamIndex !== undefined ? options.audioStreamIndex : ms.DefaultAudioStreamIndex;
+                        const audioStream = ms.MediaStreams.find(s => s.Type === 'Audio' && s.Index === audioStreamIndex);
+                        const audioLang = audioStream ? (audioStream.Language || 'und') : 'und';
+                        
+                        if (subtitleMode === 'OnlyForced') {
+                            let forced = subtitleStreams.find(s => s.IsForced && s.Language === prefLang);
+                            if (!forced) forced = subtitleStreams.find(s => s.IsForced);
+                            if (forced) chosenIndex = forced.Index;
+                        } else if (subtitleMode === 'Always') {
+                            let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                            if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
+                            if (!best) best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                            if (!best && subtitleStreams.length > 0) best = subtitleStreams[0];
+                            if (best) chosenIndex = best.Index;
+                        } else if (subtitleMode === 'Smart') {
+                            // Smart = Show if audio is NOT in the preferred subtitle language.
+                            if (prefLang !== 'none' && audioLang !== prefLang && audioLang !== 'und') {
+                                let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
+                                if (best) chosenIndex = best.Index;
+                            } else {
+                                let forced = subtitleStreams.find(s => s.IsForced && s.Language === prefLang);
+                                if (!forced) forced = subtitleStreams.find(s => s.IsForced);
+                                if (forced) chosenIndex = forced.Index;
+                            }
+                        }
+                    }
+                    
+                    if (chosenIndex !== undefined) {
+                        options.subtitleStreamIndex = chosenIndex;
+                        log.info(`[SubtitleSelection] Pre-flight Mode: ${subtitleMode}, Chosen Index: ${chosenIndex}`);
+                    }
+                }
+            }
+
             // Get playback info from server
             const playbackInfo = await this._getPlaybackInfo(options, deviceProfile, this._manualBitrate);
             log.debug('PlaybackInfo keys:', Object.keys(playbackInfo));
@@ -843,13 +901,9 @@ export class JellyfinPlayer extends EventEmitter {
                 if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
             }
 
-            // If not provided, subtitles default to -1 (off) or forced
-            if (this._currentSubtitleStreamIndex === undefined && mediaSource.MediaStreams) {
-                const subStream = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Subtitle' && (s.IsDefault || s.IsForced)
-                );
-                if (subStream) this._currentSubtitleStreamIndex = subStream.Index;
-                else this._currentSubtitleStreamIndex = -1;
+            // If not provided (and not resolved pre-flight), subtitles default to off
+            if (this._currentSubtitleStreamIndex === undefined) {
+                this._currentSubtitleStreamIndex = -1;
             }
 
             // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)

@@ -708,7 +708,7 @@ class PlayerPage extends Page {
         const savedSubtitleIndex =
             preSelectedSubtitle !== null && preSelectedSubtitle !== undefined
                 ? preSelectedSubtitle
-                : mediaSource?.DefaultSubtitleStreamIndex;
+                : undefined;
 
         log.info('Starting playback with resolved preferences:', {
             audio: savedAudioIndex,
