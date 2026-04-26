@@ -402,6 +402,8 @@
     "EnableHDR": "Enable HDR (High Dynamic Range)",
     "EnableHeroCarousel": "Enable Hero Carousel",
     "EnableHeroCarouselDescription": "Display an auto-scrolling hero section at the top of the home screen.",
+    "ShowMdbAwards": "Show Awards Badges",
+    "ShowMdbAwardsDescription": "Display award badges from MDBList plugin on the details page.",
     "EnableHEVC": "Enable HEVC (H.265)",
     "EnableTrickplay": "Thumbnail Preview",
     "EnableTrickplayDescription": "Show video frame previews when scrubbing through the timeline",

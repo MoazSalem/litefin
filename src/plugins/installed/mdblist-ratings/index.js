@@ -9,6 +9,7 @@
 
 import './mdblist-ratings.css';
 import { shouldShowScore } from '../../../utils/visibility.js';
+import { storage } from '../../../utils/StorageService.js';
 
 export default {
     id: 'mdblist-ratings',
@@ -91,7 +92,8 @@ export default {
 
             // 3. Fetch awards if we have an IMDb ID and requested
             let awards = null;
-            if (includeAwards && finalImdbId && this._awardsEnabledOnServer !== false) {
+            const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
+            if (includeAwards && finalImdbId && this._awardsEnabledOnServer !== false && userWantsAwards) {
                 try {
                     const awardsData = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/AwardsByImdb?imdbId=${finalImdbId}`);
                     if (awardsData && awardsData.hasAwards) {
@@ -170,8 +172,9 @@ export default {
     },
 
     async _fetchAndRenderAwards(pageEl, imdbId, retryCount = 0) {
-        // Skip if awards are explicitly disabled or unsupported on the server
-        if (this._awardsEnabledOnServer === false) {
+        // Skip if awards are explicitly disabled or unsupported on the server, or locally
+        const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
+        if (this._awardsEnabledOnServer === false || !userWantsAwards) {
             return;
         }
 

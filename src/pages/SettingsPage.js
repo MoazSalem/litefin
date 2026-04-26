@@ -737,6 +737,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
+                        <span class="setting-description" data-i18n="ShowMdbAwardsDescription">${i18n.t('ShowMdbAwardsDescription') || 'Display award badges from MDBList on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMdbAwards') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-mdb-awards" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item" id="hero-carousel-style-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HeroStyle">${i18n.t('HeroStyle')}</span>
@@ -2619,6 +2632,18 @@ class SettingsPage extends Page {
                 eventBus.emit('prefChanged:showRandomButton', newValue);
 
                 log.info(`Random Button set to: ${newValue}`);
+            });
+        }
+
+        // Toggle MDBList Awards
+        const mdbAwardsBtn = this.$('#toggle-mdb-awards');
+        if (mdbAwardsBtn) {
+            mdbAwardsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showMdbAwards', newValue.toString());
+                mdbAwardsBtn.classList.toggle('active', newValue);
+                log.info(`Show MDBList Awards set to: ${newValue}`);
             });
         }
 
