@@ -799,7 +799,8 @@ class DetailsPage extends Page {
             items: songs,
             type: 'square', // Square posters as requested
             contextType: 'album-grid',
-            limit: 1000,
+            limit: 60,
+            moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Audio`,
             isLandscape: false, // Not landscape
             onClick: (card) => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -1842,7 +1843,8 @@ class DetailsPage extends Page {
                 items: this._episodes,
                 type: 'episode',
                 contextType: 'season-grid',
-                limit: 1000,
+                limit: 60,
+                moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                 isLandscape: true,
                 onClick: (card) => {
                     const stateKey = `details:lastFocusedItem:${this._itemId}`;

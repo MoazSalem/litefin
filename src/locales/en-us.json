@@ -192,6 +192,8 @@
     "SearchForMissingMetadata": "Search for missing metadata",
     "SearchResults": "Search Results",
     "SearchResultsEmpty": "Sorry! No results found for \"{0}\"",
+    "SearchResultsFor": "Search results for \"{0}\"",
+    "SearchResultFor": "Search results for \"{0}\"",
     "SelectVersion": "Select Version",
     "Season": "Season",
     "SecondarySubtitles": "Secondary Subtitles",

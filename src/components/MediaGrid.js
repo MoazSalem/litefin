@@ -32,8 +32,8 @@ class MediaGrid extends Component {
         this.gridClass = config.gridClass || '';
         this.allowSeeMore = config.allowSeeMore !== undefined ? config.allowSeeMore : true;
 
-        // State
-        this.expanded = false;
+        // Path for "See More" navigation (Standard pattern replacing in-place expansion)
+        this.moreUrl = config.moreUrl || null;
 
         // Callbacks
         this.onSeeMore = config.onSeeMore || null; // Optional override
@@ -52,6 +52,8 @@ class MediaGrid extends Component {
         // landscape-grid class?
         const gridClass = this.gridClass || (this.isLandscape ? 'person-grid landscape-grid' : 'person-grid');
 
+        // Note: Standard See More buttons usually redirect to LibraryPage rather than expanding in-place
+        // to handle thousands of items efficiently on TV hardware.
         return `
             <div id="${this.id}" class="media-row">
                 ${this.title ? `<h2 class="row-title">${this.title}</h2>` : ''}
@@ -59,10 +61,11 @@ class MediaGrid extends Component {
                     ${this._renderItems()}
                 </div>
                 
-            <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'flex' : 'none'}; justify-content: center;">
-                <button class="btn see-more-btn" id="${btnId}" tabindex="0">
-                    ${this.expanded ? i18n.t('ShowLess') : i18n.t('ShowMore')}
-                </button>
+                <div class="see-more-container" id="${this.id}-btn-zone" style="display: ${this._shouldShowButton() ? 'flex' : 'none'}; justify-content: center;">
+                    <button class="btn see-more-btn" id="${btnId}" tabindex="0">
+                        ${i18n.t('SeeMore')}
+                    </button>
+                </div>
             </div>
         `;
     }
@@ -74,13 +77,13 @@ class MediaGrid extends Component {
         log.debug(`Mounted with ${this.items.length} items.`);
         const btn = document.getElementById(`${this.id}-btn`);
         if (btn) {
-            btn.onclick = () => this.toggleExpand();
+            btn.onclick = () => this.handleSeeMore();
             // CRITICAL: Add keyboard handler for "Enter" key (TV Remote/Keyboard)
             btn.onkeydown = (e) => {
                 if (e.key === 'Enter') {
-                    e.preventDefault();
-                    e.stopPropagation();
-                    this.toggleExpand();
+                    // Don't prevent default yet, we want to allow the click handler to fire
+                    // but we ensure it's captured here too.
+                    this.handleSeeMore();
                 }
             };
         }
@@ -118,7 +121,8 @@ class MediaGrid extends Component {
      * Render the grid items strings
      */
     _renderItems() {
-        const displayItems = this._shouldShowButton() && !this.expanded ? this.items.slice(0, this.limit) : this.items;
+        // Only slice if we are using in-place expansion (deprecated) or if we haven't navigated yet
+        const displayItems = this._shouldShowButton() ? this.items.slice(0, this.limit) : this.items;
 
         const html = [];
         for (let i = 0; i < displayItems.length; i++) {
@@ -128,38 +132,47 @@ class MediaGrid extends Component {
     }
 
     /**
-     * Toggle "See More" state
+     * Handle "See More" action
      */
-    toggleExpand() {
-        this.expanded = !this.expanded;
+    handleSeeMore() {
+        // Priority 1: Direct navigation (New standard)
+        if (this.moreUrl) {
+            log.info('Standardized See More: Navigating to', this.moreUrl);
+            router.navigate(this.moreUrl);
+            return;
+        }
 
-        // Re-render items container content ONLY to avoid destroying the parent (and focus)
+        // Priority 2: Custom callback
+        if (this.onSeeMore) {
+            this.onSeeMore();
+            return;
+        }
+
+        // Fallback: In-place expansion (Deprecated for most grids)
+        // We'll keep this simple for now but ideally all grids use moreUrl
+        log.warn('MediaGrid: Using deprecated in-place expansion. Please provide moreUrl.');
+        
         const grid = document.getElementById(`${this.id}-items`);
         if (grid) {
-            grid.innerHTML = this._renderItems();
-            // No need to re-bind click handlers — delegation on container survives rebuild
-            lazyLoader.observe(grid);
-        }
-
-        // Update button text
-        const btn = document.getElementById(`${this.id}-btn`);
-        if (btn) {
-            btn.textContent = this.expanded ? i18n.t('ShowLess') : i18n.t('ShowMore');
-        }
-
-        // Parent notification (optional) - allows PersonPage to re-register focus sections
-        if (this.onSeeMore) this.onSeeMore(this.expanded);
-
-        // Invalidate focus cache for the grid items section
-        focusManager.invalidateCache(`${this.id}-items`);
-
-        // Refocus button and scroll it into view after DOM update using FocusManager
-        setTimeout(() => {
-            if (btn) {
-                // Focus element now uses our improved Tizen-ready scroll logic
-                focusManager.focusElement(btn);
+            // Render ALL items
+            const html = [];
+            for (let i = 0; i < this.items.length; i++) {
+                html.push(this._createCardHtml(this.items[i]));
             }
-        }, 150);
+            grid.innerHTML = html.join('');
+            lazyLoader.observe(grid);
+            
+            // Hide the button since everything is shown
+            this._hideButton();
+            
+            // Invalidate focus cache
+            focusManager.invalidateCache(`${this.id}-items`);
+        }
+    }
+
+    _hideButton() {
+        const btnContainer = document.getElementById(`${this.id}-btn-zone`);
+        if (btnContainer) btnContainer.style.display = 'none';
     }
 
     _shouldShowButton() {
