@@ -522,7 +522,10 @@ export function buildJellyfinProfile(options = {}) {
     // to be converted. If Jellyfin's internal preference selects AAC over AC3
     // for a DTS transcode, the output will be AAC-in-TS — which is universally
     // supported by the WebOS native pipeline and Hls.js alike.
-    const transAudioCodecs = 'aac,ac3,eac3';
+    const transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
+    if (enableDts) transAudioCodecsArr.push('dts', 'dca');
+    if (enableTrueHd) transAudioCodecsArr.push('truehd');
+    const transAudioCodecs = transAudioCodecsArr.join(',');
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
@@ -910,7 +913,7 @@ export function buildJellyfinProfile(options = {}) {
     if (!enableDts) {
         codecProfiles.push({
             Type: 'VideoAudio',
-            Codec: 'dts,dca,dtshd',
+            Codec: 'dts,dca,dts-hd,dts-ma,dts-x',
             Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
         });
     }
