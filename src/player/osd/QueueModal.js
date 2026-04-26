@@ -83,6 +83,15 @@ export default class QueueModal extends BaseMenu {
         this._prevRow = this.osd._currentFocusRow;
         this._prevIndex = this.osd._currentFocusIndex;
         super.show();
+
+        /*
+         * Scroll the active item into view AFTER .visible is applied so the
+         * panel is already transitioning on-screen. Calling scrollIntoView()
+         * while the panel is still at translate3d(100%, 0, 0) (off-screen)
+         * confuses the browser’s scroll container detection on WebOS and can
+         * produce a viewport shift that compounds the flicker.
+         */
+        this._scrollActiveIntoView();
     }
 
     hide() {
@@ -219,8 +228,13 @@ export default class QueueModal extends BaseMenu {
             lazyLoader.observe(listEl);
         }
 
-        /* Scroll the currently playing item into the centre of the list. */
-        this._scrollActiveIntoView();
+        /*
+         * NOTE: _scrollActiveIntoView() is intentionally NOT called here.
+         * render() runs before show() adds the .visible class, meaning the
+         * panel is still at translate3d(100%, 0, 0) (off-screen). Scrolling
+         * an off-screen element causes undefined browser behavior on WebOS.
+         * The scroll is deferred to show() instead.
+         */
     }
 
     /**
@@ -287,7 +301,13 @@ export default class QueueModal extends BaseMenu {
         const focused = this.$el.querySelector(`.queue-row[data-index="${this.focusIndex}"]`);
         if (focused) {
             focused.classList.add('focused');
-            focused.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            /*
+             * Use 'instant' instead of 'smooth' here — this is called during the
+             * panel’s slide-in animation, and running a smooth scroll simultaneously
+             * creates two competing animations on the same element. On WebOS this
+             * can cause the renderer to drop frames and produce additional flicker.
+             */
+            focused.scrollIntoView({ block: 'nearest', behavior: 'instant' });
             focused.focus({ preventScroll: true });
         }
     }
