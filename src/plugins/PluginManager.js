@@ -70,6 +70,15 @@ const BUNDLED_PLUGINS = [
     {
         id: 'local-intros',
         load: () => import('./installed/local-intros/index.js')
+    },
+
+    // -------------------------------------------------------------------------
+    // MDBList Ratings
+    // Server dependency: mdblist-ratings
+    // -------------------------------------------------------------------------
+    {
+        id: 'mdblist-ratings',
+        load: () => import('./installed/mdblist-ratings/index.js')
     }
 ];
 
@@ -201,7 +210,14 @@ class PluginManager {
                 serverPluginClient._availabilityCache.delete(entry.plugin.serverDependency);
             }
 
-            const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item.Id);
+            const result = await serverPluginClient.isPluginAvailable(entry.plugin.serverDependency, item);
+
+            // If the probe is still deferred (e.g., intro-skipper on a Movie), skip confirmation
+            // but do NOT disable the plugin. It will be checked again on the next playback.
+            if (result.deferred) {
+                log.info(`Plugin '${id}' dependency check still deferred (item unsuitable for probe)`);
+                continue;
+            }
 
             // Mark dependency as resolved (won't re-check on every episode)
             entry.dependencyDeferred = false;
@@ -465,6 +481,64 @@ class PluginManager {
             eventBus.emit(`${pluginId}:disabled`);
         }
     }
+
+    /**
+     * Check whether a plugin's declared server dependency is currently available.
+     * This is designed to be called from the Settings UI when the user tries to
+     * enable a plugin — we want a fresh, reliable answer before committing.
+     *
+     * Handles both admin and non-admin users correctly:
+     *   - Admin:     Uses the cached (or freshly-fetched) installed plugin list.
+     *   - Non-admin: Probes the known endpoint for this plugin directly. The
+     *                mdblist-ratings probe doesn't require an itemId, so it resolves
+     *                immediately. Deferred-only probes (intro-skipper) will return
+     *                { available: false, deferred: true } and we surface that.
+     *
+     * @param {string} pluginId - The plugin ID (must be in BUNDLED_PLUGINS)
+     * @returns {Promise<{ available: boolean, deferred: boolean, serverPluginName: string }>}
+     */
+    async checkServerDependency(pluginId) {
+        const entry = this._plugins.get(pluginId);
+        if (!entry) {
+            log.warn(`checkServerDependency: unknown plugin '${pluginId}'`);
+            return { available: false, deferred: false, serverPluginName: pluginId };
+        }
+
+        const dep = entry.plugin.serverDependency;
+        if (!dep) {
+            // Plugin has no server dependency — it's always available
+            return { available: true, deferred: false, serverPluginName: '' };
+        }
+
+        // Clear any stale deferred placeholder so we get a fresh result
+        const cached = serverPluginClient._availabilityCache.get(dep);
+        if (cached?.deferred) {
+            serverPluginClient._availabilityCache.delete(dep);
+        }
+
+        // Re-probe without an itemId (non-admin users will get deferred if the
+        // probe absolutely requires one, but most probes don't)
+        const result = await serverPluginClient.isPluginAvailable(dep);
+
+        // Try to surface a human-friendly server plugin name from the admin list
+        let serverPluginName = dep;
+        const adminList = await serverPluginClient.getInstalledPlugins();
+        if (adminList) {
+            const match = adminList.find((p) => {
+                const n = (p.Name || p.name || '').toLowerCase();
+                return n.includes(dep.replace(/-/g, ' ')) || n.includes(dep.replace(/-/g, ''));
+            });
+            if (match) serverPluginName = match.Name || match.name || dep;
+        }
+
+        log.info(`Dependency check for '${pluginId}' → '${dep}': available=${result.available}, deferred=${!!result.deferred}`);
+        return {
+            available: result.available,
+            deferred: !!result.deferred,
+            serverPluginName
+        };
+    }
+
 
     // ========================================================================
     // OSD Key Forwarding

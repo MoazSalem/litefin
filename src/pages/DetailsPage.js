@@ -32,6 +32,7 @@ import { toast } from '../ui/Toast.js';
 import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('DetailsPage');
 
@@ -48,7 +49,10 @@ class DetailsPage extends Page {
 
         this._similar = null;
 
-        // Components
+        // Track/Version selection state
+        this._selectedMediaSourceId = null;
+        this._selectedAudioIndex = undefined;
+        this._selectedSubtitleIndex = undefined;
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
@@ -148,6 +152,14 @@ class DetailsPage extends Page {
                     <section class="details-collection-shows media-row hidden" id="collection-shows-section">
                         <h2 class="row-title" data-i18n="ShowsInCollection">Shows in Collection</h2>
                         <div class="collection-row row-items" id="collection-shows-row"></div>
+                    </section>
+
+                    <!-- Playlist Items — shown when viewing a Playlist type item.
+                         Uses a landscape MediaGrid to handle the mixed content (movies,
+                         episodes, music videos) that playlists can contain. -->
+                    <section class="details-playlist-items media-row hidden" id="playlist-items-section">
+                        <h2 class="row-title" id="playlist-items-title" data-i18n="PlaylistItems">Items</h2>
+                        <div class="playlist-items-list" id="playlist-items-list"></div>
                     </section>
                     
                     <!-- Next Up (for series) -->
@@ -345,6 +357,23 @@ class DetailsPage extends Page {
             this._item = item;
             log.debug('Item loaded:', item);
 
+            // ── Restore persisted version selection ─────────────────────────────────
+            // We key by itemId so each item independently remembers its last version.
+            // Only restore if the saved ID still exists in the current MediaSources list
+            // (the server may have removed a version since the last visit).
+            const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
+            if (savedSourceId && item.MediaSources?.some(m => m.Id === savedSourceId)) {
+                this._selectedMediaSourceId = savedSourceId;
+                log.info('Restored persisted media source:', savedSourceId);
+            } else {
+                // Reset — either first visit or the saved source no longer exists
+                this._selectedMediaSourceId = null;
+            }
+
+            // Reset stream selections on every fresh item load (they are version-specific)
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+
             // ────────────────────────────────────────────────────────────────────────
             // 3. Fetch User and Library Context
             // ────────────────────────────────────────────────────────────────────────
@@ -455,6 +484,33 @@ class DetailsPage extends Page {
         }
     }
 
+    _showVersionSelectionMenu() {
+        if (!this._item?.MediaSources || this._item.MediaSources.length <= 1) return;
+
+        // Map MediaSources to a format compatible with _renderTrackSelectionMenu
+        const sources = this._item.MediaSources.map(s => ({
+            ...s,
+            Index: s.Id, // We use the ID as the index for selection
+            DisplayTitle: s.Name || i18n.t('Version') || 'Version'
+        }));
+
+        const currentId = this._selectedMediaSourceId || this._item.MediaSources[0].Id;
+
+        this._renderTrackSelectionMenu(i18n.t('SelectVersion'), sources, currentId, (id) => {
+            if (this._selectedMediaSourceId === id) return;
+
+            this._selectedMediaSourceId = id;
+            log.info('Selected Media Source ID:', id);
+
+            // Persist the selection so it survives back-navigation and re-visits
+            storage.setItem(`mediaSource:${this._itemId}`, id);
+
+            // Reset track selections when version changes as they are source-specific
+            this._selectedAudioIndex = undefined;
+            this._selectedSubtitleIndex = undefined;
+        });
+    }
+
     _loadImages() {
         return new Promise((resolve) => {
             const item = this._item;
@@ -549,6 +605,9 @@ class DetailsPage extends Page {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
             await this._loadAlbumSongs();
+        } else if (this._item.Type === 'Playlist') {
+            // Playlist: load the server-ordered item list using the dedicated endpoint
+            await this._loadPlaylistItems();
         }
 
         // Render people if available
@@ -633,6 +692,101 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Fetch all items inside a Jellyfin Playlist using the dedicated endpoint.
+     * Unlike generic getItems(), /Playlists/{id}/Items respects the user's
+     * defined ordering and returns PlaylistItemId per entry for SyncPlay.
+     */
+    async _loadPlaylistItems() {
+        try {
+            const response = await api.getPlaylistItems(this._itemId);
+            this._playlistItems = response?.Items || [];
+
+            if (this._playlistItems.length > 0) {
+                this._renderPlaylistItems();
+            }
+        } catch (error) {
+            log.warn('Failed to load playlist items', error);
+        }
+    }
+
+    /**
+     * Render playlist items using a landscape MediaGrid.
+     *
+     * Playlists can contain mixed media (movies, episodes, music videos,
+     * audio) so we use 'thumb' landscape cards — they work uniformly
+     * regardless of what content type each item is, mirroring how
+     * jellyfin-web renders playlists as a vertical thumb list.
+     *
+     * The section title is updated with the item count so users know
+     * how long the playlist is at a glance.
+     */
+    _renderPlaylistItems() {
+        const container = this.$('#playlist-items-list');
+        const section = this.$('#playlist-items-section');
+        if (!section || !container || !this._playlistItems?.length) return;
+
+        // Reveal the section
+        section.classList.remove('hidden');
+
+        // Update the section header with item count so the user can see
+        // how many entries are in the playlist without scrolling
+        const titleEl = this.$('#playlist-items-title');
+        if (titleEl) {
+            const count = this._playlistItems.length;
+            titleEl.textContent = count === 1
+                ? i18n.t('ItemCountSingle') || '1 Item'
+                : i18n.t('ItemCountValue', [count]) || `${count} Items`;
+        }
+
+        // Build the landscape grid — each card navigates to its own details page
+        this._playlistGrid = new MediaGrid({
+            id: 'playlist-items-grid',
+            items: this._playlistItems,
+            type: 'thumb',           // Landscape thumb aspect ratio
+            contextType: 'playlist-grid',
+            limit: 1000,
+            isLandscape: true,       // Landscape layout for mixed content
+            onClick: (card) => {
+                // Save focus context so Back navigation returns to the same card
+                const stateKey = `details:lastFocusedItem:${this._itemId}`;
+                if (card.dataset.itemId) {
+                    state.set(stateKey, {
+                        itemId: card.dataset.itemId,
+                        sectionId: 'details-playlist-items'
+                    });
+                    router.navigate(`/details/${card.dataset.itemId}`);
+                }
+            }
+        });
+
+        container.innerHTML = this._playlistGrid.render();
+        this._playlistGrid.onMounted();
+
+        // Register focus section using the same grid pattern as the Season episode grid
+        const upwardLink = this._getPreviousVisibleSection('details-playlist-items')?.targetName || 'details-actions';
+        const nextSection = this._getNextVisibleSection('details-playlist-items');
+        const leaveDownTarget = nextSection ? nextSection.targetName : null;
+
+        this.registerFocusSection('details-playlist-items', container, {
+            orientation: 'grid',
+            leaveUp: upwardLink,
+            leaveDown: leaveDownTarget,
+            leaveLeft: 'sidebar',
+            onEnter: () => {
+                // First entry only: land on the very first card.
+                // After that, FocusManager uses spatial memory.
+                if (!this._hasEnteredPlaylistGrid) {
+                    this._hasEnteredPlaylistGrid = true;
+                    return container.querySelector('.media-card');
+                }
+                return null;
+            }
+        });
+
+        this._updateLeaveDown(upwardLink, 'details-playlist-items');
+    }
+
     _renderAlbumSongs(songs) {
         const container = this.$('#songs-list');
         const section = this.$('#songs-section');
@@ -645,7 +799,8 @@ class DetailsPage extends Page {
             items: songs,
             type: 'square', // Square posters as requested
             contextType: 'album-grid',
-            limit: 1000,
+            limit: 60,
+            moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Audio`,
             isLandscape: false, // Not landscape
             onClick: (card) => {
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -713,6 +868,7 @@ class DetailsPage extends Page {
             'details-rich-meta',
             'collection-movies-section',
             'collection-shows-section',
+            'details-playlist-items',   // Playlist items grid (Playlist type)
             'details-next-up',
             'details-seasons',
             'details-episodes',
@@ -745,6 +901,20 @@ class DetailsPage extends Page {
     }
 
     async _loadCollectionItems() {
+        log.info('Loading collection items for:', this._itemId);
+
+        // Determine sort order
+        // Jellyfin DisplayOrder settings: Default, SortName, PremiereDate
+        // User wants default for collections in Litefin to be PremiereDate (Release Date)
+        let sortBy = 'PremiereDate';
+        if (this._item?.DisplayOrder === 'SortName') {
+            sortBy = 'SortName';
+        } else if (this._item?.DisplayOrder === 'Default') {
+            sortBy = 'DateModified';
+        } else if (this._item?.DisplayOrder === 'PremiereDate') {
+            sortBy = 'PremiereDate';
+        }
+
         try {
             const [movies, shows] = await Promise.all([
                 api.getItems({
@@ -752,14 +922,18 @@ class DetailsPage extends Page {
                     IncludeItemTypes: 'Movie',
                     Recursive: true,
                     Fields: 'PrimaryImageAspectRatio,ProductionYear',
-                    Limit: 50 // Rational limit
+                    SortBy: sortBy,
+                    SortOrder: 'Ascending',
+                    Limit: 100 // Increased limit to capture larger collections
                 }),
                 api.getItems({
                     ParentId: this._itemId,
                     IncludeItemTypes: 'Series',
                     Recursive: true,
                     Fields: 'PrimaryImageAspectRatio,ProductionYear',
-                    Limit: 50
+                    SortBy: sortBy,
+                    SortOrder: 'Ascending',
+                    Limit: 100
                 })
             ]);
 
@@ -1516,7 +1690,9 @@ class DetailsPage extends Page {
         // Shuffle Button Visibility
         const shuffleBtn = this.$('.shuffle-btn');
         if (shuffleBtn) {
-            const isShuffleable = ['Series', 'Season', 'BoxSet'].includes(item.Type);
+            // Playlists get shuffle too — they are inherently sequential,
+            // and shuffle is a natural interaction users expect.
+            const isShuffleable = ['Series', 'Season', 'BoxSet', 'Playlist'].includes(item.Type);
             if (item.Type === 'Photo') {
                 shuffleBtn.classList.remove('hidden');
                 shuffleBtn.setAttribute('tabindex', '0');
@@ -1561,6 +1737,21 @@ class DetailsPage extends Page {
                 subtitleBtn.classList.remove('hidden');
                 subtitleBtn.setAttribute('tabindex', '0');
             } else {
+                subtitleBtn.classList.add('hidden');
+                subtitleBtn.setAttribute('tabindex', '-1');
+            }
+        }
+
+        // ── Playlist-specific overrides ──────────────────────────────────────────
+        // A Playlist has no single MediaSource — audio stream and subtitle track
+        // info live on each individual item, not on the container. Showing these
+        // buttons would just open an empty menu, so we hide them.
+        if (item.Type === 'Playlist') {
+            if (audioBtn) {
+                audioBtn.classList.add('hidden');
+                audioBtn.setAttribute('tabindex', '-1');
+            }
+            if (subtitleBtn) {
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
@@ -1652,7 +1843,8 @@ class DetailsPage extends Page {
                 items: this._episodes,
                 type: 'episode',
                 contextType: 'season-grid',
-                limit: 1000,
+                limit: 60,
+                moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                 isLandscape: true,
                 onClick: (card) => {
                     const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -1834,6 +2026,12 @@ class DetailsPage extends Page {
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
             },
+            // Playlist items — shown when the item is of Type 'Playlist'
+            {
+                name: 'details-playlist-items',
+                elementId: '#playlist-items-list',
+                isVisible: () => isNotHidden('#playlist-items-section')
+            },
             // Standard content rows
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
@@ -1931,6 +2129,12 @@ class DetailsPage extends Page {
                 name: 'collection-shows-section',
                 elementId: '#collection-shows-row',
                 isVisible: () => isNotHidden('#collection-shows-section')
+            },
+            // Playlist items — reverse position mirrors _getNextVisibleSection
+            {
+                name: 'details-playlist-items',
+                elementId: '#playlist-items-list',
+                isVisible: () => isNotHidden('#playlist-items-section')
             },
             {
                 name: 'collection-movies-section',
@@ -2254,6 +2458,36 @@ class DetailsPage extends Page {
             }
         }
 
+        // ── Playlist playback ────────────────────────────────────────────────
+        // Playlists have no direct MediaSource, so we resolve the first item
+        // (or a random one for shuffle) and hand contextType:'playlist' to the
+        // PlayQueue so it fetches and sequences the entire list for auto-advance.
+        if (this._item.Type === 'Playlist') {
+            if (this._playlistItems?.length > 0) {
+                // Use the already-fetched items (instant, no extra network round-trip)
+                itemToPlay = isShufflePlay
+                    ? this._playlistItems[Math.floor(Math.random() * this._playlistItems.length)]
+                    : this._playlistItems[0];
+            } else {
+                // Items not yet loaded (user pressed Play before the grid rendered)
+                try {
+                    const result = await api.getPlaylistItems(this._item.Id, { Limit: 1 });
+                    if (result?.Items?.length > 0) {
+                        itemToPlay = result.Items[0];
+                    } else {
+                        log.warn('Playlist is empty, nothing to play');
+                        return;
+                    }
+                } catch (e) {
+                    log.error('Failed to resolve playlist playback item', e);
+                    return;
+                }
+            }
+            // Tag context so PlayQueue._initPlaylistQueue() builds the full ordered list
+            itemToPlay.contextType = 'playlist';
+            itemToPlay.contextId = this._item.Id;
+        }
+
         // FORCE HIGH QUALITY for Player transition (must match _loadImages params)
         const backdropUrl = BackdropManager.getBackdropUrl(this._item, {
             maxWidth: 3840,
@@ -2263,6 +2497,7 @@ class DetailsPage extends Page {
         eventBus.emit('player:play', {
             item: itemToPlay,
             resume,
+            mediaSourceId: this._selectedMediaSourceId,
             audioStreamIndex: this._selectedAudioIndex,
             subtitleStreamIndex: this._selectedSubtitleIndex,
             backdropUrl
@@ -2275,10 +2510,11 @@ class DetailsPage extends Page {
     }
 
     _showAudioTrackMenu() {
-        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        if (!mediaSource?.MediaStreams) return;
 
         const key = 'Audio';
-        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
 
         // Find current selection (or default)
         let currentIndex = this._selectedAudioIndex;
@@ -2296,14 +2532,15 @@ class DetailsPage extends Page {
     }
 
     _showSubtitleTrackMenu() {
-        if (!this._item?.MediaSources?.[0]?.MediaStreams) return;
+        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        const tracks = this._item.MediaSources[0].MediaStreams.filter((s) => s.Type === key);
+        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
 
         let currentIndex = this._selectedSubtitleIndex;
         if (currentIndex === undefined) {
-            currentIndex = this._item.MediaSources[0].DefaultSubtitleStreamIndex; // Can be -1/null
+            currentIndex = mediaSource.DefaultSubtitleStreamIndex; // Can be -1/null
         }
 
         // Add "Off" option
@@ -2349,6 +2586,17 @@ class DetailsPage extends Page {
                         <span class="track-badge">${type}</span>
                         <span class="track-badge">${location}</span>
                     `;
+                }
+
+                // For version selection, add resolution metadata
+                if (title === i18n.t('SelectVersion') && track.Id) {
+                    const resolution = track.Height ? `${track.Height}p` : '';
+                    
+                    if (resolution) {
+                        metadataHtml = `
+                            <span class="track-badge">${resolution}</span>
+                        `;
+                    }
                 }
 
                 return `
@@ -2449,7 +2697,11 @@ class DetailsPage extends Page {
         overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
             btn.onclick = (e) => {
                 e.stopPropagation();
-                const index = parseInt(btn.dataset.index);
+                // data-index may be a numeric stream index OR a MediaSource GUID string.
+                // parseInt on a GUID always returns NaN, so we use the raw string value
+                // and only coerce to a number when it is actually numeric.
+                const rawIndex = btn.dataset.index;
+                const index = /^-?\d+$/.test(rawIndex) ? parseInt(rawIndex, 10) : rawIndex;
                 onSelect(index);
                 this._closeTrackMenu();
             };
@@ -2490,6 +2742,14 @@ class DetailsPage extends Page {
             options.push({ id: 'go-to-series', label: i18n.t('GoToSeries') });
         } else if (this._item?.Type === 'Audio' && this._item.AlbumId) {
             options.push({ id: 'go-to-album', label: i18n.t('GoToAlbum') });
+        }
+
+        if (this._item?.MediaSources?.length > 1) {
+            options.push({ id: 'select-version', label: i18n.t('SelectVersion') });
+        }
+
+        if (this._item?.Type === 'BoxSet') {
+            options.push({ id: 'display-order', label: i18n.t('LabelDisplayOrder') || 'Display order' });
         }
 
         if (this._item?.MediaSources?.length > 0) {
@@ -2642,6 +2902,47 @@ class DetailsPage extends Page {
                 } else if (id === 'go-to-album') {
                     this._closeMoreMenu();
                     router.navigate(`/details/${this._item.AlbumId}`);
+                } else if (id === 'select-version') {
+                    // Snapshot focus state BEFORE closing the more-menu, because
+                    // _closeMoreMenu() nulls out _prevFocus / _prevSection, which
+                    // _renderTrackSelectionMenu would then capture as null — causing
+                    // focus to be lost when the version menu closes.
+                    const versionPrevFocus = this._prevFocus;
+                    const versionPrevSection = this._prevSection;
+
+                    // Tear down the more-menu without the normal focus-restore path
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+                    this._prevFocus = null;
+                    this._prevSection = null;
+                    this.onBack = oldOnBack;
+
+                    // Re-seed focus state so the version menu restores correctly
+                    this._prevFocus = versionPrevFocus;
+                    this._prevSection = versionPrevSection;
+
+                    this._showVersionSelectionMenu();
+                } else if (id === 'display-order') {
+                    // Similar to select-version, we close this menu but keep focus state
+                    const versionPrevFocus = this._prevFocus;
+                    const versionPrevSection = this._prevSection;
+
+                    this._isMoreMenuOpen = false;
+                    overlay.classList.remove('visible');
+                    focusManager.unregister(optionsSection);
+                    focusManager.unregister(actionsSection);
+                    setTimeout(() => overlay.remove(), 300);
+                    this._prevFocus = null;
+                    this._prevSection = null;
+                    this.onBack = oldOnBack;
+
+                    this._prevFocus = versionPrevFocus;
+                    this._prevSection = versionPrevSection;
+
+                    this._showDisplayOrderMenu();
                 } else if (id === 'media-info') {
                     // Close menu but DON'T restore focus yet (MediaInfo will take it)
                     this._isMoreMenuOpen = false;
@@ -2926,9 +3227,162 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * Show Display Order selection menu
+     */
+    _showDisplayOrderMenu() {
+        const oldOnBack = this.onBack;
+        const prevFocus = this._prevFocus;
+        const prevSection = this._prevSection;
 
+        let overlay = document.getElementById('details-display-order-menu');
+        if (overlay) overlay.remove();
 
-    // ============================================================================
+        overlay = document.createElement('div');
+        overlay.id = 'details-display-order-menu';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        // Options according to jellyfin-web: Default (DateModified), SortName, PremiereDate
+        const options = [
+            { id: 'Default', label: i18n.t('OptionDateModified') || 'Date Modified' },
+            { id: 'SortName', label: i18n.t('OptionSortName') || 'Sort Name' },
+            { id: 'PremiereDate', label: i18n.t('OptionReleaseDate') || 'Release Date' }
+        ];
+
+        const optionsHtml = options
+            .map((opt) => `
+                <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
+                    <span>${opt.label}</span>
+                </button>
+            `)
+            .join('');
+
+        overlay.innerHTML = `
+            <div class="settings-modal" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${i18n.t('LabelDisplayOrder') || 'Display Order'}</h2>
+                </div>
+                <div class="modal-options">
+                    ${optionsHtml}
+                </div>
+                <div class="modal-actions">
+                    <button class="modal-action-btn" id="btn-display-order-cancel" tabindex="0">${i18n.t('ButtonCancel')}</button>
+                </div>
+            </div>
+        `;
+
+        const optionsSection = 'display-order-options';
+        const actionsSection = 'display-order-actions';
+
+        focusManager.register(optionsSection, overlay.querySelector('.modal-options'), {
+            orientation: 'vertical',
+            leaveDown: actionsSection,
+            enterTo: 'last'
+        });
+
+        focusManager.register(actionsSection, overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            leaveUp: optionsSection
+        });
+
+        focusManager.setActiveSection(optionsSection);
+
+        const closeMenu = () => {
+            overlay.classList.remove('visible');
+            focusManager.unregister(optionsSection);
+            focusManager.unregister(actionsSection);
+            setTimeout(() => overlay.remove(), 300);
+
+            this.onBack = oldOnBack;
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        this.onBack = () => {
+            closeMenu();
+            return true;
+        };
+
+        overlay.querySelectorAll('.modal-option-btn').forEach((btn) => {
+            btn.onclick = async (e) => {
+                e.stopPropagation();
+                const value = btn.dataset.id;
+                closeMenu();
+                await this._updateDisplayOrder(value);
+            };
+        });
+
+        overlay.querySelector('#btn-display-order-cancel').onclick = (e) => {
+            e.stopPropagation();
+            closeMenu();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeMenu();
+        };
+    }
+
+    /**
+     * Update the display order via API and refresh content
+     */
+    async _updateDisplayOrder(value) {
+        log.info('Updating display order to:', value);
+
+        try {
+            // Update the local state first so the reload uses it immediately
+            this._item.DisplayOrder = value;
+
+            // Construct a clean metadata object to avoid corruption.
+            // We only send the fields that are intended for metadata updates, 
+            // avoiding large, read-only data like MediaSources and MediaStreams.
+            const updateObj = {
+                Id: this._item.Id,
+                Name: this._item.Name,
+                OriginalTitle: this._item.OriginalTitle,
+                ForcedSortName: this._item.ForcedSortName,
+                DisplayOrder: value,
+                Overview: this._item.Overview,
+                PremiereDate: this._item.PremiereDate,
+                ProductionYear: this._item.ProductionYear,
+                Genres: this._item.Genres || [],
+                Tags: this._item.Tags || [],
+                Studios: (this._item.Studios || []).map(s => ({ Name: s.Name || s })),
+                People: (this._item.People || []).map(p => ({
+                    Name: p.Name,
+                    Id: p.Id,
+                    Role: p.Role,
+                    Type: p.Type,
+                    PrimaryImageTag: p.PrimaryImageTag
+                })),
+                LockData: this._item.LockData || false,
+                LockedFields: this._item.LockedFields || [],
+                ProviderIds: this._item.ProviderIds || {},
+                Taglines: this._item.Taglines || [],
+                DateCreated: this._item.DateCreated,
+                Status: this._item.Status
+            };
+
+            await api.updateItem(updateObj);
+
+            log.info('Display order updated on server');
+            
+            eventBus.emit('notify', {
+                text: i18n.t('Success'),
+                type: 'success'
+            });
+
+            // Reload the collection items to reflect the new order
+            this._loadCollectionItems();
+
+        } catch (error) {
+            log.error('Failed to update display order:', error);
+            eventBus.emit('notify', {
+                text: i18n.t('LabelFailed'),
+                type: 'error'
+            });
+        }
+    }
     // ── Trailer Playback ──────────────────────────────────────────────────────
     // Phase 1: button visibility, selection dialog, local trailer playback.
     // Phase 2: remote trailer via iframe (stub in _showRemoteTrailerPlayer).

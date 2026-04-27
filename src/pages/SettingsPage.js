@@ -418,6 +418,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
+                        <span class="setting-description" data-i18n="ShowMdbAwardsDescription">${i18n.t('ShowMdbAwardsDescription') || 'Display award badges from MDBList on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMdbAwards') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-mdb-awards" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
@@ -626,7 +639,7 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="PreferEpisodeImages">${i18n.t('PreferEpisodeImages') || 'Prefer Episode Images'}</span>
-                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || "Use episode thumbnails instead of series images for Next Up and Continue Watching rows."}</span>
+                        <span class="setting-description" data-i18n="PreferEpisodeImagesDescription">${i18n.t('PreferEpisodeImagesDescription') || 'Use episode thumbnails instead of series images for Next Up and Continue Watching rows.'}</span>
                     </div>
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:preferEpisodeImagesLocal') === 'true' ? 'active' : ''}" 
@@ -823,6 +836,62 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false' ? 'active' : ''}" 
                                  id="toggle-indicator-animation" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-interval-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselInterval">${i18n.t('HeroCarouselInterval') || 'Carousel Switch Timer'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIntervalDescription">${i18n.t('HeroCarouselIntervalDescription') || 'Customize how long each hero slide stays on screen before switching.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-interval-select',
+                            [
+                                { value: '2000', label: i18n.t('Seconds', [2]) || '2 seconds' },
+                                { value: '4000', label: i18n.t('Seconds', [4]) || '4 seconds' },
+                                { value: '5000', label: i18n.t('Seconds', [5]) || '5 seconds' },
+                                { value: '8000', label: i18n.t('Seconds', [8]) || '8 seconds' },
+                                { value: '10000', label: i18n.t('Seconds', [10]) || '10 seconds' },
+                                { value: '15000', label: i18n.t('Seconds', [15]) || '15 seconds' },
+                                { value: '20000', label: i18n.t('Seconds', [20]) || '20 seconds' },
+                                { value: '25000', label: i18n.t('Seconds', [25]) || '25 seconds' },
+                                { value: '30000', label: i18n.t('Seconds', [30]) || '30 seconds' },
+                                { value: '40000', label: i18n.t('Seconds', [40]) || '40 seconds' },
+                                { value: '60000', label: i18n.t('Seconds', [60]) || '60 seconds' }
+                            ],
+                            storage.getItem('pref:heroCarouselInterval') || '8000'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-count-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselCount">${i18n.t('HeroCarouselCount') || 'Carousel Item Count'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselCountDescription">${i18n.t('HeroCarouselCountDescription') || 'Choose how many items to load in the hero carousel (1-10).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'hero-carousel-count-select',
+                            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12, 15, 20, 25, 30].map((v) => ({
+                                value: v.toString(),
+                                label: v.toString()
+                            })),
+                            storage.getItem('pref:heroCarouselCount') || '5'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item" id="hero-carousel-mdb-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselMdbList">${i18n.t('HeroCarouselMdbList') || 'Show MDB Ratings & Awards'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselMdbListDescription">${i18n.t('HeroCarouselMdbListDescription') || 'Display premium ratings (IMDb, RT) and awards directly on the home carousel items.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselMdbList') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-mdb" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -1230,9 +1299,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-intro-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionIntro') || 'AskToSkip'
                         )}
@@ -1248,9 +1317,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-outro-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionOutro') || 'AskToSkip'
                         )}
@@ -1266,9 +1335,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-recap-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionRecap') || 'None'
                         )}
@@ -1284,9 +1353,9 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'segment-action-preview-select',
                             [
-                                { value: 'None',      label: i18n.t('SegmentActionNone')      || 'Disabled' },
+                                { value: 'None', label: i18n.t('SegmentActionNone') || 'Disabled' },
                                 { value: 'AskToSkip', label: i18n.t('SegmentActionAskToSkip') || 'Show Skip Button' },
-                                { value: 'Skip',      label: i18n.t('SegmentActionSkip')      || 'Auto-Skip' }
+                                { value: 'Skip', label: i18n.t('SegmentActionSkip') || 'Auto-Skip' }
                             ],
                             PlayerSettings.get('skipActionPreview') || 'None'
                         )}
@@ -1520,6 +1589,20 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ForceDirectPlay">${i18n.t('ForceDirectPlay') || 'Force Direct Play'}</span>
+                        <span class="setting-description" data-i18n="ForceDirectPlayDescription">${i18n.t('ForceDirectPlayDescription') || 'Forces direct play for all media formats. May cause playback failure if the device does not support the format natively.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('forceDirectPlay') ? 'active' : ''}" 
+                                id="toggle-force-direct-play" 
+                                data-setting="forceDirectPlay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -1584,6 +1667,20 @@ class SettingsPage extends Page {
                             ],
                             PlayerSettings.get('subtitleBurnIn') || ''
                         )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRememberTracksForSession">${i18n.t('LabelRememberTracksForSession') || 'Remember Tracks for Session'}</span>
+                        <span class="setting-description" data-i18n="RememberTracksForSessionDescription">${i18n.t('RememberTracksForSessionDescription') || 'Automatically carry your active audio and subtitle tracks to the next episode.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('rememberTracksForSession') !== false ? 'active' : ''}" 
+                                 id="subtitle-remember-tracks-toggle" 
+                                 data-setting="rememberTracksForSession"
+                                 tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -2538,6 +2635,18 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle MDBList Awards
+        const mdbAwardsBtn = this.$('#toggle-mdb-awards');
+        if (mdbAwardsBtn) {
+            mdbAwardsBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showMdbAwards', newValue.toString());
+                mdbAwardsBtn.classList.toggle('active', newValue);
+                log.info(`Show MDBList Awards set to: ${newValue}`);
+            });
+        }
+
         // Toggle Hero Carousel
         const heroCarouselBtn = this.$('#toggle-hero-carousel');
         if (heroCarouselBtn) {
@@ -2554,6 +2663,9 @@ class SettingsPage extends Page {
                 const zoomItem = this.$('#hero-carousel-zoom-item');
                 const heroQualityItem = this.$('#hero-image-quality-item');
                 const indicatorAnimItem = this.$('#hero-carousel-indicator-animation-item');
+                const intervalItem = this.$('#hero-carousel-interval-item');
+                const countItem = this.$('#hero-carousel-count-item');
+                const mdbItem = this.$('#hero-carousel-mdb-item');
 
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
@@ -2561,6 +2673,10 @@ class SettingsPage extends Page {
                 if (zoomItem) zoomItem.style.display = newValue ? '' : 'none';
                 if (heroQualityItem) heroQualityItem.style.display = newValue ? '' : 'none';
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
+                if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
+                if (countItem) countItem.style.display = newValue ? '' : 'none';
+                if (mdbItem)
+                    mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
@@ -2612,6 +2728,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselIndicatorAnimation', newValue.toString());
                 heroCarouselIndicatorBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Indicator Animation set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hero Carousel MDBList
+        const heroCarouselMdbBtn = this.$('#toggle-hero-carousel-mdb');
+        if (heroCarouselMdbBtn) {
+            heroCarouselMdbBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:heroCarouselMdbList') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:heroCarouselMdbList', newValue.toString());
+                heroCarouselMdbBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel MDBList set to: ${newValue}`);
             });
         }
 
@@ -2808,6 +2936,7 @@ class SettingsPage extends Page {
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
             'toggle-force-transcode',
+            'toggle-force-direct-play',
             'toggle-background-service',
             // Interlaced content fallback — auto-switch to HTML5 when AVPlay
             // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
@@ -2908,18 +3037,75 @@ class SettingsPage extends Page {
                 const isCurrentlyEnabled = btn.classList.contains('active');
                 const newEnabled = !isCurrentlyEnabled;
 
-                // Optimistically update the toggle UI immediately for responsiveness
-                btn.classList.toggle('active', newEnabled);
-
-                // Update the inline status badge so the user sees feedback right away
+                // Get the status badge element once for reuse
                 const statusEl = btn.closest('.setting-item')?.querySelector('.plugin-status');
-                if (statusEl) {
-                    statusEl.className = `plugin-status plugin-status--${newEnabled ? 'active' : 'disabled'}`;
-                    statusEl.textContent = i18n.t(newEnabled ? 'Active' : 'Disabled');
+
+                // ── Disabling is always immediate, no server check needed ──────
+                if (!newEnabled) {
+                    btn.classList.remove('active');
+                    if (statusEl) {
+                        statusEl.className = 'plugin-status plugin-status--disabled';
+                        statusEl.textContent = i18n.t('Disabled');
+                    }
+                    await pluginManager.setPluginEnabled(pluginId, false);
+                    return;
                 }
 
-                // Propagate change through the plugin manager (may call destroy/init)
-                await pluginManager.setPluginEnabled(pluginId, newEnabled);
+                // ── Enabling: check server dependency first ───────────────────
+                // Check if this plugin requires a Jellyfin server plugin to function.
+                const entry = pluginManager.getPlugin(pluginId);
+                const hasDependency = !!entry?.plugin?.serverDependency;
+
+                if (hasDependency) {
+                    // Show a "checking..." interim state so the user knows something is happening
+                    btn.disabled = true;
+                    if (statusEl) {
+                        statusEl.className = 'plugin-status plugin-status--pending';
+                        statusEl.textContent = i18n.t('Checking');
+                    }
+
+                    try {
+                        const depCheck = await pluginManager.checkServerDependency(pluginId);
+
+                        if (!depCheck.available && !depCheck.deferred) {
+                            // ── Server plugin is MISSING ─────────────────────
+                            // Revert UI to disabled state and show an error modal
+                            btn.disabled = false;
+                            btn.classList.remove('active');
+                            if (statusEl) {
+                                statusEl.className = 'plugin-status plugin-status--disabled';
+                                statusEl.textContent = i18n.t('Disabled');
+                            }
+
+                            // Show an informational error dialog using the existing modal overlay
+                            this._showPluginDependencyError(entry.plugin.name || pluginId, depCheck.serverPluginName);
+                            return;
+                        }
+
+                        // ── Dependency found (or deferred) — proceed to enable ─
+                        // If deferred, we allow enabling tentatively (consistent with startup flow).
+                        // The dependency will be re-confirmed at next playback.
+                        if (depCheck.deferred) {
+                            log.warn(
+                                `Plugin '${pluginId}' dependency check deferred (non-admin, no itemId) — enabling tentatively`
+                            );
+                        }
+                    } catch (err) {
+                        // Network or unexpected error — fail open (allow enabling)
+                        log.warn(`Plugin '${pluginId}' dependency check failed with error, enabling anyway:`, err);
+                    }
+
+                    btn.disabled = false;
+                }
+
+                // ── All clear — commit the enable ─────────────────────────────
+                // Optimistically update toggle and status badge
+                btn.classList.add('active');
+                if (statusEl) {
+                    statusEl.className = 'plugin-status plugin-status--active';
+                    statusEl.textContent = i18n.t('Active');
+                }
+                await pluginManager.setPluginEnabled(pluginId, true);
             });
         });
     }
@@ -3164,6 +3350,7 @@ class SettingsPage extends Page {
         // Unregister modal focus
         focusManager.unregister('modal-options');
         focusManager.unregister('modal-actions');
+        focusManager.unregister('modal-error-content');
 
         // Restore Section & Focus
         if (this._prevSection) {
@@ -3175,6 +3362,61 @@ class SettingsPage extends Page {
 
         this._prevFocus = null;
         this._prevSection = null;
+    }
+
+    /**
+     * Show an error modal when a plugin requires a server dependency that isn't met.
+     */
+    _showPluginDependencyError(pluginName, dependencyName) {
+        const overlay = this.$('#modal-overlay');
+        if (!overlay) return;
+
+        // Store focus context for restoration
+        this._prevFocus = focusManager.getFocused();
+        this._prevSection = focusManager.getActiveSection();
+
+        const title = i18n.t('MissingServerPlugin') || 'Missing Server Plugin';
+        const message =
+            i18n.t('MissingServerPluginMessage', { pluginName }, { dependencyName }) ||
+            `'${pluginName}' requires the '${dependencyName}' plugin to be installed and enabled on your Jellyfin server. Please install it via the Jellyfin dashboard and try again.`;
+        const btnCloseText = i18n.t('ButtonClose') || 'Close';
+
+        overlay.innerHTML = `
+            <div class="settings-modal modal-error" role="dialog" aria-modal="true">
+                <div class="modal-header">
+                    <h2>${title}</h2>
+                </div>
+                <div class="modal-content" style="padding: 20px; font-size: 1.1em; color: var(--text-secondary); text-align: center; line-height: 1.5;">
+                    ${message}
+                </div>
+                <div class="modal-actions" style="margin-top: 10px;">
+                    <button class="modal-action-btn" id="btn-modal-error-ok" tabindex="0">${btnCloseText}</button>
+                </div>
+            </div>
+        `;
+
+        // Show Overlay
+        overlay.classList.add('visible');
+        overlay.setAttribute('aria-hidden', 'false');
+
+        // Bind Events
+        const btnOk = overlay.querySelector('#btn-modal-error-ok');
+        btnOk.addEventListener('click', (e) => {
+            e.stopPropagation();
+            this._closeSelectionModal();
+        });
+
+        // Register Focus Section just for the action button
+        this.registerFocusSection('modal-error-content', overlay.querySelector('.modal-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first'
+        });
+
+        // Set Focus
+        focusManager.setActiveSection('modal-error-content');
+        setTimeout(() => {
+            focusManager.focusElement(btnOk);
+        }, 50);
     }
 
     /**
@@ -3290,9 +3532,9 @@ class SettingsPage extends Page {
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
-            'segment-action-intro-select':   { type: 'player', key: 'skipActionIntro' },
-            'segment-action-outro-select':   { type: 'player', key: 'skipActionOutro' },
-            'segment-action-recap-select':   { type: 'player', key: 'skipActionRecap' },
+            'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },
+            'segment-action-outro-select': { type: 'player', key: 'skipActionOutro' },
+            'segment-action-recap-select': { type: 'player', key: 'skipActionRecap' },
             'segment-action-preview-select': { type: 'player', key: 'skipActionPreview' },
 
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
@@ -3301,6 +3543,8 @@ class SettingsPage extends Page {
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
+            'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
+            'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
             'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
         };
 
@@ -3480,6 +3724,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('disableAssStyling', newValue);
                 forceTextToggle.classList.toggle('active', newValue);
                 log.info(`Force Text Mode set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Remember Tracks
+        const rememberTracksToggle = this.$('#subtitle-remember-tracks-toggle');
+        if (rememberTracksToggle) {
+            rememberTracksToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('rememberTracksForSession') !== false;
+                const newValue = !currentValue;
+                PlayerSettings.set('rememberTracksForSession', newValue);
+                rememberTracksToggle.classList.toggle('active', newValue);
+                log.info(`Remember Tracks For Session set to: ${newValue}`);
             });
         }
 
@@ -3991,7 +4247,9 @@ class SettingsPage extends Page {
                     .map((item, index) => {
                         const isLocked = item.locked;
                         const isFirst = index === 0 || (index > 0 && layoutVars[index - 1].locked);
-                        const isLast = index === layoutVars.length - 1 || (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
+                        const isLast =
+                            index === layoutVars.length - 1 ||
+                            (index < layoutVars.length - 1 && layoutVars[index + 1].locked);
 
                         return `
                         <div class="setting-item layout-row ${item.hidden ? 'layout-row-hidden' : ''}" data-id="${item.id}" data-index="${index}">

@@ -26,8 +26,9 @@ class HeroCarousel {
         this._timer = null;
         this._container = null;
         this._isFocused = false;
-        this._autoScrollInterval = 8000; // 8 seconds
-        
+        const savedInterval = storage.getItem('pref:heroCarouselInterval');
+        this._autoScrollInterval = savedInterval ? parseInt(savedInterval, 10) : 8000; // Default 8s
+
         // Bindings
         this._handleFocus = this._handleFocus.bind(this);
         this._handleBlur = this._handleBlur.bind(this);
@@ -41,24 +42,39 @@ class HeroCarousel {
 
         const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
-        const dotsHtml = this._items.map((_, index) => `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`).join('');
-        
+        const dotsHtml = this._items
+            .map(
+                (_, index) =>
+                    `<div class="hero-dot ${index === 0 ? 'active' : ''}" data-index="${index}"><div class="hero-dot-progress"></div></div>`
+            )
+            .join('');
+
         const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
         const isZoomEnabled = storage.getItem('pref:heroCarouselZoom') === 'true';
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
+        const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
         // Apply compact to the container to manage external margins (Banner Mode)
         // Use with-zoom to conditionally apply the focus transform
         // Use no-indicator-animation to disable the progress bar fill
         return `
-            <div id="hero-carousel-container" class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" tabindex="0">
+            <div id="hero-carousel-container" 
+                 class="hero-carousel-container ${carouselStyle} ${isCompact ? 'compact' : ''} ${isZoomEnabled ? 'with-zoom' : ''} ${!isAnimationEnabled ? 'no-indicator-animation' : ''} focusable" 
+                 style="--indicator-duration: ${intervalInSeconds}"
+                 tabindex="0">
                 <div class="hero-carousel">
                     <div class="hero-carousel-track">
                         ${itemsHtml}
                     </div>
+                    ${
+                        this._items.length > 1
+                            ? `
                     <div class="hero-indicators">
                         ${dotsHtml}
                     </div>
+                    `
+                            : ''
+                    }
                 </div>
             </div>
         `;
@@ -70,7 +86,7 @@ class HeroCarousel {
      */
     _renderItem(item, index, carouselStyle) {
         const isActive = index === 0;
-        
+
         // Get optimized image parameters from ImageService based on style
         const params = imageService.getParams(`hero-${carouselStyle}`);
 
@@ -86,7 +102,7 @@ class HeroCarousel {
         const useTextTitle = storage.getItem('pref:heroCarouselTextTitle') === 'true';
 
         let logoHtml = '';
-        
+
         if (!useTextTitle && logoItemId && logoTag) {
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
                 maxWidth: 800,
@@ -107,14 +123,26 @@ class HeroCarousel {
             const minutes = totalMinutes % 60;
             runtimeText = hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`;
         }
+
+        // Ratings logic: Hide standard community score if MDBList ratings are available, but keep Parental Guide (OfficialRating)
+        const hasMdbRatings = item._mdbMetadata && item._mdbMetadata.ratings && item._mdbMetadata.ratings.length > 0;
         const rating = item.OfficialRating;
-        const starRating = item.CommunityRating && shouldShowScore(item) ? `★ ${item.CommunityRating.toFixed(1)}` : '';
+        const starRating =
+            !hasMdbRatings && item.CommunityRating && shouldShowScore(item)
+                ? `★ ${item.CommunityRating.toFixed(1)}`
+                : '';
 
         let metaHtml = '';
         if (year) metaHtml += `<span class="hero-meta-item">${year}</span>`;
         if (runtimeText) metaHtml += `<span class="hero-meta-item">${runtimeText}</span>`;
         if (rating) metaHtml += `<span class="hero-meta-item hero-meta-badge">${rating}</span>`;
-        if (starRating) metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518; margin-left: 8px;">${starRating}</span>`;
+        if (starRating)
+            metaHtml += `<span class="hero-meta-item hero-meta-star" style="color: #f5c518;">${starRating}</span>`;
+
+        // Inject MDBList Metadata if present (Respect Score Visibility / Mystery Mode)
+        if (item._mdbMetadata && shouldShowScore(item)) {
+            metaHtml += this._renderMdbMetadata(item._mdbMetadata);
+        }
 
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
@@ -130,6 +158,74 @@ class HeroCarousel {
         `;
     }
 
+    /**
+     * Renders MDBList Ratings and Awards for the carousel row.
+     * @private
+     */
+    _renderMdbMetadata(data) {
+        if (!data) return '';
+
+        let html = '';
+        const assetBase = `${api.serverUrl}/Plugins/MdbListRatings/Assets/`;
+
+        // 1. Render Ratings
+        if (data.ratings && data.ratings.length > 0) {
+            for (const rating of data.ratings) {
+                if (rating.value === null || rating.value === undefined) continue;
+
+                const provider = this._getMdbProviderInfo(rating.source, rating.value);
+                const formattedValue = provider.format ? provider.format(rating.value) : rating.value;
+
+                if (provider.assetName) {
+                    const iconUrl = `${assetBase}${provider.assetName}`;
+                    html += `
+                        <div class="hero-mdb-item">
+                            <img src="${iconUrl}" class="hero-mdb-icon" alt="" />
+                            <span class="hero-mdb-value">${formattedValue}</span>
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        return html;
+    }
+
+    /**
+     * Helper to get provider info for MDBList ratings.
+     * @private
+     */
+    _getMdbProviderInfo(source, value) {
+        const s = source ? source.toLowerCase() : '';
+        const score = parseFloat(value);
+
+        if (s === 'imdb') {
+            return { assetName: 'IMDb.png' };
+        }
+        if (s === 'tomatoes') {
+            const assetName = score < 60 ? 'Rotten_Tomatoes_rotten.png' : 'Rotten_Tomatoes.png';
+            return { assetName, format: (v) => `${v}%` };
+        }
+        if (s === 'tomatoesaudience' || s === 'popcorn') {
+            const assetName =
+                score < 60 ? 'Rotten_Tomatoes_negative_audience.png' : 'Rotten_Tomatoes_positive_audience.png';
+            return { assetName, format: (v) => `${v}%` };
+        }
+        if (s === 'metacritic') {
+            return { assetName: 'Metacritic.png' };
+        }
+        if (s === 'trakt') {
+            return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
+        }
+        if (s === 'tmdb') {
+            return { assetName: 'TMDB.png', format: (v) => `${Math.round(v)}%` };
+        }
+        if (s === 'letterboxd') {
+            return { assetName: 'letterboxd.png', format: (v) => parseFloat(v).toFixed(1) };
+        }
+
+        return { assetName: null };
+    }
     /**
      * Initialize the component after it's in the DOM
      */
@@ -191,7 +287,7 @@ class HeroCarousel {
      */
     _onMove(direction) {
         const isRtl = document.documentElement.dir === 'rtl';
-        
+
         // Map physical directions to logical navigation based on current layout
         const backDir = isRtl ? 'right' : 'left';
         const forwardDir = isRtl ? 'left' : 'right';
@@ -219,7 +315,7 @@ class HeroCarousel {
     _startAutoScroll() {
         this._stopAutoScroll();
         if (this._items.length <= 1) return;
-        
+
         // Reset the visual progress bar to stay in sync with the JS timer
         // if animations are enabled.
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
@@ -300,22 +396,22 @@ class HeroCarousel {
         if (index === this._currentIndex) return;
 
         log.debug(`Navigating to hero item ${index}`);
-        
+
         const items = this._container.querySelectorAll('.hero-item');
         const dots = this._container.querySelectorAll('.hero-dot');
-        
+
         if (!items[index] || !dots[index]) return;
 
         // Update classes
         items[this._currentIndex].classList.remove('active');
         dots[this._currentIndex].classList.remove('active');
-        
+
         this._currentIndex = index;
-        
+
         items[this._currentIndex].classList.add('active');
         dots[this._currentIndex].classList.add('active');
 
-        // Restart timer on navigation. This will also restart the progress 
+        // Restart timer on navigation. This will also restart the progress
         // animation if it is enabled.
         this._startAutoScroll();
     }

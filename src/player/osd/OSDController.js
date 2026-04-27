@@ -21,7 +21,10 @@ import UpNextDialog from './UpNextDialog.js';
 import ChaptersModal from './ChaptersModal.js';
 import QueueModal from './QueueModal.js';
 import LyricsModal from './LyricsModal.js';
+import DescriptionModal from './DescriptionModal.js';
 import SyncPlayNotification from './SyncPlayNotification.js';
+
+import '../../styles/description-modal.css';
 
 const log = logger.create('OSDController');
 
@@ -243,6 +246,9 @@ export default class OSDController extends Component {
         // Lyrics modal — shows scrolling lyrics for audio items
         this.lyricsModal = new LyricsModal(this);
 
+        // Description modal — shows item details and overview
+        this.descriptionModal = new DescriptionModal(this);
+
         // SyncPlay notification overlay
         this.syncPlayNotification = new SyncPlayNotification(this);
 
@@ -262,9 +268,10 @@ export default class OSDController extends Component {
             this.chaptersModal,
             this.queueModal,
             this.lyricsModal,
+            this.descriptionModal,
             this.syncPlayNotification
         ];
-    }
+}
 
     // Public API for components
     get player() { return this._player; }
@@ -412,6 +419,7 @@ export default class OSDController extends Component {
                                     <span class="osd-syncplay-dot" id="osdSyncPlayDot"></span>
                                 </div>
                             </button>
+                            <button class="osd-btn" data-action="description" id="osdInfoBtn" tabindex="0" aria-label="Description">${ICONS.info}</button>
                             <button class="osd-btn" data-action="settings" tabindex="0">${ICONS.settings}</button>
                         </div>
                     </div>
@@ -944,6 +952,7 @@ export default class OSDController extends Component {
             this._updateFocus();
         }
     }
+
 
     toggleAspectRatioMenu(force) {
         if (force === undefined) {
@@ -1528,6 +1537,9 @@ export default class OSDController extends Component {
             case 'lyrics':
                 this.toggleLyricsModal(true);
                 break;
+            case 'description':
+                this.toggleDescriptionModal(true);
+                break;
             case 'syncplay':
                 // Lazy-import to avoid loading the group menu CSS on every startup
                 // Opens the SyncPlay group management modal overlay
@@ -2072,6 +2084,26 @@ export default class OSDController extends Component {
             const lyricsIdx = this._findActionIndex('lyrics');
             this._currentFocusIndex = lyricsIdx !== -1 ? lyricsIdx : 0;
             this._updateFocus();
+        }
+    }
+
+    /**
+     * Open or close the Description modal.
+     * Follows the same pattern as toggleChaptersModal().
+     *
+     * @param {boolean} show - True to open, false to close.
+     */
+    toggleDescriptionModal(show) {
+        if (show) {
+            this.activeMenu = this.descriptionModal;
+            this.descriptionModal.open(this._currentItem);
+        } else {
+            if (this.activeMenu === this.descriptionModal) {
+                this.activeMenu = null;
+            }
+            this.descriptionModal.hide();
+            this._cacheFocusableElements();
+            this.show();
         }
     }
 

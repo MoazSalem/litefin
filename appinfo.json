@@ -1,6 +1,6 @@
 {
     "id": "org.litefin.app",
-    "version": "0.36.0",
+    "version": "0.40.0",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",
@@ -10,6 +10,7 @@
     "disableBackHistoryAPI": true,
     "icon": "icon-80.png",
     "largeIcon": "icon-130.png",
+    "supportGIP": true,
     "bgImage": "assets/splash.png",
     "splashBackground": "assets/splash.png",
     "bgColor": "#0f0a14",

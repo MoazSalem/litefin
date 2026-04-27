@@ -1,0 +1,174 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - MDBList Ratings Plugin Styles (Apple HIG inspired)
+ * ============================================================================
+ */
+
+.mdblist-ratings-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 20px; /* Increased gap for a more premium look */
+    margin-bottom: 24px;
+    opacity: 0;
+    transform: translateY(10px);
+    transition: opacity 0.6s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.6s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.mdblist-ratings-row.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+/* Fallback for gap property in Safari older/Tizen TV WebKit */
+.mdblist-ratings-row > div {
+    margin-right: 20px;
+}
+.mdblist-ratings-row > div:last-child {
+    margin-right: 0;
+}
+
+.mdblist-item {
+    display: flex;
+    align-items: center;
+    color: var(--jf-text-primary, #ffffff);
+    font-size: 1.2rem;
+    font-weight: 500;
+}
+
+.provider-icon {
+    margin-right: 8px; /* gap between icon and text */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 32px; /* standard box for all icons */
+    min-width: 28px;
+}
+
+.provider-icon img {
+    height: 100%;
+    width: auto;
+    display: block;
+    object-fit: contain;
+}
+
+.provider-icon .star-emoji {
+    font-size: 28px; /* further boosted for visual weight */
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #f6c700;
+}
+
+/* Specific sizing to maintain visual weight parity */
+.icon-imdb img {
+    height: 24px;
+}
+
+.icon-tmdb img {
+    height: 22px;
+}
+
+.icon-letterboxd img {
+    height: 24px; /* boosted to 24px as requested for 'last 2' */
+}
+
+.icon-trakt img {
+    height: 26px;
+}
+
+.icon-rt img, 
+.icon-rt-aud img {
+    height: 28px;
+}
+
+.icon-metacritic img,
+.icon-metacritic-user img {
+    height: 26px;
+}
+
+.icon-metacritic-ms img {
+    height: 32px;
+    margin-top: -2px;
+}
+
+.icon-rogerebert img {
+    height: 30px;
+}
+
+.icon-kinopoisk img {
+    height: 26px;
+}
+
+.icon-mal img, 
+.icon-anilist img {
+    height: 26px;
+}
+
+.icon-tvmaze img {
+    height: 20px; /* Reduced to balance visual weight of the wide banner */
+}
+
+.mdblist-value {
+    letter-spacing: 0.3px;
+    font-variant-numeric: tabular-nums;
+    line-height: 32px; /* align with icon row height */
+}
+
+/* ============================================================================
+   Awards Row Styles
+   ============================================================================ */
+
+.mdblist-awards-row {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 16px;
+    margin-bottom: 24px;
+    opacity: 0;
+    max-width: 95%;
+    transform: translateY(10px);
+    transition: opacity 0.8s cubic-bezier(0.25, 0.1, 0.25, 1), transform 0.8s cubic-bezier(0.25, 0.1, 0.25, 1);
+    transition-delay: 0.2s;
+}
+
+.mdblist-awards-row.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.award-item {
+    display: flex;
+    align-items: center;
+    height: 40px;
+    flex-shrink: 0;
+}
+
+.award-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 40px; 
+}
+
+.award-icon img {
+    height: 40px !important;
+    width: auto !important;
+    max-height: 40px;
+    display: block;
+    object-fit: contain;
+    border-radius: 6px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.2);
+    box-sizing: border-box;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.4));
+    opacity: 0.95;
+}
+
+/* Tizen focus handling - ensuring row doesn't steal focus unintentionally */
+.mdblist-ratings-row:focus,
+.mdblist-awards-row:focus {
+    outline: none;
+}

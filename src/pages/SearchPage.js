@@ -134,35 +134,6 @@ class SearchPage extends Page {
                         const sectionConfig = focusManager.getSectionConfig(sectionId);
                         const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
-                        // Auto-expand logic if index > limit
-                        const gridKeyMap = {
-                            'search-movies-items': 'movies',
-                            'search-series-items': 'series',
-                            'search-episodes-items': 'episodes',
-                            'search-artists-items': 'artists',
-                            'search-albums-items': 'albums',
-                            'search-songs-items': 'songs',
-                            'search-people-items': 'people'
-                        };
-                        const gridKey = gridKeyMap[sectionId];
-                        if (gridKey && this._grids[gridKey]) {
-                            const grid = this._grids[gridKey];
-                            const index = grid.items.findIndex(
-                                (i) => i.Id === targetId || i.Id?.toString() === targetId
-                            );
-                            if (index >= grid.limit && !grid.expanded) {
-                                grid.expanded = true;
-                                const gridContainer = this.$(`#${grid.id}-items`);
-                                if (gridContainer) {
-                                    gridContainer.innerHTML = grid._renderItems();
-                                    lazyLoader.observe(gridContainer);
-                                    focusManager.invalidateCache(`${grid.id}-items`);
-                                }
-                                const btn = this.$(`#${grid.id}-btn`);
-                                if (btn) btn.textContent = i18n.t('ShowLess');
-                            }
-                        }
-
                         const savedCard = sectionContainer.querySelector(
                             `[data-item-id="${targetId}"], [data-id="${targetId}"]`
                         );
@@ -350,6 +321,8 @@ class SearchPage extends Page {
         const songs = this._results.filter((i) => i.Type === 'Audio');
         const people = this._results.filter((i) => i.Type === 'Person');
 
+        const queryParam = encodeURIComponent(this._query);
+
         // 1. Movies
         if (movies.length > 0) {
             this._grids.movies = new MediaGrid({
@@ -358,8 +331,8 @@ class SearchPage extends Page {
                 items: movies,
                 type: 'poster',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-movies-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Movie`,
+                onClick: (card) => this._saveStateAndNavigate('search-movies-items', card)
             });
             this._grids.movies.mount(container);
         }
@@ -372,8 +345,8 @@ class SearchPage extends Page {
                 items: series,
                 type: 'poster',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-series-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Series`,
+                onClick: (card) => this._saveStateAndNavigate('search-series-items', card)
             });
             this._grids.series.mount(container);
         }
@@ -384,11 +357,11 @@ class SearchPage extends Page {
                 id: 'search-episodes',
                 title: i18n.t('Episodes'),
                 items: episodes,
-                type: 'episode', // 'episode' or 'episode-primary'
+                type: 'episode', 
                 isLandscape: true,
                 limit: 9,
-                onClick: (card) => this._saveStateAndNavigate('search-episodes-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Episode&viewModeIndex=2`,
+                onClick: (card) => this._saveStateAndNavigate('search-episodes-items', card)
             });
             this._grids.episodes.mount(container);
         }
@@ -401,8 +374,8 @@ class SearchPage extends Page {
                 items: channels,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-channels-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=TvChannel`,
+                onClick: (card) => this._saveStateAndNavigate('search-channels-items', card)
             });
             this._grids.channels.mount(container);
         }
@@ -415,8 +388,8 @@ class SearchPage extends Page {
                 items: artists,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-artists-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=MusicArtist,Artist`,
+                onClick: (card) => this._saveStateAndNavigate('search-artists-items', card)
             });
             this._grids.artists.mount(container);
         }
@@ -429,8 +402,8 @@ class SearchPage extends Page {
                 items: albums,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-albums-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=MusicAlbum`,
+                onClick: (card) => this._saveStateAndNavigate('search-albums-items', card)
             });
             this._grids.albums.mount(container);
         }
@@ -443,8 +416,8 @@ class SearchPage extends Page {
                 items: songs,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-songs-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Audio`,
+                onClick: (card) => this._saveStateAndNavigate('search-songs-items', card)
             });
             this._grids.songs.mount(container);
         }
@@ -455,10 +428,10 @@ class SearchPage extends Page {
                 id: 'search-people',
                 title: i18n.t('HeaderCastAndCrew'),
                 items: people,
-                type: 'person', // Special card type? Or just poster.
+                type: 'person', 
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('search-people-items', card),
-                onSeeMore: () => this._registerSearchFocus()
+                moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Person`,
+                onClick: (card) => this._saveStateAndNavigate('search-people-items', card)
             });
             this._grids.people.mount(container);
         }

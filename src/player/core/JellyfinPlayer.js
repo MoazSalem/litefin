@@ -22,6 +22,7 @@ import SubtitleManager, { DeliveryMethod } from './SubtitleManager.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { api } from '../../api/index.js';
+import { storage } from '../../utils/StorageService.js';
 
 const log = logger.create('JellyfinPlayer');
 
@@ -427,7 +428,9 @@ export class JellyfinPlayer extends EventEmitter {
         if (event.type === PlayerEvent.TIME_UPDATE && event.data?.time !== undefined) {
             try {
                 // SubtitleManager handles both primary and secondary subtitle ticking
-                this._subtitleManager.tick(event.data.time);
+                if (this._subtitleManager) {
+                    this._subtitleManager.tick(event.data.time);
+                }
             } catch (e) {
                 console.error('Error ticking subtitle manager:', e.message || e, e.stack);
             }
@@ -439,7 +442,9 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Route embedded subtitle events through SubtitleManager
         if (event.type === 'subtitlechange') {
-            this._subtitleManager.handleEmbeddedSubtitleEvent(event.data);
+            if (this._subtitleManager) {
+                this._subtitleManager.handleEmbeddedSubtitleEvent(event.data);
+            }
             return;
         }
 
@@ -577,6 +582,63 @@ export class JellyfinPlayer extends EventEmitter {
             // (e.g. user set bitrate limits), still clear DirectPlayProfiles as a safeguard.
             if (needsDirectStreamForAudio) {
                 deviceProfile.DirectPlayProfiles = [];
+            }
+
+            // Apply Subtitle Mode logic before fetching PlaybackInfo
+            // This ensures the server includes the correct subtitle in TranscodingUrls (burn-in)
+            if (options.subtitleStreamIndex === undefined && options.item && options.item.MediaSources) {
+                const fallbackSource = options.item.MediaSources[0];
+                const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
+                if (ms && ms.MediaStreams) {
+                    const subtitleMode = PlayerSettings.get('subtitleMode') || 'Default';
+                    const subtitleStreams = ms.MediaStreams.filter(s => s.Type === 'Subtitle');
+                    let chosenIndex = undefined;
+
+                    if (subtitleMode === 'None') {
+                        chosenIndex = -1;
+                    } else if (subtitleMode === 'Default') {
+                        // Use Server's DefaultSubtitleStreamIndex if present
+                        if (ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null) {
+                            chosenIndex = ms.DefaultSubtitleStreamIndex;
+                        } else {
+                            const subStream = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                            if (subStream) chosenIndex = subStream.Index;
+                        }
+                    } else {
+                        const prefLang = storage.getItem('pref:subtitleLang') || 'none';
+                        const audioStreamIndex = options.audioStreamIndex !== undefined ? options.audioStreamIndex : ms.DefaultAudioStreamIndex;
+                        const audioStream = ms.MediaStreams.find(s => s.Type === 'Audio' && s.Index === audioStreamIndex);
+                        const audioLang = audioStream ? (audioStream.Language || 'und') : 'und';
+                        
+                        if (subtitleMode === 'OnlyForced') {
+                            let forced = subtitleStreams.find(s => s.IsForced && s.Language === prefLang);
+                            if (!forced) forced = subtitleStreams.find(s => s.IsForced);
+                            if (forced) chosenIndex = forced.Index;
+                        } else if (subtitleMode === 'Always') {
+                            let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                            if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
+                            if (!best) best = subtitleStreams.find(s => s.IsDefault || s.IsForced);
+                            if (!best && subtitleStreams.length > 0) best = subtitleStreams[0];
+                            if (best) chosenIndex = best.Index;
+                        } else if (subtitleMode === 'Smart') {
+                            // Smart = Show if audio is NOT in the preferred subtitle language.
+                            if (prefLang !== 'none' && audioLang !== prefLang && audioLang !== 'und') {
+                                let best = subtitleStreams.find(s => s.Language === prefLang && (s.IsDefault || s.IsForced));
+                                if (!best) best = subtitleStreams.find(s => s.Language === prefLang);
+                                if (best) chosenIndex = best.Index;
+                            } else {
+                                let forced = subtitleStreams.find(s => s.IsForced && s.Language === prefLang);
+                                if (!forced) forced = subtitleStreams.find(s => s.IsForced);
+                                if (forced) chosenIndex = forced.Index;
+                            }
+                        }
+                    }
+                    
+                    if (chosenIndex !== undefined) {
+                        options.subtitleStreamIndex = chosenIndex;
+                        log.info(`[SubtitleSelection] Pre-flight Mode: ${subtitleMode}, Chosen Index: ${chosenIndex}`);
+                    }
+                }
             }
 
             // Get playback info from server
@@ -839,13 +901,9 @@ export class JellyfinPlayer extends EventEmitter {
                 if (audioStream) this._currentAudioStreamIndex = audioStream.Index;
             }
 
-            // If not provided, subtitles default to -1 (off) or forced
-            if (this._currentSubtitleStreamIndex === undefined && mediaSource.MediaStreams) {
-                const subStream = mediaSource.MediaStreams.find(
-                    (s) => s.Type === 'Subtitle' && (s.IsDefault || s.IsForced)
-                );
-                if (subStream) this._currentSubtitleStreamIndex = subStream.Index;
-                else this._currentSubtitleStreamIndex = -1;
+            // If not provided (and not resolved pre-flight), subtitles default to off
+            if (this._currentSubtitleStreamIndex === undefined) {
+                this._currentSubtitleStreamIndex = -1;
             }
 
             // Check play method to determine if we need to force start-at-0 (for Transcode/Remux)
@@ -859,7 +917,7 @@ export class JellyfinPlayer extends EventEmitter {
 
             // User Request: When transcoding or remuxing, start playback at 0, 
             // and after it's loaded seek to the resume location if it exists
-            if ((playMethod === 'Transcode' || playMethod === 'DirectStream') && originalStartPositionTicks > 0) {
+            if ((playMethod === 'Transcode' || playMethod === 'DirectStream' || playMethod === 'Remux') && originalStartPositionTicks > 0) {
                 log.info(`Transcode detected: Starting at 0 ticks, will seek to ${originalStartPositionTicks} after load`);
                 effectiveStartPositionTicks = 0;
                 isTranscodeSeek = true;
@@ -1248,9 +1306,9 @@ export class JellyfinPlayer extends EventEmitter {
         //
         //   'all'        → server burns EVERY subtitle format. Always restart.
         //
-        //   'allcomplex' → server burns ONLY complex/bitmap formats (PGS,
-        //                   VOBSUB). Text formats (SRT, ASS, VTT) are delivered
-        //                   externally — no restart needed for those.
+        //   'allcomplex' / 'auto' → server burns ONLY complex/bitmap formats (PGS,
+        //                   VOBSUB, ASS, SSA). Simple Text formats (SRT, VTT) are 
+        //                   delivered externally — no restart needed for those.
         //
         // Guards: _playSetupInProgress     → called from play()'s own setup;
         //                                    subtitle index already in server req.
@@ -1261,32 +1319,33 @@ export class JellyfinPlayer extends EventEmitter {
         const isTranscodingSession = this._currentPlayMethod === 'Transcode' ||
                                      this._currentPlayMethod === 'DirectStream';
 
-        // In 'allcomplex' mode:
+        // In 'allcomplex' / 'auto' mode:
         //
-        //   Bitmap formats (PGS, VOBSUB): the server burns them in when it
-        //   transcodes. Selecting a PGS subtitle while DIRECT-PLAYING must also
+        //   Complex formats (PGS, VOBSUB, ASS, SSA): the server burns them in when it
+        //   transcodes. Selecting a complex subtitle while DIRECT-PLAYING must also
         //   trigger a restart — the server needs to start transcoding with the
-        //   PGS burned in. So bitmap = ALWAYS restart in allcomplex mode.
+        //   subtitle burned in. So complex = ALWAYS restart in allcomplex mode.
         //
-        //   Text formats (SRT, ASS, VTT): served externally by the server API,
+        //   Simple Text formats (SRT, VTT): served externally by the server API,
         //   so the client can render them without a restart UNLESS we're already
         //   transcoding — in that case the server has a specific SubtitleStreamIndex
         //   locked into the current HLS session and we must restart to change it.
-        const _isAllComplex = burnIn === 'allcomplex';
-        const isBitmapCodec = (() => {
+        const _isAllComplex = burnIn === 'allcomplex' || burnIn === 'auto';
+        const isComplexCodec = (() => {
             if (!_isAllComplex || index === -1) return false;
             const track = this.getSubtitleTracks().find(t => t.Index === index);
             const codec = (track?.Codec || '').toLowerCase();
             return codec === 'pgs' || codec === 'pgssub' ||
-                   codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle';
+                   codec === 'vobsub' || codec === 'dvdsub' || codec === 'dvd_subtitle' ||
+                   codec === 'ass' || codec === 'ssa';
         })();
 
-        // Bitmap in allcomplex: always restart (even from direct play)
-        // Text in allcomplex + transcoding: restart (subtitle locked in stream URL)
-        const isBitmapBurnIn = (_isAllComplex && isBitmapCodec) ||
+        // Complex in allcomplex: always restart (even from direct play)
+        // Simple text in allcomplex + transcoding: restart (subtitle locked in stream URL)
+        const isComplexBurnIn = (_isAllComplex && isComplexCodec) ||
                                (_isAllComplex && isTranscodingSession);
 
-        const needsBurnInRestart = burnIn === 'all' || isBitmapBurnIn;
+        const needsBurnInRestart = burnIn === 'all' || isComplexBurnIn;
 
         if (needsBurnInRestart && this._currentPlayOptions && !this._burnInRestartInProgress && !this._playSetupInProgress) {
             log.info(`Burn-in restart (mode: ${burnIn}, track: ${index}) — retranscoding`);
@@ -1896,8 +1955,11 @@ export class JellyfinPlayer extends EventEmitter {
 
         // Strict Playback Mode Enforcement
         const forceTranscodeSetting = PlayerSettings.get('forceTranscode');
-        const currentMode = forceTranscodeSetting ? 'transcode' : this._playbackMode;
-
+        const forceDirectPlaySetting = PlayerSettings.get('forceDirectPlay');
+        
+        let currentMode = this._playbackMode;
+        if (forceTranscodeSetting) currentMode = 'transcode';
+        else if (forceDirectPlaySetting) currentMode = 'directPlay';
         switch (currentMode) {
             case 'directPlay':
                 requestBody.EnableDirectPlay = true;

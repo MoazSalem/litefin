@@ -373,6 +373,18 @@ class CardRenderer {
             `;
         }
 
+        // Video Badge (Center Play Icon)
+        let videoBadgeHtml = '';
+        if (item.Type === 'Video') {
+            videoBadgeHtml = `
+                <div class="video-badge">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                    </svg>
+                </div>
+            `;
+        }
+
         // --- 3. Text Generation ---
 
         let titleText = i18n.ensureBiDi(item.Name);
@@ -485,6 +497,7 @@ class CardRenderer {
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
+            ${videoBadgeHtml}
         `;
 
         return `

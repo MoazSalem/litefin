@@ -254,7 +254,11 @@ export default class PlaybackInfo extends BaseMenu {
                 { label: i18n.t('LabelBitrate'), value: totalBitrate },
                 { label: i18n.t('LabelVideoCodec'), value: (videoStream?.Codec?.toUpperCase() || i18n.t('None')) + (videoStream?.Profile ? ' ' + videoStream.Profile : '') },
                 { label: i18n.t('LabelVideoBitrate'), value: videoBitrate },
-                { label: i18n.t('LabelVideoRangeType'), value: videoStream?.VideoRange || 'SDR' },
+                // VideoRangeType is the detailed string ("HDR10", "HDR10Plus", "DOVI",
+                // "DOVIWithHDR10Plus", etc.) reported by the server from the file's codec
+                // metadata. VideoRange is a coarse integer enum that only resolves to
+                // "HDR" or "SDR" — useless for diagnosing which HDR format is active.
+                { label: i18n.t('LabelVideoRangeType'), value: videoStream?.VideoRangeType || videoStream?.VideoRange || 'SDR' },
                 { label: i18n.t('LabelAudioCodec'), value: (activeAudioStream?.Codec?.toUpperCase() || i18n.t('None')) + (activeAudioStream?.Profile ? ' ' + activeAudioStream.Profile : '') },
                 { label: i18n.t('LabelAudioBitrate'), value: audioBitrate },
                 { label: i18n.t('LabelAudioChannels'), value: activeAudioStream?.Channels || i18n.t('None') },

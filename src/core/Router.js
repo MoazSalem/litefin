@@ -16,6 +16,7 @@ import { eventBus } from './EventBus.js';
 import { state } from './StateManager.js';
 import { navigationState } from './NavigationState.js';
 import { logger } from '../utils/Logger.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 
 const log = logger.create('Router');
 
@@ -241,6 +242,8 @@ class Router {
 
                 // Destroy current page (after capturing state)
                 if (this._currentPage && typeof this._currentPage.destroy === 'function') {
+                    const prevPageId = this._currentPage._routePattern ? this._currentPage._routePattern.split('/')[1] : 'unknown';
+                    pluginManager.notifyPageUnload(prevPageId);
                     this._currentPage.destroy();
                 }
 
@@ -269,10 +272,15 @@ class Router {
                     this._currentPage = route.PageClass;
                 }
 
+                this._currentPage._routePattern = route.pattern;
+
                 // Initialize the page with route params
                 if (typeof this._currentPage.init === 'function') {
                     this._currentPage.init(params);
                 }
+
+                const pageId = route.pattern.split('/')[1] || 'unknown';
+                pluginManager.notifyPageLoad(pageId, this._currentPage.el || document.getElementById('page-container'));
 
                 // Update state
                 state.set('router:currentPath', fullPath);

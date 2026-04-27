@@ -369,25 +369,6 @@ export class TizenAVPlayer {
                 this._pendingSubtitleIndex = null;
                 this._delayedSubtitleIndex = null;
             }
-            // Ensure HLS playlist exists before preparing AVPlay (prevents "Unknown Error" crash on 404)
-            if (options.url && options.url.includes('.m3u8')) {
-                await this._pollHlsPlaylist(options.url);
-            }
-
-            // Prepare asynchronously
-            await this._prepareAsync();
-
-            // Set up display rect only after preparation success
-            this._createDisplay();
-
-            // A tiny delay avoids internal decoder race conditions
-            await new Promise((resolve) => setTimeout(resolve, 50));
-
-            // Seek to start position BEFORE native play starts.
-            // AVPlay supports seekTo in the READY state (after prepareAsync).
-            // Seeking here ensures the decoder starts buffering from the correct
-            // position, rather than buffering from 0 and then doing a disruptive
-            // post-play seek that snaps to an unpredictable keyframe.
             if (options.playerStartPositionTicks) {
                 const startMs = options.playerStartPositionTicks / 10000;
 
@@ -415,6 +396,20 @@ export class TizenAVPlayer {
                 log.info(`Deferring resume seek to ${startMs}ms until after subtitle track is confirmed`);
                 this._pendingSeekMs = startMs;
             }
+
+            // Ensure HLS playlist exists before preparing AVPlay (prevents "Unknown Error" crash on 404)
+            if (options.url && options.url.includes('.m3u8')) {
+                await this._pollHlsPlaylist(options.url);
+            }
+
+            // Prepare asynchronously
+            await this._prepareAsync();
+
+            // Set up display rect only after preparation success
+            this._createDisplay();
+
+            // A tiny delay avoids internal decoder race conditions
+            await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Metadata is now loaded, display is ready, and seek position is set.
             // Check if we can start native playback yet (requires buffering complete).

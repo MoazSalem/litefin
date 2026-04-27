@@ -43,6 +43,7 @@ import { imageCache } from '../utils/ImageCache.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
+import { pluginManager } from '../plugins/PluginManager.js';
 import HeroCarousel from '../ui/HeroCarousel.js';
 
 const log = logger.create('HomePage');
@@ -1049,11 +1050,14 @@ class HomePage extends Page {
     async _loadHeroCarousel() {
         try {
             log.info('Loading Hero Carousel items...');
+            const heroCount = storage.getItem('pref:heroCarouselCount');
+            const limit = heroCount ? parseInt(heroCount, 10) : 5;
+
             const response = await api.getItems({
                 SortBy: 'Random',
                 Recursive: true,
-                Limit: 5,
-                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId',
+                Limit: limit,
+                Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
                 Filters: 'HasBackdrop'
@@ -1067,7 +1071,26 @@ class HomePage extends Page {
                 return;
             }
 
-            // Initialize the carousel component
+            // 1. Enrich with MDBList Metadata if enabled
+            if (storage.getItem('pref:heroCarouselMdbList') !== 'false' && pluginManager.isEnabled('mdblist-ratings')) {
+                const mdblist = pluginManager.getPlugin('mdblist-ratings');
+                if (mdblist && mdblist.plugin) {
+                    log.info('Enriching hero items with MDBList data...');
+                    try {
+                        await Promise.all(items.map(async (item) => {
+                            // Fetch and attach to the item object
+                            // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
+                            // We pass false for includeAwards to optimize for carousel performance.
+                            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                            item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                        }));
+                    } catch (err) {
+                        log.warn('Enriching hero items failed, continuing with partial data', err);
+                    }
+                }
+            }
+
+            // 2. Initialize the carousel component
             this._hero = new HeroCarousel({ items });
 
             const placeholder = this.$('#home-hero-placeholder');
@@ -1221,6 +1244,8 @@ class HomePage extends Page {
                                 return 'BoxSet';
                             case 'photos':
                                 return 'Photo';
+                            case 'playlists':
+                                return 'Playlist';
                             default:
                                 return 'Movie,Series';
                         }
@@ -1264,6 +1289,50 @@ class HomePage extends Page {
                                         quality,
                                         tag: item.BackdropImageTags[0]
                                     });
+                                }
+                            } else if (lib.CollectionType === 'playlists') {
+                                // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
+                                // To get a true landscape backdrop for the home page, we fetch the items 
+                                // inside the playlist and grab a backdrop from one of them.
+                                try {
+                                    const pResponse = await api.getPlaylistItems(item.Id, {
+                                        Limit: 20,
+                                        Fields: 'BackdropImageTags'
+                                    });
+                                    
+                                    const pItems = pResponse?.Items || [];
+                                    // Shuffle locally so the backdrop changes across reloads
+                                    const shuffled = pItems.sort(() => 0.5 - Math.random());
+                                    
+                                    for (const pItem of shuffled) {
+                                        if (pItem.BackdropImageTags?.length > 0) {
+                                            resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {
+                                                maxWidth,
+                                                quality,
+                                                tag: pItem.BackdropImageTags[0]
+                                            });
+                                            break;
+                                        }
+                                    }
+                                } catch (e) {
+                                    log.warn(`Failed to fetch items for playlist ${item.Id} for dynamic thumb`, e);
+                                }
+
+                                // Fallback to the playlist's own primary/backdrop if we couldn't find one inside
+                                if (!resolvedUrl) {
+                                    if (item.BackdropImageTags?.length > 0) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.BackdropImageTags[0]
+                                        });
+                                    } else if (item.ImageTags?.Primary) {
+                                        resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                            maxWidth,
+                                            quality,
+                                            tag: item.ImageTags.Primary
+                                        });
+                                    }
                                 }
                             } else if (lib.CollectionType === 'boxsets') {
                                 // Collections: Backdrop → Primary

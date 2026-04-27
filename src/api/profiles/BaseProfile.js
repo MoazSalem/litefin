@@ -23,12 +23,17 @@ export class BaseProfile {
             { Format: 'srt', Method: 'External' },
             { Format: 'subrip', Method: 'External' },
             { Format: 'vtt', Method: 'External' },
-            { Format: 'ass', Method: 'External' },
-            { Format: 'ssa', Method: 'External' },
             { Format: 'smi', Method: 'External' },
             { Format: 'ttml', Method: 'External' },
             { Format: 'sub', Method: 'External' },
             { Format: 'vtt', Method: 'Hls' }
+        ];
+
+        let complexSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto' ? 'Encode' : 'External';
+
+        const complexTextSubtitleProfiles = [
+            { Format: 'ass', Method: complexSubtitleMethod },
+            { Format: 'ssa', Method: complexSubtitleMethod }
         ];
 
         // ====================================================================
@@ -47,7 +52,7 @@ export class BaseProfile {
         //
         // 'Encode' → explicit burn-in: always encode into video frames.
         // ====================================================================
-        let bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' ? 'Encode' : 'External';
+        let bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto' ? 'Encode' : 'External';
 
         if (pgsMode === 'burn') {
             bitmapSubtitleMethod = 'Encode';
@@ -80,6 +85,7 @@ export class BaseProfile {
 
         return [
             ...textSubtitleProfiles,
+            ...complexTextSubtitleProfiles,
             ...bitmapSubtitleProfiles,
             { Format: 'srt', Method: 'Embed' },
             { Format: 'subrip', Method: 'Embed' },

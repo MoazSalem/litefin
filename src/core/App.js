@@ -74,6 +74,13 @@ class App {
         // This MUST happen before any other service reads from storage
         storage.init();
 
+        // 1.1 Clear session-scoped memory
+        // Ensures track memory doesn't leak across app restarts
+        storage.removeItem('session:lastAudioLang');
+        storage.removeItem('session:lastAudioTitle');
+        storage.removeItem('session:lastSubtitleLang');
+        storage.removeItem('session:lastSubtitleTitle');
+
         // 1.5. Initialize Platform Detection — saves OS type (Web, Tizen, WebOS)
         platformInfo.init();
 
@@ -460,7 +467,7 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', async ({ item, resume, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
+        eventBus.on('player:play', async ({ item, resume, mediaSourceId, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
             let itemToPlay = item;
@@ -519,6 +526,10 @@ class App {
             }
 
             // Store track selection in state for PlayerPage to consume
+            if (mediaSourceId !== undefined) {
+                state.set('player:initialMediaSourceId', mediaSourceId);
+                log.debug(`Setting initial media source ID: ${mediaSourceId}`);
+            }
             if (audioStreamIndex !== undefined) {
                 state.set('player:initialAudioIndex', audioStreamIndex);
                 log.debug(`Setting initial audio stream index: ${audioStreamIndex}`);

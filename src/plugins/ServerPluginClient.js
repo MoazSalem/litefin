@@ -38,7 +38,12 @@ const KNOWN_PROBES = {
     'intro-skipper': {
         // The endpoint that only exists when intro-skipper is installed.
         // Correct path confirmed from SkipIntroController.cs: [HttpGet("Episode/{Id}/Timestamps")]
-        probeEndpoint: (itemId) => `/Episode/${itemId}/Timestamps`,
+        probeEndpoint: (item) => {
+            // Intro Skipper only works for episodes. If this is a movie or a pre-roll intro,
+            // we cannot probe the endpoint. Return null to defer.
+            if (!item || item.Type !== 'Episode') return null;
+            return `/Episode/${item.Id}/Timestamps`;
+        },
         // Same endpoint used for actual data fetch
         dataEndpoint: (itemId) => `/Episode/${itemId}/Timestamps`
     },
@@ -54,8 +59,20 @@ const KNOWN_PROBES = {
     // Local Intros (Pre-rolls): https://github.com/jellyfin/jellyfin-plugin-intros
     'local-intros': {
         // Core endpoint — exists if intros are supported (virtually always)
-        probeEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`,
-        dataEndpoint: (itemId) => `/Users/${this._api?._userId}/Items/${itemId}/Intros`
+        probeEndpoint: (item) => {
+            if (!item || !item.Id) return null;
+            return `/Users/${serverPluginClient._api?._userId}/Items/${item.Id}/Intros`;
+        },
+        dataEndpoint: (itemId) => `/Users/${serverPluginClient._api?._userId}/Items/${itemId}/Intros`
+    },
+
+    // MDBList Ratings Plugin: https://github.com/jellyfin/jellyfin-plugin-mdblist-ratings
+    'mdblist-ratings': {
+        probeEndpoint: (item) => {
+            if (!item || !item.Id) return null;
+            return `/Plugins/MdbListRatings/CachedByItemId?itemId=${item.Id}`;
+        },
+        dataEndpoint: (itemId) => `/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`
     }
 };
 
@@ -155,10 +172,10 @@ class ServerPluginClient {
      *  2. Otherwise, run the per-plugin probe and cache the result.
      *
      * @param {string} pluginId - Logical plugin ID (matches KNOWN_PROBES keys)
-     * @param {string} [itemId] - Optional media item ID for context-specific probes
+     * @param {Object} [item] - Optional media item for context-specific probes
      * @returns {Promise<{ available: boolean, data?: any }>}
      */
-    async isPluginAvailable(pluginId, itemId = null) {
+    async isPluginAvailable(pluginId, item = null) {
         // Return cached result if already resolved
         if (this._availabilityCache.has(pluginId)) {
             return this._availabilityCache.get(pluginId);
@@ -169,7 +186,7 @@ class ServerPluginClient {
             return this._pendingProbes.get(pluginId);
         }
 
-        const probePromise = this._resolvePluginAvailability(pluginId, itemId);
+        const probePromise = this._resolvePluginAvailability(pluginId, item);
         this._pendingProbes.set(pluginId, probePromise);
 
         try {
@@ -226,7 +243,7 @@ class ServerPluginClient {
      * Resolve plugin availability using whichever strategy is appropriate.
      * @private
      */
-    async _resolvePluginAvailability(pluginId, itemId) {
+    async _resolvePluginAvailability(pluginId, item) {
         // First, try the admin route (fetches once, caches for session)
         const adminList = await this.getInstalledPlugins();
 
@@ -236,7 +253,7 @@ class ServerPluginClient {
         }
 
         // Non-admin fallback: use endpoint probing
-        return this._probeEndpoint(pluginId, itemId);
+        return this._probeEndpoint(pluginId, item);
     }
 
     /**
@@ -249,7 +266,8 @@ class ServerPluginClient {
         const NAME_MAP = {
             'intro-skipper': ['intro skipper', 'introskipper'],
             'open-subtitles': ['open subtitles', 'opensubtitles'],
-            'local-intros': ['local intros', 'localintros']
+            'local-intros': ['local intros', 'localintros'],
+            'mdblist-ratings': ['mdblist', 'mdb list', 'mdblist ratings']
         };
 
         const namesToCheck = NAME_MAP[pluginId] || [pluginId.toLowerCase()];
@@ -269,7 +287,7 @@ class ServerPluginClient {
      * A 200 = installed, 404 = not installed, 403 = installed but no access.
      * @private
      */
-    async _probeEndpoint(pluginId, itemId) {
+    async _probeEndpoint(pluginId, item) {
         const probe = KNOWN_PROBES[pluginId];
 
         if (!probe) {
@@ -278,15 +296,19 @@ class ServerPluginClient {
             return { available: false, data: null };
         }
 
-        // Some probes need an item ID — if not provided, we can't probe yet.
+        // Some probes need an item — if not provided, we can't probe yet.
         // Return deferred:true so PluginManager enables the plugin tentatively
-        // and re-checks at playback time (when we have a real itemId).
-        if (!itemId) {
-            log.debug(`Plugin '${pluginId}' probe requires an itemId — deferring until playback`);
+        // and re-checks at playback time (when we have a real item).
+        if (!item) {
+            log.debug(`Plugin '${pluginId}' probe requires an item — deferring until playback`);
             return { available: false, deferred: true, data: null };
         }
 
-        const endpoint = probe.probeEndpoint(itemId);
+        const endpoint = probe.probeEndpoint(item);
+        if (!endpoint) {
+            // Cannot probe with this item, defer
+            return { available: false, deferred: true, data: null };
+        }
 
         try {
             log.debug(`Probing endpoint for '${pluginId}': ${endpoint}`);

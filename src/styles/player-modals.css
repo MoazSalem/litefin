@@ -36,20 +36,28 @@
      */
     overflow: hidden;
     
-    background: rgba(0, 0, 0, 0.6);
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    /*
+     * Solid dark background — backdrop-filter: blur() is intentionally omitted.
+     * On WebOS (Chrome 108), combining backdrop-filter with an animating opacity
+     * causes the GPU compositor to re-capture the background layer on every frame,
+     * producing visible flickering as the modal opens. The semi-transparent solid
+     * background is visually equivalent and renders without artifacts.
+     */
+    background: rgba(0, 0, 0, 0.75);
     z-index: 9999;
-    
-    /* Hardware acceleration */
-    -webkit-transform: translate3d(0, 0, 100px);
-    transform: translate3d(0, 0, 100px);
 
-    /* Hidden by default */
+    /*
+     * Hidden by default — opacity only, no z-axis translate3d for GPU promotion.
+     * The translate3d(0,0,100px) trick on the OVERLAY itself was previously used
+     * to force a compositor layer, but it creates a stacking context that interferes
+     * with the inner panel's own transform animation — causing layer conflict flicker.
+     * The inner .queue-modal / .chapters-modal already gets GPU-promoted via their
+     * own transform animation, so promoting the parent is redundant and harmful.
+     */
     opacity: 0;
     pointer-events: none;
-    -webkit-transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-    transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-transition: opacity 0.2s ease-out;
+    transition: opacity 0.2s ease-out;
 }
 
 .chapters-modal-overlay.visible,
@@ -90,11 +98,18 @@
     border-left: 1px solid rgba(255, 255, 255, 0.08);
     box-shadow: -8px 0 32px rgba(0, 0, 0, 0.6);
 
-    /* Spring slide-in from the right */
+    /*
+     * Slide-in from the right — using a WebOS-safe ease-out, NOT a spring bezier.
+     * cubic-bezier values with y > 1.0 (overshoot springs) are mishandled by
+     * WebOS Chrome 108: the renderer rapidly oscillates the transform trying to
+     * settle the overshoot, which creates the "10Hz flickering / open-close" effect
+     * reported by users. cubic-bezier(0.2, 0, 0, 1) is a crisp Material Design
+     * sharp ease-out: fast initial movement, smooth deceleration, no overshoot.
+     */
     -webkit-transform: translate3d(100%, 0, 0);
     transform: translate3d(100%, 0, 0);
-    -webkit-transition: -webkit-transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1);
-    transition: transform 0.35s cubic-bezier(0.34, 1.1, 0.64, 1);
+    -webkit-transition: -webkit-transform 0.3s cubic-bezier(0.2, 0, 0, 1);
+    transition: transform 0.3s cubic-bezier(0.2, 0, 0, 1);
 }
 
 .chapters-modal-overlay.visible .chapters-modal,

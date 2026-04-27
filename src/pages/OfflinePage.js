@@ -138,11 +138,8 @@ class OfflinePage extends Page {
             changeServerBtn.addEventListener('click', () => {
                 log.info('Navigating to login to change server');
                 state.set('server:offline', false); // Clear offline flag for a fresh start
-                // Explicitly clear the saved server URL so LoginPage doesn't try to auto-connect to it again
-                import('../utils/StorageService.js').then(({ storage }) => {
-                    storage.removeItem('litefin:serverUrl');
-                    router.navigate('/login', { replace: true });
-                });
+                // Explicitly clear the saved server URL and all associated users
+                auth.logoutAll();
             });
         }
 

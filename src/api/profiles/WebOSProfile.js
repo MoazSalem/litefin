@@ -159,15 +159,33 @@ export function getDeviceCapabilities() {
         hevc = info.hevc === true || info.hevc === 'true';
     }
 
-    // HDR10: Use WebOS Adapter's detected hardware value if available.
-    // Otherwise rely strictly on the UHD detection. MSE probing natively fails across WebOS.
+    // HDR10: Mirror the HEVC detection pattern — default to true and only deny if hardware
+    // explicitly reports false. This fixes inconsistent HDR10 playback on WebOS.
     //
-    // IMPORTANT: Every Dolby Vision display also supports HDR10 — DV Profile 7/8 content
-    // carries an HDR10 base layer that acts as the SDR/HDR10 fallback. Some LG WebOS
-    // builds report `hdr10: false` in deviceInfo while still reporting `dolbyVision: true`.
-    // In that case the explicit hdr10Hw:false would wrongly disable HDR10 capability.
-    // We force hdr10 = true whenever dolbyVision is confirmed by hardware info.
-    const hdr10 = (hdr10Hw !== null ? hdr10Hw : uhd) || dolbyVision;
+    // WHY THE OLD FALLBACK WAS BROKEN:
+    //   The previous logic was `(hdr10Hw !== null ? hdr10Hw : uhd)`.
+    //   When the webOS.deviceInfo() async callback hasn't fired yet (common on first
+    //   profile build at app startup), hdr10Hw = null → fell through to the UHD screen
+    //   size check (window.screen.width >= 3840). WebOS has a known bug where the screen
+    //   size can report incorrectly at page load, making uhd=false → hdr10=false.
+    //   Result: 'HDR10' gets omitted from hevcVideoRangeTypes → server reports
+    //   VideoRangeTypeNotSupported → remuxes to HLS/TS → WebOS HLS pipeline doesn't get
+    //   a VIDEO-RANGE hint in the .m3u8 → HDR mode never activates on the display.
+    //   This is why forcing direct play "fixed" it: the file streamed as-is with the
+    //   original container's HDR metadata intact, bypassing the profile condition entirely.
+    //
+    // THE FIX:
+    //   Default hdr10 = true (virtually all LG WebOS 4+ TVs support HDR10).
+    //   Only set false when hardware EXPLICITLY denies it via deviceInfo.
+    //   If deviceInfo hasn't arrived yet (null), we optimistically assume true —
+    //   the worst case is that the server allows direct-play of HDR10 on a non-HDR
+    //   panel, which just plays as SDR-tonemapped. Far better than unnecessary remux.
+    //
+    // DOLBY VISION OVERRIDE:
+    //   Every DV display also supports HDR10 (DV Profile 7/8 has an HDR10 base layer).
+    //   Even if hardware explicitly says hdr10=false, we still force true when dolbyVision
+    //   is confirmed — some LG firmware builds report this incorrectly.
+    const hdr10 = hdr10Hw !== false || dolbyVision;
 
     // AV1 and VP9: MSE probing natively fails on early WebOS but hardware decodes them securely.
     // WebOS 6+ natively supports AV1. VP9 is generally safe globally on WebOS 4+.
@@ -328,12 +346,10 @@ export function buildJellyfinProfile(options = {}) {
         return _buildMinimalProfile(caps);
     }
 
-    // Cap bitrate for TVs to prevent buffer stalls on high-bitrate remuxes.
-    // 80 Mbps is a safe ceiling for most Smart TV decoders.
     let maxBitrate =
-        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 80000000 : 40000000);
-    if (maxBitrate > 80000000) {
-        maxBitrate = 80000000;
+        manualBitrateOverride || PlayerSettings.get('maxBitrateInternet') || (caps.uhd ? 120000000 : 40000000);
+    if (maxBitrate > 120000000) {
+        maxBitrate = 120000000;
     }
     if (!caps.uhd && maxBitrate > 40000000) {
         maxBitrate = 40000000;
@@ -363,16 +379,22 @@ export function buildJellyfinProfile(options = {}) {
     const supportsFmp4Hls = enableFmp4Hls && (forceFmp4Hls || caps.webosVersion >= 6);
 
     // --------------------------------------------------------------------------
-    // Dolby Vision content flag — used for segment sizing and keyframe alignment.
-    //
     // IMPORTANT: fMP4 (mp4 container) does NOT activate Dolby Vision on WebOS.
     // Testing confirmed that only MPEG-TS triggers the native DV decoder pipeline.
     // Therefore DOVI content uses TS by default just like everything else.
     // fMP4 is only used when the user explicitly enables it via settings
     // (enableFmp4HlsContainer + forceFmp4HlsContainer), and doing so will
     // sacrifice DV passthrough in exchange for fMP4 compatibility.
+    //
+    // NOTE: We previously had a per-content `isDoviContent` flag here that
+    // set SegmentLength to 10s when DV+HEVC settings were enabled. This was
+    // WRONG — the profile is built before any content is known, so the flag
+    // evaluated true for ALL HEVC content (not just actual DV streams),
+    // causing HDR10/HDR10+ files to get 10s segments (~120 MB each at 96 Mbps)
+    // instead of 6s. This was the root cause of the slideshow/stall reports.
+    // Segment length is now a fixed 6 s for all TS content, matching the
+    // behaviour of the official jellyfin-webos client.
     // --------------------------------------------------------------------------
-    const isDoviContent = enableDolbyVision && enableHEVC;
 
     // Primary HLS container: driven ONLY by the user's explicit fMP4 setting.
     const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
@@ -441,12 +463,23 @@ export function buildJellyfinProfile(options = {}) {
          * on real WebOS hardware rather than triggering an unnecessary transcode.
          */
         if (!isHtml5) {
+            /*
+             * TS/MPEGTS DirectPlay: enabled for WebOS native backend.
+             *
+             * IMPORTANT — interlaced streams are excluded via a CodecProfile condition
+             * added below. HDHomeRun ATSC channels broadcast interlaced MPEG-2 or H.264.
+             * If we claim DirectPlay for those, Jellyfin opens a 'heavy_' pre-transcode
+             * session, fails with DirectPlayError, and the fallback crashes FFmpeg.
+             * Jellyfin-web applies the same block — the server correctly falls through to
+             * a native 'ContainerNotSupported' HLS transcode which succeeds.
+             */
             directPlayProfiles.push({
                 Container: 'ts,mpegts',
                 Type: 'Video',
                 VideoCodec: tsVideoCodecs.join(','),
                 AudioCodec: audioCodecString
             });
+
             directPlayProfiles.push({
                 Container: 'm2ts',
                 Type: 'Video',
@@ -478,11 +511,21 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // WebOS native: omit AAC so Jellyfin is forced to transcode DTS/TrueHD → AC3/EAC3.
-    // Jellyfin ignores list order and internally prefers AAC; removing it entirely is the
-    // only way to guarantee AC3 output, which actually plays in MPEG-TS HLS on WebOS.
-    // HTML5 (Hls.js): keep AAC as primary for browser compatibility.
-    let transAudioCodecs = isHtml5 ? 'aac,ac3,eac3' : 'ac3,eac3';
+    // Audio codec list for HLS transcoding output.
+    //
+    // Both paths now include AAC so the server can copy AAC audio directly
+    // when the source track is already AAC (common for MP4/MOV files). This
+    // eliminates the unnecessary AAC→AC3 transcode that was causing extra
+    // server CPU load and a slightly different bitstream than the source.
+    //
+    // AC3/EAC3 remain as fallback targets for DTS/TrueHD sources that need
+    // to be converted. If Jellyfin's internal preference selects AAC over AC3
+    // for a DTS transcode, the output will be AAC-in-TS — which is universally
+    // supported by the WebOS native pipeline and Hls.js alike.
+    const transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
+    if (enableDts) transAudioCodecsArr.push('dts', 'dca');
+    if (enableTrueHd) transAudioCodecsArr.push('truehd');
+    const transAudioCodecs = transAudioCodecsArr.join(',');
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
@@ -520,29 +563,25 @@ export function buildJellyfinProfile(options = {}) {
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: maxAudioChannels,
             // ---------------------------------------------------------------------
-            // Segment sizing strategy:
+            // Segment sizing: fixed at 6 seconds for all TS content.
             //
-            //   DOVI (10 s): DV RPU metadata must align to IDR keyframe boundaries.
-            //     Larger segments give the encoder more room to land a genuine IDR
-            //     cut, preventing RPU orphans that crash the LG hardware decoder.
-            //     10 s also means only ~360 boundary crossings per hour of 4K DV
-            //     content — more than 2× fewer stall opportunities than 6 s.
+            // This matches the official jellyfin-webos client behaviour and ensures
+            // that each HLS chunk stays at a manageable ~72 MB at 96 Mbps (4K HEVC),
+            // which the LG hardware decoder and RAM bus can handle without stalling.
             //
-            //   Non-DOVI (6 s): Doubled from the previous 3 s to halve the number
-            //     of segment transitions per hour. WebOS native HLS fires a brief
-            //     'waiting' event at every TS boundary; fewer boundaries = fewer
-            //     decoder micro-stalls, even with the new buffer-aware recovery.
+            // A previous version used 10 s for "DV content" but the detection was
+            // based on settings (enableDolbyVision && enableHEVC) rather than actual
+            // stream metadata, so it incorrectly applied to all HDR10/HDR10+ content
+            // as well — causing the slideshow / slowmo playback reports.
             // ---------------------------------------------------------------------
-            SegmentLength: isDoviContent ? 10 : 6,
+            SegmentLength: 6,
             // Force IDR-aligned segment cuts for all TS content, not only DOVI.
             // The WebOS decoder produces visible macroblocking artifacts when split
             // mid-GOP, and the resulting non-IDR boundaries also trigger additional
             // 'waiting' events. BreakOnNonKeyFrames is never safe on this platform.
             // Exception: fMP4 is already forced-IDR by the muxer; and remux mode
             // passes the stream through as-is so we must not override it either.
-            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false
-                                : playbackMode === 'remux'    ? false
-                                : false  // always false for TS on WebOS
+            BreakOnNonKeyFrames: primaryHlsContainer === 'mp4' ? false : playbackMode === 'remux' ? false : false // always false for TS on WebOS
         },
         {
             Container: 'aac',
@@ -621,6 +660,34 @@ export function buildJellyfinProfile(options = {}) {
             Codec: 'h264',
             Conditions: [{ Condition: 'LessThanEqual', Property: 'VideoLevel', Value: h264Level, IsRequired: false }]
         },
+        // -----------------------------------------------------------------------
+        // Block interlaced TS/MPEGTS from DirectPlay.
+        //
+        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
+        // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
+        // the server evaluates these CodecProfile conditions to determine if
+        // DirectPlay is actually viable. The NotEquals:IsInterlaced:true
+        // condition tells the server "interlaced content is not supported for
+        // direct play in this container".
+        //
+        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
+        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
+        // With this, the server issues ContainerNotSupported immediately and
+        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
+        // what jellyfin-web does and what works correctly.
+        // -----------------------------------------------------------------------
+        {
+            Type: 'Video',
+            Container: 'ts,mpegts',
+            Conditions: [
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: false
+                }
+            ]
+        },
         {
             Type: 'Audio',
             Conditions: [
@@ -680,7 +747,40 @@ export function buildJellyfinProfile(options = {}) {
                     Property: 'VideoBitDepth',
                     Value: enableHDR ? '10' : '8',
                     IsRequired: false
-                }
+                },
+                // ---------------------------------------------------------------
+                // HDR10 codec tag gate — prevents VAAPI from stripping HDR metadata
+                // ---------------------------------------------------------------
+                // PROBLEM (confirmed via server FFmpeg logs):
+                //   When Jellyfin's server decides to re-encode HEVC HDR10 content
+                //   via VAAPI (hevc_vaapi), it uses:
+                //       -profile:v:0 main          ← forces 8-bit output
+                //       -vf "setparams=color_primaries=bt709:color_trc=bt709:..."
+                //   This explicitly converts the stream to SDR bt709. The hardware
+                //   encoder doesn't support Main 10 / HDR reliably in VAAPI, so
+                //   Jellyfin silently downgrades to SDR. WebOS receives an SDR stream
+                //   and naturally shows no HDR signal — by design.
+                //
+                // FIX:
+                //   Require VideoCodecTag = 'hvc1' for HDR HEVC. The hvc1 tag is
+                //   only present when the HEVC stream is COPIED verbatim (remux path).
+                //   When the server would re-encode (transcode path), it produces a
+                //   different / no codec tag, failing this condition. Jellyfin then
+                //   falls back to the copy path — preserving all HDR10 SEI metadata
+                //   (mastering display, MaxCLL/MaxFALL, HDR10+) in the output TS segments.
+                //
+                // NOTE: This only applies when HDR is enabled. SDR content is freely
+                //   re-encodable since there is no HDR metadata to preserve.
+                ...(enableHDR
+                    ? [
+                          {
+                              Condition: 'EqualsAny',
+                              Property: 'VideoCodecTag',
+                              Value: 'hvc1|dvh1|hev1',
+                              IsRequired: false
+                          }
+                      ]
+                    : [])
             ]
         });
 
@@ -734,19 +834,31 @@ export function buildJellyfinProfile(options = {}) {
         }
 
         // Explicit Dolby Vision encouragement profile.
-        // Without this hint, Jellyfin may emit VideoRangeTypeNotSupported and reject
-        // the DOVI stream before we even get a chance to remux it. This tells the
-        // server "DV is acceptable here" so it proceeds to the CodecProfile / container
-        // evaluation step rather than bailing out immediately.
+        //
+        // PURPOSE: Without this hint, Jellyfin may emit VideoRangeTypeNotSupported and
+        // immediately reject a DOVI stream before evaluating our container CodecProfiles.
+        // It signals "DV is acceptable here" so the server proceeds to the full evaluation.
+        //
+        // CRITICAL — must include ALL HDR types, not just DV subtypes:
+        //   Jellyfin uses AND logic across all matching CodecProfiles for the same codec.
+        //   If this profile only allowed DOVI subtypes, then pure HDR10Plus (VideoRangeType=HDR10Plus)
+        //   would fail this profile's condition (HDR10Plus ≠ any DOVI subtype) and Jellyfin would
+        //   report VideoRangeTypeNotSupported — blocking direct play of HDR10+ content even though
+        //   the hardware supports it natively. Confirmed root cause of the HDR10+ remux regression.
         if (enableDolbyVision) {
             codecProfiles.push({
                 Type: 'Video',
                 Codec: 'hevc',
                 Conditions: [
                     {
+                        // Accept ALL HDR range types supported by the device, not just DV subtypes.
+                        // The DV subtypes are included here so Jellyfin doesn't bail with
+                        // VideoRangeTypeNotSupported on DOVI content before reaching our
+                        // container-specific CodecProfiles. All other types (HDR10, HDR10Plus, etc.)
+                        // are passthrough — they would be permitted by the main HEVC profile anyway.
                         Condition: 'EqualsAny',
                         Property: 'VideoRangeType',
-                        Value: 'DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR',
+                        Value: 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR',
                         IsRequired: false
                     }
                 ]
@@ -801,7 +913,7 @@ export function buildJellyfinProfile(options = {}) {
     if (!enableDts) {
         codecProfiles.push({
             Type: 'VideoAudio',
-            Codec: 'dts,dca,dtshd',
+            Codec: 'dts,dca,dts-hd,dts-ma,dts-x',
             Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
         });
     }

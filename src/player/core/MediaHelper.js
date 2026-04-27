@@ -61,7 +61,26 @@ export const MediaHelper = {
                  mediaSource.Path.includes('localhost') ||
                  mediaSource.Path.includes('LiveStreamFiles')));
 
-            if (mediaSource.Protocol === 'Http' && requiresServerProxy) {
+            // ================================================================
+            // PROTOCOL DETECTION & ROUTING:
+            // M3U IPTV streams → Protocol: 'Http'. When DirectPlaying,
+            //   Jellyfin proxies these via its own loopback which is
+            //   unreachable from the LAN. These must go through the
+            //   /live.m3u8 HLS proxy endpoint.
+            //
+            // However, if the server explicitly set up a transcoding or remux
+            // session (indicated by TranscodeReasons in the TranscodingUrl),
+            // we MUST use the server's provided master.m3u8 pipeline instead
+            // of the simple live proxy, regardless of the protocol.
+            // ================================================================
+            const isHttpProxy = mediaSource.Protocol === 'Http' && requiresServerProxy;
+            const hasTranscodeReasons = mediaSource.TranscodingUrl && mediaSource.TranscodingUrl.includes('TranscodeReasons=');
+            
+            const needsLiveProxy = isHttpProxy && !hasTranscodeReasons;
+
+            if (needsLiveProxy) {
+
+
                 // Tizen AVPlay has severe limitations with HLS: it cannot decode MPEG-2 video
                 // or interlaced H.264 when wrapped in an .m3u8 payload. However, AVPlay's native
                 // MPEG-TS demuxer perfectly handles raw progressive HTTP TS streams.

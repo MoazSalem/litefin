@@ -556,6 +556,12 @@ export default class SubtitleManager {
 
         // Priority 2: ASS/SSA → ASS_CANVAS
         if (codec === 'ass' || codec === 'ssa') {
+            const burnIn = PlayerSettings.get('subtitleBurnIn');
+            if (burnIn === 'allcomplex' || burnIn === 'auto') {
+                log.info(`Track "${track.DisplayTitle}" is ASS/SSA, but mode is ${burnIn} -> NONE (Client rendering skipped)`);
+                return DeliveryMethod.NONE;
+            }
+
             // CHECK: Force Text Mode
             // If the user wants to disable ASS styling, we treat it as text.
             // This will cause us to fall through to Priority 3 (EXTERNAL_TEXT),
@@ -581,6 +587,12 @@ export default class SubtitleManager {
 
         // Priority 4: PGS → PGS_BITMAP
         if (codec === 'pgs' || codec === 'pgssub') {
+            const burnIn = PlayerSettings.get('subtitleBurnIn');
+            if (burnIn === 'allcomplex' || burnIn === 'auto') {
+                log.info(`Track "${track.DisplayTitle}" is PGS, but mode is ${burnIn} -> NONE (Client rendering skipped)`);
+                return DeliveryMethod.NONE;
+            }
+
             const pgsMode = PlayerSettings.get('pgsPlaybackMode') || 'client';
 
             if (pgsMode === 'client') {

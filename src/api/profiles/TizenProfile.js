@@ -368,22 +368,30 @@ export function buildJellyfinProfile(options = {}) {
     //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
     //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
     // =========================================================================
-    let transAudioCodecs;
+    let transAudioCodecsArr = [];
     let transMaxAudioChannels;
 
     if (caps.tizenVersion >= 6) {
         // Tizen 6+: AC3/EAC3 in HLS/TS is reliable — use full surround sound
-        transAudioCodecs = 'ac3,eac3';
+        transAudioCodecsArr.push('ac3', 'eac3');
         transMaxAudioChannels = maxAudioChannels;
     } else {
         // Tizen 5.x: strict AAC-only HLS path. Must also cap at 2 channels —
         // multichannel AAC in TS also crashes AVPlay on Tizen 5.0.
-        transAudioCodecs = 'aac';
+        transAudioCodecsArr.push('aac');
         // Cap at 2 (integer) — multichannel AAC in TS crashes AVPlay on Tizen 5.x
         transMaxAudioChannels = 2;
     }
 
-    let directAudioCodecs = 'aac,ac3,eac3,mp3';
+    if (enableDts) transAudioCodecsArr.push('dts', 'dca');
+    if (enableTrueHd) transAudioCodecsArr.push('truehd');
+
+    let transAudioCodecs = transAudioCodecsArr.join(',');
+
+    let directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3'];
+    if (enableDts) directAudioCodecsArr.push('dts', 'dca');
+    if (enableTrueHd) directAudioCodecsArr.push('truehd');
+    let directAudioCodecs = directAudioCodecsArr.join(',');
 
     // -------------------------------------------------------------------------
     // fMP4 HLS preference resolution
@@ -593,8 +601,35 @@ export function buildJellyfinProfile(options = {}) {
                     IsRequired: false
                 }
             ]
+        },
+        // -----------------------------------------------------------------------
+        // Block interlaced TS/MPEGTS from DirectPlay.
+        //
+        // HDHomeRun ATSC 1.0 broadcasts are typically interlaced MPEG-2 or
+        // interlaced H.264. When we include ts/mpegts in DirectPlayProfiles,
+        // the server evaluates these CodecProfile conditions to determine if
+        // DirectPlay is actually viable.
+        //
+        // Without this, Jellyfin opens a 'heavy_' pre-transcode session, then
+        // fails at runtime with DirectPlayError — causing FFmpeg to crash.
+        // With this, the server issues ContainerNotSupported immediately and
+        // opens a 'native_' capture + HLS transcode pipeline, which is exactly
+        // what jellyfin-web does and what works correctly.
+        // -----------------------------------------------------------------------
+        {
+            Type: 'Video',
+            Container: 'ts,mpegts',
+            Conditions: [
+                {
+                    Condition: 'Equals',
+                    Property: 'IsInterlaced',
+                    Value: 'false',
+                    IsRequired: false
+                }
+            ]
         }
     ];
+
 
     // CodecProfile for AAC: limit to stereo channels for DirectPlay qualification.
     // This tells Jellyfin: "only DirectPlay an AAC source if it has ≤2 channels".
@@ -623,16 +658,16 @@ export function buildJellyfinProfile(options = {}) {
     // has disabled passthrough for them.
     if (!enableDts) {
         codecProfiles.push({
-            Type: 'Audio',
+            Type: 'VideoAudio',
             Codec: 'dts,dca,dts-hd,dts-ma,dts-x',
-            Conditions: [{ Condition: 'Equals', Property: 'IsSecondaryAudio', Value: 'false', IsRequired: false }]
+            Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
         });
     }
     if (!enableTrueHd) {
         codecProfiles.push({
-            Type: 'Audio',
+            Type: 'VideoAudio',
             Codec: 'truehd',
-            Conditions: [{ Condition: 'Equals', Property: 'IsSecondaryAudio', Value: 'false', IsRequired: false }]
+            Conditions: [{ Condition: 'Equals', Property: 'AudioChannels', Value: '0', IsRequired: true }]
         });
     }
 

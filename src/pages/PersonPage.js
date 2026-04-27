@@ -157,36 +157,6 @@ class PersonPage extends Page {
                     const sectionConfig = focusManager.getSectionConfig(sectionId);
                     const sectionContainer = sectionConfig ? sectionConfig.container : this.el;
 
-                    // Ensure the grid is expanded if the item is beyond the limit
-                    const gridKeyMap = {
-                        'person-movies-items': 'movies',
-                        'person-shows-items': 'shows',
-                        'person-episodes-items': 'episodes'
-                    };
-                    const gridKey = gridKeyMap[sectionId];
-                    if (gridKey && this._grids[gridKey]) {
-                        const grid = this._grids[gridKey];
-                        const index = grid.items.findIndex((i) => i.Id === targetId || i.Id?.toString() === targetId);
-                        if (index >= grid.limit && !grid.expanded) {
-                            grid.expanded = true;
-                            // Re-render items synchronously so the DOM query below succeeds
-                            const gridContainer = this.$(`#${grid.id}-items`);
-                            if (gridContainer) {
-                                gridContainer.innerHTML = grid._renderItems();
-                                lazyLoader.observe(gridContainer);
-                                focusManager.invalidateCache(`${grid.id}-items`);
-                            }
-                            // Update button visually
-                            const btn = this.$(`#${grid.id}-btn`);
-                            if (btn) btn.textContent = i18n.t('ShowLess');
-
-                            // Re-apply roles if needed
-                            if (gridKey !== 'episodes') {
-                                this._applyRolesToCards();
-                            }
-                        }
-                    }
-
                     const savedCard = sectionContainer.querySelector(
                         `[data-item-id="${targetId}"], [data-id="${targetId}"]`
                     );
@@ -437,12 +407,8 @@ class PersonPage extends Page {
                 items: movies,
                 type: 'poster',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('person-movies-items', card),
-                onSeeMore: () => {
-                    this._registerWorkSections();
-                    // Reapply character roles after grid re-renders
-                    setTimeout(() => this._applyRolesToCards(), 200);
-                }
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Movie`,
+                onClick: (card) => this._saveStateAndNavigate('person-movies-items', card)
             });
             this._grids.movies.mount(worksContainer);
         }
@@ -455,12 +421,8 @@ class PersonPage extends Page {
                 items: shows,
                 type: 'poster',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('person-shows-items', card),
-                onSeeMore: () => {
-                    this._registerWorkSections();
-                    // Reapply character roles after grid re-renders
-                    setTimeout(() => this._applyRolesToCards(), 200);
-                }
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Series`,
+                onClick: (card) => this._saveStateAndNavigate('person-shows-items', card)
             });
             this._grids.shows.mount(worksContainer);
         }
@@ -471,11 +433,11 @@ class PersonPage extends Page {
                 id: 'person-episodes',
                 title: i18n.t('Episodes'),
                 items: episodes,
-                type: 'episode-primary', // Use special type
-                isLandscape: true, // Force landscape grid
+                type: 'episode-primary', 
+                isLandscape: true,
                 limit: 9,
-                onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card),
-                onSeeMore: () => this._registerWorkSections()
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Episode&viewModeIndex=2`,
+                onClick: (card) => this._saveStateAndNavigate('person-episodes-items', card)
             });
             this._grids.episodes.mount(worksContainer);
         }
@@ -495,7 +457,7 @@ class PersonPage extends Page {
         worksContainer.innerHTML = '';
         this._grids = {};
 
-        // 1. Albums grid (square cards — same aspect ratio as the rest of the music UI)
+        // 1. Albums grid
         if (albums.length > 0) {
             this._grids.albums = new MediaGrid({
                 id: 'artist-albums',
@@ -503,13 +465,13 @@ class PersonPage extends Page {
                 items: albums,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('artist-albums-items', card),
-                onSeeMore: () => this._registerArtistSections()
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=MusicAlbum`,
+                onClick: (card) => this._saveStateAndNavigate('artist-albums-items', card)
             });
             this._grids.albums.mount(worksContainer);
         }
 
-        // 2. Songs grid (square cards)
+        // 2. Songs grid
         if (songs.length > 0) {
             this._grids.songs = new MediaGrid({
                 id: 'artist-songs',
@@ -517,8 +479,8 @@ class PersonPage extends Page {
                 items: songs,
                 type: 'square',
                 limit: 10,
-                onClick: (card) => this._saveStateAndNavigate('artist-songs-items', card),
-                onSeeMore: () => this._registerArtistSections()
+                moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Audio`,
+                onClick: (card) => this._saveStateAndNavigate('artist-songs-items', card)
             });
             this._grids.songs.mount(worksContainer);
         }
