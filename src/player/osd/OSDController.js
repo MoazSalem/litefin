@@ -1164,11 +1164,20 @@ export default class OSDController extends Component {
 
     _navigate(direction) {
         const wasHidden = !this._isOsdVisible;
+        const seekWithArrows = PlayerSettings.get('seekWithArrows') !== false;
         
         // First D-pad press always reveals OSD if hidden
         // User requested single-press move: trigger show AND allow navigation to proceed.
         if (wasHidden) {
             this.show();
+            
+            if (seekWithArrows && (direction === 'left' || direction === 'right')) {
+                // Focus the seekbar so subsequent presses continue seeking
+                this._currentFocusRow = 2;
+                this._updateFocus();
+                this._executeAction(direction === 'left' ? 'rewind' : 'fastForward');
+                return true;
+            }
             // Do NOT return here. Let the navigation logic below run.
         } else {
             this.show(); // Always reset auto-hide if already visible

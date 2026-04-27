@@ -674,6 +674,8 @@
     "Seconds": "{0} seconds",
     "SecondsShort": "{0}s",
     "SeeMore": "See More",
+    "SeekWithArrows": "Seek with Arrows",
+    "SeekWithArrowsDescription": "When the player controls are hidden, pressing Left or Right will instantly seek instead of just showing the controls.",
     "SegmentActionAskToSkip": "Show Skip Button",
     "SegmentActionNone": "Disabled",
     "SegmentActionSkip": "Auto-Skip",

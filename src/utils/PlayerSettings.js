@@ -277,6 +277,9 @@ const DEFAULTS = {
     // Time format for clock and playback ('12h', '24h')
     timeFormat: '12h',
 
+    // Instant seek when OSD is hidden using directional arrows
+    seekWithArrows: true,
+
     /*
      * OSD Focus Restore Mode
      * Controls where the remote cursor lands when the OSD is revealed

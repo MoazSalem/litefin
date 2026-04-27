@@ -1235,6 +1235,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="SeekWithArrows">${i18n.t('SeekWithArrows') || 'Seek with Arrows'}</span>
+                        <span class="setting-description" data-i18n="SeekWithArrowsDescription">${i18n.t('SeekWithArrowsDescription') || 'When the player controls are hidden, pressing Left or Right will instantly seek instead of just showing the controls.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('seekWithArrows') ? 'active' : ''}" 
+                                id="toggle-seek-with-arrows" 
+                                data-setting="seekWithArrows"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
                         <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
                     </div>
@@ -3786,6 +3800,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('trailerAutoChain', newValue);
                 trailerAutoChainToggle.classList.toggle('active', newValue);
                 log.info(`Trailer Auto-Chain set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Seek With Arrows
+        const seekWithArrowsToggle = this.$('#toggle-seek-with-arrows');
+        if (seekWithArrowsToggle) {
+            seekWithArrowsToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('seekWithArrows');
+                const newValue = !currentValue;
+                PlayerSettings.set('seekWithArrows', newValue);
+                seekWithArrowsToggle.classList.toggle('active', newValue);
+                log.info(`Seek with Arrows set to: ${newValue}`);
             });
         }
 
