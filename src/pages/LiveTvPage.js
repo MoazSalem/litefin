@@ -148,11 +148,17 @@ class LiveTvPage extends Page {
             onMove: (direction) => {
                 if (direction === 'down') {
                     // Pick the active content section dynamically
-                    const targetSection = this._currentTab === 'guide'
-                        ? 'epg-grid'
-                        : 'livetv-content-section';
-                    focusManager.setActiveSection(targetSection);
-                    return true; // Handled
+                    let targetSection = 'livetv-content-section';
+                    if (this._currentTab === 'guide') {
+                        targetSection = 'epg-grid';
+                    } else if (this._currentTab === 'suggestions') {
+                        targetSection = 'section-on-now';
+                    }
+                    
+                    if (focusManager.getConfig(targetSection)) {
+                        focusManager.setActiveSection(targetSection);
+                        return true; // Handled
+                    }
                 }
                 return false; // Let default horizontal logic handle left/right
             }
@@ -287,7 +293,9 @@ class LiveTvPage extends Page {
             this._createRow(rowsContainer, i18n.t('OnNow'), programs.Items, {
                 id: 'on-now',
                 isLandscape: true,
-                cardType: 'thumb'
+                cardType: 'thumb',
+                leaveUp: 'livetv-tabs',
+                leaveLeft: 'sidebar'
             });
         } else {
             rowsContainer.innerHTML = `
@@ -545,6 +553,10 @@ class LiveTvPage extends Page {
             orientation: 'horizontal',
             selector: '.media-card',
             indices: true,
+            leaveUp: options.leaveUp,
+            leaveDown: options.leaveDown,
+            leaveLeft: options.leaveLeft,
+            leaveRight: options.leaveRight,
             // Handle horizontal navigation within the virtual row
             onMove: (direction, currentElement) => {
                 if (!currentElement || currentElement.dataset.virtualIndex === undefined) {
