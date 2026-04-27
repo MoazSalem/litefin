@@ -134,6 +134,13 @@ class LayoutManager {
     }
 
     /**
+     * Get the current layout
+     */
+    getLayout() {
+        return this._layout;
+    }
+
+    /**
      * Set the Theme Mode
      * @param {string} mode Theme mode constant
      * @param {boolean} [save=true] 

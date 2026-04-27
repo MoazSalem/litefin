@@ -76,7 +76,8 @@ import './styles/hero-carousel.css';
 import './styles/livetv.css';
 import './styles/slideshow.css'; // Full-screen photo viewer
 import './styles/rtl.css'; // Directional overrides
-import './themes/classic/index.js'; // All classic themes
+import './themes/index.js'; // All shared themes
+import './styles/modern.css'; // Modern layout overrides
 
 /**
  * Bootstrap the application

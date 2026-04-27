@@ -1,0 +1,15 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Modern Layout Overrides
+ * ============================================================================
+ * These styles are applied only when the 'modern' layout is active.
+ * They override the default (classic) layout values with higher specificity
+ * via the `html[data-layout="modern"]` selector.
+ * ============================================================================
+ */
+
+/* Example:
+html[data-layout="modern"] .some-component {
+    padding: 20px;
+}
+*/

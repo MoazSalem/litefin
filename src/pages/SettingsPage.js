@@ -290,6 +290,26 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Layout Section -->
+                <h3 class="setting-section-title" data-i18n="AppLayout">${i18n.t('AppLayout') || 'App Layout'}</h3>
+            
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LayoutMode">${i18n.t('LayoutMode') || 'Layout'}</span>
+                        <span class="setting-description" data-i18n="LayoutModeDescription">${i18n.t('LayoutModeDescription') || 'Choose between the classic and modern user interface.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'layout-mode-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' }
+                            ],
+                            layoutManager.getLayout() || 'classic'
+                        )}
+                    </div>
+                </div>
+
                 <!-- Theme Section -->
                 <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
             
@@ -3484,7 +3504,7 @@ class SettingsPage extends Page {
             'library-thumb-mode-select': { key: 'pref:libraryThumbMode', type: 'local' },
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
-            layout: { key: 'layout', type: 'local' },
+            'layout-mode-select': { key: 'litefin:layout', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -3587,7 +3607,7 @@ class SettingsPage extends Page {
                             }
 
                             if (
-                                settingConfig.key === 'layout' ||
+                                settingConfig.key === 'litefin:layout' ||
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'layout_direction'
                             ) {
