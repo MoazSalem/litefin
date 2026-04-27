@@ -1,0 +1,114 @@
+/* ============================================================================
+   Modern Layout - Core & Global Structure
+   ============================================================================ */
+
+/* .status-dot is modern-only — hidden in classic by not being in the classic DOM */
+.status-dot {
+    display: none;
+}
+
+html[data-layout="modern"] .login-page {
+    display: flex;
+    flex-direction: row;
+    height: 100vh;
+    width: 100vw;
+    justify-content: flex-start;
+    align-items: stretch;
+    background: var(--jf-background);
+    overflow: hidden;
+    padding: 0;
+}
+
+html[data-layout="modern"] .login-container {
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    max-width: none;
+    width: 100%;
+    height: 100%;
+}
+
+html[data-layout="modern"] .login-header {
+    width: 30vw;
+    height: 100%;
+    margin: 0;
+    padding: 80px;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: flex-start;
+    text-align: left;
+    border-right: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+    background: var(--jf-background-alt, #101010);
+    box-sizing: border-box;
+}
+
+html[data-layout="modern"] .login-logo-container {
+    justify-content: flex-start;
+    margin-bottom: 24px;
+}
+
+html[data-layout="modern"] .login-logo-svg {
+    width: 70px;
+    height: 70px;
+    margin-right: 20px;
+}
+
+html[data-layout="modern"] .login-logo {
+    font-size: 5rem;
+    font-weight: 700;
+    letter-spacing: -2px;
+    color: var(--jf-text-primary);
+}
+
+html[data-layout="modern"] .login-tagline {
+    font-size: 1.4rem;
+    opacity: 0.5;
+    color: var(--jf-text-primary);
+    max-width: 500px;
+    line-height: 1.4;
+}
+
+/* Right Content Area Base */
+html[data-layout="modern"] .login-section {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 80px 150px;
+    max-width: none;
+    margin: 0;
+    background: var(--jf-background);
+    box-sizing: border-box;
+}
+
+html[data-layout="modern"] .section-title {
+    display: block;
+    font-size: 3.2rem;
+    font-weight: 700;
+    margin-bottom: 8px;
+    color: var(--jf-text-primary);
+}
+
+html[data-layout="modern"] .input-label {
+    font-size: 1.2rem;
+    font-weight: 600;
+    margin-top: 32px;
+    margin-bottom: 16px;
+    display: block;
+    color: #fff;
+    opacity: 1;
+    text-transform: none;
+    letter-spacing: 0;
+}
+
+html[data-layout="modern"] .modern-button-row {
+    display: flex;
+    width: 100%;
+    justify-content: flex-start;
+}
+
+/* Legacy-compatible gaps for modern buttons */
+html[data-layout="modern"] .modern-button-row > *:not(:last-child) {
+    margin-right: 20px;
+}

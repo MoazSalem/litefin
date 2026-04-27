@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 
 const log = logger.create('Login');
 
@@ -76,42 +77,34 @@ class LoginPage extends Page {
     }
 
     render() {
+        /* Branch to layout-specific HTML — keeps classic DOM pristine */
+        return layoutManager.isModern() ? this._renderModernHTML() : this._renderClassicHTML();
+    }
+
+    /**
+     * Classic layout HTML — the original, untouched template.
+     * No modern-specific classes or structures here.
+     */
+    _renderClassicHTML() {
+        const logoSvg = this._logoSvg();
         return `
             <div class="page login-page">
                 <div class="login-container">
                     <!-- Header -->
                     <div class="login-header">
                         <div class="login-logo-container">
-                            <svg viewBox="0 0 100 100" class="login-logo-svg" preserveAspectRatio="xMidYMid meet">
-                                <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
-				c-0.51-4.01,1.81-7.59,3.24-9.37c4.82-5.97,9.41-12.5,10.36-19.76c0.8-6.13-1-12.33-2.9-18.9c-0.59-2.04-1.21-4.16-1.73-6.27
-				c-0.8-3.17-1.42-6.59-0.53-10.08c1.8-7.06,9.11-10.26,21.74-9.53c10.63,0.62,21.35,5.21,30.19,12.91
-				C82.12,33.08,93.56,53.11,90.5,72.93c-0.23,1.54-0.58,2.97-1.04,4.26c-1.28,3.66-3.47,6.32-6.34,7.68
-				c-3.63,1.71-7.38,1.01-10.39,0.44c-2.45-0.46-5.35-0.99-8.34-1.37c-6.72-0.86-12.12-0.79-17.02,0.21
-				c-3.5,0.71-6.9,1.8-10.49,2.95c-4.51,1.44-9.17,2.94-14.09,3.64C21.84,90.88,20.74,91,19.57,91z M35.69,16
-				c-5.23,0-10.52,0.9-11.4,4.36c-0.5,1.98-0.04,4.37,0.53,6.65c0.5,1.99,1.09,4.04,1.67,6.02c2.02,6.97,4.11,14.17,3.12,21.75
-				c-1.17,8.98-6.38,16.48-11.85,23.25c-1.19,1.47-1.87,3.08-1.75,4.08c0.04,0.31,0.17,0.73,0.85,1.23
-				c0.89,0.66,2.51,0.81,4.95,0.46c4.34-0.62,8.53-1.96,12.95-3.38c3.61-1.16,7.35-2.35,11.22-3.14c5.67-1.16,11.81-1.26,19.31-0.3
-				c3.17,0.41,6.2,0.95,8.74,1.43c2.32,0.44,4.52,0.85,6.1,0.11c1.15-0.54,2.07-1.78,2.72-3.66l0-0.01c0.31-0.87,0.55-1.88,0.72-3
-				c2.65-17.2-7.5-34.78-18.74-44.57c-7.68-6.69-16.92-10.67-26-11.2C37.81,16.04,36.75,16,35.69,16z" />
-                                <path class="logo-path-inner" d="M69.3,63.51c0.19-0.64,0.32-1.3,0.41-1.95
-				c1.26-9.44-3.2-19.55-9.22-25.63c-3.64-3.67-8.19-6.14-13.02-6.47c-2.7-0.18-7.56-0.15-8.41,3.7c-0.32,1.47-0.07,3.03,0.25,4.49
-				c1.01,4.7,2.72,9.41,2.18,14.21C41,56.22,38.72,60,36.34,63.41c-1.14,1.63-1.9,4.02-0.12,5.54c0.97,0.83,2.3,0.8,3.49,0.6
-				c3.88-0.64,7.47-2.62,11.3-3.52c2.77-0.66,5.63-0.55,8.42-0.14c1.33,0.2,2.64,0.47,3.96,0.75c1.25,0.27,2.62,0.57,3.82-0.09
-				C68.26,65.98,68.91,64.81,69.3,63.51z" />
-                            </svg>
+                            ${logoSvg}
                             <h1 class="login-logo">Litefin</h1>
                         </div>
                         <p class="login-tagline" data-i18n="LitefinTagline">${i18n.t('LitefinTagline')}</p>
                     </div>
-                    
+
                     <!-- Server URL Form -->
                     <div class="login-section server-section" data-section="server">
-                        <label class="input-label" data-i18n="HeaderConnectToServer">Connect to Server</label>
                         <div class="server-input-container">
-                            <input 
-                                type="url" 
-                                id="server-url" 
+                            <input
+                                type="url"
+                                id="server-url"
                                 class="text-input tv-input server-url-input"
                                 placeholder="https://your-server.com"
                                 autocomplete="off"
@@ -123,7 +116,7 @@ class LoginPage extends Page {
                             </button>
                         </div>
                         <p class="login-error" id="server-error"></p>
-                        
+
                         <!-- Discovered Servers -->
                         <div class="discovered-servers" id="discovered-servers">
                             <div class="discovered-header">
@@ -143,13 +136,11 @@ class LoginPage extends Page {
                             <ul class="server-list" id="server-list"></ul>
                         </div>
                     </div>
-                    
+
                     <!-- User Selection -->
                     <div class="login-section users-section hidden" data-section="users">
                         <h2 data-i18n="SelectUser">Select User</h2>
-                        <div class="users-grid" id="users-grid">
-                            <!-- Users will be rendered here -->
-                        </div>
+                        <div class="users-grid" id="users-grid"></div>
                         <p class="login-error" id="users-error"></p>
                         <div class="login-actions">
                             <button type="button" class="btn btn-secondary quick-connect-btn" tabindex="0">
@@ -163,14 +154,14 @@ class LoginPage extends Page {
                             </button>
                         </div>
                     </div>
-                    
+
                     <!-- Manual Login Form -->
                     <div class="login-section manual-section hidden" data-section="manual">
                         <h2 data-i18n="ButtonManualLogin">Manual Login</h2>
                         <div class="input-group">
-                            <input 
-                                type="text" 
-                                id="manual-username" 
+                            <input
+                                type="text"
+                                id="manual-username"
                                 class="text-input tv-input"
                                 placeholder="${i18n.t('LabelUsername')}"
                                 readonly
@@ -178,9 +169,9 @@ class LoginPage extends Page {
                             >
                         </div>
                         <div class="input-group">
-                            <input 
-                                type="password" 
-                                id="manual-password" 
+                            <input
+                                type="password"
+                                id="manual-password"
                                 class="text-input tv-input"
                                 placeholder="${i18n.t('LabelPassword')}"
                                 readonly
@@ -203,7 +194,7 @@ class LoginPage extends Page {
                         </div>
                         <p class="login-error" id="manual-error"></p>
                     </div>
-                    
+
                     <!-- Password Form -->
                     <div class="login-section password-section hidden" data-section="password">
                         <h2 data-i18n="EnterPassword">Enter Password</h2>
@@ -213,9 +204,9 @@ class LoginPage extends Page {
                             <span class="user-name"></span>
                         </div>
                         <div class="input-group">
-                            <input 
-                                type="password" 
-                                id="password-input" 
+                            <input
+                                type="password"
+                                id="password-input"
                                 class="text-input tv-input"
                                 placeholder="${i18n.t('PasswordPlaceholder')}"
                                 readonly
@@ -232,7 +223,7 @@ class LoginPage extends Page {
                         </div>
                         <p class="login-error" id="password-error"></p>
                     </div>
-                    
+
                     <!-- Quick Connect -->
                     <div class="login-section quick-connect-section hidden" data-section="quick-connect">
                         <h2 data-i18n="QuickConnect">Quick Connect</h2>
@@ -240,7 +231,6 @@ class LoginPage extends Page {
                             Open your Jellyfin app or web UI on another device, go to
                             Dashboard → Quick Connect, and enter this code:
                         </p>
-                        <!-- The big, beautiful code the user reads off the screen -->
                         <div class="quick-connect-code" id="quick-connect-code">------</div>
                         <p class="quick-connect-status" id="quick-connect-status" data-i18n="WaitingForAuthorization">Waiting for authorization…</p>
                         <p class="login-error" id="quick-connect-error"></p>
@@ -259,6 +249,210 @@ class LoginPage extends Page {
                 </div>
             </div>
         `;
+    }
+
+    /**
+     * Modern layout HTML — clean split-screen DOM.
+     * No classic hacks; every structural difference lives here.
+     * CSS in modern.css handles colours / dimensions only.
+     */
+    _renderModernHTML() {
+        const logoSvg = this._logoSvg();
+        return `
+            <div class="page login-page">
+                <div class="login-container">
+
+                    <!-- ── Left pane: branding ──────────────────────────── -->
+                    <div class="login-header">
+                        <div class="login-logo-container">
+                            ${logoSvg}
+                            <h1 class="login-logo">Litefin</h1>
+                        </div>
+                        <p class="login-tagline" data-i18n="LitefinTagline">${i18n.t('LitefinTagline')}</p>
+                    </div>
+
+                    <!-- ── Right pane: interactive sections ──────────────── -->
+
+                    <!-- Server URL Form -->
+                    <div class="login-section server-section" data-section="server">
+                        <h2 class="section-title" data-i18n="HeaderConnectToServer">${i18n.t('HeaderConnectToServer')}</h2>
+                        <label class="input-label" data-i18n="HeaderConnectToServer">${i18n.t('HeaderConnectToServer')}</label>
+                        <div class="server-input-container">
+                            <input
+                                type="url"
+                                id="server-url"
+                                class="text-input tv-input server-url-input"
+                                placeholder="https://192.168.x.x:8096"
+                                autocomplete="off"
+                                readonly
+                                tabindex="0"
+                            >
+                            <button type="button" class="btn btn-primary connect-btn" tabindex="0">
+                                <span data-i18n="Connect">Connect</span>
+                            </button>
+                        </div>
+                        <p class="login-error" id="server-error"></p>
+
+                        <!-- Discovered Servers -->
+                        <div class="discovered-servers" id="discovered-servers">
+                            <div class="discovered-header">
+                                <h3 data-i18n="DiscoveredServers">Discovered Servers</h3>
+                                <button class="btn-icon-small refresh-btn" id="refresh-discovery" title="Refresh">
+                                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M23 4v6h-6"></path>
+                                        <path d="M1 20v-6h6"></path>
+                                        <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path>
+                                    </svg>
+                                </button>
+                            </div>
+                            <div class="discovery-status" id="discovery-status">
+                                <div class="loading-spinner-small"></div>
+                                <span data-i18n="ScanningNetwork">Scanning network...</span>
+                            </div>
+                            <ul class="server-list" id="server-list"></ul>
+                        </div>
+                    </div>
+
+                    <!-- User Selection -->
+                    <div class="login-section users-section hidden" data-section="users">
+                        <h2 class="section-title" data-i18n="SelectUser">${i18n.t('SelectUser')}</h2>
+                        <div class="users-grid" id="users-grid"></div>
+                        <p class="login-error" id="users-error"></p>
+                        <div class="login-actions modern-button-row">
+                            <button type="button" class="btn btn-primary quick-connect-btn" tabindex="0">
+                                <span data-i18n="QuickConnect">Quick Connect</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary manual-login-btn" tabindex="0">
+                                <span data-i18n="ButtonManualLogin">Manual Login</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary change-server-btn" tabindex="0">
+                                <span data-i18n="ButtonChangeServer">Log out of server</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Manual Login Form -->
+                    <div class="login-section manual-section hidden" data-section="manual">
+                        <h2 class="section-title" data-i18n="ButtonSignIn">${i18n.t('ButtonSignIn')}</h2>
+                        <div class="manual-form-container">
+                            <div class="input-group">
+                                <label class="input-label" data-i18n="LabelUsername">${i18n.t('LabelUsername')}</label>
+                                <div class="input-container user-input-container">
+                                    <input
+                                        type="text"
+                                        id="manual-username"
+                                        class="text-input tv-input"
+                                        placeholder="${i18n.t('LabelUsername')}"
+                                        readonly
+                                        tabindex="0"
+                                    >
+                                </div>
+                            </div>
+                            <div class="input-group">
+                                <label class="input-label" data-i18n="LabelPassword">${i18n.t('LabelPassword')}</label>
+                                <div class="input-container pass-input-container">
+                                    <input
+                                        type="password"
+                                        id="manual-password"
+                                        class="text-input tv-input"
+                                        placeholder="${i18n.t('LabelPassword')}"
+                                        readonly
+                                        tabindex="0"
+                                    >
+                                </div>
+                            </div>
+                        </div>
+                        <div class="login-actions modern-button-row">
+                            <button type="button" class="btn btn-primary manual-signin-btn" tabindex="0">
+                                <span data-i18n="ButtonSignIn">Sign In</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonBack">Back</span>
+                            </button>
+                        </div>
+                        <p class="login-error" id="manual-error"></p>
+                    </div>
+
+                    <!-- Password Form -->
+                    <div class="login-section password-section hidden" data-section="password">
+                        <h2 class="section-title" data-i18n="EnterPassword">${i18n.t('EnterPassword')}</h2>
+                        <div class="selected-user" id="selected-user">
+                            <img class="login-user-avatar" src="" alt="" onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')">
+                            <div class="user-avatar-placeholder hidden">?</div>
+                            <span class="login-user-name"></span>
+                        </div>
+                        <div class="input-group">
+                            <input
+                                type="password"
+                                id="password-input"
+                                class="text-input tv-input"
+                                placeholder="${i18n.t('PasswordPlaceholder')}"
+                                readonly
+                                tabindex="0"
+                            >
+                        </div>
+                        <div class="login-actions modern-button-row">
+                            <button type="button" class="btn btn-primary login-btn" tabindex="0">
+                                <span data-i18n="ButtonSignIn">Sign In</span>
+                            </button>
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonBack">Back</span>
+                            </button>
+                        </div>
+                        <p class="login-error" id="password-error"></p>
+                    </div>
+
+                    <!-- Quick Connect -->
+                    <div class="login-section quick-connect-section hidden" data-section="quick-connect">
+                        <h2 class="section-title" data-i18n="QuickConnect">${i18n.t('QuickConnect')}</h2>
+                        <p class="quick-connect-instructions" data-i18n="QuickConnectDescription">
+                            Open your Jellyfin app or web UI on another device, go to
+                            Dashboard → Quick Connect, and enter this code:
+                        </p>
+                        <div class="quick-connect-code" id="quick-connect-code">------</div>
+                        <p class="quick-connect-status" id="quick-connect-status" data-i18n="WaitingForAuthorization">Waiting for authorization…</p>
+                        <p class="login-error" id="quick-connect-error"></p>
+                        <div class="login-actions modern-button-row">
+                            <button type="button" class="btn btn-secondary back-btn" tabindex="0">
+                                <span data-i18n="ButtonCancel">Cancel</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Loading -->
+                    <div class="login-section loading-section hidden" data-section="loading">
+                        <div class="loading-spinner"></div>
+                        <p class="login-error" id="server-error"></p>
+                    </div>
+
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * Shared logo SVG markup — extracted so both layouts stay DRY.
+     * Returns the raw SVG string for embedding in either template.
+     */
+    _logoSvg() {
+        return `<svg viewBox="0 0 100 100" class="login-logo-svg" preserveAspectRatio="xMidYMid meet">
+            <path class="logo-path-outer" d="M19.57,91c-2.24,0-4.73-0.44-6.87-2.02c-2.07-1.53-3.32-3.6-3.62-5.97
+				c-0.51-4.01,1.81-7.59,3.24-9.37c4.82-5.97,9.41-12.5,10.36-19.76c0.8-6.13-1-12.33-2.9-18.9c-0.59-2.04-1.21-4.16-1.73-6.27
+				c-0.8-3.17-1.42-6.59-0.53-10.08c1.8-7.06,9.11-10.26,21.74-9.53c10.63,0.62,21.35,5.21,30.19,12.91
+				C82.12,33.08,93.56,53.11,90.5,72.93c-0.23,1.54-0.58,2.97-1.04,4.26c-1.28,3.66-3.47,6.32-6.34,7.68
+				c-3.63,1.71-7.38,1.01-10.39,0.44c-2.45-0.46-5.35-0.99-8.34-1.37c-6.72-0.86-12.12-0.79-17.02,0.21
+				c-3.5,0.71-6.9,1.8-10.49,2.95c-4.51,1.44-9.17,2.94-14.09,3.64C21.84,90.88,20.74,91,19.57,91z M35.69,16
+				c-5.23,0-10.52,0.9-11.4,4.36c-0.5,1.98-0.04,4.37,0.53,6.65c0.5,1.99,1.09,4.04,1.67,6.02c2.02,6.97,4.11,14.17,3.12,21.75
+				c-1.17,8.98-6.38,16.48-11.85,23.25c-1.19,1.47-1.87,3.08-1.75,4.08c0.04,0.31,0.17,0.73,0.85,1.23
+				c0.89,0.66,2.51,0.81,4.95,0.46c4.34-0.62,8.53-1.96,12.95-3.38c3.61-1.16,7.35-2.35,11.22-3.14c5.67-1.16,11.81-1.26,19.31-0.3
+				c3.17,0.41,6.2,0.95,8.74,1.43c2.32,0.44,4.52,0.85,6.1,0.11c1.15-0.54,2.07-1.78,2.72-3.66l0-0.01c0.31-0.87,0.55-1.88,0.72-3
+				c2.65-17.2-7.5-34.78-18.74-44.57c-7.68-6.69-16.92-10.67-26-11.2C37.81,16.04,36.75,16,35.69,16z" />
+            <path class="logo-path-inner" d="M69.3,63.51c0.19-0.64,0.32-1.3,0.41-1.95
+				c1.26-9.44-3.2-19.55-9.22-25.63c-3.64-3.67-8.19-6.14-13.02-6.47c-2.7-0.18-7.56-0.15-8.41,3.7c-0.32,1.47-0.07,3.03,0.25,4.49
+				c1.01,4.7,2.72,9.41,2.18,14.21C41,56.22,38.72,60,36.34,63.41c-1.14,1.63-1.9,4.02-0.12,5.54c0.97,0.83,2.3,0.8,3.49,0.6
+				c3.88-0.64,7.47-2.62,11.3-3.52c2.77-0.66,5.63-0.55,8.42-0.14c1.33,0.2,2.64,0.47,3.96,0.75c1.25,0.27,2.62,0.57,3.82-0.09
+				C68.26,65.98,68.91,64.81,69.3,63.51z" />
+        </svg>`;
     }
 
     onMounted() {
@@ -348,12 +542,12 @@ class LoginPage extends Page {
         this.$('.login-btn')?.addEventListener('click', () => this._login());
 
         // Quick Connect buttons (on users screen and manual screen)
-        this.$$('.quick-connect-btn').forEach(btn => {
+        this.$$('.quick-connect-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._startQuickConnect());
         });
 
         // Change Server buttons (on manual screen)
-        this.$$('.change-server-btn').forEach(btn => {
+        this.$$('.change-server-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._goToServerSelection());
         });
 
@@ -374,7 +568,7 @@ class LoginPage extends Page {
         // survives innerHTML rebuilds when user list is re-rendered
         if (this._usersGrid) {
             this._usersGrid.addEventListener('click', (e) => {
-                const card = e.target.closest('.user-card');
+                const card = e.target.closest('.user-card, .login-user-card');
                 if (card) {
                     const index = parseInt(card.dataset.userIndex);
                     log.debug(`User card clicked, index=${index}`);
@@ -569,7 +763,7 @@ class LoginPage extends Page {
 
                 // Focus first user card
                 setTimeout(() => {
-                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    const firstCard = this._usersGrid.querySelector('.user-card, .login-user-card');
                     if (firstCard) focusManager.focusElement(firstCard);
                 }, 100);
             } else {
@@ -694,7 +888,7 @@ class LoginPage extends Page {
 
                 // Focus first user card
                 setTimeout(() => {
-                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    const firstCard = this._usersGrid.querySelector('.user-card, .login-user-card');
                     if (firstCard) focusManager.focusElement(firstCard);
                 }, 100);
             } else {
@@ -712,23 +906,41 @@ class LoginPage extends Page {
     }
 
     _renderUsers() {
+        const isModern = layoutManager.isModern();
         const html = this._users
-            .map(
-                (user, index) => `
-            <div class="user-item">
-                <button class="user-card" data-user-index="${index}" tabindex="0">
-                        <img 
-                            class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                            src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
-                            alt="${user.Name}"
-                            onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
-                        >
-                        <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
-                </button>
-                <div class="user-name">${user.Name}</div>
-            </div>
-        `
-            )
+            .map((user, index) => {
+                if (isModern) {
+                    return `
+                        <div class="user-item">
+                            <button class="login-user-card" data-user-index="${index}" tabindex="0">
+                                    <img 
+                                        class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
+                                        src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
+                                        alt="${user.Name}"
+                                        onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
+                                    >
+                                    <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
+                            </button>
+                            <div class="login-user-name">${user.Name}</div>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="user-item">
+                            <button class="user-card" data-user-index="${index}" tabindex="0">
+                                <img 
+                                    class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
+                                    src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
+                                    alt="${user.Name}"
+                                    onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
+                                >
+                                <div class="user-avatar-placeholder ${user.PrimaryImageTag ? 'hidden' : ''}">${user.Name.charAt(0).toUpperCase()}</div>
+                            </button>
+                            <div class="user-name">${user.Name}</div>
+                        </div>
+                    `;
+                }
+            })
             .join('');
 
         this._usersGrid.innerHTML = html;
@@ -779,9 +991,9 @@ class LoginPage extends Page {
 
                 // Update password section with user info
                 const userEl = this.$('#selected-user');
-                userEl.querySelector('.user-name').textContent = user.Name;
+                userEl.querySelector('.login-user-name').textContent = user.Name;
 
-                const img = userEl.querySelector('.user-avatar');
+                const img = userEl.querySelector('.login-user-avatar');
                 const placeholder = userEl.querySelector('.user-avatar-placeholder');
 
                 placeholder.textContent = user.Name.charAt(0).toUpperCase();
@@ -929,7 +1141,7 @@ class LoginPage extends Page {
 
                 // Focus first user card
                 setTimeout(() => {
-                    const firstCard = this._usersGrid.querySelector('.user-card');
+                    const firstCard = this._usersGrid.querySelector('.user-card, .login-user-card');
                     if (firstCard) firstCard.focus();
                 }, 100);
             }
@@ -1109,16 +1321,40 @@ class LoginPage extends Page {
         }
 
         // Render server items
+        const isModern = layoutManager.isModern();
         this._serverList.innerHTML = this._discoveredServers
-            .map(
-                (server, index) => `
-            <li class="server-item" data-server-index="${index}" tabindex="0">
-                <span class="server-name">${server.name}</span>
-                <span class="server-address">${server.address}</span>
-                ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
-            </li>
-        `
-            )
+            .map((server, index) => {
+                if (isModern) {
+                    return `
+                        <li class="server-item" data-server-index="${index}" tabindex="0">
+                            <div class="server-icon-box">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                </svg>
+                                <div class="status-dot"></div>
+                            </div>
+                            <div class="server-info">
+                                <div class="name-row">
+                                    <span class="server-name">${server.name}</span>
+                                    ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                                </div>
+                                <span class="server-address">${server.address}</span>
+                            </div>
+                        </li>
+                    `;
+                } else {
+                    return `
+                        <li class="server-item" data-server-index="${index}" tabindex="0">
+                            <span class="server-name">${server.name}</span>
+                            <span class="server-address">${server.address}</span>
+                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                        </li>
+                    `;
+                }
+            })
             .join('');
 
         // Invalid focus cache so new items are found

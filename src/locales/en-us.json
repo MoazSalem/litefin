@@ -407,6 +407,7 @@
     "EnableTrickplayDescription": "Show video frame previews when scrubbing through the timeline",
     "EnableVP9": "Enable VP9 Decode",
     "EnterPassword": "Enter Password",
+    "EnterServerDetails": "Enter Server Details",
     "EnterServerURL": "Please enter a server URL",
     "ErrorFetchingTrailers": "Could not load trailers.",
     "ErrorLoadingMediaInfo": "Failed to load media specs.",

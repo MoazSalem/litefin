@@ -256,7 +256,7 @@ class LayoutManager {
             --text-muted: var(--jf-text-secondary);`;
         }
 
-        // 2. Clear or apply tinted background variables
+        // 2. Apply background variables based on theme mode
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
             dynamicCss += `
@@ -267,6 +267,24 @@ class LayoutManager {
             --jf-card-bg-hover: ${tints.cardBgHover};
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
+        } else if (this._themeMode === THEME_MODES.BLACK) {
+            dynamicCss += `
+            --jf-background: #000000;
+            --jf-background-alt: #000000;
+            --jf-surface: #0a0a0a;
+            --jf-card-bg: #080808;
+            --jf-card-bg-hover: #121212;
+            --jf-divider: rgba(255, 255, 255, 0.05);
+            --jf-navbar-bg: #000000;`;
+        } else if (this._themeMode === THEME_MODES.CLASSIC_DARK) {
+            dynamicCss += `
+            --jf-background: #101010;
+            --jf-background-alt: #151515;
+            --jf-surface: #1a1a1a;
+            --jf-card-bg: #151515;
+            --jf-card-bg-hover: #252525;
+            --jf-divider: rgba(255, 255, 255, 0.08);
+            --jf-navbar-bg: #151515;`;
         }
 
         dynamicCss += `\n        }`;
