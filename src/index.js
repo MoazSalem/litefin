@@ -77,7 +77,10 @@ import './styles/livetv.css';
 import './styles/slideshow.css'; // Full-screen photo viewer
 import './styles/rtl.css'; // Directional overrides
 import './themes/index.js'; // All shared themes
-import './styles/modern.css'; // Modern layout overrides
+import './styles/modern/core.css';
+import './styles/modern/server.css';
+import './styles/modern/manual.css';
+import './styles/modern/users.css';
 
 /**
  * Bootstrap the application

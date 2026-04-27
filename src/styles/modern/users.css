@@ -1,0 +1,95 @@
+/* ============================================================================
+   Modern Layout - User Selection & Profile
+   ============================================================================ */
+
+html[data-layout="modern"] .users-section {
+    max-width: none;
+    text-align: left;
+}
+
+html[data-layout="modern"] .users-grid {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+    margin: 20px -20px 40px -20px;
+}
+
+html[data-layout="modern"] .user-item {
+    width: 240px;
+    margin: 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+
+html[data-layout="modern"] .login-user-card {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    background: var(--jf-surface, #151515);
+    border-radius: 50%;
+    overflow: hidden;
+    border: 4px solid transparent;
+    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    margin: 0 auto;
+}
+
+html[data-layout="modern"] .login-user-card:focus,
+html[data-layout="modern"] .login-user-card.focused {
+    border-color: var(--jf-accent, #448aff);
+    box-shadow: 0 0 20px rgba(68, 138, 255, 0.3);
+    transform: scale(1.08);
+}
+
+html[data-layout="modern"] .user-avatar-placeholder {
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 5rem;
+    font-weight: 700;
+    text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+html[data-layout="modern"] .login-user-avatar {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    transition: all 0.3s ease;
+}
+
+html[data-layout="modern"] .login-user-name {
+    font-size: 1.6rem;
+    margin-top: 24px;
+    font-weight: 600;
+    color: rgba(255, 255, 255, 0.8);
+    transition: color 0.2s ease;
+}
+
+html[data-layout="modern"] .login-user-card:focus + .login-user-name,
+html[data-layout="modern"] .login-user-card.focused + .login-user-name {
+    color: var(--jf-text-primary) !important;
+    margin-top: 24px;
+}
+
+html[data-layout="modern"] .users-section .modern-button-row {
+    margin-top: 20px;
+}
+
+html[data-layout="modern"] .quick-connect-btn {
+    flex: 2;
+    height: 72px;
+    background: var(--jf-accent, #7c4dff);
+    border: 4px solid transparent;
+    border-radius: 14px;
+    font-size: 1.6rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+}
+
+html[data-layout="modern"] .quick-connect-btn:focus,
+html[data-layout="modern"] .quick-connect-btn.focused {
+    transform: scale(1.02);
+    border-color: var(--jf-button-border-focus, #ffffff);
+}
