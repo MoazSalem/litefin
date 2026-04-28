@@ -438,7 +438,11 @@ export default class OSDController extends Component {
                             <div class="osd-slider-track">
                                 <div class="osd-slider-fill" id="osdPositionFill"></div>
                             </div>
-                            <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="0">
+                            <!-- tabindex=-1: prevents the browser from giving this range input native DOM focus.
+                                 On TV hardware, focusing a range input causes OK/Enter to synthesize a click
+                                 at clientX=0, which our seek math interprets as 'seek to 0%' and resets playback.
+                                 D-pad row focus is tracked internally via _currentFocusRow=2 instead. -->
+                            <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="-1">
                         </div>
                         <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
                     </div>
@@ -534,6 +538,19 @@ export default class OSDController extends Component {
 
                 // Sync focus state to seekbar row so D-pad resumes from here
                 this._currentFocusRow = 2;
+
+                /*
+                 * TV SYNTHESIZED CLICK GUARD (seekbar only)
+                 *
+                 * On WebOS/Tizen, pressing OK synthesizes a click at clientX=0, clientY=0.
+                 * Our seek math computes (0 - rect.left) / rect.width → 0% → seeks to start.
+                 * A real magic cursor click can never land at the absolute top-left corner
+                 * of the viewport, so (0,0) is an unambiguous signature of a rogue event.
+                 * Block it here — inside the slider path only — so button clicks are unaffected.
+                 */
+                if (e.clientX === 0 && e.clientY === 0) {
+                    return;
+                }
 
                 const slider = sliderContainer.querySelector('input[type="range"]');
                 if (slider) {
@@ -1238,6 +1255,44 @@ export default class OSDController extends Component {
             case 'left': return this._navigate('left');
             case 'right': return this._navigate('right');
             case 'back': return this._handleBack();
+            case 'enter': {
+                /*
+                 * On TV hardware, pressing OK synthesizes a click at clientX=0, clientY=0.
+                 * The OSD click handler uses elementsFromPoint(clientX, clientY) to resolve
+                 * the target — but (0,0) is the top-left corner of the viewport, nowhere near
+                 * any OSD element. As a result, button presses and slider resets all fail.
+                 *
+                 * Fix: handle OK entirely in JS for all rows, never relying on the synthesized click.
+                 */
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                if (this._currentFocusRow === 2) {
+                    // Seekbar row: OK = toggle play/pause
+                    this._executeAction('togglePlay');
+                    return true;
+                }
+
+                if (this._currentFocusRow === 1) {
+                    // Controls row: activate the currently focused button's action directly
+                    const controls = this._getControls();
+                    const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                        return true;
+                    }
+                }
+
+                if (this._currentFocusRow === 0) {
+                    // Header row (back button)
+                    this._handleBack();
+                    return true;
+                }
+
+                break;
+            }
         }
 
         // Media keys
@@ -1547,10 +1602,19 @@ export default class OSDController extends Component {
                 btn.focus();
             }
         } else if (this._currentFocusRow === 2) {
-            const slider = this._cachedSeekbar;
-            if (slider) {
-                slider.classList.add('focused');
-                slider.focus();
+            /*
+             * Focus the slider CONTAINER, not the <input type="range"> itself.
+             * Giving the range input native DOM focus causes the TV browser to
+             * synthesize a click at clientX=0 when OK is pressed, which seeks the
+             * video to 0% via our own click handler. The container div is
+             * focusable (tabindex=0 set below) and visually identical for the user.
+             */
+            const sliderContainer = this._osdEl.querySelector('.osd-slider-container');
+            if (sliderContainer) {
+                // Make it focusable if it isn't already
+                if (!sliderContainer.hasAttribute('tabindex')) sliderContainer.setAttribute('tabindex', '0');
+                sliderContainer.classList.add('focused');
+                sliderContainer.focus();
             }
         }
     }
@@ -1958,6 +2022,11 @@ export default class OSDController extends Component {
         return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
     }
     _handlePositionSliderInput(e) {
+        if (this._suppressSliderChange) {
+            if (this._player) this._updatePositionSlider(this._player);
+            return;
+        }
+        
         this._isDraggingSeekbar = true;
         this.resetAutoHide();
         const percentRaw = e.target.value;
@@ -1982,6 +2051,15 @@ export default class OSDController extends Component {
     }
 
     _handlePositionSliderChange(e) {
+        if (this._suppressSliderChange) {
+            this._suppressSliderChange = false;
+            // Revert the rogue value=0 change that the TV browser forced upon us
+            if (this._player) {
+                this._updatePositionSlider(this._player);
+            }
+            return;
+        }
+
         this._isDraggingSeekbar = false;
         try {
             const duration = this._player.getDurationTicks();
