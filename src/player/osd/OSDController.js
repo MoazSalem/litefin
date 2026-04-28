@@ -466,10 +466,84 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action]');
+            // Every click inside the OSD resets the auto-hide timer.
+            this.resetAutoHide();
+
+            /*
+             * WEBOS / TIZEN POINTER-EVENTS BUG WORKAROUND
+             *
+             * On WebOS Chrome 108, `pointer-events: none` on .osd-overlays (z-index: 1000)
+             * is sometimes ignored, causing that transparent container to swallow all clicks
+             * that should have landed on the OSD buttons in .osd-main (z-index: 10).
+             *
+             * When we detect that the click target IS the .osd-overlays div itself
+             * (i.e. not a child widget), we use document.elementsFromPoint() to walk the
+             * full stacking order at the click coordinates and find the real intended target.
+             * This completely bypasses the z-index / pointer-events interaction.
+             */
+            let resolvedTarget = e.target;
+            if (resolvedTarget.classList && resolvedTarget.classList.contains('osd-overlays')) {
+                // Find all elements at the click position, then pick the first one that
+                // actually has a [data-action] ancestor or is inside .osd-slider-container.
+                const els = document.elementsFromPoint(e.clientX, e.clientY);
+                for (const el of els) {
+                    // Skip the problematic overlay container itself
+                    if (el.classList && el.classList.contains('osd-overlays')) continue;
+                    // Accept any element that is inside .osd-main (buttons, slider, etc.)
+                    if (el.closest?.('.osd-main') || el.closest?.('[data-action]')) {
+                        resolvedTarget = el;
+                        break;
+                    }
+                }
+                log.debug('[MagicCursor] elementsFromPoint fallback, resolved:', resolvedTarget?.tagName, resolvedTarget?.className);
+            }
+
+            // Resolve the [data-action] button from the (possibly remapped) target
+            const btn = resolvedTarget.closest('[data-action]');
             if (btn) {
                 e.stopPropagation();
+
+                /*
+                 * MAGIC CURSOR STATE SYNC — keep the OSD's internal D-pad position in
+                 * sync with what was clicked so subsequent _updateFocus() calls restore
+                 * the highlight to the correct button, not some stale position.
+                 */
+                if (btn.classList.contains('osd-back-btn')) {
+                    this._currentFocusRow = 0;
+                    this._currentFocusIndex = 0;
+                } else {
+                    const controls = this._getControls();
+                    const idx = controls.indexOf(btn);
+                    if (idx !== -1) {
+                        this._currentFocusRow = 1;
+                        this._currentFocusIndex = idx;
+                    }
+                }
+
                 this._executeAction(btn.dataset.action);
+                return;
+            }
+
+            /*
+             * Magic Cursor: Clicking anywhere in the 36px tall slider container seeks to
+             * that position. Without this, the user would have to hit the 8px tall range
+             * input precisely, which is nearly impossible with a TV magic cursor.
+             */
+            const sliderContainer = resolvedTarget.closest?.('.osd-slider-container');
+            if (sliderContainer && !resolvedTarget.closest?.('.osd-overlays')) {
+                e.stopPropagation();
+
+                // Sync focus state to seekbar row so D-pad resumes from here
+                this._currentFocusRow = 2;
+
+                const slider = sliderContainer.querySelector('input[type="range"]');
+                if (slider) {
+                    const rect = sliderContainer.getBoundingClientRect();
+                    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    slider.value = percent * 100;
+                    slider.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                return;
             }
         });
 

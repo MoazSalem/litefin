@@ -538,6 +538,54 @@ class PlayerPage extends Page {
             eventBus.on('key:channelDown', this._onChannelDown);
 
             // ================================================================
+            // MAGIC CURSOR SUPPORT (WebOS / Tizen Pointer)
+            // ================================================================
+            
+            // 1. Moving the magic remote wakes up the OSD.
+            //    Throttled to 200ms — without throttling, every pixel of cursor movement
+            //    spams show() + resetAutoHide(), causing the timer to reset continuously
+            //    and making it impossible for the OSD to settle before the user clicks.
+            let _mouseMoveThrottle = null;
+            this.el.addEventListener('mousemove', () => {
+                if (_mouseMoveThrottle) return;
+                _mouseMoveThrottle = setTimeout(() => { _mouseMoveThrottle = null; }, 200);
+                if (this._osd) {
+                    this._osd._onMouseMove();
+                }
+            });
+
+            // 2. Clicking the video background shows/hides the OSD.
+            //    Use a robust contains() guard against the entire #osd-overlay subtree
+            //    so OSD button clicks can never accidentally reach this handler even if
+            //    stopPropagation() is still in flight on older TV browsers.
+            this.el.addEventListener('click', (e) => {
+                const osdOverlay = this.el.querySelector('#osd-overlay');
+
+                // If the click originated from anywhere inside the OSD container, ignore it.
+                // This covers buttons, slider, modals, overlays — anything inside #osd-overlay.
+                if (osdOverlay && osdOverlay.contains(e.target)) {
+                    return;
+                }
+
+                // Ignore the error panel
+                if (e.target.closest('.error-panel')) {
+                    return;
+                }
+
+                // Click landed on the raw video background.
+                // - If OSD is hidden: wake it up.
+                // - If OSD is visible: toggle play/pause (standard media player behaviour).
+                //   This branch is only reached for genuine background clicks — OSD buttons
+                //   and the slider are fully guarded by the contains() check above.
+                if (this._osd && !this._osd._isOsdVisible) {
+                    this._osd.show();
+                    this._osd.resetAutoHide();
+                } else {
+                    this._onRemotePlayPause();
+                }
+            });
+
+            // ================================================================
             // PHYSICAL REMOTE CONTROL HANDLERS (WebOS/Tizen)
             // ================================================================
             // Link physical hardware keys to our existing remote command logic.
