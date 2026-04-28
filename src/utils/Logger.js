@@ -158,30 +158,38 @@ class Logger {
         });
 
         // 5. Output to native console (if enabled)
-        // We format it nicely for the browser console
+        // We format it nicely for the browser console.
+        // NOTE: We do NOT use %c CSS formatting here — Chromium 32 (Tizen 2.x) does not
+        // support console styling and throws/hangs when it receives a %c argument,
+        // which was causing the app to silently freeze on ultra-legacy builds.
         if (this._enabled) {
             this._isLogging = true; // Set flag to warn interceptor to ignore this
             try {
-                const prefix = `[${moduleName}]`;
-                const css = this._getLevelColor(level);
+                const prefix = '[' + moduleName + ']';
+
+                // Build a single formatted string instead of spreading raw objects.
+                // Chromium 32's console.log can choke on complex object arguments
+                // (especially circular refs or host objects), so we pre-serialize.
+                const safeArgs = args.map(function(arg) {
+                    if (arg === null || arg === undefined) return String(arg);
+                    if (typeof arg === 'object') {
+                        try { return JSON.stringify(arg); } catch(e) { return '[Object]'; }
+                    }
+                    return String(arg);
+                });
+                const msg = prefix + ' ' + safeArgs.join(' ');
 
                 switch (level) {
-                    case LogLevel.ERROR:
-                        console.error(`%c${prefix}`, css, ...args);
-                        break;
-                    case LogLevel.WARN:
-                        console.warn(`%c${prefix}`, css, ...args);
-                        break;
-                    case LogLevel.INFO:
-                        console.info(`%c${prefix}`, css, ...args);
-                        break;
-                    default:
-                        console.log(`%c${prefix}`, css, ...args);
+                    case LogLevel.ERROR: console.error(msg); break;
+                    case LogLevel.WARN:  console.warn(msg);  break;
+                    case LogLevel.INFO:  console.info(msg);  break;
+                    default:             console.log(msg);   break;
                 }
             } finally {
                 this._isLogging = false; // Reset flag
             }
         }
+
     }
 
     _getLevelColor(level) {
