@@ -254,11 +254,11 @@ export class HtmlVideoPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
-                // Apply saved tracks
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
-                    if (options.audioStreamIndex < hls.audioTracks.length) {
-                        hls.audioTrack = options.audioStreamIndex;
-                        log.debug('Set HLS audio track:', options.audioStreamIndex);
+                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : options.audioStreamIndex;
+                    if (outputIndex < hls.audioTracks.length) {
+                        hls.audioTrack = outputIndex;
+                        log.debug('Set HLS audio track:', options.audioStreamIndex, 'mapped to', outputIndex);
                     }
                 }
 
@@ -671,11 +671,14 @@ export class HtmlVideoPlayer {
         // ── HLS path: delegate to hls.js which owns the audio track selection ──
         if (this._hlsPlayer) {
             const tracks = this._hlsPlayer.audioTracks;
-            if (tracks && listIndex >= 0 && listIndex < tracks.length) {
-                log.info('HLS: switching audio track to list index', listIndex, '→', tracks[listIndex]?.name);
-                this._hlsPlayer.audioTrack = listIndex;
-            } else {
-                log.warn('HLS: audio track index', listIndex, 'out of range (', tracks?.length, 'tracks)');
+            if (tracks) {
+                const outputIndex = tracks.length <= 1 ? 0 : listIndex;
+                if (outputIndex >= 0 && outputIndex < tracks.length) {
+                    log.info('HLS: switching audio track to list index', listIndex, '→ outputIndex', outputIndex, '(', tracks[outputIndex]?.name, ')');
+                    this._hlsPlayer.audioTrack = outputIndex;
+                } else {
+                    log.warn('HLS: audio track index', listIndex, 'mapped to', outputIndex, 'out of range (', tracks.length, 'tracks)');
+                }
             }
             return;
         }
@@ -687,11 +690,13 @@ export class HtmlVideoPlayer {
         const audioTracks = video.audioTracks;
         if (!audioTracks || audioTracks.length === 0) return;
 
+        const outputIndex = audioTracks.length <= 1 ? 0 : listIndex;
+
         for (let i = 0; i < audioTracks.length; i++) {
             // Enable only the track at the requested list index
-            audioTracks[i].enabled = (i === listIndex);
+            audioTracks[i].enabled = (i === outputIndex);
         }
-        log.info('Native: switched audio track to list index', listIndex);
+        log.info('Native: switched audio track to list index', listIndex, 'mapped to', outputIndex);
     }
 
     /**
