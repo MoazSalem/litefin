@@ -268,14 +268,10 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     margin: 0 auto;
 }
 
-.osd-btn:hover {
-    background: var(--osd-btn-hover);
-    /* Promote only the hovered button to its own compositor layer */
-    will-change: transform;
-}
-
+.osd-btn:hover,
 .osd-btn:focus,
-.osd-btn.focused {
+.osd-btn.focused,
+.osd-btn.magic-hover {
     background: var(--jf-accent) !important;
     border-color: var(--jf-button-border-focus) !important;
     color: var(--jf-primary-btn-color) !important;
@@ -283,7 +279,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     border: 2px solid var(--jf-action-btn-active-border)!important;
     -webkit-transform: scale(1.15);
     transform: scale(1.15);
-    /* Promote only the focused button */
+    /* Promote only the focused/hovered button to its own compositor layer */
     will-change: transform;
 }
 
@@ -291,8 +287,10 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     color: var(--osd-accent-color);
 }
 
+.osd-btn.active:hover,
 .osd-btn.active:focus,
-.osd-btn.active.focused {
+.osd-btn.active.focused,
+.osd-btn.active.magic-hover {
     background: var(--jf-primary-btn-color) !important;
     color: var(--osd-accent-color) !important;
     border-color: var(--jf-primary-btn-color) !important;
@@ -686,8 +684,11 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 /* Player/Offset Focus (28px Thumb on 8px Track) */
 /* Formula: (TrackHeight - ThumbHeight) / 2 = (8 - 28) / 2 = -10px */
+.osd-slider-container:hover .osd-slider::-webkit-slider-thumb,
+.osd-slider-container.magic-hover .osd-slider::-webkit-slider-thumb,
 .osd-slider.focused::-webkit-slider-thumb,
 .osd-slider:focus::-webkit-slider-thumb,
+.osd-offset-slider:hover::-webkit-slider-thumb,
 .osd-offset-slider.focused::-webkit-slider-thumb,
 .osd-offset-slider:focus::-webkit-slider-thumb {
     width: 10px !important;
@@ -708,8 +709,10 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 }
 
 
+.osd-slider-container:hover .osd-slider::-moz-range-thumb,
 .osd-slider.focused::-moz-range-thumb,
 .osd-slider:focus::-moz-range-thumb,
+.osd-offset-slider:hover::-moz-range-thumb,
 .osd-offset-slider.focused::-moz-range-thumb,
 .osd-offset-slider:focus::-moz-range-thumb {
     width: 10px;

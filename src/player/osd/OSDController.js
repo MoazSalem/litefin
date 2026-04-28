@@ -495,7 +495,6 @@ export default class OSDController extends Component {
                         break;
                     }
                 }
-                log.debug('[MagicCursor] elementsFromPoint fallback, resolved:', resolvedTarget?.tagName, resolvedTarget?.className);
             }
 
             // Resolve the [data-action] button from the (possibly remapped) target
@@ -579,9 +578,50 @@ export default class OSDController extends Component {
         return this._osdEl;
     }
 
-    _onMouseMove() {
+    _onMouseMove(e) {
         this.show();
         this.resetAutoHide();
+
+        if (!e) return;
+
+        // PROGRAMMATIC HOVER SUPPORT
+        // Since WebOS 108 ignores pointer-events: none on .osd-overlays, 
+        // native CSS :hover is broken for OSD buttons. We simulate it here.
+        const els = document.elementsFromPoint(e.clientX, e.clientY);
+        let targetBtn = null;
+
+        for (const el of els) {
+            // Find the first OSD button or slider under the cursor
+            const btn = el.closest?.('[data-action], .osd-slider-container');
+            if (btn) {
+                targetBtn = btn;
+                break;
+            }
+        }
+
+        // Clean up previous hover
+        if (this._lastHoveredEl && this._lastHoveredEl !== targetBtn) {
+            this._lastHoveredEl.classList.remove('magic-hover');
+        }
+
+        // Apply new hover
+        if (targetBtn) {
+            targetBtn.classList.add('magic-hover');
+            this._lastHoveredEl = targetBtn;
+        } else {
+            this._lastHoveredEl = null;
+        }
+    }
+
+    /**
+     * Clear all programmatic hover effects (Magic Cursor).
+     * Called when the OSD hides or when D-pad navigation resumes.
+     */
+    _clearMagicHover() {
+        if (this._osdEl) {
+            this._osdEl.querySelectorAll('.magic-hover').forEach(el => el.classList.remove('magic-hover'));
+        }
+        this._lastHoveredEl = null;
     }
 
     // ===================================
@@ -858,6 +898,9 @@ export default class OSDController extends Component {
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+
+        // Clear Magic Cursor hover when hiding
+        this._clearMagicHover();
 
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
@@ -1237,6 +1280,10 @@ export default class OSDController extends Component {
     }
 
     _navigate(direction) {
+        // When the user picks up the D-pad, clear any Magic Cursor hover state
+        // so the two input methods don't visually conflict.
+        this._clearMagicHover();
+
         const wasHidden = !this._isOsdVisible;
         const seekWithArrows = PlayerSettings.get('seekWithArrows') !== false;
         
@@ -1750,7 +1797,10 @@ export default class OSDController extends Component {
 
         const isPaused = this._player.isPaused();
         this._osdPlayPauseBtnEl.innerHTML = isPaused ? ICONS.play : ICONS.pause;
-        this._osdPlayPauseBtnEl.className = isPaused ? 'osd-btn osd-btn-play osd-btn-paused' : 'osd-btn osd-btn-play';
+
+        // Toggle only osd-btn-paused — avoid replacing the entire className which
+        // would wipe transient classes like .magic-hover and .focused on every call.
+        this._osdPlayPauseBtnEl.classList.toggle('osd-btn-paused', isPaused);
     }
 
     _startUpdates() {

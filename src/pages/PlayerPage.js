@@ -546,11 +546,11 @@ class PlayerPage extends Page {
             //    spams show() + resetAutoHide(), causing the timer to reset continuously
             //    and making it impossible for the OSD to settle before the user clicks.
             let _mouseMoveThrottle = null;
-            this.el.addEventListener('mousemove', () => {
+            this.el.addEventListener('mousemove', (e) => {
                 if (_mouseMoveThrottle) return;
                 _mouseMoveThrottle = setTimeout(() => { _mouseMoveThrottle = null; }, 200);
                 if (this._osd) {
-                    this._osd._onMouseMove();
+                    this._osd._onMouseMove(e);
                 }
             });
 
