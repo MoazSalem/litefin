@@ -208,7 +208,13 @@ export default class DescriptionModal extends BaseMenu {
             return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
         }
         if (s === 'tmdb') {
-            return { assetName: 'TMDB.png', format: (v) => `${Math.round(v)}%` };
+            return { 
+                assetName: 'TMDB.png', 
+                format: (v) => {
+                    const num = parseFloat(v);
+                    return (num > 10 ? num / 10 : num).toFixed(1);
+                }
+            };
         }
         if (s === 'letterboxd') {
             return { assetName: 'letterboxd.png', format: (v) => parseFloat(v).toFixed(1) };
