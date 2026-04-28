@@ -66,11 +66,11 @@ import './styles/search.css';
 import './styles/player-osd.css';
 import './styles/upnext.css';
 import './styles/player-modals.css'; /* Chapters & Queue modal panels */
-import './styles/syncplay-menu.css';  /* SyncPlay group-selection overlay */
+import './styles/syncplay-menu.css'; /* SyncPlay group-selection overlay */
 import './styles/settings.css';
 import './styles/season.css';
 import './styles/offline.css';
-import './styles/profiles.css';   /* "Who's Watching" profile switcher */
+import './styles/profiles.css'; /* "Who's Watching" profile switcher */
 import './styles/screensaver.css';
 import './styles/hero-carousel.css';
 import './styles/livetv.css';
@@ -81,6 +81,7 @@ import './styles/modern/core.css';
 import './styles/modern/server.css';
 import './styles/modern/manual.css';
 import './styles/modern/users.css';
+import './styles/modern/home.css';
 
 /**
  * Bootstrap the application
@@ -121,8 +122,12 @@ async function bootstrap() {
                     const pkgId = appId.split('.')[0];
                     tizen.application.launch(
                         pkgId + '.ytresolver',
-                        function() { log.info('Tizen background service launched successfully'); },
-                        function(err) { log.error('Failed to launch Tizen background service: ' + err.message); }
+                        function () {
+                            log.info('Tizen background service launched successfully');
+                        },
+                        function (err) {
+                            log.error('Failed to launch Tizen background service: ' + err.message);
+                        }
                     );
                 } catch (e) {
                     log.error('Exception launching Tizen service: ' + e.message);
@@ -131,14 +136,14 @@ async function bootstrap() {
                 window.webOS.service.request('luna://org.litefin.app.service', {
                     method: 'discover',
                     parameters: { subscribe: false },
-                    onSuccess: function() {},
-                    onFailure: function() {}
+                    onSuccess: function () {},
+                    onFailure: function () {}
                 });
             }
         } else {
             log.info('Background service launch skipped (disabled in settings)');
         }
-    } catch(e) {
+    } catch (e) {
         log.warn('Failed to wake up background service:', e);
     }
 

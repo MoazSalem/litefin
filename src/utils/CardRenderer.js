@@ -161,16 +161,11 @@ class CardRenderer {
                     });
                 }
             } else if (type === 'library') {
+                const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+
                 // Dynamic Library Thumbs (from HomePage pre-fetch)
                 if (item._dynamicThumbUrl) {
                     imageUrl = item._dynamicThumbUrl;
-
-                    // Add modern overlay label and tint directly to the image area
-                    // This provides a premium "streaming service" aesthetic
-                    imageInnerHtml = `
-                        <div class="card-overlay-tint"></div>
-                        <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
-                    `;
                 }
                 // Libraries: Primary -> Thumb -> Backdrop
                 else if (item.ImageTags?.Primary) {
@@ -191,9 +186,18 @@ class CardRenderer {
                         quality: params.quality
                     });
                 }
+
+                // Add modern overlay label and tint directly to the image area
+                // This provides a premium "streaming service" aesthetic
+                if (isModern || item._dynamicThumbUrl) {
+                    imageInnerHtml = `
+                        <div class="card-overlay-tint"></div>
+                        <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
+                    `;
+                }
             } else {
                 // Movies/Series Landscape: Thumb -> Backdrop -> Primary
-                if (item.ImageTags && item.ImageTags.Thumb) {
+                if (item.ImageTags?.Thumb) {
                     imageUrl = api.getImageUrl(itemId, 'Thumb', {
                         maxWidth: params.maxWidth,
                         quality: params.quality,
@@ -385,6 +389,16 @@ class CardRenderer {
             `;
         }
 
+        // Season/Episode Badge (for Series/Episodes)
+        let episodeBadgeHtml = '';
+        if (item.Type === 'Episode' && item.IndexNumber !== undefined) {
+            const s = item.ParentIndexNumber || 0;
+            const e = item.IndexNumber;
+            episodeBadgeHtml = `<div class="episode-badge">S${s}:E${e}</div>`;
+        } else if (item.Type === 'Season' && item.IndexNumber !== undefined) {
+            episodeBadgeHtml = `<div class="episode-badge">Season ${item.IndexNumber}</div>`;
+        }
+
         // --- 3. Text Generation ---
 
         let titleText = i18n.ensureBiDi(item.Name);
@@ -498,6 +512,7 @@ class CardRenderer {
             ${badgeHtml}
             ${playedBadgeHtml}
             ${videoBadgeHtml}
+            ${episodeBadgeHtml}
         `;
 
         return `

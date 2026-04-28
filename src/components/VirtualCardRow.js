@@ -33,15 +33,25 @@ export class VirtualCardRow {
 
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
-        this.itemWidth = this.isLandscape ? 400 : 240;
-        this.itemMargin = 24;
+        // Modern override: 440px / 260px with 28px margin
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        if (isModern) {
+            this.itemWidth = this.isLandscape ? 440 : 250; // Portrait reduced for better spacing
+            this.itemMargin = 40; // Increased gap for premium feel
+            this.sidePadding = 120; // Clears collapsed sidebar (100px) with 20px buffer
+        } else {
+            this.itemWidth = this.isLandscape ? 400 : 240;
+            this.itemMargin = 24;
+            this.sidePadding = 60;
+        }
+
         this.totalItemWidth = this.itemWidth + this.itemMargin;
 
         this.totalItems = this.items.length;
 
         // Set the total width of the track to simulate all items existing
-        // Add 60px padding-left and padding-right from layout.css
-        const totalWidth = this.totalItems * this.totalItemWidth + 120;
+        // Add sidePadding on left and right from layout.css
+        const totalWidth = this.totalItems * this.totalItemWidth + (this.sidePadding * 2);
         this.track.style.width = `${totalWidth}px`;
         // Ensure track is relative for absolute positioned children
         this.track.style.position = 'relative';
@@ -70,7 +80,8 @@ export class VirtualCardRow {
             // Inner wrapper provides the actual pixel context for height calculation
             const dummyContent = document.createElement('div');
             dummyContent.style.width = `${this.itemWidth}px`;
-            dummyContent.style.border = '3px solid transparent';
+            const borderWidth = isModern ? '4px' : '3px';
+            dummyContent.style.border = `${borderWidth} solid transparent`;
             dummyContent.style.display = 'block';
 
             // Emulate .card-image
@@ -81,14 +92,22 @@ export class VirtualCardRow {
             if (this.isLandscape) padding = '56.25%';
             else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
             imageRatioDiv.style.paddingBottom = padding;
-            imageRatioDiv.style.border = '3px solid transparent';
+            imageRatioDiv.style.border = `${borderWidth} solid transparent`;
             dummyContent.appendChild(imageRatioDiv);
 
             // Emulate .card-info
             if (!this.hideLabels) {
                 const infoDiv = document.createElement('div');
-                infoDiv.style.padding = '12px 4px 0 4px';
-                infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
+                const infoPadding = isModern ? '16px 8px 0 8px' : '12px 4px 0 4px';
+                infoDiv.style.padding = infoPadding;
+                
+                if (isModern) {
+                    // Modern: 1.6rem title (1.2 line-height) + 4px margin + 1.2rem subtitle
+                    infoDiv.innerHTML = `<div style="height: 1.92rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.2rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
+                } else {
+                    // Classic: 1.2rem title + 6px margin + 1rem subtitle
+                    infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
+                }
                 dummyContent.appendChild(infoDiv);
             }
 
@@ -137,7 +156,7 @@ export class VirtualCardRow {
                     tempDiv.innerHTML = this.renderCard(this.items[i]).trim();
                     const cardNode = tempDiv.firstElementChild;
                     if (cardNode) {
-                        const leftPos = 60 + i * this.totalItemWidth;
+                        const leftPos = this.sidePadding + i * this.totalItemWidth;
                         cardNode.style.position = 'absolute';
                         const isRtl = document.documentElement.dir === 'rtl';
                         if (isRtl) {
@@ -225,8 +244,8 @@ export class VirtualCardRow {
 
                 if (cardNode) {
                     // Position the card absolutely within the relative track
-                    // Include 60px padding-left from layout.css
-                    const leftPos = 60 + i * this.totalItemWidth;
+                    // Include sidePadding from layout.css
+                    const leftPos = this.sidePadding + i * this.totalItemWidth;
                     cardNode.style.position = 'absolute';
 
                     const isRtl = document.documentElement.dir === 'rtl';
@@ -307,9 +326,9 @@ export class VirtualCardRow {
             relativeX = documentX - trackRect.left;
         }
 
-        // Items are placed at: 60 + i * totalItemWidth
+        // Items are placed at: sidePadding + i * totalItemWidth
         // We want to find index i where target center is closest
-        bestIndex = Math.round((relativeX - 60 - this.itemWidth / 2) / this.totalItemWidth);
+        bestIndex = Math.round((relativeX - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth);
         bestIndex = Math.max(0, Math.min(this.totalItems - 1, bestIndex));
 
         this.currentIndex = bestIndex;
@@ -387,7 +406,7 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getTrackWidth() {
-        return this.totalItems * this.totalItemWidth + 120; // Matches totalWidth calculation in constructor
+        return this.totalItems * this.totalItemWidth + (this.sidePadding * 2); // Matches totalWidth calculation in constructor
     }
 
     /**
@@ -397,6 +416,6 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getItemPosition(index) {
-        return 60 + index * this.totalItemWidth; // Matches leftPos calculation in constructor / _updateWindow
+        return this.sidePadding + index * this.totalItemWidth; // Matches leftPos calculation in constructor / _updateWindow
     }
 }
