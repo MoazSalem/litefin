@@ -43,10 +43,20 @@ npm run package
 
 ## Quick Installation
 
-For the easiest installation on Samsung Tizen TVs, it is recommended to use the **Jellyfin2Samsung** installer:
+### Samsung Tizen TVs
 
-1. Download the latest `.wgt` from the releases or build it yourself.
-2. Use [**Jellyfin2Samsung**](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer) to sideload the application to your TV.
+The easiest way to install on a Samsung TV is with the **Jellyfin2Samsung** installer:
+
+1. Download the latest `.wgt` from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
+2. Use [**Jellyfin2Samsung**](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer) to sideload the `.wgt` to your TV.
+
+### LG web-OS TVs
+
+Litefin can be installed on LG TVs using the **Homebrew Channel**:
+
+1. Install the [**Homebrew Channel**](https://github.com/webosbrew/webos-homebrew-channel) on your LG TV by following the instructions in its repository.
+2. Either install through the Homebrew Channel UI or Download the latest `.ipk` for your hardware from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
+3. Open the Homebrew Channel on your TV and use the **Package Manager** to sideload the `.ipk` file.
 
 ## Support
 
