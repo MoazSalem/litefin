@@ -2303,9 +2303,18 @@ class DetailsPage extends Page {
             try {
                 // Fetch first item in collection (recursive)
                 // We prefer Movies over Episodes to match the visual row priority
+                let sortBy = 'PremiereDate';
+                if (this._item?.DisplayOrder === 'SortName') {
+                    sortBy = 'SortName';
+                } else if (this._item?.DisplayOrder === 'Default') {
+                    sortBy = 'DateModified';
+                } else if (this._item?.DisplayOrder === 'PremiereDate') {
+                    sortBy = 'PremiereDate';
+                }
+
                 const sortParams = isShufflePlay
                     ? { SortBy: 'Random' }
-                    : { SortBy: 'SortName', SortOrder: 'Ascending' };
+                    : { SortBy: sortBy, SortOrder: 'Ascending' };
                 const [movies, episodes, audio] = await Promise.all([
                     api.getItems({
                         ParentId: this._item.Id,
