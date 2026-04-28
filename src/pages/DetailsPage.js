@@ -2290,7 +2290,16 @@ class DetailsPage extends Page {
     async _play({ resume = false, isShufflePlay = false } = {}) {
         let itemToPlay = this._item;
 
-        if (this._item.Type === 'BoxSet') {
+        // If it's a Live TV Program, play the parent Channel instead
+        if (this._item.Type === 'Program' && this._item.ChannelId) {
+            log.info('Live TV Program detected. Playing parent Channel instead.');
+            itemToPlay = {
+                Id: this._item.ChannelId,
+                Type: 'TvChannel',
+                Name: this._item.ChannelName || this._item.Name,
+                // Pass along other context if needed, but Id and Type are the critical ones for PlayQueue
+            };
+        } else if (this._item.Type === 'BoxSet') {
             try {
                 // Fetch first item in collection (recursive)
                 // We prefer Movies over Episodes to match the visual row priority
