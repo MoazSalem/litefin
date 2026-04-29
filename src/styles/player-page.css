@@ -149,11 +149,13 @@ body.lyrics-active .audio-album-art {
 
 /* Glass Panel for Error */
 .error-panel {
-    width: 600px;
-    padding: 60px;
-    border-radius: var(--jf-border-radius-lg);
-    background: var(--jf-action-btn-bg, rgba(30, 30, 30, 0.9));
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
+    width: 960px;
+    padding: 50px 60px;
+    border-radius: 40px;
+    background: rgba(28, 28, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    -webkit-backdrop-filter: blur(30px);
+    backdrop-filter: blur(30px);
     display: -webkit-flex;
     display: flex;
     -webkit-flex-direction: column;
@@ -161,12 +163,11 @@ body.lyrics-active .audio-album-art {
     -webkit-align-items: center;
     align-items: center;
     text-align: center;
-    box-shadow: var(--jf-shadow-lg);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
     -webkit-transform: translateY(20px);
     transform: translateY(20px);
     -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-
 }
 
 .player-error:not(.hidden) .error-panel {
@@ -211,19 +212,19 @@ body.lyrics-active .audio-album-art {
 }
 
 .error-title {
-    font-size: 42px;
+    font-size: 52px;
     font-weight: 700;
-    color: var(--jf-text-primary, #fff);
-    margin-bottom: 16px;
-    letter-spacing: -0.5px;
+    color: #fff;
+    margin: 10px 0 15px;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
 }
 
 .error-message {
-    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
-    font-size: 22px;
-    line-height: 1.5;
-    margin-bottom: 48px;
-    max-width: 100%;
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0 0 55px;
+    font-weight: 400;
 }
 
 .error-actions {
@@ -238,8 +239,10 @@ body.lyrics-active .audio-album-art {
     flex: 1;
     height: 72px;
     border-radius: var(--jf-border-radius-lg);
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 20px;
     display: -webkit-flex;
     display: flex;
     -webkit-align-items: center;
@@ -436,4 +439,4 @@ body.lyrics-active .audio-album-art {
 /* Hide cursor on TV platforms during playback */
 html:not([data-platform="web"]) .player-page * {
     cursor: none;
-}
+}

@@ -95,6 +95,7 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
+                            <button class="btn btn-secondary focusable" id="error-force-transcode-btn" tabindex="0">Force Transcode</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -834,7 +835,7 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
-            await this._player.play({
+            const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
@@ -843,7 +844,14 @@ class PlayerPage extends Page {
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
-            });
+            };
+
+            if (this._forceTranscode) {
+                playOptions.playbackMode = 'transcode';
+                this._forceTranscode = false; // Reset after applying
+            }
+
+            await this._player.play(playOptions);
         } catch (err) {
             if (err.name === 'NotAllowedError') {
                 log.warn('_startPlayback: Autoplay blocked. Forcing mute and retrying.');
@@ -2075,10 +2083,15 @@ class PlayerPage extends Page {
 
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
+            const forceTranscodeBtn = this.$('#error-force-transcode-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
+            }
+
+            if (forceTranscodeBtn) {
+                forceTranscodeBtn.onclick = () => this._retryPlayback(true);
             }
 
             if (backBtn) {
@@ -2100,7 +2113,7 @@ class PlayerPage extends Page {
     /**
      * Attempt to restart playback after an error
      */
-    async _retryPlayback() {
+    async _retryPlayback(forceTranscode = false) {
         // Hide error and unregister focus
         const errorEl = this.$('#player-error');
         if (errorEl) {
@@ -2110,6 +2123,10 @@ class PlayerPage extends Page {
 
         try {
             this._showLoading(true);
+
+            if (forceTranscode) {
+                this._forceTranscode = true;
+            }
 
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {

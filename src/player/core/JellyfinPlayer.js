@@ -768,6 +768,13 @@ export class JellyfinPlayer extends EventEmitter {
                      log.info('[PlaybackMode] Inferring Remux based on DirectPlayError only.');
                 }
             }
+            if (this._playbackMode === 'transcode') {
+                playMethod = 'Transcode';
+                mediaSource.SupportsDirectStream = false;
+                mediaSource.SupportsDirectPlay = false;
+                log.info('[PlaybackMode] Enforcing Transcode label due to strict transcode mode.');
+            }
+
             log.info(`[PlaybackMode] Calculated PlayMethod: ${playMethod}`);
 
             // Store the resolved play method so track-switching logic can
