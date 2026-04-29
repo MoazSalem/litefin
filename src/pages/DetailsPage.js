@@ -2368,9 +2368,12 @@ class DetailsPage extends Page {
                     }
                 }
 
-                // Attach context so PlayQueue knows this is a collection play
+                // Attach context so PlayQueue knows this is a collection play.
+                // We also pass the resolved sortBy so _initBoxSetQueue can order
+                // the full queue the same way the display grid is ordered.
                 itemToPlay.contextType = 'boxset';
                 itemToPlay.contextId = this._item.Id;
+                itemToPlay.boxsetSortBy = sortBy;
             } catch (e) {
                 log.error('Failed to play collection', e);
                 return;

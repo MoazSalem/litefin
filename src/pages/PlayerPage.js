@@ -229,8 +229,11 @@ class PlayerPage extends Page {
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
-            log.debug('Initializing PlayQueue with context:', { contextType, contextId });
-            await playQueue.init(this._item, contextType, contextId);
+            // For BoxSet queues, the sort order is forwarded from DetailsPage so the
+            // full queue is ordered the same way the collection display grid is ordered.
+            const boxsetSortBy = state.get('player:boxsetSortBy');
+            log.debug('Initializing PlayQueue with context:', { contextType, contextId, boxsetSortBy });
+            await playQueue.init(this._item, contextType, contextId, boxsetSortBy);
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
@@ -242,6 +245,7 @@ class PlayerPage extends Page {
             // Clear context state so it doesn't leak to next playback
             state.set('player:contextType', null);
             state.set('player:contextId', null);
+            state.set('player:boxsetSortBy', null);
 
             // Calculate resume position if needed
             if (startPositionTicks !== null && !isNaN(startPositionTicks)) {

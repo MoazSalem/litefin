@@ -506,6 +506,9 @@ class App {
             // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
             state.set('player:contextType', itemToPlay?.contextType || null);
             state.set('player:contextId', itemToPlay?.contextId || null);
+            // For BoxSet playback, forward the sort order so PlayQueue builds the
+            // full queue in the same order the collection grid is displayed.
+            state.set('player:boxsetSortBy', itemToPlay?.boxsetSortBy || null);
 
             // Store explicit trailer metadata overrides since the player re-fetches the item
             // and loses the parent context injected by DetailsPage.
