@@ -64,6 +64,24 @@ If Litefin is useful to you, please consider supporting the development:
 
 - [**Sponsor this project on GitHub**](https://github.com/sponsors/MoazSalem)
 
+<p>
+  A massive thank you to the individuals supporting the development of <b>LiteFin</b>!
+</p>
+
+  <table border="0">
+    <tr>
+      <td align="center" width="120">
+        <a href="https://github.com/DatAres37">
+          <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
+          <br />
+          <br />
+          <b>DatAres37</b>
+        </a>
+      </td>
+      </tr>
+    
+  </table>
+
 ## License
 
 Litefin is subject to the terms of the **Mozilla Public License, v. 2.0**. See the [LICENSE](LICENSE) file for more details.
