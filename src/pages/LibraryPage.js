@@ -1748,10 +1748,11 @@ class LibraryPage extends Page {
                     viewType === 'Artists' ||
                     viewType === 'AlbumArtists' ||
                     viewType === 'Songs');
-            const isPlaylists = collectionType === 'playlists' && viewType === 'Items';
+            const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
+            const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
             const isEpisodes = viewType === 'Episodes';
             // Do not show any header controls if we are deep linking to a specific genre/studio
-            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || isPlaylists || this._isSubView();
+            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || isCollections || isFolderMain || this._isSubView();
 
             const btnReset = this.$('#btn-reset-filters');
             if (btnReset) {
@@ -1877,8 +1878,10 @@ class LibraryPage extends Page {
         const isMusicMain =
             collectionType === 'music' &&
             (viewType === 'Albums' || viewType === 'Artists' || viewType === 'AlbumArtists' || viewType === 'Songs');
+        const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
+        const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
-        const isAlphaVisible = isMovieMain || isTVMain || isMusicMain || isEpisodes || this._isSubView();
+        const isAlphaVisible = isMovieMain || isTVMain || isMusicMain || isEpisodes || isCollections || isFolderMain || this._isSubView();
 
         // Update Alpha Picker navigation to point to grid
         if (isAlphaVisible) {
