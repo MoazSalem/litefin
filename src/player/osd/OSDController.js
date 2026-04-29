@@ -930,6 +930,7 @@ export default class OSDController extends Component {
     hide() {
         // Don't hide if a modal menu is open
         if (this.isModalOpen) return;
+
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
@@ -971,6 +972,11 @@ export default class OSDController extends Component {
             this._focusResetTimer = null;
         }
 
+        // Exception: Do not park focus if the subtitle offset is pinned
+        if (this.activeMenu === this.subtitleOffset && PlayerSettings.get('keepFocusOnSubtitleOffset')) {
+            return;
+        }
+
         const mode = PlayerSettings.get('osdFocusRestoreMode') || 'always';
 
         if (mode === 'always') {
@@ -1007,6 +1013,7 @@ export default class OSDController extends Component {
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
         // Do not auto-hide if a modal menu is open
         if (this.isModalOpen) return;
+
         this._autoHideTimer = setTimeout(() => this.hide(), this._config.autoHideDelay);
     }
 

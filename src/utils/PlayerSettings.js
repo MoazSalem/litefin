@@ -293,6 +293,9 @@ const DEFAULTS = {
      */
     osdFocusRestoreMode: 'always',
 
+    // Keep focus on subtitle offset menu (prevent auto-hide)
+    keepFocusOnSubtitleOffset: true,
+
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total',
 

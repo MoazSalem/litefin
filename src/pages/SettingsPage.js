@@ -1273,6 +1273,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="KeepFocusOnSubtitleOffset">${i18n.t('KeepFocusOnSubtitleOffset') || 'Pin Subtitle Offset'}</span>
+                        <span class="setting-description" data-i18n="KeepFocusOnSubtitleOffsetDescription">${i18n.t('KeepFocusOnSubtitleOffsetDescription') || 'Prevent the player controls from auto-hiding while the subtitle offset menu is open.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('keepFocusOnSubtitleOffset') ? 'active' : ''}" 
+                                id="toggle-keep-focus-subtitle-offset" 
+                                data-setting="keepFocusOnSubtitleOffset"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
                         <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
                     </div>
@@ -2812,6 +2826,17 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableTrickplay', newValue);
                 trickplayBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Keep Focus On Subtitle Offset
+        const keepFocusOffsetBtn = this.$('#toggle-keep-focus-subtitle-offset');
+        if (keepFocusOffsetBtn) {
+            keepFocusOffsetBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('keepFocusOnSubtitleOffset');
+                const newValue = !currentValue;
+                PlayerSettings.set('keepFocusOnSubtitleOffset', newValue);
+                keepFocusOffsetBtn.classList.toggle('active', newValue);
             });
         }
 

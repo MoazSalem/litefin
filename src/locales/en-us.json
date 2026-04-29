@@ -594,6 +594,8 @@
     "OsdFocusAlways": "Always return to Play/Pause",
     "OsdFocusRemember": "Remember last position",
     "OsdFocusRestoreMode": "OSD Focus Mode",
+    "KeepFocusOnSubtitleOffset": "Keep Focus on Offset Menu",
+    "KeepFocusOnSubtitleOffsetDescription": "Remember focus position on the subtitle offset menu when the player controls auto-hide.",
     "OsdFocusRestoreModeDescription": "Where the remote focus lands when the player controls reappear after being auto-hidden.",
     "OsdFocusTimeout": "Return to Play/Pause after 10 s",
     "OsdTimeDisplayDescription": "Choose whether to show the total duration or remaining time on the player seek bar.",
