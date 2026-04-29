@@ -561,6 +561,16 @@ export default class OSDController extends Component {
                 }
                 return;
             }
+
+            /*
+             * OSD background click: any click inside the OSD that doesn't land on a
+             * specific button or the seekbar is treated as a play/pause toggle. This
+             * mirrors the standard media player convention (clicking "somewhere" = pause).
+             * Modals/overlays are excluded since their content may handle clicks internally.
+             */
+            if (!this.isModalOpen && !resolvedTarget.closest?.('.osd-overlays > *')) {
+                this._executeAction('togglePlay');
+            }
         });
 
         /*
