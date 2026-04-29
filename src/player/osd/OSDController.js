@@ -665,6 +665,14 @@ export default class OSDController extends Component {
 
     show() {
         /*
+         * Exit lock: if the player is in the process of shutting down (e.g. the back
+         * button was clicked and _stopAndExit is awaiting async operations), do not
+         * allow cursor movement to resurrect the OSD. Without this guard, _onMouseMove()
+         * calling show() during the async shutdown gap makes the OSD flicker back.
+         */
+        if (this._isExiting) return;
+
+        /*
          * Cancel the pending focus-reset timer (timeout mode) if the user
          * returns to the OSD before the 10-second deadline.
          * Focus stays wherever they left it — the timer firing early would be wrong.
@@ -1666,8 +1674,16 @@ export default class OSDController extends Component {
 
         switch (action) {
             case 'back': this._handleBack(); break;
-            case 'exit': 
-                this.emit('exit'); 
+            case 'exit':
+                /*
+                 * Lock out show() immediately so cursor movement during the async
+                 * _stopAndExit() shutdown cannot flicker the OSD back into view.
+                 * Then hide the OSD visually before the event fires.
+                 */
+                this._isExiting = true;
+                clearTimeout(this._autoHideTimer);
+                this.hide();
+                this.emit('exit');
                 break;
             case 'togglePlay': 
                 if (this._player.togglePlay) this._player.togglePlay();
