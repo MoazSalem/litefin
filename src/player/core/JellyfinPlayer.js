@@ -772,6 +772,20 @@ export class JellyfinPlayer extends EventEmitter {
                 playMethod = 'Transcode';
                 mediaSource.SupportsDirectStream = false;
                 mediaSource.SupportsDirectPlay = false;
+                
+                // Force MediaHelper to evaluate this as a full transcode for UI overlays
+                if (!mediaSource.TranscodingInfo) {
+                    mediaSource.TranscodingInfo = {
+                        IsVideoDirect: false,
+                        IsAudioDirect: false,
+                        VideoCodec: 'h264', // Dummy value to prevent !VideoCodec fallback
+                        AudioCodec: 'aac'
+                    };
+                } else {
+                    mediaSource.TranscodingInfo.IsVideoDirect = false;
+                    mediaSource.TranscodingInfo.IsAudioDirect = false;
+                }
+                
                 log.info('[PlaybackMode] Enforcing Transcode label due to strict transcode mode.');
             }
 
