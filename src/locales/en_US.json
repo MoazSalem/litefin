@@ -361,6 +361,8 @@
     "Default": "Default",
     "DefaultServerPreference": "Default (Server preference)",
     "DefaultTizenSans": "Default - Tizen Sans",
+    "DefaultWebOSSans": "Default - WebOS Sans",
+    "DefaultSystemSans": "Default - System Sans",
     "DeleteMediaConfirmMessage": "Are you sure you want to delete this item from your library and storage? This action cannot be undone.",
     "DeleteMediaConfirmTitle": "Delete Media?",
     "DevelopedBy": "Developed by MoazSalem",

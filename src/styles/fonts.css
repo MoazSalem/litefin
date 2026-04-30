@@ -146,7 +146,7 @@
 .font-silkscreen { font-family: 'Silkscreen', 'Courier New', monospace; }
 .font-space-grotesk { font-family: 'Space Grotesk', sans-serif; }
 
-.font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif; }
+.font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
 
 /* 
    Nuclear font override: 

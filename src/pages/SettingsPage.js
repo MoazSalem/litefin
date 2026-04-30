@@ -334,7 +334,7 @@ class SettingsPage extends Page {
                             'ui-font-select',
                             [
                                 { value: 'poppins', label: i18n.t('ModernPoppins') },
-                                { value: 'system', label: i18n.t('DefaultTizenSans') },
+                                { value: 'system', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                                 { value: 'roboto', label: i18n.t('FontRoboto') },
                                 { value: 'google', label: i18n.t('FontGoogleSans') },
@@ -1787,7 +1787,7 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'subtitle-font-select',
                             [
-                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
                                 { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
@@ -2063,7 +2063,7 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'subtitle-font-ass-select',
                             [
-                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                                 { value: 'poppins', label: i18n.t('ModernPoppins') },
                                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                                 { value: 'typewriter', label: i18n.t('Typewriter') },

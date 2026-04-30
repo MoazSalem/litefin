@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { i18n } from '../../utils/i18n.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 /**
  * SubtitleQuickSettings
@@ -145,7 +146,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleFont',
                 visible: !isASS,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -289,7 +290,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleFontAss',
                 visible: isASS,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },

@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { platformInfo } from './PlatformInfo.js';
 
 /**
  * Convert HEX color to RGBA
@@ -481,7 +482,10 @@ export default {
             case 'silkscreen':
                 return 'Silkscreen';
             default:
-                return 'TizenSans';
+                // Return platform-specific default font stack
+                return platformInfo.isWebOS 
+                    ? 'Roboto, "LG Smart UI", sans-serif' 
+                    : 'TizenSans';
         }
     },
     getFontScale: (settingKey = 'subtitleFont') => {
