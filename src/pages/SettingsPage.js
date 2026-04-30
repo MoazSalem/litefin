@@ -1263,6 +1263,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
+                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableHoverTrickplay') ? 'active' : ''}" 
+                                id="toggle-hover-trickplay" 
+                                data-setting="enableHoverTrickplay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
                         <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
                     </div>
@@ -3863,6 +3877,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('enableMagicCursor', newValue);
                 magicCursorToggle.classList.toggle('active', newValue);
                 log.info(`Magic Cursor set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hover Trickplay
+        const hoverTrickplayToggle = this.$('#toggle-hover-trickplay');
+        if (hoverTrickplayToggle) {
+            hoverTrickplayToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableHoverTrickplay');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableHoverTrickplay', newValue);
+                hoverTrickplayToggle.classList.toggle('active', newValue);
+                log.info(`Hover Trickplay set to: ${newValue}`);
             });
         }
 

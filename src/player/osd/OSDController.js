@@ -637,8 +637,15 @@ export default class OSDController extends Component {
         if (targetBtn) {
             targetBtn.classList.add('magic-hover');
             this._lastHoveredEl = targetBtn;
+
+            if (targetBtn.classList.contains('osd-slider-container')) {
+                this._handlePositionSliderMouseMove(e);
+            } else {
+                this._handlePositionSliderMouseLeave(e);
+            }
         } else {
             this._lastHoveredEl = null;
+            this._handlePositionSliderMouseLeave(e);
         }
     }
 
@@ -2116,6 +2123,49 @@ export default class OSDController extends Component {
         } catch (err) {
             log.error('Slider seek failed:', err);
         }
+    }
+
+    _handlePositionSliderMouseMove(e) {
+        if (!PlayerSettings.get('enableHoverTrickplay') || this._isDraggingSeekbar || this._seekTargetTicks !== null || !this._player) return;
+
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+        if (!duration) return;
+
+        const rect = this._osdPositionSliderEl.getBoundingClientRect();
+        // Calculate relative position to the slider
+        let percent = (e.clientX - rect.left) / rect.width;
+        percent = Math.max(0, Math.min(1, percent));
+        
+        const targetTicks = duration * percent;
+
+        if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
+        const tooltip = this._cachedTooltipEl;
+
+        if (tooltip) {
+            const forceHours = duration >= 3600 * 10000000;
+            const timeText = this._formatTime(targetTicks, forceHours);
+
+            if (this._cachedTooltipTextEl) {
+                this._cachedTooltipTextEl.textContent = timeText;
+            } else {
+                tooltip.textContent = timeText;
+            }
+
+            tooltip.classList.add('visible');
+            tooltip.style.left = (percent * 100) + '%';
+
+            this._updateTrickplayTooltip(targetTicks);
+        }
+    }
+
+    _handlePositionSliderMouseLeave(e) {
+        if (this._isDraggingSeekbar || this._seekTargetTicks !== null) return; // Scrubbing handles its own hide logic
+        
+        const tooltip = this._cachedTooltipEl || this._osdEl.querySelector('#osdSeekTooltip');
+        if (tooltip) {
+            tooltip.classList.remove('visible');
+        }
+        this._hideTrickplayThumb();
     }
 
     _onMediaStreamsChange(e) {

@@ -283,6 +283,9 @@ const DEFAULTS = {
     // Enable mouse/magic cursor support in the OSD (hover and click)
     enableMagicCursor: true,
 
+    // Show timestamp and trickplay images on hover with mouse
+    enableHoverTrickplay: false,
+
     /*
      * OSD Focus Restore Mode
      * Controls where the remote cursor lands when the OSD is revealed
