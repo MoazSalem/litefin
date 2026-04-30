@@ -280,6 +280,9 @@ const DEFAULTS = {
     // Instant seek when OSD is hidden using directional arrows
     seekWithArrows: true,
 
+    // Enable mouse/magic cursor support in the OSD (hover and click)
+    enableMagicCursor: true,
+
     /*
      * OSD Focus Restore Mode
      * Controls where the remote cursor lands when the OSD is revealed

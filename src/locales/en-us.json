@@ -403,6 +403,8 @@
     "EnableHeroCarousel": "Enable Hero Carousel",
     "EnableHeroCarouselDescription": "Display an auto-scrolling hero section at the top of the home screen.",
     "EnableHEVC": "Enable HEVC (H.265)",
+    "EnableMagicCursor": "Enable Magic Cursor",
+    "EnableMagicCursorDescription": "Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).",
     "EnableTrickplay": "Thumbnail Preview",
     "EnableTrickplayDescription": "Show video frame previews when scrubbing through the timeline",
     "EnableVP9": "Enable VP9 Decode",

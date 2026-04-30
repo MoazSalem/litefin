@@ -470,6 +470,8 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
+            if (!PlayerSettings.get('enableMagicCursor')) return;
+
             // Every click inside the OSD resets the auto-hide timer.
             this.resetAutoHide();
 
@@ -1312,7 +1314,12 @@ export default class OSDController extends Component {
 
                 if (this._currentFocusRow === 0) {
                     // Header row (back button)
-                    this._handleBack();
+                    const btn = this._cachedHeaderRow[0];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    } else {
+                        this._executeAction('exit');
+                    }
                     return true;
                 }
 

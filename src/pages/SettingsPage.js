@@ -1249,6 +1249,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMagicCursor">${i18n.t('EnableMagicCursor') || 'Enable Magic Cursor'}</span>
+                        <span class="setting-description" data-i18n="EnableMagicCursorDescription">${i18n.t('EnableMagicCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
+                                id="toggle-magic-cursor" 
+                                data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
                         <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
                     </div>
@@ -3837,6 +3851,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('seekWithArrows', newValue);
                 seekWithArrowsToggle.classList.toggle('active', newValue);
                 log.info(`Seek with Arrows set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Magic Cursor
+        const magicCursorToggle = this.$('#toggle-magic-cursor');
+        if (magicCursorToggle) {
+            magicCursorToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableMagicCursor');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableMagicCursor', newValue);
+                magicCursorToggle.classList.toggle('active', newValue);
+                log.info(`Magic Cursor set to: ${newValue}`);
             });
         }
 

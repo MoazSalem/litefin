@@ -552,6 +552,8 @@ class PlayerPage extends Page {
             //    and making it impossible for the OSD to settle before the user clicks.
             let _mouseMoveThrottle = null;
             this.el.addEventListener('mousemove', (e) => {
+                if (!PlayerSettings.get('enableMagicCursor')) return;
+                
                 if (_mouseMoveThrottle) return;
                 _mouseMoveThrottle = setTimeout(() => { _mouseMoveThrottle = null; }, 200);
                 if (this._osd) {
@@ -564,6 +566,8 @@ class PlayerPage extends Page {
             //    so OSD button clicks can never accidentally reach this handler even if
             //    stopPropagation() is still in flight on older TV browsers.
             this.el.addEventListener('click', (e) => {
+                if (!PlayerSettings.get('enableMagicCursor')) return;
+
                 const osdOverlay = this.el.querySelector('#osd-overlay');
 
                 // If the click originated from anywhere inside the OSD container, ignore it.
