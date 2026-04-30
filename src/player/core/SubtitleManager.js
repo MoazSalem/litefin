@@ -548,7 +548,10 @@ export default class SubtitleManager {
         // When Transcoding/Remuxing (HLS), native text tracks are unreliable or missing.
         // We restrict this to known text formats to avoid selecting unsupported tracks.
         if (isEmbedded && this._backendType === 'tizen' && this._playMethod === 'DirectPlay') {
-            if (this._isTextFormat(codec)) {
+            // Samsung AVPlay claims to support mov_text/tx3g natively, but it frequently fails
+            // to display them on-screen. We exclude them from native rendering to force
+            // fallback to server-side extraction (EXTERNAL_TEXT).
+            if (this._isTextFormat(codec) && codec !== 'mov_text' && codec !== 'tx3g') {
                 log.debug(`Track "${track.DisplayTitle}" is embedded text + Tizen DirectPlay → EMBEDDED_NATIVE`);
                 return DeliveryMethod.EMBEDDED_NATIVE;
             }
