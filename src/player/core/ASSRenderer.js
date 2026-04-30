@@ -207,8 +207,20 @@ export default class ASSRenderer {
 
             log.info('ASS renderer created successfully');
         } catch (err) {
-            const errorMsg = err ? (err.name + ': ' + err.message + '\n' + err.stack) : err;
-            log.error('Failed to create ASS renderer:', errorMsg);
+            let errorMsg;
+            if (err instanceof Error) {
+                errorMsg = `${err.name}: ${err.message}\n${err.stack}`;
+            } else if (typeof err === 'object') {
+                errorMsg = JSON.stringify(err);
+            } else {
+                errorMsg = String(err);
+            }
+            
+            // Provide a preview of the content that failed to parse
+            const preview = content ? content.substring(0, 300).replace(/\r?\n/g, '\\n') : 'null/empty';
+            log.error(`Failed to create ASS renderer. Error: ${errorMsg}`);
+            log.error(`Content preview: ${preview}`);
+            
             this.destroy();
             throw err;
         }
@@ -309,6 +321,75 @@ export default class ASSRenderer {
         log.info(`Preprocessing ASS content with font="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
 
         const lines = content.split(/\r?\n/);
+
+        // =====================================================================
+        // Inject missing PlayResX / PlayResY into the [Script Info] section.
+        //
+        // libjass is strictly unforgiving: if resolutionX or resolutionY is
+        // undefined after parsing the whole file it throws "Malformed ASS
+        // script." and rejects the entire track.  Jellyfin's FFmpeg extraction
+        // pipeline (e.g. remuxing from MKV to TS, or extracting from MP4)
+        // often strips these fields from the Script Info block.
+        //
+        // We scan for their presence upfront and, when absent, inject safe
+        // defaults right after the ScriptType declaration so the rest of the
+        // pre-processor loop runs on already-valid content.
+        // =====================================================================
+        // ====================================================================
+        // Fix PlayResX / PlayResY — must be present AND non-zero.
+        //
+        // When libjass encounters PlayResX=0 or PlayResY=0 (explicitly set to
+        // zero, or missing entirely) it divides by those values when computing
+        // every subtitle position.  This produces Infinity/NaN CSS values which
+        // trigger massive browser style-recalculation on EVERY tick, freezing
+        // the entire UI whenever the user seeks, chapter-jumps, or scrubs.
+        //
+        // We also handle Jellyfin's FFmpeg extraction quirk where the resolution
+        // fields are completely stripped from the [Script Info] block.
+        // ====================================================================
+
+        /**
+         * Parse the numeric value from a "PlayResX: NNN" line, or -1 if absent.
+         * @param {string} key
+         */
+        const getPlayRes = (key) => {
+            const line = lines.find(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
+            if (!line) return -1; // missing entirely
+            return parseInt(line.split(':')[1], 10) || 0; // 0 if value is "0" or NaN
+        };
+
+        const resX = getPlayRes('PlayResX');
+        const resY = getPlayRes('PlayResY');
+
+        /*
+         * The standard ASS specification defaults to 384x288 when PlayRes fields 
+         * are missing. If we use video dimensions (e.g. 1920x1080), fonts sized
+         * for the smaller 288p canvas will appear tiny on screen. 
+         */
+        const safeResX = 384;
+        const safeResY = 288;
+
+        if (resX <= 0 || resY <= 0) {
+            log.warn(`ASS script has invalid PlayRes (${resX}x${resY}) — patching to ${safeResX}x${safeResY}`);
+
+            // Inject after [Script Info] to ensure it's in the correct section
+            const scriptInfoIdx = lines.findIndex(l => /^\[Script Info\]/i.test(l.trim()));
+            const insertAt = scriptInfoIdx !== -1 ? scriptInfoIdx + 1 : 0;
+
+            // Helper: replace in-place if the line already exists (to avoid duplication)
+            const setPlayRes = (key, value) => {
+                const idx = lines.findIndex(l => new RegExp(`^${key}\\s*:`, 'i').test(l.trim()));
+                if (idx !== -1) {
+                    lines[idx] = `${key}: ${value}`;
+                } else {
+                    lines.splice(insertAt, 0, `${key}: ${value}`);
+                }
+            };
+
+            setPlayRes('PlayResX', safeResX);
+            setPlayRes('PlayResY', safeResY);
+        }
+
         let styleFormat = null;
         let stylesOverridden = 0;
 
@@ -701,6 +782,12 @@ export default class ASSRenderer {
         if (this._videoElement) {
             videoWidth = this._videoElement.videoWidth || this._videoWidth;
             videoHeight = this._videoElement.videoHeight || this._videoHeight;
+        }
+        
+        // Prevent NaN calculations if video dimensions are 0 (e.g. during early initialization or audio-only)
+        if (!videoWidth || !videoHeight) {
+            videoWidth = 1280;
+            videoHeight = 720;
         }
 
         // Container dimensions (what space we have to render in)
