@@ -45,6 +45,13 @@ class ImageCache {
         /** Set of URLs we have already started or completed a pre-load for. */
         this._started = new Set();
 
+        /**
+         * All Image objects currently loading. Kept so cancel() can null their
+         * src synchronously, which causes the browser to abort the TCP request
+         * and release the HTTP connection slot back to the pool immediately.
+         */
+        this._activeImages = new Set();
+
         /** Whether the cache system is enabled (true unless explicitly disabled). */
         this._ready = true;
     }
@@ -105,13 +112,50 @@ class ImageCache {
     }
 
     /**
+     * Immediately abort all in-flight image loads and empty the queue.
+     *
+     * Called by HomePage.onDestroyed() so that background preloads do NOT
+     * continue saturating the browser's HTTP connection pool (6–8 slots on
+     * Chromium) after the user navigates away. Without this, pending Image
+     * loads can block all subsequent XHR/fetch requests for 30+ seconds.
+     *
+     * Technique: setting img.src = '' causes the browser to abort the
+     * underlying TCP request synchronously and release the connection slot
+     * back to the pool — exactly what we need.
+     */
+    cancel() {
+        const abortedCount = this._activeImages.size;
+        const queuedCount = this._queue.length;
+
+        /* ── 1. Kill every in-flight Image object ────────────────────────── */
+        for (const img of this._activeImages) {
+            // Remove callbacks first so the onload/onerror drain path
+            // does not re-start _drain() with stale state.
+            img.onload = null;
+            img.onerror = null;
+            img.src = ''; // Signals the browser to abort the pending TCP request
+        }
+        this._activeImages.clear();
+
+        /* ── 2. Flush the pending queue ──────────────────────────────────── */
+        this._queue = [];
+
+        /* ── 3. Reset the active slot counter ────────────────────────────── */
+        this._active = 0;
+
+        /* ── 4. Clear the "already started" set so the next page visit
+               (e.g. user goes back to Home) can re-preload fresh URLs.  ── */
+        this._started.clear();
+
+        log.info(`ImageCache cancelled: ${abortedCount} in-flight aborted, ${queuedCount} queued dropped.`);
+    }
+
+    /**
      * Reset the pre-warm tracker (e.g. after logout, so a new user's
      * homepage pre-warms fresh).
      */
     clear() {
-        this._queue = [];
-        this._started.clear();
-        this._active = 0;
+        this.cancel(); // cancel() already resets everything
         log.info('ImageCache cleared.');
     }
 
@@ -144,8 +188,13 @@ class ImageCache {
     _loadOne(url) {
         const img = new Image();
 
+        /* Track this object so cancel() can abort it if the page is destroyed
+         * before the load completes. */
+        this._activeImages.add(img);
+
         const onDone = () => {
-            // Free this concurrency slot and immediately try the next item
+            /* Remove from the live-tracking set and free the concurrency slot. */
+            this._activeImages.delete(img);
             this._active--;
             this._drain();
         };

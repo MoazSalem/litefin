@@ -164,6 +164,20 @@ class HomePage extends Page {
 
     onDestroyed() {
         this._isMounted = false;
+
+        /*
+         * CRITICAL: Cancel all pending background image preloads immediately.
+         *
+         * The home page queues dozens of `new Image()` preload requests. Each
+         * one holds an HTTP connection slot. Chromium's per-host connection pool
+         * is only 6 slots — if these preloads are still in-flight when the user
+         * navigates to the next page, every API XHR/fetch call blocks for up to
+         * 30s waiting for a free slot. cancel() sets img.src = '' on every
+         * in-flight Image, which causes the browser to abort the TCP request
+         * synchronously and return the slot to the pool.
+         */
+        imageCache.cancel();
+
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
