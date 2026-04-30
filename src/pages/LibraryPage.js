@@ -1548,8 +1548,7 @@ class LibraryPage extends Page {
             this.params.personId ||
             this.params.tagName ||
             this.params.searchTerm ||
-            this.params.includeItemTypes ||
-            this.state.isSubFolder
+            this.params.includeItemTypes
         );
     }
 
@@ -1557,8 +1556,8 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
         const tabsContainer = this.$('#library-tabs');
 
-        // Hide tabs for BoxSets (Collections) and Playlists libraries or if we are deep linking into a subview
-        if (collectionType === 'boxsets' || collectionType === 'playlists' || this._isSubView()) {
+        // Hide tabs for BoxSets (Collections), Playlists, Folder libraries, or if we are deep linking into a subview
+        if (collectionType === 'boxsets' || collectionType === 'playlists' || this.state.isFolderLibrary || this._isSubView()) {
             if (tabsContainer) {
                 tabsContainer.style.display = 'none';
                 tabsContainer.innerHTML = '';
@@ -1915,9 +1914,10 @@ class LibraryPage extends Page {
             enterTo: 'default-element' // Land on first enabled (Prev or Next)
         });
 
+        const hasTabs = this.$('#library-tabs')?.style.display !== 'none';
         this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
-            leaveUp: this._isSubView() ? null : 'library-tabs',
+            leaveUp: hasTabs ? 'library-tabs' : null,
             leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
             leaveLeft: 'sidebar',
             selector: 'button'
