@@ -188,6 +188,11 @@
                 html += '<strong>User Agent:</strong> ' + navigator.userAgent;
                 html += '</div>';
 
+                // Compatibility Tip
+                html += '<div style="background: rgba(255, 107, 107, 0.1); border-left: 4px solid #ff6b6b; padding: 16px 20px; margin-top: 32px; border-radius: 4px; color: #e0e0e0; font-size: 16px;">';
+                html += '<strong>Tip:</strong> You probably used the wrong build. Try a more compatible one like <strong>legacy</strong> or <strong>ultra-legacy</strong> builds.';
+                html += '</div>';
+
                 overlay.innerHTML = html;
 
                 // Hide the splash spinner so the error is clearly visible
