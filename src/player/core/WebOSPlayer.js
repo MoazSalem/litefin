@@ -309,12 +309,19 @@ export class WebOSPlayer {
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    // Older browsers (Chrome < 50) don't return a Promise from play()
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onLoadError = () => {
@@ -359,12 +366,18 @@ export class WebOSPlayer {
                 // player, so doing it here (before play()) ensures the array is ready.
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onError = () => {
@@ -399,9 +412,14 @@ export class WebOSPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('WebOSPlayer: Hls.js manifest parsed');
                 this._applyInitialTracks(options, hls);
-                video.play()
-                    .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(resolve)
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    resolve();
+                }
             });
 
             if (options.playerStartPositionTicks) {

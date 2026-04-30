@@ -104,7 +104,7 @@ class LayoutManager {
         document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
         log.info(
-            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`
+            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}", tier="${platformInfo.layoutTier}", platform="${platformInfo.platformString}"`
         );
     }
 

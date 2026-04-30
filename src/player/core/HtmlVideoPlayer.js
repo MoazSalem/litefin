@@ -276,22 +276,29 @@ export class HtmlVideoPlayer {
                     log.info('HLS.js path: Skipping initial play() due to autoPlay=false');
                     resolve();
                 } else {
-                    video.play().then(resolve).catch((err) => {
-                        if (err.name === 'NotAllowedError') {
-                            // Browser blocked unmuted autoplay (no prior user gesture).
-                            // Mute, retry, and queue an unmute on the next user interaction.
-                            // Any keypress or click qualifies as a gesture — this is transparent to the user.
-                            log.warn('Autoplay blocked — retrying muted (remote launch).');
-                            video.muted = true;
-                            video.play().then(() => {
-                                // Schedule unmute as soon as the user presses any key or clicks
-                                this._scheduleUnmuteOnInteraction(video);
-                                resolve();
-                            }).catch(reject);
-                        } else {
-                            reject(err);
-                        }
-                    });
+                    const playPromise = video.play();
+                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                        playPromise.then(resolve).catch((err) => {
+                            if (err.name === 'NotAllowedError') {
+                                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                                video.muted = true;
+                                const retryPromise = video.play();
+                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                    retryPromise.then(() => {
+                                        this._scheduleUnmuteOnInteraction(video);
+                                        resolve();
+                                    }).catch(reject);
+                                } else {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolve();
+                                }
+                            } else {
+                                reject(err);
+                            }
+                        });
+                    } else {
+                        resolve();
+                    }
                 }
             });
 
@@ -440,18 +447,29 @@ export class HtmlVideoPlayer {
                     resolve();
                 } else {
                     // Attempt unmuted playback.
-                    video.play().then(resolve).catch((err) => {
-                        if (err.name === 'NotAllowedError') {
-                            log.warn('Autoplay blocked — retrying muted (remote launch).');
-                            video.muted = true;
-                            video.play().then(() => {
-                                this._scheduleUnmuteOnInteraction(video);
-                                resolve();
-                            }).catch(reject);
-                        } else {
-                            reject(err);
-                        }
-                    });
+                    const playPromise = video.play();
+                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                        playPromise.then(resolve).catch((err) => {
+                            if (err.name === 'NotAllowedError') {
+                                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                                video.muted = true;
+                                const retryPromise = video.play();
+                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                    retryPromise.then(() => {
+                                        this._scheduleUnmuteOnInteraction(video);
+                                        resolve();
+                                    }).catch(reject);
+                                } else {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolve();
+                                }
+                            } else {
+                                reject(err);
+                            }
+                        });
+                    } else {
+                        resolve();
+                    }
                 }
             };
 
