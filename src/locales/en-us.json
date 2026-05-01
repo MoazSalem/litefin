@@ -613,6 +613,8 @@
     "OverlayPositionDescription": "Screen location of the debug window",
     "OverlayWidth": "Overlay Width",
     "OverlayWidthDescription": "Horizontal size of the debug window",
+    "OverrideAssFonts": "Override ASS Fonts",
+    "OverrideAssFontsDescription": "Override container-embedded ASS fonts with your chosen font or system fallback.",
     "OverrideOutlineShadow": "Override Outline/Shadow (ASS)",
     "OverrideOutlineShadowDescription": "Enable user settings for text border and shadow depth (disabling this uses values from the file)",
     "PageNumberXOfY": "Page {0} of {1}",

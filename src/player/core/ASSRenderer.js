@@ -319,6 +319,13 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
 
     async setFontStyles(className, fontFamily, fontScale = 1.0, outlineThickness = 0.8, shadowThickness = 0.5, lineHeight = 0, letterSpacing = 0, bottomOffset = 0) {
         log.info(`ASSRenderer.setFontStyles: class="${className}", family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}, lineH=${lineHeight}, letterS=${letterSpacing}, bottom=${bottomOffset}`);
+        
+        const styleRequiresReparse = 
+            this._fontFamily !== fontFamily ||
+            this._fontScale !== fontScale ||
+            this._outlineThickness !== outlineThickness ||
+            this._shadowThickness !== shadowThickness;
+
         this._fontClass = className;
         this._fontFamily = fontFamily;
         this._fontScale = fontScale;
@@ -330,8 +337,8 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
 
         this._updateWrapperStyles();
 
-        if (this._rawContent && fontFamily) {
-            log.info(`Re-parsing ASS with new font choice: ${fontFamily} (Scale: ${fontScale}, Out: ${outlineThickness}, Shad: ${shadowThickness})`);
+        if (this._rawContent && styleRequiresReparse) {
+            log.info(`Re-parsing ASS with new styles: family="${fontFamily}", scale=${fontScale}, outline=${outlineThickness}, shadow=${shadowThickness}`);
             
             // Re-preprocess and re-parse the entire string.
             // This is the most "Nuclear" and definitive way to ensure the new font
@@ -428,8 +435,6 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
             
             // 1. Capture the Styles format line
             if (trimmed.startsWith('Format:') && (trimmed.includes('Outline') || trimmed.includes('Fontname'))) {
-                // Ensure we handle both "Format:" and "[V4 Styles]" headers correctly if needed
-                // For now we just parse the format line in the Styles section.
                 styleFormat = trimmed.substring(trimmed.indexOf(':') + 1).split(',').map(s => s.trim());
                 log.debug(`Found Styles Format: ${styleFormat.join(', ')}`);
                 return line;
@@ -439,15 +444,23 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
             if (trimmed.startsWith('Style:') && styleFormat) {
                 const parts = line.substring(line.indexOf(':') + 1).split(',');
                 
-                // Override Fontname
+                // Log the original Fontname so we can cross-check against registered @font-face aliases
                 const fontIdx = styleFormat.indexOf('Fontname');
-                if (fontIdx !== -1 && fontFamily) {
+                const originalFontname = fontIdx !== -1 ? parts[fontIdx].trim() : '(unknown)';
+                log.debug(`ASS Style Fontname: "${originalFontname}" — will ${(fontFamily && fontFamily !== 'null') ? 'override with "' + fontFamily + '"' : 'keep original (no override)'}`);
+
+                // Override Fontname — only when fontFamily is a real non-null string.
+                // The string 'null' must also be explicitly rejected: it can appear if
+                // the value was stored in localStorage as a serialised null and then
+                // read back as a string, which is truthy and would clobber every Style
+                // with the literal text "null".
+                if (fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
                     parts[fontIdx] = fontFamily;
                 }
                 
                 // Override Fontsize - Scaling up if a specific boost is requested (e.g. for Noto Arabic)
                 const sizeIdx = styleFormat.indexOf('Fontsize');
-                if (sizeIdx !== -1 && fontFamily && fontScale !== 1.0) {
+                if (sizeIdx !== -1 && fontScale !== 1.0) {
                     const originalSize = parseFloat(parts[sizeIdx]);
                     if (!isNaN(originalSize)) {
                         parts[sizeIdx] = (originalSize * fontScale).toFixed(2);
@@ -470,6 +483,8 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
                 // Adding a space after "Style: " for standard ASS compatibility
                 return 'Style: ' + parts.join(',');
             }
+
+
 
             // 3. Strip problematic inline overrides from Dialogues (\fn, \bord, \shad, etc.)
             if (trimmed.startsWith('Dialogue:')) {

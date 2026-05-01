@@ -100,6 +100,9 @@ const DEFAULTS = {
     // Separate setting for Anime/ASS content
     subtitleFontAss: '',
 
+    // Override container fonts with the chosen ASS font (or system fallback)
+    subtitleOverrideAssFonts: false,
+
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
 

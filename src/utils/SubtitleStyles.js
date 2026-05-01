@@ -492,10 +492,10 @@ export default {
             case 'silkscreen':
                 return 'Silkscreen';
             default:
-                // Return platform-specific default font stack
-                return platformInfo.isWebOS 
-                    ? 'Roboto, "LG Smart UI", sans-serif' 
-                    : 'TizenSans';
+                // Return null when no specific font is selected, so callers that
+                // respect a null value (e.g. _preProcessAssContent) won't override
+                // the ASS file's own Fontname with a platform default.
+                return null;
         }
     },
     getFontScale: (settingKey = 'subtitleFont') => {

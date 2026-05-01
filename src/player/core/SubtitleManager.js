@@ -169,6 +169,7 @@ export default class SubtitleManager {
         this._itemId = context.itemId;
         this._mediaSourceId = context.mediaSourceId;
         this._mediaStreams = context.mediaStreams || [];
+        this._mediaAttachments = context.mediaAttachments || [];
         this._backendType = context.backendType;
         this._videoElement = context.videoElement || null;
         this._playMethod = context.playMethod || 'DirectPlay';
@@ -446,13 +447,21 @@ export default class SubtitleManager {
         // SRT/VTT track is active, triggering an unwanted overlay.
         // =================================================================
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
-            const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
-            if (fontId) {
-                await FontLoader.loadFont(fontId);
+            const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+            let fontClass = null;
+            let fontFamily = null;
+
+            if (this._hasContainerFonts && !overrideAssFonts) {
+                log.info('Using container fonts for ASS; font override toggle is OFF.');
+            } else {
+                const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+                if (fontId) {
+                    await FontLoader.loadFont(fontId);
+                }
+                fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
+                fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             }
-            
-            const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
-            const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
+
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
             // When the override toggle is off, pass null so the ASS file's own outline/shadow values are kept
             const overrideOutlineShadow = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
@@ -461,9 +470,8 @@ export default class SubtitleManager {
             const lineHeight = PlayerSettings.get('subtitleLineHeight');
             const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
             const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
-            if (fontClass && fontFamily) {
-                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
-            }
+            
+            await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
         }
     }
 
@@ -678,13 +686,50 @@ export default class SubtitleManager {
             await this._assRenderer.setTrack(content);
             
             // Apply current subtitle font override
-            const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
-            if (fontId) {
-                await FontLoader.loadFont(fontId);
+            const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+            let fontClass = null;
+            let fontFamily = null;
+
+            // Extract the exact Fontname strings from the ASS [Styles] section.
+            // FontLoader will use these to register each attachment under the name
+            // the ASS file actually uses, guaranteeing a CSS font-family hit.
+            const assFontnames = this._extractAssFontnames(content);
+            // log.info(`[ASSRenderer Setup] Extracted ${assFontnames.size} ASS fontname(s):`, [...assFontnames]);
+            log.info(`[ASSRenderer Setup] Passing ${this._mediaAttachments.length} media attachments to FontLoader`);
+
+            // Attempt to load container fonts, giving FontLoader the ASS fontname
+            // set so it can normalize-match filenames to exact ASS Fontnames.
+            const loadedContainerFonts = await FontLoader.loadContainerFonts(
+                this._mediaAttachments, 
+                this._serverUrl, 
+                this._itemId, 
+                this._mediaSourceId, 
+                this._authToken,
+                assFontnames
+            );
+            
+            log.info(`[ASSRenderer Setup] FontLoader returned ${loadedContainerFonts.length} fonts:`, loadedContainerFonts);
+
+            this._hasContainerFonts = loadedContainerFonts.length > 0;
+
+            if (this._hasContainerFonts && !overrideAssFonts) {
+                // Container fonts are registered under their real filenames via @font-face.
+                // We intentionally leave fontFamily = null here so _preProcessAssContent
+                // will NOT touch the Fontname field in any Style: line — each style keeps
+                // its original name, which libjass then resolves against the registered
+                // @font-face entries. Overriding with a single family (e.g. fonts[0])
+                // would incorrectly clobber every style with one font.
+                // log.info(`[ASSRenderer Setup] Using ${loadedContainerFonts.length} container font(s) for ASS; Fontname overrides disabled.`);
+            } else {
+                // log.info(`[ASSRenderer Setup] Using custom font override path. hasContainerFonts=${this._hasContainerFonts}, overrideAssFonts=${overrideAssFonts}`);
+                const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+                if (fontId) {
+                    await FontLoader.loadFont(fontId);
+                }
+                fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
+                fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             }
 
-            const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
-            const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
             // When the override toggle is off, pass null so the ASS file's own outline/shadow values are kept
             const overrideOutlineShadow = PlayerSettings.get('subtitleOverrideAssOutlineShadow') !== false;
@@ -693,9 +738,9 @@ export default class SubtitleManager {
             const lineHeight = PlayerSettings.get('subtitleLineHeight');
             const letterSpacing = PlayerSettings.get('subtitleLetterSpacing');
             const bottomOffset = PlayerSettings.get('subtitleBottomOffset');
-            if (fontClass && fontFamily) {
-                await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
-            }
+            
+            // Set styles, which might be null (allowing container fonts to work naturally)
+            await this._assRenderer.setFontStyles(fontClass, fontFamily, fontScale, outlineThickness, shadowThickness, lineHeight, letterSpacing, bottomOffset);
 
             this._assRenderer.show();
 
@@ -703,6 +748,61 @@ export default class SubtitleManager {
             const errorMsg = err ? (err.name + ': ' + err.message + '\n' + err.stack) : err;
             log.error('Failed to load ASS track:', errorMsg);
         }
+    }
+
+    /**
+     * Parse the [V4+ Styles] section of an ASS file and return a Set of all
+     * unique Fontname values. The result is passed to FontLoader so it can
+     * register each container font attachment under the exact name the ASS
+     * file uses, guaranteeing a CSS font-family match at render time.
+     *
+     * @param {string} assContent - Raw ASS/SSA content string
+     * @returns {Set<string>}
+     * @private
+     */
+    _extractAssFontnames(assContent) {
+        const fontnames = new Set();
+        if (!assContent) return fontnames;
+
+        const lines = assContent.split(/\r?\n/);
+        let inStyles = false;
+        let styleFormat = null;
+        let fontnameIdx = -1;
+
+        for (const line of lines) {
+            const trimmed = line.trim();
+
+            // Enter the Styles section
+            if (/^\[V4\+?\s*Styles\]/i.test(trimmed)) {
+                inStyles = true;
+                continue;
+            }
+
+            // Leave the Styles section when a new section starts
+            if (trimmed.startsWith('[') && inStyles) {
+                inStyles = false;
+                break; // Styles always come before Events; we can stop here
+            }
+
+            if (!inStyles) continue;
+
+            // Capture column order from the Format: line
+            if (trimmed.startsWith('Format:')) {
+                styleFormat = trimmed.substring(trimmed.indexOf(':') + 1).split(',').map(s => s.trim());
+                fontnameIdx = styleFormat.indexOf('Fontname');
+                continue;
+            }
+
+            // Extract the Fontname from each Style: line
+            if (trimmed.startsWith('Style:') && fontnameIdx !== -1) {
+                // +1 to skip past the "Style:" prefix itself
+                const parts = trimmed.substring(trimmed.indexOf(':') + 1).split(',');
+                const fontname = parts[fontnameIdx] ? parts[fontnameIdx].trim() : '';
+                if (fontname) fontnames.add(fontname);
+            }
+        }
+
+        return fontnames;
     }
 
     /**

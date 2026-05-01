@@ -2056,6 +2056,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OverrideAssFonts">${i18n.t('OverrideAssFonts')}</span>
+                        <span class="setting-description" data-i18n="OverrideAssFontsDescription">${i18n.t('OverrideAssFontsDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleOverrideAssFonts') === true ? 'active' : ''}" 
+                                 id="toggle-subtitle-override-ass-fonts" 
+                                 data-setting="subtitleOverrideAssFonts"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-font-ass-container" style="display: ${PlayerSettings.get('subtitleOverrideAssFonts') === true ? '' : 'none'}">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="AssFontFamily">${i18n.t('AssFontFamily')}</span>
                         <span class="setting-description" data-i18n="FontFamilyAssDescription">${i18n.t('FontFamilyAssDescription')}</span>
                     </div>
@@ -2865,6 +2879,24 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('keepFocusOnSubtitleOffset', newValue);
                 keepFocusOffsetBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle ASS Font Override
+        const assFontOverrideBtn = this.$('#toggle-subtitle-override-ass-fonts');
+        if (assFontOverrideBtn) {
+            assFontOverrideBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleOverrideAssFonts', newValue);
+                assFontOverrideBtn.classList.toggle('active', newValue);
+
+                // Update visibility of the font dropdown container
+                const fontContainer = this.$('#subtitle-font-ass-container');
+                if (fontContainer) fontContainer.style.display = newValue ? '' : 'none';
+
+                // Invalidate focus cache so the newly visible items can be focused
+                focusManager.invalidateCache();
             });
         }
 

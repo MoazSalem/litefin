@@ -902,6 +902,7 @@ export class JellyfinPlayer extends EventEmitter {
                 itemId:       options.itemId,
                 mediaSourceId: mediaSource.Id,
                 mediaStreams:  mediaSource.MediaStreams || [],
+                mediaAttachments: mediaSource.MediaAttachments || [],
                 // Use the resolved _backendType string so SubtitleManager knows
                 // whether it should attempt embedded-native subtitle routing
                 // (Tizen only) or always defer to external text/ASS/PGS paths.
