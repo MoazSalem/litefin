@@ -1588,16 +1588,6 @@ html[data-layout-tier="ultra-legacy"] .osd-main.osd-hidden {
     display: none !important;
 }
 
-/* DIAGNOSTIC: Semi-transparent red tint on .osd-main so we can see whether
- * the OSD element is actually rendering on screen.
- *   - Visible red tint = OSD is present, issue is content colors/icons only
- *   - Nothing visible = OSD is still off-screen or behind video (z-index/position still broken)
- * Remove this block once OSD rendering is confirmed working. */
-html[data-layout-tier="ultra-legacy"] .osd-main:not(.osd-hidden) {
-    background: rgba(255, 0, 0, 0.3) !important;
-    outline: 3px solid red !important;
-    outline-offset: -3px;
-}
 
 /* 3. Header */
 html[data-layout-tier="ultra-legacy"] .osd-header {

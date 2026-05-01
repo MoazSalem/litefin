@@ -262,25 +262,55 @@ export default class ASSRenderer {
         const hasLetterSpacing = this._letterSpacing !== undefined && this._letterSpacing !== 0;
         const hasBottomOffset = this._bottomOffset !== undefined && this._bottomOffset !== 0;
 
-        if (hasLineHeight) {
-            this._wrapper.style.setProperty('--ass-vertical-spacing', this._lineHeight + 'px');
-            classNames.push('override-line-height');
-        } else {
-            this._wrapper.style.removeProperty('--ass-vertical-spacing');
-        }
+        if (hasLineHeight) classNames.push('override-line-height');
+        if (hasBottomOffset) classNames.push('override-bottom-offset');
+        if (hasLetterSpacing) classNames.push('override-letter-spacing');
 
-        if (hasBottomOffset) {
-            this._wrapper.style.setProperty('--ass-bottom-offset', this._bottomOffset + 'px');
-            classNames.push('override-bottom-offset');
-        } else {
-            this._wrapper.style.removeProperty('--ass-bottom-offset');
-        }
+        const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
 
-        if (hasLetterSpacing) {
-            this._wrapper.style.setProperty('--ass-letter-spacing', this._letterSpacing + 'px');
-            classNames.push('override-letter-spacing');
+        if (isUltraLegacy) {
+            // Chrome 38 does not support CSS variables, so dynamic inline vars fail.
+            // We must inject a dedicated style block to enforce these offsets.
+            let styleEl = document.getElementById('ass-ul-styles');
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = 'ass-ul-styles';
+                document.head.appendChild(styleEl);
+            }
+            
+            let cssText = '';
+            if (hasLineHeight) {
+                cssText += `html[data-layout-tier="ultra-legacy"] .libjass-subs div[data-dialogue-id] > span { margin-bottom: ${this._lineHeight}px !important; }\n`;
+            }
+            if (hasBottomOffset) {
+                cssText += `html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .libjass-subs .an1,
+html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .libjass-subs .an2,
+html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .libjass-subs .an3 { bottom: ${this._bottomOffset}px !important; }\n`;
+            }
+            if (hasLetterSpacing) {
+                cssText += `html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-letter-spacing span { letter-spacing: ${this._letterSpacing}px !important; }\n`;
+            }
+            styleEl.innerHTML = cssText;
+            
         } else {
-            this._wrapper.style.removeProperty('--ass-letter-spacing');
+            // Modern WebKit: use standard CSS variables
+            if (hasLineHeight) {
+                this._wrapper.style.setProperty('--ass-vertical-spacing', this._lineHeight + 'px');
+            } else {
+                this._wrapper.style.removeProperty('--ass-vertical-spacing');
+            }
+
+            if (hasBottomOffset) {
+                this._wrapper.style.setProperty('--ass-bottom-offset', this._bottomOffset + 'px');
+            } else {
+                this._wrapper.style.removeProperty('--ass-bottom-offset');
+            }
+
+            if (hasLetterSpacing) {
+                this._wrapper.style.setProperty('--ass-letter-spacing', this._letterSpacing + 'px');
+            } else {
+                this._wrapper.style.removeProperty('--ass-letter-spacing');
+            }
         }
 
         this._wrapper.className = classNames.join(' ');
@@ -624,7 +654,13 @@ export default class ASSRenderer {
         this._wrapper.style.width = '100%';
         this._wrapper.style.height = '100%';
         this._wrapper.style.pointerEvents = 'none';
-        this._wrapper.style.zIndex = '1';
+        
+        // On WebOS 1/2 (Chrome 38), the hardware video plane is punched through the DOM.
+        // We must elevate the wrapper to z-index: 50 to render above the video, 
+        // matching the normal subtitle overlay tier.
+        const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
+        this._wrapper.style.zIndex = isUltraLegacy ? '50' : '1';
+        
         /*
          * Force LTR on the wrapper regardless of the document direction.
          * libjass uses absolute CSS pixel positioning for \pos() coordinates.

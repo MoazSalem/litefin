@@ -398,11 +398,21 @@ export function applyStyles(element, styles) {
     // First, clear any existing font classes
     element.classList.remove(...fontClasses);
 
+    // Ultra-legacy hardware uses !important in player-page.css for fallback styles.
+    // We must apply inline styles with !important priority to override them dynamically.
+    const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
+
     for (const style of styles) {
         if (style.className) {
             element.classList.add(style.className);
         } else if (style.value !== undefined) {
-            element.style[style.name] = style.value;
+            if (isUltraLegacy) {
+                // Convert camelCase to kebab-case
+                const propName = style.name.replace(/([A-Z])/g, '-$1').toLowerCase();
+                element.style.setProperty(propName, style.value, 'important');
+            } else {
+                element.style[style.name] = style.value;
+            }
         }
     }
 }
