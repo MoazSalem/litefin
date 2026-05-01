@@ -17,6 +17,7 @@ import ASSRenderer from './ASSRenderer.js';
 import PGSRenderer from './PGSRenderer.js';
 import MediaHelper from './MediaHelper.js';
 import SubtitleStyles from '../../utils/SubtitleStyles.js';
+import FontLoader from '../../utils/FontLoader.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { logger } from '../../utils/Logger.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
@@ -445,6 +446,11 @@ export default class SubtitleManager {
         // SRT/VTT track is active, triggering an unwanted overlay.
         // =================================================================
         if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
+            const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+            if (fontId) {
+                await FontLoader.loadFont(fontId);
+            }
+            
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
             const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');
@@ -672,6 +678,11 @@ export default class SubtitleManager {
             await this._assRenderer.setTrack(content);
             
             // Apply current subtitle font override
+            const fontId = SubtitleStyles.getCurrentFontId('subtitleFontAss');
+            if (fontId) {
+                await FontLoader.loadFont(fontId);
+            }
+
             const fontClass = SubtitleStyles.getFontClassName('subtitleFontAss');
             const fontFamily = SubtitleStyles.getFontFamily('subtitleFontAss');
             const fontScale = SubtitleStyles.getFontScale('subtitleFontAss');

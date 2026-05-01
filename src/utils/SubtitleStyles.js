@@ -422,8 +422,8 @@ export function applyStyles(element, styles) {
  * Used by PlayerPage to trigger font preloading
  * @returns {string|null} The font ID (e.g. 'typewriter', 'cursive') or null
  */
-function getCurrentFontId() {
-    const font = PlayerSettings.get('subtitleFont') || '';
+function getCurrentFontId(settingKey = 'subtitleFont') {
+    const font = PlayerSettings.get(settingKey) || '';
     // Return null for 'default' or empty (no Google Font needed)
     return font && font !== 'default' ? font : null;
 }
