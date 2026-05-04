@@ -502,6 +502,10 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
                 const originalFontname = fontIdx !== -1 ? parts[fontIdx].trim() : '(unknown)';
                 log.debug(`ASS Style Fontname: "${originalFontname}" — will ${(fontFamily && fontFamily !== 'null') ? 'override with "' + fontFamily + '"' : 'keep original (no override)'}`);
 
+                // Track whether we actually changed anything in this style line,
+                // so stylesOverridden only counts lines we genuinely mutated.
+                let didOverride = false;
+
                 // Override Fontname — only when fontFamily is a real non-null string.
                 // The string 'null' must also be explicitly rejected: it can appear if
                 // the value was stored in localStorage as a serialised null and then
@@ -509,24 +513,30 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
                 // with the literal text "null".
                 if (fontIdx !== -1 && fontFamily && fontFamily !== 'null') {
                     parts[fontIdx] = fontFamily;
+                    didOverride = true;
                 }
                 
                 // Native Fontsize scaling removed.
                 // We now scale the entire .libjass-subs wrapper via CSS transform.
                 // Modifying Fontsize natively breaks absolute \pos layout coordinates in Karaoke templates.
+
                 // Override Outline — null means "don't override; use the value from the ASS file"
                 const outlineIdx = styleFormat.indexOf('Outline');
                 if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
                     parts[outlineIdx] = String(outlineThickness);
+                    didOverride = true;
                 }
                 
                 // Override Shadow — null means "don't override; use the value from the ASS file"
                 const shadowIdx = styleFormat.indexOf('Shadow');
                 if (shadowIdx !== -1 && shadowThickness !== null && shadowThickness !== undefined) {
                     parts[shadowIdx] = String(shadowThickness);
+                    didOverride = true;
                 }
                 
-                stylesOverridden++;
+                // Only count the override if we actually changed something
+                if (didOverride) stylesOverridden++;
+
                 // Adding a space after "Style: " for standard ASS compatibility
                 return 'Style: ' + parts.join(',');
             }

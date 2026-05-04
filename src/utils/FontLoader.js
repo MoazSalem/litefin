@@ -403,6 +403,10 @@ class FontLoader {
                 }
 
                 if (window.FontFace && document.fonts) {
+                    // Track this file as loaded once per font FILE (not per alias/variant)
+                    // to prevent the returned array being inflated with duplicates.
+                    let fileLoaded = false;
+
                     for (const alias of aliasSet) {
                         let successCount = 0;
                         for (const v of variants) {
@@ -411,16 +415,24 @@ class FontLoader {
                                 await fontFace.load();
                                 document.fonts.add(fontFace);
                                 successCount++;
+                                fileLoaded = true;
                             } catch (err) {
-                                log.warn(`Variant load failed: ${alias} (${v.weight}/${v.style})`);
+                                // Only log at ERROR level when the font was explicitly requested
+                                // in the ASS style section — otherwise it's just a harmless variant
+                                // mismatch (e.g. trying to load an italic variant of a non-italic file).
+                                if (exactAssName && alias === exactAssName) {
+                                    log.warn(`Variant load failed: ${alias} (${v.weight}/${v.style})`);
+                                }
                             }
                         }
-                        if (successCount > 0) {
-                            // log.debug(`  ↳ "${alias}" (${successCount}/${variants.length} variants loaded)`);
-                            loadedFonts.push(exactAssName || baseName);
-                        } else {
+                        if (successCount === 0 && exactAssName && alias === exactAssName) {
                             log.error(`FAILED to load any variant for alias "${alias}"`);
                         }
+                    }
+
+                    // Push the primary name once per file, not once per alias
+                    if (fileLoaded) {
+                        loadedFonts.push(exactAssName || baseName);
                     }
                 } else {
                     const styleId = `font-attachment-${uniqueIndex}`;
