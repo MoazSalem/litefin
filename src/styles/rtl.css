@@ -16,7 +16,8 @@
     border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
 
-[dir="rtl"] .sidebar.expanded {
+[dir="rtl"] .sidebar.expanded,
+[dir="rtl"] .sidebar:hover {
     transform: translate3d(0, 0, 0) !important;
 }
 
@@ -49,9 +50,7 @@
     text-align: right !important;
 }
 
-[dir="rtl"] .sidebar.expanded {
-    transform: translate3d(0, 0, 0);
-}
+/* Duplicate rule removed */
 
 /* Base translation offset to keep icons in view when collapsed */
 [dir="rtl"] .sidebar-item,

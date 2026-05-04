@@ -53,7 +53,8 @@
     transform: translate3d(-100%, 0, 0);
 }
 
-.sidebar.expanded {
+.sidebar.expanded,
+.sidebar:hover {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
     /* Shift to reveal full sidebar */
@@ -93,12 +94,11 @@ body.sidebar-mode-hidden .sidebar:not(.expanded) {
     will-change: transform, opacity;
 }
 
-.sidebar.expanded .sidebar-focus-indicator {
+.sidebar.expanded .sidebar-focus-indicator,
+.sidebar:hover .sidebar-focus-indicator {
     /* Smooth sliding only when expanded and already visible */
     -webkit-transition: -webkit-transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
     transition: transform 0.2s cubic-bezier(0.2, 0, 0, 1), opacity 0.15s ease;
-
-
 }
 
 .sidebar.has-focus .sidebar-focus-indicator {
@@ -112,9 +112,10 @@ body.sidebar-mode-hidden .sidebar:not(.expanded) {
 }
 
 /* Compensate for translation on ALL content elements to keep them visible at the screen edge.
-   Only do this when the sidebar is NOT in a full-hidden mode, otherwise they slide weirdly. */
-body:not(.sidebar-mode-hidden) .sidebar.collapsed .logo-icon,
-body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
+   Only do this when the sidebar is NOT in a full-hidden mode, otherwise they slide weirdly. 
+   Also disable this compensation when the sidebar is hovered (expanding via CSS). */
+body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .logo-icon,
+body:not(.sidebar-mode-hidden) .sidebar.collapsed:not(:hover) .item-icon {
     -webkit-transform: translate3d(250px, 0, 0);
     transform: translate3d(250px, 0, 0);
 }
@@ -178,7 +179,8 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
 }
 
 
-.sidebar.expanded .logo-text {
+.sidebar.expanded .logo-text,
+.sidebar:hover .logo-text {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.5s ease-out, visibility 0s;
@@ -223,7 +225,8 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
     color: var(--jf-accent);
 }
 
-.sidebar.expanded .sidebar-item:hover {
+.sidebar.expanded .sidebar-item:hover,
+.sidebar:hover .sidebar-item:hover {
     transform: none;
     will-change: unset;
     color: var(--jf-accent);
@@ -231,6 +234,8 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
 
 .sidebar.expanded .sidebar-item.active:focus,
 .sidebar.expanded .sidebar-item.active.focused,
+.sidebar:hover .sidebar-item.active:focus,
+.sidebar:hover .sidebar-item.active.focused,
 .sidebar-item.focused {
     color: var(--jf-primary-btn-color) !important;
     transform: none;
@@ -385,7 +390,8 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     z-index: 6;
 }
 
-.sidebar.expanded .item-text {
+.sidebar.expanded .item-text,
+.sidebar:hover .item-text {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.5s ease-out, visibility 0s;
@@ -423,8 +429,8 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     flex-shrink: 0;
 }
 
-.sidebar:not(.expanded) .sidebar-section-header,
-.sidebar:not(.expanded) .library-item {
+.sidebar:not(.expanded):not(:hover) .sidebar-section-header,
+.sidebar:not(.expanded):not(:hover) .library-item {
     display: none;
 }
 
