@@ -146,7 +146,7 @@ function _buildMinimalProfile(caps) {
                 Protocol: 'hls',
                 MaxAudioChannels: String(caps.maxAudioChannels),
                 MinSegments: '1',
-                SegmentLength: '3',
+                SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
                 BreakOnNonKeyFrames: true
             },
             {
@@ -283,7 +283,7 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '2',
-            SegmentLength: '4',
+            SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {
@@ -295,7 +295,7 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: '2',
-            SegmentLength: '4',
+            SegmentLength: String(PlayerSettings.get('html5SegmentLength') || 2),
             BreakOnNonKeyFrames: playbackMode !== 'remux'
         },
         {

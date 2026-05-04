@@ -23,6 +23,7 @@
 import Hls from 'hls.js';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('WebOSPlayer');
 
@@ -1213,7 +1214,8 @@ export class WebOSPlayer {
             // don't fire a kick mid-download and restart the entire stall cycle.
             // The native engine always self-recovers at boundaries — let it.
             // ----------------------------------------------------------------
-            if (bufferAhead > 10) {
+            const bufferGate = PlayerSettings.get('webosBufferGate') || 10;
+            if (bufferAhead > bufferGate) {
                 log.debug(
                     'WebOSPlayer: Stall timer fired with',
                     bufferAhead.toFixed(1),
@@ -1227,14 +1229,14 @@ export class WebOSPlayer {
             log.warn(
                 'WebOSPlayer: Still stalled after 8s (buffer:',
                 bufferAhead.toFixed(1),
-                's) — recovery kick (+0.5s)'
+                `s) — recovery kick (+0.5s)`
             );
             try {
                 this._videoElement.currentTime += 0.5;
             } catch (e) {
                 log.error('WebOSPlayer: Recovery kick failed', e);
             }
-        }, 8000);
+        }, (PlayerSettings.get('webosStallRecovery') || 8) * 1000);
     }
 
     /** @private */

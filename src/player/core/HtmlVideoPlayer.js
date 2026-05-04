@@ -11,6 +11,7 @@ import Hls from 'hls.js';
 import Screenfull from 'screenfull';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('HtmlVideoPlayer');
 
@@ -240,8 +241,8 @@ export class HtmlVideoPlayer {
 
             const hls = new Hls({
                 startPosition: (options.playerStartPositionTicks || 0) / 10000000,
-                maxBufferLength: 60,
-                maxMaxBufferLength: 120,
+                maxBufferLength: PlayerSettings.get('html5MaxBufferLength') || 60,
+                maxMaxBufferLength: PlayerSettings.get('html5MaxMaxBufferLength') || 120,
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
                 fragLoadingTimeOut: 20000,

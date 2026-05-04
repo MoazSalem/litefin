@@ -271,7 +271,7 @@ function _buildMinimalProfile(caps) {
                 // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
                 MaxAudioChannels: caps.maxAudioChannels,
                 MinSegments: 1,
-                SegmentLength: 3,
+                SegmentLength: PlayerSettings.get('webosSegmentLength') || 3,
                 BreakOnNonKeyFrames: true
             },
             {
@@ -574,7 +574,7 @@ export function buildJellyfinProfile(options = {}) {
             // stream metadata, so it incorrectly applied to all HDR10/HDR10+ content
             // as well — causing the slideshow / slowmo playback reports.
             // ---------------------------------------------------------------------
-            SegmentLength: 6,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
             // Force IDR-aligned segment cuts for all TS content, not only DOVI.
             // The WebOS decoder produces visible macroblocking artifacts when split
             // mid-GOP, and the resulting non-IDR boundaries also trigger additional
@@ -640,7 +640,7 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: 1,
-            SegmentLength: 2,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
             // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });

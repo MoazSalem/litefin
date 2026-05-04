@@ -245,6 +245,25 @@ const DEFAULTS = {
     forceFmp4HlsContainer: false,
 
     // =========================================================================
+    // BUFFER SETTINGS
+    // =========================================================================
+
+    // Tizen
+    tizenInitialBuffer: 6,
+    tizenResumeBuffer: 4,
+    tizenSegmentLength: 6,
+
+    // WebOS
+    webosStallRecovery: 8,
+    webosBufferGate: 10,
+    webosSegmentLength: 6,
+
+    // HTML5
+    html5MaxBufferLength: 60,
+    html5MaxMaxBufferLength: 120,
+    html5SegmentLength: 2,
+
+    // =========================================================================
     // PLAYBACK SETTINGS
     // =========================================================================
 
