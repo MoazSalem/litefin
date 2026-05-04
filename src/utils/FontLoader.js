@@ -30,6 +30,9 @@ class FontLoader {
             'space-grotesk': 'Space Grotesk'
         };
 
+        // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls
+        this._loadedStaticFonts = new Set();
+
         // Track all blob: URLs created for container fonts so we can revoke
         // them on cleanup and avoid memory leaks across media sessions.
         this._blobUrls = new Set();
@@ -65,6 +68,7 @@ class FontLoader {
      */
     async loadFont(fontId) {
         if (!fontId || !this._fontMap[fontId]) return false;
+        if (this._loadedStaticFonts.has(fontId)) return true;
 
         const fontFamily = this._fontMap[fontId];
         log.debug(`Preloading font: ${fontFamily}`);
@@ -74,6 +78,7 @@ class FontLoader {
             if (document.fonts && document.fonts.load) {
                 await document.fonts.load(`16px "${fontFamily}"`);
                 log.debug(`Font loaded via API: ${fontFamily}`);
+                this._loadedStaticFonts.add(fontId);
                 return true;
             }
         } catch (e) {
@@ -94,6 +99,7 @@ class FontLoader {
             setTimeout(() => {
                 document.body.removeChild(span);
                 log.debug(`Font loaded via DOM fallback: ${fontFamily}`);
+                this._loadedStaticFonts.add(fontId);
                 resolve(true);
             }, 100);
         });
