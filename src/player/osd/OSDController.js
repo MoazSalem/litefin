@@ -2529,12 +2529,12 @@ export default class OSDController extends Component {
             const lastChapter = chapters[chapters.length - 1];
             const lastChapterTicks = lastChapter.StartPositionTicks || 0;
 
-            // Sanity check: the last chapter must start at least 30 s into the
+            // Sanity check: the last chapter must start at least 80% into the
             // episode and leave at least 5 s before the end, otherwise ignore it
             // and fall through to the time-based method.
-            const MIN_CHAPTER_OFFSET = 30 * TICKS_PER_SECOND;
+            const minChapterOffsetTicks = durationTicks * 0.8;
             const MIN_REMAINING = 5 * TICKS_PER_SECOND;
-            if (lastChapterTicks >= MIN_CHAPTER_OFFSET && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
+            if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
                 showAtTicks = lastChapterTicks;
             }
         }
