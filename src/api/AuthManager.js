@@ -251,7 +251,8 @@ class AuthManager {
         // Validate token with a server round-trip
         try {
             log.info('Validating token by fetching current user...');
-            const user = await api.getCurrentUser();
+            // Use a 5s timeout instead of 30s to quickly detect offline hosts on boot
+            const user = await api.getCurrentUser({ timeout: 5000 });
             log.info('Token valid, user:', user?.Name);
 
             // Sync the stored session with fresh user data from the server
@@ -327,7 +328,8 @@ class AuthManager {
         api.setServer(serverUrl);
 
         try {
-            const info = await api.getPublicInfo();
+            // Short timeout so the UI doesn't hang if the user types a dead IP
+            const info = await api.getPublicInfo({ timeout: 5000 });
 
             // Persist the server URL
             storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
@@ -355,7 +357,8 @@ class AuthManager {
         if (!url) return false;
 
         try {
-            await api.getPublicInfo();
+            // Very short timeout for background polling
+            await api.getPublicInfo({ timeout: 3000 });
             return true;
         } catch (e) {
             return false;
