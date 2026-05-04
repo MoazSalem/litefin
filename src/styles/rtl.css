@@ -11,10 +11,15 @@
 [dir="rtl"] .sidebar {
     left: auto;
     right: 0;
-    transform: translate3d(100px, 0, 0); /* Match collapsed width logic */
+    transform: translate3d(250px, 0, 0); /* Collapsed by default: moves 250px right */
     border-right: none;
     border-left: 1px solid rgba(255, 255, 255, 0.05);
 }
+
+[dir="rtl"] .sidebar.expanded {
+    transform: translate3d(0, 0, 0) !important;
+}
+
 
 /* ================== SETTINGS ================== */
 [dir="rtl"] .settings-sidebar {
@@ -49,28 +54,51 @@
 }
 
 /* Base translation offset to keep icons in view when collapsed */
-/* Originally translate3d(-250px, 0, 0) in LTR, now +250 in RTL */
-/* Wait, sidebar width is 350, collapsed is 100. Diff = 250px */
-[dir="rtl"] .sidebar {
-    transform: translate3d(250px, 0, 0);
+[dir="rtl"] .sidebar-item,
+[dir="rtl"] .sidebar-header {
+    /* We MUST use row-reverse to put icons on the left side of the sidebar,
+       because the left side is what stays on screen when we translate right to collapse. */
+    flex-direction: row-reverse !important;
 }
 
-[dir="rtl"] .sidebar:not(.expanded) .logo-icon,
-[dir="rtl"] .sidebar:not(.expanded) .item-icon {
-    transform: translate3d(-250px, 0, 0);
+[dir="rtl"] body:not(.sidebar-mode-hidden) .sidebar.collapsed .logo-icon,
+[dir="rtl"] body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
+    transform: none !important;
+}
+
+[dir="rtl"] .sidebar-header {
+    padding: 0;
+}
+
+[dir="rtl"] .logo-icon,
+[dir="rtl"] .item-icon {
+    width: 100px;
+    flex-shrink: 0;
+    display: flex;
+    justify-content: center;
+    align-items: center;
 }
 
 [dir="rtl"] .logo-text {
     margin-left: 0;
-    margin-right: 0px;
+    margin-right: 20px; /* Gap between logo and text */
+    /* Removed flex:1 to prevent text from pushing logo away */
 }
 
-[dir="rtl"] .sidebar.expanded .logo-text {
-    margin-left: 0;
-    margin-right: 15px;
+[dir="rtl"] .sidebar-content {
+    /* Remove the global padding that was breaking icon visibility */
+    padding-left: 0;
+    padding-right: 0;
 }
 
-[dir="rtl"] .sidebar-item {
+[dir="rtl"] .library-item {
+    /* Add the requested spacing on the left (inner side) for library items */
+    padding-left: 20px;
+}
+
+[dir="rtl"] .library-item .item-text {
+    padding-right: 20px;
+    padding-left: 0;
     text-align: right;
 }
 
@@ -85,8 +113,8 @@
 }
 
 [dir="rtl"] .sidebar-focus-indicator {
-    left: auto;
-    right: 0;
+    left: 0;
+    right: auto;
 }
 
 /* ================== LAYOUT ================== */
