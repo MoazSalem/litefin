@@ -884,7 +884,6 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 8px 12px;
     text-align: center;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
