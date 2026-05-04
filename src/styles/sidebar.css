@@ -223,9 +223,18 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
     color: var(--jf-accent);
 }
 
-.sidebar-item.active:focus,
-.sidebar-item.active.focused {
-    color: var(--jf-primary-btn-color);
+.sidebar.expanded .sidebar-item:hover {
+    transform: none;
+    will-change: unset;
+    color: var(--jf-accent);
+}
+
+.sidebar.expanded .sidebar-item.active:focus,
+.sidebar.expanded .sidebar-item.active.focused,
+.sidebar-item.focused {
+    color: var(--jf-primary-btn-color) !important;
+    transform: none;
+    will-change: unset;
 }
 
 /* Update icon background to match item state when focused */
