@@ -29,6 +29,22 @@ class FontLoader {
             silkscreen: 'Silkscreen',
             'space-grotesk': 'Space Grotesk'
         };
+
+        // Track all blob: URLs created for container fonts so we can revoke
+        // them on cleanup and avoid memory leaks across media sessions.
+        this._blobUrls = new Set();
+    }
+
+    /**
+     * Release all blob URLs created for container font attachments.
+     * Must be called when the player stops or switches media to prevent leaks.
+     */
+    clearContainerFonts() {
+        for (const url of this._blobUrls) {
+            try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+        }
+        this._blobUrls.clear();
+        log.debug('[FontLoader] Container font blob URLs cleared.');
     }
 
     /**
@@ -184,7 +200,12 @@ class FontLoader {
                     }
                 }
             }
-            return Array.from(names);
+            
+            const result = [];
+            if (names && names.forEach) {
+                names.forEach(name => result.push(name));
+            }
+            return result;
         } catch (e) {
             log.warn('Failed to parse TTF name table:', e);
             return [];
@@ -255,14 +276,29 @@ class FontLoader {
                     url = `${serverUrl}/Videos/${itemId}/${mediaSourceId}/Attachments/${uniqueIndex}?api_key=${encodeURIComponent(authToken)}`;
                 }
 
-                // Download the font into memory so we can parse its internal name table
+                // Download the font into memory so we can parse its internal name table.
+                // The 5-second timeout prevents runaway fetches when playing a transcoded
+                // stream whose original attachment URLs are no longer valid.
                 let buffer;
                 try {
-                    const res = await fetch(url);
+                    let res;
+                    if (typeof AbortController !== 'undefined') {
+                        const controller = new AbortController();
+                        const timeout = setTimeout(() => controller.abort(), 5000);
+                        res = await fetch(url, { signal: controller.signal });
+                        clearTimeout(timeout);
+                    } else {
+                        // Legacy fallback for WebOS 2/3 (Chrome 38/53)
+                        res = await fetch(url);
+                    }
                     if (!res.ok) throw new Error(`HTTP ${res.status}`);
                     buffer = await res.arrayBuffer();
                 } catch (fetchErr) {
-                    log.warn(`Failed to download font attachment ${uniqueIndex}:`, fetchErr);
+                    if (fetchErr && fetchErr.name === 'AbortError') {
+                        log.warn(`[FontLoader] Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`);
+                    } else {
+                        log.warn(`[FontLoader] Failed to download font attachment ${uniqueIndex}:`, fetchErr);
+                    }
                     continue;
                 }
 
@@ -271,9 +307,11 @@ class FontLoader {
                     // log.debug(`Binary Extracted Names for Attachment ${uniqueIndex}:`, internalNames);
                 }
 
-                // Convert buffer to Blob URL for FontFace registration
+                // Convert buffer to Blob URL for FontFace registration.
+                // Track the URL so clearContainerFonts() can revoke it later.
                 const blob = new Blob([buffer], { type: font.MimeType || 'font/ttf' });
                 const blobUrl = URL.createObjectURL(blob);
+                this._blobUrls.add(blobUrl);
 
                 const rawName = font.Name || font.FileName || `ContainerFont${uniqueIndex}`;
                 const baseName = rawName.replace(/\.[^/.]+$/, '');

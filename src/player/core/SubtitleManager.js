@@ -156,6 +156,10 @@ export default class SubtitleManager {
         this._clearPrimary();
         this._clearSecondary();
 
+        // Release all blob: URLs from the previous session to prevent memory
+        // leaks. This must happen before we download new font attachments.
+        FontLoader.clearContainerFonts();
+
         // Destroy existing renderers as context (video/container) might change
         if (this._assRenderer) {
             this._assRenderer.destroy();
