@@ -290,40 +290,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Theme Section -->
-                <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
-            
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ThemeMode">${i18n.t('ThemeMode') || 'Theme Mode'}</span>
-                        <span class="setting-description" data-i18n="ThemeModeDescription">${i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'theme-mode-select',
-                            [
-                                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
-                                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
-                                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
-                                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
-                            ],
-                            layoutManager.getThemeMode()
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ThemeColor">${i18n.t('ThemeColor') || 'Theme Color'}</span>
-                        <span class="setting-description" data-i18n="ThemeColorDescription">${i18n.t('ThemeColorDescription') || 'Choose your primary accent color.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <div class="theme-color-grid">
-                            ${this._renderColorOptions()}
-                        </div>
-                    </div>
-                </div>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="AppFont">${i18n.t('AppFont')}</span>
@@ -379,6 +345,59 @@ class SettingsPage extends Page {
                                 { value: '1.4', label: '140%' }
                             ],
                             layoutManager.getTextScale().toString()
+                        )}
+                    </div>
+                </div>
+
+                <!-- Theme Section -->
+                <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
+            
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeMode">${i18n.t('ThemeMode') || 'Theme Mode'}</span>
+                        <span class="setting-description" data-i18n="ThemeModeDescription">${i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'theme-mode-select',
+                            [
+                                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+                                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+                                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+                                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
+                            ],
+                            layoutManager.getThemeMode()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeColor">${i18n.t('ThemeColor') || 'Theme Color'}</span>
+                        <span class="setting-description" data-i18n="ThemeColorDescription">${i18n.t('ThemeColorDescription') || 'Choose your primary accent color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <div class="theme-color-grid">
+                            ${this._renderColorOptions()}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-button-borders-select',
+                            [
+                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
+                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
+                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
+                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
+                            ],
+                            layoutManager.getOsdButtonBorders()
                         )}
                     </div>
                 </div>
@@ -3908,7 +3927,8 @@ class SettingsPage extends Page {
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
-            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
+            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
+            'osd-button-borders-select': { key: 'litefin:osdButtonBorders', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -3937,6 +3957,9 @@ class SettingsPage extends Page {
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
+                        } else if (id === 'osd-button-borders-select') {
+                            // SPECIAL CASE: OSD Button Borders handled by LayoutManager
+                            layoutManager.setOsdButtonBorders(newValue);
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');

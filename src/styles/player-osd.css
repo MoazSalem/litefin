@@ -258,7 +258,7 @@
     justify-content: center;
     width: 58px;
     height: 58px;
-    border: none;
+    border: none; /* Base reset */
     background: transparent;
     color: var(--osd-text-color);
     cursor: pointer;
@@ -269,6 +269,7 @@
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 0;
     margin: 0;
+    box-sizing: border-box; /* Ensure border doesn't grow the button */
 }
 
 /* 
@@ -293,14 +294,54 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 .osd-btn.focused,
 .osd-btn.magic-hover {
     background: var(--jf-accent) !important;
-    border-color: var(--jf-button-border-focus) !important;
     color: var(--jf-primary-btn-color) !important;
     outline: none !important;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
     -webkit-transform: scale(1.15);
     transform: scale(1.15);
     /* Promote only the focused/hovered button to its own compositor layer */
     will-change: transform;
+}
+
+/* 
+ * ── OSD Button Focus Border Customization ──────────────────────────────────
+ * Controlled via Settings > Display. Adjusts the prominence of the focus
+ * ring around active player controls.
+ */
+
+/* Auto/Default Focus Border */
+html:not([data-osd-borders]) .osd-btn:hover,
+html:not([data-osd-borders]) .osd-btn:focus,
+html:not([data-osd-borders]) .osd-btn.focused,
+html:not([data-osd-borders]) .osd-btn.magic-hover,
+html[data-osd-borders="auto"] .osd-btn:hover,
+html[data-osd-borders="auto"] .osd-btn:focus,
+html[data-osd-borders="auto"] .osd-btn.focused,
+html[data-osd-borders="auto"] .osd-btn.magic-hover {
+    border: 2px solid var(--jf-action-btn-active-border) !important;
+}
+
+/* Light Focus Border (Always White) */
+html[data-osd-borders="light"] .osd-btn:hover,
+html[data-osd-borders="light"] .osd-btn:focus,
+html[data-osd-borders="light"] .osd-btn.focused,
+html[data-osd-borders="light"] .osd-btn.magic-hover {
+    border: 2px solid rgba(255, 255, 255, 1) !important;
+}
+
+/* Dark Focus Border */
+html[data-osd-borders="dark"] .osd-btn:hover,
+html[data-osd-borders="dark"] .osd-btn:focus,
+html[data-osd-borders="dark"] .osd-btn.focused,
+html[data-osd-borders="dark"] .osd-btn.magic-hover {
+    border: 2px solid rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Hidden Focus Border */
+html[data-osd-borders="hidden"] .osd-btn:hover,
+html[data-osd-borders="hidden"] .osd-btn:focus,
+html[data-osd-borders="hidden"] .osd-btn.focused,
+html[data-osd-borders="hidden"] .osd-btn.magic-hover {
+    border: none !important;
 }
 
 .osd-btn.active {
