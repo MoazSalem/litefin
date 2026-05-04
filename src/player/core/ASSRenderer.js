@@ -311,6 +311,59 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
             } else {
                 this._wrapper.style.removeProperty('--ass-letter-spacing');
             }
+            
+        }
+        
+        // ====================================================================
+        // Apply ASS Subtitle Scaling via CSS Transform to Individual Divs
+        // --------------------------------------------------------------------
+        // We MUST scale the individual subtitle `div`s using their specific
+        // alignment anchor points (transform-origin).
+        // Scaling the whole container pushes top/bottom subtitles off-screen.
+        // Natively modifying ASS `Fontsize` breaks Karaoke syllable absolute math.
+        // ====================================================================
+        let scaleStyleEl = document.getElementById('ass-scale-styles');
+        if (!scaleStyleEl) {
+            scaleStyleEl = document.createElement('style');
+            scaleStyleEl.id = 'ass-scale-styles';
+            document.head.appendChild(scaleStyleEl);
+        }
+
+        if (this._fontScale && this._fontScale !== 1.0) {
+            const scale = this._fontScale;
+            // Target all libjass subtitle divs. Use .anX classes to determine the exact anchor point
+            // so they scale outward from their intended baseline, never clipping off-screen.
+            scaleStyleEl.innerHTML = `
+                /* Specific overrides to scale standard dialogue while preventing edge-aligned subtitles from clipping off-screen */
+                .libjass-wrapper .libjass-subs .an1,
+                .libjass-wrapper .libjass-subs .an2,
+                .libjass-wrapper .libjass-subs .an3,
+                .libjass-wrapper .libjass-subs .an4,
+                .libjass-wrapper .libjass-subs .an5,
+                .libjass-wrapper .libjass-subs .an6,
+                .libjass-wrapper .libjass-subs .an7,
+                .libjass-wrapper .libjass-subs .an8,
+                .libjass-wrapper .libjass-subs .an9 {
+                    transform: scale(${scale}) !important;
+                    -webkit-transform: scale(${scale}) !important;
+                }
+                .libjass-wrapper .libjass-subs .an1 { transform-origin: left bottom !important; -webkit-transform-origin: left bottom !important; }
+                .libjass-wrapper .libjass-subs .an2 { transform-origin: center bottom !important; -webkit-transform-origin: center bottom !important; }
+                .libjass-wrapper .libjass-subs .an3 { transform-origin: right bottom !important; -webkit-transform-origin: right bottom !important; }
+                .libjass-wrapper .libjass-subs .an4 { transform-origin: left center !important; -webkit-transform-origin: left center !important; }
+                .libjass-wrapper .libjass-subs .an5 { transform-origin: center center !important; -webkit-transform-origin: center center !important; }
+                .libjass-wrapper .libjass-subs .an6 { transform-origin: right center !important; -webkit-transform-origin: right center !important; }
+                .libjass-wrapper .libjass-subs .an7 { transform-origin: left top !important; -webkit-transform-origin: left top !important; }
+                .libjass-wrapper .libjass-subs .an8 { transform-origin: center top !important; -webkit-transform-origin: center top !important; }
+                .libjass-wrapper .libjass-subs .an9 { transform-origin: right top !important; -webkit-transform-origin: right top !important; }
+            `;
+            // Cleanup wrapper transform just in case
+            this._wrapper.style.transform = '';
+            this._wrapper.style.transformOrigin = '';
+            this._wrapper.style.webkitTransform = '';
+            this._wrapper.style.webkitTransformOrigin = '';
+        } else {
+            scaleStyleEl.innerHTML = '';
         }
 
         this._wrapper.className = classNames.join(' ');
@@ -458,15 +511,9 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
                     parts[fontIdx] = fontFamily;
                 }
                 
-                // Override Fontsize - Scaling up if a specific boost is requested (e.g. for Noto Arabic)
-                const sizeIdx = styleFormat.indexOf('Fontsize');
-                if (sizeIdx !== -1 && fontScale !== 1.0) {
-                    const originalSize = parseFloat(parts[sizeIdx]);
-                    if (!isNaN(originalSize)) {
-                        parts[sizeIdx] = (originalSize * fontScale).toFixed(2);
-                    }
-                }
-                
+                // Native Fontsize scaling removed.
+                // We now scale the entire .libjass-subs wrapper via CSS transform.
+                // Modifying Fontsize natively breaks absolute \pos layout coordinates in Karaoke templates.
                 // Override Outline — null means "don't override; use the value from the ASS file"
                 const outlineIdx = styleFormat.indexOf('Outline');
                 if (outlineIdx !== -1 && outlineThickness !== null && outlineThickness !== undefined) {
