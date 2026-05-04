@@ -536,10 +536,14 @@ export class WebOSPlayer {
      * @param {number} ticks - Jellyfin position ticks
      */
     _applyRobustResume(video, ticks) {
-        if (!ticks) return;
-        const resumeSeconds = ticks / 10000000;
+        this._cancelRobustResume = false;
 
-        if (resumeSeconds < 5) return;
+        // Do not attempt robust resume for live TV/streams
+        if (this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId) {
+            return;
+        }
+
+        const resumeSeconds = (ticks || 0) / 10000000;
 
         // Safety guard: do not seek beyond the end
         if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
@@ -547,48 +551,64 @@ export class WebOSPlayer {
             return;
         }
 
-        log.info('WebOSPlayer: Applying robust resume to', resumeSeconds, 's');
-
-        const seekWithRetry = (time, attempts = 5) => {
-            let tries = 0;
-            const attempt = () => {
-                tries++;
-                try {
-                    video.currentTime = time;
-                } catch (e) {}
-
-                setTimeout(() => {
-                    if (Math.abs(video.currentTime - time) < 2) {
-                        log.debug('WebOSPlayer: Seek successful on attempt', tries);
-                    } else if (tries < attempts) {
-                        log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
-                        attempt();
-                    } else {
-                        log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
-                    }
-                }, 500);
-            };
-            attempt();
-        };
+        this._robustSeekTarget = resumeSeconds;
 
         const tryApply = () => {
-            // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
-            if (video.readyState >= 3 && video.seekable.length > 0) {
-                seekWithRetry(resumeSeconds);
-            } else {
-                setTimeout(tryApply, 300);
+            if (this._cancelRobustResume || this._robustSeekTarget === null) return;
+
+            // Only apply proactively if we're actually resuming from significantly past 0
+            if (resumeSeconds >= 5) {
+                // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
+                if (video.readyState >= 3 && video.seekable.length > 0) {
+                    this._seekWithRetry(resumeSeconds);
+                } else {
+                    setTimeout(tryApply, 300);
+                }
             }
         };
 
         tryApply();
+    }
 
-        const onPlaying = () => {
-            if (Math.abs(video.currentTime - resumeSeconds) > 5) {
-                log.info('WebOSPlayer: Detected snap-back, re-applying seek');
-                seekWithRetry(resumeSeconds);
+    _seekWithRetry(time, attempts = 5) {
+        this._robustSeekPending = true;
+        let tries = 0;
+        const video = this._videoElement;
+
+        log.info('WebOSPlayer: Applying robust resume seek to', time, 's');
+
+        const attempt = () => {
+            if (this._cancelRobustResume) {
+                this._robustSeekPending = false;
+                this._robustSeekTarget = null;
+                log.info('WebOSPlayer: Robust resume cancelled by manual seek or stop');
+                return;
             }
+            tries++;
+            try {
+                video.currentTime = time;
+            } catch (e) {}
+
+            setTimeout(() => {
+                if (this._cancelRobustResume) return;
+
+                if (Math.abs(video.currentTime - time) < 2) {
+                    log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                } else if (tries < attempts) {
+                    log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                    attempt();
+                } else {
+                    log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                }
+            }, 500);
         };
-        video.addEventListener('playing', onPlaying, { once: true });
+        attempt();
     }
 
     /**
@@ -641,6 +661,7 @@ export class WebOSPlayer {
      * @returns {Promise<void>}
      */
     async stop() {
+        this._cancelRobustResume = true;
         this._clearStallCheck();
         this._destroyHlsPlayer();
 
@@ -671,6 +692,7 @@ export class WebOSPlayer {
      * @param {number} positionTicks
      */
     seek(positionTicks) {
+        this._cancelRobustResume = true;
         const video = this._videoElement;
         if (!video) return;
 
@@ -971,6 +993,8 @@ export class WebOSPlayer {
 
     /** @private */
     _onTimeUpdate() {
+        if (this._robustSeekPending) return;
+
         if (!this._timeUpdated && this._videoElement?.currentTime) {
             this._timeUpdated = true;
         }
@@ -1068,6 +1092,23 @@ export class WebOSPlayer {
 
     /** @private */
     _onPlaying() {
+        if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
+            const target = this._robustSeekTarget;
+            // If we drifted past the target
+            if (Math.abs(this.getCurrentTime() - target) > 2) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${this.getCurrentTime()}, expected: ${target}), applying robust seek`);
+                this._seekWithRetry(target);
+                return; // suppress this playing event
+            } else {
+                // No drift, we are good.
+                this._robustSeekTarget = null;
+            }
+        }
+
+        if (this._robustSeekPending) {
+            return; // suppress playing event until retry loop finishes
+        }
+
         if (!this._started) {
             this._started = true;
             log.info('WebOSPlayer: Playback started');
