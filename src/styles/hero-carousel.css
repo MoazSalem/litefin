@@ -348,12 +348,16 @@
 }
 
 .hero-carousel-container:focus,
-.hero-carousel-container.focused {
+.hero-carousel-container.focused,
+.hero-carousel-container:hover,
+.hero-carousel-container.hovered {
     outline: none;
 }
 
 .hero-carousel-container:focus::after,
-.hero-carousel-container.focused::after {
+.hero-carousel-container.focused::after,
+.hero-carousel-container:hover::after,
+.hero-carousel-container.hovered::after {
     opacity: 0.15;
 }
 
@@ -435,7 +439,9 @@
    ============================================================================ */
 
 .hero-carousel-container.banner:focus,
-.hero-carousel-container.banner.focused {
+.hero-carousel-container.banner.focused,
+.hero-carousel-container.banner:hover,
+.hero-carousel-container.banner.hovered {
     border-color: var(--jf-accent);
     z-index: 1000;
 }

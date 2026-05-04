@@ -205,9 +205,14 @@ body:not(.sidebar-mode-hidden) .sidebar.collapsed .item-icon {
 }
 
 .sidebar-item:focus,
-.sidebar-item.focused {
+.sidebar-item.focused{
     background: transparent;
     color: var(--jf-primary-btn-color);
+}
+
+.sidebar-item:hover {
+    transform: scale(1.05);
+    will-change: transform;
 }
 
 .sidebar-item.active {

@@ -27,10 +27,10 @@ import { storage } from '../utils/StorageService.js';
 // ============================================================================
 
 // Default animation duration (ms) for vertical smooth scrolling
-const SCROLL_DURATION_VERTICAL = 200;
+const SCROLL_DURATION_VERTICAL = 150;
 
 // Animation duration (ms) for horizontal card-centering scrolls
-const SCROLL_DURATION_HORIZONTAL = 150;
+const SCROLL_DURATION_HORIZONTAL = 120;
 
 // Minimum pixel difference to consider "not at target" (avoids sub-pixel jitter)
 const SCROLL_SNAP_THRESHOLD = 1;

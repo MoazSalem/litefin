@@ -121,10 +121,16 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .settings-menu-btn:focus,
-.settings-menu-btn.focused {
+.settings-menu-btn.focused{
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color, #ffffff);
     outline: none !important;
+    transform: scale(1.05);
+    will-change: transform;
+}
+
+.settings-menu-btn:hover {
+    border-color: var(--jf-action-btn-active-border) !important;
     transform: scale(1.05);
     will-change: transform;
 }
@@ -240,12 +246,18 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .btn-option:focus,
-.btn-option.focused {
+.btn-option.focused{
     border: 2px solid var(--jf-action-btn-active-border)!important;
     /* High contrast focus */
     background: var(--jf-accent-hover);
     transform: scale(1.05);
     outline: none !important;
+    will-change: transform;
+}
+
+.btn-option:hover {
+    border-color: var(--jf-action-btn-active-border) !important;
+    transform: scale(1.05);
     will-change: transform;
 }
 
@@ -272,9 +284,15 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .select-btn:focus,
-.select-btn.focused {
+.select-btn.focused{
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color, #ffffff);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    transform: scale(1.02);
+    will-change: transform;
+}
+
+.select-btn:hover {
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -456,7 +474,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .switch-user-btn:focus,
-.switch-user-btn.focused {
+.switch-user-btn.focused,
+.switch-user-btn:hover {
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
     border: 2px solid var(--jf-action-btn-active-border)!important;
@@ -479,7 +498,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .about-card:focus,
-.about-card.focused {
+.about-card.focused,
+.about-card:hover {
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid var(--jf-action-btn-active-border)!important;
     outline: none;
@@ -610,7 +630,8 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
 }
 
 .toggle-switch:focus,
-.toggle-switch.focused {
+.toggle-switch.focused,
+.toggle-switch:hover {
     border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
     will-change: transform;
@@ -993,7 +1014,12 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 }
 
 .color-option.active {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(255, 255, 255, 1);
+}
+
+.color-option:hover,
+.color-option.hovered {
+    border-color: rgba(255, 255, 255, 0.7);
 }
 
 .color-option.active::after {

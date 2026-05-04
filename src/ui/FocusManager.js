@@ -33,7 +33,7 @@ const FOCUSABLE_SELECTOR = `
 
 // Minimum time (ms) between key events to prevent event flooding.
 // Keypresses faster than this interval are dropped.
-const KEY_DEBOUNCE_MS = 50;
+const KEY_DEBOUNCE_MS = 40;
 
 // Maximum number of empty sections to skip through when leaving a section.
 // Prevents infinite loops if section linking is misconfigured.
@@ -41,8 +41,7 @@ const MAX_SECTION_SKIP_DEPTH = 20;
 
 // Rapid navigation (instant scroll) threshold.
 // If consecutive keypresses are faster than this, we snap to avoid scroll queueing.
-// 200ms was too loose (triggered on manual taps); 150ms is more robust.
-const RAPID_MOVE_THRESHOLD_MS = 150;
+const RAPID_MOVE_THRESHOLD_MS = 120;
 
 // Minimum number of consecutive rapid moves before instant scroll kicks in.
 // Ensures a single fast double-tap doesn't cause a snap.
@@ -183,7 +182,6 @@ class FocusManager {
                 this._updateFocusMemory();
             }
         });
-
         log.info('Initialized (v3 Single Source Rewrite)');
     }
 

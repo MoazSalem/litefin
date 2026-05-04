@@ -95,7 +95,8 @@
 }
 
 .header-focusable:focus,
-.header-focusable.focused {
+.header-focusable.focused,
+.header-focusable:hover {
     background-color: rgba(255, 255, 255, 0.15);
     color: #fff;
     transform: scale(1.08);
