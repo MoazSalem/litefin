@@ -1,5 +1,6 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { eventBus } from '../core/EventBus.js';
 
 export class VirtualCardRow {
     /**
@@ -68,6 +69,61 @@ export class VirtualCardRow {
         // Link the instance to the DOM element so ScrollController can access computationally
         // derived layout values instead of forcing synchronous layout flushes.
         this.track.__virtualRow = this;
+
+        // Modern: Handle Poster-to-Landscape Expansion logic
+        if (isModern) {
+            // Add a buffer for the expanded card width (375px) so the track doesn't clip
+            const expansion = (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist') ? 0 : 375;
+            this.track.style.width = `${totalWidth + expansion}px`;
+
+            const handleFocus = (element) => {
+                const card = element.closest('.media-card');
+                if (card && this.track.contains(card)) {
+                    const index = parseInt(card.dataset.virtualIndex);
+                    const itemId = card.dataset.itemId;
+                    
+                    // Trigger expansion shift only if the card is explicitly marked as expandable
+                    const isExpanding = card.classList.contains('has-expansion');
+                    if (isExpanding) {
+                        this.track.style.setProperty('--focused-index', index);
+                    } else {
+                        this.track.style.setProperty('--focused-index', -1);
+                    }
+                    
+                    // Lazy-load the expansion thumb (landscape image) on focus
+                    const thumb = card.querySelector('.thumb-layer');
+                    const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
+                    
+                    if (thumb && !thumb.getAttribute('src') && thumbSrc) {
+                        thumb.setAttribute('src', thumbSrc);
+                        thumb.onload = () => {
+                            thumb.classList.add('loaded');
+                            card.classList.add('expansion-ready');
+                        };
+                        thumb.onerror = () => {
+                            thumb.classList.add('load-failed');
+                            card.classList.remove('expansion-ready');
+                        };
+                    }
+                }
+            };
+
+            // Listen for global focus changes from FocusManager (native focus is disabled on Tizen)
+            this._focusUnsubscribe = eventBus.on('focus:changed', (element) => {
+                handleFocus(element);
+            });
+
+            // Keep native listeners for click/mouse/right-click interaction
+            this.track.addEventListener('focusin', (e) => handleFocus(e.target));
+            this.track.addEventListener('mousedown', (e) => handleFocus(e.target));
+
+            this.track.addEventListener('focusout', (e) => {
+                // Only clear if we are actually leaving the row
+                if (!e.relatedTarget || !this.track.contains(e.relatedTarget)) {
+                    this.track.style.setProperty('--focused-index', -1);
+                }
+            });
+        }
 
         // Inject a hidden dummy element to natively expand the track's height.
         // Since absolute children collapse the parent, this static element prevents

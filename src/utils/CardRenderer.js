@@ -186,11 +186,10 @@ class CardRenderer {
                     });
                 }
 
-                // Add modern overlay label and tint directly to the image area
+                // Add modern overlay label directly to the image area
                 // This provides a premium "streaming service" aesthetic
                 if (isModern || item._dynamicThumbUrl) {
                     imageInnerHtml = `
-                        <div class="card-overlay-tint"></div>
                         <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
                     `;
                 }
@@ -338,9 +337,13 @@ class CardRenderer {
             }
         }
 
-        // --- 1.5 Premium Fallbacks for Missing Images ---
+        // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
             imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
+        } else if (isModern) {
+            // Modern cards always get a shadow tint to ensure title readability
+            // We prepend it if imageInnerHtml already has content (like library labels)
+            imageInnerHtml = `<div class="card-image-tint"></div>${imageInnerHtml}`;
         }
 
         // --- 2. Overlays (Progress & Badges) ---
@@ -489,8 +492,32 @@ class CardRenderer {
         const hideInitials = type === 'library';
         const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
+        // Support for Dual-Image Modern Posters (Poster -> Landscape Expansion)
+        // ONLY expand if we actually HAVE a landscape image to transition to.
+        const hasBackdrop = (item.BackdropImageTags && item.BackdropImageTags.length > 0) || (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0);
+        const canExpand = isModern && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series') && hasBackdrop;
+
+        let thumbPart = '';
+        if (canExpand) {
+            // Resolve Thumb (Backdrop) URL for the expanded state
+            const thumbParams = imageService.getParams('card-backdrop');
+            let thumbUrl = '';
+            if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
+                thumbUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.BackdropImageTags[0] });
+            } else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
+                thumbUrl = api.getImageUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.ParentBackdropImageTags[0] });
+            } else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
+                thumbUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.SeriesBackdropImageTags[0] });
+            }
+            
+            if (thumbUrl) {
+                // We add data-thumb-src but NO src. We will load it only on focus in VirtualCardRow.
+                thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" />`;
+            }
+        }
+
         const imagePart = imageUrl
-            ? `${imageInnerHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy" />`
+            ? `${imageInnerHtml}${thumbPart}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
             : CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials });
         const finalContextType = contextType || item.Type;
 
@@ -517,13 +544,17 @@ class CardRenderer {
             }
         }
 
+        // --- 5. Integrated vs External Labels (Modern Layout) ---
+        // For native landscape/square, labels are ALWAYS inside.
+        // For expandable posters, we render BOTH to allow a smooth CSS transition from outside to inside.
         const isSquare = type === 'square' || type === 'artist';
-        const isPortrait = !isLandscape && !isSquare;
-
-        // Integrated labels for landscape/square in modern
-        const moveInfoInside = isModern && (isLandscape || isSquare) && !isHiddenLibraryLabel;
-        // Hide labels for portrait in modern
-        const hideLabelsAlt = isModern && isPortrait && !isHiddenLibraryLabel;
+        const renderInside = isModern && (isLandscape || isSquare || canExpand);
+        const renderOutside = !isLandscape && !isSquare; // Posters always have outside labels available
+        
+        // Final visibility logic (Classic vs Modern)
+        const showInside = renderInside && !isHiddenLibraryLabel;
+        const showOutside = renderOutside && !isHiddenLibraryLabel;
+        const expansionClass = canExpand ? ' has-expansion' : '';
 
         const badgeContainer = `
             ${badgeHtml}
@@ -533,14 +564,13 @@ class CardRenderer {
         `;
 
         return `
-            <button class="${cssClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
                     ${!options.showMeta ? badgeContainer : ''}
-                    ${moveInfoInside ? '<div class="card-overlay-tint"></div>' : ''}
                     ${
-                        moveInfoInside
+                        showInside
                             ? `
                     <div class="card-info inside">
                         ${
@@ -561,7 +591,7 @@ class CardRenderer {
                     }
                 </div>
                 ${
-                    !isHiddenLibraryLabel && !moveInfoInside && !hideLabelsAlt
+                    showOutside
                         ? `
                 <div class="card-info">
                     ${

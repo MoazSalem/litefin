@@ -32,12 +32,38 @@ html[data-layout="modern"] .media-row:focus-within .row-title {
    ========================================================================= */
 
 html[data-layout="modern"] .media-card {
-    width: 225px; /* Height: 225 * 1.5 = 337.5px */
+    width: 225px;
+    height: 337.5px !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
     margin-right: 40px;
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
-    -webkit-transition: -webkit-transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* Expansion Transition */
+    -webkit-transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1), -webkit-transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* Sibling Shifting Logic:
+       ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
+       Difference = 600px - 225px = 375px.
+    */
+    --expansion-amount: 375px;
+    --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
+    /* Note: We only shift if we are NOT the focused item ourselves and we are AFTER it */
+    /* This calculation is slightly complex to avoid shifting the focused item itself */
+}
+
+/* Sibling Shifting: Shift ALL cards that come after the focused card */
+/* We use the ~ selector combined with the focus state for immediate CSS-only shifting of visible siblings */
+html[data-layout="modern"] .media-card.has-expansion:focus ~ .media-card,
+html[data-layout="modern"] .media-card.has-expansion.focused ~ .media-card {
+    transform: translateX(375px);
+}
+
+/* Posters that grow on focus */
+html[data-layout="modern"] .media-card.has-expansion:focus,
+html[data-layout="modern"] .media-card.has-expansion.focused {
+    width: 600px;
+    height: 337.5px !important; /* Force height lockdown during expansion */
+    z-index: 100;
 }
 
 html[data-layout="modern"] .media-card.landscape {
@@ -48,7 +74,26 @@ html[data-layout="modern"] .media-card.square {
     width: 338px; /* Height: 338 * 1 = 338px */
 }
 
+/* Integrated Labels: Reveal timing */
+html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
+    opacity: 0;
+    transition: opacity 0.3s ease 0.3s; /* Delay until expansion finishes */
+}
+
+html[data-layout="modern"] .media-card.has-expansion:focus .card-info.inside,
+html[data-layout="modern"] .media-card.has-expansion.focused .card-info.inside {
+    opacity: 1;
+}
+
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1; /* Always visible for items that don't expand */
+}
+
 html[data-layout="modern"] .media-card .card-image {
+    width: 100%;
+    height: 100% !important; /* Force height to match parent .media-card */
+    padding-bottom: 0 !important; /* KILL the global aspect-ratio padding hack */
     border-radius: 24px; /* Premium rounding */
     border: none !important; /* Fix: Remove border entirely to eliminate ghosting */
     box-shadow: none; /* Removed outer shadow as requested */
@@ -84,7 +129,91 @@ html[data-layout="modern"] .media-card.focused .card-image::after {
 }
 
 html[data-layout="modern"] .media-card .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
     border-radius: 24px; /* Match full radius since border is removed */
+    transition: opacity 0.4s ease;
+}
+
+/* Layer Stack: 
+   1. Thumb (Back)
+   2. Poster (Front)
+   3. Thumb Loaded (Top Front on focus)
+*/
+html[data-layout="modern"] .media-card .card-image img.thumb-layer {
+    z-index: 1; /* Behind poster initially */
+    opacity: 0;
+    transform: scale(1.05); /* Start slightly larger for 'burst' effect */
+    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
+                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-layout="modern"] .media-card .card-image img.poster-layer {
+    z-index: 2; /* In front of thumb */
+    opacity: 1;
+    transform: scale(1);
+    transition: opacity 0.2s ease-in, 
+                transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* On focus expansion: 
+   Burst & Recede: Poster shrinks and vanishes, Thumb pops forward.
+*/
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer {
+    opacity: 1;
+    z-index: 3;
+    transform: scale(1); /* Pop forward to normal */
+}
+
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer {
+    opacity: 0;
+    transform: scale(0.95); /* Recede into the background */
+    filter: brightness(0.5); /* Dim as it recedes */
+}
+
+/* Integrated Labels (Inside): Hidden by default for posters, visible for native landscape/square */
+html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
+    opacity: 0;
+    visibility: hidden;
+    z-index: 5;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
+}
+
+/* Reveal inside labels when expanded */
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-info.inside,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-info.inside {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    transition: opacity 0.3s ease 0.25s, visibility 0.3s ease 0.25s; /* Delayed reveal */
+}
+
+/* Native landscape/square cards always show their inside labels */
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Outside Labels (Standard): Hide when card expands into landscape */
+html[data-layout="modern"] .media-card.has-expansion:focus .card-info:not(.inside),
+html[data-layout="modern"] .media-card.has-expansion.focused .card-info:not(.inside) {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1;
+    z-index: 5;
 }
 
 /* =========================================================================
@@ -93,7 +222,13 @@ html[data-layout="modern"] .media-card .card-image img {
 
 html[data-layout="modern"] .media-card .card-info {
     padding: 16px 8px 0 8px;
-    transition: transform 0.3s ease;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1; /* Visible for landscape/square */
+}
+
+/* Hide outside labels for modern posters to keep the grid clean */
+html[data-layout="modern"] .media-card:not(.landscape):not(.square) .card-info:not(.inside) {
+    opacity: 0;
 }
 
 html[data-layout="modern"] .card-title {
@@ -123,6 +258,30 @@ html[data-layout="modern"] .media-card.focused .card-subtitle {
 /* =========================================================================
    Modern Card Overlays (Labels/Badges)
    ========================================================================= */
+
+html[data-layout="modern"] .media-card .card-image .card-image-tint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 35%, rgba(0,0,0,0) 75%);
+    z-index: 4;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
+}
+
+/* Show shadow for expanded cards, native landscape cards, and square cards */
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.landscape .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.square .card-image .card-image-tint {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease 0.2s, visibility 0.3s ease 0.2s; /* Delayed reveal to match expansion */
+}
 
 html[data-layout="modern"] .card-overlay-tint {
     position: absolute;
@@ -159,7 +318,7 @@ html[data-layout="modern"] .card-info.inside {
 
 html[data-layout="modern"] .card-info.inside .card-title {
     font-size: 1.5rem; /* Slightly larger for inside placement */
-    text-shadow: 4px 2px 8px rgba(0, 0, 0, 0.8);
+    text-shadow: 3px 2px 6px rgba(0, 0, 0, 0.8);
     text-align: left;
     /* Allow up to 2 lines for longer titles */
     display: -webkit-box;
@@ -174,7 +333,7 @@ html[data-layout="modern"] .card-info.inside .card-title {
 html[data-layout="modern"] .card-info.inside .card-subtitle {
     font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.8);
-    text-shadow: 4px 2px 8px rgba(0, 0, 0, 0.8);
+    text-shadow: 3px 2px 6px rgba(0, 0, 0, 0.8);
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
