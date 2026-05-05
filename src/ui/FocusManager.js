@@ -115,9 +115,24 @@ class FocusManager {
             this._handleKey('right');
         });
 
+        let lastMouseDownTime = 0;
+
+        document.addEventListener('mousedown', () => {
+            lastMouseDownTime = Date.now();
+        }, { capture: true, passive: true });
+
         eventBus.on('key:enter', (e) => {
             if (this._suspended) return;
-            e?.preventDefault(); // Prevent native button click (we trigger it manually)
+
+            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown 
+            // immediately after 'mousedown'. If we intercept it, we break the native
+            // mouse click sequence and trigger the wrong focused element.
+            // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
+            if (Date.now() - lastMouseDownTime < 500) {
+                return;
+            }
+
+            e?.preventDefault(); // Prevent native button click (we trigger it manually for D-pad)
             this._activate();
         });
 
@@ -128,61 +143,76 @@ class FocusManager {
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
             if (this._focusedElement !== e.target) {
-                // If trap is active, check if focus is escaping
-                if (this._trapStack.length > 0) {
-                    const trapConfig = this._sections.get('__trap__');
-                    if (trapConfig && !trapConfig.container.contains(e.target)) {
-                        // Focus escaped the trap! Force it back
-                        log.warn('Focus escaped trap, forcing back');
-                        const focusables = this._getFocusables('__trap__', true);
-                        if (focusables.length > 0) {
-                            this.focusElement(focusables[0]);
-                        }
-                        return;
-                    }
-                }
-
-                // Explicitly remove .focused class from the previous element
-                if (this._focusedElement) {
-                    this._focusedElement.classList.remove('focused');
-
-                    // Remove generic .focused-row from parent settings items if applicable
-                    const oldSettingItem = this._focusedElement.closest('.setting-item');
-                    if (oldSettingItem) {
-                        oldSettingItem.classList.remove('focused-row');
-                    }
-                }
-
-                this._focusedElement = e.target;
-
-                // Add .focused to the new element so focus styling applies correctly
-                if (this._focusedElement) {
-                    this._focusedElement.classList.add('focused');
-
-                    // Add generic .focused-row to parent settings items to highlight the whole row
-                    const newSettingItem = this._focusedElement.closest('.setting-item');
-                    if (newSettingItem) {
-                        newSettingItem.classList.add('focused-row');
-                    }
-                }
-
-                // Auto-sync active section if the element belongs to one (but not during trap)
-                if (this._trapStack.length === 0) {
-                    const sectionName = this.getSectionForElement(e.target);
-                    if (sectionName && this._activeSection !== sectionName) {
-                        if (this._activeSection) {
-                            this._previousSection = this._activeSection;
-                        }
-                        this._activeSection = sectionName;
-                        eventBus.emit('focus:sectionChanged', sectionName);
-                        log.debug(`Auto-synced active section to "${sectionName}" via focusin`);
-                    }
-                }
-
-                this._updateFocusMemory();
+                this._handleFocusChange(e.target);
             }
         });
+
+        // REMOVED: Proactive mousedown focus sync.
+        // It caused layout shifts and blur() calls during the click sequence,
+        // which caused TV browsers to cancel the click event (the "not opening" bug).
+        // Magic Remote is now handled purely as a native mouse via the Enter bypass above.
+
         log.info('Initialized (v3 Single Source Rewrite)');
+    }
+
+    /**
+     * Internal logic for handling a focus change to a new element.
+     * @param {HTMLElement} target - The element receiving focus
+     * @private
+     */
+    _handleFocusChange(target) {
+        // If trap is active, check if focus is escaping
+        if (this._trapStack.length > 0) {
+            const trapConfig = this._sections.get('__trap__');
+            if (trapConfig && !trapConfig.container.contains(target)) {
+                // Focus escaped the trap! Force it back
+                log.warn('Focus escaped trap, forcing back');
+                const focusables = this._getFocusables('__trap__', true);
+                if (focusables.length > 0) {
+                    this.focusElement(focusables[0]);
+                }
+                return;
+            }
+        }
+
+        // Explicitly remove .focused class from the previous element
+        if (this._focusedElement) {
+            this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items if applicable
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+        }
+
+        this._focusedElement = target;
+
+        // Add .focused to the new element so focus styling applies correctly
+        if (this._focusedElement) {
+            this._focusedElement.classList.add('focused');
+
+            // Add generic .focused-row to parent settings items to highlight the whole row
+            const newSettingItem = this._focusedElement.closest('.setting-item');
+            if (newSettingItem) {
+                newSettingItem.classList.add('focused-row');
+            }
+        }
+
+        // Auto-sync active section if the element belongs to one (but not during trap)
+        if (this._trapStack.length === 0) {
+            const sectionName = this.getSectionForElement(target);
+            if (sectionName && this._activeSection !== sectionName) {
+                if (this._activeSection) {
+                    this._previousSection = this._activeSection;
+                }
+                this._activeSection = sectionName;
+                eventBus.emit('focus:sectionChanged', sectionName);
+                log.debug(`Auto-synced active section to "${sectionName}" via focusin`);
+            }
+        }
+
+        this._updateFocusMemory();
     }
 
     // REMOVED: _onKeyDown (Redundant)

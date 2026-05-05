@@ -415,7 +415,7 @@ class Sidebar extends Component {
         // Logo click handler (Needs explicit binding due to dynamic DOM class mutation)
         const logoHeader = this.el.querySelector('#sidebar-logo-header');
         if (logoHeader) {
-            logoHeader.onclick = () => {
+            logoHeader.onmousedown = () => {
                 if (logoHeader.classList.contains('sidebar-item')) {
                     router.navigate('/settings');
                 }
