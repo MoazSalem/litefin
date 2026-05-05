@@ -135,12 +135,14 @@ export class VirtualCardRow {
         const leftBtn = document.createElement('button');
         leftBtn.className = 'scroll-arrow left-arrow';
         leftBtn.setAttribute('aria-label', 'Scroll left');
+        leftBtn.setAttribute('tabindex', '-1');
         leftBtn.innerHTML =
             '<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>';
 
         const rightBtn = document.createElement('button');
         rightBtn.className = 'scroll-arrow right-arrow';
         rightBtn.setAttribute('aria-label', 'Scroll right');
+        rightBtn.setAttribute('tabindex', '-1');
         rightBtn.innerHTML =
             '<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>';
 

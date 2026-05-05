@@ -59,10 +59,10 @@ class HeroCarousel {
         if ((platformInfo.isWeb || platformInfo.isWebOS) && this._items.length > 1) {
             navArrowsHtml = `
                 <div class="hero-nav-arrows">
-                    <button class="hero-arrow hero-arrow-left" aria-label="Previous">
+                    <button class="hero-arrow hero-arrow-left" aria-label="Previous" tabindex="-1">
                         <svg viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
                     </button>
-                    <button class="hero-arrow hero-arrow-right" aria-label="Next">
+                    <button class="hero-arrow hero-arrow-right" aria-label="Next" tabindex="-1">
                         <svg viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
                     </button>
                 </div>
