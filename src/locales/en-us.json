@@ -528,7 +528,7 @@
     "LayoutDirectionDescription": "Force the application's text reading direction (requires restart)",
     "LayoutMode": "Layout Mode",
     "LayoutModeDescription": "Choose optimized layout for your screen",
-    "LayoutModern": "Modern (later)",
+    "LayoutModern": "Modern (Experimental)",
     "LayoutOrder": "Home Screen Layout",
     "Library": "Library",
     "LibraryPageSizeDescription": "Choose how many items to load at once in the grid view. Low values improve performance on weaker devices.",

@@ -258,10 +258,10 @@ class HomePage extends Page {
 
                     // Merge Resume items first, then Next Up
                     const combined = [...resumeItems, ...nextUpItems];
-                    
+
                     // Deduplicate based on Id
                     const seen = new Set();
-                    const deduplicated = combined.filter(item => {
+                    const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
                         seen.add(item.Id);
                         return true;
@@ -328,8 +328,18 @@ class HomePage extends Page {
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
                 // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
-                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'portrait',
-                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'poster',
+                layout:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos'
+                        ? 'square'
+                        : 'portrait',
+                cardType:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos'
+                        ? 'square'
+                        : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -525,7 +535,12 @@ class HomePage extends Page {
             // Build skeleton interior — title + shimmer cards
             // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
             const skeletonCardCount = landscape ? 5 : 8;
-            const skeletonHtml = CardRenderer.createSkeletonHtml(skeletonCardCount, landscape);
+            const skeletonHtml = CardRenderer.createSkeletonHtml(
+                skeletonCardCount,
+                landscape,
+                descriptor.cardType || 'poster',
+                shouldHideLabels
+            );
 
             sectionEl.innerHTML = `
                 <h2 class="row-title">${descriptor.title}</h2>
@@ -797,7 +812,7 @@ class HomePage extends Page {
         this._focusInitialized = true; // Prevent double-initialization
 
         // [RACE CONDITION FIX] Capture and clear _pendingNavState synchronously!
-        // The render pipeline yields via Promise (microtasks), so if data is cached, 
+        // The render pipeline yields via Promise (microtasks), so if data is cached,
         // the pipeline reaches Step 7 and calls NavigationState BEFORE this requestAnimationFrame
         // can clear the state. That leads to NavigationState firing a 50ms fallback timeout
         // which clobbers our correct focus back to "sidebar" or whatever just as the user
@@ -1077,13 +1092,15 @@ class HomePage extends Page {
                 if (mdblist && mdblist.plugin) {
                     log.info('Enriching hero items with MDBList data...');
                     try {
-                        await Promise.all(items.map(async (item) => {
-                            // Fetch and attach to the item object
-                            // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
-                            // We pass false for includeAwards to optimize for carousel performance.
-                            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                            item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
-                        }));
+                        await Promise.all(
+                            items.map(async (item) => {
+                                // Fetch and attach to the item object
+                                // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
+                                // We pass false for includeAwards to optimize for carousel performance.
+                                const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                                item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                            })
+                        );
                     } catch (err) {
                         log.warn('Enriching hero items failed, continuing with partial data', err);
                     }
@@ -1292,18 +1309,18 @@ class HomePage extends Page {
                                 }
                             } else if (lib.CollectionType === 'playlists') {
                                 // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
-                                // To get a true landscape backdrop for the home page, we fetch the items 
+                                // To get a true landscape backdrop for the home page, we fetch the items
                                 // inside the playlist and grab a backdrop from one of them.
                                 try {
                                     const pResponse = await api.getPlaylistItems(item.Id, {
                                         Limit: 20,
                                         Fields: 'BackdropImageTags'
                                     });
-                                    
+
                                     const pItems = pResponse?.Items || [];
                                     // Shuffle locally so the backdrop changes across reloads
                                     const shuffled = pItems.sort(() => 0.5 - Math.random());
-                                    
+
                                     for (const pItem of shuffled) {
                                         if (pItem.BackdropImageTags?.length > 0) {
                                             resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {

@@ -134,7 +134,7 @@
 .hero-content {
     position: relative;
     z-index: 10;
-    padding: 0 80px;
+    padding: 0 60px;
     max-width: 1600px;
     display: flex;
     flex-direction: column;

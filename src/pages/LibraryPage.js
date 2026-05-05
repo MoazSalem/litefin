@@ -757,7 +757,12 @@ class LibraryPage extends Page {
             // Show a skeleton whose shape matches the active view mode.
             // For forced landscape tab types, ignore viewMode and show landscape skeletons.
             const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
-            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode);
+            const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isLibraryView = this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
+            const shouldHideLabels = (isLibraryView && hideLibraryLabels) || (isLibraryView && isModern);
+
+            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
         try {

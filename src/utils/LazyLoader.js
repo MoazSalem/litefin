@@ -150,6 +150,8 @@ class LazyLoader {
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');
 
@@ -167,7 +169,7 @@ class LazyLoader {
                 const fallbackHtml = `
                     <div class="media-fallback grad-${gradNum}">
                         ${!hideInitials ? `<div class="media-fallback-initials">${initials}</div>` : ''}
-                        <div class="media-fallback-name">${name}</div>
+                        ${!isModern ? `<div class="media-fallback-name">${name}</div>` : ''}
                     </div>
                 `;
                 // Insert at the beginning so overlays (like progress/badges) render on top

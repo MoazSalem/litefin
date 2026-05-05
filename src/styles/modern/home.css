@@ -1,37 +1,19 @@
-/**
- * ============================================================================
- * Litefin Tizen - Modern Home Styles
- * ============================================================================
- * Premium, Apple-inspired layout overrides for the HomePage.
- * Features:
- *   - High-radius cards (24px)
- *   - Atmospheric row headers
- *   - Soft focus glows and spring scales
- * ============================================================================
- */
-
-html[data-layout="modern"] .home-page .page-content {
-    /* More space at the top when hero is absent or for first row */
-    padding-top: 20px;
-    background: var(--jf-background);
-}
-
+/* =========================================================================
+   Modern Home Layout
+   ========================================================================= */
 html[data-layout="modern"] .home-rows {
-    padding: 20px 0 80px 0;
+    padding-top: 18px;
+    padding-bottom: var(--row-padding-bottom, 30px);
 }
 
 /* =========================================================================
    Modern Row Headers
    ========================================================================= */
 
-html[data-layout="modern"] .media-row {
-    margin-bottom: 54px; /* More breathing room */
-}
-
 html[data-layout="modern"] .row-title {
     font-size: 2.4rem;
     font-weight: 800;
-    padding: 0 120px;
+    padding: 0 60px;
     color: var(--jf-text-primary);
     letter-spacing: -0.5px;
     /* Subtle text shadow for premium feel */
@@ -50,7 +32,7 @@ html[data-layout="modern"] .media-row:focus-within .row-title {
    ========================================================================= */
 
 html[data-layout="modern"] .media-card {
-    width: 250px; /* Footprint: 250+40=290 */
+    width: 225px; /* Height: 225 * 1.5 = 337.5px */
     margin-right: 40px;
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
@@ -59,7 +41,11 @@ html[data-layout="modern"] .media-card {
 }
 
 html[data-layout="modern"] .media-card.landscape {
-    width: 440px; /* Footprint remains 440+28=468 */
+    width: 600px; /* Height: 600 * 0.5625 = 337.5px */
+}
+
+html[data-layout="modern"] .media-card.square {
+    width: 338px; /* Height: 338 * 1 = 338px */
 }
 
 html[data-layout="modern"] .media-card .card-image {
@@ -120,20 +106,18 @@ html[data-layout="modern"] .card-title {
 html[data-layout="modern"] .card-subtitle {
     font-size: 1.1rem;
     font-weight: 500;
-    margin-top: 4px;
+    margin-top: 0px;
     color: rgba(255, 255, 255, 0.5);
 }
 
 html[data-layout="modern"] .media-card:focus .card-title,
 html[data-layout="modern"] .media-card.focused .card-title {
     color: #fff;
-    transform: translateY(-4px);
 }
 
 html[data-layout="modern"] .media-card:focus .card-subtitle,
 html[data-layout="modern"] .media-card.focused .card-subtitle {
     color: rgba(255, 255, 255, 0.7);
-    transform: translateY(-4px);
 }
 
 /* =========================================================================
@@ -159,14 +143,52 @@ html[data-layout="modern"] .media-card.focused .card-overlay-tint {
     background: linear-gradient(0deg, rgba(0, 0, 0, .9) 0, rgba(0, 0, 0, .5) 25%, transparent 60%) !important;
 }
 
-html[data-layout="modern"] .card-overlay-label {
+html[data-layout="modern"] .card-overlay-label,
+html[data-layout="modern"] .card-info.inside {
     position: absolute;
-    bottom: 20px;
-    left: 20px;
+    bottom: 40px; /* Positioned above the progress bar (which ends at ~24px) */
+    left: 30px;
+    right: 30px; /* NEW: Constrain width so text wraps */
     top: auto;
-    right: auto;
     transform: none;
+    padding: 0;
+    z-index: 10;
     text-align: left;
+    pointer-events: none;
+}
+
+html[data-layout="modern"] .card-info.inside .card-title {
+    font-size: 1.5rem; /* Slightly larger for inside placement */
+    text-shadow: 4px 2px 8px rgba(0, 0, 0, 0.8);
+    text-align: left;
+    /* Allow up to 2 lines for longer titles */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
+    max-height: 3.6rem; /* 2 lines * 1.5rem * 1.2 */
+    white-space: normal; /* Override classic nowrap */
+}
+
+html[data-layout="modern"] .card-info.inside .card-subtitle {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.8);
+    text-shadow: 4px 2px 8px rgba(0, 0, 0, 0.8);
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+}
+
+html[data-layout="modern"] .card-info.inside .card-meta {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+html[data-layout="modern"] .card-overlay-label {
     width: 85%;
     font-size: 1.8rem; 
     font-weight: 800;
@@ -208,11 +230,11 @@ html[data-layout="modern"] .media-card.focused .card-overlay-label {
    ========================================================================= */
 
 html[data-layout="modern"] .card-progress-container {
-    bottom: 16px;
+    bottom: 20px;
     left: 32px;
     right: 32px;
     height: 8px;
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.6);
     border-radius: 10px;
     overflow: hidden;
 }
@@ -241,7 +263,7 @@ html[data-layout="modern"] .count-badge,
 html[data-layout="modern"] .played-badge,
 html[data-layout="modern"] .episode-badge {
     position: absolute;
-    top: 18px;
+    top: 22px;
     z-index: 5;
     background: rgba(0, 0, 0, 0.45);
     -webkit-backdrop-filter: blur(12px);
@@ -265,7 +287,7 @@ html[data-layout="modern"] .media-card.focused .episode-badge {
 }
 
 html[data-layout="modern"] .count-badge {
-    right: 18px;
+    right: 22px;
     min-width: 36px;
     height: 36px;
     padding: 0 8px;
@@ -278,7 +300,7 @@ html[data-layout="modern"] .count-badge {
 }
 
 html[data-layout="modern"] .played-badge {
-    right: 18px;
+    right: 22px;
     width: 36px;
     height: 36px;
     border-radius: 24px;
@@ -288,10 +310,10 @@ html[data-layout="modern"] .played-badge {
 }
 
 html[data-layout="modern"] .episode-badge {
-    left: 18px;
+    left: 22px;
     padding: 5px 12px;
     border-radius: 10px;
-    font-size: 1rem;
+    font-size: 1.2rem;
     letter-spacing: 0.5px;
     /* Subtle glow for episode context */
     border-color: rgba(255, 255, 255, 0.25);

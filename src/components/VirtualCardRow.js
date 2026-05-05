@@ -33,12 +33,19 @@ export class VirtualCardRow {
 
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
-        // Modern override: 440px / 260px with 28px margin
+        // Modern override: 600px / 260px with 28px margin
         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
         if (isModern) {
-            this.itemWidth = this.isLandscape ? 440 : 250; // Portrait reduced for better spacing
+            // Target Height: 600px * 56.25% (16:9) = 337.5px
+            if (this.isLandscape) {
+                this.itemWidth = 600;
+            } else if (this.cardType === 'square' || this.cardType === 'artist') {
+                this.itemWidth = 338; // 338px * 100% = 338px height
+            } else {
+                this.itemWidth = 225; // 225px * 150% = 337.5px height
+            }
             this.itemMargin = 40; // Increased gap for premium feel
-            this.sidePadding = 120; // Clears collapsed sidebar (100px) with 20px buffer
+            this.sidePadding = 60; // Match classic alignment (60px)
         } else {
             this.itemWidth = this.isLandscape ? 400 : 240;
             this.itemMargin = 24;
@@ -51,7 +58,7 @@ export class VirtualCardRow {
 
         // Set the total width of the track to simulate all items existing
         // Add sidePadding on left and right from layout.css
-        const totalWidth = this.totalItems * this.totalItemWidth + (this.sidePadding * 2);
+        const totalWidth = this.totalItems * this.totalItemWidth + this.sidePadding * 2;
         this.track.style.width = `${totalWidth}px`;
         // Ensure track is relative for absolute positioned children
         this.track.style.position = 'relative';
@@ -96,11 +103,14 @@ export class VirtualCardRow {
             dummyContent.appendChild(imageRatioDiv);
 
             // Emulate .card-info
-            if (!this.hideLabels) {
+            const isIntegratedModern = isModern && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
+            const isPortraitModern = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+
+            if (!this.hideLabels && !isIntegratedModern && !isPortraitModern) {
                 const infoDiv = document.createElement('div');
                 const infoPadding = isModern ? '16px 8px 0 8px' : '12px 4px 0 4px';
                 infoDiv.style.padding = infoPadding;
-                
+
                 if (isModern) {
                     // Modern: 1.6rem title (1.2 line-height) + 4px margin + 1.2rem subtitle
                     infoDiv.innerHTML = `<div style="height: 1.92rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.2rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
@@ -193,7 +203,7 @@ export class VirtualCardRow {
         let start, end;
 
         if (this.totalItems <= this.visibleCount) {
-            // If the row is small enough to fit within the visible bounds entirely, 
+            // If the row is small enough to fit within the visible bounds entirely,
             // just render everything simultaneously so bounds clipping is never an issue.
             start = 0;
             end = this.totalItems - 1;
@@ -406,7 +416,7 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getTrackWidth() {
-        return this.totalItems * this.totalItemWidth + (this.sidePadding * 2); // Matches totalWidth calculation in constructor
+        return this.totalItems * this.totalItemWidth + this.sidePadding * 2; // Matches totalWidth calculation in constructor
     }
 
     /**

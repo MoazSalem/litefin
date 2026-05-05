@@ -24,6 +24,7 @@ class CardRenderer {
      */
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null } = options;
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
@@ -161,8 +162,6 @@ class CardRenderer {
                     });
                 }
             } else if (type === 'library') {
-                const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
-
                 // Dynamic Library Thumbs (from HomePage pre-fetch)
                 if (item._dynamicThumbUrl) {
                     imageUrl = item._dynamicThumbUrl;
@@ -418,11 +417,21 @@ class CardRenderer {
                 } else {
                     // Next Up Style (Keep Series Name)
                     titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-                    subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                    // Modern: Episode code is in the badge, just show name
+                    // Classic: Show "SxxExx - Name"
+                    if (isModern) {
+                        subtitleText = i18n.ensureBiDi(item.Name);
+                    } else {
+                        subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                    }
                 }
             } else {
-                // Poster Style
-                subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                // Poster Style: Episode code in badge for modern
+                if (isModern) {
+                    subtitleText = '';
+                } else {
+                    subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                }
             }
         } else if (type === 'season') {
             if (item.IndexNumber === 0) {
@@ -485,7 +494,7 @@ class CardRenderer {
             : CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials });
         const finalContextType = contextType || item.Type;
 
-        const isHiddenLibraryLabel = type === 'library' && storage.getItem('pref:hideLibraryLabels') === 'true';
+        const isHiddenLibraryLabel = type === 'library' && (storage.getItem('pref:hideLibraryLabels') === 'true' || isModern);
 
         // --- 5. Optional Meta Row (list view) ---
         // showMeta injects an additional row with rating + year + runtime for
@@ -508,6 +517,14 @@ class CardRenderer {
             }
         }
 
+        const isSquare = type === 'square' || type === 'artist';
+        const isPortrait = !isLandscape && !isSquare;
+
+        // Integrated labels for landscape/square in modern
+        const moveInfoInside = isModern && (isLandscape || isSquare) && !isHiddenLibraryLabel;
+        // Hide labels for portrait in modern
+        const hideLabelsAlt = isModern && isPortrait && !isHiddenLibraryLabel;
+
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
@@ -521,9 +538,30 @@ class CardRenderer {
                     ${imagePart}
                     ${progressHtml}
                     ${!options.showMeta ? badgeContainer : ''}
+                    ${moveInfoInside ? '<div class="card-overlay-tint"></div>' : ''}
+                    ${
+                        moveInfoInside
+                            ? `
+                    <div class="card-info inside">
+                        ${
+                            options.showMeta
+                                ? `
+                        <div class="card-title-row">
+                            <div class="card-title">${titleText}</div>
+                            ${badgeContainer}
+                        </div>
+                        `
+                                : `<div class="card-title">${titleText}</div>`
+                        }
+                        ${subtitleText ? `<div class="card-subtitle">${subtitleText}</div>` : ''}
+                        ${metaHtml}
+                    </div>
+                    `
+                            : ''
+                    }
                 </div>
                 ${
-                    !isHiddenLibraryLabel
+                    !isHiddenLibraryLabel && !moveInfoInside && !hideLabelsAlt
                         ? `
                 <div class="card-info">
                     ${
@@ -578,11 +616,12 @@ class CardRenderer {
     static getFallbackHtml(item, isLandscape, options = {}) {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
                 ${!hideInitials ? `<div class="media-fallback-initials">${data.initials}</div>` : ''}
-                <div class="media-fallback-name">${data.name}</div>
+                ${!isModern ? `<div class="media-fallback-name">${data.name}</div>` : ''}
             </div>
         `;
     }
@@ -597,7 +636,7 @@ class CardRenderer {
      * @param {string}  [viewMode='poster'] - Active view mode identifier
      * @returns {string} HTML string
      */
-    static createSkeletonHtml(count = 10, isLandscape = false, viewMode = 'poster') {
+    static createSkeletonHtml(count = 10, isLandscape = false, viewMode = 'poster', hideLabels = false) {
         // Determine the CSS class suffix that matches the real card's layout
         let cardClass = 'media-card skeleton';
         if (isLandscape || viewMode === 'thumb') {
@@ -615,27 +654,39 @@ class CardRenderer {
 
         let html = '';
         for (let i = 0; i < count; i++) {
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isSquare = viewMode === 'square' || viewMode === 'artist';
+            const isIntegratedModern = isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
+            const isPortraitModern = isModern && !isLandscape && !isSquare;
+
             if (viewMode === 'list') {
                 // List skeleton: horizontal strip
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
+                    ${!hideLabels ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
                         <div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>
                     </div>
+                    ` : ''}
                 </div>
             `;
             } else {
+                const infoHtml = !hideLabels ? `
+                    <div class="card-info${isIntegratedModern ? ' inside' : ''}">
+                        <div class="card-title skeleton-line skeleton-shimmer w-80${isIntegratedModern ? '' : ' m-auto'}"></div>
+                        ${isIntegratedModern ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4"></div>` : ''}
+                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>
+                    </div>
+                ` : '';
+
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer">
-                        <!-- Space reserved by aspect-ratio padding -->
+                        ${isIntegratedModern ? infoHtml : '<!-- Space reserved by aspect-ratio padding -->'}
                     </div>
-                    <div class="card-info">
-                        <div class="card-title skeleton-line skeleton-shimmer w-80 m-auto"></div>
-                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 m-auto mt-8"></div>
-                    </div>
+                    ${(!hideLabels && !isIntegratedModern && !isPortraitModern) ? infoHtml : ''}
                 </div>
             `;
             }
