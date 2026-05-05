@@ -114,7 +114,44 @@ class WebOSAdapter {
         // 4. Load Device Info
         this._loadDeviceInfo();
 
+        // 5. Setup wheel amplification for Magic Remote
+        this._setupWheelHandler();
+
         log.info('WebOSAdapter initialized');
+    }
+
+    /**
+     * WebOS Magic Remote scroll wheel is notoriously slow and "resistive".
+     * This handler intercepts the native wheel event and amplifies the delta
+     * to make vertical scrolling feel responsive and fluid.
+     * @private
+     */
+    _setupWheelHandler() {
+        window.addEventListener('wheel', (e) => {
+            // Only handle vertical scrolling
+            if (Math.abs(e.deltaY) < 0.1) return;
+
+            // Find the nearest scrollable container
+            const container = e.target.closest('.page-content, .modal-options, .filter-main, .sidebar-libraries-wrapper, .settings-content');
+            
+            if (container) {
+                let delta = e.deltaY;
+
+                // Normalize delta based on deltaMode (0=pixels, 1=lines, 2=pages)
+                if (e.deltaMode === 1) {
+                    delta *= 40; // Approx line height
+                } else if (e.deltaMode === 2) {
+                    delta *= 800; // Approx page height
+                }
+
+                // Amplify the delta for WebOS responsiveness
+                const multiplier = 3.0;
+                container.scrollTop += delta * multiplier;
+                
+                // Prevent native slow scroll
+                e.preventDefault();
+            }
+        }, { passive: false });
     }
 
     /**
