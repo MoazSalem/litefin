@@ -16,6 +16,7 @@ import { router } from '../core/Router.js';
 import { storage } from '../utils/StorageService.js';
 import { imageService } from '../utils/ImageService.js';
 import { shouldShowScore } from '../utils/visibility.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 const log = logger.create('HeroCarousel');
 
@@ -54,6 +55,20 @@ class HeroCarousel {
         const isAnimationEnabled = storage.getItem('pref:heroCarouselIndicatorAnimation') !== 'false';
         const intervalInSeconds = (this._autoScrollInterval / 1000).toFixed(1) + 's';
 
+        let navArrowsHtml = '';
+        if ((platformInfo.isWeb || platformInfo.isWebOS) && this._items.length > 1) {
+            navArrowsHtml = `
+                <div class="hero-nav-arrows">
+                    <button class="hero-arrow hero-arrow-left" aria-label="Previous">
+                        <svg viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>
+                    </button>
+                    <button class="hero-arrow hero-arrow-right" aria-label="Next">
+                        <svg viewBox="0 0 24 24" width="36" height="36"><path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>
+                    </button>
+                </div>
+            `;
+        }
+
         // Apply compact to the container to manage external margins (Banner Mode)
         // Use with-zoom to conditionally apply the focus transform
         // Use no-indicator-animation to disable the progress bar fill
@@ -76,6 +91,7 @@ class HeroCarousel {
                             : ''
                     }
                 </div>
+                ${navArrowsHtml}
             </div>
         `;
     }
@@ -265,6 +281,21 @@ class HeroCarousel {
         // Initial check if we are already focused (though unlikely during init)
         if (this._container.classList.contains('focused')) {
             this._handleFocus();
+        }
+
+        if (platformInfo.isWeb || platformInfo.isWebOS) {
+            const leftBtn = this._container.querySelector('.hero-arrow-left');
+            const rightBtn = this._container.querySelector('.hero-arrow-right');
+            if (leftBtn && rightBtn) {
+                leftBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.previous();
+                });
+                rightBtn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    this.next();
+                });
+            }
         }
 
         // Start auto-scroll

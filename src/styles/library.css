@@ -1598,6 +1598,7 @@ html[data-layout-tier="ultra-legacy"] .library-row {
     transform: scale(1.08);
     will-change: transform;
     overflow: hidden !important;
+    border-color: var(--jf-action-btn-active-border) !important;
 }
 
 /* Icon wrapper — scaled to a consistent size; margin-bottom provides icon-to-label gap */
