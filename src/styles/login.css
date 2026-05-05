@@ -275,6 +275,10 @@ body.app-splash-active .loading-section .loading-spinner {
     color: var(--jf-text-primary);
 }
 
+.login-page .btn:hover{
+   border: 4px solid var(--jf-accent);
+}
+
 .login-error {
     color: var(--jf-error);
     margin-top: 16px;
@@ -479,6 +483,13 @@ html[data-layout-tier="ultra-legacy"] .user-card {
     font-weight: 600;
     color: var(--jf-accent);
     background: var(--jf-surface);
+}
+
+.user-card:hover{
+   border: 4px solid var(--jf-accent);
+   will-change: transform;
+   -webkit-transform: scale(1.07);
+   transform: scale(1.07);
 }
 
 .user-name {
