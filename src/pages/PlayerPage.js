@@ -2347,7 +2347,6 @@ class PlayerPage extends Page {
             log.warn('Error during stop:', error);
         }
 
-        // ----------------------------------------------------------------
         // If clearChain is true (user pressed Back), remove the auto-chain
         // flag so DetailsPage.onInit() does not launch the remote trailer.
         // If clearChain is false (Next/chain exit), leave the flag so the
@@ -2361,8 +2360,28 @@ class PlayerPage extends Page {
         // but kept for potential future use (e.g., analytics, remote control).
         eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'userStop' });
 
-        // Navigate back to the Details page
-        router.back();
+        // ----------------------------------------------------------------
+        // Navigation Override: Ensure we return to the Details page of the
+        // item that was LAST playing, not the one that started the session.
+        //
+        // This is critical for series, collections, and playlists where the
+        // user may skip multiple tracks. Returning to the metadata page of
+        // the item they were just watching is more intuitive than returning
+        // to the initial entry point.
+        // ----------------------------------------------------------------
+        if (this._item && this._item.Id && !this._item.isIntro && this._item.Type !== 'TvChannel' && this._item.Type !== 'Trailer') {
+            const detailsPath = `/details/${this._item.Id}`;
+            
+            // The PlayerPage always replaces the page that launched it in history.
+            // When exiting, we replace the Player entry with the Details page of 
+            // whatever was LAST playing. This prevents history bloat and ensures 
+            // the Back button takes the user to where they started (Home/Library).
+            // We use isBack: true to trigger the correct "slide-out" animation.
+            router.navigate(detailsPath, { replace: true, isBack: true });
+        } else {
+            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            router.back();
+        }
     }
 
     // ========================================================================

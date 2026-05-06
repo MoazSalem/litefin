@@ -571,7 +571,7 @@ class App {
                 return;
             }
 
-            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}`);
+            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}`, { replace: true });
         });
 
         // ================================================================

@@ -95,7 +95,11 @@ class Router {
      * @param {Object} [options.state] - Additional state to pass to the page
      */
     navigate(path, options = {}) {
-        const { replace = false, state: pageState = null } = options;
+        const { replace = false, state: pageState = null, isBack = false } = options;
+
+        if (isBack) {
+            this._isBackNavigation = true;
+        }
 
         // Store state for the incoming page
         if (pageState) {
@@ -178,6 +182,7 @@ class Router {
         this._history = [];
         this.navigate(path, { replace: true });
     }
+
 
     /**
      * Get current route path
