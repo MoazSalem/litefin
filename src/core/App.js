@@ -191,7 +191,9 @@ class App {
             this.container.insertAdjacentHTML(
                 'afterbegin',
                 `
-                <div id="sidebar-container"></div>
+                <div id="sidebar-container">
+                    <div class="sidebar-hover-trigger"></div>
+                </div>
                 <div id="page-container" class="page-container"></div>
             `
             );

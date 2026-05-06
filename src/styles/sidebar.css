@@ -69,10 +69,34 @@
     transition: none !important;
 }
 
-/* Sidebar Mode: Always Hidden */
+/* Sidebar Mode: Always Hidden - Completely off-screen by default */
 body.sidebar-mode-hidden .sidebar:not(.expanded) {
     -webkit-transform: translate3d(-100%, 0, 0);
     transform: translate3d(-100%, 0, 0);
+}
+
+/* 
+ * Magic Cursor Reveal: Even if hidden, hovering the trigger zone or the 
+ * sidebar itself (once it starts peaking) will slide it fully into view.
+ * We use high specificity here to override the hidden state without !important,
+ * and only target non-expanded state to prevent animation re-triggering.
+ */
+body.sidebar-mode-hidden .sidebar-hover-trigger:hover ~ .sidebar:not(.expanded),
+body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
+/* Invisible 50px strip on the left edge of the screen to trigger the sidebar */
+.sidebar-hover-trigger {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 50px;
+    z-index: 199; /* Just below .sidebar (200) to avoid re-triggering when sidebar is visible */
+    background: transparent;
+    pointer-events: all;
 }
 
 /* Sliding Focus Indicator - Snappy, GPU-accelerated highlight */

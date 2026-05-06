@@ -21,6 +21,19 @@
     transform: translate3d(0, 0, 0) !important;
 }
 
+/* Sidebar Hover Trigger for RTL - Flip to the right edge */
+[dir="rtl"] .sidebar-hover-trigger {
+    left: auto;
+    right: 0;
+}
+
+/* Hover reveal logic for RTL - matching the specificity and logic of the main sheet */
+[dir="rtl"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover ~ .sidebar:not(.expanded),
+[dir="rtl"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+}
+
 
 /* ================== SETTINGS ================== */
 [dir="rtl"] .settings-sidebar {
