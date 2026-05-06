@@ -371,12 +371,47 @@ class Sidebar extends Component {
         this.el.classList.toggle('no-animation', disabled);
     }
 
+    /**
+     * Bind interaction handlers to a sidebar item.
+     * Uses onmousedown for snappy mouse/pointer response and onclick for D-pad.
+     * Includes a 400ms debounce to prevent double-activation on WebOS Magic Remote,
+     * where a pointer click synthesizes a mousedown followed by a key:enter.
+     * @param {HTMLElement} el - Item element
+     * @param {Function} callback - Activation handler
+     * @private
+     */
+    _bindItem(el, callback) {
+        if (!el) return;
+
+        let lastActiveTime = 0;
+        const handleActivate = (e) => {
+            const now = Date.now();
+            if (now - lastActiveTime < 400) return;
+            lastActiveTime = now;
+
+            callback(e);
+        };
+
+        // Pointer/Magic Remote: snap to mousedown for zero lag
+        el.onmousedown = (e) => {
+            if (e.button === 0) { // Left click only
+                handleActivate(e);
+            }
+        };
+
+        // D-pad/Synthetic: fallback to onclick
+        el.onclick = (e) => {
+            handleActivate(e);
+        };
+    }
+
     _bindEvents() {
-        // Expand on focus - Use MutationObserver since FocusManager disables native focus
-        // and manages the .focused class manually.
-        if (window.MutationObserver) {
-            this._focusObserver = new MutationObserver(() => {
-                const focusedItem = this.el.querySelector('.sidebar-item.focused');
+        if (!this.el) return;
+
+        // MutationObserver to watch for focus changes (used to expand/collapse sidebar)
+        if (!this._focusObserver) {
+            this._focusObserver = new MutationObserver((mutations) => {
+                const focusedItem = this.el.querySelector('.focused');
                 const hasFocus = !!focusedItem;
 
                 if (focusedItem) {
@@ -412,22 +447,17 @@ class Sidebar extends Component {
             }
         });
 
-        // Logo click handler (Needs explicit binding due to dynamic DOM class mutation)
-        const logoHeader = this.el.querySelector('#sidebar-logo-header');
-        if (logoHeader) {
-            logoHeader.onmousedown = () => {
-                if (logoHeader.classList.contains('sidebar-item')) {
-                    router.navigate('/settings');
-                }
-            };
-        }
+        // Logo click handler
+        this._bindItem(this.el.querySelector('#sidebar-logo-header'), () => {
+            router.navigate('/settings');
+        });
 
         // Navigation Clicks for other standard items
         const items = this.el.querySelectorAll('.sidebar-item');
         items.forEach((item) => {
             if (item.id === 'sidebar-logo-header') return; // Handled above
 
-            item.onclick = () => {
+            this._bindItem(item, () => {
                 const path = item.dataset.path;
                 if (path) {
                     if (path === '/home') {
@@ -439,18 +469,18 @@ class Sidebar extends Component {
                     // Clicking the user profile tile opens the "Who's Watching" profiles screen.
                     // From there the user can switch profiles, add a user, or switch servers.
                     router.navigate('/profiles');
-                } else if (item.id === 'sidebar-logout') {
-                    // AuthManager.logout() handles the routing based on remaining sessions:
-                    //   • Other sessions remain → auth:switchToProfiles → App.js routes to /profiles
-                    //   • No sessions remain    → auth:logout           → App.js routes to /login
-                    // auth.logout();
                 } else if (item.id === 'sidebar-syncplay') {
                     // Open the SyncPlay group menu overlay (works from any screen)
                     syncPlayGroupMenu.open();
                 } else if (item.id === 'sidebar-random') {
                     this._onRandomClick();
+                } else if (item.id === 'sidebar-logout') {
+                    // AuthManager.logout() handles the routing based on remaining sessions:
+                    //   • Other sessions remain → auth:switchToProfiles → App.js routes to /profiles
+                    //   • No sessions remain    → auth:logout           → App.js routes to /login
+                    // auth.logout();
                 }
-            };
+            });
         });
 
         // Sync indicator during scrolling
@@ -524,7 +554,7 @@ class Sidebar extends Component {
                     <span class="item-text">${lib.Name}</span>
                 `;
 
-                btn.onclick = () => router.navigate(buttonPath);
+                this._bindItem(btn, () => router.navigate(buttonPath));
 
                 sidebarContent.appendChild(btn);
             });
