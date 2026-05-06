@@ -648,61 +648,6 @@ export class JellyfinPlayer extends EventEmitter {
                  log.debug('MediaSource[0] keys:', Object.keys(playbackInfo.MediaSources[0]));
             }
 
-            /*
-             * Audio items (Music, Audiobooks) never have chapters in Jellyfin's
-             * sense — skip the chapter fetch entirely to avoid a wasted API call.
-             * Video items still go through the normal 3-step chapter resolution.
-             */
-            const isAudioItem = options.item?.MediaType === 'Audio' ||
-                                 options.item?.Type === 'AudioBook';
-
-            let chapters = [];
-
-            if (!isAudioItem) {
-                // Chapter Recovery Strategy
-                // 1. Check if passed item has chapters (from options.item passed by PlayerPage)
-                chapters = options.item?.Chapters || [];
-
-                if (chapters.length > 0) {
-                    log.info('Using chapters from item object:', chapters.length);
-                } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
-                    // 2. Check PlaybackInfo
-                    chapters = playbackInfo.Chapters;
-                    log.info('Using chapters from PlaybackInfo:', chapters.length);
-                } else {
-                    // 3. Fallback: Fetch item details to get chapters
-                    log.info('Chapters missing. Fetching item details...');
-                    try {
-                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks' });
-                        if (itemDetails && itemDetails.Chapters) {
-                            chapters = itemDetails.Chapters;
-                            log.info('Chapters fetched from API:', chapters.length);
-                        } else {
-                            log.info('No chapters found in API response.');
-                        }
-                        // Also back-fill RunTimeTicks onto options.item if it was missing
-                        // so the mediaSource back-fill below can pick it up.
-                        if (itemDetails?.RunTimeTicks && options.item && !options.item.RunTimeTicks) {
-                            log.info(`[Duration] Back-filling RunTimeTicks onto item from chapter fetch: ${itemDetails.RunTimeTicks}`);
-                            options.item.RunTimeTicks = itemDetails.RunTimeTicks;
-                        }
-                    } catch (e) {
-                        log.warn('Failed to fetch item details for chapters:', e);
-                    }
-                }
-            } else {
-                log.debug('Audio item — skipping chapter fetch');
-            }
-
-            this._chapters = chapters;
-            log.debug('Final Chapters:', this._chapters.length);
-
-            if (this._chapters.length > 0) {
-                log.info('Chapters loaded:', this._chapters.length);
-                this.emit('chaptersloaded', { chapters: this._chapters });
-            } else {
-                this.emit('chaptersloaded', { chapters: [] });
-            }
 
             if (!playbackInfo || !playbackInfo.MediaSources?.length) {
                 log.error('No media sources in PlaybackInfo');
@@ -871,6 +816,47 @@ export class JellyfinPlayer extends EventEmitter {
 
             this._currentMediaSource = mediaSource;
             this._currentItem = options.item || { Id: options.itemId };
+
+            // ================================================================
+            // Chapter Resolution
+            //
+            // We resolve chapters after establishing _currentMediaSource and
+            // _currentItem. This prevents race conditions where the 'chaptersloaded'
+            // event triggers an OSD render that tries to read duration from a
+            // null media source.
+            // ================================================================
+            const isAudioItemForChapters = this._currentItem?.MediaType === 'Audio' ||
+                                 this._currentItem?.Type === 'AudioBook';
+
+            let chapters = [];
+            if (!isAudioItemForChapters) {
+                chapters = this._currentItem?.Chapters || [];
+
+                if (chapters.length > 0) {
+                    log.info('Using chapters from item object:', chapters.length);
+                } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
+                    chapters = playbackInfo.Chapters;
+                    log.info('Using chapters from PlaybackInfo:', chapters.length);
+                } else {
+                    log.info('Chapters missing. Fetching item details...');
+                    try {
+                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks' });
+                        if (itemDetails?.Chapters) {
+                            chapters = itemDetails.Chapters;
+                            log.info('Chapters fetched from API:', chapters.length);
+                        }
+                        // Back-fill RunTimeTicks if missing
+                        if (itemDetails?.RunTimeTicks && !this._currentItem.RunTimeTicks) {
+                            this._currentItem.RunTimeTicks = itemDetails.RunTimeTicks;
+                        }
+                    } catch (e) {
+                        log.warn('Failed to fetch item details for chapters:', e);
+                    }
+                }
+            }
+
+            this._chapters = chapters;
+            this.emit('chaptersloaded', { chapters: this._chapters });
 
             // ================================================================
             // Duration Resolution — back-fill from item metadata
@@ -1846,11 +1832,13 @@ export class JellyfinPlayer extends EventEmitter {
             const hlsDur = this._backend.getHlsManifestDuration();
             if (hlsDur !== null) {
                 log.debug(`[Duration] Using HLS manifest duration: ${hlsDur.toFixed(1)}s`);
+                
+                const ticks = Math.floor(hlsDur * 10000000);
                 // Cache it on the MediaSource so subsequent calls skip this lookup
                 if (this._currentMediaSource) {
-                    this._currentMediaSource.RunTimeTicks = Math.floor(hlsDur * 10000000);
+                    this._currentMediaSource.RunTimeTicks = ticks;
                 }
-                return this._currentMediaSource.RunTimeTicks;
+                return ticks;
             }
         }
 
