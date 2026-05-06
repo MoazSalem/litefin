@@ -192,7 +192,7 @@ class App {
                 'afterbegin',
                 `
                 <div id="sidebar-container">
-                    <div class="sidebar-hover-trigger"></div>
+                    <!-- Order swapped: Sidebar first, then trigger to allow CSS + sibling selector -->
                 </div>
                 <div id="page-container" class="page-container"></div>
             `
@@ -204,6 +204,9 @@ class App {
         // for focus registration, but we'll have it be invisible until the loading sequence completes.
         this.sidebar = new Sidebar();
         this.sidebar.mount(document.getElementById('sidebar-container'));
+
+        // Append trigger AFTER sidebar so we can use sibling selectors in CSS
+        document.getElementById('sidebar-container').insertAdjacentHTML('beforeend', '<div class="sidebar-hover-trigger"></div>');
 
         // Hide the sidebar at the CSS level so the GPU layer doesn't render it over the splash screen.
         // We use visibility:hidden + pointer-events:none instead of display:none so the

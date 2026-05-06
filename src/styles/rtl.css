@@ -28,10 +28,15 @@
 }
 
 /* Hover reveal logic for RTL - matching the specificity and logic of the main sheet */
-[dir="rtl"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover ~ .sidebar:not(.expanded),
+[dir="rtl"] body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 [dir="rtl"] body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
+}
+
+[dir="rtl"] .sidebar.expanded + .sidebar-hover-trigger,
+[dir="rtl"] .sidebar:hover + .sidebar-hover-trigger {
+    pointer-events: none !important;
 }
 
 

@@ -81,10 +81,19 @@ body.sidebar-mode-hidden .sidebar:not(.expanded) {
  * We use high specificity here to override the hidden state without !important,
  * and only target non-expanded state to prevent animation re-triggering.
  */
-body.sidebar-mode-hidden .sidebar-hover-trigger:hover ~ .sidebar:not(.expanded),
+body.sidebar-mode-hidden .sidebar-hover-trigger:hover + .sidebar:not(.expanded),
 body.sidebar-mode-hidden .sidebar:hover:not(.expanded) {
     -webkit-transform: translate3d(0, 0, 0);
     transform: translate3d(0, 0, 0);
+}
+
+/* 
+ * Disable trigger once sidebar is active to prevent animation re-triggering loops 
+ * when the mouse is moving during the transition.
+ */
+.sidebar.expanded + .sidebar-hover-trigger,
+.sidebar:hover + .sidebar-hover-trigger {
+    pointer-events: none !important;
 }
 
 /* Invisible 50px strip on the left edge of the screen to trigger the sidebar */

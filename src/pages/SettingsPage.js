@@ -467,22 +467,18 @@ class SettingsPage extends Page {
                 </div>
 
                 <!-- controls Section -->
-                <h3 class="setting-section-title" data-i18n="controls">${i18n.t('controls')}</h3>                
-
-                <div class="setting-item">
+                <h3 class="setting-section-title" data-i18n="controls">${i18n.t('controls')}</h3>                <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="FocusOnHover">${i18n.t('FocusOnHover') || 'Focus on Hover'}</span>
-                        <span class="setting-description" data-i18n="FocusOnHoverDescription">${i18n.t('FocusOnHoverDescription') || 'Automatically focus cards and buttons when hovering over them with the mouse.'}</span>
+                        <span class="setting-name" data-i18n="HoverScrollNavigation">${i18n.t('HoverScrollNavigation') || 'Scroll Navigation'}</span>
+                        <span class="setting-description" data-i18n="HoverScrollNavigationDescription">${i18n.t('HoverScrollNavigationDescription') || 'Traverse vertical lists and rows using the scroll wheel or magic remote wheel.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:focusOnHover') === 'true' ? 'active' : ''}" 
-                                id="toggle-focus-on-hover" 
-                                data-setting="focusOnHover"
+                        <button class="toggle-switch ${storage.getItem('pref:hoverScrollNavigation') !== 'false' ? 'active' : ''}" 
+                                id="toggle-hover-scroll-nav" 
                                 tabindex="0">
                         </button>
                     </div>
                 </div>
-
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -4280,15 +4276,15 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Switch for Focus on Hover
-        const focusOnHoverToggle = this.$('#toggle-focus-on-hover');
-        if (focusOnHoverToggle) {
-            focusOnHoverToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:focusOnHover') === 'true';
+        // Toggle Switch for Scroll Navigation
+        const hoverScrollNavToggle = this.$('#toggle-hover-scroll-nav');
+        if (hoverScrollNavToggle) {
+            hoverScrollNavToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:hoverScrollNavigation') !== 'false';
                 const newValue = !currentValue;
-                storage.setItem('pref:focusOnHover', newValue.toString());
-                focusOnHoverToggle.classList.toggle('active', newValue);
-                log.info(`Focus on Hover set to: ${newValue}`);
+                storage.setItem('pref:hoverScrollNavigation', newValue.toString());
+                hoverScrollNavToggle.classList.toggle('active', newValue);
+                log.info(`Scroll Navigation set to: ${newValue}`);
             });
         }
 
