@@ -486,8 +486,8 @@ class SettingsPage extends Page {
                 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableMagicCursor">${i18n.t('EnableMagicCursor') || 'Enable Magic Cursor'}</span>
-                        <span class="setting-description" data-i18n="EnableMagicCursorDescription">${i18n.t('EnableMagicCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
+                        <span class="setting-name" data-i18n="EnablePlayerCursor">${i18n.t('EnablePlayerCursor') || 'Enable Player Cursor'}</span>
+                        <span class="setting-description" data-i18n="EnablePlayerCursorDescription">${i18n.t('EnablePlayerCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
                     </div>
                     <div class="setting-control">
                         <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
