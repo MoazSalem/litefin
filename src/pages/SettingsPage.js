@@ -465,6 +465,53 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- controls Section -->
+                <h3 class="setting-section-title" data-i18n="controls">${i18n.t('controls')}</h3>                
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="FocusOnHover">${i18n.t('FocusOnHover') || 'Focus on Hover'}</span>
+                        <span class="setting-description" data-i18n="FocusOnHoverDescription">${i18n.t('FocusOnHoverDescription') || 'Automatically focus cards and buttons when hovering over them with the mouse.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:focusOnHover') === 'true' ? 'active' : ''}" 
+                                id="toggle-focus-on-hover" 
+                                data-setting="focusOnHover"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableMagicCursor">${i18n.t('EnableMagicCursor') || 'Enable Magic Cursor'}</span>
+                        <span class="setting-description" data-i18n="EnableMagicCursorDescription">${i18n.t('EnableMagicCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
+                                id="toggle-magic-cursor" 
+                                data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
+                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableHoverTrickplay') ? 'active' : ''}" 
+                                id="toggle-hover-trickplay" 
+                                data-setting="enableHoverTrickplay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -1264,34 +1311,6 @@ class SettingsPage extends Page {
                         <button class="toggle-switch ${PlayerSettings.get('seekWithArrows') ? 'active' : ''}" 
                                 id="toggle-seek-with-arrows" 
                                 data-setting="seekWithArrows"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableMagicCursor">${i18n.t('EnableMagicCursor') || 'Enable Magic Cursor'}</span>
-                        <span class="setting-description" data-i18n="EnableMagicCursorDescription">${i18n.t('EnableMagicCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
-                                id="toggle-magic-cursor" 
-                                data-setting="enableMagicCursor"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
-                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableHoverTrickplay') ? 'active' : ''}" 
-                                id="toggle-hover-trickplay" 
-                                data-setting="enableHoverTrickplay"
                                 tabindex="0">
                         </button>
                     </div>
@@ -4258,6 +4277,18 @@ class SettingsPage extends Page {
                 PlayerSettings.set('enableMagicCursor', newValue);
                 magicCursorToggle.classList.toggle('active', newValue);
                 log.info(`Magic Cursor set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Focus on Hover
+        const focusOnHoverToggle = this.$('#toggle-focus-on-hover');
+        if (focusOnHoverToggle) {
+            focusOnHoverToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:focusOnHover') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:focusOnHover', newValue.toString());
+                focusOnHoverToggle.classList.toggle('active', newValue);
+                log.info(`Focus on Hover set to: ${newValue}`);
             });
         }
 

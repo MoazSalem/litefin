@@ -244,6 +244,7 @@
     "Writers": "Writers",
 
     "_Litefin Specific Keys": "",
+    "controls": "Controls",
     "10Minutes": "10 Minutes",
     "1Minute": "1 Minute",
     "30Minutes": "30 Minutes",
@@ -412,6 +413,8 @@
     "EnableHoverTrickplayDescription": "Show timestamp and trickplay images when hovering over the seekbar with the mouse.",
     "EnableMagicCursor": "Enable Magic Cursor",
     "EnableMagicCursorDescription": "Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).",
+    "FocusOnHover": "Focus on Hover",
+    "FocusOnHoverDescription": "Automatically focus cards and buttons when hovering over them with the mouse.",
     "EnableTrickplay": "Thumbnail Preview",
     "EnableTrickplayDescription": "Show video frame previews when scrubbing through the timeline",
     "EnableVP9": "Enable VP9 Decode",

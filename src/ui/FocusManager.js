@@ -11,6 +11,7 @@ import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
 import { spatialNavigator } from './SpatialNavigator.js';
 import { scrollController } from './ScrollController.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('FocusManager');
 
@@ -117,14 +118,18 @@ class FocusManager {
 
         let lastMouseDownTime = 0;
 
-        document.addEventListener('mousedown', () => {
-            lastMouseDownTime = Date.now();
-        }, { capture: true, passive: true });
+        document.addEventListener(
+            'mousedown',
+            () => {
+                lastMouseDownTime = Date.now();
+            },
+            { capture: true, passive: true }
+        );
 
         eventBus.on('key:enter', (e) => {
             if (this._suspended) return;
 
-            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown 
+            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown
             // immediately after 'mousedown'. If we intercept it, we break the native
             // mouse click sequence and trigger the wrong focused element.
             // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
@@ -147,10 +152,50 @@ class FocusManager {
             }
         });
 
-        // REMOVED: Proactive mousedown focus sync.
-        // It caused layout shifts and blur() calls during the click sequence,
-        // which caused TV browsers to cancel the click event (the "not opening" bug).
         // Magic Remote is now handled purely as a native mouse via the Enter bypass above.
+        // =========================================================================
+        // MAGIC CURSOR: Focus on Hover
+        // =========================================================================
+        let lastMouseX = -999;
+        let lastMouseY = -999;
+
+        document.addEventListener('mouseover', (e) => {
+            // Respect suspension (OSD/Modals) and the user setting
+            if (this._suspended) return;
+            if (storage.getItem('pref:focusOnHover') !== 'true') return;
+
+            // Ignore hover if player is active (OSD manages its own focus behavior
+            // and we don't want the mouse to jump focus while watching content).
+            if (document.body.classList.contains('player-active')) return;
+
+            // Calculate movement delta to prevent jitter from triggering focus logic
+            const deltaX = Math.abs(e.clientX - lastMouseX);
+            const deltaY = Math.abs(e.clientY - lastMouseY);
+
+            // Jitter protection (8px threshold matches legacy Litefin behavior)
+            if (deltaX < 8 && deltaY < 8) return;
+
+            lastMouseX = e.clientX;
+            lastMouseY = e.clientY;
+
+            // Find the nearest focusable ancestor
+            const target = e.target.closest ? e.target.closest(FOCUSABLE_SELECTOR) : null;
+
+            if (target) {
+                const sectionName = this.getSectionForElement(target);
+
+                // Only change focus if the element is new and belongs to a valid section
+                if (sectionName && target !== this._focusedElement) {
+                    // Check if the element is actually in the list of focusables for its section
+                    // (this handles visibility and disabled state checks via _getFocusables).
+                    const focusables = this._getFocusables(sectionName);
+                    if (focusables.includes(target)) {
+                        log.debug(`Magic Cursor: Hover focusing element in section "${sectionName}"`);
+                        this.focusElement(target, { skipScroll: true });
+                    }
+                }
+            }
+        });
 
         log.info('Initialized (v3 Single Source Rewrite)');
     }

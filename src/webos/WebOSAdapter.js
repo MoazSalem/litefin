@@ -15,7 +15,7 @@ import { logger } from '../utils/Logger.js';
 
 const log = logger.create('WebOSAdapter');
 
-// Minimum pixel movement to consider as an interaction. 
+// Minimum pixel movement to consider as an interaction.
 // Filters out gyro noise from LG Magic Remotes.
 const MOVEMENT_THRESHOLD = 5;
 
@@ -127,31 +127,37 @@ class WebOSAdapter {
      * @private
      */
     _setupWheelHandler() {
-        window.addEventListener('wheel', (e) => {
-            // Only handle vertical scrolling
-            if (Math.abs(e.deltaY) < 0.1) return;
+        window.addEventListener(
+            'wheel',
+            (e) => {
+                // Only handle vertical scrolling
+                if (Math.abs(e.deltaY) < 0.1) return;
 
-            // Find the nearest scrollable container
-            const container = e.target.closest('.page-content, .modal-options, .filter-main, .sidebar-libraries-wrapper, .settings-content');
-            
-            if (container) {
-                let delta = e.deltaY;
+                // Find the nearest scrollable container
+                const container = e.target.closest(
+                    '.page-content, .modal-options, .filter-main, .sidebar-libraries-wrapper, .settings-content'
+                );
 
-                // Normalize delta based on deltaMode (0=pixels, 1=lines, 2=pages)
-                if (e.deltaMode === 1) {
-                    delta *= 40; // Approx line height
-                } else if (e.deltaMode === 2) {
-                    delta *= 800; // Approx page height
+                if (container) {
+                    let delta = e.deltaY;
+
+                    // Normalize delta based on deltaMode (0=pixels, 1=lines, 2=pages)
+                    if (e.deltaMode === 1) {
+                        delta *= 40; // Approx line height
+                    } else if (e.deltaMode === 2) {
+                        delta *= 800; // Approx page height
+                    }
+
+                    // Amplify the delta for WebOS responsiveness (reduced by 30%)
+                    const multiplier = 2.0;
+                    container.scrollTop += delta * multiplier;
+
+                    // Prevent native slow scroll
+                    e.preventDefault();
                 }
-
-                // Amplify the delta for WebOS responsiveness
-                const multiplier = 3.0;
-                container.scrollTop += delta * multiplier;
-                
-                // Prevent native slow scroll
-                e.preventDefault();
-            }
-        }, { passive: false });
+            },
+            { passive: false }
+        );
     }
 
     /**
@@ -467,7 +473,7 @@ class WebOSAdapter {
                 method: 'launch',
                 parameters: {
                     id: 'youtube.leanback.v4',
-                    params: { 
+                    params: {
                         videoId: videoId,
                         contentId: videoId // Fallback for some YouTube TV app versions
                     }
