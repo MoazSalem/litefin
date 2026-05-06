@@ -559,6 +559,7 @@ export default class OSDController extends Component {
                     const rect = sliderContainer.getBoundingClientRect();
                     const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
                     slider.value = percent * 100;
+                    slider.dispatchEvent(new Event('input', { bubbles: true }));
                     slider.dispatchEvent(new Event('change', { bubbles: true }));
                 }
                 return;
@@ -638,8 +639,19 @@ export default class OSDController extends Component {
             targetBtn.classList.add('magic-hover');
             this._lastHoveredEl = targetBtn;
 
+            /* Handle OSD slider interaction (scrubbing) */
             if (targetBtn.classList.contains('osd-slider-container')) {
-                this._handlePositionSliderMouseMove(e);
+                /* 
+                 * If the user is HOLDING the button (e.buttons === 1), we treat 
+                 * this as an active drag. This bypasses the WebOS pointer-events 
+                 * bug where the native <input type="range"> might not receive 
+                 * the drag events through the transparent overlays.
+                 */
+                if (e.buttons === 1) {
+                    this._handlePositionSliderManualDrag(e);
+                } else {
+                    this._handlePositionSliderMouseMove(e);
+                }
             } else {
                 this._handlePositionSliderMouseLeave(e);
             }
@@ -2037,8 +2049,10 @@ export default class OSDController extends Component {
         const currentVal = parseFloat(this._osdPositionSliderEl.value);
         if (Math.abs(currentVal - percent) > 0.01) {
             this._osdPositionSliderEl.value = percent;
-            this._osdPositionFillEl.style.width = percent + '%';
         }
+
+        /* Always update the fill bar width to ensure visual sync, even if the value was set manually */
+        this._osdPositionFillEl.style.width = percent + '%';
     }
 
     /**
@@ -2076,25 +2090,69 @@ export default class OSDController extends Component {
         
         this._isDraggingSeekbar = true;
         this.resetAutoHide();
+
         const percentRaw = e.target.value;
-        const fill = this._osdEl.querySelector('#osdPositionFill');
-        if (fill) fill.style.width = percentRaw + '%';
+        const percent = parseFloat(percentRaw);
 
-        const duration = this._player.getDurationTicks();
-        const percent = percentRaw / 100;
+        /* Update fill bar visually - use cached element for performance */
+        if (this._osdPositionFillEl) {
+            this._osdPositionFillEl.style.width = percent + '%';
+        }
+
+        /* Update time labels live */
+        this._syncTimeDisplayToPercent(percent);
+    }
+
+    /**
+     * Manually sync the current and remaining time displays to a given percentage.
+     * Used during dragging/scrubbing to avoid waiting for the next update loop.
+     * @param {number} percent - 0 to 100
+     * @private
+     */
+    _syncTimeDisplayToPercent(percent) {
+        if (!this._player) return;
+
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+        if (!duration) return;
+
+        const currentTicks = duration * (percent / 100);
         const forceHours = duration >= 3600 * 10000000;
-        const currentTicks = duration * percent;
-        const currentEl = this._osdEl.querySelector('#osdCurrentTime');
-        if (currentEl) currentEl.textContent = this._formatTime(currentTicks, forceHours);
 
-        // Update Duration/Remaining label live
+        if (this._osdCurrentTimeEl) {
+            this._osdCurrentTimeEl.textContent = this._formatTime(currentTicks, forceHours);
+        }
+
         const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
         const isRemaining = timeDisplayMode === 'remaining';
         const durationDisplayTicks = isRemaining ? (duration - currentTicks) : duration;
         const totalStr = (isRemaining ? '-' : '') + this._formatTime(durationDisplayTicks, forceHours);
-        if (this._osdTotalTimeEl && this._osdTotalTimeEl.textContent !== totalStr) {
+
+        if (this._osdTotalTimeEl) {
             this._osdTotalTimeEl.textContent = totalStr;
         }
+    }
+
+    /**
+     * Handle manual dragging with the Magic Cursor or Mouse.
+     * This simulates the native range input behavior for smoother scrubbing.
+     * @param {MouseEvent} e 
+     * @private
+     */
+    _handlePositionSliderManualDrag(e) {
+        if (!this._osdPositionSliderEl || !this._player) return;
+
+        const rect = this._osdPositionSliderEl.getBoundingClientRect();
+        let percent = ((e.clientX - rect.left) / rect.width) * 100;
+        percent = Math.max(0, Math.min(100, percent));
+
+        /* Update the native input value so a subsequent 'change' event works */
+        this._osdPositionSliderEl.value = percent;
+
+        /* Force input logic to fire */
+        this._handlePositionSliderInput({ target: this._osdPositionSliderEl });
+        
+        /* Also show the tooltip since we are dragging */
+        this._handlePositionSliderMouseMove(e);
     }
 
     _handlePositionSliderChange(e) {
@@ -2107,7 +2165,6 @@ export default class OSDController extends Component {
             return;
         }
 
-        this._isDraggingSeekbar = false;
         try {
             const duration = this._player.getDurationTicks();
             const percent = e.target.value / 100;
@@ -2126,7 +2183,7 @@ export default class OSDController extends Component {
     }
 
     _handlePositionSliderMouseMove(e) {
-        if (!PlayerSettings.get('enableHoverTrickplay') || this._isDraggingSeekbar || this._seekTargetTicks !== null || !this._player) return;
+        if (!PlayerSettings.get('enableHoverTrickplay') || this._seekTargetTicks !== null || !this._player) return;
 
         const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
         if (!duration) return;
