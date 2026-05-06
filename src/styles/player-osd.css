@@ -759,6 +759,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
 /* Player/Offset Focus (28px Thumb on 8px Track) */
 /* Formula: (TrackHeight - ThumbHeight) / 2 = (8 - 28) / 2 = -10px */
 .osd-slider-container:hover .osd-slider::-webkit-slider-thumb,
+.osd-slider-container.focused .osd-slider::-webkit-slider-thumb,
 .osd-slider-container.magic-hover .osd-slider::-webkit-slider-thumb,
 .osd-slider.focused::-webkit-slider-thumb,
 .osd-slider:focus::-webkit-slider-thumb,
@@ -784,6 +785,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
 
 
 .osd-slider-container:hover .osd-slider::-moz-range-thumb,
+.osd-slider-container.focused .osd-slider::-moz-range-thumb,
 .osd-slider.focused::-moz-range-thumb,
 .osd-slider:focus::-moz-range-thumb,
 .osd-offset-slider:hover::-moz-range-thumb,

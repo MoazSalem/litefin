@@ -118,14 +118,18 @@ class FocusManager {
 
         let lastMouseDownTime = 0;
 
-        document.addEventListener('mousedown', () => {
-            lastMouseDownTime = Date.now();
-        }, { capture: true, passive: true });
+        document.addEventListener(
+            'mousedown',
+            () => {
+                lastMouseDownTime = Date.now();
+            },
+            { capture: true, passive: true }
+        );
 
         eventBus.on('key:enter', (e) => {
             if (this._suspended) return;
 
-            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown 
+            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown
             // immediately after 'mousedown'. If we intercept it, we break the native
             // mouse click sequence and trigger the wrong focused element.
             // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
@@ -155,21 +159,34 @@ class FocusManager {
 
         // MAGIC CURSOR: Wheel Navigation
         // Allows scrolling the Magic Remote wheel to navigate vertically between rows/items.
-        document.addEventListener('wheel', (e) => {
-            if (this._suspended) return;
+        document.addEventListener(
+            'wheel',
+            (e) => {
+                if (this._suspended) return;
 
-            // Respect the user setting (default to true)
-            if (storage.getItem('pref:hoverScrollNavigation') === 'false') return;
-            
-            // Ignore if player is active or OSD is focused (PlayerOSD handles its own wheel behavior)
-            if (document.body.classList.contains('player-active') || this.activeSection === 'osd' || this.activeSection === 'player') return;
+                // Respect the user setting (default to true)
+                if (storage.getItem('pref:hoverScrollNavigation') === 'false') return;
 
-            // Threshold to prevent accidental jitter moves (Magic Remotes are sensitive)
-            if (Math.abs(e.deltaY) < 30) return;
+                // Ignore if player is active or OSD is focused (PlayerOSD handles its own wheel behavior)
+                if (
+                    document.body.classList.contains('player-active') ||
+                    this.activeSection === 'osd' ||
+                    this.activeSection === 'player' ||
+                    this._activeSection === 'sidebar' ||
+                    document.querySelector('.sidebar.expanded') ||
+                    document.querySelector('.sidebar:hover') ||
+                    (this._activeSection && this._activeSection.startsWith('settings-'))
+                )
+                    return;
 
-            const direction = e.deltaY > 0 ? 'down' : 'up';
-            this._handleKey(direction);
-        }, { passive: true });
+                // Threshold to prevent accidental jitter moves (Magic Remotes are sensitive)
+                if (Math.abs(e.deltaY) < 30) return;
+
+                const direction = e.deltaY > 0 ? 'down' : 'up';
+                this._handleKey(direction);
+            },
+            { passive: true }
+        );
 
         log.info('Initialized (v3 Single Source Rewrite)');
     }
