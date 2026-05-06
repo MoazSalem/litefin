@@ -92,6 +92,11 @@ export class WebOSPlayer {
         // ---- Stall recovery timer ----
         this._stallTimer = null;
 
+        // ---- Robust resume state ----
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
+        this._cancelRobustResume = false;
+
         log.info('WebOSPlayer constructed');
     }
 
@@ -221,6 +226,13 @@ export class WebOSPlayer {
         this._timeUpdated = false;
         this._subtitleOffset = 0;
         this._previousOffset = 0;
+
+        // Initialize robust seek state immediately to avoid race conditions with early 'playing' events.
+        // Do not attempt robust resume for live TV/streams.
+        const isLive = options.item?.Type === 'TvChannel' || options.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : (options.playerStartPositionTicks || 0) / 10000000;
+        this._robustSeekPending = false;
+        this._cancelRobustResume = false;
 
         const video = this._ensureVideoElement();
 
@@ -537,22 +549,16 @@ export class WebOSPlayer {
      * @param {number} ticks - Jellyfin position ticks
      */
     _applyRobustResume(video, ticks) {
-        this._cancelRobustResume = false;
+        if (this._robustSeekTarget === null || this._robustSeekTarget === undefined) return;
 
-        // Do not attempt robust resume for live TV/streams
-        if (this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId) {
-            return;
-        }
-
-        const resumeSeconds = (ticks || 0) / 10000000;
+        const resumeSeconds = this._robustSeekTarget;
 
         // Safety guard: do not seek beyond the end
         if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
             log.warn('WebOSPlayer: Resume position near end of video, ignoring', resumeSeconds);
+            this._robustSeekTarget = null;
             return;
         }
-
-        this._robustSeekTarget = resumeSeconds;
 
         const tryApply = () => {
             if (this._cancelRobustResume || this._robustSeekTarget === null) return;
@@ -663,6 +669,8 @@ export class WebOSPlayer {
      */
     async stop() {
         this._cancelRobustResume = true;
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
         this._clearStallCheck();
         this._destroyHlsPlayer();
 
@@ -693,9 +701,12 @@ export class WebOSPlayer {
      * @param {number} positionTicks
      */
     seek(positionTicks) {
-        this._cancelRobustResume = true;
         const video = this._videoElement;
         if (!video) return;
+
+        // Cancel any pending retry loops from previous seeks
+        this._cancelRobustResume = true;
+        this._robustSeekPending = false;
 
         let seconds = positionTicks / 10000000;
 
@@ -704,6 +715,14 @@ export class WebOSPlayer {
         if (this._currentPlayOptions?.transcodingOffsetTicks) {
             seconds = (positionTicks - this._currentPlayOptions.transcodingOffsetTicks) / 10000000;
         }
+
+        // Update the robust seek target so that _onPlaying can detect if this seek snaps back.
+        // We skip this for Live TV where currentTime logic is often non-standard.
+        const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : seconds;
+
+        // Re-enable robust check for the new seek
+        this._cancelRobustResume = false;
 
         // Skip tiny seeks — avoids decoder stutter on redundant calls
         if (Math.abs(video.currentTime - seconds) > SEEK_THRESHOLD_MS / 1000) {
