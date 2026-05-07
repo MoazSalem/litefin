@@ -891,7 +891,7 @@ export class ApiClient {
     async searchHints(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            SearchTerm: query,
+            searchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,Artist,MusicAlbum,Audio',
             Limit: 50,
             Recursive: true,
@@ -966,7 +966,7 @@ export class ApiClient {
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            SearchTerm: query,
+            searchTerm: query,
             Limit: 24,
             Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
