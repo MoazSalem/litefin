@@ -106,25 +106,25 @@ class SpatialNavigator {
             let distCross = 0; // Distance perpendicular to navigation direction
 
             if (direction === 'right') {
-                if (dx > DIRECTION_THRESHOLD) {
+                if (rect2.left > rect1.right - DIRECTION_THRESHOLD) {
                     isValid = true;
                     distMain = dx;
                     distCross = Math.abs(dy);
                 }
             } else if (direction === 'left') {
-                if (dx < -DIRECTION_THRESHOLD) {
+                if (rect2.right < rect1.left + DIRECTION_THRESHOLD) {
                     isValid = true;
                     distMain = Math.abs(dx);
                     distCross = Math.abs(dy);
                 }
             } else if (direction === 'down') {
-                if (dy > DIRECTION_THRESHOLD) {
+                if (rect2.top > rect1.bottom - DIRECTION_THRESHOLD) {
                     isValid = true;
                     distMain = dy;
                     distCross = Math.abs(dx);
                 }
             } else if (direction === 'up') {
-                if (dy < -DIRECTION_THRESHOLD) {
+                if (rect2.bottom < rect1.top + DIRECTION_THRESHOLD) {
                     isValid = true;
                     distMain = Math.abs(dy);
                     distCross = Math.abs(dx);

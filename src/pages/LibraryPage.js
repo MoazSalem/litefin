@@ -2145,7 +2145,7 @@ class LibraryPage extends Page {
                 columns: 6, // Only used for grid orientation
                 // Navigation between rows
                 leaveUp: rowIndex === 0 ? nextUpTarget : `row-${rowIndex - 1}`,
-                leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : null,
+                leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : 'library-pagination',
                 leaveLeft: 'sidebar',
                 // Select both header button and media cards as focusable
                 selector: selector,

@@ -67,7 +67,6 @@
 /* Tabs (Chip Style) */
 .library-tabs {
     display: flex;
-    overflow-x: auto;
     padding: 6px 0;
     margin-bottom: 6px;
     justify-content: center;
