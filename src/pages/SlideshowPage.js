@@ -99,6 +99,11 @@ class SlideshowPage extends Page {
          * removeEventListener on destroy().
          */
         this._keyHandler = this._onKeyDown.bind(this);
+        this._wheelHandler = this._onWheel.bind(this);
+        this._navClickHandler = this._onNavClick.bind(this);
+        this._mouseMoveHandler = this._onMouseMove.bind(this);
+        this._stageClickHandler = this._onStageClick.bind(this);
+        this._activityTimer = null;
 
         /**
          * Two <img> scratch elements for off-screen preloading.
@@ -156,20 +161,24 @@ class SlideshowPage extends Page {
                     </svg>
                 </div>
 
-                <!-- ── Ghost nav arrows (visible only on left/right D-pad press) ── -->
-                <!-- These aren't real focusable buttons — we handle nav in keydown.
-                     They provide a visual cue that left/right navigation is possible. -->
-                <div class="slideshow-arrow slideshow-arrow-left hidden" id="arrow-left" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="15 18 9 12 15 6"/>
-                    </svg>
+                <!-- ── Navigation Areas (Hover + Click) ── -->
+                <!-- These provide large clickable/hoverable targets for Mouse/Magic Remote.
+                     The arrows are contained within them and shown via CSS :hover. -->
+                <div class="slideshow-nav-area slideshow-nav-area-left" id="nav-area-left" data-direction="prev">
+                    <button class="slideshow-arrow slideshow-arrow-left" id="arrow-left" tabindex="-1" aria-label="Previous">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="15 18 9 12 15 6"/>
+                        </svg>
+                    </button>
                 </div>
-                <div class="slideshow-arrow slideshow-arrow-right hidden" id="arrow-right" aria-hidden="true">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                         stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                        <polyline points="9 18 15 12 9 6"/>
-                    </svg>
+                <div class="slideshow-nav-area slideshow-nav-area-right" id="nav-area-right" data-direction="next">
+                    <button class="slideshow-arrow slideshow-arrow-right" id="arrow-right" tabindex="-1" aria-label="Next">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                            <polyline points="9 18 15 12 9 6"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <!-- ── EXIF Metadata Overlay ── -->
@@ -228,8 +237,15 @@ class SlideshowPage extends Page {
             /* ── Show the current image (no crossfade on first display) ── */
             await this._showPhoto(this._currentIndex, false /* no transition */);
 
-            /* ── Wire up keyboard handling ── */
+            /* ── Wire up event handling ── */
             document.addEventListener('keydown', this._keyHandler, true /* capture */);
+            document.addEventListener('wheel', this._wheelHandler, { passive: false });
+            document.addEventListener('mousemove', this._mouseMoveHandler);
+
+            // Wire up navigation and stage clicks
+            this.$('#nav-area-left')?.addEventListener('click', this._navClickHandler);
+            this.$('#nav-area-right')?.addEventListener('click', this._navClickHandler);
+            this.el?.addEventListener('click', this._stageClickHandler);
 
             /* ── Set focus to our invisible trap so the page receives keys ── */
             const trap = this.$('#slideshow-focus-trap');
@@ -255,8 +271,16 @@ class SlideshowPage extends Page {
         /* Stop any running auto-advance before teardown */
         this._stopAutoAdvance();
 
-        /* Release keyboard capture */
+        /* Release event listeners */
         document.removeEventListener('keydown', this._keyHandler, true);
+        document.removeEventListener('wheel', this._wheelHandler);
+        document.removeEventListener('mousemove', this._mouseMoveHandler);
+
+        this.$('#nav-area-left')?.removeEventListener('click', this._navClickHandler);
+        this.$('#nav-area-right')?.removeEventListener('click', this._navClickHandler);
+        this.el?.removeEventListener('click', this._stageClickHandler);
+
+        clearTimeout(this._activityTimer);
 
         /* Drop preload references so the browser can GC the image data */
         this._preloadSlots.prev = null;
@@ -549,9 +573,79 @@ class SlideshowPage extends Page {
         const arrow = this.$(`#arrow-${direction}`);
         if (!arrow) return;
 
-        arrow.classList.remove('hidden');
+        arrow.classList.add('is-flashing');
         clearTimeout(arrow._flashTimer);
-        arrow._flashTimer = setTimeout(() => arrow.classList.add('hidden'), 600);
+        arrow._flashTimer = setTimeout(() => arrow.classList.remove('is-flashing'), 600);
+    }
+
+    /**
+     * Handle mouse move to show UI controls.
+     * UI hides after 3 seconds of inactivity.
+     */
+    _onMouseMove() {
+        const root = this.el;
+        if (!root) return;
+
+        // Show UI
+        root.classList.add('user-active');
+
+        // Reset inactivity timer
+        clearTimeout(this._activityTimer);
+        this._activityTimer = setTimeout(() => {
+            root.classList.remove('user-active');
+        }, 3000);
+    }
+
+    /**
+     * Handle mouse wheel / Magic Remote scroll to navigate between photos.
+     * @param {WheelEvent} e
+     */
+    _onWheel(e) {
+        // Prevent default scroll behavior
+        e.preventDefault();
+
+        // Throttling: Ignore scroll events during transitions
+        if (this._transitioning) return;
+
+        // Use a small threshold to avoid hair-trigger scrolling
+        if (Math.abs(e.deltaY) < 10 && Math.abs(e.deltaX) < 10) return;
+
+        if (e.deltaY > 0 || e.deltaX > 0) {
+            this._next();
+        } else {
+            this._prev();
+        }
+    }
+
+    /**
+     * Handle clicking the navigation areas.
+     * @param {MouseEvent} e
+     */
+    _onNavClick(e) {
+        e.stopPropagation(); // Don't trigger stage click
+        const direction = e.currentTarget.dataset.direction;
+        if (direction === 'prev') {
+            this._prev();
+        } else {
+            this._next();
+        }
+    }
+
+    /**
+     * Handle clicking the main stage area.
+     * Redirects to video player if it's a video, otherwise toggles EXIF.
+     */
+    _onStageClick() {
+        const item = this._photos[this._currentIndex];
+        if (!item) return;
+
+        if (item.Type === 'Video') {
+            log.info('Video clicked — starting playback');
+            this._stopAutoAdvance();
+            eventBus.emit('player:play', { item });
+        } else {
+            this._toggleExif();
+        }
     }
 
     // ──────────────────────────────────────────────────────────────────────────
