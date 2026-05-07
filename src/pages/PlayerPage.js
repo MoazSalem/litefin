@@ -534,7 +534,6 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
 
-
             // Channel Up/Down for Live TV
             this._onChannelUp = () => this._handleChannelChange(1);
             eventBus.on('key:channelUp', this._onChannelUp);
@@ -545,7 +544,7 @@ class PlayerPage extends Page {
             // ================================================================
             // MAGIC CURSOR SUPPORT (WebOS / Tizen Pointer)
             // ================================================================
-            
+
             // 1. Moving the magic remote wakes up the OSD.
             //    Throttled to 200ms — without throttling, every pixel of cursor movement
             //    spams show() + resetAutoHide(), causing the timer to reset continuously
@@ -553,9 +552,11 @@ class PlayerPage extends Page {
             let _mouseMoveThrottle = null;
             this.el.addEventListener('mousemove', (e) => {
                 if (!PlayerSettings.get('enableMagicCursor')) return;
-                
+
                 if (_mouseMoveThrottle) return;
-                _mouseMoveThrottle = setTimeout(() => { _mouseMoveThrottle = null; }, 200);
+                _mouseMoveThrottle = setTimeout(() => {
+                    _mouseMoveThrottle = null;
+                }, 200);
                 if (this._osd) {
                     this._osd._onMouseMove(e);
                 }
@@ -751,7 +752,7 @@ class PlayerPage extends Page {
         // Allow plugins to perform late-stage preparation before playback actually
         // initializes. This is where Local Intros injects pre-roll videos into the queue.
         try {
-            // Note: We pass the current _resumePosition so plugins (like Local Intros) 
+            // Note: We pass the current _resumePosition so plugins (like Local Intros)
             // can decide whether to skip their logic if the user is resuming a session.
             await pluginManager.prepareItemPlayback(this._item, {
                 resumePosition: this._resumePosition
@@ -792,8 +793,10 @@ class PlayerPage extends Page {
             : item.MediaSources?.[0];
 
         // 2. Resolve Tracks
-        let savedAudioIndex = preSelectedAudio !== null && preSelectedAudio !== undefined ? preSelectedAudio : undefined;
-        let savedSubtitleIndex = preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
+        let savedAudioIndex =
+            preSelectedAudio !== null && preSelectedAudio !== undefined ? preSelectedAudio : undefined;
+        let savedSubtitleIndex =
+            preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
         // If no explicit selection from DetailsPage, try to restore from session memory (if enabled)
         if (PlayerSettings.get('rememberTracksForSession') !== false) {
@@ -801,10 +804,17 @@ class PlayerPage extends Page {
                 const sessionAudioLang = storage.getItem('session:lastAudioLang');
                 const sessionAudioTitle = storage.getItem('session:lastAudioTitle');
                 if (sessionAudioLang) {
-                    const resolvedAudio = this._resolveTrackByLang(mediaSource, 'Audio', sessionAudioLang, sessionAudioTitle);
+                    const resolvedAudio = this._resolveTrackByLang(
+                        mediaSource,
+                        'Audio',
+                        sessionAudioLang,
+                        sessionAudioTitle
+                    );
                     if (resolvedAudio !== undefined) {
                         savedAudioIndex = resolvedAudio;
-                        log.info(`[Track Memory] Restored Audio: ${sessionAudioLang} - ${sessionAudioTitle} -> Index ${resolvedAudio}`);
+                        log.info(
+                            `[Track Memory] Restored Audio: ${sessionAudioLang} - ${sessionAudioTitle} -> Index ${resolvedAudio}`
+                        );
                     }
                 }
             }
@@ -813,10 +823,17 @@ class PlayerPage extends Page {
                 const sessionSubtitleLang = storage.getItem('session:lastSubtitleLang');
                 const sessionSubtitleTitle = storage.getItem('session:lastSubtitleTitle');
                 if (sessionSubtitleLang) {
-                    const resolvedSubtitle = this._resolveTrackByLang(mediaSource, 'Subtitle', sessionSubtitleLang, sessionSubtitleTitle);
+                    const resolvedSubtitle = this._resolveTrackByLang(
+                        mediaSource,
+                        'Subtitle',
+                        sessionSubtitleLang,
+                        sessionSubtitleTitle
+                    );
                     if (resolvedSubtitle !== undefined) {
                         savedSubtitleIndex = resolvedSubtitle;
-                        log.info(`[Track Memory] Restored Subtitle: ${sessionSubtitleLang} - ${sessionSubtitleTitle} -> Index ${resolvedSubtitle}`);
+                        log.info(
+                            `[Track Memory] Restored Subtitle: ${sessionSubtitleLang} - ${sessionSubtitleTitle} -> Index ${resolvedSubtitle}`
+                        );
                     }
                 }
             }
@@ -1243,16 +1260,11 @@ class PlayerPage extends Page {
             return;
         }
 
-        // Natural end of playback - report and navigate back
-        this._isExiting = true;
-        this._reportPlaybackStopped().then(() => {
-            // Notify any listeners (e.g., DetailsPage auto-chain) that this playback
-            // session has ended naturally before we navigate away from the player.
-            eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'ended' });
-            router.back();
-        });
-
+        // Natural end of playback - delegate to centralized exit logic.
+        // We pass false for clearChain so the auto-chain flag is preserved if it exists.
+        log.info('Natural end of playback reached. Triggering exit.');
         eventBus.emit('player:ended', { item: this._item });
+        this._stopAndExit(false, 'ended');
     }
 
     /**
@@ -1532,10 +1544,15 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            const activeAudioTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.Index === activeAudioIndex);
+            const activeAudioTrack = mediaSource.MediaStreams.find(
+                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
+            );
             if (activeAudioTrack) {
                 storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'none');
-                storage.setItem('session:lastAudioTitle', activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none');
+                storage.setItem(
+                    'session:lastAudioTitle',
+                    activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+                );
                 log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
             }
         }
@@ -1549,11 +1566,18 @@ class PlayerPage extends Page {
                 storage.setItem('session:lastSubtitleTitle', 'none');
                 log.info(`[Track Memory] Saved Subtitle: none`);
             } else {
-                const activeSubtitleTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex);
+                const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                    (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                );
                 if (activeSubtitleTrack) {
                     storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
-                    storage.setItem('session:lastSubtitleTitle', activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none');
-                    log.info(`[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`);
+                    storage.setItem(
+                        'session:lastSubtitleTitle',
+                        activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                    );
+                    log.info(
+                        `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                    );
                 }
             }
         }
@@ -2225,7 +2249,7 @@ class PlayerPage extends Page {
             if (mediaSource?.LiveStreamId) {
                 log.info('Closing Live Stream:', mediaSource.LiveStreamId);
                 // Call asynchronously to avoid blocking the stopped report
-                api.closeLiveStream(mediaSource.LiveStreamId).catch(err => {
+                api.closeLiveStream(mediaSource.LiveStreamId).catch((err) => {
                     log.warn('Failed to close live stream:', err);
                 });
             }
@@ -2320,8 +2344,11 @@ class PlayerPage extends Page {
      *   Pass false when exiting as part of an intentional chain (Next button,
      *   natural end-of-file) so the flag is preserved for DetailsPage to
      *   consume and fire the remote trailer player.
+     *
+     * @param {string} [reason='userStop']
+     *   The reason for stopping playback, passed to the 'player:stopped' event.
      */
-    async _stopAndExit(clearChain = true) {
+    async _stopAndExit(clearChain = true, reason = 'userStop') {
         // Prevent multiple calls
         if (this._isExiting) {
             return;
@@ -2358,7 +2385,7 @@ class PlayerPage extends Page {
 
         // Emit for any general listeners; no longer used by the chain logic
         // but kept for potential future use (e.g., analytics, remote control).
-        eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'userStop' });
+        eventBus.emit('player:stopped', { itemId: this._item?.Id, reason });
 
         // ----------------------------------------------------------------
         // Navigation Override: Ensure we return to the Details page of the
@@ -2369,12 +2396,18 @@ class PlayerPage extends Page {
         // the item they were just watching is more intuitive than returning
         // to the initial entry point.
         // ----------------------------------------------------------------
-        if (this._item && this._item.Id && !this._item.isIntro && this._item.Type !== 'TvChannel' && this._item.Type !== 'Trailer') {
+        if (
+            this._item &&
+            this._item.Id &&
+            !this._item.isIntro &&
+            this._item.Type !== 'TvChannel' &&
+            this._item.Type !== 'Trailer'
+        ) {
             const detailsPath = `/details/${this._item.Id}`;
-            
+
             // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
-            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly 
-            // where we left off. In that case, App.js pushed the player instead of replacing, 
+            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly
+            // where we left off. In that case, App.js pushed the player instead of replacing,
             // so we just call router.back().
             if (this.params.fromSlideshow === 'true') {
                 router.back();
@@ -2488,10 +2521,10 @@ class PlayerPage extends Page {
             if (programs && programs.Items && programs.Items.length > 0) {
                 const program = programs.Items[0];
                 log.info('Current program:', program.Name);
-                
+
                 // Set the page title to "Channel: Program"
                 this.title = `${this._item.Name}: ${program.Name}`;
-                
+
                 // Update OSD if it exists
                 if (this._osd) {
                     this._osd.updateItem(program);
@@ -2533,7 +2566,7 @@ class PlayerPage extends Page {
             }
 
             // 2. Find current channel index
-            const currentIndex = this._channels.findIndex(c => c.Id === this._item.Id);
+            const currentIndex = this._channels.findIndex((c) => c.Id === this._item.Id);
             if (currentIndex === -1) {
                 // Not in current list (maybe list updated?), just take first
                 await this._switchChannel(this._channels[0]);
@@ -2576,7 +2609,7 @@ class PlayerPage extends Page {
         }
 
         // Briefly settle hardware
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise((r) => setTimeout(r, 300));
 
         // Update state for new channel
         this._item = nextChannel;
@@ -2602,4 +2635,3 @@ class PlayerPage extends Page {
 }
 
 export default PlayerPage;
-

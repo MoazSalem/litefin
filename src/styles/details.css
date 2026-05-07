@@ -216,6 +216,16 @@
     margin-bottom: 16px;
 }
 
+.clickable-subtitle {
+    cursor: pointer;
+    display: inline-block;
+    transition: opacity 0.2s ease;
+}
+
+.clickable-subtitle:hover {
+    opacity: 0.8;
+}
+
 /* Metadata Row */
 .details-meta-row {
     display: flex;
