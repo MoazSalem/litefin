@@ -35,6 +35,11 @@ export class TrailerPlayer extends Component {
         this._onYTStateChange = this._onYTStateChange.bind(this);
         this._updateProgress = this._updateProgress.bind(this);
         this._onProxyMessage = this._onProxyMessage.bind(this);
+        this._onMouseMove = this._onMouseMove.bind(this);
+        this._onOverlayClick = this._onOverlayClick.bind(this);
+        this._onThrottledMouseMove = this._onThrottledMouseMove.bind(this);
+        
+        this._mouseMoveThrottle = null;
     }
 
     static showLegacy(trailers, parentPage) {
@@ -78,6 +83,7 @@ export class TrailerPlayer extends Component {
             this.show(trailers, parentPage);
         }
     }
+
 
     render() {
         this._overlay = document.createElement('div');
@@ -155,16 +161,8 @@ export class TrailerPlayer extends Component {
         this._positionSliderEl = this._overlay.querySelector('#trailerPositionSlider');
 
         // Bind clicks
-        this._overlay.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action]');
-            if (btn) {
-                e.stopPropagation();
-                this._executeAction(btn.dataset.action);
-            } else {
-                // Click anywhere else toggles OSD
-                this._toggleOsd();
-            }
-        });
+        this._overlay.addEventListener('click', this._onOverlayClick);
+        this._overlay.addEventListener('mousemove', this._onThrottledMouseMove);
 
         // Scrubbing via slider
         this._positionSliderEl.addEventListener('mousedown', () => this._isDraggingSlider = true);
@@ -233,9 +231,15 @@ export class TrailerPlayer extends Component {
     onBeforeDestroy() {
         document.removeEventListener('keydown', this._handleKeyDown, true);
         
+        if (this._overlay) {
+            this._overlay.removeEventListener('click', this._onOverlayClick);
+            this._overlay.removeEventListener('mousemove', this._onThrottledMouseMove);
+        }
+
         if (this._isProxy) { window.removeEventListener('message', this._onProxyMessage); }
         if (this._progressTimer) clearInterval(this._progressTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
+        if (this._mouseMoveThrottle) clearTimeout(this._mouseMoveThrottle);
         
         if (this._ytPlayer) {
             try { this._ytPlayer.destroy(); } catch(e){}
@@ -249,6 +253,25 @@ export class TrailerPlayer extends Component {
                 focusManager.focusElement(this._previousFocusTarget);
             }, 50);
         }
+    }
+
+    _onOverlayClick(e) {
+        const btn = e.target.closest('[data-action]');
+        if (btn) {
+            e.stopPropagation();
+            this._executeAction(btn.dataset.action);
+        } else {
+            // Click anywhere else toggles OSD
+            this._toggleOsd();
+        }
+    }
+
+    _onThrottledMouseMove(e) {
+        if (this._mouseMoveThrottle) return;
+        this._mouseMoveThrottle = setTimeout(() => {
+            this._mouseMoveThrottle = null;
+        }, 200);
+        this._onMouseMove(e);
     }
 
     _showLoading() {
@@ -809,17 +832,50 @@ export class TrailerPlayer extends Component {
         }
     }
 
-    _showOsd() {
+    _onMouseMove(e) {
+        if (!PlayerSettings.get('enableMagicCursor')) return;
+        this._showOsd(false);
+
+        if (!e) return;
+
+        // Programmatic hover support for Magic Remote / Mouse
+        const els = document.elementsFromPoint(e.clientX, e.clientY);
+        let targetBtn = null;
+
+        for (const el of els) {
+            // Find the first OSD button or slider under the cursor
+            const btn = el.closest?.('[data-action], .osd-slider-container');
+            if (btn) {
+                targetBtn = btn;
+                break;
+            }
+        }
+
+        // Clean up previous hover
+        if (this._lastHoveredEl && this._lastHoveredEl !== targetBtn) {
+            this._lastHoveredEl.classList.remove('magic-hover');
+        }
+
+        // Apply new hover
+        if (targetBtn) {
+            targetBtn.classList.add('magic-hover');
+            this._lastHoveredEl = targetBtn;
+        } else {
+            this._lastHoveredEl = null;
+        }
+    }
+
+    _showOsd(shouldFocus = true) {
         this._isOsdVisible = true;
         this._osdEl.classList.remove('osd-is-hidden');
         this._osdEl.querySelector('.osd-main').classList.remove('osd-hidden');
         
-        // Always lock the section and move focus to the play/pause button when
-        // the OSD becomes visible. Without the unconditional re-focus, a situation
-        // where the section is already 'trailer-player' but focus is on another
-        // button (e.g. Back) would leave focus in the wrong place after resume.
-        focusManager.setActiveSection('trailer-player');
-        focusManager.focusElement(this._playPauseBtn);
+        if (shouldFocus) {
+            this._clearMagicHover();
+            // Only lock focus if explicitly requested (e.g. D-pad or click)
+            focusManager.setActiveSection('trailer-player');
+            focusManager.focusElement(this._playPauseBtn);
+        }
         
         this._resetAutoHide();
     }
@@ -828,7 +884,14 @@ export class TrailerPlayer extends Component {
         this._isOsdVisible = false;
         this._osdEl.classList.add('osd-is-hidden');
         this._osdEl.querySelector('.osd-main').classList.add('osd-hidden');
-        // We do not drop the focus trap, just let the buttons be visually hidden and disabled naturally via CSS opacity
+        this._clearMagicHover();
+    }
+
+    _clearMagicHover() {
+        if (this._osdEl) {
+            this._osdEl.querySelectorAll('.magic-hover').forEach(el => el.classList.remove('magic-hover'));
+        }
+        this._lastHoveredEl = null;
     }
 
     _toggleOsd() {
