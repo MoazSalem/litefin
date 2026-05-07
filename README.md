@@ -6,6 +6,7 @@
 [![GitHub Repo stars](https://img.shields.io/github/stars/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/stargazers)
 [![GitHub license](https://img.shields.io/github/license/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/blob/release/LICENSE)
 [![GitHub issues](https://img.shields.io/github/issues/MoazSalem/litefin?color=blue&style=flat-square)](https://github.com/MoazSalem/litefin/issues)
+[![Discord Link](https://img.shields.io/discord/1498618592902647818?color=blue&label=discord&logo=discord&style=flat-square)](https://discord.gg/N3VpazBtTx)
 
 ![Litefin Banner](./Docs/Previews/banner.png)
 
@@ -42,16 +43,44 @@ npm run package
 
 ## Quick Installation
 
-For the easiest installation on Samsung Tizen TVs, it is recommended to use the **Jellyfin2Samsung** installer:
+### Samsung Tizen TVs
 
-1. Download the latest `.wgt` from the releases or build it yourself.
-2. Use [**Jellyfin2Samsung**](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer) to sideload the application to your TV.
+The easiest way to install on a Samsung TV is with the **Jellyfin2Samsung** installer:
+
+1. Download the latest `.wgt` from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
+2. Use [**Jellyfin2Samsung**](https://github.com/Jellyfin2Samsung/Samsung-Jellyfin-Installer) to sideload the `.wgt` to your TV.
+
+### LG web-OS TVs
+
+Litefin can be installed on LG TVs using the **Homebrew Channel**:
+
+1. Install the [**Homebrew Channel**](https://github.com/webosbrew/webos-homebrew-channel) on your LG TV by following the instructions in its repository.
+2. Either install through the Homebrew Channel UI or Download the latest `.ipk` for your hardware from the [Releases](https://github.com/MoazSalem/litefin/releases) page.
+3. Open the Homebrew Channel on your TV and use the **Package Manager** to sideload the `.ipk` file.
 
 ## Support
 
 If Litefin is useful to you, please consider supporting the development:
 
 - [**Sponsor this project on GitHub**](https://github.com/sponsors/MoazSalem)
+
+<p>
+  A massive thank you to the individuals supporting the development of <b>LiteFin</b>!
+</p>
+
+  <table border="0">
+    <tr>
+      <td align="center" width="120">
+        <a href="https://github.com/DatAres37">
+          <img src="https://github.com/DatAres37.png?s=100" width="80" alt="DatAres37" />
+          <br />
+          <br />
+          <b>DatAres37</b>
+        </a>
+      </td>
+      </tr>
+    
+  </table>
 
 ## License
 
