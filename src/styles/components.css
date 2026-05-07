@@ -1351,7 +1351,7 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.media-info-row:last-child {
+.media-info-row:last-child:nth-child(odd) {
     border-bottom: none;
 }
 
