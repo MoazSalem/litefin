@@ -2,7 +2,6 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
-import { storage } from '../utils/StorageService.js';
 
 /**
  * ============================================================================
@@ -139,8 +138,8 @@ class MediaInfoModal {
                         ${this._renderRow(i18n.t('Container'), source.Container)}
                         ${source.Size ? this._renderRow(i18n.t('Size'), this._formatSize(source.Size)) : ''}
                         ${source.Bitrate ? this._renderRow(i18n.t('Bitrate'), this._formatBitrate(source.Bitrate)) : ''}
-                        ${storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated ? this._renderRow(i18n.t('Added'), this._formatDate(item.DateCreated)) : ''}
-                        ${storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate ? this._renderRow(i18n.t('Aired'), this._formatDate(item.PremiereDate)) : ''}
+                        ${item.DateCreated ? this._renderRow(i18n.t('Added'), this._formatDate(item.DateCreated)) : ''}
+                        ${item.PremiereDate ? this._renderRow(i18n.t('Aired'), this._formatDate(item.PremiereDate)) : ''}
                     </div>
                 </div>
             `;
