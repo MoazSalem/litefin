@@ -297,50 +297,95 @@ class DetailsPage extends Page {
     }
 
     _bindActions() {
+        let lastActivateTime = 0;
+        const handleActivate = (e, callback) => {
+            const now = Date.now();
+            if (now - lastActivateTime < 400) return;
+            lastActivateTime = now;
+            e.preventDefault();
+            e.stopPropagation();
+            callback();
+        };
+
         // Play button
-        this.$('.play-btn')?.addEventListener('click', () => {
-            this._play();
-        });
+        const playBtn = this.$('.play-btn');
+        if (playBtn) {
+            playBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play()));
+            playBtn.addEventListener('click', (e) => handleActivate(e, () => this._play()));
+        }
 
         // Resume button
-        this.$('.resume-btn')?.addEventListener('click', () => {
-            this._play({ resume: true });
-        });
+        const resumeBtn = this.$('.resume-btn');
+        if (resumeBtn) {
+            resumeBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play({ resume: true })));
+            resumeBtn.addEventListener('click', (e) => handleActivate(e, () => this._play({ resume: true })));
+        }
 
         // Watched button
-        this.$('.watched-btn')?.addEventListener('click', () => {
-            this._toggleWatched();
-        });
+        const watchedBtn = this.$('.watched-btn');
+        if (watchedBtn) {
+            watchedBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._toggleWatched()));
+            watchedBtn.addEventListener('click', (e) => handleActivate(e, () => this._toggleWatched()));
+        }
 
         // Reset button
-        this.$('.reset-btn')?.addEventListener('click', () => {
-            this._resetProgress();
-        });
+        const resetBtn = this.$('.reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._resetProgress()));
+            resetBtn.addEventListener('click', (e) => handleActivate(e, () => this._resetProgress()));
+        }
 
-        // Trailer button — dispatches to dialog or directly to player/iframe
-        this.$('.trailer-btn')?.addEventListener('click', () => {
-            this._onTrailerClick();
-        });
+        // Trailer button
+        const trailerBtn = this.$('.trailer-btn');
+        if (trailerBtn) {
+            trailerBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._onTrailerClick()));
+            trailerBtn.addEventListener('click', (e) => handleActivate(e, () => this._onTrailerClick()));
+        }
 
         // Shuffle button
-        this.$('.shuffle-btn')?.addEventListener('click', () => {
-            this._shufflePlay();
-        });
+        const shuffleBtn = this.$('.shuffle-btn');
+        if (shuffleBtn) {
+            shuffleBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._shufflePlay()));
+            shuffleBtn.addEventListener('click', (e) => handleActivate(e, () => this._shufflePlay()));
+        }
 
         // Subtitle button
-        this.$('.subtitle-btn')?.addEventListener('click', () => {
-            this._showSubtitleTrackMenu();
-        });
+        const subtitleBtn = this.$('.subtitle-btn');
+        if (subtitleBtn) {
+            subtitleBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showSubtitleTrackMenu()));
+            subtitleBtn.addEventListener('click', (e) => handleActivate(e, () => this._showSubtitleTrackMenu()));
+        }
 
         // Audio button
-        this.$('.audio-btn')?.addEventListener('click', () => {
-            this._showAudioTrackMenu();
-        });
+        const audioBtn = this.$('.audio-btn');
+        if (audioBtn) {
+            audioBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showAudioTrackMenu()));
+            audioBtn.addEventListener('click', (e) => handleActivate(e, () => this._showAudioTrackMenu()));
+        }
 
         // More button
-        this.$('.more-btn')?.addEventListener('click', () => {
-            this._showMoreOptionsModal(this._itemId);
-        });
+        const moreBtn = this.$('.more-btn');
+        if (moreBtn) {
+            moreBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showMoreOptionsModal(this._itemId)));
+            moreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showMoreOptionsModal(this._itemId)));
+        }
+
+        // See more button
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.addEventListener('mousedown', (e) => {
+                const now = Date.now();
+                if (now - lastActivateTime < 400) return;
+                lastActivateTime = now;
+                this._showFullOverview();
+            });
+            seeMoreBtn.addEventListener('click', (e) => {
+                const now = Date.now();
+                if (now - lastActivateTime < 400) return;
+                lastActivateTime = now;
+                this._showFullOverview();
+            });
+        }
     }
 
     async _loadDetails() {

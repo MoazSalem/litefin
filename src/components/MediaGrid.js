@@ -90,27 +90,38 @@ class MediaGrid extends Component {
 
         this._updateButtonVisibility();
 
-        // Delegated click handler on grid container — survives innerHTML rebuilds
-        // in toggleExpand() without needing per-card re-binding
+        // Delegated click/mousedown handler on grid container — survives innerHTML rebuilds
+        // in toggleExpand() without needing per-card re-binding.
+        // We use both mousedown and click for snappy "instant-response" feel on Magic Remote.
         const grid = document.getElementById(`${this.id}-items`);
         if (grid) {
-            grid.addEventListener('click', (e) => {
+            let lastActivateTime = 0;
+            const handleActivate = (e) => {
                 const card = e.target.closest('.media-card');
                 if (card) {
+                    const now = Date.now();
+                    if (now - lastActivateTime < 400) return;
+                    lastActivateTime = now;
+
                     if (this.onClick) {
                         this.onClick(card);
                     } else if (card.dataset.itemId) {
+                        const itemId = card.dataset.itemId;
                         const itemType = card.dataset.type;
+
                         if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
-                            log.debug('Navigating to PersonPage:', card.dataset.itemId);
-                            router.navigate(`/person/${card.dataset.itemId}`);
+                            log.debug('Navigating to PersonPage:', itemId);
+                            router.navigate(`/person/${itemId}`);
                         } else {
-                            log.debug('Navigating to item details:', card.dataset.itemId);
-                            router.navigate(`/details/${card.dataset.itemId}`);
+                            log.debug('Navigating to item details:', itemId);
+                            router.navigate(`/details/${itemId}`);
                         }
                     }
                 }
-            });
+            };
+
+            grid.addEventListener('mousedown', handleActivate);
+            grid.addEventListener('click', handleActivate);
 
             // Lazy Load Images
             lazyLoader.observe(grid);
