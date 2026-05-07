@@ -151,7 +151,6 @@
 }
 
 .hero-info {
-    margin-bottom: 24px;
     position: relative;
     /* Anchor for logo */
 }
@@ -230,6 +229,11 @@
 
 .meta-item {
     margin-right: 20px;
+}
+
+.meta-item-dates {
+    font-size: 1.3rem;
+    color: var(--jf-text-secondary);
 }
 
 .meta-item:last-child {

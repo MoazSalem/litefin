@@ -33,6 +33,7 @@ import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
+import { formatDate } from '../utils/TimeUtils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -366,7 +367,9 @@ class DetailsPage extends Page {
         // More button
         const moreBtn = this.$('.more-btn');
         if (moreBtn) {
-            moreBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showMoreOptionsModal(this._itemId)));
+            moreBtn.addEventListener('mousedown', (e) =>
+                handleActivate(e, () => this._showMoreOptionsModal(this._itemId))
+            );
             moreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showMoreOptionsModal(this._itemId)));
         }
 
@@ -401,7 +404,7 @@ class DetailsPage extends Page {
                 // CanDelete is essential for implementing the 'Delete Media' feature.
                 // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
                 // We also request Photo EXIF fields so they are available immediately.
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete,Width,Height,CameraMake,CameraModel,ExposureTime,FocalLength,Aperture,Altitude'
+                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete,Width,Height,CameraMake,CameraModel,ExposureTime,FocalLength,Aperture,Altitude,DateCreated,PremiereDate'
             });
             this._item = item;
             //log.debug('Item loaded:', item);
@@ -1521,6 +1524,33 @@ class DetailsPage extends Page {
         if (criticRating) metaHtml += `<span class="meta-item meta-tomato">${criticRating}</span>`;
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
+        // --- Added & Aired Dates ---
+        // Conditionally render library metadata based on global user preferences.
+        let addedHtml = '';
+        if (storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated) {
+            addedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Added')}: ${formatDate(item.DateCreated)}</span>`;
+        }
+
+        let airedHtml = '';
+        if (storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate) {
+            airedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Aired')}: ${formatDate(item.PremiereDate)}</span>`;
+        }
+
+        // Logic: If both are enabled and present, move them to a new row for better clarity.
+        // Otherwise, append to the main row if only one exists.
+        const bothEnabled =
+            storage.getItem('pref:showAddedDate') === 'true' &&
+            item.DateCreated &&
+            storage.getItem('pref:showDateAired') === 'true' &&
+            item.PremiereDate;
+
+        let secondaryMetaRow = '';
+        if (bothEnabled) {
+            secondaryMetaRow = `<div class="details-meta-row">${addedHtml}${airedHtml}</div>`;
+        } else {
+            metaHtml += addedHtml + airedHtml;
+        }
+
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
         const displaySubtitle = i18n.ensureBiDi(
@@ -1536,6 +1566,7 @@ class DetailsPage extends Page {
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
+            ${secondaryMetaRow}
         `;
 
         // Overview

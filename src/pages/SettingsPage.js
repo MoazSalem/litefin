@@ -385,6 +385,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
+                        <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
+                                id="toggle-rounded-corners" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
                         <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
                     </div>
@@ -453,14 +466,31 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Details Page Metadata Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
-                        <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
+                        <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
+                        <span class="setting-description" data-i18n="ShowAddedDateDescription">${i18n.t('ShowAddedDateDescription') || 'Display the date this item was added to your library on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
-                                id="toggle-rounded-corners" 
+                        <button class="toggle-switch ${storage.getItem('pref:showAddedDate') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-added-date" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowDateAired">${i18n.t('LabelShowDateAired') || 'Show Date Aired'}</span>
+                        <span class="setting-description" data-i18n="ShowDateAiredDescription">${i18n.t('ShowDateAiredDescription') || 'Display the premiere date on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showDateAired') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-date-aired" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -4297,6 +4327,30 @@ class SettingsPage extends Page {
                 PlayerSettings.set('enableHoverTrickplay', newValue);
                 hoverTrickplayToggle.classList.toggle('active', newValue);
                 log.info(`Hover Trickplay set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Show Added Date
+        const showAddedDateToggle = this.$('#toggle-show-added-date');
+        if (showAddedDateToggle) {
+            showAddedDateToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:showAddedDate') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:showAddedDate', newValue.toString());
+                showAddedDateToggle.classList.toggle('active', newValue);
+                log.info(`Show Added Date set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Show Date Aired
+        const showDateAiredToggle = this.$('#toggle-show-date-aired');
+        if (showDateAiredToggle) {
+            showDateAiredToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:showDateAired') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:showDateAired', newValue.toString());
+                showDateAiredToggle.classList.toggle('active', newValue);
+                log.info(`Show Date Aired set to: ${newValue}`);
             });
         }
 
