@@ -2209,40 +2209,40 @@ class DetailsPage extends Page {
                 elementId: '#artists-row',
                 isVisible: () => isNotHidden('#artists-section')
             },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
             },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
             },
             {
-                name: 'details-episodes',
-                elementId: '#episodes-list',
-                isVisible: () => isNotHidden('#episodes-section')
-            },
-            {
                 name: 'details-songs',
                 elementId: '#songs-list',
                 isVisible: () => isNotHidden('#songs-section')
             },
+            {
+                name: 'details-episodes',
+                elementId: '#episodes-list',
+                isVisible: () => isNotHidden('#episodes-section')
+            },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
-            // Collection rows (BoxSet contents) - in reverse order
-            {
-                name: 'collection-shows-section',
-                elementId: '#collection-shows-row',
-                isVisible: () => isNotHidden('#collection-shows-section')
-            },
             // Playlist items — reverse position mirrors _getNextVisibleSection
             {
                 name: 'details-playlist-items',
                 elementId: '#playlist-items-list',
                 isVisible: () => isNotHidden('#playlist-items-section')
+            },
+            // Collection rows (BoxSet contents) - in reverse order
+            {
+                name: 'collection-shows-section',
+                elementId: '#collection-shows-row',
+                isVisible: () => isNotHidden('#collection-shows-section')
             },
             {
                 name: 'collection-movies-section',
