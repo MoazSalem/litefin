@@ -188,13 +188,16 @@ export class ApiClient {
         this.lastUrl = url;
 
         // Build headers
-        const authHeader = this.getAuthHeader();
         const headers = {
-            'X-Emby-Authorization': authHeader,
-            'Authorization': authHeader,      // Standard header for modern servers/proxies
             'Accept': 'application/json',     // Explicitly request JSON response
             ...options.headers
         };
+
+        if (!options.skipAuth) {
+            const authHeader = this.getAuthHeader();
+            headers['X-Emby-Authorization'] = authHeader;
+            headers['Authorization'] = authHeader;      // Standard header for modern servers/proxies
+        }
 
         if (!options.body || !(options.body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
@@ -345,8 +348,8 @@ export class ApiClient {
     /**
      * GET request helper
      */
-    async get(endpoint, params = null) {
-        return this.request(endpoint, { method: 'GET', params });
+    async get(endpoint, params = null, options = {}) {
+        return this.request(endpoint, { method: 'GET', params, ...options });
     }
 
     /**
@@ -359,8 +362,8 @@ export class ApiClient {
     /**
      * DELETE request helper
      */
-    async delete(endpoint) {
-        return this.request(endpoint, { method: 'DELETE' });
+    async delete(endpoint, options = {}) {
+        return this.request(endpoint, { method: 'DELETE', ...options });
     }
 
     // ========================================================================
@@ -370,8 +373,8 @@ export class ApiClient {
     /**
      * Get server public info
      */
-    async getPublicInfo() {
-        return this.get('/System/Info/Public');
+    async getPublicInfo(options = {}) {
+        return this.get('/System/Info/Public', null, { skipAuth: true, ...options });
     }
 
     /**
@@ -461,8 +464,8 @@ export class ApiClient {
     /**
      * Get current user info
      */
-    async getCurrentUser() {
-        return this.get(`/Users/${this._userId}`);
+    async getCurrentUser(options = {}) {
+        return this.get(`/Users/${this._userId}`, null, options);
     }
 
     /**

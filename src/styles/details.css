@@ -151,7 +151,6 @@
 }
 
 .hero-info {
-    margin-bottom: 24px;
     position: relative;
     /* Anchor for logo */
 }
@@ -230,6 +229,11 @@
 
 .meta-item {
     margin-right: 20px;
+}
+
+.meta-item-dates {
+    font-size: 1.3rem;
+    color: var(--jf-text-secondary);
 }
 
 .meta-item:last-child {
@@ -365,6 +369,14 @@
     background-clip: padding-box;
     cursor: pointer;
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+
+.btn-icon:hover {
+   border: 2px solid var(--jf-action-btn-active-border) !important;
+}
+
+.play-btn:hover, .resume-btn:hover {
+    border: 2px solid var(--jf-accent) !important;
 }
 
 .btn-icon svg,

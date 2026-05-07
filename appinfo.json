@@ -1,6 +1,6 @@
 {
     "id": "org.litefin.app",
-    "version": "0.40.0",
+    "version": "0.45.0",
     "vendor": "Litefin",
     "type": "web",
     "main": "index.html",
@@ -14,5 +14,6 @@
     "bgImage": "assets/splash.png",
     "splashBackground": "assets/splash.png",
     "bgColor": "#0f0a14",
-    "iconColor": "#0f0a14"
+    "iconColor": "#0f0a14",
+    "supportTouchMode": "full"
 }

@@ -290,40 +290,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Theme Section -->
-                <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
-            
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ThemeMode">${i18n.t('ThemeMode') || 'Theme Mode'}</span>
-                        <span class="setting-description" data-i18n="ThemeModeDescription">${i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'theme-mode-select',
-                            [
-                                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
-                                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
-                                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
-                                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
-                            ],
-                            layoutManager.getThemeMode()
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ThemeColor">${i18n.t('ThemeColor') || 'Theme Color'}</span>
-                        <span class="setting-description" data-i18n="ThemeColorDescription">${i18n.t('ThemeColorDescription') || 'Choose your primary accent color.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <div class="theme-color-grid">
-                            ${this._renderColorOptions()}
-                        </div>
-                    </div>
-                </div>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="AppFont">${i18n.t('AppFont')}</span>
@@ -334,7 +300,10 @@ class SettingsPage extends Page {
                             'ui-font-select',
                             [
                                 { value: 'poppins', label: i18n.t('ModernPoppins') },
-                                { value: 'system', label: i18n.t('DefaultTizenSans') },
+                                {
+                                    value: 'system',
+                                    label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
+                                },
                                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                                 { value: 'roboto', label: i18n.t('FontRoboto') },
                                 { value: 'google', label: i18n.t('FontGoogleSans') },
@@ -376,6 +345,72 @@ class SettingsPage extends Page {
                                 { value: '1.4', label: '140%' }
                             ],
                             layoutManager.getTextScale().toString()
+                        )}
+                    </div>
+                </div>
+
+                <!-- Theme Section -->
+                <h3 class="setting-section-title" data-i18n="ColorTheme">${i18n.t('ColorTheme')}</h3>
+            
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeMode">${i18n.t('ThemeMode') || 'Theme Mode'}</span>
+                        <span class="setting-description" data-i18n="ThemeModeDescription">${i18n.t('ThemeModeDescription') || 'Choose the base visual style of the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'theme-mode-select',
+                            [
+                                { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+                                { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+                                { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+                                { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
+                            ],
+                            layoutManager.getThemeMode()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ThemeColor">${i18n.t('ThemeColor') || 'Theme Color'}</span>
+                        <span class="setting-description" data-i18n="ThemeColorDescription">${i18n.t('ThemeColorDescription') || 'Choose your primary accent color.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <div class="theme-color-grid">
+                            ${this._renderColorOptions()}
+                        </div>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
+                        <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
+                                id="toggle-rounded-corners" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-button-borders-select',
+                            [
+                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
+                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
+                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
+                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
+                            ],
+                            layoutManager.getOsdButtonBorders()
                         )}
                     </div>
                 </div>
@@ -431,18 +466,78 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Details Page Metadata Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="RoundedCorners">${i18n.t('RoundedCorners')}</span>
-                        <span class="setting-description" data-i18n="RoundedCornersDescription">${i18n.t('RoundedCornersDescription')}</span>
+                        <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
+                        <span class="setting-description" data-i18n="ShowAddedDateDescription">${i18n.t('ShowAddedDateDescription') || 'Display the date this item was added to your library on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getRoundedCorners() ? 'active' : ''}" 
-                                id="toggle-rounded-corners" 
+                        <button class="toggle-switch ${storage.getItem('pref:showAddedDate') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-added-date" 
                                 tabindex="0">
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowDateAired">${i18n.t('LabelShowDateAired') || 'Show Date Aired'}</span>
+                        <span class="setting-description" data-i18n="ShowDateAiredDescription">${i18n.t('ShowDateAiredDescription') || 'Display the premiere date on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showDateAired') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-date-aired" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- controls Section -->
+                <h3 class="setting-section-title" data-i18n="controls">${i18n.t('controls')}</h3>                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HoverScrollNavigation">${i18n.t('HoverScrollNavigation') || 'Scroll Navigation'}</span>
+                        <span class="setting-description" data-i18n="HoverScrollNavigationDescription">${i18n.t('HoverScrollNavigationDescription') || 'Traverse vertical lists and rows using the scroll wheel or magic remote wheel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hoverScrollNavigation') !== 'false' ? 'active' : ''}" 
+                                id="toggle-hover-scroll-nav" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnablePlayerCursor">${i18n.t('EnablePlayerCursor') || 'Enable Player Cursor'}</span>
+                        <span class="setting-description" data-i18n="EnablePlayerCursorDescription">${i18n.t('EnablePlayerCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
+                                id="toggle-magic-cursor" 
+                                data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
+                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableHoverTrickplay') ? 'active' : ''}" 
+                                id="toggle-hover-trickplay" 
+                                data-setting="enableHoverTrickplay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
 
@@ -1235,6 +1330,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="SeekWithArrows">${i18n.t('SeekWithArrows') || 'Seek with Arrows'}</span>
+                        <span class="setting-description" data-i18n="SeekWithArrowsDescription">${i18n.t('SeekWithArrowsDescription') || 'When the player controls are hidden, pressing Left or Right will instantly seek instead of just showing the controls.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('seekWithArrows') ? 'active' : ''}" 
+                                id="toggle-seek-with-arrows" 
+                                data-setting="seekWithArrows"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="OsdFocusRestoreMode">${i18n.t('OsdFocusRestoreMode') || 'OSD Focus Restore'}</span>
                         <span class="setting-description" data-i18n="OsdFocusRestoreModeDescription">${i18n.t('OsdFocusRestoreModeDescription') || 'Where the remote cursor lands when the player controls reappear after being auto-hidden.'}</span>
                     </div>
@@ -1254,6 +1363,20 @@ class SettingsPage extends Page {
                             ],
                             PlayerSettings.get('osdFocusRestoreMode') || 'always'
                         )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="KeepFocusOnSubtitleOffset">${i18n.t('KeepFocusOnSubtitleOffset') || 'Pin Subtitle Offset'}</span>
+                        <span class="setting-description" data-i18n="KeepFocusOnSubtitleOffsetDescription">${i18n.t('KeepFocusOnSubtitleOffsetDescription') || 'Prevent the player controls from auto-hiding while the subtitle offset menu is open.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('keepFocusOnSubtitleOffset') ? 'active' : ''}" 
+                                id="toggle-keep-focus-subtitle-offset" 
+                                data-setting="keepFocusOnSubtitleOffset"
+                                tabindex="0">
+                        </button>
                     </div>
                 </div>
 
@@ -1603,6 +1726,249 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- Playback Buffering Section -->
+                <h3 class="setting-section-title" data-i18n="PlaybackBuffering">${i18n.t('PlaybackBuffering') || 'Playback Buffering'}</h3>
+                
+                ${(() => {
+                    let html = '';
+
+                    // WebOS Buffering
+                    if (currentBackend === 'webos' || (currentBackend === 'auto' && platformInfo.isWebOS)) {
+                        html += `
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="WebosBufferGate">${i18n.t('WebosBufferGate') || 'Buffer Gate'}</span>
+                                <span class="setting-description" data-i18n="WebosBufferGateDesc">${i18n.t('WebosBufferGateDesc') || 'Threshold in seconds for micro-stall recovery.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'webos-buffer-gate-select',
+                                    [
+                                        { value: 0.05, label: '0.05s' },
+                                        { value: 0.1, label: '0.1s' },
+                                        { value: 0.3, label: '0.3s' },
+                                        { value: 0.5, label: '0.5s' },
+                                        { value: 1.0, label: '1.0s' },
+                                        { value: 2.0, label: '2.0s' },
+                                        { value: 3.0, label: '3.0s' },
+                                        { value: 5.0, label: '5.0s' }
+                                    ],
+                                    PlayerSettings.get('webosBufferGate') || 0.3
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="WebosStallRecovery">${i18n.t('WebosStallRecovery') || 'Stall Recovery Timeout'}</span>
+                                <span class="setting-description" data-i18n="WebosStallRecoveryDesc">${i18n.t('WebosStallRecoveryDesc') || 'Timeout in milliseconds before a recovery kick is applied.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'webos-stall-recovery-select',
+                                    [
+                                        { value: 250, label: '250ms' },
+                                        { value: 500, label: '500ms' },
+                                        { value: 1000, label: '1000ms' },
+                                        { value: 2000, label: '2000ms' },
+                                        { value: 3000, label: '3000ms' },
+                                        { value: 5000, label: '5000ms' },
+                                        { value: 8000, label: '8000ms' },
+                                        { value: 10000, label: '10000ms' }
+                                    ],
+                                    PlayerSettings.get('webosStallRecovery') || 1000
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="TranscodingSegmentLength">${i18n.t('TranscodingSegmentLength') || 'Segment Length'}</span>
+                                <span class="setting-description" data-i18n="TranscodingSegmentLengthDesc">${i18n.t('TranscodingSegmentLengthDesc') || 'Length of HLS segments generated by the server. Only applied when the video is transcoded.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'webos-segment-length-select',
+                                    [
+                                        { value: 1, label: i18n.t('Seconds', [1]) || '1s' },
+                                        { value: 2, label: i18n.t('Seconds', [2]) || '2s' },
+                                        { value: 3, label: i18n.t('Seconds', [3]) || '3s' },
+                                        { value: 4, label: i18n.t('Seconds', [4]) || '4s' },
+                                        { value: 5, label: i18n.t('Seconds', [5]) || '5s' },
+                                        { value: 6, label: i18n.t('Seconds', [6]) || '6s' },
+                                        { value: 8, label: i18n.t('Seconds', [8]) || '8s' },
+                                        { value: 10, label: i18n.t('Seconds', [10]) || '10s' },
+                                        { value: 12, label: i18n.t('Seconds', [12]) || '12s' },
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' }
+                                    ],
+                                    PlayerSettings.get('webosSegmentLength') || 3
+                                )}
+                            </div>
+                        </div>
+                        `;
+                    }
+
+                    // Tizen Buffering
+                    if (currentBackend === 'avplay' || (currentBackend === 'auto' && platformInfo.isTizen)) {
+                        html += `
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="TizenInitialBuffer">${i18n.t('TizenInitialBuffer') || 'Initial Buffer'}</span>
+                                <span class="setting-description" data-i18n="TizenInitialBufferDesc">${i18n.t('TizenInitialBufferDesc') || 'Seconds of video to buffer before playback begins.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'tizen-initial-buffer-select',
+                                    [
+                                        { value: 1, label: i18n.t('Seconds', [1]) || '1s' },
+                                        { value: 2, label: i18n.t('Seconds', [2]) || '2s' },
+                                        { value: 4, label: i18n.t('Seconds', [4]) || '4s' },
+                                        { value: 6, label: i18n.t('Seconds', [6]) || '6s' },
+                                        { value: 8, label: i18n.t('Seconds', [8]) || '8s' },
+                                        { value: 10, label: i18n.t('Seconds', [10]) || '10s' },
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' },
+                                        { value: 20, label: i18n.t('Seconds', [20]) || '20s' },
+                                        { value: 30, label: i18n.t('Seconds', [30]) || '30s' },
+                                        { value: 60, label: i18n.t('Seconds', [60]) || '60s' }
+                                    ],
+                                    PlayerSettings.get('tizenInitialBuffer') || 6
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="TizenResumeBuffer">${i18n.t('TizenResumeBuffer') || 'Resume Buffer'}</span>
+                                <span class="setting-description" data-i18n="TizenResumeBufferDesc">${i18n.t('TizenResumeBufferDesc') || 'Seconds of video to buffer after a seek or underflow.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'tizen-resume-buffer-select',
+                                    [
+                                        { value: 1, label: i18n.t('Seconds', [1]) || '1s' },
+                                        { value: 2, label: i18n.t('Seconds', [2]) || '2s' },
+                                        { value: 4, label: i18n.t('Seconds', [4]) || '4s' },
+                                        { value: 6, label: i18n.t('Seconds', [6]) || '6s' },
+                                        { value: 8, label: i18n.t('Seconds', [8]) || '8s' },
+                                        { value: 10, label: i18n.t('Seconds', [10]) || '10s' },
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' },
+                                        { value: 20, label: i18n.t('Seconds', [20]) || '20s' },
+                                        { value: 30, label: i18n.t('Seconds', [30]) || '30s' },
+                                        { value: 60, label: i18n.t('Seconds', [60]) || '60s' }
+                                    ],
+                                    PlayerSettings.get('tizenResumeBuffer') || 4
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="TranscodingSegmentLength">${i18n.t('TranscodingSegmentLength') || 'Segment Length'}</span>
+                                <span class="setting-description" data-i18n="TranscodingSegmentLengthDesc">${i18n.t('TranscodingSegmentLengthDesc') || 'Length of HLS segments generated by the server. Only applied when the video is transcoded.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'tizen-segment-length-select',
+                                    [
+                                        { value: 1, label: i18n.t('Seconds', [1]) || '1s' },
+                                        { value: 2, label: i18n.t('Seconds', [2]) || '2s' },
+                                        { value: 3, label: i18n.t('Seconds', [3]) || '3s' },
+                                        { value: 4, label: i18n.t('Seconds', [4]) || '4s' },
+                                        { value: 5, label: i18n.t('Seconds', [5]) || '5s' },
+                                        { value: 6, label: i18n.t('Seconds', [6]) || '6s' },
+                                        { value: 8, label: i18n.t('Seconds', [8]) || '8s' },
+                                        { value: 10, label: i18n.t('Seconds', [10]) || '10s' },
+                                        { value: 12, label: i18n.t('Seconds', [12]) || '12s' },
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' }
+                                    ],
+                                    PlayerSettings.get('tizenSegmentLength') || 6
+                                )}
+                            </div>
+                        </div>
+                        `;
+                    }
+
+                    // HTML5 Buffering
+                    if (
+                        currentBackend === 'html5' ||
+                        (currentBackend === 'auto' && !platformInfo.isTizen && !platformInfo.isWebOS)
+                    ) {
+                        html += `
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="Html5MaxBufferLength">${i18n.t('Html5MaxBufferLength') || 'Max Buffer Length'}</span>
+                                <span class="setting-description" data-i18n="Html5MaxBufferLengthDesc">${i18n.t('Html5MaxBufferLengthDesc') || 'Maximum length of video to keep in the forward buffer (seconds).'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'html5-max-buffer-select',
+                                    [
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' },
+                                        { value: 30, label: i18n.t('Seconds', [30]) || '30s' },
+                                        { value: 45, label: i18n.t('Seconds', [45]) || '45s' },
+                                        { value: 60, label: i18n.t('Seconds', [60]) || '60s' },
+                                        { value: 90, label: i18n.t('Seconds', [90]) || '90s' },
+                                        { value: 120, label: i18n.t('Seconds', [120]) || '120s' },
+                                        { value: 180, label: i18n.t('Seconds', [180]) || '180s' },
+                                        { value: 300, label: i18n.t('Seconds', [300]) || '300s' },
+                                        { value: 600, label: i18n.t('Seconds', [600]) || '600s' },
+                                        { value: 900, label: i18n.t('Seconds', [900]) || '900s' }
+                                    ],
+                                    PlayerSettings.get('html5MaxBufferLength') || 60
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="Html5MaxMaxBufferLength">${i18n.t('Html5MaxMaxBufferLength') || 'Max Max Buffer Length'}</span>
+                                <span class="setting-description" data-i18n="Html5MaxMaxBufferLengthDesc">${i18n.t('Html5MaxMaxBufferLengthDesc') || 'Maximum length of video buffer allowed when bitrates are low.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'html5-max-max-buffer-select',
+                                    [
+                                        { value: 30, label: i18n.t('Seconds', [30]) || '30s' },
+                                        { value: 60, label: i18n.t('Seconds', [60]) || '60s' },
+                                        { value: 90, label: i18n.t('Seconds', [90]) || '90s' },
+                                        { value: 120, label: i18n.t('Seconds', [120]) || '120s' },
+                                        { value: 180, label: i18n.t('Seconds', [180]) || '180s' },
+                                        { value: 240, label: i18n.t('Seconds', [240]) || '240s' },
+                                        { value: 300, label: i18n.t('Seconds', [300]) || '300s' },
+                                        { value: 480, label: i18n.t('Seconds', [480]) || '480s' },
+                                        { value: 600, label: i18n.t('Seconds', [600]) || '600s' },
+                                        { value: 900, label: i18n.t('Seconds', [900]) || '900s' },
+                                        { value: 1200, label: i18n.t('Seconds', [1200]) || '1200s' }
+                                    ],
+                                    PlayerSettings.get('html5MaxMaxBufferLength') || 120
+                                )}
+                            </div>
+                        </div>
+                        <div class="setting-item">
+                            <div class="setting-label">
+                                <span class="setting-name" data-i18n="TranscodingSegmentLength">${i18n.t('TranscodingSegmentLength') || 'Segment Length'}</span>
+                                <span class="setting-description" data-i18n="TranscodingSegmentLengthDesc">${i18n.t('TranscodingSegmentLengthDesc') || 'Length of HLS segments generated by the server. Only applied when the video is transcoded.'}</span>
+                            </div>
+                            <div class="setting-control">
+                                ${this._renderDropdown(
+                                    'html5-segment-length-select',
+                                    [
+                                        { value: 1, label: i18n.t('Seconds', [1]) || '1s' },
+                                        { value: 2, label: i18n.t('Seconds', [2]) || '2s' },
+                                        { value: 3, label: i18n.t('Seconds', [3]) || '3s' },
+                                        { value: 4, label: i18n.t('Seconds', [4]) || '4s' },
+                                        { value: 5, label: i18n.t('Seconds', [5]) || '5s' },
+                                        { value: 6, label: i18n.t('Seconds', [6]) || '6s' },
+                                        { value: 8, label: i18n.t('Seconds', [8]) || '8s' },
+                                        { value: 10, label: i18n.t('Seconds', [10]) || '10s' },
+                                        { value: 12, label: i18n.t('Seconds', [12]) || '12s' },
+                                        { value: 15, label: i18n.t('Seconds', [15]) || '15s' }
+                                    ],
+                                    PlayerSettings.get('html5SegmentLength') || 2
+                                )}
+                            </div>
+                        </div>
+                        `;
+                    }
+
+                    return html;
+                })()}
             </div>
         `;
     }
@@ -1731,7 +2097,10 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'subtitle-font-select',
                             [
-                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                {
+                                    value: '',
+                                    label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
+                                },
                                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
                                 { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
@@ -2000,6 +2369,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="OverrideAssFonts">${i18n.t('OverrideAssFonts')}</span>
+                        <span class="setting-description" data-i18n="OverrideAssFontsDescription">${i18n.t('OverrideAssFontsDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${PlayerSettings.get('subtitleOverrideAssFonts') === true ? 'active' : ''}" 
+                                 id="toggle-subtitle-override-ass-fonts" 
+                                 data-setting="subtitleOverrideAssFonts"
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="subtitle-font-ass-container" style="display: ${PlayerSettings.get('subtitleOverrideAssFonts') === true ? '' : 'none'}">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="AssFontFamily">${i18n.t('AssFontFamily')}</span>
                         <span class="setting-description" data-i18n="FontFamilyAssDescription">${i18n.t('FontFamilyAssDescription')}</span>
                     </div>
@@ -2007,7 +2390,10 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'subtitle-font-ass-select',
                             [
-                                { value: '', label: i18n.t('DefaultTizenSans') },
+                                {
+                                    value: '',
+                                    label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans')
+                                },
                                 { value: 'poppins', label: i18n.t('ModernPoppins') },
                                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                                 { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -2801,6 +3187,35 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Keep Focus On Subtitle Offset
+        const keepFocusOffsetBtn = this.$('#toggle-keep-focus-subtitle-offset');
+        if (keepFocusOffsetBtn) {
+            keepFocusOffsetBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('keepFocusOnSubtitleOffset');
+                const newValue = !currentValue;
+                PlayerSettings.set('keepFocusOnSubtitleOffset', newValue);
+                keepFocusOffsetBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle ASS Font Override
+        const assFontOverrideBtn = this.$('#toggle-subtitle-override-ass-fonts');
+        if (assFontOverrideBtn) {
+            assFontOverrideBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('subtitleOverrideAssFonts') === true;
+                const newValue = !currentValue;
+                PlayerSettings.set('subtitleOverrideAssFonts', newValue);
+                assFontOverrideBtn.classList.toggle('active', newValue);
+
+                // Update visibility of the font dropdown container
+                const fontContainer = this.$('#subtitle-font-ass-container');
+                if (fontContainer) fontContainer.style.display = newValue ? '' : 'none';
+
+                // Invalidate focus cache so the newly visible items can be focused
+                focusManager.invalidateCache();
+            });
+        }
+
         // Toggle ASS Outline/Shadow Override
         const assOverrideBtn = this.$('#subtitle-override-ass-toggle');
         if (assOverrideBtn) {
@@ -3537,6 +3952,18 @@ class SettingsPage extends Page {
             'segment-action-recap-select': { type: 'player', key: 'skipActionRecap' },
             'segment-action-preview-select': { type: 'player', key: 'skipActionPreview' },
 
+            'webos-buffer-gate-select': { type: 'player', key: 'webosBufferGate' },
+            'webos-stall-recovery-select': { type: 'player', key: 'webosStallRecovery' },
+            'webos-segment-length-select': { type: 'player', key: 'webosSegmentLength' },
+
+            'tizen-initial-buffer-select': { type: 'player', key: 'tizenInitialBuffer' },
+            'tizen-resume-buffer-select': { type: 'player', key: 'tizenResumeBuffer' },
+            'tizen-segment-length-select': { type: 'player', key: 'tizenSegmentLength' },
+
+            'html5-max-buffer-select': { type: 'player', key: 'html5MaxBufferLength' },
+            'html5-max-max-buffer-select': { type: 'player', key: 'html5MaxMaxBufferLength' },
+            'html5-segment-length-select': { type: 'player', key: 'html5SegmentLength' },
+
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
@@ -3545,7 +3972,8 @@ class SettingsPage extends Page {
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
             'hero-carousel-interval-select': { key: 'pref:heroCarouselInterval', type: 'local' },
             'hero-carousel-count-select': { key: 'pref:heroCarouselCount', type: 'local' },
-            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' }
+            'sidebar-mode-select': { key: 'pref:sidebarMode', type: 'local' },
+            'osd-button-borders-select': { key: 'litefin:osdButtonBorders', type: 'local' }
         };
 
         this.$$('.select-btn').forEach((btn) => {
@@ -3574,6 +4002,9 @@ class SettingsPage extends Page {
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
+                        } else if (id === 'osd-button-borders-select') {
+                            // SPECIAL CASE: OSD Button Borders handled by LayoutManager
+                            layoutManager.setOsdButtonBorders(newValue);
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
@@ -3588,12 +4019,43 @@ class SettingsPage extends Page {
 
                             if (
                                 settingConfig.key === 'layout' ||
-                                settingConfig.key === 'app_language' ||
-                                settingConfig.key === 'layout_direction'
+                                settingConfig.key === 'layout_direction' ||
+                                settingConfig.key === 'app_language'
                             ) {
-                                // Flush memory to disk synchronously before the reboot nukes the event loop
+                                /*
+                                 * ----------------------------------------------------------------
+                                 * Language/Layout changes need a TRUE hard reload.
+                                 *
+                                 * WHY window.location.reload() BREAKS ON TIZEN/WEBOS:
+                                 * On these platforms, reload() is a *soft* reload — the JS
+                                 * module cache is preserved. The 'app' singleton stays alive
+                                 * with _initialized=true, so App.init() exits early without
+                                 * ever calling i18n.init(). The dictionary stays {}, causing
+                                 * all i18n.t() calls to return raw key strings.
+                                 *
+                                 * FIX: Navigate to the app's root entry-point URL *without
+                                 * the hash fragment*. The WebView treats this as a fresh
+                                 * cold-start navigation, fully re-parsing and re-executing
+                                 * all JS modules from scratch — identical to a native restart.
+                                 * ----------------------------------------------------------------
+                                 */
                                 storage.flush();
-                                window.location.reload();
+
+                                // Compute the base URL (strips the hash / current route)
+                                const href = window.location.href;
+                                const protocol = window.location.protocol;
+                                let entryUrl;
+
+                                if (protocol === 'file:') {
+                                    // file:// packaged app — strip everything from '#' onward
+                                    entryUrl = href.split('#')[0];
+                                } else {
+                                    // http(s):// dev server — use origin + pathname (no hash)
+                                    entryUrl = window.location.origin + window.location.pathname;
+                                }
+
+                                // Hard-navigate: forces a true cold-start re-init on all platforms
+                                window.location.href = entryUrl;
                             }
 
                             if (settingConfig.key === 'pref:libraryThumbMode') {
@@ -3624,13 +4086,44 @@ class SettingsPage extends Page {
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);
                         } else if (settingConfig.type === 'player') {
-                            // Numeric settings need parseInt conversion
-                            const numericKeys = ['skipForwardLength', 'skipBackLength', 'maxBitrateInternet'];
-                            const val = numericKeys.includes(settingConfig.key) ? parseInt(newValue, 10) : newValue;
+                            // Numeric settings need parseFloat/parseInt conversion
+                            const floatKeys = ['webosBufferGate'];
+                            const intKeys = [
+                                'skipForwardLength',
+                                'skipBackLength',
+                                'maxBitrateInternet',
+                                'webosStallRecovery',
+                                'webosSegmentLength',
+                                'tizenInitialBuffer',
+                                'tizenResumeBuffer',
+                                'tizenSegmentLength',
+                                'html5MaxBufferLength',
+                                'html5MaxMaxBufferLength',
+                                'html5SegmentLength'
+                            ];
+
+                            let val = newValue;
+                            if (floatKeys.includes(settingConfig.key)) {
+                                val = parseFloat(newValue);
+                            } else if (intKeys.includes(settingConfig.key)) {
+                                val = parseInt(newValue, 10);
+                            }
                             PlayerSettings.set(settingConfig.key, val);
 
+                            // Trigger complete tab re-render when changing player backend to show the correct buffering options
+                            if (settingConfig.key === 'playerBackend') {
+                                this._switchTab('player', false, true);
+                                return; // Skip further processing, DOM is refreshed
+                            }
+
                             // Invalidate cached device capabilities when profile-affecting settings change
-                            if (settingConfig.key === 'maxResolution' || settingConfig.key === 'maxBitrateInternet') {
+                            if (
+                                settingConfig.key === 'maxResolution' ||
+                                settingConfig.key === 'maxBitrateInternet' ||
+                                settingConfig.key === 'webosSegmentLength' ||
+                                settingConfig.key === 'tizenSegmentLength' ||
+                                settingConfig.key === 'html5SegmentLength'
+                            ) {
                                 clearCapabilitiesCache();
                             }
 
@@ -3786,6 +4279,78 @@ class SettingsPage extends Page {
                 PlayerSettings.set('trailerAutoChain', newValue);
                 trailerAutoChainToggle.classList.toggle('active', newValue);
                 log.info(`Trailer Auto-Chain set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Seek With Arrows
+        const seekWithArrowsToggle = this.$('#toggle-seek-with-arrows');
+        if (seekWithArrowsToggle) {
+            seekWithArrowsToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('seekWithArrows');
+                const newValue = !currentValue;
+                PlayerSettings.set('seekWithArrows', newValue);
+                seekWithArrowsToggle.classList.toggle('active', newValue);
+                log.info(`Seek with Arrows set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Magic Cursor
+        const magicCursorToggle = this.$('#toggle-magic-cursor');
+        if (magicCursorToggle) {
+            magicCursorToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableMagicCursor');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableMagicCursor', newValue);
+                magicCursorToggle.classList.toggle('active', newValue);
+                log.info(`Magic Cursor set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Scroll Navigation
+        const hoverScrollNavToggle = this.$('#toggle-hover-scroll-nav');
+        if (hoverScrollNavToggle) {
+            hoverScrollNavToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:hoverScrollNavigation') !== 'false';
+                const newValue = !currentValue;
+                storage.setItem('pref:hoverScrollNavigation', newValue.toString());
+                hoverScrollNavToggle.classList.toggle('active', newValue);
+                log.info(`Scroll Navigation set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hover Trickplay
+        const hoverTrickplayToggle = this.$('#toggle-hover-trickplay');
+        if (hoverTrickplayToggle) {
+            hoverTrickplayToggle.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('enableHoverTrickplay');
+                const newValue = !currentValue;
+                PlayerSettings.set('enableHoverTrickplay', newValue);
+                hoverTrickplayToggle.classList.toggle('active', newValue);
+                log.info(`Hover Trickplay set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Show Added Date
+        const showAddedDateToggle = this.$('#toggle-show-added-date');
+        if (showAddedDateToggle) {
+            showAddedDateToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:showAddedDate') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:showAddedDate', newValue.toString());
+                showAddedDateToggle.classList.toggle('active', newValue);
+                log.info(`Show Added Date set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Show Date Aired
+        const showDateAiredToggle = this.$('#toggle-show-date-aired');
+        if (showDateAiredToggle) {
+            showDateAiredToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:showDateAired') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:showDateAired', newValue.toString());
+                showDateAiredToggle.classList.toggle('active', newValue);
+                log.info(`Show Date Aired set to: ${newValue}`);
             });
         }
 

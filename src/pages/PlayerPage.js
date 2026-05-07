@@ -95,6 +95,7 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
+                            <button class="btn btn-secondary focusable" id="error-force-transcode-btn" tabindex="0">Force Transcode</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -229,8 +230,11 @@ class PlayerPage extends Page {
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
-            log.debug('Initializing PlayQueue with context:', { contextType, contextId });
-            await playQueue.init(this._item, contextType, contextId);
+            // For BoxSet queues, the sort order is forwarded from DetailsPage so the
+            // full queue is ordered the same way the collection display grid is ordered.
+            const boxsetSortBy = state.get('player:boxsetSortBy');
+            log.debug('Initializing PlayQueue with context:', { contextType, contextId, boxsetSortBy });
+            await playQueue.init(this._item, contextType, contextId, boxsetSortBy);
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
@@ -242,6 +246,7 @@ class PlayerPage extends Page {
             // Clear context state so it doesn't leak to next playback
             state.set('player:contextType', null);
             state.set('player:contextId', null);
+            state.set('player:boxsetSortBy', null);
 
             // Calculate resume position if needed
             if (startPositionTicks !== null && !isNaN(startPositionTicks)) {
@@ -538,6 +543,58 @@ class PlayerPage extends Page {
             eventBus.on('key:channelDown', this._onChannelDown);
 
             // ================================================================
+            // MAGIC CURSOR SUPPORT (WebOS / Tizen Pointer)
+            // ================================================================
+            
+            // 1. Moving the magic remote wakes up the OSD.
+            //    Throttled to 200ms — without throttling, every pixel of cursor movement
+            //    spams show() + resetAutoHide(), causing the timer to reset continuously
+            //    and making it impossible for the OSD to settle before the user clicks.
+            let _mouseMoveThrottle = null;
+            this.el.addEventListener('mousemove', (e) => {
+                if (!PlayerSettings.get('enableMagicCursor')) return;
+                
+                if (_mouseMoveThrottle) return;
+                _mouseMoveThrottle = setTimeout(() => { _mouseMoveThrottle = null; }, 200);
+                if (this._osd) {
+                    this._osd._onMouseMove(e);
+                }
+            });
+
+            // 2. Clicking the video background shows/hides the OSD.
+            //    Use a robust contains() guard against the entire #osd-overlay subtree
+            //    so OSD button clicks can never accidentally reach this handler even if
+            //    stopPropagation() is still in flight on older TV browsers.
+            this.el.addEventListener('click', (e) => {
+                if (!PlayerSettings.get('enableMagicCursor')) return;
+
+                const osdOverlay = this.el.querySelector('#osd-overlay');
+
+                // If the click originated from anywhere inside the OSD container, ignore it.
+                // This covers buttons, slider, modals, overlays — anything inside #osd-overlay.
+                if (osdOverlay && osdOverlay.contains(e.target)) {
+                    return;
+                }
+
+                // Ignore the error panel
+                if (e.target.closest('.error-panel')) {
+                    return;
+                }
+
+                // Click landed on the raw video background.
+                // - If OSD is hidden: wake it up.
+                // - If OSD is visible: toggle play/pause (standard media player behaviour).
+                //   This branch is only reached for genuine background clicks — OSD buttons
+                //   and the slider are fully guarded by the contains() check above.
+                if (this._osd && !this._osd._isOsdVisible) {
+                    this._osd.show();
+                    this._osd.resetAutoHide();
+                } else {
+                    this._onRemotePlayPause();
+                }
+            });
+
+            // ================================================================
             // PHYSICAL REMOTE CONTROL HANDLERS (WebOS/Tizen)
             // ================================================================
             // Link physical hardware keys to our existing remote command logic.
@@ -782,7 +839,7 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
-            await this._player.play({
+            const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
@@ -791,7 +848,14 @@ class PlayerPage extends Page {
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
-            });
+            };
+
+            if (this._forceTranscode) {
+                playOptions.playbackMode = 'transcode';
+                this._forceTranscode = false; // Reset after applying
+            }
+
+            await this._player.play(playOptions);
         } catch (err) {
             if (err.name === 'NotAllowedError') {
                 log.warn('_startPlayback: Autoplay blocked. Forcing mute and retrying.');
@@ -2023,10 +2087,15 @@ class PlayerPage extends Page {
 
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
+            const forceTranscodeBtn = this.$('#error-force-transcode-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
+            }
+
+            if (forceTranscodeBtn) {
+                forceTranscodeBtn.onclick = () => this._retryPlayback(true);
             }
 
             if (backBtn) {
@@ -2048,7 +2117,7 @@ class PlayerPage extends Page {
     /**
      * Attempt to restart playback after an error
      */
-    async _retryPlayback() {
+    async _retryPlayback(forceTranscode = false) {
         // Hide error and unregister focus
         const errorEl = this.$('#player-error');
         if (errorEl) {
@@ -2058,6 +2127,10 @@ class PlayerPage extends Page {
 
         try {
             this._showLoading(true);
+
+            if (forceTranscode) {
+                this._forceTranscode = true;
+            }
 
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {
@@ -2274,7 +2347,6 @@ class PlayerPage extends Page {
             log.warn('Error during stop:', error);
         }
 
-        // ----------------------------------------------------------------
         // If clearChain is true (user pressed Back), remove the auto-chain
         // flag so DetailsPage.onInit() does not launch the remote trailer.
         // If clearChain is false (Next/chain exit), leave the flag so the
@@ -2288,8 +2360,31 @@ class PlayerPage extends Page {
         // but kept for potential future use (e.g., analytics, remote control).
         eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'userStop' });
 
-        // Navigate back to the Details page
-        router.back();
+        // ----------------------------------------------------------------
+        // Navigation Override: Ensure we return to the Details page of the
+        // item that was LAST playing, not the one that started the session.
+        //
+        // This is critical for series, collections, and playlists where the
+        // user may skip multiple tracks. Returning to the metadata page of
+        // the item they were just watching is more intuitive than returning
+        // to the initial entry point.
+        // ----------------------------------------------------------------
+        if (this._item && this._item.Id && !this._item.isIntro && this._item.Type !== 'TvChannel' && this._item.Type !== 'Trailer') {
+            const detailsPath = `/details/${this._item.Id}`;
+            
+            // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
+            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly 
+            // where we left off. In that case, App.js pushed the player instead of replacing, 
+            // so we just call router.back().
+            if (this.params.fromSlideshow === 'true') {
+                router.back();
+            } else {
+                router.navigate(detailsPath, { replace: true, isBack: true });
+            }
+        } else {
+            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            router.back();
+        }
     }
 
     // ========================================================================

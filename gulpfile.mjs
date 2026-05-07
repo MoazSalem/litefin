@@ -39,7 +39,7 @@ function spawnAsync(command, opts = {}) {
     });
 }
 
-console.info('Building Litefin Tizen app');
+console.info('Building Litefin');
 
 // Read version from config.xml (Single Source of Truth)
 // We already validated this regex in webpack.config.cjs

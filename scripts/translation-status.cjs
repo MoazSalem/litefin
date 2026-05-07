@@ -95,21 +95,66 @@ function getStatus() {
     });
 
     if (shouldUpdate && fs.existsSync(LANGUAGES_JS)) {
-        console.log(`\n${c.bold}Updating languages.js...${c.reset}`);
+        console.log(`\n${c.bold}Updating and reordering languages.js...${c.reset}`);
+        
         let langJsContent = fs.readFileSync(LANGUAGES_JS, 'utf8');
+        
+        // Extract the array part from the JS file
+        const arrayStart = langJsContent.indexOf('[');
+        const arrayEnd = langJsContent.lastIndexOf(']') + 1;
+        
+        if (arrayStart === -1 || arrayEnd === 0) {
+            console.error(`${c.red}Could not find the array in languages.js${c.reset}`);
+            return;
+        }
 
-        results.forEach(res => {
-            // Find the object with the matching value, e.g., "value": "ar"
-            // Then find the next "completeness": and update it.
-            // This regex look for the "value": "ID" followed by any content up to "completeness": VALUE
-            const regex = new RegExp(`("value":\\s*"${res.lang}",[^]*?"completeness":\\s*)[\\d.]+`, 'g');
-            if (regex.test(langJsContent)) {
-                langJsContent = langJsContent.replace(regex, `$1${res.percent}`);
+        const arrayText = langJsContent.substring(arrayStart, arrayEnd);
+        let languages;
+        try {
+            // We use eval-like parsing or JSON.parse if it's clean JSON
+            // The file looks like clean JSON inside the array, but we'll be careful
+            languages = JSON.parse(arrayText);
+        } catch (e) {
+            console.error(`${c.red}Failed to parse array in languages.js. Ensure it is valid JSON-formatted array.${c.reset}`);
+            return;
+        }
+
+        // Update completeness from results
+        languages.forEach(langObj => {
+            const match = results.find(r => r.lang === langObj.value);
+            if (match) {
+                langObj.completeness = match.percent;
             }
         });
 
-        fs.writeFileSync(LANGUAGES_JS, langJsContent, 'utf8');
-        console.log(`${c.green}Successfully updated completion values in languages.js${c.reset}`);
+        // Add any missing languages from the locales folder that aren't in languages.js yet
+        results.forEach(res => {
+            if (!languages.find(l => l.value === res.lang)) {
+                languages.push({
+                    value: res.lang,
+                    label: res.lang.toUpperCase(), // Fallback label
+                    completeness: res.percent
+                });
+            }
+        });
+
+        // Sort: >85% first (alpha by label), then the rest (alpha by label)
+        languages.sort((a, b) => {
+            const aComplete = a.completeness >= 85;
+            const bComplete = b.completeness >= 85;
+
+            if (aComplete && !bComplete) return -1;
+            if (!aComplete && bComplete) return 1;
+
+            // Both are in the same group, sort by label
+            return a.label.localeCompare(b.label);
+        });
+
+        const newArrayText = JSON.stringify(languages, null, 4);
+        const newContent = `// Auto-generated language mapping\nexport const availableLanguages = ${newArrayText};\n`;
+
+        fs.writeFileSync(LANGUAGES_JS, newContent, 'utf8');
+        console.log(`${c.green}Successfully updated and reordered languages.js${c.reset}`);
     } else if (shouldUpdate) {
         console.error(`${c.red}Could not find languages.js to update.${c.reset}`);
     }

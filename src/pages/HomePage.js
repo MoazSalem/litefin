@@ -164,6 +164,20 @@ class HomePage extends Page {
 
     onDestroyed() {
         this._isMounted = false;
+
+        /*
+         * CRITICAL: Cancel all pending background image preloads immediately.
+         *
+         * The home page queues dozens of `new Image()` preload requests. Each
+         * one holds an HTTP connection slot. Chromium's per-host connection pool
+         * is only 6 slots — if these preloads are still in-flight when the user
+         * navigates to the next page, every API XHR/fetch call blocks for up to
+         * 30s waiting for a free slot. cancel() sets img.src = '' on every
+         * in-flight Image, which causes the browser to abort the TCP request
+         * synchronously and return the slot to the pool.
+         */
+        imageCache.cancel();
+
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
@@ -917,10 +931,22 @@ class HomePage extends Page {
         const container = this.$('#home-rows');
         if (!container) return;
 
-        // ── Click → Navigate ──────────────────────────────────────────────────
-        container.addEventListener('click', (e) => {
+        // ── Click / Mousedown → Navigate ──────────────────────────────────────
+        // We handle both mousedown (fast/snappy) and click (standard/fallback).
+        // This parity with Sidebar.js ensures a responsive "snap" when selecting cards.
+        let lastActivateTime = 0;
+
+        const handleActivate = (e) => {
             const card = e.target.closest('.media-card');
             if (!card?.dataset?.itemId) return;
+
+            const now = Date.now();
+            // Debounce to prevent double-navigation on hardware that fires both events
+            if (now - lastActivateTime < 400) return;
+            lastActivateTime = now;
+
+            // Stop propagation to avoid bubbling to unwanted handlers
+            e.stopPropagation();
 
             // Save focused item + its row ID for exact focus restoration on back-nav
             const sectionEl = card.closest('section[data-row-id]');
@@ -934,14 +960,12 @@ class HomePage extends Page {
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
-                // Special handling for Live TV: redirect to the unified Live TV page
                 if (card.dataset.collectionType === 'livetv') {
                     router.navigate('/livetv');
                 } else {
                     router.navigate(`/library/${card.dataset.itemId}`);
                 }
             } else {
-                // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;
                 if (
                     itemType === 'Person' ||
@@ -949,14 +973,16 @@ class HomePage extends Page {
                     itemType === 'Artist' ||
                     itemType === 'AlbumArtist'
                 ) {
-                    log.info('Navigating to PersonPage:', card.dataset.itemId);
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
-                    log.info('Navigating to item details:', card.dataset.itemId);
                     router.navigate(`/details/${card.dataset.itemId}`);
                 }
             }
-        });
+        };
+
+        // Bind both events for parity with Sidebar.js snappy behavior
+        container.addEventListener('mousedown', handleActivate);
+        container.addEventListener('click', handleActivate);
 
         // ── FocusIn → Sync VirtualCardRow index ──────────────────────────────
         // When focus jumps to a card via SpatialNavigator (bypassing onMove),

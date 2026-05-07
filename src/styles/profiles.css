@@ -128,6 +128,17 @@
     will-change: transform;
 }
 
+.profiles-card:hover{
+   border: 4px solid var(--jf-accent);
+   will-change: transform;
+   -webkit-transform: scale(1.07);
+   transform: scale(1.07);
+}
+
+.profiles-switch-server-btn:hover{
+   border: 2px solid var(--jf-accent);
+}
+
 /*
  * Focus indicator drawn as an overlay (::after pseudo-element) so it
  * never clips the avatar image or shifts the layout.

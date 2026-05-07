@@ -191,7 +191,9 @@ class App {
             this.container.insertAdjacentHTML(
                 'afterbegin',
                 `
-                <div id="sidebar-container"></div>
+                <div id="sidebar-container">
+                    <!-- Order swapped: Sidebar first, then trigger to allow CSS + sibling selector -->
+                </div>
                 <div id="page-container" class="page-container"></div>
             `
             );
@@ -202,6 +204,9 @@ class App {
         // for focus registration, but we'll have it be invisible until the loading sequence completes.
         this.sidebar = new Sidebar();
         this.sidebar.mount(document.getElementById('sidebar-container'));
+
+        // Append trigger AFTER sidebar so we can use sibling selectors in CSS
+        document.getElementById('sidebar-container').insertAdjacentHTML('beforeend', '<div class="sidebar-hover-trigger"></div>');
 
         // Hide the sidebar at the CSS level so the GPU layer doesn't render it over the splash screen.
         // We use visibility:hidden + pointer-events:none instead of display:none so the
@@ -467,7 +472,7 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', async ({ item, resume, mediaSourceId, audioStreamIndex, subtitleStreamIndex, backdropUrl }) => {
+        eventBus.on('player:play', async ({ item, resume, mediaSourceId, audioStreamIndex, subtitleStreamIndex, backdropUrl, fromSlideshow }) => {
             log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
             let itemToPlay = item;
@@ -506,6 +511,9 @@ class App {
             // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
             state.set('player:contextType', itemToPlay?.contextType || null);
             state.set('player:contextId', itemToPlay?.contextId || null);
+            // For BoxSet playback, forward the sort order so PlayQueue builds the
+            // full queue in the same order the collection grid is displayed.
+            state.set('player:boxsetSortBy', itemToPlay?.boxsetSortBy || null);
 
             // Store explicit trailer metadata overrides since the player re-fetches the item
             // and loses the parent context injected by DetailsPage.
@@ -541,6 +549,7 @@ class App {
 
             // Navigate to player page with item ID and resume flag
             const resumeParam = resume ? 'true' : 'false';
+            const slideshowParam = fromSlideshow ? '?fromSlideshow=true' : '';
 
             // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
             // Instead, we command the server to start playback of the new item. The server
@@ -563,7 +572,9 @@ class App {
                 return;
             }
 
-            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}`);
+            // If we came from a slideshow, we PUSH the player so we can go BACK to the slideshow.
+            // For all other cases (Details/Library), we REPLACE the previous page to prevent history bloat.
+            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${slideshowParam}`, { replace: !fromSlideshow });
         });
 
         // ================================================================

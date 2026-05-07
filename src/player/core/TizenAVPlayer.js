@@ -10,6 +10,7 @@
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { detectTizenVersion } from '../../api/profiles/TizenProfile.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('TizenAVPlayer');
 
@@ -205,8 +206,8 @@ export class TizenAVPlayer {
                     // 1. ABR Quality Kickstart: Prevent ABR jump stutter by starting at high quality.
                     // If no bitrate is provided, default to a high value (20Mbps) to ensure hardware
                     // requests high quality immediately.
-                    const bufferPlaySec = 6;
-                    const bufferResumeSec = 4;
+                    const bufferPlaySec = PlayerSettings.get('tizenInitialBuffer') || 6;
+                    const bufferResumeSec = PlayerSettings.get('tizenResumeBuffer') || 4;
                     const timeoutSec = 8;
                     const bitrate = options.mediaSource?.Bitrate || 20000000;
                     const isDirectPlay = options.playMethod === 'DirectPlay';

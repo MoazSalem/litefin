@@ -88,43 +88,61 @@ class Logger {
     }
 
     /**
-     * Intercept native console methods to capture logs from 3rd party libs (like the player)
+     * Intercept native console methods to capture logs from 3rd party libs (like the player).
+     *
+     * CHROMIUM 32 (TIZEN 2.X) COMPATIBILITY:
+     * Native console methods on old WebKit are host objects — they silently reject
+     * being invoked via Function.prototype.apply() and may throw even with the
+     * typeof guard. We therefore wrap every call to the original method in a
+     * try/catch so a broken console never kills module initialization.
+     *
      * @private
      */
     _captureConsole() {
         const methods = ['log', 'info', 'warn', 'error', 'debug'];
 
         methods.forEach((method) => {
-            // Must save directly, because { ...console } fails on old WebKit 
-            // since host object properties are non-enumerable
+            // Save directly — { ...console } fails on old WebKit because
+            // host object properties are non-enumerable.
             const originalMethod = console[method] || console.log || function(){};
 
             console[method] = (...args) => {
-                // 1. Call original method (so DevTools still see it)
-                // Old WebKit native console methods don't inherit from Function.prototype, lacking .apply()
-                if (typeof originalMethod.apply === 'function') {
-                    originalMethod.apply(console, args);
-                } else {
-                    Function.prototype.apply.call(originalMethod, console, args);
+                // 1. Forward to the native method.
+                //    Wrapped in try/catch because Chromium 32 host console methods
+                //    can throw when invoked via .apply(), and we must never let a
+                //    console call crash the caller's execution context.
+                try {
+                    if (typeof originalMethod.apply === 'function') {
+                        originalMethod.apply(console, args);
+                    } else {
+                        Function.prototype.apply.call(originalMethod, console, args);
+                    }
+                } catch (e) {
+                    // Absolute last resort — if even this fails, silently swallow
+                    // to prevent an infinite error loop (console.error would recurse).
                 }
 
-                // 2. If this log came from us (Logger._log), ignore it to prevent duplicates
-                // The _isLogging flag is set during our own _log calls
+                // 2. Ignore our own internal _log() calls to prevent duplicates.
                 if (this._isLogging) return;
 
-                // 3. Emit to EventBus for DebugOverlay
-                // Map console methods to LogLevels
-                let level = LogLevel.INFO;
-                if (method === 'error') level = LogLevel.ERROR;
-                else if (method === 'warn') level = LogLevel.WARN;
-                else if (method === 'debug') level = LogLevel.DEBUG;
+                // 3. Emit to EventBus for DebugOverlay.
+                //    Guard with try/catch: EventBus may not be ready during the
+                //    very earliest boot phase when Logger is first instantiated.
+                try {
+                    let level = LogLevel.INFO;
+                    if (method === 'error') level = LogLevel.ERROR;
+                    else if (method === 'warn') level = LogLevel.WARN;
+                    else if (method === 'debug') level = LogLevel.DEBUG;
 
-                eventBus.emit('logger:log', {
-                    level,
-                    module: 'System', // Generic module for external logs
-                    timestamp: Date.now(),
-                    args
-                });
+                    eventBus.emit('logger:log', {
+                        level,
+                        module: 'System',
+                        timestamp: Date.now(),
+                        args
+                    });
+                } catch (e) {
+                    // EventBus not yet ready — skip silently.
+                }
             };
         });
     }
@@ -158,30 +176,38 @@ class Logger {
         });
 
         // 5. Output to native console (if enabled)
-        // We format it nicely for the browser console
+        // We format it nicely for the browser console.
+        // NOTE: We do NOT use %c CSS formatting here — Chromium 32 (Tizen 2.x) does not
+        // support console styling and throws/hangs when it receives a %c argument,
+        // which was causing the app to silently freeze on ultra-legacy builds.
         if (this._enabled) {
             this._isLogging = true; // Set flag to warn interceptor to ignore this
             try {
-                const prefix = `[${moduleName}]`;
-                const css = this._getLevelColor(level);
+                const prefix = '[' + moduleName + ']';
+
+                // Build a single formatted string instead of spreading raw objects.
+                // Chromium 32's console.log can choke on complex object arguments
+                // (especially circular refs or host objects), so we pre-serialize.
+                const safeArgs = args.map(function(arg) {
+                    if (arg === null || arg === undefined) return String(arg);
+                    if (typeof arg === 'object') {
+                        try { return JSON.stringify(arg); } catch(e) { return '[Object]'; }
+                    }
+                    return String(arg);
+                });
+                const msg = prefix + ' ' + safeArgs.join(' ');
 
                 switch (level) {
-                    case LogLevel.ERROR:
-                        console.error(`%c${prefix}`, css, ...args);
-                        break;
-                    case LogLevel.WARN:
-                        console.warn(`%c${prefix}`, css, ...args);
-                        break;
-                    case LogLevel.INFO:
-                        console.info(`%c${prefix}`, css, ...args);
-                        break;
-                    default:
-                        console.log(`%c${prefix}`, css, ...args);
+                    case LogLevel.ERROR: console.error(msg); break;
+                    case LogLevel.WARN:  console.warn(msg);  break;
+                    case LogLevel.INFO:  console.info(msg);  break;
+                    default:             console.log(msg);   break;
                 }
             } finally {
                 this._isLogging = false; // Reset flag
             }
         }
+
     }
 
     _getLevelColor(level) {

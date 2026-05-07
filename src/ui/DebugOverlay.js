@@ -177,38 +177,54 @@ class DebugOverlay {
         this._overlay = document.createElement('div');
         this._overlay.id = 'debug-overlay';
 
-        this._overlay.style.cssText = `
-            position: fixed;
-            background: rgba(0,0,0,0.85);
-            color: #ccc;
-            font-family: 'Consolas', 'Monaco', monospace;
-            font-size: 13px;
-            overflow-y: auto;
-            z-index: 99999;
-            padding: 10px;
-            pointer-events: none;
-            border: 1px solid var(--jf-accent, #444);
-            display: none;
-            text-align: left;
-            line-height: 1.4;
-            box-shadow: 0 0 10px rgba(0,0,0,0.5);
-            border-radius: 4px;
-        `;
+        /*
+         * IMPORTANT: On ultra-legacy Chromium 32 (Tizen 2.x), CSS custom properties
+         * (var(--jf-accent)) inside a style.cssText string cause the ENTIRE cssText
+         * assignment to be silently discarded — including display:none, position:fixed,
+         * z-index, etc. We therefore only use hardcoded values here.
+         * The display property is set individually below so show()/hide() can toggle it.
+         */
+        this._overlay.style.cssText = [
+            'position:fixed',
+            'background:rgba(0,0,0,0.85)',
+            'color:#ccc',
+            "font-family:'Consolas','Monaco',monospace",
+            'font-size:13px',
+            'overflow-y:auto',
+            'z-index:99999',
+            'padding:10px',
+            'pointer-events:none',
+            'border:1px solid #00a4dc',
+            'text-align:left',
+            'line-height:1.4',
+            'box-shadow:0 0 10px rgba(0,0,0,0.5)',
+            'border-radius:4px',
+        ].join(';');
+
+        /* Set display separately so show()/hide() can toggle it without cssText race */
+        this._overlay.style.display = 'none';
 
         this._updateStyles();
 
         const header = document.createElement('div');
-        header.style.cssText = `
-            border-bottom: 1px solid var(--jf-accent, #444);
-            margin-bottom: 5px;
-            padding-bottom: 5px;
-            font-weight: bold;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            color: var(--jf-accent, #fff);
-        `;
-        header.innerHTML = `<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v${__APP_VERSION__}</span>`;
+        /*
+         * Same Chromium 32 caveat — hardcode the color, no var().
+         * The refreshTheme() call after init will update it for newer engines.
+         */
+        header.style.cssText = [
+            'border-bottom:1px solid #00a4dc',
+            'margin-bottom:5px',
+            'padding-bottom:5px',
+            'font-weight:bold',
+            'display:-webkit-box',
+            'display:flex',
+            '-webkit-box-pack:justify',
+            'justify-content:space-between',
+            '-webkit-box-align:center',
+            'align-items:center',
+            'color:#00a4dc',
+        ].join(';');
+        header.innerHTML = '<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v' + __APP_VERSION__ + '</span>';
         this._overlay.appendChild(header);
 
         this._content = document.createElement('div');
@@ -216,6 +232,54 @@ class DebugOverlay {
         this._overlay.appendChild(this._content);
 
         document.body.appendChild(this._overlay);
+
+        /*
+         * Flush early-boot logs: any log entries that fired before _createElements()
+         * ran (e.g. during StorageService, TizenAdapter, or App.init bootstrap) were
+         * buffered in _uploadBuffer as plain text strings but never rendered to the DOM
+         * because _content didn't exist yet.
+         *
+         * We now replay them so the developer can see the FULL startup sequence,
+         * not just logs that happened after the overlay was created.
+         */
+        this._flushUploadBufferToDOM();
+    }
+
+    /**
+     * Replay the pre-init _uploadBuffer into the visible DOM content.
+     * Called once immediately after _content is created.
+     * @private
+     */
+    _flushUploadBufferToDOM() {
+        if (!this._content || this._uploadBuffer.length === 0) return;
+
+        var fragment = document.createDocumentFragment();
+
+        for (var i = 0; i < this._uploadBuffer.length; i++) {
+            var line = document.createElement('div');
+            line.style.borderBottom = '1px solid #222';
+            line.style.padding = '2px 0';
+            line.style.wordBreak = 'break-all';
+
+            var text = this._uploadBuffer[i];
+
+            /* Colour-code based on the level string embedded in the buffered line */
+            if (text.indexOf('] [ERROR]') !== -1) {
+                line.style.color = '#ff5555';
+            } else if (text.indexOf('] [WARN]') !== -1) {
+                line.style.color = '#ffaa00';
+            } else if (text.indexOf('] [DEBUG]') !== -1) {
+                line.style.color = '#00a4dc';
+            }
+
+            line.textContent = text;
+            fragment.appendChild(line);
+        }
+
+        this._content.appendChild(fragment);
+
+        /* Scroll to the most recent entry */
+        this._overlay.scrollTop = this._overlay.scrollHeight;
     }
 
     _updateStyles() {

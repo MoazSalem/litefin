@@ -27,10 +27,10 @@ import { storage } from '../utils/StorageService.js';
 // ============================================================================
 
 // Default animation duration (ms) for vertical smooth scrolling
-const SCROLL_DURATION_VERTICAL = 200;
+const SCROLL_DURATION_VERTICAL = 150;
 
 // Animation duration (ms) for horizontal card-centering scrolls
-const SCROLL_DURATION_HORIZONTAL = 150;
+const SCROLL_DURATION_HORIZONTAL = 120;
 
 // Minimum pixel difference to consider "not at target" (avoids sub-pixel jitter)
 const SCROLL_SNAP_THRESHOLD = 1;
@@ -137,8 +137,19 @@ class ScrollController {
                 this[animIdKey] = null;
                 this[stateKey] = null;
             }
-            if (isVertical) container.scrollTop = targetScroll;
-            else container.scrollLeft = targetScroll;
+            if (isVertical) {
+                container.scrollTop = targetScroll;
+                // STABILIZATION: Force reset of horizontal drift on vertical containers.
+                // Browsers may auto-scroll the page container
+                // horizontally if a focused element is centered via justify-content but
+                // perceived as overflowing. Forcing scrollLeft=0 here ensures the UI
+                // remains perfectly pinned to the left edge.
+                if (container.scrollLeft !== 0) {
+                    container.scrollLeft = 0;
+                }
+            } else {
+                container.scrollLeft = targetScroll;
+            }
             return;
         }
 
@@ -207,6 +218,11 @@ class ScrollController {
             // Apply scroll position (Layout-triggering, but unavoidable without transform scroll)
             if (isVertical) {
                 state.container.scrollTop = newScroll;
+                // STABILIZATION: Prevent horizontal drift on vertical containers.
+                // Ensures the page doesn't accidentally scroll horizontally during vertical animation.
+                if (state.container.scrollLeft !== 0) {
+                    state.container.scrollLeft = 0;
+                }
             } else {
                 state.container.scrollLeft = newScroll;
             }
@@ -440,7 +456,11 @@ class ScrollController {
                 // This is optional and controlled by pref:snapLargeScrolls.
                 const snapEnabled = storage.getItem('pref:snapLargeScrolls') === 'true';
                 const forceInstant = snapEnabled && scrollDelta > viewHeight * LARGE_SCROLL_SNAP_FRACTION;
-                this.smoothScrollTo(pageContent, targetScroll, (options.instantScroll || forceInstant) ? 0 : SCROLL_DURATION_VERTICAL);
+                this.smoothScrollTo(
+                    pageContent,
+                    targetScroll,
+                    options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL
+                );
             }
         }
 
@@ -509,60 +529,73 @@ class ScrollController {
 
                     // Clamp to the start and end bounds
                     const maxScroll = Math.max(0, trackWidth - containerWidth);
-                    const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
-                    // Use completely hardware-accelerated CSS transform!
-                    if (options.instantScroll) {
-                        // OPTIMIZATION: Parse the current transform to check if we're already
-                        // at the target position. This skips the forced-layout reflow path
-                        // entirely when navigating vertically (the card is already centered).
-                        // track.offsetHeight is a synchronous layout and is expensive on Tizen.
-                        const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                        const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
-                        const currentTransformX = match ? parseFloat(match[1]) : 0;
-                        const alreadyCentered = Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
+                    // STABILIZATION: Only trigger horizontal centering if the track is actually
+                    // wider than the container. For short rows (e.g. Suggestions with 1-2 items)
+                    // that already fit on screen, any translate3d shift is unnecessary and
+                    // can cause visible jitter or sub-pixel blurring.
+                    if (trackWidth > containerWidth) {
+                        const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
-                        if (!alreadyCentered) {
-                            // Bypass CSS transitions for instant snap.
-                            // IMPORTANT: We must NOT read track.offsetHeight here to force a reflow —
-                            // that is a synchronous layout flush that stalls the Tizen compositor on
-                            // every row entry. Instead, toggle transition off, write the transform,
-                            // and restore transition asynchronously on the next frame once the
-                            // browser has committed the no-transition paint.
-                            track.style.transition = 'none';
-                            track.style.webkitTransition = 'none';
-                            if (isRtl) {
-                                track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                            } else {
-                                track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                        // Use completely hardware-accelerated CSS transform!
+                        if (options.instantScroll) {
+                            // OPTIMIZATION: Parse the current transform to check if we're already
+                            // at the target position. This skips the forced-layout reflow path
+                            // entirely when navigating vertically (the card is already centered).
+                            // track.offsetHeight is a synchronous layout and is expensive on Tizen.
+                            const currentTransform = track.style.transform || track.style.webkitTransform || '';
+                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                            const currentTransformX = match ? parseFloat(match[1]) : 0;
+                            const alreadyCentered =
+                                Math.abs(currentTransformX - finalScrollLeft) < SCROLL_SNAP_THRESHOLD;
+
+                            if (!alreadyCentered) {
+                                // Bypass CSS transitions for instant snap.
+                                // IMPORTANT: We must NOT read track.offsetHeight here to force a reflow —
+                                // that is a synchronous layout flush that stalls the Tizen compositor on
+                                // every row entry. Instead, toggle transition off, write the transform,
+                                // and restore transition asynchronously on the next frame once the
+                                // browser has committed the no-transition paint.
+                                track.style.transition = 'none';
+                                track.style.webkitTransition = 'none';
+                                if (isRtl) {
+                                    track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                                    track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                                } else {
+                                    track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                                }
+                                // Restore transition property on the next frame (after the browser
+                                // has committed the transform snap) — zero layout reads needed.
+                                requestAnimationFrame(() => {
+                                    track.style.webkitTransition = '';
+                                    track.style.transition = '';
+                                });
                             }
-                            // Restore transition property on the next frame (after the browser
-                            // has committed the transform snap) — zero layout reads needed.
-                            requestAnimationFrame(() => {
-                                track.style.webkitTransition = '';
-                                track.style.transition = '';
-                            });
+                        } else {
+                            // Same position check for the smooth (CSS transition) path.
+                            // .row-items-track has a 150ms CSS transition on transform — writing
+                            // the same value triggers a useless animated "wobble" on every vertical
+                            // row-enter even though the horizontal position hasn't changed at all.
+                            const currentTransform = track.style.transform || track.style.webkitTransform || '';
+                            const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
+                            const currentTransformX = match ? parseFloat(match[1]) : 0;
+                            if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
+                                if (isRtl) {
+                                    // In RTL, moving track right reveals further elements on the left
+                                    track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                                    track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
+                                } else {
+                                    track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                                    track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
+                                }
+                            }
                         }
                     } else {
-                        // Same position check for the smooth (CSS transition) path.
-                        // .row-items-track has a 150ms CSS transition on transform — writing
-                        // the same value triggers a useless animated "wobble" on every vertical
-                        // row-enter even though the horizontal position hasn't changed at all.
-                        const currentTransform = track.style.transform || track.style.webkitTransform || '';
-                        const match = currentTransform.match(/translate3d\(\s*-?([\d.]+)px/);
-                        const currentTransformX = match ? parseFloat(match[1]) : 0;
-                        if (Math.abs(currentTransformX - finalScrollLeft) >= SCROLL_SNAP_THRESHOLD) {
-                            if (isRtl) {
-                                // In RTL, moving track right reveals further elements on the left
-                                track.style.webkitTransform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                                track.style.transform = `translate3d(${finalScrollLeft}px, 0, 0)`;
-                            } else {
-                                track.style.webkitTransform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                                track.style.transform = `translate3d(-${finalScrollLeft}px, 0, 0)`;
-                            }
-                        }
+                        // For short rows, ensure the track is reset to 0 to prevent stale
+                        // offsets if items were removed or the window was resized.
+                        track.style.webkitTransform = 'translate3d(0, 0, 0)';
+                        track.style.transform = 'translate3d(0, 0, 0)';
                     }
                 } else {
                     // Fallback for native horizontal scrolls
@@ -632,7 +665,7 @@ class ScrollController {
                     this.smoothScrollTo(
                         activePageContent,
                         finalScrollTop,
-                        (options.instantScroll || forceInstant) ? 0 : SCROLL_DURATION_VERTICAL
+                        options.instantScroll || forceInstant ? 0 : SCROLL_DURATION_VERTICAL
                     );
                 }
             }

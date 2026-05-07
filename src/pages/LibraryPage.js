@@ -505,89 +505,66 @@ class LibraryPage extends Page {
             if (e.target.id === 'modal-overlay') this._closeModal();
         });
 
-        // Horizontal Rows Header Click
-        // Attach to #library-content (stable parent)
-        this.$('#library-content')?.addEventListener('click', (e) => {
-            // Handle genre header clicks
-            const headerBtn = e.target.closest('.header-focusable');
-            if (headerBtn) {
-                const genreId = headerBtn.dataset.genreId || headerBtn.closest('.library-row')?.dataset?.genreId;
+        // Horizontal Rows / Grid Content Selection
+        // We handle both mousedown and click for snappy "instant-response" feel on Magic Remote.
+        const content = this.$('#library-content');
+        if (content) {
+            let lastActivateTime = 0;
+            const handleActivate = (e) => {
+                const card = e.target.closest('.media-card');
+                if (!card) {
+                    // Check for genre header clicks
+                    const headerBtn = e.target.closest('.header-focusable');
+                    if (headerBtn) {
+                        e.stopPropagation();
+                        const genreId = headerBtn.dataset.genreId || headerBtn.closest('.library-row')?.dataset?.genreId;
+                        if (genreId) {
+                            const now = Date.now();
+                            if (now - lastActivateTime < 400) return;
+                            lastActivateTime = now;
+                            
+                            log.info('Navigating to Genre:', genreId);
+                            let sectionId = null;
+                            const rowAncestor = headerBtn.closest('.library-row');
+                            if (rowAncestor && rowAncestor.id) {
+                                sectionId = rowAncestor.id;
+                            }
+                            this._saveState(sectionId, headerBtn.id || headerBtn.dataset.id || genreId);
+                            router.navigate(`/library/${this.state.libraryId}/genre/${genreId}`);
+                        }
+                    }
+                    return;
+                }
 
-                if (genreId) {
-                    log.info('Navigating to Genre:', genreId);
+                if (card.dataset.itemId) {
+                    const now = Date.now();
+                    if (now - lastActivateTime < 400) return;
+                    lastActivateTime = now;
 
-                    // Save state pointing to the row header
+                    e.stopPropagation();
+                    const itemId = card.dataset.itemId;
+
                     let sectionId = null;
-                    const rowAncestor = headerBtn.closest('.library-row');
-                    if (rowAncestor && rowAncestor.id) {
-                        sectionId = rowAncestor.id;
+                    const gridAncestor = card.closest('#library-grid');
+                    if (gridAncestor) {
+                        sectionId = 'library-grid';
+                    } else {
+                        const rowAncestor = card.closest('.library-row');
+                        if (rowAncestor && rowAncestor.id) {
+                            sectionId = rowAncestor.id;
+                        }
                     }
-                    this._saveState(sectionId, headerBtn.id || headerBtn.dataset.id || genreId);
 
-                    // Navigate to Genre Filtered Page
-                    router.navigate(`/library/${this.state.libraryId}/genre/${genreId}`);
+                    this._saveState(sectionId, itemId);
+
+                    // Re-use logic from _handleGridClick or centralize it
+                    this._handleGridClick(e, card);
                 }
-                return;
-            }
+            };
 
-            // Handle media card clicks in horizontal rows AND grid
-            const mediaCard = e.target.closest('.media-card');
-            if (mediaCard?.dataset?.itemId) {
-                const itemId = mediaCard.dataset.itemId;
-
-                let sectionId = null;
-                const gridAncestor = mediaCard.closest('#library-grid');
-                if (gridAncestor) {
-                    sectionId = 'library-grid';
-                } else {
-                    const rowAncestor = mediaCard.closest('.library-row');
-                    if (rowAncestor && rowAncestor.id) {
-                        sectionId = rowAncestor.id;
-                    }
-                }
-
-                this._saveState(sectionId, itemId);
-
-                // Special handling for Networks view: navigate to studio-filtered library
-                if (this.state.viewType === 'Networks') {
-                    log.info('Navigating to Studio:', itemId);
-                    router.navigate(`/library/${this.state.libraryId}/studio/${itemId}`);
-                    return;
-                }
-
-                // Special handling for Persons and Artists: navigate to the unified PersonPage
-                const itemType = mediaCard.dataset.type;
-                if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
-                    log.info('Navigating to PersonPage:', itemId);
-                    router.navigate(`/person/${itemId}`);
-                    return;
-                }
-
-                // Special handling for Photos and Home Videos: open Slideshow
-                if (itemType === 'Photo' || itemType === 'Video') {
-                    log.info('Navigating to Slideshow:', itemId);
-                    const parentArg = this.params.id || this.state.libraryId;
-                    router.navigate(`/slideshow/${itemId}?parentId=${parentArg}&sortBy=${this.state.sortBy}&sortOrder=${this.state.sortOrder}`);
-                    return;
-                }
-
-                // Special handling for PhotoAlbums: navigate to standard LibraryPage
-                if (itemType === 'PhotoAlbum') {
-                    log.info('Navigating into PhotoAlbum:', itemId);
-                    router.navigate(`/library/${itemId}`);
-                    return;
-                }
-
-                // Default: navigate to folder or item details
-                if (itemType === 'Folder' || itemType === 'CollectionFolder') {
-                    log.info('Navigating into folder:', itemId);
-                    router.navigate(`/library/${itemId}`);
-                } else {
-                    log.info('Navigating to item details:', itemId);
-                    router.navigate(`/details/${itemId}`);
-                }
-            }
-        });
+            content.addEventListener('mousedown', handleActivate);
+            content.addEventListener('click', handleActivate);
+        }
     }
 
     _getCacheKey() {
@@ -1548,8 +1525,7 @@ class LibraryPage extends Page {
             this.params.personId ||
             this.params.tagName ||
             this.params.searchTerm ||
-            this.params.includeItemTypes ||
-            this.state.isSubFolder
+            this.params.includeItemTypes
         );
     }
 
@@ -1557,8 +1533,8 @@ class LibraryPage extends Page {
         const collectionType = this.state.libraryInfo?.CollectionType || 'movies';
         const tabsContainer = this.$('#library-tabs');
 
-        // Hide tabs for BoxSets (Collections) and Playlists libraries or if we are deep linking into a subview
-        if (collectionType === 'boxsets' || collectionType === 'playlists' || this._isSubView()) {
+        // Hide tabs for BoxSets (Collections), Playlists, Folder libraries, or if we are deep linking into a subview
+        if (collectionType === 'boxsets' || collectionType === 'playlists' || this.state.isFolderLibrary || this._isSubView()) {
             if (tabsContainer) {
                 tabsContainer.style.display = 'none';
                 tabsContainer.innerHTML = '';
@@ -1748,10 +1724,11 @@ class LibraryPage extends Page {
                     viewType === 'Artists' ||
                     viewType === 'AlbumArtists' ||
                     viewType === 'Songs');
-            const isPlaylists = collectionType === 'playlists' && viewType === 'Items';
+            const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
+            const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
             const isEpisodes = viewType === 'Episodes';
             // Do not show any header controls if we are deep linking to a specific genre/studio
-            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || isPlaylists || this._isSubView();
+            const shouldShowControls = isMovieMain || isTVMain || isMusicMain || isEpisodes || isCollections || isFolderMain || this._isSubView();
 
             const btnReset = this.$('#btn-reset-filters');
             if (btnReset) {
@@ -1877,8 +1854,10 @@ class LibraryPage extends Page {
         const isMusicMain =
             collectionType === 'music' &&
             (viewType === 'Albums' || viewType === 'Artists' || viewType === 'AlbumArtists' || viewType === 'Songs');
+        const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
+        const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
         const isEpisodes = viewType === 'Episodes';
-        const isAlphaVisible = isMovieMain || isTVMain || isMusicMain || isEpisodes || this._isSubView();
+        const isAlphaVisible = isMovieMain || isTVMain || isMusicMain || isEpisodes || isCollections || isFolderMain || this._isSubView();
 
         // Update Alpha Picker navigation to point to grid
         if (isAlphaVisible) {
@@ -1912,9 +1891,10 @@ class LibraryPage extends Page {
             enterTo: 'default-element' // Land on first enabled (Prev or Next)
         });
 
+        const hasTabs = this.$('#library-tabs')?.style.display !== 'none';
         this.registerFocusSection('library-controls', this.$('#library-controls'), {
             orientation: 'horizontal',
-            leaveUp: this._isSubView() ? null : 'library-tabs',
+            leaveUp: hasTabs ? 'library-tabs' : null,
             leaveDown: isAlphaVisible ? 'alpha-picker' : 'library-grid',
             leaveLeft: 'sidebar',
             selector: 'button'
@@ -2165,7 +2145,7 @@ class LibraryPage extends Page {
                 columns: 6, // Only used for grid orientation
                 // Navigation between rows
                 leaveUp: rowIndex === 0 ? nextUpTarget : `row-${rowIndex - 1}`,
-                leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : null,
+                leaveDown: rowIndex < rows.length - 1 ? `row-${rowIndex + 1}` : 'library-pagination',
                 leaveLeft: 'sidebar',
                 // Select both header button and media cards as focusable
                 selector: selector,
@@ -2397,8 +2377,8 @@ class LibraryPage extends Page {
         if (scrollContainer) scrollContainer.scrollTop = 0;
     }
 
-    _handleGridClick(e) {
-        const card = e.target.closest('.media-card');
+    _handleGridClick(e, cardElement) {
+        const card = cardElement || e.target.closest('.media-card');
         if (!card) return;
 
         const itemId = card.dataset.itemId;
@@ -2415,14 +2395,36 @@ class LibraryPage extends Page {
         // Handle Songs - go straight to player
         if (this.state.viewType === 'Songs') {
             log.debug('Navigating to Player for Song:', itemId);
-            router.navigate(`/player/${itemId}`);
+            router.navigate(`/player/${itemId}`, { replace: true });
             return;
         }
 
         // For Audio/Song items in Suggestions/Playlists/Genres - double check type
         if (card.dataset.type === 'Audio') {
             log.debug('Navigating to Player for Audio item:', itemId);
-            router.navigate(`/player/${itemId}`);
+            router.navigate(`/player/${itemId}`, { replace: true });
+            return;
+        }
+
+        // Special handling for Photos and Home Videos: open Slideshow
+        if (card.dataset.type === 'Photo' || card.dataset.type === 'Video') {
+            log.info('Navigating to Slideshow:', itemId);
+            const parentArg = this.params.id || this.state.libraryId;
+            router.navigate(`/slideshow/${itemId}?parentId=${parentArg}&sortBy=${this.state.sortBy}&sortOrder=${this.state.sortOrder}`);
+            return;
+        }
+
+        // Special handling for PhotoAlbums: navigate to standard LibraryPage
+        if (card.dataset.type === 'PhotoAlbum') {
+            log.info('Navigating into PhotoAlbum:', itemId);
+            router.navigate(`/library/${itemId}`);
+            return;
+        }
+
+        // Special handling for Folders: navigate to sub-library
+        if (card.dataset.type === 'Folder' || card.dataset.type === 'CollectionFolder') {
+            log.info('Navigating into folder:', itemId);
+            router.navigate(`/library/${itemId}`);
             return;
         }
 

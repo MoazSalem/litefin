@@ -221,13 +221,19 @@ class FavoritesPage extends Page {
                 }
 
                 // Set initial focus to first content row if nothing was restored
-                if (
-                    !restoredFocus &&
-                    sectionsData.length > 0 &&
-                    !focusManager.getActiveSection() &&
-                    !focusManager.getFocused()
-                ) {
-                    this.setActiveSection(sectionsData[0].id);
+                if (!restoredFocus && sectionsData.length > 0) {
+                    const firstSectionId = sectionsData[0].id;
+                    this.setActiveSection(firstSectionId, false);
+                    
+                    const firstCard = container.querySelector(`#${firstSectionId}-items .media-card`);
+                    if (firstCard) {
+                        focusManager.focusElement(firstCard, { instantScroll: true });
+                    }
+                } else if (!restoredFocus && sectionsData.length === 0) {
+                    // If no favorites exist, just make sure sidebar has focus
+                    if (!focusManager.getFocused()) {
+                        this.setActiveSection('sidebar');
+                    }
                 }
             });
         } catch (e) {

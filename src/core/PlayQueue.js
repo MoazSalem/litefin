@@ -166,9 +166,10 @@ class PlayQueue {
      * @param {Object} item - The currently playing item
      * @param {string} [contextType] - Optional context (e.g., 'boxset' if launched from a collection)
      * @param {string} [contextId] - Optional context ID (e.g., the BoxSet ID)
+     * @param {string} [boxsetSortBy] - Optional sort field for BoxSet queues (e.g., 'PremiereDate', 'SortName')
      */
-    async init(item, contextType = null, contextId = null) {
-        log.info('PlayQueue.init called', { itemId: item?.Id, contextType, contextId });
+    async init(item, contextType = null, contextId = null, boxsetSortBy = null) {
+        log.info('PlayQueue.init called', { itemId: item?.Id, contextType, contextId, boxsetSortBy });
         this.clear();
         this._contextType = contextType;
         this._contextId = contextId;
@@ -176,8 +177,9 @@ class PlayQueue {
 
         try {
             if ((contextType === 'boxset' || contextType === 'music') && (contextId || item.ParentId)) {
-                // Prioritize collection context if explicitly provided
-                await this._initBoxSetQueue(item, contextId || item.ParentId);
+                // Prioritize collection context if explicitly provided.
+                // Pass through the sort order so the queue matches the display grid.
+                await this._initBoxSetQueue(item, contextId || item.ParentId, boxsetSortBy);
             } else if (contextType === 'season' && contextId) {
                 // Season-specific shuffle: fetch only episodes for this season
                 await this._initSeasonQueue(item, contextId);
@@ -487,16 +489,27 @@ class PlayQueue {
         }
     }
 
-    async _initBoxSetQueue(currentItem, parentId) {
-        log.debug('Building BoxSet queue for parent:', parentId);
+    /**
+     * Build the play queue for a BoxSet (collection) or music album.
+     *
+     * @param {Object} currentItem - The item playback started on
+     * @param {string} parentId - The BoxSet/Album ID
+     * @param {string|null} [sortBy] - Sort field to use ('PremiereDate', 'SortName',
+     *   'DateModified'). Defaults to 'PremiereDate' when not provided, matching the
+     *   Litefin default display order for collections.
+     */
+    async _initBoxSetQueue(currentItem, parentId, sortBy = 'PremiereDate') {
+        log.debug('Building BoxSet queue for parent:', parentId, '| sortBy:', sortBy);
 
-        // Fetch movies, episodes, and audio separately to maintain UI-like ordering
+        // Fetch movies, episodes, and audio separately to maintain UI-like ordering.
+        // All three fetches share the same sort field so the full queue is consistent
+        // with whatever Display Order the user has chosen for this collection.
         const [moviesResponse, episodesResponse, audioResponse] = await Promise.all([
             api.getItems({
                 ParentId: parentId,
                 Recursive: true,
                 IncludeItemTypes: 'Movie',
-                SortBy: 'SortName',
+                SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
                 Fields: 'Trickplay'
@@ -505,7 +518,7 @@ class PlayQueue {
                 ParentId: parentId,
                 Recursive: true,
                 IncludeItemTypes: 'Episode',
-                SortBy: 'SortName',
+                SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100,
                 Fields: 'Trickplay'
@@ -514,7 +527,7 @@ class PlayQueue {
                 ParentId: parentId,
                 Recursive: true,
                 IncludeItemTypes: 'Audio',
-                SortBy: 'SortName',
+                SortBy: sortBy,
                 SortOrder: 'Ascending',
                 Limit: 100
             })

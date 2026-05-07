@@ -55,7 +55,8 @@ html[data-layout-tier="ultra-legacy"] .search-input {
 
 
 .search-input:focus,
-.search-input.focused {
+.search-input.focused,
+.search-input:hover {
     border-color: var(--jf-accent);
     outline: none;
 }

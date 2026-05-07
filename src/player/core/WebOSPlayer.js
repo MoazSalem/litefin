@@ -23,6 +23,7 @@
 import Hls from 'hls.js';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('WebOSPlayer');
 
@@ -90,6 +91,11 @@ export class WebOSPlayer {
 
         // ---- Stall recovery timer ----
         this._stallTimer = null;
+
+        // ---- Robust resume state ----
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
+        this._cancelRobustResume = false;
 
         log.info('WebOSPlayer constructed');
     }
@@ -221,6 +227,13 @@ export class WebOSPlayer {
         this._subtitleOffset = 0;
         this._previousOffset = 0;
 
+        // Initialize robust seek state immediately to avoid race conditions with early 'playing' events.
+        // Do not attempt robust resume for live TV/streams.
+        const isLive = options.item?.Type === 'TvChannel' || options.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : (options.playerStartPositionTicks || 0) / 10000000;
+        this._robustSeekPending = false;
+        this._cancelRobustResume = false;
+
         const video = this._ensureVideoElement();
 
         // Tear down any active Hls.js session before starting fresh
@@ -309,12 +322,19 @@ export class WebOSPlayer {
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    // Older browsers (Chrome < 50) don't return a Promise from play()
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onLoadError = () => {
@@ -359,12 +379,18 @@ export class WebOSPlayer {
                 // player, so doing it here (before play()) ensures the array is ready.
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onError = () => {
@@ -399,9 +425,14 @@ export class WebOSPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('WebOSPlayer: Hls.js manifest parsed');
                 this._applyInitialTracks(options, hls);
-                video.play()
-                    .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(resolve)
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    resolve();
+                }
             });
 
             if (options.playerStartPositionTicks) {
@@ -518,59 +549,73 @@ export class WebOSPlayer {
      * @param {number} ticks - Jellyfin position ticks
      */
     _applyRobustResume(video, ticks) {
-        if (!ticks) return;
-        const resumeSeconds = ticks / 10000000;
+        if (this._robustSeekTarget === null || this._robustSeekTarget === undefined) return;
 
-        if (resumeSeconds < 5) return;
+        const resumeSeconds = this._robustSeekTarget;
 
         // Safety guard: do not seek beyond the end
         if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
             log.warn('WebOSPlayer: Resume position near end of video, ignoring', resumeSeconds);
+            this._robustSeekTarget = null;
             return;
         }
 
-        log.info('WebOSPlayer: Applying robust resume to', resumeSeconds, 's');
-
-        const seekWithRetry = (time, attempts = 5) => {
-            let tries = 0;
-            const attempt = () => {
-                tries++;
-                try {
-                    video.currentTime = time;
-                } catch (e) {}
-
-                setTimeout(() => {
-                    if (Math.abs(video.currentTime - time) < 2) {
-                        log.debug('WebOSPlayer: Seek successful on attempt', tries);
-                    } else if (tries < attempts) {
-                        log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
-                        attempt();
-                    } else {
-                        log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
-                    }
-                }, 500);
-            };
-            attempt();
-        };
-
         const tryApply = () => {
-            // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
-            if (video.readyState >= 3 && video.seekable.length > 0) {
-                seekWithRetry(resumeSeconds);
-            } else {
-                setTimeout(tryApply, 300);
+            if (this._cancelRobustResume || this._robustSeekTarget === null) return;
+
+            // Only apply proactively if we're actually resuming from significantly past 0
+            if (resumeSeconds >= 5) {
+                // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
+                if (video.readyState >= 3 && video.seekable.length > 0) {
+                    this._seekWithRetry(resumeSeconds);
+                } else {
+                    setTimeout(tryApply, 300);
+                }
             }
         };
 
         tryApply();
+    }
 
-        const onPlaying = () => {
-            if (Math.abs(video.currentTime - resumeSeconds) > 5) {
-                log.info('WebOSPlayer: Detected snap-back, re-applying seek');
-                seekWithRetry(resumeSeconds);
+    _seekWithRetry(time, attempts = 5) {
+        this._robustSeekPending = true;
+        let tries = 0;
+        const video = this._videoElement;
+
+        log.info('WebOSPlayer: Applying robust resume seek to', time, 's');
+
+        const attempt = () => {
+            if (this._cancelRobustResume) {
+                this._robustSeekPending = false;
+                this._robustSeekTarget = null;
+                log.info('WebOSPlayer: Robust resume cancelled by manual seek or stop');
+                return;
             }
+            tries++;
+            try {
+                video.currentTime = time;
+            } catch (e) {}
+
+            setTimeout(() => {
+                if (this._cancelRobustResume) return;
+
+                if (Math.abs(video.currentTime - time) < 2) {
+                    log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                } else if (tries < attempts) {
+                    log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                    attempt();
+                } else {
+                    log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                }
+            }, 500);
         };
-        video.addEventListener('playing', onPlaying, { once: true });
+        attempt();
     }
 
     /**
@@ -623,6 +668,9 @@ export class WebOSPlayer {
      * @returns {Promise<void>}
      */
     async stop() {
+        this._cancelRobustResume = true;
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
         this._clearStallCheck();
         this._destroyHlsPlayer();
 
@@ -656,6 +704,10 @@ export class WebOSPlayer {
         const video = this._videoElement;
         if (!video) return;
 
+        // Cancel any pending retry loops from previous seeks
+        this._cancelRobustResume = true;
+        this._robustSeekPending = false;
+
         let seconds = positionTicks / 10000000;
 
         // Subtract the transcoding offset so the seek lands at the right place
@@ -663,6 +715,14 @@ export class WebOSPlayer {
         if (this._currentPlayOptions?.transcodingOffsetTicks) {
             seconds = (positionTicks - this._currentPlayOptions.transcodingOffsetTicks) / 10000000;
         }
+
+        // Update the robust seek target so that _onPlaying can detect if this seek snaps back.
+        // We skip this for Live TV where currentTime logic is often non-standard.
+        const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : seconds;
+
+        // Re-enable robust check for the new seek
+        this._cancelRobustResume = false;
 
         // Skip tiny seeks — avoids decoder stutter on redundant calls
         if (Math.abs(video.currentTime - seconds) > SEEK_THRESHOLD_MS / 1000) {
@@ -953,6 +1013,8 @@ export class WebOSPlayer {
 
     /** @private */
     _onTimeUpdate() {
+        if (this._robustSeekPending) return;
+
         if (!this._timeUpdated && this._videoElement?.currentTime) {
             this._timeUpdated = true;
         }
@@ -1050,6 +1112,23 @@ export class WebOSPlayer {
 
     /** @private */
     _onPlaying() {
+        if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
+            const target = this._robustSeekTarget;
+            // If we drifted past the target
+            if (Math.abs(this.getCurrentTime() - target) > 2) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${this.getCurrentTime()}, expected: ${target}), applying robust seek`);
+                this._seekWithRetry(target);
+                return; // suppress this playing event
+            } else {
+                // No drift, we are good.
+                this._robustSeekTarget = null;
+            }
+        }
+
+        if (this._robustSeekPending) {
+            return; // suppress playing event until retry loop finishes
+        }
+
         if (!this._started) {
             this._started = true;
             log.info('WebOSPlayer: Playback started');
@@ -1154,7 +1233,8 @@ export class WebOSPlayer {
             // don't fire a kick mid-download and restart the entire stall cycle.
             // The native engine always self-recovers at boundaries — let it.
             // ----------------------------------------------------------------
-            if (bufferAhead > 10) {
+            const bufferGate = PlayerSettings.get('webosBufferGate') || 10;
+            if (bufferAhead > bufferGate) {
                 log.debug(
                     'WebOSPlayer: Stall timer fired with',
                     bufferAhead.toFixed(1),
@@ -1168,14 +1248,14 @@ export class WebOSPlayer {
             log.warn(
                 'WebOSPlayer: Still stalled after 8s (buffer:',
                 bufferAhead.toFixed(1),
-                's) — recovery kick (+0.5s)'
+                `s) — recovery kick (+0.5s)`
             );
             try {
                 this._videoElement.currentTime += 0.5;
             } catch (e) {
                 log.error('WebOSPlayer: Recovery kick failed', e);
             }
-        }, 8000);
+        }, (PlayerSettings.get('webosStallRecovery') || 8) * 1000);
     }
 
     /** @private */

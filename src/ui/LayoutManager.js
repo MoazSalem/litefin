@@ -66,6 +66,9 @@ class LayoutManager {
         // Global text scale multiplier
         this._textScale = 1.0;
 
+        // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
+        this._osdButtonBorders = 'auto';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -91,6 +94,7 @@ class LayoutManager {
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
+        const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -98,13 +102,14 @@ class LayoutManager {
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
+        this.setOsdButtonBorders(savedOsdBorders, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
         document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
         log.info(
-            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`
+            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}", tier="${platformInfo.layoutTier}", platform="${platformInfo.platformString}"`
         );
     }
 
@@ -331,6 +336,27 @@ class LayoutManager {
 
     getTextScale() {
         return this._textScale;
+    }
+
+    getOsdButtonBorders() {
+        return this._osdButtonBorders;
+    }
+
+    setOsdButtonBorders(mode, save = true) {
+        if (!['auto', 'light', 'dark', 'hidden'].includes(mode)) {
+            log.warn(`Invalid OSD border mode "${mode}"`);
+            return;
+        }
+
+        this._osdButtonBorders = mode;
+        document.documentElement.setAttribute('data-osd-borders', mode);
+
+        if (save) {
+            storage.setItem('litefin:osdButtonBorders', mode);
+        }
+
+        log.info(`OSD button borders updated: ${mode}`);
+        eventBus.emit('osdButtonBorders:changed', { mode });
     }
 
     // Component registration (Existing logic maintained)

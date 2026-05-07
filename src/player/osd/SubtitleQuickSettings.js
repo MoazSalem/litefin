@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { i18n } from '../../utils/i18n.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 /**
  * SubtitleQuickSettings
@@ -76,6 +77,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
 
         // Whether the outline/shadow user overrides are enabled (default: true)
         const overrideOutlineShadow = PlayerSettings.get( 'subtitleOverrideAssOutlineShadow' ) !== false;
+        
+        // Whether ASS fonts override is enabled (default: false)
+        const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
 
         // Check if a secondary subtitle track is active
         // osd.currentSecondarySubtitleIndex is -1 when no secondary track is selected
@@ -145,7 +149,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleFont',
                 visible: !isASS,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -282,14 +286,26 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             }, 
             {
+                id: 'overrideAssFonts',
+                type: 'select',
+                label: i18n.t('OverrideAssFonts'),
+                labelKey: 'OverrideAssFonts',
+                key: 'subtitleOverrideAssFonts',
+                visible: isASS,
+                options: [
+                    { value: true,  label: i18n.t('On') },
+                    { value: false, label: i18n.t('Off') }
+                ]
+            },
+            {
                 id: 'fontAss',
                 type: 'select',
                 label: i18n.t('AssFontFamily'),
                 labelKey: 'AssFontFamily',
                 key: 'subtitleFontAss',
-                visible: isASS,
+                visible: isASS && overrideAssFonts,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },

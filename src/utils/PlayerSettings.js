@@ -100,6 +100,9 @@ const DEFAULTS = {
     // Separate setting for Anime/ASS content
     subtitleFontAss: '',
 
+    // Override container fonts with the chosen ASS font (or system fallback)
+    subtitleOverrideAssFonts: false,
+
     // Global font scale multiplier for ASS subtitles
     subtitleFontScale: 1.0,
 
@@ -242,6 +245,25 @@ const DEFAULTS = {
     forceFmp4HlsContainer: false,
 
     // =========================================================================
+    // BUFFER SETTINGS
+    // =========================================================================
+
+    // Tizen
+    tizenInitialBuffer: 6,
+    tizenResumeBuffer: 4,
+    tizenSegmentLength: 6,
+
+    // WebOS
+    webosStallRecovery: 8,
+    webosBufferGate: 10,
+    webosSegmentLength: 6,
+
+    // HTML5
+    html5MaxBufferLength: 60,
+    html5MaxMaxBufferLength: 120,
+    html5SegmentLength: 2,
+
+    // =========================================================================
     // PLAYBACK SETTINGS
     // =========================================================================
 
@@ -277,6 +299,15 @@ const DEFAULTS = {
     // Time format for clock and playback ('12h', '24h')
     timeFormat: '12h',
 
+    // Instant seek when OSD is hidden using directional arrows
+    seekWithArrows: true,
+
+    // Enable mouse/magic cursor support in the OSD (hover and click)
+    enableMagicCursor: true,
+
+    // Show timestamp and trickplay images on hover with mouse
+    enableHoverTrickplay: false,
+
     /*
      * OSD Focus Restore Mode
      * Controls where the remote cursor lands when the OSD is revealed
@@ -289,6 +320,9 @@ const DEFAULTS = {
      *                no matter how short the hide was.
      */
     osdFocusRestoreMode: 'always',
+
+    // Keep focus on subtitle offset menu (prevent auto-hide)
+    keepFocusOnSubtitleOffset: true,
 
     // Time display mode ('total', 'remaining')
     osdTimeDisplayMode: 'total',

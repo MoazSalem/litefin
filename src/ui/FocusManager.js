@@ -11,6 +11,7 @@ import { eventBus } from '../core/EventBus.js';
 import { logger } from '../utils/Logger.js';
 import { spatialNavigator } from './SpatialNavigator.js';
 import { scrollController } from './ScrollController.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('FocusManager');
 
@@ -33,7 +34,7 @@ const FOCUSABLE_SELECTOR = `
 
 // Minimum time (ms) between key events to prevent event flooding.
 // Keypresses faster than this interval are dropped.
-const KEY_DEBOUNCE_MS = 50;
+const KEY_DEBOUNCE_MS = 40;
 
 // Maximum number of empty sections to skip through when leaving a section.
 // Prevents infinite loops if section linking is misconfigured.
@@ -41,8 +42,7 @@ const MAX_SECTION_SKIP_DEPTH = 20;
 
 // Rapid navigation (instant scroll) threshold.
 // If consecutive keypresses are faster than this, we snap to avoid scroll queueing.
-// 200ms was too loose (triggered on manual taps); 150ms is more robust.
-const RAPID_MOVE_THRESHOLD_MS = 150;
+const RAPID_MOVE_THRESHOLD_MS = 120;
 
 // Minimum number of consecutive rapid moves before instant scroll kicks in.
 // Ensures a single fast double-tap doesn't cause a snap.
@@ -116,9 +116,28 @@ class FocusManager {
             this._handleKey('right');
         });
 
+        let lastMouseDownTime = 0;
+
+        document.addEventListener(
+            'mousedown',
+            () => {
+                lastMouseDownTime = Date.now();
+            },
+            { capture: true, passive: true }
+        );
+
         eventBus.on('key:enter', (e) => {
             if (this._suspended) return;
-            e?.preventDefault(); // Prevent native button click (we trigger it manually)
+
+            // Magic Remote cursor clicks generate a synthetic 'Enter' keydown
+            // immediately after 'mousedown'. If we intercept it, we break the native
+            // mouse click sequence and trigger the wrong focused element.
+            // By ignoring Enter keys right after a mousedown, the cursor acts exactly like a real mouse.
+            if (Date.now() - lastMouseDownTime < 500) {
+                return;
+            }
+
+            e?.preventDefault(); // Prevent native button click (we trigger it manually for D-pad)
             this._activate();
         });
 
@@ -129,62 +148,107 @@ class FocusManager {
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
             if (this._focusedElement !== e.target) {
-                // If trap is active, check if focus is escaping
-                if (this._trapStack.length > 0) {
-                    const trapConfig = this._sections.get('__trap__');
-                    if (trapConfig && !trapConfig.container.contains(e.target)) {
-                        // Focus escaped the trap! Force it back
-                        log.warn('Focus escaped trap, forcing back');
-                        const focusables = this._getFocusables('__trap__', true);
-                        if (focusables.length > 0) {
-                            this.focusElement(focusables[0]);
-                        }
-                        return;
-                    }
-                }
-
-                // Explicitly remove .focused class from the previous element
-                if (this._focusedElement) {
-                    this._focusedElement.classList.remove('focused');
-
-                    // Remove generic .focused-row from parent settings items if applicable
-                    const oldSettingItem = this._focusedElement.closest('.setting-item');
-                    if (oldSettingItem) {
-                        oldSettingItem.classList.remove('focused-row');
-                    }
-                }
-
-                this._focusedElement = e.target;
-
-                // Add .focused to the new element so focus styling applies correctly
-                if (this._focusedElement) {
-                    this._focusedElement.classList.add('focused');
-
-                    // Add generic .focused-row to parent settings items to highlight the whole row
-                    const newSettingItem = this._focusedElement.closest('.setting-item');
-                    if (newSettingItem) {
-                        newSettingItem.classList.add('focused-row');
-                    }
-                }
-
-                // Auto-sync active section if the element belongs to one (but not during trap)
-                if (this._trapStack.length === 0) {
-                    const sectionName = this.getSectionForElement(e.target);
-                    if (sectionName && this._activeSection !== sectionName) {
-                        if (this._activeSection) {
-                            this._previousSection = this._activeSection;
-                        }
-                        this._activeSection = sectionName;
-                        eventBus.emit('focus:sectionChanged', sectionName);
-                        log.debug(`Auto-synced active section to "${sectionName}" via focusin`);
-                    }
-                }
-
-                this._updateFocusMemory();
+                this._handleFocusChange(e.target);
             }
         });
 
+        // REMOVED: Proactive mousedown focus sync.
+        // It caused layout shifts and blur() calls during the click sequence,
+        // which caused TV browsers to cancel the click event (the "not opening" bug).
+        // Magic Remote is now handled purely as a native mouse via the Enter bypass above.
+
+        // MAGIC CURSOR: Wheel Navigation
+        // Allows scrolling the Magic Remote wheel to navigate vertically between rows/items.
+        document.addEventListener(
+            'wheel',
+            (e) => {
+                if (this._suspended) return;
+
+                // Respect the user setting (default to true)
+                if (storage.getItem('pref:hoverScrollNavigation') === 'false') return;
+
+                // Ignore if player is active or OSD is focused (PlayerOSD handles its own wheel behavior)
+                if (
+                    document.body.classList.contains('player-active') ||
+                    this.activeSection === 'osd' ||
+                    this.activeSection === 'player' ||
+                    this._activeSection === 'sidebar' ||
+                    document.querySelector('.sidebar.expanded') ||
+                    document.querySelector('.sidebar:hover') ||
+                    (this._activeSection && this._activeSection.startsWith('settings-'))
+                )
+                    return;
+
+                // Threshold to prevent accidental jitter moves (Magic Remotes are sensitive)
+                if (Math.abs(e.deltaY) < 30) return;
+
+                const direction = e.deltaY > 0 ? 'down' : 'up';
+                this._handleKey(direction);
+            },
+            { passive: true }
+        );
+
         log.info('Initialized (v3 Single Source Rewrite)');
+    }
+
+    /**
+     * Internal logic for handling a focus change to a new element.
+     * @param {HTMLElement} target - The element receiving focus
+     * @private
+     */
+    _handleFocusChange(target) {
+        // If trap is active, check if focus is escaping
+        if (this._trapStack.length > 0) {
+            const trapConfig = this._sections.get('__trap__');
+            if (trapConfig && !trapConfig.container.contains(target)) {
+                // Focus escaped the trap! Force it back
+                log.warn('Focus escaped trap, forcing back');
+                const focusables = this._getFocusables('__trap__', true);
+                if (focusables.length > 0) {
+                    this.focusElement(focusables[0]);
+                }
+                return;
+            }
+        }
+
+        // Explicitly remove .focused class from the previous element
+        if (this._focusedElement) {
+            this._focusedElement.classList.remove('focused');
+
+            // Remove generic .focused-row from parent settings items if applicable
+            const oldSettingItem = this._focusedElement.closest('.setting-item');
+            if (oldSettingItem) {
+                oldSettingItem.classList.remove('focused-row');
+            }
+        }
+
+        this._focusedElement = target;
+
+        // Add .focused to the new element so focus styling applies correctly
+        if (this._focusedElement) {
+            this._focusedElement.classList.add('focused');
+
+            // Add generic .focused-row to parent settings items to highlight the whole row
+            const newSettingItem = this._focusedElement.closest('.setting-item');
+            if (newSettingItem) {
+                newSettingItem.classList.add('focused-row');
+            }
+        }
+
+        // Auto-sync active section if the element belongs to one (but not during trap)
+        if (this._trapStack.length === 0) {
+            const sectionName = this.getSectionForElement(target);
+            if (sectionName && this._activeSection !== sectionName) {
+                if (this._activeSection) {
+                    this._previousSection = this._activeSection;
+                }
+                this._activeSection = sectionName;
+                eventBus.emit('focus:sectionChanged', sectionName);
+                log.debug(`Auto-synced active section to "${sectionName}" via focusin`);
+            }
+        }
+
+        this._updateFocusMemory();
     }
 
     // REMOVED: _onKeyDown (Redundant)

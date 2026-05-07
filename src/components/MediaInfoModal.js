@@ -2,6 +2,7 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 /**
  * ============================================================================
@@ -101,7 +102,7 @@ class MediaInfoModal {
         // --- 2. Fetch Detailed Metadata ---
         try {
             const item = await api.getItem(itemId, { 
-                Fields: 'MediaSources,MediaStreams' 
+                Fields: 'MediaSources,MediaStreams,DateCreated,PremiereDate' 
             });
             
             if (!item.MediaSources || item.MediaSources.length === 0) {
@@ -138,6 +139,8 @@ class MediaInfoModal {
                         ${this._renderRow(i18n.t('Container'), source.Container)}
                         ${source.Size ? this._renderRow(i18n.t('Size'), this._formatSize(source.Size)) : ''}
                         ${source.Bitrate ? this._renderRow(i18n.t('Bitrate'), this._formatBitrate(source.Bitrate)) : ''}
+                        ${storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated ? this._renderRow(i18n.t('Added'), this._formatDate(item.DateCreated)) : ''}
+                        ${storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate ? this._renderRow(i18n.t('Aired'), this._formatDate(item.PremiereDate)) : ''}
                     </div>
                 </div>
             `;
@@ -236,6 +239,19 @@ class MediaInfoModal {
         if (!bits) return '';
         if (bits > 1000000) return (bits / 1000000).toFixed(1) + ' Mbps';
         return (bits / 1000).toFixed(0) + ' Kbps';
+    }
+
+    static _formatDate(dateStr) {
+        if (!dateStr) return '';
+        try {
+            const d = new Date(dateStr);
+            const day = String(d.getDate()).padStart(2, '0');
+            const month = String(d.getMonth() + 1).padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}/${month}/${year}`;
+        } catch (e) {
+            return dateStr;
+        }
     }
 
     /**

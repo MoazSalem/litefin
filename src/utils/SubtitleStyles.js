@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { platformInfo } from './PlatformInfo.js';
 
 /**
  * Convert HEX color to RGBA
@@ -397,11 +398,21 @@ export function applyStyles(element, styles) {
     // First, clear any existing font classes
     element.classList.remove(...fontClasses);
 
+    // Ultra-legacy hardware uses !important in player-page.css for fallback styles.
+    // We must apply inline styles with !important priority to override them dynamically.
+    const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
+
     for (const style of styles) {
         if (style.className) {
             element.classList.add(style.className);
         } else if (style.value !== undefined) {
-            element.style[style.name] = style.value;
+            if (isUltraLegacy) {
+                // Convert camelCase to kebab-case
+                const propName = style.name.replace(/([A-Z])/g, '-$1').toLowerCase();
+                element.style.setProperty(propName, style.value, 'important');
+            } else {
+                element.style[style.name] = style.value;
+            }
         }
     }
 }
@@ -411,8 +422,8 @@ export function applyStyles(element, styles) {
  * Used by PlayerPage to trigger font preloading
  * @returns {string|null} The font ID (e.g. 'typewriter', 'cursive') or null
  */
-function getCurrentFontId() {
-    const font = PlayerSettings.get('subtitleFont') || '';
+function getCurrentFontId(settingKey = 'subtitleFont') {
+    const font = PlayerSettings.get(settingKey) || '';
     // Return null for 'default' or empty (no Google Font needed)
     return font && font !== 'default' ? font : null;
 }
@@ -481,7 +492,10 @@ export default {
             case 'silkscreen':
                 return 'Silkscreen';
             default:
-                return 'TizenSans';
+                // Return null when no specific font is selected, so callers that
+                // respect a null value (e.g. _preProcessAssContent) won't override
+                // the ASS file's own Fontname with a platform default.
+                return null;
         }
     },
     getFontScale: (settingKey = 'subtitleFont') => {

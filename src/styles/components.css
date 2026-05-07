@@ -43,7 +43,8 @@
 }
 
 .btn-secondary:focus,
-.btn-secondary.focused {
+.btn-secondary.focused,
+.btn-secondary:hover {
     background: var(--jf-button-hover);
 }
 
@@ -688,7 +689,6 @@ progress.card-progress::-webkit-progress-value {
 }
 
 
-.modal-option-btn:hover,
 .modal-option-btn:focus,
 .modal-option-btn.focused {
     background: var(--jf-accent) !important; /* Force priority over .selected */
@@ -697,6 +697,13 @@ progress.card-progress::-webkit-progress-value {
     outline: none;
     transform: scale(1.03);
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    will-change: transform;
+}
+
+.modal-option-btn:hover {
+    transform: scale(1.03);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    will-change: transform;
 }
 
 
@@ -1344,7 +1351,7 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.media-info-row:last-child {
+.media-info-row:last-child:nth-child(odd) {
     border-bottom: none;
 }
 
