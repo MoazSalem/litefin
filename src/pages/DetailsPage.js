@@ -1561,13 +1561,24 @@ class DetailsPage extends Page {
             <div id="details-logo" class="details-logo"></div>
             <h1 class="details-title">${displayTitle}</h1>
             ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
+            ${item.Type === 'Episode' ? `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
             
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
             ${secondaryMetaRow}
         `;
+
+        // Bind clickable subtitle if present
+        const subtitleLink = this.$('#episode-subtitle-link');
+        if (subtitleLink && item.SeriesId) {
+            subtitleLink.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log.info('Navigating to series via subtitle link:', item.SeriesId);
+                router.navigate(`/details/${item.SeriesId}`);
+            };
+        }
 
         // Overview
         const overviewEl = this.$('.overview-text');
