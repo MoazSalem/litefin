@@ -2372,12 +2372,15 @@ class PlayerPage extends Page {
         if (this._item && this._item.Id && !this._item.isIntro && this._item.Type !== 'TvChannel' && this._item.Type !== 'Trailer') {
             const detailsPath = `/details/${this._item.Id}`;
             
-            // The PlayerPage always replaces the page that launched it in history.
-            // When exiting, we replace the Player entry with the Details page of 
-            // whatever was LAST playing. This prevents history bloat and ensures 
-            // the Back button takes the user to where they started (Home/Library).
-            // We use isBack: true to trigger the correct "slide-out" animation.
-            router.navigate(detailsPath, { replace: true, isBack: true });
+            // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
+            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly 
+            // where we left off. In that case, App.js pushed the player instead of replacing, 
+            // so we just call router.back().
+            if (this.params.fromSlideshow === 'true') {
+                router.back();
+            } else {
+                router.navigate(detailsPath, { replace: true, isBack: true });
+            }
         } else {
             // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
             router.back();

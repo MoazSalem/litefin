@@ -253,11 +253,11 @@ class Router {
                 }
 
                 // Add to history as an object with path and state
-                // Skip if: back navigation via replace (path already at top)
-                if (this._isBackNavigation) {
+                // Skip if: back navigation and the path is already at the top of the stack (we just returned there)
+                const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
+                if (this._isBackNavigation && fullPath === topPath) {
                     // We DO NOT clear the flag here. Page.js will consume it and clear it.
                 } else {
-                    const topPath = this._history.length > 0 ? this._history[this._history.length - 1]?.path : null;
                     if (fullPath !== topPath) {
                         // Only push if path is different from top of history
                         this._history.push({ path: fullPath, state: null });

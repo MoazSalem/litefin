@@ -642,7 +642,7 @@ class SlideshowPage extends Page {
         if (item.Type === 'Video') {
             log.info('Video clicked — starting playback');
             this._stopAutoAdvance();
-            eventBus.emit('player:play', { item });
+            eventBus.emit('player:play', { item, fromSlideshow: true });
         } else {
             this._toggleExif();
         }
@@ -858,7 +858,7 @@ class SlideshowPage extends Page {
                 if (this._photos[this._currentIndex]?.Type === 'Video') {
                     // Stop auto advance just in case
                     this._stopAutoAdvance();
-                    eventBus.emit('player:play', { item: this._photos[this._currentIndex] });
+                    eventBus.emit('player:play', { item: this._photos[this._currentIndex], fromSlideshow: true });
                 } else {
                     this._toggleExif();
                 }
@@ -875,7 +875,7 @@ class SlideshowPage extends Page {
                 e.stopPropagation();
                 if (this._photos[this._currentIndex]?.Type === 'Video') {
                     this._stopAutoAdvance();
-                    eventBus.emit('player:play', { item: this._photos[this._currentIndex] });
+                    eventBus.emit('player:play', { item: this._photos[this._currentIndex], fromSlideshow: true });
                 } else {
                     this._toggleAutoAdvance();
                 }
