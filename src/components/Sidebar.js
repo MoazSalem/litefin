@@ -81,7 +81,7 @@ class Sidebar extends Component {
                         <div class="item-icon user-avatar-container">
                             ${this._renderUserAvatar()}
                         </div>
-                        <span class="item-text user-name">${this._getUserName()}</span>
+                        <span class="item-text sidebar-user-name">${this._getUserName()}</span>
                     </button>
 
                     <button class="sidebar-item" id="sidebar-home" tabindex="0" data-path="/home">
@@ -312,7 +312,7 @@ class Sidebar extends Component {
                 avatarContainer.innerHTML = this._renderUserAvatar();
             }
             // Update Name
-            const nameSpan = userBtn.querySelector('.user-name');
+            const nameSpan = userBtn.querySelector('.sidebar-user-name');
             if (nameSpan) {
                 nameSpan.textContent = this._getUserName();
             }
