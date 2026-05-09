@@ -2408,8 +2408,8 @@ class LibraryPage extends Page {
             return;
         }
 
-        // Special handling for Photos and Home Videos: open Slideshow
-        if (card.dataset.type === 'Photo' || card.dataset.type === 'Video') {
+        // Special handling for Photos: open Slideshow
+        if (card.dataset.type === 'Photo') {
             log.info('Navigating to Slideshow:', itemId);
             const parentArg = this.params.id || this.state.libraryId;
             router.navigate(`/slideshow/${itemId}?parentId=${parentArg}&sortBy=${this.state.sortBy}&sortOrder=${this.state.sortOrder}`);
