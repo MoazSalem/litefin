@@ -1009,6 +1009,9 @@ export default class OSDController extends Component {
                 this._focusResetTimer = null;
                 this._resetFocusToPlayPause();
             }, 10_000);
+        } else if (mode === 'seekbar') {
+            // Park immediately on the seekbar
+            this._resetFocusToSeekbar();
         }
         // 'remember' → do nothing, focus stays on the last button
     }
@@ -1027,6 +1030,18 @@ export default class OSDController extends Component {
         this._currentFocusRow = 1;
         const playIdx = this._findActionIndex('togglePlay');
         if (playIdx !== -1) this._currentFocusIndex = playIdx;
+        this._updateFocus();
+    }
+
+    /**
+     * Moves focus state to the Position Slider (seekbar) and updates the DOM.
+     *
+     * Called by hide() for 'seekbar' mode. Safe to call while the OSD is hidden.
+     * @private
+     */
+    _resetFocusToSeekbar() {
+        this._currentFocusRow = 2; // Position Slider row
+        this._currentFocusIndex = 0;
         this._updateFocus();
     }
 
@@ -1413,6 +1428,11 @@ export default class OSDController extends Component {
         if (direction === 'up') {
             if (this._currentFocusRow === 2) {
                 this._currentFocusRow = 1;
+                // Always target Play/Pause when moving UP from the seekbar
+                const playIdx = this._findActionIndex('togglePlay');
+                if (playIdx !== -1) {
+                    this._currentFocusIndex = playIdx;
+                }
             } else if (this._currentFocusRow === 1) {
                 // If plugin widgets are visible in the overlay row, go there directly.
                 // The overlay row is visually ABOVE the controls, so Up from controls = overlay.

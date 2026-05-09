@@ -1358,8 +1358,10 @@ class SettingsPage extends Page {
                                     value: 'timeout',
                                     label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
                                 },
-                                /* Keep the last button the user navigated to — the legacy behaviour */
-                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' }
+                                 /* Keep the last button the user navigated to — the legacy behaviour */
+                                { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
+                                /* Always snap to seekbar on every OSD reveal */
+                                { value: 'seekbar', label: i18n.t('OsdFocusSeekbar') || 'Always return to Seekbar' }
                             ],
                             PlayerSettings.get('osdFocusRestoreMode') || 'always'
                         )}
