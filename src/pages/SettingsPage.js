@@ -564,6 +564,30 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DetailsImageQuality">${i18n.t('DetailsImageQuality') || 'Details Image Quality'}</span>
+                        <span class="setting-description" data-i18n="DetailsImageQualityDescription">${i18n.t('DetailsImageQualityDescription') || 'Set the image quality specifically for the item details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'details-image-quality-select',
+                            [
+                                { value: 'default', label: i18n.t('Default') || 'Default' },
+                                { value: 'low', label: i18n.t('Low') || 'Low' },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                                { value: 'high', label: i18n.t('High') || 'High' },
+                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                                { value: 'ultra', label: i18n.t('Ultra') },
+                                { value: 'original', label: i18n.t('Original') }
+                            ],
+                            imageService.getDetailsPreset() || 'very-high'
+                        )}
+                    </div>
+                </div>
+
                 <!-- Time Section -->
                 <h3 class="setting-section-title" data-i18n="Time">${i18n.t('Time') || 'Time'}</h3>
 
@@ -883,7 +907,7 @@ class SettingsPage extends Page {
                                 { value: 'ultra', label: i18n.t('Ultra') },
                                 { value: 'original', label: i18n.t('Original') }
                             ],
-                            storage.getItem('pref:heroImageQuality') || 'medium-low'
+                            storage.getItem('pref:heroImageQuality') || 'default'
                         )}
                     </div>
                 </div>
@@ -3912,6 +3936,7 @@ class SettingsPage extends Page {
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
+            'details-image-quality-select': { key: 'detailsImageQuality', type: 'details-service' },
             'max-resolution-select': { key: 'maxResolution', type: 'player' },
             'player-backend-select': { key: 'playerBackend', type: 'player' },
             'max-bitrate-select': { key: 'maxBitrateInternet', type: 'player' },
@@ -4095,6 +4120,8 @@ class SettingsPage extends Page {
                             }
                         } else if (settingConfig.type === 'service') {
                             imageService.setPreset(newValue);
+                        } else if (settingConfig.type === 'details-service') {
+                            imageService.setDetailsPreset(newValue);
                         } else if (settingConfig.type === 'player') {
                             // Numeric settings need parseFloat/parseInt conversion
                             const floatKeys = ['webosBufferGate'];

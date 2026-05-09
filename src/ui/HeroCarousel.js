@@ -120,9 +120,10 @@ class HeroCarousel {
         let logoHtml = '';
 
         if (!useTextTitle && logoItemId && logoTag) {
+            const logoParams = imageService.getParams('hero-logo');
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: 800,
-                quality: 80,
+                maxWidth: logoParams.maxWidth,
+                quality: logoParams.quality,
                 tag: logoTag
             });
             logoHtml = `<div class="hero-logo-container"><img src="${logoUrl}" alt="" class="hero-logo"></div>`;

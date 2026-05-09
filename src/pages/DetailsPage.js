@@ -613,11 +613,10 @@ class DetailsPage extends Page {
             }
 
             if (item.ImageTags && item.ImageTags.Primary) {
-                // FORCE HIGH QUALITY for Details Page
-                // const params = imageService.getParams('poster');
+                const params = imageService.getParams('details-poster');
                 const posterUrl = api.getImageUrl(item.Id, 'Primary', {
-                    maxWidth: 600,
-                    quality: 90
+                    maxWidth: params.maxWidth,
+                    quality: params.quality
                 });
                 const img = new Image();
                 img.onload = () => {
@@ -639,10 +638,10 @@ class DetailsPage extends Page {
             }
 
             // Backdrop (Fire and forget, via Manager)
-            // FORCE HIGH QUALITY for Details Page
+            const params = imageService.getParams('details-backdrop');
             const backdropUrl = BackdropManager.getBackdropUrl(item, {
-                maxWidth: 3840,
-                quality: 90
+                maxWidth: params.maxWidth,
+                quality: params.quality
             });
             if (backdropUrl) {
                 BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
@@ -1466,11 +1465,10 @@ class DetailsPage extends Page {
         const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
 
         if (logoItemId && logoTag) {
-            const params = imageService.getParams('thumb'); // Logo usually similar resolution needs as thumb
-            // Bump logo quality slightly as it is text
+            const params = imageService.getParams('details-logo');
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: params.maxWidth * 2,
-                quality: 70,
+                maxWidth: params.maxWidth,
+                quality: params.quality,
                 tag: logoTag
             });
             const img = new Image();
