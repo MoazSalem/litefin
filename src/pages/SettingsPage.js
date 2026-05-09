@@ -503,7 +503,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="HoverScrollNavigationDescription">${i18n.t('HoverScrollNavigationDescription') || 'Traverse vertical lists and rows using the scroll wheel or magic remote wheel.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hoverScrollNavigation') !== 'false' ? 'active' : ''}" 
+                        <button class="toggle-switch ${storage.getItem('pref:hoverScrollNavigation') === 'true' ? 'active' : ''}" 
                                 id="toggle-hover-scroll-nav" 
                                 tabindex="0">
                         </button>
@@ -4317,7 +4317,7 @@ class SettingsPage extends Page {
         const hoverScrollNavToggle = this.$('#toggle-hover-scroll-nav');
         if (hoverScrollNavToggle) {
             hoverScrollNavToggle.addEventListener('click', () => {
-                const currentValue = storage.getItem('pref:hoverScrollNavigation') !== 'false';
+                const currentValue = storage.getItem('pref:hoverScrollNavigation') === 'true';
                 const newValue = !currentValue;
                 storage.setItem('pref:hoverScrollNavigation', newValue.toString());
                 hoverScrollNavToggle.classList.toggle('active', newValue);

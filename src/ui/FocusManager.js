@@ -164,8 +164,8 @@ class FocusManager {
             (e) => {
                 if (this._suspended) return;
 
-                // Respect the user setting (default to true)
-                if (storage.getItem('pref:hoverScrollNavigation') === 'false') return;
+                // Respect the user setting (default to false)
+                if (storage.getItem('pref:hoverScrollNavigation') !== 'true') return;
 
                 // Ignore if player is active or OSD is focused (PlayerOSD handles its own wheel behavior)
                 if (
