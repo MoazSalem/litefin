@@ -1510,7 +1510,9 @@ class LibraryPage extends Page {
             case 'banner':
                 return 'backdrop';
             case 'poster':
+                return 'poster';
             case 'small-poster':
+                return 'small-poster';
             case 'list':
             default:
                 return 'poster';

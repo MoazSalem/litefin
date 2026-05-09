@@ -561,7 +561,7 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
-                
+
                 <!-- Time Section -->
                 <h3 class="setting-section-title" data-i18n="Time">${i18n.t('Time') || 'Time'}</h3>
 

@@ -307,6 +307,7 @@ class CardRenderer {
                     quality: params.quality
                 });
             } else if (
+                type === 'small-poster' ||
                 item.ImageTags?.Primary ||
                 item.AlbumPrimaryImageTag ||
                 (itemId &&
@@ -316,7 +317,7 @@ class CardRenderer {
                         item.Type === 'Audio'))
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams(type === 'small-poster' ? 'small-poster' : 'poster');
                 
                 let targetId = itemId;
                 let targetTag = item.ImageTags?.Primary;

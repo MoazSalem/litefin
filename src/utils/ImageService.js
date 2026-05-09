@@ -52,13 +52,14 @@ class ImageService {
 
     /**
      * Get optimization parameters for a specific image usage
-     * @param {string} type - 'poster' | 'backdrop' | 'thumb' | 'avatar'
+     * @param {string} type - 'poster' | 'small-poster' | 'backdrop' | 'thumb' | 'avatar'
      * @returns {Object} { maxLimit, quality }
      */
     getParams(type) {
         const presets = {
             low: {
                 poster: 240,
+                'small-poster': 160,
                 backdrop: 640,
                 'card-backdrop': 360,
                 'hero-banner': 554,
@@ -70,6 +71,7 @@ class ImageService {
             },
             'medium-low': {
                 poster: 300,
+                'small-poster': 200,
                 backdrop: 860,
                 'card-backdrop': 480,
                 'hero-banner': 1100,
@@ -81,6 +83,7 @@ class ImageService {
             },
             medium: {
                 poster: 360,
+                'small-poster': 240,
                 backdrop: 1080,
                 'card-backdrop': 600,
                 'hero-banner': 1662,
@@ -92,6 +95,7 @@ class ImageService {
             },
             'medium-high': {
                 poster: 430,
+                'small-poster': 280,
                 backdrop: 1500,
                 'card-backdrop': 700,
                 'hero-banner': 1790,
@@ -103,6 +107,7 @@ class ImageService {
             },
             high: {
                 poster: 500,
+                'small-poster': 340,
                 backdrop: 1920,
                 'card-backdrop': 800,
                 'hero-banner': 1920,
@@ -114,6 +119,7 @@ class ImageService {
             },
             ultra: {
                 poster: 800,
+                'small-poster': 480,
                 backdrop: 3840,
                 'card-backdrop': 1280,
                 'hero-banner': 3840,
