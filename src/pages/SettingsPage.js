@@ -555,7 +555,9 @@ class SettingsPage extends Page {
                                 { value: 'medium', label: i18n.t('Medium') },
                                 { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
                                 { value: 'high', label: i18n.t('High') },
-                                { value: 'ultra', label: i18n.t('Ultra') }
+                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                                { value: 'ultra', label: i18n.t('Ultra') },
+                                { value: 'original', label: i18n.t('Original') }
                             ],
                             imageService.getPreset() || 'medium'
                         )}
@@ -877,7 +879,9 @@ class SettingsPage extends Page {
                                 { value: 'medium', label: i18n.t('Medium') || 'Medium' },
                                 { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
                                 { value: 'high', label: i18n.t('High') || 'High' },
-                                { value: 'ultra', label: i18n.t('Ultra') || 'Ultra' }
+                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                                { value: 'ultra', label: i18n.t('Ultra') },
+                                { value: 'original', label: i18n.t('Original') }
                             ],
                             storage.getItem('pref:heroImageQuality') || 'medium-low'
                         )}
@@ -1358,7 +1362,7 @@ class SettingsPage extends Page {
                                     value: 'timeout',
                                     label: i18n.t('OsdFocusTimeout') || 'Return to Play/Pause after 10 s'
                                 },
-                                 /* Keep the last button the user navigated to — the legacy behaviour */
+                                /* Keep the last button the user navigated to — the legacy behaviour */
                                 { value: 'remember', label: i18n.t('OsdFocusRemember') || 'Remember last position' },
                                 /* Always snap to seekbar on every OSD reveal */
                                 { value: 'seekbar', label: i18n.t('OsdFocusSeekbar') || 'Always return to Seekbar' }
