@@ -3353,6 +3353,9 @@ class SettingsPage extends Page {
             'toggle-force-transcode',
             'toggle-force-direct-play',
             'toggle-background-service',
+            'toggle-magic-cursor',
+            'toggle-hover-trickplay',
+            'toggle-seek-with-arrows',
             // Interlaced content fallback — auto-switch to HTML5 when AVPlay
             // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
             // cache invalidation needed (device caps don't change), but keeping
@@ -3914,6 +3917,7 @@ class SettingsPage extends Page {
             'subtitle-mode-select': { key: 'subtitleMode', type: 'player' },
             // Subtitle delivery mode — drives SubtitleProfiles in DeviceProfile
             'subtitle-burn-in-select': { key: 'subtitleBurnIn', type: 'player' },
+            'pgs-playback-mode-select': { key: 'pgsPlaybackMode', type: 'player' },
             'subtitle-size-select': { key: 'subtitleSize', type: 'player' },
             'subtitle-weight-select': { key: 'subtitleWeight', type: 'player' },
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
@@ -4120,6 +4124,7 @@ class SettingsPage extends Page {
                             if (
                                 settingConfig.key === 'maxResolution' ||
                                 settingConfig.key === 'maxBitrateInternet' ||
+                                settingConfig.key === 'pgsPlaybackMode' ||
                                 settingConfig.key === 'webosSegmentLength' ||
                                 settingConfig.key === 'tizenSegmentLength' ||
                                 settingConfig.key === 'html5SegmentLength'
