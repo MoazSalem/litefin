@@ -22,6 +22,7 @@ import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('ProfilesPage');
 
@@ -166,7 +167,11 @@ class ProfilesPage extends Page {
         // Build avatar URL only if we have an image tag
         let avatarHtml;
         if (session.primaryImageTag) {
-            const imgUrl = api.getUserImageUrl(session.userId, { maxWidth: 300 });
+            const params = imageService.getParams('avatar');
+            const imgUrl = api.getUserImageUrl(session.userId, { 
+                maxWidth: params.maxWidth, 
+                quality: params.quality 
+            });
             avatarHtml = `
                 <img
                     class="profiles-card-avatar"

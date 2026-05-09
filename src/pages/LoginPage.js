@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('Login');
 
@@ -719,7 +720,10 @@ class LoginPage extends Page {
                 <button class="user-card" data-user-index="${index}" tabindex="0">
                         <img 
                             class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                            src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
+                            src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { 
+                                maxWidth: imageService.getParams('avatar').maxWidth,
+                                quality: imageService.getParams('avatar').quality
+                            }) : ''}"
                             alt="${user.Name}"
                             onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                         >
@@ -787,7 +791,11 @@ class LoginPage extends Page {
                 placeholder.textContent = user.Name.charAt(0).toUpperCase();
 
                 if (user.PrimaryImageTag) {
-                    img.src = api.getUserImageUrl(user.Id, { maxWidth: 100 });
+                    const params = imageService.getParams('avatar');
+                    img.src = api.getUserImageUrl(user.Id, { 
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                     img.classList.remove('hidden');
                     placeholder.classList.add('hidden');
                 } else {

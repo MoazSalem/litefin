@@ -261,7 +261,9 @@ class Page extends Component {
      * Unified method for Home and Details pages
      */
     _renderMediaCard(item, isLandscape = false, type = 'poster', contextType = null) {
-        return CardRenderer.createCardHtml(item, { isLandscape, type, contextType });
+        // Derive context from class name if not provided (e.g. HomePage -> home)
+        const derivedContext = contextType || this.constructor.name.replace('Page', '').toLowerCase();
+        return CardRenderer.createCardHtml(item, { isLandscape, type, contextType: derivedContext });
     }
 }
 

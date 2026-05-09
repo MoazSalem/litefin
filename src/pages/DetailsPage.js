@@ -59,6 +59,17 @@ class DetailsPage extends Page {
         this._isAsyncPage = true;
     }
 
+    /**
+     * Override _renderMediaCard to provide a default context for all 
+     * related content rows (Similar, Next Up, Cast).
+     */
+    _renderMediaCard(item, isLandscape, type, options = {}) {
+        // Default to 'details-row' which maps to the 'home' preset (228px posters, 388px thumbs)
+        // rather than the massive 'details' primary image presets.
+        options.contextType = options.contextType || 'details-row';
+        return super._renderMediaCard(item, isLandscape, type, options);
+    }
+
     render() {
         return `
             <div class="page details-page">
@@ -801,7 +812,7 @@ class DetailsPage extends Page {
             id: 'playlist-items-grid',
             items: this._playlistItems,
             type: 'thumb', // Landscape thumb aspect ratio
-            contextType: 'playlist-grid',
+            contextType: 'library',
             limit: 1000,
             isLandscape: true, // Landscape layout for mixed content
             onClick: (card) => {
@@ -855,7 +866,7 @@ class DetailsPage extends Page {
             id: 'album-songs-grid',
             items: songs,
             type: 'square', // Square posters as requested
-            contextType: 'album-grid',
+            contextType: 'library',
             limit: 60,
             moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Audio`,
             isLandscape: false, // Not landscape
@@ -1948,7 +1959,7 @@ class DetailsPage extends Page {
                 id: 'season-episodes-grid',
                 items: this._episodes,
                 type: 'episode',
-                contextType: 'season-grid',
+                contextType: 'details',
                 limit: 60,
                 moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                 isLandscape: true,

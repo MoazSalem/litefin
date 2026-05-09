@@ -1191,7 +1191,7 @@ class HomePage extends Page {
         const urls = [];
         const isLandscape = descriptor.layout === 'landscape';
         const sizeType = isLandscape ? 'backdrop' : 'poster';
-        const { maxWidth, quality } = imageService.getParams(sizeType);
+        const { maxWidth, quality } = imageService.getParams(sizeType, descriptor.contextType);
 
         const subset = items.slice(0, IMAGE_PREWARM_PER_ROW);
 
