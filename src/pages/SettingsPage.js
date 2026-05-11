@@ -1532,6 +1532,7 @@ class SettingsPage extends Page {
                                 options.push({ value: 'avplay', label: i18n.t('BackendTizen') });
                             } else if (platformInfo.isWebOS) {
                                 options.push({ value: 'webos', label: i18n.t('BackendWebOS') });
+                                options.push({ value: 'webos-native', label: i18n.t('BackendWebOSNative') || 'WebOS Local Player' });
                             }
                             return this._renderDropdown('player-backend-select', options, currentBackend);
                         })()}

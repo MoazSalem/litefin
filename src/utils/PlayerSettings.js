@@ -185,7 +185,7 @@ const DEFAULTS = {
     // Enable HDR10/HLG pass-through
     enableHDR: true,
 
-    // Player backend ('auto', 'avplay', 'webos', 'html5')
+    // Player backend ('auto', 'avplay', 'webos', 'webos-native', 'html5')
     playerBackend: 'auto',
 
     /*

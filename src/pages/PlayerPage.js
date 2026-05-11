@@ -926,7 +926,9 @@ class PlayerPage extends Page {
         // but for now we'll rely on the player's internal logic or add reporting here if needed.
 
         // Initialize OSD
-        this._initOSD();
+        if (this._player.backendType !== 'webos-native' && this._player._backendType !== 'webos-native') {
+            this._initOSD();
+        }
 
         // === Plugin System ===
         // Notify all loaded plugins that player + OSD are ready.

@@ -293,6 +293,7 @@
     "BackendTizen": "Tizen Native (Avplay)",
     "BackendWeb": "Web (HTML5 Player)",
     "BackendWebOS": "LG Native (webOS Player)",
+    "BackendWebOSNative": "WebOS Local Player",
     "BackgroundColor": "Background Color",
     "BackgroundColorDescription": "Subtitle background color",
     "BackgroundOpacity": "Background Opacity",

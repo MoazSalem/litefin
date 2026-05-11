@@ -15,6 +15,7 @@
 import { HtmlVideoPlayer } from './HtmlVideoPlayer.js';
 import { TizenAVPlayer } from './TizenAVPlayer.js';
 import { WebOSPlayer } from './WebOSPlayer.js';
+import { WebOSLunaPlayer } from './WebOSLunaPlayer.js';
 import { platformInfo } from '../../utils/PlatformInfo.js';
 import { MediaHelper } from './MediaHelper.js';
 import { buildJellyfinProfile } from '../../api/DeviceProfile.js';
@@ -275,6 +276,16 @@ export class JellyfinPlayer extends EventEmitter {
             log.info('Using HTML5 Video backend (forced by setting)');
             this._backendType = 'html5';
             this._backend    = new HtmlVideoPlayer(sharedOptions);
+            return;
+        }
+
+        // ----------------------------------------------------------------
+        // Explicit override: 'webos-native' → always use WebOSLunaPlayer
+        // ----------------------------------------------------------------
+        if (backendSetting === 'webos-native') {
+            log.info('Using WebOS Native Player backend (forced by setting)');
+            this._backendType = 'webos-native';
+            this._backend    = new WebOSLunaPlayer(sharedOptions);
             return;
         }
 
@@ -1004,8 +1015,9 @@ export class JellyfinPlayer extends EventEmitter {
              */
             const isAudioItemSetup = options.item?.MediaType === 'Audio' ||
                                       options.item?.Type === 'AudioBook';
+            const isNativePlayer = this._backendType === 'webos-native';
 
-            if (!isAudioItemSetup && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
+            if (!isAudioItemSetup && !isNativePlayer && this._currentSubtitleStreamIndex !== undefined && this._currentSubtitleStreamIndex !== -1) {
                 // Initialize the SubtitleManager with the selected subtitle track.
                 // The subtitle index is already included in the server request, so
                 // this call only needs to set up CLIENT-SIDE rendering (fetch external
