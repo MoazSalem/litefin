@@ -251,8 +251,8 @@ class AuthManager {
         // Validate token with a server round-trip
         try {
             log.info('Validating token by fetching current user...');
-            // Use a 5s timeout instead of 30s to quickly detect offline hosts on boot
-            const user = await api.getCurrentUser({ timeout: 5000 });
+            // Use an 8s timeout instead of 30s to quickly detect offline hosts on boot
+            const user = await api.getCurrentUser({ timeout: 8000 });
             log.info('Token valid, user:', user?.Name);
 
             // Sync the stored session with fresh user data from the server
@@ -329,7 +329,7 @@ class AuthManager {
 
         try {
             // Short timeout so the UI doesn't hang if the user types a dead IP
-            const info = await api.getPublicInfo({ timeout: 5000 });
+            const info = await api.getPublicInfo({ timeout: 8000 });
 
             // Persist the server URL
             storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
@@ -700,6 +700,37 @@ class AuthManager {
             log.info('Logout complete. No remaining sessions — routing to login.');
             eventBus.emit('auth:logout');
         }
+    }
+
+    /**
+     * Disconnect from the current server AND wipe all stored sessions for it.
+     *
+     * Used by the destructive "Sign Out" action on the profiles screen.
+     * This effectively "forgets" the server entirely.
+     */
+    async logoutAndForgetServer() {
+        log.info('Signing out and forgetting current server...');
+
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        if (serverUrl) {
+            // Load the full map
+            let sessionMap = {};
+            try {
+                sessionMap = JSON.parse(storage.getItem(STORAGE_KEYS.SERVER_SESSIONS) || '{}');
+            } catch (e) {
+                log.error('Failed to parse sessions map during forgetServer:', e);
+            }
+
+            // Remove this server's entry entirely
+            if (sessionMap[serverUrl]) {
+                delete sessionMap[serverUrl];
+                storage.setItem(STORAGE_KEYS.SERVER_SESSIONS, JSON.stringify(sessionMap));
+                log.info(`Wiped ${serverUrl} from saved sessions.`);
+            }
+        }
+
+        // Now perform the standard disconnect (clears pointers, resets state)
+        await this.logoutAll();
     }
 
     /**

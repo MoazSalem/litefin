@@ -261,16 +261,13 @@ class ProfilesPage extends Page {
             cancelBtn.addEventListener('click', () => this._hideDialog());
         }
 
-        // Dialog: Confirm → signs out only the active user, preserves the server slot
+        // Dialog: Confirm → signs out ALL users on this server and forgets the server
         const confirmBtn = this.$('#profiles-dialog-confirm');
         if (confirmBtn) {
             confirmBtn.addEventListener('click', async () => {
                 this._hideDialog();
-                // auth.logout() handles routing automatically:
-                // - Other users on this server remain  → routes to /profiles
-                // - Last user on this server           → routes to /login
-                // Sessions for other servers are always preserved.
-                await auth.logout();
+                // This wipes all tokens for the active server and routes back to login (server selection)
+                await auth.logoutAndForgetServer();
             });
         }
     }

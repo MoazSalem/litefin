@@ -315,6 +315,7 @@ class LoginPage extends Page {
             }
 
             this._startDiscovery();
+            this._showState(STATE.SERVER);
             setTimeout(() => {
                 this._serverInput.focus();
             }, 100);
@@ -559,6 +560,17 @@ class LoginPage extends Page {
         try {
             this._serverUrl = savedUrl;
             await auth.connectToServer(savedUrl);
+
+            // If we already have saved sessions for this server, jump straight to the profiles picker
+            const savedServers = auth.getSavedServers();
+            const serverData = savedServers.find(s => s.serverUrl === savedUrl);
+            
+            if (!this._isAddUserMode && serverData && serverData.sessions.length > 0) {
+                log.info(`Server ${savedUrl} has saved sessions. Skipping login prompt.`);
+                state.set('user:sessionCount', serverData.sessions.length);
+                router.navigate('/profiles', { replace: true });
+                return;
+            }
 
             // Get public users
             this._users = await api.getPublicUsers();
