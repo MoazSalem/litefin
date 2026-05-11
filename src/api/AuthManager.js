@@ -42,19 +42,23 @@ const log = logger.create('AuthManager');
 // Storage Keys
 // ============================================================================
 const STORAGE_KEYS = {
-    SERVER_URL:    'litefin:serverUrl',
-    DEVICE_ID:     'litefin:deviceId',
+    SERVER_URL:      'litefin:serverUrl',
+    DEVICE_ID:       'litefin:deviceId',
 
-    // --- Multi-user keys ---
-    /** JSON array of session objects */
-    SESSIONS:      'litefin:sessions',
+    // --- Active user marker ---
     /** userId string of the currently active session */
-    ACTIVE_USER:   'litefin:activeUserId',
+    ACTIVE_USER:     'litefin:activeUserId',
 
-    // --- Legacy single-user keys (kept for migration, then pruned) ---
-    ACCESS_TOKEN:  'litefin:accessToken',
-    USER_ID:       'litefin:userId',
-    USER_DATA:     'litefin:userData'
+    // --- Per-server session map ---
+    /**
+     * JSON object mapping server URL → array of session objects.
+     * Shape: { "https://server.com": [{userId, accessToken, userName, primaryImageTag}] }
+     * This replaces the old flat litefin:sessions array.
+     */
+    SERVER_SESSIONS: 'litefin:serverSessions',
+
+    // --- Legacy flat sessions (migration reference only — do not write to this after migration) ---
+    SESSIONS:        'litefin:sessions'
 };
 
 /**
@@ -108,7 +112,7 @@ class AuthManager {
     /**
      * Initialize auth manager.
      * - Ensures device ID exists
-     * - Migrates old single-user credentials to the new sessions array (one-time)
+     * - Migrates flat litefin:sessions → per-server litefin:serverSessions (one-time)
      * - Attempts to restore the last active session
      *
      * @returns {Promise<boolean>} True if a session was successfully restored
@@ -119,10 +123,10 @@ class AuthManager {
         // Ensure a unique device ID is registered with the API
         this._ensureDeviceId();
 
-        // One-time migration from the old single-user storage format
-        this._migrateOldSession();
+        // One-time migration: lift flat sessions array → per-server keyed map
+        this._migrateServerSessions();
 
-        // Restore the last active session from the sessions array
+        // Restore the last active session from the per-server sessions map
         const restored = await this._restoreSession();
 
         if (restored) {
@@ -160,50 +164,46 @@ class AuthManager {
     }
 
     /**
-     * One-time migration: if old-style single-user keys exist but the new
-     * sessions array does not, lift them into a sessions array and prune the
-     * legacy keys so they don't accumulate.
+     * One-time migration: lift the old flat litefin:sessions array into the
+     * new per-server keyed map (litefin:serverSessions).
+     *
+     * Old format: litefin:sessions = [{userId, accessToken, ...}]
+     * New format: litefin:serverSessions = { "https://server.com": [{...}] }
+     *
+     * This runs once on the first launch with the new code. After that,
+     * SERVER_SESSIONS already exists and this is a no-op on subsequent boots.
+     * The old litefin:sessions key is cleaned up after migration.
      * @private
      */
-    _migrateOldSession() {
-        // If the new sessions format already exists, nothing to do
-        if (storage.getItem(STORAGE_KEYS.SESSIONS) !== null) return;
+    _migrateServerSessions() {
+        // Already on the new format — nothing to do
+        if (storage.getItem(STORAGE_KEYS.SERVER_SESSIONS) !== null) return;
 
-        const oldToken  = storage.getItem(STORAGE_KEYS.ACCESS_TOKEN);
-        const oldUserId = storage.getItem(STORAGE_KEYS.USER_ID);
-        let   oldUser   = null;
+        const serverUrl      = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        const flatSessionRaw = storage.getItem(STORAGE_KEYS.SESSIONS);
 
-        // Attempt to parse cached user object (may be absent on very old installs)
-        try {
-            const raw = storage.getItem(STORAGE_KEYS.USER_DATA);
-            if (raw) oldUser = JSON.parse(raw);
-        } catch (_) { /* ignore parse errors — treat as missing */ }
+        let initialMap = {};
 
-        if (oldToken && oldUserId) {
-            log.info('Migrating legacy single-user session to multi-user format');
-
-            // Construct a session object from whatever data we have
-            const session = {
-                userId:          oldUserId,
-                accessToken:     oldToken,
-                userName:        oldUser?.Name  || '',
-                primaryImageTag: oldUser?.PrimaryImageTag || null
-            };
-
-            // Write the new format
-            storage.setItem(STORAGE_KEYS.SESSIONS,    JSON.stringify([session]));
-            storage.setItem(STORAGE_KEYS.ACTIVE_USER, oldUserId);
-        } else {
-            // No usable legacy data — initialize an empty sessions array
-            storage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify([]));
+        if (flatSessionRaw && serverUrl) {
+            // Existing users: lift the flat sessions array into the server's slot
+            try {
+                const flatSessions = JSON.parse(flatSessionRaw);
+                if (Array.isArray(flatSessions) && flatSessions.length > 0) {
+                    log.info(`Migrating ${flatSessions.length} session(s) for ${serverUrl} to per-server format`);
+                    initialMap[serverUrl] = flatSessions;
+                }
+            } catch (e) {
+                log.error('Failed to parse legacy sessions during migration:', e);
+            }
         }
 
-        // Prune old single-user keys regardless (clean slate)
-        storage.removeItem(STORAGE_KEYS.ACCESS_TOKEN);
-        storage.removeItem(STORAGE_KEYS.USER_ID);
-        storage.removeItem(STORAGE_KEYS.USER_DATA);
+        // Write the new keyed map (may be empty on fresh installs)
+        storage.setItem(STORAGE_KEYS.SERVER_SESSIONS, JSON.stringify(initialMap));
 
-        log.info('Legacy session migration complete');
+        // Remove the old flat key — it is superseded by SERVER_SESSIONS
+        storage.removeItem(STORAGE_KEYS.SESSIONS);
+
+        log.info('Per-server session migration complete');
     }
 
     /**
@@ -703,27 +703,30 @@ class AuthManager {
     }
 
     /**
-     * Log out ALL stored users at once.
-     * Used by "Switch Server" on the profiles screen.
-     * The server is NOT notified individually per user because we are
-     * switching servers (the old tokens are no longer relevant).
+     * Disconnect from the current server without wiping stored credentials.
+     *
+     * Used by "Switch Server" on the profiles screen. Sessions for ALL servers
+     * (including the current one) are intentionally preserved in
+     * litefin:serverSessions so the user can return later without re-login.
+     *
+     * Only the active server pointer and active user marker are cleared.
      */
     async logoutAll() {
-        log.info('Logging out ALL users (switch server)...');
+        log.info('Disconnecting from current server (all server sessions preserved)...');
 
-        // Close WebSocket cleanly
+        // Close WebSocket cleanly before dropping credentials
         api.closeWebSocket();
 
-        // Wipe the sessions array and active user marker
-        storage.setItem(STORAGE_KEYS.SESSIONS,   JSON.stringify([]));
+        // Clear the active server + user pointers — sessions themselves are kept
+        // intact inside litefin:serverSessions for future reconnection.
         storage.removeItem(STORAGE_KEYS.ACTIVE_USER);
         storage.removeItem(STORAGE_KEYS.SERVER_URL);
 
-        // Clear ApiClient
+        // Detach the API client so it doesn't auto-reconnect with stale credentials
         api.clearAuth();
-        api.setServer(''); // Detach server URL so it doesn't auto-reconnect
+        api.setServer('');
 
-        // Reset state
+        // Reset application state
         state.set('user:authenticated', false);
         state.set('user:data',          null);
         state.set('user:sessionCount',  0);
@@ -731,7 +734,7 @@ class AuthManager {
 
         // Route to login page
         eventBus.emit('auth:logout');
-        log.info('All users logged out');
+        log.info('Disconnected from server. Saved sessions for all servers are intact.');
     }
 
     // ========================================================================
@@ -761,11 +764,24 @@ class AuthManager {
     }
 
     /**
-     * Return the number of stored sessions.
+     * Return the number of stored sessions for the current server.
      * @returns {number}
      */
     getSessionCount() {
         return this._loadSessions().length;
+    }
+
+    /**
+     * Return all servers that have at least one stored session.
+     * Useful for building a server-picker UI in a future iteration.
+     *
+     * @returns {Array<{serverUrl: string, sessions: Array}>}
+     */
+    getSavedServers() {
+        const map = this._loadAllServerSessions();
+        return Object.entries(map)
+            .filter(([, sessions]) => Array.isArray(sessions) && sessions.length > 0)
+            .map(([serverUrl, sessions]) => ({ serverUrl, sessions }));
     }
 
     // ========================================================================
@@ -829,34 +845,64 @@ class AuthManager {
     }
 
     // ========================================================================
-    // Private — Sessions Array CRUD
+    // Private — Per-Server Sessions CRUD
     // ========================================================================
 
     /**
-     * Load the sessions array from storage.
-     * Safe: always returns an array even if storage is empty or corrupted.
-     * @returns {Array}
+     * Load the full per-server session map from storage.
+     * Always returns a plain object — never throws.
+     *
+     * @returns {{ [serverUrl: string]: Array }} The full keyed map
      * @private
      */
-    _loadSessions() {
+    _loadAllServerSessions() {
         try {
-            const raw = storage.getItem(STORAGE_KEYS.SESSIONS);
-            if (!raw) return [];
+            const raw = storage.getItem(STORAGE_KEYS.SERVER_SESSIONS);
+            if (!raw) return {};
             const parsed = JSON.parse(raw);
-            return Array.isArray(parsed) ? parsed : [];
+            // Guard against corrupt / unexpected data shapes
+            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
         } catch (e) {
-            log.error('Failed to parse sessions from storage — returning empty array:', e);
-            return [];
+            log.error('Failed to parse serverSessions from storage — returning empty map:', e);
+            return {};
         }
     }
 
     /**
-     * Persist the sessions array back to storage.
-     * @param {Array} sessions - The full sessions array to save
+     * Load sessions for the currently active server.
+     * Safe: always returns an array even if storage is empty or corrupted.
+     *
+     * @returns {Array<{userId, accessToken, userName, primaryImageTag}>}
+     * @private
+     */
+    _loadSessions() {
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        // Cannot scope sessions without a server URL
+        if (!serverUrl) return [];
+
+        const map      = this._loadAllServerSessions();
+        const sessions = map[serverUrl];
+        return Array.isArray(sessions) ? sessions : [];
+    }
+
+    /**
+     * Persist the sessions array for the currently active server.
+     * Other servers' sessions remain untouched.
+     *
+     * @param {Array} sessions - Updated sessions for the active server
      * @private
      */
     _writeSessions(sessions) {
-        storage.setItem(STORAGE_KEYS.SESSIONS, JSON.stringify(sessions));
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        if (!serverUrl) {
+            log.warn('_writeSessions: no active server URL — sessions not saved');
+            return;
+        }
+
+        // Read the full map, update only the active server's slot, then write back
+        const map    = this._loadAllServerSessions();
+        map[serverUrl] = sessions;
+        storage.setItem(STORAGE_KEYS.SERVER_SESSIONS, JSON.stringify(map));
     }
 
     /**

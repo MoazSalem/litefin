@@ -2576,6 +2576,12 @@ class SettingsPage extends Page {
                 </div>
 
                 <div class="setting-actions centered">
+                    <!-- Navigate to the Who's Watching screen to pick a different profile -->
+                    <button class="btn btn-secondary switch-profiles-btn focusable" tabindex="0" data-i18n="SwitchUsers">
+                        ${i18n.t('SwitchUsers')}
+                    </button>
+
+                    <!-- Sign out the current user session (other sessions preserved) -->
                     <button class="btn btn-danger switch-user-btn focusable" tabindex="0" data-i18n="ButtonSignOut">
                         ${i18n.t('ButtonSignOut')}
                     </button>
@@ -3408,7 +3414,12 @@ class SettingsPage extends Page {
             }
         });
 
-        // Log Out
+        // Switch Users — navigate to the Who's Watching profile picker
+        this.$('.switch-profiles-btn')?.addEventListener('click', () => {
+            router.navigate('/profiles');
+        });
+
+        // Sign Out — logs out the active user (other server sessions preserved)
         this.$('.switch-user-btn')?.addEventListener('click', async () => {
             await auth.logout();
         });

@@ -615,8 +615,9 @@ class LoginPage extends Page {
 
     /**
      * Go to server selection screen (when Change Server button is clicked).
-     * Uses logoutAll() to ensure ALL sessions are cleared before switching —
-     * a server change is a full reset, not a single-user sign-out.
+     * Uses logoutAll() to clear the active server pointer and route to /login.
+     * Stored sessions for ALL servers are preserved in litefin:serverSessions
+     * so users can reconnect to any previously-used server without re-logging in.
      */
     _goToServerSelection() {
         log.info('Going to server selection');
@@ -630,14 +631,9 @@ class LoginPage extends Page {
         }
         focusManager.clearFocus();
 
-        // Explicitly clear ONLY server URL for local purposes if not handled by logout
-        // But auth.logout() handles the rest and notifies server
-        storage.removeItem('litefin:serverUrl');
-
-        // Call logoutAll to clear ALL sessions — switching server means starting fresh.
-        // logoutAll() emits auth:logout, which App.js catches and routes to /login.
-        // We don't use auth.logout() here because that would emit auth:switchToProfiles
-        // if other sessions exist (wrong — we want the full reset flow).
+        // logoutAll() clears only the active server URL + active user pointer;
+        // it does NOT wipe litefin:serverSessions — sessions for all servers are kept.
+        // It emits auth:logout, which App.js catches and routes to /login.
         auth.logoutAll();
 
         // Reset state
@@ -684,6 +680,20 @@ class LoginPage extends Page {
             // Stop scanning first
             cancelDiscovery();
             await auth.connectToServer(serverUrl);
+
+            // If we already have saved sessions for this server, jump straight to the profiles picker
+            // This prevents prompting the user to login again for a server they've already authenticated with.
+            // We ignore this shortcut if we're in "Add User" mode (where they explicitly want to add a NEW token).
+            const savedServers = auth.getSavedServers();
+            const serverData = savedServers.find(s => s.serverUrl === serverUrl);
+            
+            if (!this._isAddUserMode && serverData && serverData.sessions.length > 0) {
+                log.info(`Found ${serverData.sessions.length} saved sessions for ${serverUrl}, routing to profiles`);
+                // Update session count so App.js routing logic handles back-navigation correctly
+                state.set('user:sessionCount', serverData.sessions.length);
+                router.navigate('/profiles', { replace: true });
+                return;
+            }
 
             // Get public users
             this._users = await api.getPublicUsers();
