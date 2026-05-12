@@ -463,7 +463,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 
 .switch-user-btn {
     margin-top: 10px;
-    padding: 16px 48px;
+    padding: 12px 48px;
     border-radius: var(--jf-border-radius-lg);
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
@@ -478,7 +478,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .switch-user-btn:hover {
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border-color: var(--jf-button-border-focus) !important;
     will-change: transform;
 }
 

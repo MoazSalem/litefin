@@ -721,7 +721,7 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="btn btn-danger" id="btn-reset-settings" tabindex="0">
+                        <button class="btn btn-danger btn-small" id="btn-reset-settings" tabindex="0">
                             ${i18n.t('ButtonResetAll') || 'Reset All'}
                         </button>
                     </div>
@@ -2601,12 +2601,20 @@ class SettingsPage extends Page {
 
                 <div class="setting-actions centered">
                     <!-- Navigate to the Who's Watching screen to pick a different profile -->
-                    <button class="btn btn-secondary switch-profiles-btn focusable" tabindex="0" data-i18n="SwitchUsers">
+                    <button class="btn btn-secondary btn-small switch-profiles-btn focusable" 
+                            id="btn-switch-profiles"
+                            tabindex="0" 
+                            data-nav-right="#btn-sign-out"
+                            data-i18n="SwitchUsers">
                         ${i18n.t('SwitchUsers')}
                     </button>
 
                     <!-- Sign out the current user session (other sessions preserved) -->
-                    <button class="btn btn-danger switch-user-btn focusable" tabindex="0" data-i18n="ButtonSignOut">
+                    <button class="btn btn-danger btn-small switch-user-btn focusable" 
+                            id="btn-sign-out"
+                            tabindex="0" 
+                            data-nav-left="#btn-switch-profiles"
+                            data-i18n="ButtonSignOut">
                         ${i18n.t('ButtonSignOut')}
                     </button>
                 </div>
@@ -3433,9 +3441,6 @@ class SettingsPage extends Page {
             'toggle-force-transcode',
             'toggle-force-direct-play',
             'toggle-background-service',
-            'toggle-magic-cursor',
-            'toggle-hover-trickplay',
-            'toggle-seek-with-arrows',
             // Interlaced content fallback — auto-switch to HTML5 when AVPlay
             // encounters interlaced H264 (1080i MPEG-TS in HLS). No profile
             // cache invalidation needed (device caps don't change), but keeping
@@ -3880,7 +3885,7 @@ class SettingsPage extends Page {
 
         const title = i18n.t('MissingServerPlugin') || 'Missing Server Plugin';
         const message =
-            i18n.t('MissingServerPluginMessage', { pluginName }, { dependencyName }) ||
+            i18n.t('MissingServerPluginMessage', [pluginName, dependencyName]) ||
             `'${pluginName}' requires the '${dependencyName}' plugin to be installed and enabled on your Jellyfin server. Please install it via the Jellyfin dashboard and try again.`;
         const btnCloseText = i18n.t('ButtonClose') || 'Close';
 
