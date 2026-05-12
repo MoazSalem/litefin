@@ -1322,8 +1322,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     width: 40vw;
     height: 100vh;
     background: rgba(10, 10, 15, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+
     border-radius: 0;
     padding: 40px;
     display: flex;
@@ -1471,9 +1470,8 @@ body.lyrics-active .subtitle-overlay {
 
 .osd-syncplay-notification-glass {
     /* Sleek Apple-style frosted glass */
-    background: rgba(30, 30, 30, 0.45);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
+    background: rgba(30, 30, 30, 0.8);
+
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
     

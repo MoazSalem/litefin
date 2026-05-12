@@ -267,7 +267,7 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
 }
 
 .scroll-arrow {
-    background: rgba(255, 255, 255, 0.1);
+    background: rgba(0, 0, 0, 0.5);
     border: none;
     border-radius: 50%;
     width: 44px;
@@ -278,8 +278,8 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     align-items: center;
     justify-content: center;
     transition: background 0.2s, transform 0.2s, color 0.2s;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+
+
 }
 
 .scroll-arrow:hover {
