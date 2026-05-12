@@ -153,11 +153,28 @@ export const themeUtils = {
      * @returns {string} #ffffff or #000000
      */
     getContrastColor(hex) {
-        const rgb = this.hexToRgb(hex);
-        if (!rgb) return '#ffffff';
+        const luminance = this.getLuminance(hex);
+        const hsl = this.hexToHsl(hex);
 
-        // Relative luminance formula (WCAG 2.0)
-        // L = 0.2126 * R + 0.7152 * G + 0.0722 * B
+        // Threshold adjusted from 0.179 to 0.4 to be less "aggressive".
+        if (luminance > 0.4) {
+            // Background is bright - need dark text
+            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.4, 90), 12);
+        } else {
+            // Background is dark - need light text
+            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.1, 80), 90);
+        }
+    },
+
+    /**
+     * Get relative luminance of a color
+     * @param {string} hex
+     * @returns {number} 0-1
+     */
+    getLuminance(hex) {
+        const rgb = this.hexToRgb(hex);
+        if (!rgb) return 0;
+
         const normalize = (val) => {
             const s = val / 255;
             return s <= 0.03928 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
@@ -167,21 +184,26 @@ export const themeUtils = {
         const g = normalize(rgb.g);
         const b = normalize(rgb.b);
 
-        const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    },
 
+    /**
+     * Check if a color is "bright" (requires dark text contrast)
+     * @param {string} hex
+     * @returns {boolean}
+     */
+    isBright(hex) {
+        return this.getLuminance(hex) > 0.4;
+    },
+
+    /**
+     * Generate a soft light version of a color for focus indicators
+     * @param {string} hex
+     * @returns {string}
+     */
+    getSoftLight(hex) {
         const hsl = this.hexToHsl(hex);
-
-        // Threshold adjusted from 0.179 to 0.4 to be less "aggressive".
-        // This ensures vibrant colors like Lavender (#af52de) keep light text,
-        // while extremely bright colors like Yellow/White still get dark text.
-        if (luminance > 0.4) {
-            // Background is bright - need dark text
-            // Aggressive Dark: High saturation, very low lightness for deep color bleed
-            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.4, 90), 12);
-        } else {
-            // Background is dark - need light text
-            // Aggressive Light: High saturation, lowered lightness for maximum "glow"
-            return this.hslToHex(hsl.h, Math.min(hsl.s * 1.1, 80), 90);
-        }
+        // Desaturate slightly and set to high lightness for a clean focus look
+        return this.hslToHex(hsl.h, Math.min(hsl.s, 15), 82);
     }
 };

@@ -205,6 +205,13 @@ class LayoutManager {
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
         const contrastRgb = themeUtils.hexToRgb(contrastColor);
         const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
+
+        // Focus Indicator Logic:
+        // If the accent color is "bright" (Luminance > 0.4), the calculated contrast color 
+        // (normally for text) is very dark. Since most themes are dark, a dark focus border 
+        // would be invisible. We use a soft light variant for focus borders in these cases.
+        const isBrightAccent = themeUtils.isBright(this._themeColor);
+        const focusBorderColor = isBrightAccent ? themeUtils.getSoftLight(this._themeColor) : contrastColor;
         
         // Remove any inline flash-prevention variables injected by index.html
         // so that our dynamic stylesheet (which has lower specificity than inline style)
@@ -229,8 +236,8 @@ class LayoutManager {
             --jf-primary-btn-color: ${contrastColor};
             --jf-primary-btn-color-rgb: ${contrastRgbStr};
             --jf-switch-handle: ${contrastColor};
-            --jf-action-btn-active-border: ${contrastColor};
-            --jf-button-border-focus: ${contrastColor};
+            --jf-action-btn-active-border: ${focusBorderColor};
+            --jf-button-border-focus: ${focusBorderColor};
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)

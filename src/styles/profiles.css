@@ -135,7 +135,11 @@
    transform: scale(1.07);
 }
 
-.profiles-switch-server-btn:hover{
+.profiles-card.focused:hover{
+   border: 4px solid var(--jf-accent);
+}
+
+.profiles-switch-server-btn:hover, .profiles-sign-out-btn:hover{
    border: 2px solid var(--jf-accent);
 }
 
@@ -151,7 +155,6 @@
     left: 0;
     right: 0;
     bottom: 0;
-    border: 4px solid var(--jf-button-border-focus);
     border-radius: inherit;
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -165,6 +168,7 @@
     transform: scale(1.07);
     outline: none;
     z-index: 10;
+    border: 4px solid var(--jf-button-border-focus);
     /* Box shadow removed as requested */
 }
 
@@ -236,11 +240,7 @@
 
 .profiles-add-card:focus,
 .profiles-add-card.focused {
-    /* 
-     * Prevent double border: hide the element's own border-color change
-     * and let ::after provide the consistent focus ring.
-     */
-    border-color: transparent;
+    border: 4px solid var(--jf-button-border-focus);
     -webkit-transform: scale(1.07);
     transform: scale(1.07);
     z-index: 2;
@@ -277,7 +277,7 @@
 .profiles-sign-out-btn,
 .profiles-switch-server-btn {
     background: rgba(255, 255, 255, 0.05);
-    border: 1px solid rgba(255, 255, 255, 0.15);
+    border: 2px solid rgba(255, 255, 255, 0.15);
     color: var(--jf-text-secondary, #aaa);
     font-size: 1.25rem;
     font-weight: 500;
@@ -310,11 +310,10 @@
 .profiles-switch-server-btn:focus,
 .profiles-switch-server-btn.focused {
     background: var(--jf-accent);
-    color: #fff;
+    color: var(--jf-primary-btn-color);
     border-color: transparent;
     -webkit-transform: scale(1.06);
     transform: scale(1.06);
-    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
 }
 
 /* Active press state */
