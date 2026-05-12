@@ -537,6 +537,19 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelFocusFirstItemInLibrary">${i18n.t('LabelFocusFirstItemInLibrary') || 'Focus first item in Library'}</span>
+                        <span class="setting-description" data-i18n="FocusFirstItemInLibraryDescription">${i18n.t('FocusFirstItemInLibraryDescription') || 'Automatically focus the first item when entering a library instead of the navigation tabs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:focusFirstItemLibrary') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-focus-first-item-library" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -728,8 +741,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -3019,6 +3030,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:preferEpisodeImagesLocal', newValue);
                 preferEpisodeImagesBtn.classList.toggle('active', newValue);
                 log.info(`Prefer Episode Images set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Focus First Item in Library
+        const focusFirstItemBtn = this.$('#toggle-focus-first-item-library');
+        if (focusFirstItemBtn) {
+            focusFirstItemBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:focusFirstItemLibrary', newValue.toString());
+                focusFirstItemBtn.classList.toggle('active', newValue);
+                log.info(`Focus First Item in Library set to: ${newValue}`);
             });
         }
 

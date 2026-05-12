@@ -97,6 +97,8 @@
     "LabelPlayer": "Player",
     "LabelPlayerDimensions": "Player dimensions",
     "LabelPlayMethod": "Play method",
+    "LabelFocusFirstItemInLibrary": "Focus first item in Library",
+    "FocusFirstItemInLibraryDescription": "Automatically focus the first item when entering a library instead of the navigation tabs.",
     "LabelPreferredDisplayLanguage": "App Language",
     "LabelPreferredSubtitleLanguage": "Preferred subtitle language",
     "LabelProfileContainer": "Container",

@@ -458,10 +458,27 @@ class LibraryPage extends Page {
     }
 
     _setupFocus() {
-        // Determine start section
-        // For BoxSets, tabs are hidden, so start at Controls or Grid
         const collectionType = this.state.libraryInfo?.CollectionType;
+        const autoFocusFirstItem = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
 
+        // If we have items loaded, default focus to the grid (first item) or first horizontal row
+        if (autoFocusFirstItem && this.state.items && this.state.items.length > 0) {
+            const isHorizontalLayout =
+                this.state.viewType === 'Genres' ||
+                this.state.viewType === 'MusicGenres' ||
+                this.state.viewType === 'Suggestions' ||
+                this.state.viewType === 'Upcoming';
+
+            if (isHorizontalLayout) {
+                this.setActiveSection('row-0');
+            } else {
+                this.setActiveSection('library-grid');
+            }
+            return;
+        }
+
+        // Determine start section fallback
+        // For BoxSets, tabs are hidden, so start at Controls or Grid
         if (collectionType === 'boxsets' || collectionType === 'playlists') {
             // Try controls first (Sort/Filter), else Grid
             if (this.$('#library-controls')?.style.display !== 'none') {
