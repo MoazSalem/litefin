@@ -503,7 +503,7 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 2;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
 }
 
 .video-badge {
@@ -520,8 +520,8 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 2;
-    backdrop-filter: blur(4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    /* PERFORMANCE: Removed backdrop-filter (blur) and box-shadow. 
+       These are extremely expensive on Tizen 3.0/4.0 in a grid context. */
 }
 
 .video-badge svg {

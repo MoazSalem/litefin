@@ -498,7 +498,6 @@ class CardRenderer {
         const badgeContainer = `
             ${badgeHtml}
             ${playedBadgeHtml}
-            ${videoBadgeHtml}
         `;
 
         return `
@@ -506,6 +505,7 @@ class CardRenderer {
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
+                    ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
                 </div>
                 ${

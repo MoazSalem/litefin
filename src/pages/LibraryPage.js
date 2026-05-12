@@ -3595,13 +3595,24 @@ class LibraryPage extends Page {
                 viewType === 'Playlists');
 
         const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
-        const isFolderMain = this.state.isFolderLibrary && viewType === 'Items';
+        
+        // Home Videos, Music Videos, and Photos often use 'Folders' or 'Videos' or 'Photos' viewType
+        const isFolderLikeMain = (collectionType === 'homevideos' || collectionType === 'musicvideos' || collectionType === 'photos') &&
+            (viewType === 'Folders' || viewType === 'Videos' || viewType === 'Photos' || viewType === 'Items');
 
-        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain;
+        const isFolderMain = (this.state.isFolderLibrary || collectionType === 'folders') && 
+            (viewType === 'Items' || viewType === 'Folders');
+
+        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
 
         const isSubView = this._isSubView();
-        const isControlsVisible = shouldShow || isSubView;
-        const isAlphaVisible = shouldShow || isSubView;
+        const isSubFolder = this.state.isSubFolder;
+
+        // Controls and Alpha Picker should be visible in main views, sub-views (Genre/Person), 
+        // or when navigating into sub-folders.
+        const isControlsVisible = shouldShow || isSubView || isSubFolder;
+        const isAlphaVisible = shouldShow || isSubView || isSubFolder;
+
 
         const isCollectionsLike = collectionType === 'boxsets' || collectionType === 'playlists';
         const isTabsVisible = !isCollectionsLike && !isSubView;
