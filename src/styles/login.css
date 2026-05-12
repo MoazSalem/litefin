@@ -394,6 +394,20 @@ body.app-splash-active .loading-section .loading-spinner {
     border-radius: var(--jf-border-radius);
 }
 
+.server-badge {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--jf-text-primary);
+    background: rgba(255, 255, 255, 0.08);
+    padding: 4px 12px;
+    border-radius: 50px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    margin-left: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+}
+
 /* Users grid */
 .users-grid {
     display: flex;
