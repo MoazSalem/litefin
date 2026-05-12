@@ -2184,6 +2184,7 @@ class SettingsPage extends Page {
                             [
                                 { value: 'small', label: i18n.t('Small') },
                                 { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'mediumlarge', label: i18n.t('MediumLarge') },
                                 { value: 'large', label: i18n.t('Large') },
                                 { value: 'larger', label: i18n.t('Larger') },
                                 { value: 'extralarge', label: i18n.t('ExtraLarge') },
@@ -2205,7 +2206,8 @@ class SettingsPage extends Page {
                             PlayerSettings.get('subtitleSizeCustomValue'),
                             1,
                             20,
-                            1
+                            0.1,
+                            'vh'
                         )}
                     </div>
                 </div>
@@ -3689,7 +3691,8 @@ class SettingsPage extends Page {
             'subtitle-shadow-thickness': 'subtitleShadowThickness',
             'subtitle-line-height': 'subtitleLineHeight',
             'subtitle-letter-spacing': 'subtitleLetterSpacing',
-            'subtitle-bottom-offset': 'subtitleBottomOffset'
+            'subtitle-bottom-offset': 'subtitleBottomOffset',
+            'subtitle-custom-size': 'subtitleSizeCustomValue'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -3717,7 +3720,15 @@ class SettingsPage extends Page {
 
                 // Save setting
                 if (key) {
-                    PlayerSettings.set(key, parseInt(value, 10));
+                    const floatKeys = [
+                        'subtitleFontScale',
+                        'subtitleSizeCustomValue',
+                        'subtitleOutlineThickness',
+                        'subtitleShadowThickness',
+                        'subtitleLetterSpacing'
+                    ];
+                    const val = floatKeys.includes(key) ? parseFloat(value) : parseInt(value, 10);
+                    PlayerSettings.set(key, val);
                 }
             });
 

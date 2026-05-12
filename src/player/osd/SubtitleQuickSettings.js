@@ -126,6 +126,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 options: [
                     { value: 'small', label: i18n.t('Small') },
                     { value: 'medium', label: i18n.t('Medium') },
+                    { value: 'mediumlarge', label: i18n.t('MediumLarge') },
                     { value: 'large', label: i18n.t('Large') },
                     { value: 'larger', label: i18n.t('Larger') },
                     { value: 'extralarge', label: i18n.t('ExtraLarge') },
@@ -138,7 +139,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('CustomSize'),
                 labelKey: 'CustomSize',
                 key: 'subtitleSizeCustomValue',
-                min: 1, max: 20, step: 1, unit: 'vh',
+                min: 1, max: 20, step: 0.1, unit: 'vh',
                 visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
             },
             {

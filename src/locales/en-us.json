@@ -581,6 +581,7 @@
     "MaxStreamingBitrate": "Max Streaming Bitrate",
     "MaxStreamingBitrateDescription": "Quality when streaming over internet",
     "Medium": "Medium",
+    "MediumLarge": "Medium Large",
     "MediumHigh": "Medium High",
     "MediumLow": "Medium Low",
     "MessageComingSoon": "Coming soon!",

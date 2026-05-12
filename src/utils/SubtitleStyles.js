@@ -59,6 +59,9 @@ export function getTextStyles() {
         case 'large':
             styles.push({ name: 'fontSize', value: '6vh' });
             break;
+        case 'mediumlarge':
+            styles.push({ name: 'fontSize', value: '5.5vh' });
+            break;
         case 'small':
             styles.push({ name: 'fontSize', value: '4vh' });
             break;
@@ -309,6 +312,7 @@ export function getSecondaryTextStyles() {
         extralarge: '8vh',
         larger: '7vh',
         large: '6vh',
+        mediumlarge: '5.5vh',
         medium: '5vh',
         small: '4vh',
         smaller: '3vh'
