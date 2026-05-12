@@ -58,7 +58,11 @@ const STORAGE_KEYS = {
     SERVER_SESSIONS: 'litefin:serverSessions',
 
     // --- Legacy flat sessions (migration reference only — do not write to this after migration) ---
-    SESSIONS:        'litefin:sessions'
+    SESSIONS:        'litefin:sessions',
+
+    // --- Server names map ---
+    /** Maps serverUrl -> serverName for displaying friendlier names in saved servers */
+    SERVER_NAMES:    'litefin:serverNames'
 };
 
 /**
@@ -333,6 +337,19 @@ class AuthManager {
 
             // Persist the server URL
             storage.setItem(STORAGE_KEYS.SERVER_URL, serverUrl);
+
+            // Persist the server name for friendly display in saved servers
+            if (info && info.ServerName) {
+                try {
+                    let namesMap = {};
+                    const rawNames = storage.getItem(STORAGE_KEYS.SERVER_NAMES);
+                    if (rawNames) namesMap = JSON.parse(rawNames);
+                    namesMap[serverUrl] = info.ServerName;
+                    storage.setItem(STORAGE_KEYS.SERVER_NAMES, JSON.stringify(namesMap));
+                } catch (e) {
+                    log.warn('Failed to save server name to map', e);
+                }
+            }
 
             state.set('server:connected', true);
             state.set('server:offline',   false);
@@ -810,9 +827,21 @@ class AuthManager {
      */
     getSavedServers() {
         const map = this._loadAllServerSessions();
+        let namesMap = {};
+        try {
+            const rawNames = storage.getItem(STORAGE_KEYS.SERVER_NAMES);
+            if (rawNames) namesMap = JSON.parse(rawNames);
+        } catch (e) {
+            log.warn('Failed to parse SERVER_NAMES', e);
+        }
+
         return Object.entries(map)
             .filter(([, sessions]) => Array.isArray(sessions) && sessions.length > 0)
-            .map(([serverUrl, sessions]) => ({ serverUrl, sessions }));
+            .map(([serverUrl, sessions]) => ({ 
+                serverUrl, 
+                sessions,
+                serverName: namesMap[serverUrl] || null
+            }));
     }
 
     // ========================================================================

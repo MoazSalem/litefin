@@ -137,6 +137,7 @@ class LoginPage extends Page {
                                     </svg>
                                 </button>
                             </div>
+                            <ul class="server-list" id="saved-server-list"></ul>
                             <div class="discovery-status" id="discovery-status">
                                 <div class="loading-spinner-small"></div>
                                 <span data-i18n="ScanningNetwork">Scanning network...</span>
@@ -276,6 +277,7 @@ class LoginPage extends Page {
         this._manualPassword = this.$('#manual-password');
         this._usersGrid = this.$('#users-grid');
         this._serverList = this.$('#server-list');
+        this._savedServerList = this.$('#saved-server-list');
         this._discoveryStatus = this.$('#discovery-status');
 
         // Translate the page
@@ -393,6 +395,17 @@ class LoginPage extends Page {
         // survives innerHTML rebuilds when discovered servers are re-rendered
         if (this._serverList) {
             this._serverList.addEventListener('click', (e) => {
+                const item = e.target.closest('.server-item:not(.empty)');
+                if (item) {
+                    const index = parseInt(item.dataset.serverIndex);
+                    this._selectDiscoveredServer(index);
+                }
+            });
+        }
+
+        // Add the same for the saved server list
+        if (this._savedServerList) {
+            this._savedServerList.addEventListener('click', (e) => {
                 const item = e.target.closest('.server-item:not(.empty)');
                 if (item) {
                     const index = parseInt(item.dataset.serverIndex);
@@ -1067,16 +1080,24 @@ class LoginPage extends Page {
 
         log.info('LoginPage: Starting server discovery...');
 
-        // Clear previous results
+        // Initialize with saved servers first
         this._discoveredServers = [];
+        const savedServers = auth.getSavedServers();
+        if (savedServers && savedServers.length > 0) {
+            savedServers.forEach(saved => {
+                // Use the domain/IP as the name if we don't have a specific friendly name saved
+                const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                this._discoveredServers.push({
+                    name: saved.serverName || fallbackName,
+                    address: saved.serverUrl,
+                    version: null,
+                    isSaved: true
+                });
+            });
+        }
         this._renderDiscoveredServers();
 
         try {
-            // Show scanning status
-            if (this._discoveryStatus) {
-                this._discoveryStatus.style.display = 'flex';
-            }
-
             // Run discovery
             const servers = await discoverServers(
                 (checked, total) => {
@@ -1085,15 +1106,38 @@ class LoginPage extends Page {
                     log.info(`LoginPage: Discovery ${percent}%`);
                 },
                 (server) => {
-                    // Server found! Add and render immediately
-                    log.info(`LoginPage: Found server ${server.name} (${server.address})`);
-                    this._discoveredServers.push(server);
-                    this._renderDiscoveredServers();
+                    // Check if already in list (could be from saved servers)
+                    const existing = this._discoveredServers.find(
+                        s => s.address.replace(/\/$/, '') === server.address.replace(/\/$/, '')
+                    );
+                    
+                    if (!existing) {
+                        // Server found! Add and render immediately
+                        log.info(`LoginPage: Found server ${server.name} (${server.address})`);
+                        this._discoveredServers.push(server);
+                        this._renderDiscoveredServers();
+                    } else {
+                        // Update existing with better discovery info
+                        if (existing.isSaved) {
+                            existing.name = server.name || existing.name;
+                            existing.version = server.version || existing.version;
+                            this._renderDiscoveredServers();
+                        }
+                    }
                 }
             );
 
-            // Ensure final list is synced
-            this._discoveredServers = servers;
+            // Ensure final list is synced, but preserve our saved servers
+            if (servers && servers.length > 0) {
+                servers.forEach(server => {
+                    const exists = this._discoveredServers.find(
+                        s => s.address.replace(/\/$/, '') === server.address.replace(/\/$/, '')
+                    );
+                    if (!exists) {
+                        this._discoveredServers.push(server);
+                    }
+                });
+            }
             this._renderDiscoveredServers();
         } catch (error) {
             log.error('LoginPage: Discovery failed', error);
@@ -1102,6 +1146,7 @@ class LoginPage extends Page {
             }
         } finally {
             this._isDiscovering = false;
+            this._renderDiscoveredServers();
         }
     }
 
@@ -1109,11 +1154,14 @@ class LoginPage extends Page {
      * Render discovered servers list
      */
     _renderDiscoveredServers() {
-        if (!this._serverList) return;
+        if (!this._serverList || !this._savedServerList) return;
 
         // Remember current focus before destroying DOM
         const activeElement = document.activeElement;
-        const isFocusInList = this._serverList.contains(activeElement);
+        const isFocusInSavedList = this._savedServerList.contains(activeElement);
+        const isFocusInDiscoveredList = this._serverList.contains(activeElement);
+        const isFocusInList = isFocusInSavedList || isFocusInDiscoveredList;
+        
         let focusedIndex = -1;
         let isFocusPreserved = false;
 
@@ -1123,44 +1171,70 @@ class LoginPage extends Page {
             isFocusPreserved = true;
         }
 
-        // Hide scanning status
+        // Separate servers
+        const savedServers = this._discoveredServers.filter(s => s.isSaved);
+        const otherServers = this._discoveredServers.filter(s => !s.isSaved);
+
+        // Update discovery status visibility
         if (this._discoveryStatus) {
-            this._discoveryStatus.style.display = 'none';
+            // Only show scanning if actively discovering
+            this._discoveryStatus.style.display = this._isDiscovering ? 'flex' : 'none';
         }
 
-        if (this._discoveredServers.length === 0) {
-            // Only show empty message if NOT discovering
-            if (!this._isDiscovering) {
+        // Render saved servers
+        this._savedServerList.innerHTML = savedServers.map(server => {
+            const index = this._discoveredServers.indexOf(server);
+            return `
+                <li class="server-item" data-server-index="${index}" tabindex="0">
+                    <span class="server-name">${server.name}</span>
+                    <span class="server-address">${server.address}</span>
+                    ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                </li>
+            `;
+        }).join('');
+
+        // Render discovered servers
+        if (otherServers.length === 0) {
+            // Only show empty message if NOT discovering AND no saved servers either
+            if (!this._isDiscovering && savedServers.length === 0) {
                 this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
             } else {
                 this._serverList.innerHTML = '';
             }
-            return;
+        } else {
+            this._serverList.innerHTML = otherServers.map(server => {
+                const index = this._discoveredServers.indexOf(server);
+                return `
+                    <li class="server-item" data-server-index="${index}" tabindex="0">
+                        <span class="server-name">${server.name}</span>
+                        <span class="server-address">${server.address}</span>
+                        ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                    </li>
+                `;
+            }).join('');
         }
-
-        // Render server items
-        this._serverList.innerHTML = this._discoveredServers
-            .map(
-                (server, index) => `
-            <li class="server-item" data-server-index="${index}" tabindex="0">
-                <span class="server-name">${server.name}</span>
-                <span class="server-address">${server.address}</span>
-                ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
-            </li>
-        `
-            )
-            .join('');
 
         // Invalid focus cache so new items are found
         focusManager.invalidateCache('login-server');
 
         // Restore focus
         if (isFocusInList && focusedIndex >= 0) {
-            const items = this._serverList.querySelectorAll('.server-item:not(.empty)');
-            if (items.length > 0) {
-                // Try to focus the same index, or the last available item if it was removed
-                const indexToFocus = Math.min(focusedIndex, items.length - 1);
-                focusManager.focusElement(items[indexToFocus]);
+            const selector = `.server-item[data-server-index="${focusedIndex}"]`;
+            let item = this._savedServerList.querySelector(selector) || this._serverList.querySelector(selector);
+            
+            if (!item) {
+                // Fallback to nearest index if original item is gone
+                const allItems = [
+                    ...this._savedServerList.querySelectorAll('.server-item:not(.empty)'),
+                    ...this._serverList.querySelectorAll('.server-item:not(.empty)')
+                ];
+                if (allItems.length > 0) {
+                    item = allItems[Math.min(focusedIndex, allItems.length - 1)];
+                }
+            }
+            
+            if (item) {
+                focusManager.focusElement(item);
             }
         } else if (isFocusPreserved) {
             // Restore focus if Tizen dropped it from an unaffected element (e.g. server URL input)
