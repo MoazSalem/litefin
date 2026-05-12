@@ -16,6 +16,7 @@
 import { logger } from './Logger.js';
 import { storage } from './StorageService.js';
 import { eventBus } from '../core/EventBus.js';
+import { platformInfo } from './PlatformInfo.js';
 
 const log = logger.create('PlayerSettings');
 
@@ -303,7 +304,8 @@ const DEFAULTS = {
     seekWithArrows: true,
 
     // Enable mouse/magic cursor support in the OSD (hover and click)
-    enableMagicCursor: true,
+    // Disabled by default on Tizen due to cursor interaction bugs
+    enableMagicCursor: !platformInfo.isTizen,
 
     // Show timestamp and trickplay images on hover with mouse
     enableHoverTrickplay: false,
