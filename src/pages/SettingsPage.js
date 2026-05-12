@@ -713,6 +713,19 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                
+                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
+                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger" id="btn-reset-settings" tabindex="0">
+                            ${i18n.t('ButtonResetAll') || 'Reset All'}
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -2988,6 +3001,14 @@ class SettingsPage extends Page {
             });
         }
 
+        // Reset Settings Button
+        const resetSettingsBtn = this.$('#btn-reset-settings');
+        if (resetSettingsBtn) {
+            resetSettingsBtn.addEventListener('click', () => {
+                this._showResetConfirmation();
+            });
+        }
+
         // Toggle Rounded Corners
         const roundedCornersBtn = this.$('#toggle-rounded-corners');
         if (roundedCornersBtn) {
@@ -5030,6 +5051,107 @@ class SettingsPage extends Page {
                 return false;
             }
         });
+    }
+
+    /**
+     * Show a confirmation dialog before resetting all settings.
+     * @private
+     */
+    _showResetConfirmation() {
+        const prevFocus = focusManager.getFocused();
+        const prevSection = focusManager.getActiveSection();
+
+        const overlay = document.createElement('div');
+        overlay.id = 'reset-settings-dialog';
+        overlay.className = 'modal-overlay visible';
+        document.body.appendChild(overlay);
+
+        overlay.innerHTML = `
+            <div class="settings-modal exit-dialog-modal" role="dialog" aria-modal="true" aria-label="${i18n.t('LabelResetSettings')}">
+                <div class="modal-header">
+                    <h2>${i18n.t('LabelResetSettings')}</h2>
+                </div>
+                <div class="modal-content" style="padding: 0 24px 24px; color: var(--text-color); font-size: 1.1rem; text-align: center;">
+                    ${i18n.t('ResetSettingsWarning')}
+                </div>
+                <div class="modal-actions" id="reset-dialog-actions" style="margin-top: 0; justify-content: center; gap: 16px;">
+                    <button class="modal-action-btn" id="reset-dialog-no" tabindex="0">
+                        ${i18n.t('ButtonCancel') || 'Cancel'}
+                    </button>
+                    <button class="modal-action-btn danger-btn" id="reset-dialog-yes" tabindex="0">
+                        ${i18n.t('ButtonResetAll') || 'Reset All'}
+                    </button>
+                </div>
+            </div>
+        `;
+
+        const closeDialog = () => {
+            overlay.classList.remove('visible');
+            setTimeout(() => {
+                if (overlay.parentNode) overlay.parentNode.removeChild(overlay);
+            }, 300);
+            focusManager.unregister('reset-dialog-actions');
+            if (prevSection) focusManager.setActiveSection(prevSection, false);
+            if (prevFocus) focusManager.focusElement(prevFocus);
+        };
+
+        focusManager.register('reset-dialog-actions', overlay.querySelector('#reset-dialog-actions'), {
+            orientation: 'horizontal',
+            enterTo: 'first' // Focus Cancel safely
+        });
+
+        focusManager.setActiveSection('reset-dialog-actions');
+
+        overlay.querySelector('#reset-dialog-no').onclick = (e) => {
+            e.stopPropagation();
+            closeDialog();
+        };
+
+        overlay.querySelector('#reset-dialog-yes').onclick = (e) => {
+            e.stopPropagation();
+            log.info('User confirmed reset all settings.');
+            this._handleResetAll();
+        };
+
+        overlay.onclick = (e) => {
+            if (e.target === overlay) closeDialog();
+        };
+    }
+
+    /**
+     * Clear all preference keys from storage and reload the application.
+     * @private
+     */
+    _handleResetAll() {
+        // 1. Clear player settings
+        PlayerSettings.resetAll();
+
+        // 2. Clear app preferences
+        storage.clearByPrefix('pref:');
+
+        // 3. Clear layout/theme preferences
+        storage.removeItem('litefin:layout');
+        storage.removeItem('litefin:themeMode');
+        storage.removeItem('litefin:theme');
+        storage.removeItem('litefin:themeColor');
+        storage.removeItem('litefin:uiFont');
+        storage.removeItem('litefin:roundedCorners');
+        storage.removeItem('litefin:textScale');
+        storage.removeItem('litefin:osdButtonBorders');
+
+        // 4. Clear other app settings
+        storage.removeItem('app_language');
+        storage.removeItem('layout_direction');
+
+        // 5. Clear image presets
+        storage.removeItem('image_preset');
+        storage.removeItem('image_details_preset');
+
+        // 6. Clear debug settings
+        storage.clearByPrefix('debug_');
+
+        // 7. Reload to apply defaults everywhere
+        window.location.reload();
     }
 
     _setLayout(layout) {
