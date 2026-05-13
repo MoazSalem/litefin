@@ -1650,9 +1650,7 @@ class LibraryPage extends Page {
             <button class="tab-btn ${this.state.viewType === tab.id ? 'active' : ''}" 
                     data-type="${tab.id}" 
                     tabindex="0"
-                    data-i18n="${tab.label}">
-                ${i18n.t(tab.label)}
-            </button>
+                    data-i18n="${tab.label}">${i18n.t(tab.label)}</button>
         `
             )
             .join('');
@@ -1690,9 +1688,7 @@ class LibraryPage extends Page {
                 return `
                 <button class="alpha-btn ${isActive ? 'active' : ''}" 
                         data-char="${char}" 
-                        tabindex="0">
-                    ${char}
-                </button>
+                        tabindex="0">${char}</button>
             `;
             })
             .join('');
