@@ -713,19 +713,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-                
-                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
-                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="btn btn-danger btn-small" id="btn-reset-settings" tabindex="0">
-                            ${i18n.t('ButtonResetAll') || 'Reset All'}
-                        </button>
-                    </div>
-                </div>
             </div>
         `;
     }
@@ -2718,6 +2705,18 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="btn btn-secondary setting-btn focusable" id="btn-check-updates" tabindex="0" data-i18n="CheckForUpdatesNow" data-focusable="true" style="width: auto; min-width: 160px;">
                             ${i18n.t('CheckForUpdatesNow')}
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" style="margin-top: 40px; border-top: 1px solid var(--jf-divider); padding-top: 40px;">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelResetSettings">${i18n.t('LabelResetSettings') || 'Reset All Settings'}</span>
+                        <span class="setting-description" data-i18n="LabelResetSettingsDescription">${i18n.t('LabelResetSettingsDescription') || 'Restore all application and player settings to their default values. This will not sign you out.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="btn btn-danger btn-small" id="btn-reset-settings" tabindex="0">
+                            ${i18n.t('ButtonResetAll') || 'Reset All'}
                         </button>
                     </div>
                 </div>
@@ -5166,8 +5165,22 @@ class SettingsPage extends Page {
         // 6. Clear debug settings
         storage.clearByPrefix('debug_');
 
-        // 7. Reload to apply defaults everywhere
-        window.location.reload();
+        // 7. Hard reload to apply defaults everywhere and re-initialize i18n correctly.
+        // We navigate to the app's root entry-point URL without the hash fragment.
+        // This forces a true cold-start navigation, re-executing all JS modules.
+        const href = window.location.href;
+        const protocol = window.location.protocol;
+        let entryUrl;
+
+        if (protocol === 'file:') {
+            // file:// packaged app (Tizen/WebOS) — strip everything from '#' onward
+            entryUrl = href.split('#')[0];
+        } else {
+            // http(s):// dev server — use origin + pathname (no hash)
+            entryUrl = window.location.origin + window.location.pathname;
+        }
+
+        window.location.href = entryUrl;
     }
 
     _setLayout(layout) {
