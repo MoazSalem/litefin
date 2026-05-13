@@ -2153,7 +2153,9 @@ class SettingsPage extends Page {
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
-                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                                { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -2446,7 +2448,9 @@ class SettingsPage extends Page {
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
-                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                                { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

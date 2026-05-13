@@ -27,7 +27,9 @@ class FontLoader {
             poppins: 'Poppins',
             'noto-arabic': 'Noto Sans Arabic',
             silkscreen: 'Silkscreen',
-            'space-grotesk': 'Space Grotesk'
+            'space-grotesk': 'Space Grotesk',
+            retrotech: 'RETROTECH',
+            kitty: 'Kitty'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls

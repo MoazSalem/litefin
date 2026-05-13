@@ -214,6 +214,12 @@ export function getTextStyles() {
         case 'noto-arabic':
             styles.push({ className: 'font-noto-arabic' });
             break;
+        case 'retrotech':
+            styles.push({ className: 'font-retrotech' });
+            break;
+        case 'kitty':
+            styles.push({ className: 'font-kitty' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -388,6 +394,8 @@ const fontClasses = [
     'font-google',
     'font-silkscreen',
     'font-space-grotesk',
+    'font-retrotech',
+    'font-kitty',
     'font-default'
 ];
 
@@ -466,6 +474,10 @@ export default {
                 return 'font-silkscreen';
             case 'space-grotesk':
                 return 'font-space-grotesk';
+            case 'retrotech':
+                return 'font-retrotech';
+            case 'kitty':
+                return 'font-kitty';
             default:
                 return 'font-default';
         }
@@ -495,6 +507,10 @@ export default {
                 return 'Noto Sans Arabic';
             case 'silkscreen':
                 return 'Silkscreen';
+            case 'retrotech':
+                return 'RETROTECH';
+            case 'kitty':
+                return 'Kitty';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override
