@@ -553,49 +553,109 @@ body.webos-cursor-active .focused {
     box-shadow: none !important;
 }
 /* ============================================================================
-   Low VRAM Mode (Legacy Hardware Mitigation)
+   Performance Tweaks (Legacy Hardware Mitigation)
    ============================================================================ */
 
 /* 
+ * 1. LOW VRAM MODE
  * Disables expensive GPU-accelerated CSS properties to prevent compositor 
  * memory exhaustion and rendering glitches on Tizen/WebOS hardware.
  */
-html[data-low-vram="true"] * {
+/* Global transition removal, EXCLUDING media cards and loading indicators */
+html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small) {
     /* Stop forcing GPU promotion for every moving part */
     will-change: auto !important;
     
-    /* Disable all animations and transitions */
+    /* Disable all animations and transitions for non-essential UI elements */
     -webkit-transition: none !important;
     transition: none !important;
     -webkit-animation: none !important;
     animation: none !important;
 }
 
-/* Specifically disable the focus-scaling behavior across the app */
-html[data-low-vram="true"] .focusable:focus,
-html[data-low-vram="true"] .focusable.focused,
-html[data-low-vram="true"] [tabindex]:focus,
-html[data-low-vram="true"] [tabindex].focused,
-html[data-low-vram="true"] .btn:focus,
-html[data-low-vram="true"] .btn.focused,
-html[data-low-vram="true"] .modal-option-btn:focus,
-html[data-low-vram="true"] .modal-option-btn.focused,
+/* Ensure loading indicators maintain their animations even in Low VRAM mode */
+html[data-low-vram="true"] .loading-spinner,
+html[data-low-vram="true"] .loading-spinner-small {
+    -webkit-animation: rotation 1s linear infinite !important;
+    animation: rotation 1s linear infinite !important;
+    will-change: transform !important;
+}
+
+html[data-low-vram="true"] .loading-spinner::after,
+html[data-low-vram="true"] .loading-spinner::before,
+html[data-low-vram="true"] .loading-spinner-small::after,
+html[data-low-vram="true"] .loading-spinner-small::before {
+    -webkit-animation: animloader-gpu 1s infinite ease-in-out !important;
+    animation: animloader-gpu 1s infinite ease-in-out !important;
+    will-change: transform !important;
+}
+
+/* 
+ * UI ELEMENT SCALING (OSD, Tabs, Buttons)
+ * In Low VRAM mode, we disable scaling for UI controls to ensure maximum stability.
+ */
 html[data-low-vram="true"] .tab-btn:focus,
 html[data-low-vram="true"] .tab-btn.focused,
 html[data-low-vram="true"] .control-btn:focus,
 html[data-low-vram="true"] .control-btn.focused,
 html[data-low-vram="true"] .pagination-btn:focus,
 html[data-low-vram="true"] .pagination-btn.focused,
-html[data-low-vram="true"] .media-card:focus,
-html[data-low-vram="true"] .media-card.focused,
-html[data-low-vram="true"] .grid-card:focus,
-html[data-low-vram="true"] .grid-card.focused {
+html[data-low-vram="true"] .btn:focus,
+html[data-low-vram="true"] .btn.focused,
+html[data-low-vram="true"] .osd-btn:focus,
+html[data-low-vram="true"] .osd-btn.focused,
+html[data-low-vram="true"] .focusable:focus,
+html[data-low-vram="true"] .focusable.focused {
     -webkit-transform: none !important;
     transform: none !important;
-    /* Maintain focus border/background logic from component styles */
+}
+
+/* Ensure will-change is removed even for cards to save memory */
+html[data-low-vram="true"] .media-card,
+html[data-low-vram="true"] .grid-card {
+    will-change: auto !important;
 }
 
 /* Maintain skeleton shimmer fallback (solid color instead of animation) */
 html[data-low-vram="true"] .skeleton-shimmer::after {
     display: none !important;
+}
+
+/* 
+ * 2. DISABLE CARD SCALING
+ * Specifically targets the focus-scaling behavior for posters and thumbnails ONLY.
+ * This allows users to keep smooth poster "pop" while still having Low VRAM mode active,
+ * or disable it separately for grid stability.
+ */
+html[data-disable-card-scaling="true"] .media-card:focus,
+html[data-disable-card-scaling="true"] .media-card.focused,
+html[data-disable-card-scaling="true"] .grid-card:focus,
+html[data-disable-card-scaling="true"] .grid-card.focused,
+html[data-disable-card-scaling="true"] .result-card:focus,
+html[data-disable-card-scaling="true"] .result-card.focused,
+html[data-disable-card-scaling="true"] .person-card:focus,
+html[data-disable-card-scaling="true"] .person-card.focused,
+html[data-disable-card-scaling="true"] .episode-card:focus,
+html[data-disable-card-scaling="true"] .episode-card.focused,
+/* Target internal animated elements */
+html[data-disable-card-scaling="true"] .media-card.focused .video-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .video-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .played-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .played-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .count-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .count-badge {
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
+/* 
+ * 3. COMPONENT FALLBACKS
+ * Adjust UI elements that rely on animations to be usable when animations are disabled.
+ */
+/* Carousel Indicators: Show active slide as solid color since progress animation is disabled */
+html[data-low-vram="true"] .hero-dot.active .hero-dot-progress {
+    width: 100% !important;
+    background-color: var(--jf-accent) !important;
+    -webkit-animation: none !important;
+    animation: none !important;
 }

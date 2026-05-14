@@ -455,6 +455,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableCardScaling">${i18n.t('LabelDisableCardScaling') || 'Disable Card Scaling'}</span>
+                        <span class="setting-description" data-i18n="DisableCardScalingDescription">${i18n.t('DisableCardScalingDescription') || 'Stop movie posters and thumbnails from scaling up when focused. Helpful for grid stability.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getDisableCardScaling() ? 'active' : ''}" 
+                                id="toggle-disable-card-scaling" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
                         <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
                     </div>
@@ -465,7 +478,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
 
                 <!-- Details Page Metadata Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
@@ -3216,6 +3228,16 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getLowVramMode();
                 layoutManager.setLowVramMode(newValue);
                 lowVramBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Disable Card Scaling
+        const disableScalingBtn = this.$('#toggle-disable-card-scaling');
+        if (disableScalingBtn) {
+            disableScalingBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getDisableCardScaling();
+                layoutManager.setDisableCardScaling(newValue);
+                disableScalingBtn.classList.toggle('active', newValue);
             });
         }
 

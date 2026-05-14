@@ -101,6 +101,8 @@
     "PerformanceTweaks": "Performance Tweaks",
     "LabelLowVramMode": "Low VRAM Mode",
     "LowVramModeDescription": "Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.",
+    "LabelDisableCardScaling": "Disable Card Scaling",
+    "DisableCardScalingDescription": "Stop movie posters and thumbnails from scaling up when focused. Helpful for grid stability.",
     "LabelPlayer": "Player",
     "LabelPlayerDimensions": "Player dimensions",
     "LabelPlayMethod": "Play method",

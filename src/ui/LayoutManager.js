@@ -72,6 +72,9 @@ class LayoutManager {
         // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
         this._lowVramMode = false;
 
+        // Disable Card Scaling: Specifically prevents posters/thumbs from scaling on focus
+        this._disableCardScaling = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -99,6 +102,7 @@ class LayoutManager {
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
         const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
+        const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -108,6 +112,7 @@ class LayoutManager {
         this.setTextScale(savedTextScale, false);
         this.setOsdButtonBorders(savedOsdBorders, false);
         this.setLowVramMode(savedLowVram, false);
+        this.setDisableCardScaling(savedDisableScaling, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -395,6 +400,32 @@ class LayoutManager {
 
     getLowVramMode() {
         return this._lowVramMode;
+    }
+
+    /**
+     * Enable or disable Card Scaling
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setDisableCardScaling(enabled, save = true) {
+        this._disableCardScaling = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-disable-card-scaling', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-disable-card-scaling');
+        }
+
+        if (save) {
+            storage.setItem('litefin:disableCardScaling', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Disable Card Scaling set to: ${enabled}`);
+        eventBus.emit('disableCardScaling:changed', { enabled });
+    }
+
+    getDisableCardScaling() {
+        return this._disableCardScaling;
     }
 
     // Component registration (Existing logic maintained)
