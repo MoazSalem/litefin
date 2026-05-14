@@ -1956,12 +1956,15 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
          * so this is generous while cutting worst-case scan time roughly in half
          * vs the previous 800ms.
          */
-        const CHUNK_SIZE = 30;
+        const CHUNK_SIZE = 15; // Reduced from 30 to prevent saturating network stack on older TVs
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
             if (signal.aborted) return;
 
             const chunk = batch.slice(i, i + CHUNK_SIZE);
             const results = await Promise.all(chunk.map((addr) => testServer(addr, 400, signal)));
+
+            // Exit immediately if aborted during the probes
+            if (signal.aborted) return;
 
             results
                 .filter((s) => s)
