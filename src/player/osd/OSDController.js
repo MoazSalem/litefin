@@ -293,6 +293,7 @@ export default class OSDController extends Component {
         this.syncTracks();
 
         if (this._currentItem) {
+            log.info('OSD Mounted - Setting initial metadata for:', this._currentItem.Name);
             this.setMetadata(this._currentItem);
         }
 
@@ -2795,9 +2796,17 @@ export default class OSDController extends Component {
 
         // Live TV: Channel/Program handling
         if (item.Type === 'TvChannel' || item.ChannelId) {
-            const channelNumber = item.Number || item.ChannelNumber || '';
+            const channelNumber = item.Number || item.ChannelNumber;
             const channelName = item.ChannelName || (item.Type === 'TvChannel' ? item.Name : '');
-            const programName = item.Type === 'TvChannel' ? '' : item.Name;
+            const programName = (item.Type === 'TvChannel' || item.Name === channelName) ? '' : item.Name;
+
+            log.debug('[OSD] Formatting Live TV Title:', { 
+                type: item.Type, 
+                channelNumber, 
+                channelName, 
+                programName, 
+                origName: item.Name 
+            });
 
             let text = '';
             if (channelNumber) text += `${channelNumber} `;
