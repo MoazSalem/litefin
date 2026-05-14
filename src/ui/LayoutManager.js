@@ -69,6 +69,9 @@ class LayoutManager {
         // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
         this._osdButtonBorders = 'auto';
 
+        // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
+        this._lowVramMode = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -95,6 +98,7 @@ class LayoutManager {
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
         const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
+        const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -103,6 +107,7 @@ class LayoutManager {
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
         this.setOsdButtonBorders(savedOsdBorders, false);
+        this.setLowVramMode(savedLowVram, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -364,6 +369,32 @@ class LayoutManager {
 
         log.info(`OSD button borders updated: ${mode}`);
         eventBus.emit('osdButtonBorders:changed', { mode });
+    }
+
+    /**
+     * Enable or disable Low VRAM Mode
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setLowVramMode(enabled, save = true) {
+        this._lowVramMode = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-low-vram', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-low-vram');
+        }
+
+        if (save) {
+            storage.setItem('litefin:lowVramMode', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Low VRAM Mode set to: ${enabled}`);
+        eventBus.emit('lowVramMode:changed', { enabled });
+    }
+
+    getLowVramMode() {
+        return this._lowVramMode;
     }
 
     // Component registration (Existing logic maintained)

@@ -552,3 +552,50 @@ body.webos-cursor-active .focused {
     transform: none !important;
     box-shadow: none !important;
 }
+/* ============================================================================
+   Low VRAM Mode (Legacy Hardware Mitigation)
+   ============================================================================ */
+
+/* 
+ * Disables expensive GPU-accelerated CSS properties to prevent compositor 
+ * memory exhaustion and rendering glitches on Tizen/WebOS hardware.
+ */
+html[data-low-vram="true"] * {
+    /* Stop forcing GPU promotion for every moving part */
+    will-change: auto !important;
+    
+    /* Disable all animations and transitions */
+    -webkit-transition: none !important;
+    transition: none !important;
+    -webkit-animation: none !important;
+    animation: none !important;
+}
+
+/* Specifically disable the focus-scaling behavior across the app */
+html[data-low-vram="true"] .focusable:focus,
+html[data-low-vram="true"] .focusable.focused,
+html[data-low-vram="true"] [tabindex]:focus,
+html[data-low-vram="true"] [tabindex].focused,
+html[data-low-vram="true"] .btn:focus,
+html[data-low-vram="true"] .btn.focused,
+html[data-low-vram="true"] .modal-option-btn:focus,
+html[data-low-vram="true"] .modal-option-btn.focused,
+html[data-low-vram="true"] .tab-btn:focus,
+html[data-low-vram="true"] .tab-btn.focused,
+html[data-low-vram="true"] .control-btn:focus,
+html[data-low-vram="true"] .control-btn.focused,
+html[data-low-vram="true"] .pagination-btn:focus,
+html[data-low-vram="true"] .pagination-btn.focused,
+html[data-low-vram="true"] .media-card:focus,
+html[data-low-vram="true"] .media-card.focused,
+html[data-low-vram="true"] .grid-card:focus,
+html[data-low-vram="true"] .grid-card.focused {
+    -webkit-transform: none !important;
+    transform: none !important;
+    /* Maintain focus border/background logic from component styles */
+}
+
+/* Maintain skeleton shimmer fallback (solid color instead of animation) */
+html[data-low-vram="true"] .skeleton-shimmer::after {
+    display: none !important;
+}

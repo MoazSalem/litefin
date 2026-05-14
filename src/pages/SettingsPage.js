@@ -437,6 +437,36 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Performance Tweaks Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLowVramMode">${i18n.t('LabelLowVramMode') || 'Low VRAM Mode'}</span>
+                        <span class="setting-description" data-i18n="LowVramModeDescription">${i18n.t('LowVramModeDescription') || 'Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLowVramMode() ? 'active' : ''}" 
+                                id="toggle-low-vram-mode" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
+                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') === 'true' ? 'active' : ''}" 
+                                 id="toggle-snap-large-scrolls" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+
                 <!-- Details Page Metadata Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
@@ -1055,18 +1085,6 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:heroCarouselMdbList') !== 'false' ? 'active' : ''}" 
                                  id="toggle-hero-carousel-mdb" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
-                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') === 'true' ? 'active' : ''}" 
-                                 id="toggle-snap-large-scrolls" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -3191,6 +3209,16 @@ class SettingsPage extends Page {
             });
         }
 
+        // Toggle Low VRAM Mode
+        const lowVramBtn = this.$('#toggle-low-vram-mode');
+        if (lowVramBtn) {
+            lowVramBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getLowVramMode();
+                layoutManager.setLowVramMode(newValue);
+                lowVramBtn.classList.toggle('active', newValue);
+            });
+        }
+
         // Toggle Hide Cast & Guest Stars
         const hideCastBtn = this.$('#toggle-hide-cast-section');
         if (hideCastBtn) {
@@ -5081,7 +5109,7 @@ class SettingsPage extends Page {
             orientation: 'grid',
             leaveLeft: 'settings-sidebar',
             leaveRight: null,
-            enterTo: 'last-focused',
+            enterTo: 'first',
             onMove: (direction, currentElement) => {
                 // To prevent the "diagonal trap" where pressing left from a right-aligned setting control
                 // jumps to a control in the row above/below instead of escaping to the sidebar:
