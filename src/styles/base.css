@@ -659,3 +659,26 @@ html[data-low-vram="true"] .hero-dot.active .hero-dot-progress {
     -webkit-animation: none !important;
     animation: none !important;
 }
+
+/* 
+ * 4. SIMPLE LOADING INDICATOR
+ * Replaces the complex pulsing dot spinner with a lightweight rotating ring.
+ */
+html[data-simple-loader="true"] .loading-spinner,
+html[data-simple-loader="true"] .loading-spinner-small {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--jf-accent);
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-simple-loader="true"] .loading-spinner-small {
+    border-width: 2px;
+}
+
+html[data-simple-loader="true"] .loading-spinner::after,
+html[data-simple-loader="true"] .loading-spinner::before,
+html[data-simple-loader="true"] .loading-spinner-small::after,
+html[data-simple-loader="true"] .loading-spinner-small::before {
+    display: none !important;
+}

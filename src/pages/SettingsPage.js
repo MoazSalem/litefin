@@ -479,6 +479,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
+                        <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getSimpleLoader() ? 'active' : ''}" 
+                                id="toggle-simple-loader" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- Details Page Metadata Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
@@ -3238,6 +3251,16 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getDisableCardScaling();
                 layoutManager.setDisableCardScaling(newValue);
                 disableScalingBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Simple Loader
+        const simpleLoaderBtn = this.$('#toggle-simple-loader');
+        if (simpleLoaderBtn) {
+            simpleLoaderBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getSimpleLoader();
+                layoutManager.setSimpleLoader(newValue);
+                simpleLoaderBtn.classList.toggle('active', newValue);
             });
         }
 

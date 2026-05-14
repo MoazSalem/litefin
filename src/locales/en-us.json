@@ -103,6 +103,8 @@
     "LowVramModeDescription": "Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.",
     "LabelDisableCardScaling": "Disable Card Scaling",
     "DisableCardScalingDescription": "Stop movie posters and thumbnails from scaling up when focused. Helpful for grid stability.",
+    "LabelSimpleLoader": "Simple Loading Indicator",
+    "SimpleLoaderDescription": "Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.",
     "LabelPlayer": "Player",
     "LabelPlayerDimensions": "Player dimensions",
     "LabelPlayMethod": "Play method",

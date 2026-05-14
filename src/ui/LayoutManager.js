@@ -75,6 +75,9 @@ class LayoutManager {
         // Disable Card Scaling: Specifically prevents posters/thumbs from scaling on focus
         this._disableCardScaling = false;
 
+        // Simple Loader: Lightweight rotating ring instead of pulsing dots
+        this._simpleLoader = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -103,6 +106,7 @@ class LayoutManager {
         const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
+        const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -113,6 +117,7 @@ class LayoutManager {
         this.setOsdButtonBorders(savedOsdBorders, false);
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
+        this.setSimpleLoader(savedSimpleLoader, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -426,6 +431,32 @@ class LayoutManager {
 
     getDisableCardScaling() {
         return this._disableCardScaling;
+    }
+
+    /**
+     * Enable or disable Simple Loader
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setSimpleLoader(enabled, save = true) {
+        this._simpleLoader = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-simple-loader', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-simple-loader');
+        }
+
+        if (save) {
+            storage.setItem('litefin:simpleLoader', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Simple Loader set to: ${enabled}`);
+        eventBus.emit('simpleLoader:changed', { enabled });
+    }
+
+    getSimpleLoader() {
+        return this._simpleLoader;
     }
 
     // Component registration (Existing logic maintained)
