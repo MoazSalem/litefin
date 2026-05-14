@@ -5111,8 +5111,19 @@ class SettingsPage extends Page {
             leaveRight: null,
             enterTo: 'first',
             onMove: (direction, currentElement) => {
+                // 0. Check for explicit navigation override (highest priority)
+                if (currentElement) {
+                    const navOverride = currentElement.getAttribute(`data-nav-${direction}`);
+                    if (navOverride) {
+                        const target = document.querySelector(navOverride);
+                        if (target) {
+                            focusManager.focusElement(target);
+                            return true;
+                        }
+                    }
+                }
+
                 // To prevent the "diagonal trap" where pressing left from a right-aligned setting control
-                // jumps to a control in the row above/below instead of escaping to the sidebar:
                 if (direction === 'left' && currentElement) {
                     const row = currentElement.closest('.setting-item');
                     if (row) {

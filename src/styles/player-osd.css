@@ -780,7 +780,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     height: 24px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important;
-    background: #fff !important;
+    background: var(--jf-accent-content-color, #fff) !important;
 }
 
 
@@ -1056,14 +1056,14 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     /* border-radius removed */
 }
 
-/* When the item is focused, the fill becomes white */
+/* When the item is focused, the fill becomes the contrast color */
 .track-option.focused .menu-slider .osd-slider-fill {
-    background: #fff;
+    background: var(--jf-accent-content-color, #fff);
 }
 
-/* When the item is focused, the track becomes brighter */
+/* When the item is focused, the track becomes brighter contrast tint */
 .track-option.focused .menu-slider .osd-slider-track {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.25);
 }
 
 .menu-slider .osd-slider {
