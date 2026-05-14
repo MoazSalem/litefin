@@ -316,7 +316,9 @@ class SettingsPage extends Page {
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
                                 { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
-                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                                { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -2216,7 +2218,8 @@ class SettingsPage extends Page {
                                 },
                                 { value: 'poppins', label: i18n.t('FontPoppins') || 'Poppins' },
                                 { value: 'roboto', label: i18n.t('FontRoboto') || 'Roboto' },
-                                { value: 'google', label: i18n.t('FontGoogleSans') || 'Google Sans' },
+                                { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
                                 { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                                 { value: 'typewriter', label: i18n.t('Typewriter') },
                                 { value: 'print', label: i18n.t('Print') },
@@ -2522,7 +2525,9 @@ class SettingsPage extends Page {
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
                                 { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
-                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                                { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

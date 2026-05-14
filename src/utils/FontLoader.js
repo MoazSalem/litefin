@@ -29,7 +29,9 @@ class FontLoader {
             silkscreen: 'Silkscreen',
             'space-grotesk': 'Space Grotesk',
             retrotech: 'RETROTECH',
-            kitty: 'Kitty'
+            kitty: 'Kitty',
+            inter: 'Inter',
+            proxima: 'Proxima Nova'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls

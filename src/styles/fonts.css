@@ -131,6 +131,24 @@
     font-display: swap;
 }
 
+/* Inter - Modern geometric sans-serif */
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/fonts/Inter.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Proxima Nova - Modern geometric sans-serif */
+@font-face {
+    font-family: 'Proxima Nova';
+    src: url('../assets/fonts/ProximaNova.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -165,6 +183,8 @@
 .font-space-grotesk { font-family: 'Space Grotesk', sans-serif; }
 .font-retrotech { font-family: 'RETROTECH', sans-serif; }
 .font-kitty { font-family: 'Kitty', cursive; }
+.font-inter { font-family: 'Inter', sans-serif; }
+.font-proxima { font-family: 'Proxima Nova', sans-serif; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
 

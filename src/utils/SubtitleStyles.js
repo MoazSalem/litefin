@@ -220,6 +220,12 @@ export function getTextStyles() {
         case 'kitty':
             styles.push({ className: 'font-kitty' });
             break;
+        case 'inter':
+            styles.push({ className: 'font-inter' });
+            break;
+        case 'proxima':
+            styles.push({ className: 'font-proxima' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -396,6 +402,8 @@ const fontClasses = [
     'font-space-grotesk',
     'font-retrotech',
     'font-kitty',
+    'font-inter',
+    'font-proxima',
     'font-default'
 ];
 
@@ -478,6 +486,10 @@ export default {
                 return 'font-retrotech';
             case 'kitty':
                 return 'font-kitty';
+            case 'inter':
+                return 'font-inter';
+            case 'proxima':
+                return 'font-proxima';
             default:
                 return 'font-default';
         }
@@ -511,6 +523,10 @@ export default {
                 return 'RETROTECH';
             case 'kitty':
                 return 'Kitty';
+            case 'inter':
+                return 'Inter';
+            case 'proxima':
+                return 'Proxima Nova';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override
