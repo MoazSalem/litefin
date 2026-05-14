@@ -410,12 +410,42 @@ class DetailsPage extends Page {
             // ────────────────────────────────────────────────────────────────────────
             // 2. Fetch Base Item Details
             // ────────────────────────────────────────────────────────────────────────
+            const hideRich = storage.getItem('pref:hideRichMetadata') === 'true';
+            const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+
+            // Build dynamic fields list based on user preferences to save bandwidth/CPU
+            const requestedFields = [
+                'MediaStreams',
+                'MediaSources',
+                'Overview',
+                'LibraryId',
+                'CanDelete',
+                'Width',
+                'Height',
+                'CameraMake',
+                'CameraModel',
+                'ExposureTime',
+                'FocalLength',
+                'Aperture',
+                'Altitude',
+                'DateCreated',
+                'PremiereDate'
+            ];
+
+            if (!hideRich) {
+                requestedFields.push('Genres', 'GenreItems', 'Studios', 'Tags');
+            }
+
+            if (!hideCast) {
+                requestedFields.push('People');
+            }
+
             const item = await api.getItem(this._itemId, {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
                 // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
                 // We also request Photo EXIF fields so they are available immediately.
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete,Width,Height,CameraMake,CameraModel,ExposureTime,FocalLength,Aperture,Altitude,DateCreated,PremiereDate'
+                Fields: requestedFields.join(',')
             });
             this._item = item;
             //log.debug('Item loaded:', item);
@@ -667,7 +697,16 @@ class DetailsPage extends Page {
         } else if (this._item.Type === 'Season') {
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
-            await Promise.all([this._loadMoreFromSeason(), this._loadGuestStars()]);
+            const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+            const loads = [this._loadMoreFromSeason()];
+            if (!hideCast) {
+                loads.push(this._loadGuestStars());
+            } else {
+                // Ensure section is hidden if guest stars are skipped
+                const guestStarsSection = this.$('#guest-stars-section');
+                if (guestStarsSection) guestStarsSection.classList.add('hidden');
+            }
+            await Promise.all(loads);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
@@ -679,8 +718,12 @@ class DetailsPage extends Page {
 
         // Render people if available
         this._people = this._item.People || [];
-        if (this._people.length > 0) {
+        const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+        if (this._people.length > 0 && !hideCast) {
             this._renderPeople();
+        } else if (hideCast) {
+            const peopleSection = this.$('#people-section');
+            if (peopleSection) peopleSection.classList.add('hidden');
         }
 
         // Special Features
@@ -1207,6 +1250,16 @@ class DetailsPage extends Page {
     }
 
     _renderRichMetadata() {
+        const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
+        let container = this.$('#rich-meta');
+        const containerWrapper = this.$('#rich-meta-container');
+
+        if (isHidden) {
+            if (container) container.innerHTML = '';
+            if (containerWrapper) containerWrapper.classList.add('hidden');
+            return;
+        }
+
         const item = this._item;
         const htmlParts = [];
 
@@ -1325,7 +1378,7 @@ class DetailsPage extends Page {
             htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
-        const container = this.$('#rich-meta');
+        container = this.$('#rich-meta');
         if (container) {
             container.innerHTML = htmlParts.join('');
 
@@ -2324,9 +2377,13 @@ class DetailsPage extends Page {
         // or just 'Actor' but specific to the episode.
         // In many setups, if they aren't 'Director' or 'Writer' or 'Producer', they are actors.
         const guestStars = (this._item.People || []).filter((p) => p.Type === 'GuestStar' || p.Role === 'Guest Star');
+        const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
-        if (guestStars.length > 0) {
+        if (guestStars.length > 0 && !hideCast) {
             this._renderGuestStars(guestStars);
+        } else if (hideCast) {
+            const guestStarsSection = this.$('#guest-stars-section');
+            if (guestStarsSection) guestStarsSection.classList.add('hidden');
         }
     }
 

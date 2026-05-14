@@ -314,7 +314,9 @@ class SettingsPage extends Page {
                                 { value: 'casual', label: i18n.t('Casual') },
                                 { value: 'smallcaps', label: i18n.t('SmallCaps') },
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
-                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' }
+                                { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                                { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -435,6 +437,10 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Details Page Metadata Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelScoreVisibility">${i18n.t('LabelScoreVisibility') || 'Score Visibility'}</span>
@@ -466,10 +472,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Details Page Metadata Section -->
-                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
-                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
-
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
@@ -493,6 +495,83 @@ class SettingsPage extends Page {
                                 id="toggle-show-date-aired" 
                                 tabindex="0">
                         </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideRichMetadata">${i18n.t('LabelHideRichMetadata') || 'Hide Rich Metadata'}</span>
+                        <span class="setting-description" data-i18n="HideRichMetadataDescription">${i18n.t('HideRichMetadataDescription') || 'Hide the genres, directors, and studios table on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideRichMetadata') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-rich-metadata" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideCastSection">${i18n.t('LabelHideCastSection') || 'Hide Cast & Guest Stars'}</span>
+                        <span class="setting-description" data-i18n="HideCastSectionDescription">${i18n.t('HideCastSectionDescription') || 'Hide the actors and guest stars rows on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideCastSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-cast-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                
+                <!-- Image Related Section -->
+                <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ImageQuality">${i18n.t('ImageQuality')}</span>
+                        <span class="setting-description" data-i18n="ImageQualityDescription">${i18n.t('ImageQualityDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'image-quality-select',
+                            [
+                                { value: 'low', label: i18n.t('Low') },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                                { value: 'medium', label: i18n.t('Medium') },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                                { value: 'high', label: i18n.t('High') },
+                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                                { value: 'ultra', label: i18n.t('Ultra') },
+                                { value: 'original', label: i18n.t('Original') }
+                            ],
+                            imageService.getPreset() || 'medium'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="DetailsImageQuality">${i18n.t('DetailsImageQuality') || 'Details Image Quality'}</span>
+                        <span class="setting-description" data-i18n="DetailsImageQualityDescription">${i18n.t('DetailsImageQualityDescription') || 'Set the image quality specifically for the item details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'details-image-quality-select',
+                            [
+                                { value: 'default', label: i18n.t('Default') || 'Default' },
+                                { value: 'low', label: i18n.t('Low') || 'Low' },
+                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
+                                { value: 'high', label: i18n.t('High') || 'High' },
+                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
+                                { value: 'ultra', label: i18n.t('Ultra') },
+                                { value: 'original', label: i18n.t('Original') }
+                            ],
+                            imageService.getDetailsPreset() || 'very-high'
+                        )}
                     </div>
                 </div>
 
@@ -548,56 +627,6 @@ class SettingsPage extends Page {
                                  id="toggle-focus-first-item-library" 
                                  tabindex="0">
                         </button>
-                    </div>
-                </div>
-
-                <!-- Image Related Section -->
-                <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ImageQuality">${i18n.t('ImageQuality')}</span>
-                        <span class="setting-description" data-i18n="ImageQualityDescription">${i18n.t('ImageQualityDescription')}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'image-quality-select',
-                            [
-                                { value: 'low', label: i18n.t('Low') },
-                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
-                                { value: 'medium', label: i18n.t('Medium') },
-                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
-                                { value: 'high', label: i18n.t('High') },
-                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
-                                { value: 'ultra', label: i18n.t('Ultra') },
-                                { value: 'original', label: i18n.t('Original') }
-                            ],
-                            imageService.getPreset() || 'medium'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="DetailsImageQuality">${i18n.t('DetailsImageQuality') || 'Details Image Quality'}</span>
-                        <span class="setting-description" data-i18n="DetailsImageQualityDescription">${i18n.t('DetailsImageQualityDescription') || 'Set the image quality specifically for the item details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'details-image-quality-select',
-                            [
-                                { value: 'default', label: i18n.t('Default') || 'Default' },
-                                { value: 'low', label: i18n.t('Low') || 'Low' },
-                                { value: 'medium-low', label: i18n.t('MediumLow') || 'Medium Low' },
-                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
-                                { value: 'medium-high', label: i18n.t('MediumHigh') || 'Medium High' },
-                                { value: 'high', label: i18n.t('High') || 'High' },
-                                { value: 'very-high', label: i18n.t('VeryHigh') || 'Very High' },
-                                { value: 'ultra', label: i18n.t('Ultra') },
-                                { value: 'original', label: i18n.t('Original') }
-                            ],
-                            imageService.getDetailsPreset() || 'very-high'
-                        )}
                     </div>
                 </div>
 
@@ -3114,18 +3143,6 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle MDBList Awards
-        const mdbAwardsBtn = this.$('#toggle-mdb-awards');
-        if (mdbAwardsBtn) {
-            mdbAwardsBtn.addEventListener('click', () => {
-                const isEnabled = storage.getItem('pref:showMdbAwards') !== 'false';
-                const newValue = !isEnabled;
-                storage.setItem('pref:showMdbAwards', newValue.toString());
-                mdbAwardsBtn.classList.toggle('active', newValue);
-                log.info(`Show MDBList Awards set to: ${newValue}`);
-            });
-        }
-
         // Toggle Hero Carousel
         const heroCarouselBtn = this.$('#toggle-hero-carousel');
         if (heroCarouselBtn) {
@@ -3159,6 +3176,30 @@ class SettingsPage extends Page {
 
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hide Rich Metadata
+        const hideRichMetaBtn = this.$('#toggle-hide-rich-metadata');
+        if (hideRichMetaBtn) {
+            hideRichMetaBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideRichMetadata', newValue.toString());
+                hideRichMetaBtn.classList.toggle('active', newValue);
+                log.info(`Hide Rich Metadata set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hide Cast & Guest Stars
+        const hideCastBtn = this.$('#toggle-hide-cast-section');
+        if (hideCastBtn) {
+            hideCastBtn.addEventListener('click', () => {
+                const isHidden = storage.getItem('pref:hideCastSection') === 'true';
+                const newValue = !isHidden;
+                storage.setItem('pref:hideCastSection', newValue.toString());
+                hideCastBtn.classList.toggle('active', newValue);
+                log.info(`Hide Cast & Guest Stars set to: ${newValue}`);
             });
         }
 

@@ -67,6 +67,8 @@ html[data-ui-font="casual"] { --jf-font-family: 'Patrick Hand', cursive, 'Comic 
 html[data-ui-font="smallcaps"] { --jf-font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
 html[data-ui-font="silkscreen"] { --jf-font-family: 'Silkscreen', 'Courier New', monospace; }
 html[data-ui-font="space-grotesk"] { --jf-font-family: 'Space Grotesk', sans-serif; }
+html[data-ui-font="retrotech"] { --jf-font-family: 'RETROTECH', sans-serif; }
+html[data-ui-font="kitty"] { --jf-font-family: 'Kitty', cursive; }
 
 html {
     /* Apply global font-family here so it inherits downwards to * */
