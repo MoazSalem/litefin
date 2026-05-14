@@ -248,7 +248,32 @@
     height: 60px;
     object-fit: contain;
     margin-right: 15px;
+    flex-shrink: 0;
 }
+
+.epg-channel-logo-fallback {
+    width: 80px;
+    height: 60px;
+    margin-right: 15px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.5rem;
+    font-weight: 800;
+    color: #fff;
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.3);
+    flex-shrink: 0;
+    text-transform: uppercase;
+}
+
+/* Apple-style Gradient Palettes for Fallbacks */
+.grad-1 { background: linear-gradient(135deg, #ff5e62, #ff9966); }
+.grad-2 { background: linear-gradient(135deg, #4facfe, #00f2fe); }
+.grad-3 { background: linear-gradient(135deg, #667eea, #764ba2); }
+.grad-4 { background: linear-gradient(135deg, #11998e, #38ef7d); }
+.grad-5 { background: linear-gradient(135deg, #ee0979, #ff6a00); }
+.grad-6 { background: linear-gradient(135deg, #30cfd0, #330867); }
 
 .epg-channel-info {
     flex-grow: 1;
