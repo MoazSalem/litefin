@@ -297,11 +297,12 @@
     top: 5px;
     background: rgba(255, 255, 255, 0.08); /* More modern semi-transparent base */
     border-radius: var(--jf-border-radius); /* Use global setting */
-    padding: 10px 15px;
+    padding: 0; /* Remove padding to let content wrapper handle it */
     overflow: hidden;
     border: 2px solid transparent;
     transition: background 0.25s ease, border-color 0.25s ease;
     will-change: background, border-color;
+    display: flex; /* Support sticky content alignment */
 }
 
 .epg-program:focus,
@@ -312,12 +313,40 @@
     z-index: 20;
 }
 
+.epg-program-content {
+    flex: 1;
+    height: 100%;
+    padding: 10px 15px;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    /* transition removed to ensure no lag during scroll-synced transform updates */
+    will-change: transform;
+    pointer-events: none; /* Let clicks pass through to parent progEl */
+}
+
 .epg-program-title {
     font-size: 1.1rem;
     font-weight: 600;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+    display: flex;
+    align-items: center;
+}
+
+.epg-program-prefix {
+    margin-right: 8px;
+    font-weight: 800;
+    color: var(--jf-accent);
+    font-size: 1.4rem;
+    line-height: 1;
+    flex-shrink: 0;
+}
+
+.epg-program-prefix.hidden {
+    display: none;
 }
 
 .epg-program-time {

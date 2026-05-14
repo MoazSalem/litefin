@@ -200,6 +200,45 @@ class EpgGrid {
         this.timelineTrack.style.transform = `translate3d(${scrollX}px, 0, 0)`;
         this.channelsTrack.style.transform = `translate3d(0, ${scrollY}px, 0)`;
         this.programsTrack.style.transform = `translate3d(${scrollX}px, ${scrollY}px, 0)`;
+
+        // Update sticky titles to keep text visible for programs starting off-screen
+        this._updateStickyTitles();
+    }
+
+    /**
+     * Updates the horizontal offset of program titles within their boxes.
+     * If a program started before the current visible time, the title is
+     * "stuck" to the left edge of the visible area so it remains readable.
+     */
+    _updateStickyTitles() {
+        const scrollX = this.scrollX;
+        
+        for (const data of this.domNodes.values()) {
+            const programNodes = data.rowEl.children;
+            for (let i = 0; i < programNodes.length; i++) {
+                const progEl = programNodes[i];
+                const contentEl = progEl._contentNode;
+                if (!contentEl) continue;
+
+                const left = progEl._epgLeft;
+                const width = progEl._epgWidth;
+                
+                // Calculate how much is hidden to the left (if any)
+                const hiddenAmount = Math.max(0, scrollX - left);
+                
+                // Don't push content past the end of the box (leave some padding)
+                const maxShift = Math.max(0, width - 60);
+                const shift = Math.min(hiddenAmount, maxShift);
+                
+                if (shift > 0) {
+                    contentEl.style.transform = `translate3d(${shift}px, 0, 0)`;
+                    progEl._prefixNode?.classList.remove('hidden');
+                } else {
+                    contentEl.style.transform = '';
+                    progEl._prefixNode?.classList.add('hidden');
+                }
+            }
+        }
     }
 
     _renderRow(index, channel) {
@@ -268,13 +307,23 @@ class EpgGrid {
             progEl.dataset.programId = program.Id;
             progEl.dataset.channelId = channelId;
             progEl.dataset.rowIndex = rowIndex;
-            // Store raw program data for focus logic
+            // Store raw program data and layout metadata for fast updates in render loop
             progEl.__programData = program;
+            progEl._epgLeft = left;
+            progEl._epgWidth = width;
             
             progEl.innerHTML = `
-                <div class="epg-program-title">${program.Name}</div>
-                <div class="epg-program-time">${this._formatProgramTime(program)}</div>
+                <div class="epg-program-content">
+                    <div class="epg-program-title">
+                        <span class="epg-program-prefix hidden">‹</span>
+                        <span class="title-text">${program.Name}</span>
+                    </div>
+                    <div class="epg-program-time">${this._formatProgramTime(program)}</div>
+                </div>
             `;
+            
+            progEl._contentNode = progEl.querySelector('.epg-program-content');
+            progEl._prefixNode = progEl.querySelector('.epg-program-prefix');
             
             progEl.onclick = () => this._handleProgramClick(program);
             progEl.onfocus = () => this._handleProgramFocus(progEl);
