@@ -1866,12 +1866,20 @@ export default class OSDController extends Component {
                 log.info(`Seek scrub session started from: ${this._formatTime(startPos)}`);
             }
 
+            /*
+             * ── SEEK ACCELERATION LOGIC ───────────────────────────────────────
+             * The longer the user holds the seek button, the faster we skip.
+             * This provides fine-grained control for short skips and massive
+             * throughput for traversing long movies.
+             */
             const seekDuration = (Date.now() - this._seekStartTime) / 1000;
             let speedMultiplier = 1;
-            if (seekDuration >= 8) speedMultiplier = 5;
-            else if (seekDuration >= 6) speedMultiplier = 4;
-            else if (seekDuration >= 4) speedMultiplier = 3;
-            else if (seekDuration >= 2) speedMultiplier = 2;
+            
+            if (seekDuration >= 12) speedMultiplier = 10;      // Warp Speed: 10x
+            else if (seekDuration >= 8) speedMultiplier = 5;   // Very Fast: 5x
+            else if (seekDuration >= 6) speedMultiplier = 4;   // Fast: 4x
+            else if (seekDuration >= 4) speedMultiplier = 3;   // Medium: 3x
+            else if (seekDuration >= 2) speedMultiplier = 2;   // Slow Ramp: 2x
 
             if (isNaN(offsetTicks)) return;
             const adjustedOffset = offsetTicks * speedMultiplier;
