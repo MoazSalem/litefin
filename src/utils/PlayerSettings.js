@@ -350,7 +350,16 @@ const DEFAULTS = {
     skipActionRecap: 'None',
 
     // Preview/next-episode teaser segment action
-    skipActionPreview: 'None'
+    skipActionPreview: 'None',
+
+    // Show show/movie logo in OSD instead of text title
+    osdShowLogo: false,
+
+    // Hide production year from the OSD title
+    osdHideYear: false,
+
+    // Hide the show name (or logo) for episodes
+    osdHideShowName: false
 };
 
 /**

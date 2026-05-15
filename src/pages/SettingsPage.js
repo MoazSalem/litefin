@@ -402,25 +402,6 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
-                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-button-borders-select',
-                            [
-                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
-                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
-                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
-                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
-                            ],
-                            layoutManager.getOsdButtonBorders()
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelLibraryPageSize">${i18n.t('LabelLibraryPageSize') || 'Items per page (Library)'}</span>
                         <span class="setting-description" data-i18n="LibraryPageSizeDescription">${i18n.t('LibraryPageSizeDescription') || 'Choose how many items to load at once in the grid view.'}</span>
                     </div>
@@ -494,7 +475,89 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- Details Page Metadata Section -->
+                <!-- OSD Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="OSDCustomization">${i18n.t('OSDCustomization') || 'OSD Customization'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
+                        <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdShowLogo') ? 'active' : ''}" 
+                                id="toggle-osd-show-logo" 
+                                data-setting="osdShowLogo"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
+                        <span class="setting-description" data-i18n="HideYearInOsdDescription">${i18n.t('HideYearInOsdDescription') || 'Hides the production year from the playback overlay title.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideYear') ? 'active' : ''}" 
+                                id="toggle-osd-hide-year" 
+                                data-setting="osdHideYear"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideShowNameInOsd">${i18n.t('LabelHideShowNameInOsd') || 'Hide Show Name'}</span>
+                        <span class="setting-description" data-i18n="HideShowNameInOsdDescription">${i18n.t('HideShowNameInOsdDescription') || 'Hides the show name (or logo) for episodes in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideShowName') ? 'active' : ''}" 
+                                id="toggle-osd-hide-show-name" 
+                                data-setting="osdHideShowName"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
+                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-time-display-select',
+                            [
+                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                            ],
+                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-button-borders-select',
+                            [
+                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
+                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
+                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
+                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
+                            ],
+                            layoutManager.getOsdButtonBorders()
+                        )}
+                    </div>
+                </div>
+
+                <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
 
@@ -1492,23 +1555,6 @@ class SettingsPage extends Page {
                                 data-setting="keepFocusOnSubtitleOffset"
                                 tabindex="0">
                         </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
-                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-time-display-select',
-                            [
-                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
-                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
-                            ],
-                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
-                        )}
                     </div>
                 </div>
 
@@ -3388,7 +3434,6 @@ class SettingsPage extends Page {
         }
 
         // Toggle Trickplay Thumbnail Previews
-        // Simple on/off — no cache invalidation needed (purely a UI rendering preference)
         const trickplayBtn = this.$('#toggle-trickplay');
         if (trickplayBtn) {
             trickplayBtn.addEventListener('click', () => {
@@ -3396,6 +3441,39 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableTrickplay', newValue);
                 trickplayBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle OSD Show Logo
+        const showLogoBtn = this.$('#toggle-osd-show-logo');
+        if (showLogoBtn) {
+            showLogoBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdShowLogo');
+                const newValue = !currentValue;
+                PlayerSettings.set('osdShowLogo', newValue);
+                showLogoBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle OSD Hide Year
+        const hideYearBtn = this.$('#toggle-osd-hide-year');
+        if (hideYearBtn) {
+            hideYearBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideYear');
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideYear', newValue);
+                hideYearBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle OSD Hide Show Name
+        const hideShowNameBtn = this.$('#toggle-osd-hide-show-name');
+        if (hideShowNameBtn) {
+            hideShowNameBtn.addEventListener('click', () => {
+                const currentValue = PlayerSettings.get('osdHideShowName');
+                const newValue = !currentValue;
+                PlayerSettings.set('osdHideShowName', newValue);
+                hideShowNameBtn.classList.toggle('active', newValue);
             });
         }
 

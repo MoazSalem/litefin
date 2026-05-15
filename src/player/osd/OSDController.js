@@ -381,7 +381,13 @@ export default class OSDController extends Component {
                         <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('ButtonBack')}" tabindex="0">
                             ${ICONS.arrowBack}
                         </button>
-                        <span class="osd-title" id="osdTitle"></span>
+                        <div class="osd-title-wrap">
+                            <div class="osd-title-main">
+                                <span class="osd-title" id="osdTitle"></span>
+                                <img class="osd-title-logo hidden" id="osdLogo" alt="Logo">
+                            </div>
+                            <span class="osd-title-secondary" id="osdTitleSecondary"></span>
+                        </div>
                     </div>
                     <div class="osd-header-right">
                         <span class="osd-clock" id="osdClock"></span>
@@ -2771,7 +2777,68 @@ export default class OSDController extends Component {
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
         
         const titleEl = this._osdEl.querySelector('#osdTitle');
-        if (titleEl) titleEl.textContent = this._getFormattedTitle(item);
+        const secondaryEl = this._osdEl.querySelector('#osdTitleSecondary');
+        const logoEl = this._osdEl.querySelector('#osdLogo');
+        const showLogoSetting = PlayerSettings.get('osdShowLogo');
+        const hideShowNameSetting = PlayerSettings.get('osdHideShowName');
+
+        // Always reset to visible title and hidden logo initially to avoid stale images
+        if (titleEl) titleEl.classList.remove('hidden');
+        if (logoEl) {
+            logoEl.classList.add('hidden');
+            logoEl.src = '';
+        }
+        if (secondaryEl) secondaryEl.textContent = '';
+
+        // Get the split title components
+        const titleData = this._getFormattedTitle(item);
+
+        // Set the text titles
+        if (titleEl) titleEl.textContent = titleData.main;
+        if (secondaryEl) secondaryEl.textContent = titleData.secondary;
+
+        // If logo feature is enabled, try to resolve and show the logo for the MAIN part only
+        // Skip if it's an episode and we are hiding the show name (logo represents show)
+        const isEpisode = !!item.SeriesName;
+        if (showLogoSetting && logoEl && item && !this._isAudio && !(isEpisode && hideShowNameSetting)) {
+            /* 
+             * Resolve the item ID that has the logo image.
+             * 1. Check current item (Movie, Series, Channel)
+             * 2. Check parent (Episode -> Series)
+             * 3. Check ParentLogoItemId (Metadata fallback)
+             */
+            let logoItemId = null;
+            if (item.ImageTags && item.ImageTags.Logo) {
+                logoItemId = item.Id;
+            } else if (item.SeriesId && item.SeriesImageTags && item.SeriesImageTags.Logo) {
+                logoItemId = item.SeriesId;
+            } else if (item.ParentLogoItemId && item.ParentLogoImageTag) {
+                logoItemId = item.ParentLogoItemId;
+            } else if (item.ChannelId) {
+                logoItemId = item.ChannelId;
+            }
+
+            if (logoItemId) {
+                // Max height of 60px to fit well in the OSD header
+                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: 60 });
+                
+                logoEl.onload = () => {
+                    // Only switch if this is still the active item
+                    if (this._currentItem && (this._currentItem.Id === item.Id)) {
+                        logoEl.classList.remove('hidden');
+                        if (titleEl) titleEl.classList.add('hidden');
+                    }
+                };
+                
+                logoEl.onerror = () => {
+                    if (titleEl) titleEl.classList.remove('hidden');
+                    logoEl.classList.add('hidden');
+                };
+
+                logoEl.src = logoUrl;
+            }
+        }
+
         this._updateFavoriteButton(item);
         this._updateNavigationButtons();
 
@@ -2792,7 +2859,10 @@ export default class OSDController extends Component {
     }
 
     _getFormattedTitle(item) {
-        if (!item) return '';
+        if (!item) return { main: '', secondary: '' };
+
+        const hideYear = PlayerSettings.get('osdHideYear');
+        const hideShowName = PlayerSettings.get('osdHideShowName');
 
         // Live TV: Channel/Program handling
         if (item.Type === 'TvChannel' || item.ChannelId) {
@@ -2800,36 +2870,46 @@ export default class OSDController extends Component {
             const channelName = item.ChannelName || (item.Type === 'TvChannel' ? item.Name : '');
             const programName = (item.Type === 'TvChannel' || item.Name === channelName) ? '' : item.Name;
 
-            log.debug('[OSD] Formatting Live TV Title:', { 
-                type: item.Type, 
-                channelNumber, 
-                channelName, 
-                programName, 
-                origName: item.Name 
-            });
+            let main = '';
+            if (channelNumber) main += `${channelNumber} `;
+            if (channelName) main += `${channelName}`;
 
-            let text = '';
-            if (channelNumber) text += `${channelNumber} `;
-            if (channelName) text += `${channelName}`;
-            if (programName) text += ` - ${programName}`;
-            
-            return text.trim() || item.Name || '';
+            return {
+                main: main.trim() || item.Name || '',
+                secondary: programName ? ` - ${programName}` : ''
+            };
         }
 
         if (item.SeriesName) {
-            let text = item.SeriesName;
+            let secondary = '';
             if (item.IndexNumber !== undefined) {
                 const s = item.ParentIndexNumber || 1;
                 const e = item.IndexNumber;
-                text += ` S${String(s).padStart(2,'0')}:E${String(e).padStart(2,'0')}`;
+                secondary += ` S${String(s).padStart(2,'0')}:E${String(e).padStart(2,'0')}`;
             }
-            if (item.Name) text += ` - ${item.Name}`;
-            if (item.ProductionYear) text += ` (${item.ProductionYear})`;
-            return text;
+            if (item.Name) secondary += ` - ${item.Name}`;
+            
+            if (item.ProductionYear && !hideYear) {
+                secondary += ` (${item.ProductionYear})`;
+            }
+
+            const mainTitle = hideShowName ? '' : item.SeriesName;
+
+            return {
+                main: mainTitle,
+                secondary: (mainTitle && secondary) ? ` - ${secondary.trim()}` : secondary.trim()
+            };
         }
-        let text = item.Name || '';
-        if (item.ProductionYear) text += ` (${item.ProductionYear})`;
-        return text;
+
+        let secondary = '';
+        if (item.ProductionYear && !hideYear) {
+            secondary = ` (${item.ProductionYear})`;
+        }
+
+        return {
+            main: item.Name || '',
+            secondary: secondary
+        };
     }
     
     _updateFavoriteButton(item) {
