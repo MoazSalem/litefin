@@ -563,8 +563,8 @@ body.webos-cursor-active .focused {
  * Disables expensive GPU-accelerated CSS properties to prevent compositor 
  * memory exhaustion and rendering glitches on Tizen/WebOS hardware.
  */
-/* Global transition removal, EXCLUDING media cards and loading indicators */
-html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small) {
+/* Global transition removal, EXCLUDING media cards, loading indicators, and OSD (handled by scaling toggle) */
+html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom) {
     /* Stop forcing GPU promotion for every moving part */
     will-change: auto !important;
     
@@ -648,6 +648,15 @@ html[data-disable-card-scaling="true"] .media-card.focused .count-badge,
 html[data-disable-card-scaling="true"] .media-card:focus .count-badge {
     -webkit-transform: none !important;
     transform: none !important;
+}
+
+/* Disable OSD show/hide transitions for snappy player feel when card scaling is off */
+html[data-disable-card-scaling="true"] .player-osd,
+html[data-disable-card-scaling="true"] .osd-main,
+html[data-disable-card-scaling="true"] .osd-top,
+html[data-disable-card-scaling="true"] .osd-bottom {
+    -webkit-transition: none !important;
+    transition: none !important;
 }
 
 /* 
