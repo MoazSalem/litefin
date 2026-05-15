@@ -177,7 +177,7 @@
 
 .osd-title-logo {
     max-height: 52px;
-    max-width: 400px;
+    max-width: 200px;
     object-fit: contain;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
     /* Force Hardware acceleration */
