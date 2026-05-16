@@ -22,6 +22,7 @@ import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { i18n } from '../utils/i18n.js';
 import { logger } from '../utils/Logger.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('ProfilesPage');
 
@@ -53,8 +54,19 @@ class ProfilesPage extends Page {
                     <!-- Populated in onMounted -->
                 </div>
 
-                <!-- Bottom bar: Switch Server -->
+                <!-- Bottom bar: Sign Out + Switch Server -->
                 <div class="profiles-bottom">
+                    <!-- Sign out the currently active user session only -->
+                    <button
+                        class="profiles-sign-out-btn focusable"
+                        id="profiles-sign-out"
+                        tabindex="0"
+                        data-i18n="ButtonSignOut"
+                    >
+                        ${i18n.t('ButtonSignOut')}
+                    </button>
+
+                    <!-- Disconnect from the current server (sessions preserved) -->
                     <button
                         class="profiles-switch-server-btn focusable"
                         id="profiles-switch-server"
@@ -69,13 +81,13 @@ class ProfilesPage extends Page {
                 <div class="modal-overlay profiles-dialog-overlay" id="profiles-dialog-overlay">
                     <div class="settings-modal profiles-dialog" id="profiles-dialog" role="dialog" aria-modal="true">
                         <div class="modal-header">
-                            <h2 class="profiles-dialog-title" data-i18n="SwitchServerConfirmTitle">
-                                ${i18n.t('SwitchServerConfirmTitle')}
+                            <h2 class="profiles-dialog-title" data-i18n="SignOutConfirmTitle">
+                                ${i18n.t('SignOutConfirmTitle')}
                             </h2>
                         </div>
                         <div class="modal-options">
-                            <p class="profiles-dialog-body" data-i18n="SwitchServerConfirmMessage">
-                                ${i18n.t('SwitchServerConfirmMessage')}
+                            <p class="profiles-dialog-body" data-i18n="SignOutConfirmMessage">
+                                ${i18n.t('SignOutConfirmMessage')}
                             </p>
                         </div>
                         <div class="modal-actions profiles-dialog-actions">
@@ -166,7 +178,11 @@ class ProfilesPage extends Page {
         // Build avatar URL only if we have an image tag
         let avatarHtml;
         if (session.primaryImageTag) {
-            const imgUrl = api.getUserImageUrl(session.userId, { maxWidth: 300 });
+            const params = imageService.getParams('avatar');
+            const imgUrl = api.getUserImageUrl(session.userId, { 
+                maxWidth: params.maxWidth, 
+                quality: params.quality 
+            });
             avatarHtml = `
                 <img
                     class="profiles-card-avatar"
@@ -225,10 +241,18 @@ class ProfilesPage extends Page {
             });
         }
 
-        // "Switch Server" button — shows confirmation dialog
+        // "Sign Out" button — opens confirmation dialog
+        const signOutBtn = this.$('#profiles-sign-out');
+        if (signOutBtn) {
+            signOutBtn.addEventListener('click', () => this._showDialog());
+        }
+
+        // "Switch Server" button — disconnects immediately (sessions for ALL servers preserved)
         const switchServerBtn = this.$('#profiles-switch-server');
         if (switchServerBtn) {
-            switchServerBtn.addEventListener('click', () => this._showDialog());
+            switchServerBtn.addEventListener('click', () => {
+                auth.logoutAll();
+            });
         }
 
         // Dialog: Cancel
@@ -237,12 +261,13 @@ class ProfilesPage extends Page {
             cancelBtn.addEventListener('click', () => this._hideDialog());
         }
 
-        // Dialog: Confirm → logout all and go to login
+        // Dialog: Confirm → signs out ALL users on this server and forgets the server
         const confirmBtn = this.$('#profiles-dialog-confirm');
         if (confirmBtn) {
-            confirmBtn.addEventListener('click', () => {
+            confirmBtn.addEventListener('click', async () => {
                 this._hideDialog();
-                auth.logoutAll();
+                // This wipes all tokens for the active server and routes back to login (server selection)
+                await auth.logoutAndForgetServer();
             });
         }
     }

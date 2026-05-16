@@ -373,6 +373,7 @@ class SearchPage extends Page {
                 title: i18n.t('Movies'),
                 items: movies,
                 type: 'poster',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Movie`,
                 onClick: (card) => this._saveStateAndNavigate('search-movies-items', card)
@@ -387,6 +388,7 @@ class SearchPage extends Page {
                 title: i18n.t('TypeOptionPluralSeries'),
                 items: series,
                 type: 'poster',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Series`,
                 onClick: (card) => this._saveStateAndNavigate('search-series-items', card)
@@ -401,6 +403,7 @@ class SearchPage extends Page {
                 title: i18n.t('Episodes'),
                 items: episodes,
                 type: 'episode',
+                contextType: 'search',
                 isLandscape: true,
                 limit: 9,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Episode&viewModeIndex=2`,
@@ -416,6 +419,7 @@ class SearchPage extends Page {
                 title: i18n.t('HeaderCastAndCrew'),
                 items: people,
                 type: 'person',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Person`,
                 onClick: (card) => this._saveStateAndNavigate('search-people-items', card)
@@ -430,6 +434,7 @@ class SearchPage extends Page {
                 title: i18n.t('Artists'),
                 items: artists,
                 type: 'square',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=MusicArtist,Artist`,
                 onClick: (card) => this._saveStateAndNavigate('search-artists-items', card)
@@ -444,6 +449,7 @@ class SearchPage extends Page {
                 title: i18n.t('Albums'),
                 items: albums,
                 type: 'square',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=MusicAlbum`,
                 onClick: (card) => this._saveStateAndNavigate('search-albums-items', card)
@@ -458,6 +464,7 @@ class SearchPage extends Page {
                 title: i18n.t('Songs'),
                 items: songs,
                 type: 'square',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=Audio`,
                 onClick: (card) => this._saveStateAndNavigate('search-songs-items', card)
@@ -472,6 +479,7 @@ class SearchPage extends Page {
                 title: i18n.t('Collections'),
                 items: collections,
                 type: 'poster',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=BoxSet`,
                 onClick: (card) => this._saveStateAndNavigate('search-collections-items', card)
@@ -486,6 +494,7 @@ class SearchPage extends Page {
                 title: i18n.t('LiveTv'),
                 items: channels,
                 type: 'square',
+                contextType: 'search',
                 limit: 10,
                 moreUrl: `/library/all?searchTerm=${queryParam}&includeItemTypes=TvChannel`,
                 onClick: (card) => this._saveStateAndNavigate('search-channels-items', card)

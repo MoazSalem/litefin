@@ -59,6 +59,9 @@ export function getTextStyles() {
         case 'large':
             styles.push({ name: 'fontSize', value: '6vh' });
             break;
+        case 'mediumlarge':
+            styles.push({ name: 'fontSize', value: '5.5vh' });
+            break;
         case 'small':
             styles.push({ name: 'fontSize', value: '4vh' });
             break;
@@ -211,6 +214,18 @@ export function getTextStyles() {
         case 'noto-arabic':
             styles.push({ className: 'font-noto-arabic' });
             break;
+        case 'retrotech':
+            styles.push({ className: 'font-retrotech' });
+            break;
+        case 'kitty':
+            styles.push({ className: 'font-kitty' });
+            break;
+        case 'inter':
+            styles.push({ className: 'font-inter' });
+            break;
+        case 'proxima':
+            styles.push({ className: 'font-proxima' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -309,6 +324,7 @@ export function getSecondaryTextStyles() {
         extralarge: '8vh',
         larger: '7vh',
         large: '6vh',
+        mediumlarge: '5.5vh',
         medium: '5vh',
         small: '4vh',
         smaller: '3vh'
@@ -384,6 +400,10 @@ const fontClasses = [
     'font-google',
     'font-silkscreen',
     'font-space-grotesk',
+    'font-retrotech',
+    'font-kitty',
+    'font-inter',
+    'font-proxima',
     'font-default'
 ];
 
@@ -462,6 +482,14 @@ export default {
                 return 'font-silkscreen';
             case 'space-grotesk':
                 return 'font-space-grotesk';
+            case 'retrotech':
+                return 'font-retrotech';
+            case 'kitty':
+                return 'font-kitty';
+            case 'inter':
+                return 'font-inter';
+            case 'proxima':
+                return 'font-proxima';
             default:
                 return 'font-default';
         }
@@ -491,6 +519,14 @@ export default {
                 return 'Noto Sans Arabic';
             case 'silkscreen':
                 return 'Silkscreen';
+            case 'retrotech':
+                return 'RETROTECH';
+            case 'kitty':
+                return 'Kitty';
+            case 'inter':
+                return 'Inter';
+            case 'proxima':
+                return 'Proxima Nova';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override

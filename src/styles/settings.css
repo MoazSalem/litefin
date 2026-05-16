@@ -249,6 +249,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .btn-option.focused{
     border: 2px solid var(--jf-action-btn-active-border)!important;
     /* High contrast focus */
+    color: var(--jf-primary-btn-color, #fff);
     background: var(--jf-accent-hover);
     transform: scale(1.05);
     outline: none !important;
@@ -463,7 +464,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 
 .switch-user-btn {
     margin-top: 10px;
-    padding: 16px 48px;
+    padding: 12px 48px;
     border-radius: var(--jf-border-radius-lg);
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
@@ -478,7 +479,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 .switch-user-btn:hover {
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border-color: var(--jf-button-border-focus) !important;
     will-change: transform;
 }
 
@@ -617,7 +618,7 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
     left: 3px;
     width: 24px;
     height: 24px;
-    background-color: var(--jf-switch-handle);
+    background-color: #ffffff; /* Always light when OFF for visibility in dark themes */
     border-radius: 50%;
 }
 
@@ -627,6 +628,7 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
 
 .toggle-switch.active::after {
     transform: translateX(26px);
+    background-color: var(--jf-switch-handle); /* Use accent-contrast color when ON */
 }
 
 .toggle-switch:focus,
@@ -746,13 +748,18 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     height: 24px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important; /* (6 - 24) / 2 */
-    background: #fff !important;
+    background: var(--jf-accent-content-color, #fff) !important;
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
 }
 
 .setting-slider:focus + .slider-fill,
 .setting-slider.focused + .slider-fill {
-    background: #fff !important; /* Contrast when focused */
+    background: var(--jf-accent-content-color, #fff) !important; /* Contrast when focused */
+}
+
+/* Ensure track remains visible when item is focused */
+.setting-item.focused .slider-track {
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.2);
 }
 
 .slider-value {

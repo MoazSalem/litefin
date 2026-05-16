@@ -157,8 +157,44 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
-    margin: 0;
+    line-height: 1.5;
+    margin: 0px 0px 2px 0px;
+}
+
+.osd-title-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center; /* Better for mixed Logo + Text */
+    max-height: 60px;
+    gap: 0.6rem;
+}
+
+.osd-title-main {
+    display: flex;
+    align-items: center;
+    height: 60px; /* Force height to match wrapper */
+}
+
+.osd-title-logo {
+    max-height: 52px;
+    max-width: 200px;
+    object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+    /* Force Hardware acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    display: block;
+}
+
+.osd-title-secondary {
+    font-size: 1.6em;
+    font-weight: 500; /* Slightly lighter than main title for hierarchy */
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    opacity: 0.9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5; /* Match main title line-height */
 }
 
 
@@ -780,7 +816,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     height: 24px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important;
-    background: #fff !important;
+    background: var(--jf-accent-content-color, #fff) !important;
 }
 
 
@@ -1056,14 +1092,14 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     /* border-radius removed */
 }
 
-/* When the item is focused, the fill becomes white */
+/* When the item is focused, the fill becomes the contrast color */
 .track-option.focused .menu-slider .osd-slider-fill {
-    background: #fff;
+    background: var(--jf-accent-content-color, #fff);
 }
 
-/* When the item is focused, the track becomes brighter */
+/* When the item is focused, the track becomes brighter contrast tint */
 .track-option.focused .menu-slider .osd-slider-track {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.25);
 }
 
 .menu-slider .osd-slider {
@@ -1322,8 +1358,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     width: 40vw;
     height: 100vh;
     background: rgba(10, 10, 15, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+
     border-radius: 0;
     padding: 40px;
     display: flex;
@@ -1471,9 +1506,8 @@ body.lyrics-active .subtitle-overlay {
 
 .osd-syncplay-notification-glass {
     /* Sleek Apple-style frosted glass */
-    background: rgba(30, 30, 30, 0.45);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
+    background: rgba(30, 30, 30, 0.8);
+
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
     

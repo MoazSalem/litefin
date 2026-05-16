@@ -25,7 +25,7 @@ class LazyLoader {
         // NATIVE focus is disabled in this TV app, so we must hook EventBus.
         eventBus.on('focus:changed', (target) => {
             if (!target || !target.classList) return;
-            
+
             // If it's a media card
             if (target.classList.contains('media-card')) {
                 const img = target.querySelector('img[data-src]');
@@ -201,11 +201,11 @@ class LazyLoader {
 
         let nextCard = currentCard.nextElementSibling;
         let count = 0;
-        
+
         // Default preload is 20 images. If in a dense small-poster grid, preload 6 more (26).
         let limit = 20;
         if (currentCard.parentElement && currentCard.parentElement.classList.contains('view-small-poster')) {
-            limit += 6;
+            limit += 7;
         }
 
         while (nextCard && count < limit) {
@@ -239,7 +239,7 @@ class LazyLoader {
             this.forceLoad(images[i]);
         }
 
-        // If no observer (older browser?), we are done. 
+        // If no observer (older browser?), we are done.
         // Focus-driven event handler will load the rest as the user navigates.
         if (!this.observer) {
             return;

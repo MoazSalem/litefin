@@ -528,6 +528,33 @@ export class HtmlVideoPlayer {
             // Use removeAttribute instead of setting src to empty string to be cleaner
             video.removeAttribute('src');
             video.load();
+
+            // ── Tizen Chromium GPU surface release ────────────────────────────
+            //
+            // On Tizen's embedded Chromium, a <video> element that remains in
+            // the DOM continues to hold its decoded frame buffer as a GPU texture
+            // even after src is cleared and load() is called. For 4K content,
+            // this surface can be 20–80MB of VRAM that the compositor cannot
+            // reclaim. The result: GPU memory fragmentation that manifests as
+            // visual glitches (flickering icons, white button flashes) on the
+            // next page.
+            //
+            // The fix: temporarily remove the element from the DOM. This signals
+            // to the compositor that the GPU surface is no longer needed and
+            // should be released. We immediately re-insert a placeholder so that
+            // _ensureVideoElement() re-uses the same DOM node on the next play()
+            // call without needing to recreate it.
+            //
+            if (video.parentNode) {
+                const parent = video.parentNode;
+                parent.removeChild(video);
+                // Re-insert so the element is still reachable — _ensureVideoElement()
+                // checks this._videoElement (not the DOM), so re-insertion order
+                // doesn't matter, but having it in the tree avoids surprises with
+                // any code that queries the container's children.
+                parent.appendChild(video);
+                log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
+            }
         }
 
         this._currentSrc = null;

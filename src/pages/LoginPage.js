@@ -17,6 +17,7 @@ import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
+import { imageService } from '../utils/ImageService.js';
 
 const log = logger.create('Login');
 
@@ -136,11 +137,12 @@ class LoginPage extends Page {
                                     </svg>
                                 </button>
                             </div>
+                            <ul class="server-list" id="saved-server-list"></ul>
+                            <ul class="server-list" id="server-list"></ul>
                             <div class="discovery-status" id="discovery-status">
                                 <div class="loading-spinner-small"></div>
                                 <span data-i18n="ScanningNetwork">Scanning network...</span>
                             </div>
-                            <ul class="server-list" id="server-list"></ul>
                         </div>
                     </div>
                     
@@ -275,6 +277,7 @@ class LoginPage extends Page {
         this._manualPassword = this.$('#manual-password');
         this._usersGrid = this.$('#users-grid');
         this._serverList = this.$('#server-list');
+        this._savedServerList = this.$('#saved-server-list');
         this._discoveryStatus = this.$('#discovery-status');
 
         // Translate the page
@@ -314,6 +317,7 @@ class LoginPage extends Page {
             }
 
             this._startDiscovery();
+            this._showState(STATE.SERVER);
             setTimeout(() => {
                 this._serverInput.focus();
             }, 100);
@@ -348,12 +352,12 @@ class LoginPage extends Page {
         this.$('.login-btn')?.addEventListener('click', () => this._login());
 
         // Quick Connect buttons (on users screen and manual screen)
-        this.$$('.quick-connect-btn').forEach(btn => {
+        this.$$('.quick-connect-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._startQuickConnect());
         });
 
         // Change Server buttons (on manual screen)
-        this.$$('.change-server-btn').forEach(btn => {
+        this.$$('.change-server-btn').forEach((btn) => {
             btn.addEventListener('click', () => this._goToServerSelection());
         });
 
@@ -391,6 +395,17 @@ class LoginPage extends Page {
         // survives innerHTML rebuilds when discovered servers are re-rendered
         if (this._serverList) {
             this._serverList.addEventListener('click', (e) => {
+                const item = e.target.closest('.server-item:not(.empty)');
+                if (item) {
+                    const index = parseInt(item.dataset.serverIndex);
+                    this._selectDiscoveredServer(index);
+                }
+            });
+        }
+
+        // Add the same for the saved server list
+        if (this._savedServerList) {
+            this._savedServerList.addEventListener('click', (e) => {
                 const item = e.target.closest('.server-item:not(.empty)');
                 if (item) {
                     const index = parseInt(item.dataset.serverIndex);
@@ -559,6 +574,17 @@ class LoginPage extends Page {
             this._serverUrl = savedUrl;
             await auth.connectToServer(savedUrl);
 
+            // If we already have saved sessions for this server, jump straight to the profiles picker
+            const savedServers = auth.getSavedServers();
+            const serverData = savedServers.find((s) => s.serverUrl === savedUrl);
+
+            if (!this._isAddUserMode && serverData && serverData.sessions.length > 0) {
+                log.info(`Server ${savedUrl} has saved sessions. Skipping login prompt.`);
+                state.set('user:sessionCount', serverData.sessions.length);
+                router.navigate('/profiles', { replace: true });
+                return;
+            }
+
             // Get public users
             this._users = await api.getPublicUsers();
 
@@ -614,8 +640,9 @@ class LoginPage extends Page {
 
     /**
      * Go to server selection screen (when Change Server button is clicked).
-     * Uses logoutAll() to ensure ALL sessions are cleared before switching —
-     * a server change is a full reset, not a single-user sign-out.
+     * Uses logoutAll() to clear the active server pointer and route to /login.
+     * Stored sessions for ALL servers are preserved in litefin:serverSessions
+     * so users can reconnect to any previously-used server without re-logging in.
      */
     _goToServerSelection() {
         log.info('Going to server selection');
@@ -629,14 +656,9 @@ class LoginPage extends Page {
         }
         focusManager.clearFocus();
 
-        // Explicitly clear ONLY server URL for local purposes if not handled by logout
-        // But auth.logout() handles the rest and notifies server
-        storage.removeItem('litefin:serverUrl');
-
-        // Call logoutAll to clear ALL sessions — switching server means starting fresh.
-        // logoutAll() emits auth:logout, which App.js catches and routes to /login.
-        // We don't use auth.logout() here because that would emit auth:switchToProfiles
-        // if other sessions exist (wrong — we want the full reset flow).
+        // logoutAll() clears only the active server URL + active user pointer;
+        // it does NOT wipe litefin:serverSessions — sessions for all servers are kept.
+        // It emits auth:logout, which App.js catches and routes to /login.
         auth.logoutAll();
 
         // Reset state
@@ -684,6 +706,20 @@ class LoginPage extends Page {
             cancelDiscovery();
             await auth.connectToServer(serverUrl);
 
+            // If we already have saved sessions for this server, jump straight to the profiles picker
+            // This prevents prompting the user to login again for a server they've already authenticated with.
+            // We ignore this shortcut if we're in "Add User" mode (where they explicitly want to add a NEW token).
+            const savedServers = auth.getSavedServers();
+            const serverData = savedServers.find((s) => s.serverUrl === serverUrl);
+
+            if (!this._isAddUserMode && serverData && serverData.sessions.length > 0) {
+                log.info(`Found ${serverData.sessions.length} saved sessions for ${serverUrl}, routing to profiles`);
+                // Update session count so App.js routing logic handles back-navigation correctly
+                state.set('user:sessionCount', serverData.sessions.length);
+                router.navigate('/profiles', { replace: true });
+                return;
+            }
+
             // Get public users
             this._users = await api.getPublicUsers();
 
@@ -719,7 +755,14 @@ class LoginPage extends Page {
                 <button class="user-card" data-user-index="${index}" tabindex="0">
                         <img 
                             class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                            src="${user.PrimaryImageTag ? api.getUserImageUrl(user.Id, { maxWidth: 300 }) : ''}"
+                            src="${
+                                user.PrimaryImageTag
+                                    ? api.getUserImageUrl(user.Id, {
+                                          maxWidth: imageService.getParams('avatar').maxWidth,
+                                          quality: imageService.getParams('avatar').quality
+                                      })
+                                    : ''
+                            }"
                             alt="${user.Name}"
                             onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                         >
@@ -787,7 +830,11 @@ class LoginPage extends Page {
                 placeholder.textContent = user.Name.charAt(0).toUpperCase();
 
                 if (user.PrimaryImageTag) {
-                    img.src = api.getUserImageUrl(user.Id, { maxWidth: 100 });
+                    const params = imageService.getParams('avatar');
+                    img.src = api.getUserImageUrl(user.Id, {
+                        maxWidth: params.maxWidth,
+                        quality: params.quality
+                    });
                     img.classList.remove('hidden');
                     placeholder.classList.add('hidden');
                 } else {
@@ -1037,16 +1084,24 @@ class LoginPage extends Page {
 
         log.info('LoginPage: Starting server discovery...');
 
-        // Clear previous results
+        // Initialize with saved servers first
         this._discoveredServers = [];
+        const savedServers = auth.getSavedServers();
+        if (savedServers && savedServers.length > 0) {
+            savedServers.forEach((saved) => {
+                // Use the domain/IP as the name if we don't have a specific friendly name saved
+                const fallbackName = saved.serverUrl.replace(/^https?:\/\//, '').replace(/\/$/, '');
+                this._discoveredServers.push({
+                    name: saved.serverName || fallbackName,
+                    address: saved.serverUrl,
+                    version: null,
+                    isSaved: true
+                });
+            });
+        }
         this._renderDiscoveredServers();
 
         try {
-            // Show scanning status
-            if (this._discoveryStatus) {
-                this._discoveryStatus.style.display = 'flex';
-            }
-
             // Run discovery
             const servers = await discoverServers(
                 (checked, total) => {
@@ -1055,15 +1110,38 @@ class LoginPage extends Page {
                     log.info(`LoginPage: Discovery ${percent}%`);
                 },
                 (server) => {
-                    // Server found! Add and render immediately
-                    log.info(`LoginPage: Found server ${server.name} (${server.address})`);
-                    this._discoveredServers.push(server);
-                    this._renderDiscoveredServers();
+                    // Check if already in list (could be from saved servers)
+                    const existing = this._discoveredServers.find(
+                        (s) => s.address.replace(/\/$/, '') === server.address.replace(/\/$/, '')
+                    );
+
+                    if (!existing) {
+                        // Server found! Add and render immediately
+                        log.info(`LoginPage: Found server ${server.name} (${server.address})`);
+                        this._discoveredServers.push(server);
+                        this._renderDiscoveredServers();
+                    } else {
+                        // Update existing with better discovery info
+                        if (existing.isSaved) {
+                            existing.name = server.name || existing.name;
+                            existing.version = server.version || existing.version;
+                            this._renderDiscoveredServers();
+                        }
+                    }
                 }
             );
 
-            // Ensure final list is synced
-            this._discoveredServers = servers;
+            // Ensure final list is synced, but preserve our saved servers
+            if (servers && servers.length > 0) {
+                servers.forEach((server) => {
+                    const exists = this._discoveredServers.find(
+                        (s) => s.address.replace(/\/$/, '') === server.address.replace(/\/$/, '')
+                    );
+                    if (!exists) {
+                        this._discoveredServers.push(server);
+                    }
+                });
+            }
             this._renderDiscoveredServers();
         } catch (error) {
             log.error('LoginPage: Discovery failed', error);
@@ -1072,6 +1150,7 @@ class LoginPage extends Page {
             }
         } finally {
             this._isDiscovering = false;
+            this._renderDiscoveredServers();
         }
     }
 
@@ -1079,11 +1158,14 @@ class LoginPage extends Page {
      * Render discovered servers list
      */
     _renderDiscoveredServers() {
-        if (!this._serverList) return;
+        if (!this._serverList || !this._savedServerList) return;
 
         // Remember current focus before destroying DOM
         const activeElement = document.activeElement;
-        const isFocusInList = this._serverList.contains(activeElement);
+        const isFocusInSavedList = this._savedServerList.contains(activeElement);
+        const isFocusInDiscoveredList = this._serverList.contains(activeElement);
+        const isFocusInList = isFocusInSavedList || isFocusInDiscoveredList;
+
         let focusedIndex = -1;
         let isFocusPreserved = false;
 
@@ -1093,44 +1175,75 @@ class LoginPage extends Page {
             isFocusPreserved = true;
         }
 
-        // Hide scanning status
+        // Separate servers
+        const savedServers = this._discoveredServers.filter((s) => s.isSaved);
+        const otherServers = this._discoveredServers.filter((s) => !s.isSaved);
+
+        // Update discovery status visibility
         if (this._discoveryStatus) {
-            this._discoveryStatus.style.display = 'none';
+            // Only show scanning if actively discovering
+            this._discoveryStatus.style.display = this._isDiscovering ? 'flex' : 'none';
         }
 
-        if (this._discoveredServers.length === 0) {
-            // Only show empty message if NOT discovering
-            if (!this._isDiscovering) {
+        // Render saved servers
+        this._savedServerList.innerHTML = savedServers
+            .map((server) => {
+                const index = this._discoveredServers.indexOf(server);
+                return `
+                <li class="server-item" data-server-index="${index}" tabindex="0">
+                    <span class="server-name">${server.name}</span>
+                    <span class="server-badge" data-i18n="SavedBadge">Saved</span>
+                    <span class="server-address">${server.address}</span>
+                    ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                </li>
+            `;
+            })
+            .join('');
+
+        // Render discovered servers
+        if (otherServers.length === 0) {
+            // Only show empty message if NOT discovering AND no saved servers either
+            if (!this._isDiscovering && savedServers.length === 0) {
                 this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
             } else {
                 this._serverList.innerHTML = '';
             }
-            return;
+        } else {
+            this._serverList.innerHTML = otherServers
+                .map((server) => {
+                    const index = this._discoveredServers.indexOf(server);
+                    return `
+                    <li class="server-item" data-server-index="${index}" tabindex="0">
+                        <span class="server-name">${server.name}</span>
+                        <span class="server-address">${server.address}</span>
+                        ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                    </li>
+                `;
+                })
+                .join('');
         }
-
-        // Render server items
-        this._serverList.innerHTML = this._discoveredServers
-            .map(
-                (server, index) => `
-            <li class="server-item" data-server-index="${index}" tabindex="0">
-                <span class="server-name">${server.name}</span>
-                <span class="server-address">${server.address}</span>
-                ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
-            </li>
-        `
-            )
-            .join('');
 
         // Invalid focus cache so new items are found
         focusManager.invalidateCache('login-server');
 
         // Restore focus
         if (isFocusInList && focusedIndex >= 0) {
-            const items = this._serverList.querySelectorAll('.server-item:not(.empty)');
-            if (items.length > 0) {
-                // Try to focus the same index, or the last available item if it was removed
-                const indexToFocus = Math.min(focusedIndex, items.length - 1);
-                focusManager.focusElement(items[indexToFocus]);
+            const selector = `.server-item[data-server-index="${focusedIndex}"]`;
+            let item = this._savedServerList.querySelector(selector) || this._serverList.querySelector(selector);
+
+            if (!item) {
+                // Fallback to nearest index if original item is gone
+                const allItems = [
+                    ...this._savedServerList.querySelectorAll('.server-item:not(.empty)'),
+                    ...this._serverList.querySelectorAll('.server-item:not(.empty)')
+                ];
+                if (allItems.length > 0) {
+                    item = allItems[Math.min(focusedIndex, allItems.length - 1)];
+                }
+            }
+
+            if (item) {
+                focusManager.focusElement(item);
             }
         } else if (isFocusPreserved) {
             // Restore focus if Tizen dropped it from an unaffected element (e.g. server URL input)

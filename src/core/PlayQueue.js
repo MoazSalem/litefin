@@ -188,6 +188,8 @@ class PlayQueue {
                 await this._initPlaylistQueue(item, contextId);
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 await this._initEpisodeQueue(item);
+            } else if (item.Type === 'TvChannel') {
+                await this._initLiveTvQueue(item);
             } else if (item.Type === 'Audio' && item.AlbumId) {
                 // Auto-init album queue for songs played standalone
                 await this._initBoxSetQueue(item, item.AlbumId);
@@ -209,6 +211,41 @@ class PlayQueue {
             log.error('Failed to initialize play queue:', error);
             // Fallback to single item
             this._queue = [item];
+            this._currentIndex = 0;
+        }
+    }
+
+    /**
+     * Build the play queue for Live TV channels.
+     * Fetches the full channel list so users can navigate via the OSD queue.
+     * @param {Object} currentItem - The starting channel
+     * @private
+     */
+    async _initLiveTvQueue(currentItem) {
+        log.debug('Building Live TV channel queue');
+
+        // Fetch the full channel list (up to 2000) with logical sorting.
+        // This ensures the OSD Queue matches the user's expected EPG order.
+        const response = await api.getLiveTvChannels({
+            Limit: 2000,
+            SortBy: 'Number,SortName',
+            SortOrder: 'Ascending'
+        });
+
+        const channels = response.Items || [];
+
+        // Stamp every channel with a session-unique PlaylistItemId
+        channels.forEach(_stampPlaylistItemId);
+
+        this._queue = channels;
+
+        // Locate the starting channel
+        this._currentIndex = this._queue.findIndex((c) => c.Id === currentItem.Id);
+
+        // Fallback: if not found, prepend the current item
+        if (this._currentIndex === -1) {
+            _stampPlaylistItemId(currentItem);
+            this._queue.unshift(currentItem);
             this._currentIndex = 0;
         }
     }

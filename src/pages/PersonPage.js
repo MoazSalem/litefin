@@ -252,7 +252,7 @@ class PersonPage extends Page {
 
         if (posterContainer) {
             if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams('details-poster');
                 const url = api.getImageUrl(p.Id, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,

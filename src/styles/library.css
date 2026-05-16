@@ -234,6 +234,9 @@ html[data-layout-tier="ultra-legacy"] .tab-btn {
     height: 52px;
     padding: 0 28px;
     line-height: normal;
+    /* Use font-size: 0 to strip whitespace between inline-blocks, 
+       but ensure children have their own font-size. */
+    font-size: 0; 
 }
 
 html[data-layout-tier="ultra-legacy"] .tab-btn::before {
@@ -241,6 +244,12 @@ html[data-layout-tier="ultra-legacy"] .tab-btn::before {
     display: inline-block;
     height: 100%;
     vertical-align: middle;
+}
+
+/* Ensure the text inside the tab is visible and centered */
+html[data-layout-tier="ultra-legacy"] .tab-btn-text,
+html[data-layout-tier="ultra-legacy"] .tab-btn {
+    font-size: 20px;
 }
 
 html[data-layout-tier="ultra-legacy"] .library-controls {
@@ -255,6 +264,7 @@ html[data-layout-tier="ultra-legacy"] .pagination-btn {
     height: 52px;
     padding: 0 18px;
     line-height: normal;
+    /* Use font-size: 0 to strip whitespace between inline-blocks */
     font-size: 0;
 }
 
@@ -266,6 +276,7 @@ html[data-layout-tier="ultra-legacy"] .pagination-btn::before {
     vertical-align: middle;
 }
 
+html[data-layout-tier="ultra-legacy"] .control-btn .icon,
 html[data-layout-tier="ultra-legacy"] .control-svg {
     display: inline-block;
     vertical-align: middle;
@@ -275,6 +286,55 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     display: inline-block;
     vertical-align: middle;
     font-size: 18px;
+    /* On ultra-legacy, the ::before ghost is the first child.
+       We must ensure the text has margin only if it's NOT the first visible child. */
+}
+
+/* Correct margins on ultra-legacy.
+   Child 1 (usually .icon) should have no left margin.
+   Child 2 (usually text) should have the 10px margin.
+   Note: ::before pseudo-element is NOT a child element. */
+html[data-layout-tier="ultra-legacy"] .control-btn > *:nth-child(1),
+html[data-layout-tier="ultra-legacy"] .pagination-btn > *:nth-child(1) {
+    margin-left: 0 !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-btn > *:nth-child(2),
+html[data-layout-tier="ultra-legacy"] .pagination-btn > *:nth-child(2) {
+    margin-left: 10px !important;
+}
+
+/* --- Alpha Picker Ultra-Legacy --- */
+html[data-layout-tier="ultra-legacy"] .alpha-picker-container {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-picker {
+    display: inline-block;
+    vertical-align: top;
+    white-space: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-btn {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: normal; 
+    text-align: center;
+    /* Use font-size: 0 to strip any possible remaining text node whitespace, 
+       then set font-size on the pseudo-element? No, that won't work for direct text.
+       The JS fix removed whitespace, so font-size: 18px is safe here. */
+    font-size: 18px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 

@@ -67,6 +67,10 @@ html[data-ui-font="casual"] { --jf-font-family: 'Patrick Hand', cursive, 'Comic 
 html[data-ui-font="smallcaps"] { --jf-font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
 html[data-ui-font="silkscreen"] { --jf-font-family: 'Silkscreen', 'Courier New', monospace; }
 html[data-ui-font="space-grotesk"] { --jf-font-family: 'Space Grotesk', sans-serif; }
+html[data-ui-font="retrotech"] { --jf-font-family: 'RETROTECH', sans-serif; }
+html[data-ui-font="kitty"] { --jf-font-family: 'Kitty', cursive; }
+html[data-ui-font="inter"] { --jf-font-family: 'Inter', sans-serif; }
+html[data-ui-font="proxima"] { --jf-font-family: 'Proxima Nova', sans-serif; }
 
 html {
     /* Apply global font-family here so it inherits downwards to * */
@@ -503,7 +507,7 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 2;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
 }
 
 .video-badge {
@@ -520,8 +524,8 @@ body {
     align-items: center;
     justify-content: center;
     z-index: 2;
-    backdrop-filter: blur(4px);
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    /* PERFORMANCE: Removed backdrop-filter (blur) and box-shadow. 
+       These are extremely expensive on Tizen 3.0/4.0 in a grid context. */
 }
 
 .video-badge svg {
@@ -549,4 +553,143 @@ body.webos-cursor-active :focus,
 body.webos-cursor-active .focused {
     transform: none !important;
     box-shadow: none !important;
+}
+/* ============================================================================
+   Performance Tweaks (Legacy Hardware Mitigation)
+   ============================================================================ */
+
+/* 
+ * 1. LOW VRAM MODE
+ * Disables expensive GPU-accelerated CSS properties to prevent compositor 
+ * memory exhaustion and rendering glitches on Tizen/WebOS hardware.
+ */
+/* Global transition removal, EXCLUDING media cards, loading indicators, and OSD (handled by scaling toggle) */
+html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom) {
+    /* Stop forcing GPU promotion for every moving part */
+    will-change: auto !important;
+    
+    /* Disable all animations and transitions for non-essential UI elements */
+    -webkit-transition: none !important;
+    transition: none !important;
+    -webkit-animation: none !important;
+    animation: none !important;
+}
+
+/* Ensure loading indicators maintain their animations even in Low VRAM mode */
+html[data-low-vram="true"] .loading-spinner,
+html[data-low-vram="true"] .loading-spinner-small {
+    -webkit-animation: rotation 1s linear infinite !important;
+    animation: rotation 1s linear infinite !important;
+    will-change: transform !important;
+}
+
+html[data-low-vram="true"] .loading-spinner::after,
+html[data-low-vram="true"] .loading-spinner::before,
+html[data-low-vram="true"] .loading-spinner-small::after,
+html[data-low-vram="true"] .loading-spinner-small::before {
+    -webkit-animation: animloader-gpu 1s infinite ease-in-out !important;
+    animation: animloader-gpu 1s infinite ease-in-out !important;
+    will-change: transform !important;
+}
+
+/* 
+ * UI ELEMENT SCALING (OSD, Tabs, Buttons)
+ * In Low VRAM mode, we disable scaling for UI controls to ensure maximum stability.
+ */
+html[data-low-vram="true"] .tab-btn:focus,
+html[data-low-vram="true"] .tab-btn.focused,
+html[data-low-vram="true"] .control-btn:focus,
+html[data-low-vram="true"] .control-btn.focused,
+html[data-low-vram="true"] .pagination-btn:focus,
+html[data-low-vram="true"] .pagination-btn.focused,
+html[data-low-vram="true"] .btn:focus,
+html[data-low-vram="true"] .btn.focused,
+html[data-low-vram="true"] .osd-btn:focus,
+html[data-low-vram="true"] .osd-btn.focused,
+html[data-low-vram="true"] .focusable:focus,
+html[data-low-vram="true"] .focusable.focused {
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
+/* Ensure will-change is removed even for cards to save memory */
+html[data-low-vram="true"] .media-card,
+html[data-low-vram="true"] .grid-card {
+    will-change: auto !important;
+}
+
+/* Maintain skeleton shimmer fallback (solid color instead of animation) */
+html[data-low-vram="true"] .skeleton-shimmer::after {
+    display: none !important;
+}
+
+/* 
+ * 2. DISABLE CARD SCALING
+ * Specifically targets the focus-scaling behavior for posters and thumbnails ONLY.
+ * This allows users to keep smooth poster "pop" while still having Low VRAM mode active,
+ * or disable it separately for grid stability.
+ */
+html[data-disable-card-scaling="true"] .media-card:focus,
+html[data-disable-card-scaling="true"] .media-card.focused,
+html[data-disable-card-scaling="true"] .grid-card:focus,
+html[data-disable-card-scaling="true"] .grid-card.focused,
+html[data-disable-card-scaling="true"] .result-card:focus,
+html[data-disable-card-scaling="true"] .result-card.focused,
+html[data-disable-card-scaling="true"] .person-card:focus,
+html[data-disable-card-scaling="true"] .person-card.focused,
+html[data-disable-card-scaling="true"] .episode-card:focus,
+html[data-disable-card-scaling="true"] .episode-card.focused,
+/* Target internal animated elements */
+html[data-disable-card-scaling="true"] .media-card.focused .video-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .video-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .played-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .played-badge,
+html[data-disable-card-scaling="true"] .media-card.focused .count-badge,
+html[data-disable-card-scaling="true"] .media-card:focus .count-badge {
+    -webkit-transform: none !important;
+    transform: none !important;
+}
+
+/* Disable OSD show/hide transitions for snappy player feel when card scaling is off */
+html[data-disable-card-scaling="true"] .player-osd,
+html[data-disable-card-scaling="true"] .osd-main,
+html[data-disable-card-scaling="true"] .osd-top,
+html[data-disable-card-scaling="true"] .osd-bottom {
+    -webkit-transition: none !important;
+    transition: none !important;
+}
+
+/* 
+ * 3. COMPONENT FALLBACKS
+ * Adjust UI elements that rely on animations to be usable when animations are disabled.
+ */
+/* Carousel Indicators: Show active slide as solid color since progress animation is disabled */
+html[data-low-vram="true"] .hero-dot.active .hero-dot-progress {
+    width: 100% !important;
+    background-color: var(--jf-accent) !important;
+    -webkit-animation: none !important;
+    animation: none !important;
+}
+
+/* 
+ * 4. SIMPLE LOADING INDICATOR
+ * Replaces the complex pulsing dot spinner with a lightweight rotating ring.
+ */
+html[data-simple-loader="true"] .loading-spinner,
+html[data-simple-loader="true"] .loading-spinner-small {
+    border: 3px solid rgba(255, 255, 255, 0.1);
+    border-top-color: var(--jf-accent);
+    border-radius: 50%;
+    background: transparent !important;
+}
+
+html[data-simple-loader="true"] .loading-spinner-small {
+    border-width: 2px;
+}
+
+html[data-simple-loader="true"] .loading-spinner::after,
+html[data-simple-loader="true"] .loading-spinner::before,
+html[data-simple-loader="true"] .loading-spinner-small::after,
+html[data-simple-loader="true"] .loading-spinner-small::before {
+    display: none !important;
 }

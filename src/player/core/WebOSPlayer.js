@@ -685,6 +685,26 @@ export class WebOSPlayer {
                 video.removeChild(video.firstChild);
             }
             video.load();
+
+            // ── WebOS Chromium GPU surface release ───────────────────────────
+            //
+            // WebOS uses the same embedded Chromium compositor as Tizen's HTML
+            // backend. A <video> element remaining in the DOM after src is cleared
+            // still holds its decoded frame buffer as a GPU texture. For 4K content
+            // this can be 20–80MB of VRAM that the compositor cannot reclaim,
+            // resulting in GPU memory fragmentation that shows up as glitching UI
+            // (flickering icons, white flashes) on the next page.
+            //
+            // Temporarily removing the element from the DOM signals the compositor
+            // to release the GPU surface. We immediately re-insert it so that
+            // _ensureVideoElement() can reuse the same DOM node on the next play().
+            //
+            if (video.parentNode) {
+                const parent = video.parentNode;
+                parent.removeChild(video);
+                parent.appendChild(video);
+                log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
+            }
         }
 
         this._currentSrc         = null;

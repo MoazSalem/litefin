@@ -607,6 +607,8 @@ class PlayerPage extends Page {
             this.on('key:stop', () => this._onRemoteStop());
             this.on('key:next', () => this._onRemoteNext());
             this.on('key:previous', () => this._onRemotePrevious());
+            this.on('key:channelUp', () => this._onRemoteChannelUp());
+            this.on('key:channelDown', () => this._onRemoteChannelDown());
 
             this.on('key:rewind', () => {
                 if (this._player) {
@@ -771,7 +773,9 @@ class PlayerPage extends Page {
 
             // If OSD is already up (restarting playback), update its title/metadata
             if (this._osd) {
-                this._osd.updateItem(this._item);
+                // If we have a cached program for this channel, prefer it over the generic channel item
+                const metadataItem = this._currentLiveTvProgram || this._item;
+                this._osd.updateItem(metadataItem);
             }
         }
 
@@ -1128,6 +1132,14 @@ class PlayerPage extends Page {
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
+        // SYNC INITIAL METADATA:
+        // If _updateLiveTvTitle already fetched the program before the OSD was ready,
+        // push it now so the title element populates immediately on render.
+        if (this._currentLiveTvProgram) {
+            log.info('OSD ready - Syncing cached program metadata:', this._currentLiveTvProgram.Name);
+            this._osd.updateItem(this._currentLiveTvProgram);
+        }
+
         if (this._player) {
             const resolvedSource = this._player.getCurrentMediaSource?.();
             if (resolvedSource?.Id) {
@@ -1331,6 +1343,12 @@ class PlayerPage extends Page {
                 this._osd.resetLyrics();
             }
 
+            // Update title for Live TV items to show current program
+            if (this._item.Type === 'TvChannel') {
+                this._currentLiveTvProgram = null;
+                this._updateLiveTvTitle();
+            }
+
             // Restart playback
             await this._startPlayback();
 
@@ -1453,6 +1471,12 @@ class PlayerPage extends Page {
                         this._osd.resetLyrics();
                     }
 
+                    // Update title for Live TV items to show current program
+                    if (this._item.Type === 'TvChannel') {
+                        this._currentLiveTvProgram = null;
+                        this._updateLiveTvTitle();
+                    }
+
                     await this._startPlayback();
 
                     this._showLoading(false);
@@ -1512,6 +1536,12 @@ class PlayerPage extends Page {
                     // Reset Up Next and Lyrics state
                     this._osd.resetUpNext();
                     this._osd.resetLyrics();
+                }
+
+                // Update title for Live TV items to show current program
+                if (this._item.Type === 'TvChannel') {
+                    this._currentLiveTvProgram = null;
+                    this._updateLiveTvTitle();
                 }
 
                 await this._startPlayback();
@@ -1651,6 +1681,11 @@ class PlayerPage extends Page {
                 /* Reset OSD states so they trigger fresh for the new item. */
                 this._osd.resetUpNext();
                 this._osd.resetLyrics();
+            }
+
+            // Update title for Live TV items to show current program
+            if (this._item.Type === 'TvChannel') {
+                this._updateLiveTvTitle();
             }
 
             await this._startPlayback();
@@ -2510,6 +2545,8 @@ class PlayerPage extends Page {
     async _updateLiveTvTitle() {
         if (!this._item || this._item.Type !== 'TvChannel') return;
 
+        const channelIdAtStart = this._item.Id;
+
         try {
             log.info('Fetching current program for channel:', this._item.Name);
             const programs = await api.getLiveTvPrograms({
@@ -2519,13 +2556,22 @@ class PlayerPage extends Page {
             });
 
             if (programs && programs.Items && programs.Items.length > 0) {
+                // IMPORTANT: Only apply if we are still on the SAME channel
+                if (this._item.Id !== channelIdAtStart) {
+                    log.info('Program fetch returned but channel has changed. Ignoring.');
+                    return;
+                }
+
                 const program = programs.Items[0];
                 log.info('Current program:', program.Name);
 
-                // Set the page title to "Channel: Program"
-                this.title = `${this._item.Name}: ${program.Name}`;
+                // Enrich program with channel info for better OSD display
+                program.ChannelName = this._item.Name;
+                program.ChannelNumber = this._item.Number || this._item.ChannelNumber;
+                
+                // Cache for OSD init sync and playback start sync
+                this._currentLiveTvProgram = program;
 
-                // Update OSD if it exists
                 if (this._osd) {
                     this._osd.updateItem(program);
                 }
@@ -2540,6 +2586,16 @@ class PlayerPage extends Page {
      * @param {number} direction - 1 for Up, -1 for Down
      * @private
      */
+    _onRemoteChannelUp() {
+        log.info('Remote: Channel Up');
+        this._handleChannelChange(1);
+    }
+
+    _onRemoteChannelDown() {
+        log.info('Remote: Channel Down');
+        this._handleChannelChange(-1);
+    }
+
     async _handleChannelChange(direction) {
         if (this._isSwitching) return;
         if (!this._item || this._item.Type !== 'TvChannel') {
@@ -2552,10 +2608,9 @@ class PlayerPage extends Page {
 
         try {
             // 1. Ensure we have the channel list
-            if (!this._channels) {
-                log.info('Fetching channel list for navigation...');
-                const result = await api.getLiveTvChannels();
-                this._channels = result.Items || [];
+            if (!this._channels || this._channels.length === 0) {
+                this._channels = playQueue.getQueue() || [];
+                log.info(`Using ${this._channels.length} channels from PlayQueue for navigation.`);
             }
 
             if (this._channels.length <= 1) {
@@ -2568,8 +2623,15 @@ class PlayerPage extends Page {
             // 2. Find current channel index
             const currentIndex = this._channels.findIndex((c) => c.Id === this._item.Id);
             if (currentIndex === -1) {
-                // Not in current list (maybe list updated?), just take first
-                await this._switchChannel(this._channels[0]);
+                log.warn(`Current channel (${this._item.Name}, ${this._item.Id}) not found in navigation list. Falling back to first channel.`);
+                const firstChannel = this._channels[0];
+                if (firstChannel.Id === this._item.Id) {
+                    log.info('Fallback channel is already playing - ignoring switch.');
+                    this._showLoading(false);
+                    this._isSwitching = false;
+                    return;
+                }
+                await this._switchChannel(firstChannel);
                 return;
             }
 
@@ -2598,6 +2660,13 @@ class PlayerPage extends Page {
      * @private
      */
     async _switchChannel(nextChannel) {
+        if (!nextChannel || nextChannel.Id === this._item.Id) {
+            log.debug('Ignoring channel switch: already on this channel or invalid target');
+            return;
+        }
+
+        log.info(`[ChannelSwitch] Transitioning from ${this._item.Name} (${this._item.Id}) to ${nextChannel.Name} (${nextChannel.Id})`);
+
         // Stop current playback cleanly
         if (this._player?.stop) {
             // Capture current info for reporting
@@ -2608,15 +2677,17 @@ class PlayerPage extends Page {
             await this._reportPlaybackStopped(mediaSource, positionTicks, false);
         }
 
-        // Briefly settle hardware
-        await new Promise((r) => setTimeout(r, 300));
+        // Briefly settle hardware to prevent decoder state overlaps
+        await new Promise((r) => setTimeout(r, 400));
 
         // Update state for new channel
+        const oldItem = this._item;
         this._item = nextChannel;
         this.title = nextChannel.Name;
         this._resumePosition = 0;
         this._hasReportedStart = false;
         this._cachedMediaSource = null;
+        this._currentLiveTvProgram = null;
 
         // Fetch current program info asynchronously so we don't block start
         this._updateLiveTvTitle();
@@ -2626,6 +2697,8 @@ class PlayerPage extends Page {
             this._osd.updateItem(nextChannel);
             this._osd.resetUpNext();
         }
+
+        log.info('[ChannelSwitch] State updated, initializing new playback session...');
 
         // Start new playback
         await this._startPlayback();

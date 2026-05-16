@@ -30,7 +30,7 @@
     --jf-input-border: #222222;
     --jf-button-bg: #222222;
     --jf-button-hover: #2a2a2a;
-    --jf-switch-bg: rgba(255, 255, 255, 0.1);
+    --jf-switch-bg: rgba(255, 255, 255, 0.15);
     --jf-switch-handle: var(--jf-accent-content-color, #ffffff);
 
     --jf-shadow-sm: 0 2px 4px rgba(0, 0, 0, 0.5);
