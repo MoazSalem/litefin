@@ -78,6 +78,14 @@ If Litefin is useful to you, please consider supporting the development:
           <b>DatAres37</b>
         </a>
       </td>
+      <td align="center" width="120">
+        <a href="https://github.com/danitesler">
+          <img src="https://github.com/danitesler.png?s=100" width="80" alt="Dani Tesler" />
+          <br />
+          <br />
+          <b>Dani Tesler</b>
+        </a>
+      </td>
       </tr>
     
   </table>
