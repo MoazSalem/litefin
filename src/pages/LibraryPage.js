@@ -674,6 +674,8 @@ class LibraryPage extends Page {
                     item.CollectionType = 'music';
                 } else if (['Series', 'Season', 'Episode', 'TvChannel', 'TvProgram'].includes(item.Type)) {
                     item.CollectionType = 'tvshows';
+                } else if (item.Type === 'MusicVideo') {
+                    item.CollectionType = 'musicvideos';
                 } else if (['Movie', 'BoxSet', 'Video'].includes(item.Type)) {
                     item.CollectionType = 'movies';
                 }
@@ -818,6 +820,8 @@ class LibraryPage extends Page {
                 subViewItemTypes = 'Series';
             } else if (info?.CollectionType === 'movies') {
                 subViewItemTypes = 'Movie';
+            } else if (info?.CollectionType === 'musicvideos') {
+                subViewItemTypes = 'MusicVideo';
             } else {
                 log.info(
                     'Defaulting to Movie/TV subview types for unknown collection:',
@@ -929,6 +933,8 @@ class LibraryPage extends Page {
                 } else if (this.state.libraryInfo?.CollectionType === 'music' && !this.params.genreId) {
                     // For standard Item fetches in Music libraries without specific subview filters like genre
                     params.IncludeItemTypes = 'MusicAlbum';
+                } else if (this.state.libraryInfo?.CollectionType === 'musicvideos') {
+                    params.IncludeItemTypes = 'MusicVideo';
                 }
                 result = await api.getItems(params);
             } else if (viewType === 'Suggestions') {
@@ -1014,6 +1020,77 @@ class LibraryPage extends Page {
                     this._renderHorizontalRows(this.state.items);
                     this._updatePaginationUI();
                     return; // Skip grid render
+                }
+
+                if (collectionType === 'musicvideos') {
+                    // ------------------------------------------------------------------
+                    // Music Video Suggestions
+                    // ------------------------------------------------------------------
+                    const [latest, recentlyPlayed, frequentlyPlayed] = await Promise.all([
+                        api
+                            .getLatestItems(this.state.libraryId, { Limit: 12, IncludeItemTypes: 'MusicVideo' })
+                            .catch(() => []),
+                        api
+                            .getItems({
+                                ParentId: this.state.libraryId,
+                                SortBy: 'DatePlayed',
+                                SortOrder: 'Descending',
+                                Limit: 12,
+                                Recursive: true,
+                                IncludeItemTypes: 'MusicVideo',
+                                Filters: 'IsPlayed'
+                            })
+                            .catch(() => ({ Items: [] })),
+                        api
+                            .getItems({
+                                ParentId: this.state.libraryId,
+                                SortBy: 'PlayCount',
+                                SortOrder: 'Descending',
+                                Limit: 12,
+                                Recursive: true,
+                                IncludeItemTypes: 'MusicVideo',
+                                Filters: 'IsPlayed'
+                            })
+                            .catch(() => ({ Items: [] }))
+                    ]);
+
+                    if (latest && latest.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderRecentlyAdded'),
+                            items: latest,
+                            isLandscape: true,
+                            cardType: 'backdrop',
+                            contextType: 'library'
+                        });
+                    }
+                    if (recentlyPlayed.Items && recentlyPlayed.Items.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderRecentlyPlayed'),
+                            items: recentlyPlayed.Items,
+                            isLandscape: true,
+                            cardType: 'backdrop',
+                            contextType: 'library'
+                        });
+                    }
+                    if (frequentlyPlayed.Items && frequentlyPlayed.Items.length > 0) {
+                        rows.push({
+                            title: i18n.t('HeaderFrequentlyPlayed'),
+                            items: frequentlyPlayed.Items,
+                            isLandscape: true,
+                            cardType: 'backdrop',
+                            contextType: 'library'
+                        });
+                    }
+
+                    // Guard: Check if we are still on the same tab
+                    if (this.state.viewType !== capturedViewType) {
+                        return;
+                    }
+
+                    this.state.items = rows;
+                    this._renderHorizontalRows(this.state.items);
+                    this._updatePaginationUI();
+                    return;
                 }
 
                 const suggestionTypes = collectionType === 'tvshows' ? 'Series' : 'Movie,Series';
@@ -1527,6 +1604,7 @@ class LibraryPage extends Page {
         if (
             this.state.libraryInfo?.CollectionType === 'music' ||
             this.state.libraryInfo?.CollectionType === 'homevideos' ||
+            this.state.libraryInfo?.CollectionType === 'musicvideos' ||
             (this.params.includeItemTypes && squareTypes.includes(this.params.includeItemTypes))
         ) {
             // For thumb/banner, use backdrop if available; fall back gracefully
@@ -1626,6 +1704,13 @@ class LibraryPage extends Page {
                 { id: 'Photos', label: 'Photos' },
                 { id: 'PhotoAlbums', label: 'PhotoAlbums' },
                 { id: 'Videos', label: 'Videos' }
+            ];
+        } else if (collectionType === 'musicvideos') {
+            tabs = [
+                { id: 'Items', label: 'MusicVideos' },
+                { id: 'Suggestions', label: 'Suggestions' },
+                { id: 'Genres', label: 'Genres' },
+                { id: 'Folders', label: 'Folders' }
             ];
         } else {
             // Generic fallback (Generic Folders, Music Videos, etc.)
@@ -2285,6 +2370,8 @@ class LibraryPage extends Page {
                 includeItemTypes = 'Series'; // Only show series, not seasons or episodes
             } else if (collectionType === 'movies') {
                 includeItemTypes = 'Movie'; // Only movies
+            } else if (collectionType === 'musicvideos') {
+                includeItemTypes = 'MusicVideo';
             }
 
             const result = await api.getItems({
@@ -2557,6 +2644,8 @@ class LibraryPage extends Page {
                 } else {
                     includeItemTypes = 'Audio,MusicAlbum';
                 }
+            } else if (collectionType === 'musicvideos') {
+                includeItemTypes = 'MusicVideo';
             }
 
             const params = {
