@@ -1079,6 +1079,16 @@ class HomePage extends Page {
             const heroCount = storage.getItem('pref:heroCarouselCount');
             const limit = heroCount ? parseInt(heroCount, 10) : 5;
 
+            // =================================================================
+            // HERO CAROUSEL DATA FILTERS RESOLUTION
+            // =================================================================
+            // Check if the user has enabled the "Ignore Watched Content" preference.
+            // If active, we append the 'IsUnplayed' item filter to the request so that
+            // the Jellyfin backend returns only unplayed Movies and Series for the banner.
+            const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
+            const filters = ignoreWatched ? 'HasBackdrop,IsUnplayed' : 'HasBackdrop';
+
+            // Fetch random items with backdrops from user libraries.
             const response = await api.getItems({
                 SortBy: 'Random',
                 Recursive: true,
@@ -1086,7 +1096,7 @@ class HomePage extends Page {
                 Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
-                Filters: 'HasBackdrop'
+                Filters: filters
             });
 
             if (!this._isMounted) return;

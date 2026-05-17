@@ -511,6 +511,8 @@
     "HeroCarouselTextTitleDescription": "Prefer text titles over logos in the hero carousel.",
     "HeroCarouselZoom": "Enable Background Motion",
     "HeroCarouselZoomDescription": "Enable the slow background motion effect on the hero carousel backdrops.",
+    "HeroCarouselIgnoreWatched": "Ignore Watched Content",
+    "HeroCarouselIgnoreWatchedDescription": "Excludes already watched movies and series from appearing in the featured carousel.",
     "HeroImageQuality": "Hero Background Quality",
     "HeroImageQualityDescription": "Set the image quality specifically for hero backgrounds. Lower quality can improve performance.",
     "HeroStyle": "Hero Style",

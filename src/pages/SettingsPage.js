@@ -1201,6 +1201,27 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!--
+                  =============================================================================
+                  HERO CAROUSEL: IGNORE WATCHED CONTENT TOGGLE
+                  =============================================================================
+                  This control allows the user to filter the hero carousel items, hiding any
+                  movies or series that the user has already marked as watched (played) in their
+                  Jellyfin library database. Fits seamlessly with Apple-style premium toggles.
+                -->
+                <div class="setting-item" id="hero-carousel-ignore-watched-item" style="display: ${storage.getItem('pref:heroCarousel') !== 'false' ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HeroCarouselIgnoreWatched">${i18n.t('HeroCarouselIgnoreWatched') || 'Ignore Watched Content'}</span>
+                        <span class="setting-description" data-i18n="HeroCarouselIgnoreWatchedDescription">${i18n.t('HeroCarouselIgnoreWatchedDescription') || 'Excludes already watched movies and series from appearing in the featured carousel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:heroCarouselIgnoreWatched') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hero-carousel-ignore-watched" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <h3 class="setting-section-title" data-i18n="HomeLayoutOrder" style="margin-top: 40px;">${i18n.t('HomeLayoutOrder') || 'Home Screen Layout'}</h3>
                 
                 <div class="setting-item">
@@ -3269,7 +3290,12 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarousel', newValue.toString());
                 heroCarouselBtn.classList.toggle('active', newValue);
 
-                // Toggle visibility of dependent settings (style, text title, compact)
+                // =====================================================================
+                // DEPENDENT COMPONENT VISIBILITY DISPATCHER
+                // =====================================================================
+                // When the Hero Carousel is toggled, we must gracefully cascade the
+                // visibility state to all sub-settings (e.g. typography, zoom effects,
+                // backdrop qualities, interval timers, MDB ratings, and watched filters).
                 const textTitleItem = this.$('#hero-carousel-text-title-item');
                 const compactItem = this.$('#hero-carousel-compact-item');
                 const styleItem = this.$('#hero-carousel-style-item');
@@ -3279,7 +3305,9 @@ class SettingsPage extends Page {
                 const intervalItem = this.$('#hero-carousel-interval-item');
                 const countItem = this.$('#hero-carousel-count-item');
                 const mdbItem = this.$('#hero-carousel-mdb-item');
+                const ignoreWatchedItem = this.$('#hero-carousel-ignore-watched-item');
 
+                // Apply transitions/display toggles based on the master toggle value.
                 if (textTitleItem) textTitleItem.style.display = newValue ? '' : 'none';
                 if (compactItem) compactItem.style.display = newValue ? '' : 'none';
                 if (styleItem) styleItem.style.display = newValue ? '' : 'none';
@@ -3288,9 +3316,19 @@ class SettingsPage extends Page {
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
+                
+                // MDBList has an additional check to make sure the server plugin is installed.
                 if (mdbItem)
                     mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
+                
+                // Toggle the ignore watched filter setting visibility.
+                if (ignoreWatchedItem) ignoreWatchedItem.style.display = newValue ? '' : 'none';
 
+                // =====================================================================
+                // FOCUS ENGINE CACHE INVALIDATION
+                // =====================================================================
+                // Re-indexing the focusable elements on the screen to prevent ghost focus
+                // target issues on spatial navigators when toggles change the layout height.
                 focusManager.invalidateCache('settings-content');
                 log.info(`Hero Carousel set to: ${newValue}`);
             });
@@ -3407,6 +3445,28 @@ class SettingsPage extends Page {
                 storage.setItem('pref:heroCarouselMdbList', newValue.toString());
                 heroCarouselMdbBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel MDBList set to: ${newValue}`);
+            });
+        }
+
+        // =====================================================================
+        // HERO CAROUSEL FILTER: IGNORE WATCHED CONTENT
+        // =====================================================================
+        // Registers the click event handler on the "Ignore Watched Content" switch.
+        // Toggling this will exclude items already played by the user from the random
+        // pool fetched for the main homepage hero banner. Re-saves value in localStorage.
+        const heroCarouselIgnoreWatchedBtn = this.$('#toggle-hero-carousel-ignore-watched');
+        if (heroCarouselIgnoreWatchedBtn) {
+            heroCarouselIgnoreWatchedBtn.addEventListener('click', () => {
+                // Read current filter state.
+                const isEnabled = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
+                const newValue = !isEnabled;
+                
+                // Save new setting state as a serialized string.
+                storage.setItem('pref:heroCarouselIgnoreWatched', newValue.toString());
+                
+                // Toggle active state classes to visual elements.
+                heroCarouselIgnoreWatchedBtn.classList.toggle('active', newValue);
+                log.info(`Hero Carousel Ignore Watched set to: ${newValue}`);
             });
         }
 
