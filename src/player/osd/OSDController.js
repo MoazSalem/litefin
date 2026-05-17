@@ -2790,11 +2790,18 @@ export default class OSDController extends Component {
         const showLogoSetting = PlayerSettings.get('osdShowLogo');
         const hideShowNameSetting = PlayerSettings.get('osdHideShowName');
 
+        // Reset title wrap classes
+        const wrapEl = this._osdEl.querySelector('.osd-title-wrap');
+        if (wrapEl) {
+            wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+        }
+
         // Always reset to visible title and hidden logo initially to avoid stale images
         if (titleEl) titleEl.classList.remove('hidden');
         if (logoEl) {
             logoEl.classList.add('hidden');
             logoEl.src = '';
+            logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
         }
         if (secondaryEl) secondaryEl.textContent = '';
 
@@ -2827,8 +2834,29 @@ export default class OSDController extends Component {
             }
 
             if (logoItemId) {
-                // Max height of 60px to fit well in the OSD header
-                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: 60 });
+                // Get the custom logo size from player settings (default to medium)
+                const logoSize = PlayerSettings.get('osdLogoSize') || 'medium';
+                let maxImgHeight = 60;
+                if (logoSize === 'small') {
+                    maxImgHeight = 40;
+                } else if (logoSize === 'large') {
+                    maxImgHeight = 80;
+                } else if (logoSize === 'extralarge') {
+                    maxImgHeight = 100;
+                } else if (logoSize === 'xxl') {
+                    maxImgHeight = 120;
+                }
+
+                // Add size class to the logo element
+                logoEl.classList.add('logo-' + logoSize);
+
+                // Add corresponding class to title wrap to adjust row height dynamically
+                if (wrapEl) {
+                    wrapEl.classList.add('has-logo-' + logoSize);
+                }
+
+                // Max height of maxImgHeight to fit well in the OSD header
+                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: maxImgHeight });
                 
                 logoEl.onload = () => {
                     // Only switch if this is still the active item
@@ -2841,6 +2869,10 @@ export default class OSDController extends Component {
                 logoEl.onerror = () => {
                     if (titleEl) titleEl.classList.remove('hidden');
                     logoEl.classList.add('hidden');
+                    logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
+                    if (wrapEl) {
+                        wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+                    }
                 };
 
                 logoEl.src = logoUrl;

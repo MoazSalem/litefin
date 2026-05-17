@@ -158,7 +158,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'console', label: i18n.t('Console') },
                     { value: 'cursive', label: i18n.t('Cursive') },
                     { value: 'casual', label: i18n.t('Casual') },
-                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                    { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                    { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                    { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                    { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                    { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                    { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                    { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                 ]
             },
             {
@@ -314,7 +321,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'console', label: i18n.t('Console') },
                     { value: 'cursive', label: i18n.t('Cursive') },
                     { value: 'casual', label: i18n.t('Casual') },
-                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                    { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                    { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                    { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                    { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                    { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                    { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                    { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                 ]
             },
             {

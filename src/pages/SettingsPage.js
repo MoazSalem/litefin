@@ -494,6 +494,26 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item" id="osd-logo-size-container" style="display: ${PlayerSettings.get('osdShowLogo') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdLogoSize">${i18n.t('LabelOsdLogoSize') || 'OSD Logo Size'}</span>
+                        <span class="setting-description" data-i18n="OsdLogoSizeDescription">${i18n.t('OsdLogoSizeDescription') || 'Choose the display size of the show or movie logo in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-logo-size-select',
+                            [
+                                { value: 'small', label: i18n.t('Small') || 'Small' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'large', label: i18n.t('Large') || 'Large' },
+                                { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
+                                { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
+                            ],
+                            PlayerSettings.get('osdLogoSize') || 'medium'
+                        )}
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
@@ -2277,7 +2297,8 @@ class SettingsPage extends Page {
                                 { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
                                 { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
-                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' }
+                                { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -3454,6 +3475,15 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('osdShowLogo', newValue);
                 showLogoBtn.classList.toggle('active', newValue);
+
+                // Update visibility of the logo size container
+                const logoSizeContainer = this.$('#osd-logo-size-container');
+                if (logoSizeContainer) {
+                    logoSizeContainer.style.display = newValue ? '' : 'none';
+                }
+                
+                // Invalidate focus cache so the newly visible items can be navigated to
+                focusManager.invalidateCache('settings-content');
             });
         }
 
@@ -4253,6 +4283,7 @@ class SettingsPage extends Page {
              */
             'osd-focus-mode-select': { type: 'player', key: 'osdFocusRestoreMode' },
             'osd-time-display-select': { type: 'player', key: 'osdTimeDisplayMode' },
+            'osd-logo-size-select': { type: 'player', key: 'osdLogoSize' },
 
             // Per-segment-type skip action — read by the skip-intro plugin on each onPlayerStart
             'segment-action-intro-select': { type: 'player', key: 'skipActionIntro' },

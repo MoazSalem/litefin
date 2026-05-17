@@ -359,7 +359,10 @@ const DEFAULTS = {
     osdHideYear: false,
 
     // Hide the show name (or logo) for episodes
-    osdHideShowName: false
+    osdHideShowName: false,
+
+    // Size of the show/movie logo in OSD ('small', 'medium', 'large')
+    osdLogoSize: 'medium'
 };
 
 /**
