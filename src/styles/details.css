@@ -521,6 +521,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     margin-bottom: 12px;
     /* Text rendering opt */
     text-rendering: optimizeLegibility;
+    /*
+     * ── Line Break Preservation ────────────────────────────────────────────────
+     * Retain native newline formatting (\n or \r\n) from biography and movie
+     * overviews, preventing text from looking compressed or "clinched", while
+     * still collapsing sequential whitespace and wrapping lines normally.
+     */
+    white-space: pre-line;
 }
 
 .line-clamp-6 {
