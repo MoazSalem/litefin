@@ -567,7 +567,14 @@ class PlayerPage extends Page {
             //    so OSD button clicks can never accidentally reach this handler even if
             //    stopPropagation() is still in flight on older TV browsers.
             this.el.addEventListener('click', (e) => {
-                if (!PlayerSettings.get('enableMagicCursor')) return;
+                /*
+                 * DELIBERATE PHYSICAL CLICK EXEMPTION:
+                 * We do NOT bypass physical clicks when 'enableMagicCursor' is false.
+                 * The user turned off "enableMagicCursor" to prevent accidental pointer
+                 * movements (gyro shakes) from waking the OSD. But if they physically
+                 * click the video background, it is a deliberate intent to wake up the
+                 * OSD or toggle playback state.
+                 */
 
                 const osdOverlay = this.el.querySelector('#osd-overlay');
 

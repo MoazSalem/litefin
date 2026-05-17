@@ -477,7 +477,15 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
-            if (!PlayerSettings.get('enableMagicCursor')) return;
+            /* 
+             * DELIBERATE PHYSICAL CLICK EXEMPTION:
+             * We do NOT return early even if 'enableMagicCursor' is disabled.
+             * Disabling cursor controls prevents highly sensitive gyro movements
+             * (mousemove) from waking the OSD or styling hovers. However, physical clicks
+             * (via mouse or Magic Remote center/wheel clicks) are always deliberate actions
+             * and must register. If the OSD is currently showing, clicking a button
+             * should activate it.
+             */
 
             // Every click inside the OSD resets the auto-hide timer.
             this.resetAutoHide();
