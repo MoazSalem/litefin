@@ -1638,6 +1638,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         if (index === -1) {
              if (this._chapters && this._chapters.length > 0) {
+                 this._lastChapterSeekTime = Date.now();
                  this.seek(this._chapters[0].StartPositionTicks);
                  return;
              }
@@ -1658,12 +1659,22 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info('TizenAVPlayer: Applying 2.5s offset to next chapter jump');
             }
             log.info('Skipping to next chapter:', nextChapter.Name);
+            this._lastChapterSeekTime = Date.now();
             this.seek(seekTarget);
         }
     }
 
     previousChapter() {
-        const index = this.getCurrentChapterIndex();
+        // Tizen Seek Offset Workaround:
+        // On Tizen, nextChapter() applies a -2.5s offset to chapter seeks, landing slightly
+        // before the actual chapter start. To prevent previousChapter() from misidentifying
+        // the current chapter and getting stuck in a loop, we look ahead by 3s (matching nextChapter).
+        let lookAhead = 0;
+        if (this._backendType === 'tizen') {
+             lookAhead = 30000000; // 3 seconds in ticks
+        }
+
+        const index = this.getCurrentChapterIndex(this.getCurrentPositionTicks() + lookAhead);
         log.debug('Chapter Debug (Prev): Current Index', index);
 
         if (index === -1) return;
@@ -1675,18 +1686,27 @@ export class JellyfinPlayer extends EventEmitter {
         const diff = currentTicks - chapterStart;
         log.debug('Chapter Debug: Diff from start', diff);
 
-        // If we are more than 3 seconds into the chapter, restart event
-        // 3 seconds = 30,000,000 ticks
-        if (diff > 30000000) {
+        // STICKY CHAPTER SEEK PROTECTION (Bypasses restart block if user clicks quickly)
+        const now = Date.now();
+        const isRepeatedClick = this._lastChapterSeekTime && (now - this._lastChapterSeekTime < 2500);
+
+        // If we are more than 3 seconds into the chapter AND it's not a rapid repeated click, restart current chapter.
+        // On Tizen, keyframe seeking can make us land up to 8-10 seconds after the target chapter start.
+        // Therefore, if the user repeatedly clicks "Previous Chapter" (within 2.5 seconds),
+        // we bypass the restart protection entirely and skip to the previous chapter.
+        if (diff > 30000000 && !isRepeatedClick) {
             log.info('Restarting current chapter:', currentChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(chapterStart);
         } else if (index > 0) {
             // Go to previous chapter
             const prevChapter = this._chapters[index - 1];
             log.info('Skipping to previous chapter:', prevChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(prevChapter.StartPositionTicks);
         } else {
              // First chapter, just seek to start
+             this._lastChapterSeekTime = now;
              this.seek(0);
         }
     }
