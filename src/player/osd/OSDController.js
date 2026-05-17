@@ -477,6 +477,29 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
+            /*
+             * ========================================================================
+             * TV SYNTHESIZED GHOST CLICK GUARD
+             * ========================================================================
+             * On WebOS/Tizen, pressing the remote OK button on a focused element
+             * synthesizes a native click event at coordinates clientX = 0, clientY = 0.
+             * Since we handle Enter/OK keydown events 100% in JS for all OSD rows
+             * (via handleInput('enter')), executing actions for these ghost clicks
+             * would trigger them twice in rapid succession.
+             * 
+             * This double-execution is extremely noticeable for cumulative,
+             * non-idempotent actions like skip forward and skip backward (fastForward /
+             * rewind), which would seek by double the user-configured step.
+             * 
+             * A real user cursor or mouse click can never land precisely at the
+             * coordinate (0, 0) of the viewport. Thus, we safely discard all
+             * synthesized click events with (0, 0) coordinates.
+             * ========================================================================
+             */
+            if (e.clientX === 0 && e.clientY === 0) {
+                return;
+            }
+
             /* 
              * DELIBERATE PHYSICAL CLICK EXEMPTION:
              * We do NOT return early even if 'enableMagicCursor' is disabled.
@@ -557,17 +580,11 @@ export default class OSDController extends Component {
                 this._currentFocusRow = 2;
 
                 /*
-                 * TV SYNTHESIZED CLICK GUARD (seekbar only)
+                 * TV SYNTHESIZED CLICK GUARD (redundant, handled globally)
                  *
-                 * On WebOS/Tizen, pressing OK synthesizes a click at clientX=0, clientY=0.
-                 * Our seek math computes (0 - rect.left) / rect.width → 0% → seeks to start.
-                 * A real magic cursor click can never land at the absolute top-left corner
-                 * of the viewport, so (0,0) is an unambiguous signature of a rogue event.
-                 * Block it here — inside the slider path only — so button clicks are unaffected.
+                 * Any synthesized OK ghost click (clientX=0, clientY=0) is already discarded
+                 * at the very top of the click handler, so it never reaches this block.
                  */
-                if (e.clientX === 0 && e.clientY === 0) {
-                    return;
-                }
 
                 const slider = sliderContainer.querySelector('input[type="range"]');
                 if (slider) {
@@ -1298,30 +1315,39 @@ export default class OSDController extends Component {
 
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
-            /*
-             * The ghost click from this OK press fires on whatever holds DOM focus
-             * right now. hide() already pre-parked focus on Play/Pause for 'always'
-             * and 'timeout' (after 10 s) modes, so the ghost click hits the correct
-             * button. For 'remember' mode, focus stayed on the last button — same
-             * as the original behaviour before this feature was added.
-             */
             if (e) e.preventDefault();
             this.show();
             this._updateFocus();
 
             /*
              * ========================================================================
-             * SEEKBAR OK GHOST-CLICK EXEMPTION
+             * UNIFIED KEYBOARD OK/ENTER DISPATCH WHEN WAKING OSD
              * ========================================================================
-             * When focus is parked on the seekbar (Row 2), the browser's synthesized
-             * ghost click will hit the seekbar slider container (or input element), 
-             * which does NOT trigger play/pause (it seeks to point or does nothing).
-             * To make pressing OK on a hidden seekbar behave identically to pressing
-             * OK on a visible seekbar, we explicitly trigger the togglePlay action here.
+             * When the OSD is hidden, pressing OK/Enter must wake the OSD and
+             * immediately execute the action of whatever holds the pre-parked focus.
+             * Since we discard the TV browser's synthesized ghost clicks globally
+             * to prevent double-execution, we must execute the focused action
+             * entirely in JavaScript during the wake-up sequence.
              * ========================================================================
              */
             if (this._currentFocusRow === 2) {
+                // Seekbar row: OK = toggle play/pause
                 this._executeAction('togglePlay');
+            } else if (this._currentFocusRow === 1) {
+                // Controls row: execute focused action (e.g. play/pause or subtitles)
+                const controls = this._getControls();
+                const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                }
+            } else if (this._currentFocusRow === 0) {
+                // Header row (back button)
+                const btn = this._cachedHeaderRow[0];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                } else {
+                    this._executeAction('exit');
+                }
             }
 
             return true;
