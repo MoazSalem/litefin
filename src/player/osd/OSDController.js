@@ -1308,6 +1308,22 @@ export default class OSDController extends Component {
             if (e) e.preventDefault();
             this.show();
             this._updateFocus();
+
+            /*
+             * ========================================================================
+             * SEEKBAR OK GHOST-CLICK EXEMPTION
+             * ========================================================================
+             * When focus is parked on the seekbar (Row 2), the browser's synthesized
+             * ghost click will hit the seekbar slider container (or input element), 
+             * which does NOT trigger play/pause (it seeks to point or does nothing).
+             * To make pressing OK on a hidden seekbar behave identically to pressing
+             * OK on a visible seekbar, we explicitly trigger the togglePlay action here.
+             * ========================================================================
+             */
+            if (this._currentFocusRow === 2) {
+                this._executeAction('togglePlay');
+            }
+
             return true;
         }
 
