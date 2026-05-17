@@ -318,7 +318,8 @@ class SettingsPage extends Page {
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
-                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }
+                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -2573,7 +2574,8 @@ class SettingsPage extends Page {
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
-                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' }
+                                { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

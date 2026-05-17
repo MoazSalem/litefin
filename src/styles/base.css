@@ -71,6 +71,7 @@ html[data-ui-font="retrotech"] { --jf-font-family: 'RETROTECH', sans-serif; }
 html[data-ui-font="kitty"] { --jf-font-family: 'Kitty', cursive; }
 html[data-ui-font="inter"] { --jf-font-family: 'Inter', sans-serif; }
 html[data-ui-font="proxima"] { --jf-font-family: 'Proxima Nova', sans-serif; }
+html[data-ui-font="baloo"] { --jf-font-family: 'Baloo Bhaijaan 2', sans-serif; }
 
 html {
     /* Apply global font-family here so it inherits downwards to * */

@@ -226,6 +226,12 @@ export function getTextStyles() {
         case 'proxima':
             styles.push({ className: 'font-proxima' });
             break;
+        case 'baloo':
+            /* -------------------------------------------------------------
+               Baloo Bhaijaan 2 font option injected into styles array
+               ------------------------------------------------------------- */
+            styles.push({ className: 'font-baloo' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -404,6 +410,7 @@ const fontClasses = [
     'font-kitty',
     'font-inter',
     'font-proxima',
+    'font-baloo',
     'font-default'
 ];
 
@@ -490,6 +497,11 @@ export default {
                 return 'font-inter';
             case 'proxima':
                 return 'font-proxima';
+            case 'baloo':
+                /* -------------------------------------------------------------
+                   Map internal 'baloo' ID to '.font-baloo' class name
+                   ------------------------------------------------------------- */
+                return 'font-baloo';
             default:
                 return 'font-default';
         }
@@ -527,6 +539,11 @@ export default {
                 return 'Inter';
             case 'proxima':
                 return 'Proxima Nova';
+            case 'baloo':
+                /* -------------------------------------------------------------
+                   Map internal 'baloo' ID to the CSS font-family name
+                   ------------------------------------------------------------- */
+                return 'Baloo Bhaijaan 2';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override

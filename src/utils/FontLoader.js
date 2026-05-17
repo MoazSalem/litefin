@@ -31,7 +31,11 @@ class FontLoader {
             retrotech: 'RETROTECH',
             kitty: 'Kitty',
             inter: 'Inter',
-            proxima: 'Proxima Nova'
+            proxima: 'Proxima Nova',
+            /* ---------------------------------------------------------
+               Baloo Bhaijaan 2 - Rounded high-quality font
+               --------------------------------------------------------- */
+            baloo: 'Baloo Bhaijaan 2'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls
