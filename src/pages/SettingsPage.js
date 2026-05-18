@@ -883,6 +883,101 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!--
+                  =============================================================================
+                  REMOTE BUTTON MAPPING SECTION
+                  =============================================================================
+                  This premium, Apple-inspired interface panel enables TV owners to customize the
+                  exact hardware workflows triggered by the four physical colored buttons (Red,
+                  Green, Yellow, Blue) on standard Samsung Tizen and LG WebOS remote controls.
+                  Fits beautifully within our sleek dark mode dashboard.
+                -->
+                <h3 class="setting-section-title" style="margin-top: 40px;" data-i18n="HeaderRemoteButtons">${i18n.t('HeaderRemoteButtons') || 'Remote Button Mapping'}</h3>
+
+                <!-- Red Remote Button Action Select Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRemoteRed">${i18n.t('LabelRemoteRed') || 'Red Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteRedActionDescription">${i18n.t('RemoteRedActionDescription') || 'Action to perform when the Red button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'remote-red-select',
+                            [
+                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
+                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
+                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
+                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                            ],
+                            storage.getItem('pref:remoteRedAction') || 'none'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Green Remote Button Action Select Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRemoteGreen">${i18n.t('LabelRemoteGreen') || 'Green Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteGreenActionDescription">${i18n.t('RemoteGreenActionDescription') || 'Action to perform when the Green button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'remote-green-select',
+                            [
+                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
+                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
+                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
+                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                            ],
+                            storage.getItem('pref:remoteGreenAction') || 'none'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Yellow Remote Button Action Select Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRemoteYellow">${i18n.t('LabelRemoteYellow') || 'Yellow Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteYellowActionDescription">${i18n.t('RemoteYellowActionDescription') || 'Action to perform when the Yellow button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'remote-yellow-select',
+                            [
+                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
+                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
+                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
+                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                            ],
+                            storage.getItem('pref:remoteYellowAction') || 'none'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Blue Remote Button Action Select Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRemoteBlue">${i18n.t('LabelRemoteBlue') || 'Blue Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteBlueActionDescription">${i18n.t('RemoteBlueActionDescription') || 'Action to perform when the Blue button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'remote-blue-select',
+                            [
+                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
+                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
+                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
+                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                            ],
+                            storage.getItem('pref:remoteBlueAction') || 'none'
+                        )}
+                    </div>
+                </div>
             </div>
         `;
     }
@@ -4336,6 +4431,12 @@ class SettingsPage extends Page {
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
             'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
+            
+            // Centralized mappings for TV hardware remote control color buttons
+            'remote-red-select': { key: 'pref:remoteRedAction', type: 'local', triggerEvent: true },
+            'remote-green-select': { key: 'pref:remoteGreenAction', type: 'local', triggerEvent: true },
+            'remote-yellow-select': { key: 'pref:remoteYellowAction', type: 'local', triggerEvent: true },
+            'remote-blue-select': { key: 'pref:remoteBlueAction', type: 'local', triggerEvent: true },
             'time-format-select': { key: 'timeFormat', type: 'player' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()

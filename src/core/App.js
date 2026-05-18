@@ -47,6 +47,7 @@ import { cssVarsPolyfill } from '../utils/CssVarsPolyfill.js';
 import { versionChecker } from '../utils/VersionChecker.js';
 import { globalClock } from '../ui/GlobalClock.js';
 import { smartHubManager } from '../tizen/SmartHubManager.js';
+import { remoteButtonManager } from './RemoteButtonManager.js';
 
 const log = logger.create('App');
 
@@ -158,6 +159,18 @@ class App {
         // Must be initialized after StorageService so it can read delay preferences.
         const { screensaverManager } = await import('./ScreensaverManager.js');
         screensaverManager.init();
+
+        /*
+         * ============================================================================
+         * PHYSICAL REMOTE BUTTON ENGINE INITIALIZATION
+         * ============================================================================
+         * Initialize the RemoteButtonManager engine to begin capture of Red, Green,
+         * Yellow, and Blue button events propagated from Samsung Tizen / LG WebOS
+         * hardware remote adapters. Requires StorageService to be fully operational
+         * to load custom button functions successfully.
+         * ============================================================================
+         */
+        remoteButtonManager.init();
 
         // Initialize Global Clock — persistent time display above all UI
         globalClock.init();
