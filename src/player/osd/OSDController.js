@@ -2674,10 +2674,20 @@ export default class OSDController extends Component {
             const lastChapter = chapters[chapters.length - 1];
             const lastChapterTicks = lastChapter.StartPositionTicks || 0;
 
-            // Sanity check: the last chapter must start at least 80% into the
-            // episode and leave at least 5 s before the end, otherwise ignore it
-            // and fall through to the time-based method.
-            const minChapterOffsetTicks = durationTicks * 0.8;
+            /*
+             * =========================================================================
+             * CHAPTER SANITY CHECK & THRESHOLD
+             * =========================================================================
+             * To avoid popping up the dialog too early during normal content, we 
+             * enforce that the last chapter (credits/outro) must start at or after 
+             * 90% of the total episode duration.
+             *
+             * If the final chapter starts BEFORE this 90% mark (i.e. it's an unusually 
+             * long final chapter or incorrectly placed marker), we discard it and 
+             * fall back to the standard time-based countdown trigger (e.g. 30 seconds).
+             * =========================================================================
+             */
+            const minChapterOffsetTicks = durationTicks * 0.9;
             const MIN_REMAINING = 5 * TICKS_PER_SECOND;
             if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
                 showAtTicks = lastChapterTicks;
