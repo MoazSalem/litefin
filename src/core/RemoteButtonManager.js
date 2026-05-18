@@ -15,8 +15,9 @@ import { eventBus } from './EventBus.js';
 import { router } from './Router.js';
 import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
-import { platformInfo } from '../utils/PlatformInfo.js';
 import { screensaverManager } from './ScreensaverManager.js';
+import { toast } from '../ui/Toast.js';
+import { i18n } from '../utils/i18n.js';
 
 // Setup highly targeted logger to trace button mapping execution details
 const log = logger.create('RemoteButtonManager');
@@ -25,6 +26,10 @@ class RemoteButtonManager {
     constructor() {
         // Prevent double-initialization scenarios during hot reloading or app re-starts
         this._initialized = false;
+        
+        // Track customizable Sleep Timer parameters dynamically
+        this._sleepTimerMinutes = 0;
+        this._sleepTimerInterval = null;
     }
 
     /**
@@ -87,10 +92,10 @@ class RemoteButtonManager {
                 this._toggleScreensaver();
                 break;
 
-            case 'powerOff':
-                // 4. Turn Off Screen - Direct panel sleep request to hardware
-                log.info('Power sleep Mapped: Initializing TV display sleep command.');
-                this._turnOffScreen();
+            case 'sleepTimer':
+                // 4. Sleep Timer - Increments shutdown/screensaver countdown
+                log.info('Sleep Timer Mapped: Adding 5 minutes to countdown timer.');
+                this._addSleepTimerTime();
                 break;
 
             case 'playerSubtitles':
@@ -200,85 +205,121 @@ class RemoteButtonManager {
     }
 
     /**
-     * Issues native system requests to put the display panel to sleep.
-     * Safely checks environment and isolates platform-specific Luna or Tizen APIs.
+     * ========================================================================
+     * HIGH-FIDELITY SLEEP TIMER CONTROLLER
+     * ========================================================================
+     * Dynamically adds 5 minutes to the sleep timer on each press.
+     * If the sleep timer exceeds 120 minutes (2 hours), it resets to 0 (disabled).
+     * Displays real-time feedback to the user via elegant Toast notifications.
+     * When the countdown finishes, playback is paused, and the screensaver starts.
+     * ========================================================================
      * @private
      */
-    _turnOffScreen() {
-        log.info('Requesting TV hardware to turn off display screen...');
-
-        // 1. LG WebOS Luna Service API Path
-        if (platformInfo.isWebOS) {
-            log.debug('Executing WebOS Luna service request...');
-            
-            // Check global window scope for webOS library injection availability
-            if (window.webOS && window.webOS.service) {
-                try {
-                    // Triggers the com.webos.service.tvpower service to put the panel to sleep
-                    window.webOS.service.request('luna://com.webos.service.tvpower', {
-                        method: 'power/turnOffScreen',
-                        parameters: {},
-                        onSuccess: (inResponse) => {
-                            log.info('WebOS: tvpower/turnOffScreen call successful.', inResponse);
-                        },
-                        onFailure: (inError) => {
-                            log.error('WebOS: Failed tvpower/turnOffScreen request:', inError);
-                        }
-                    });
-                } catch (e) {
-                    log.error('WebOS: Unexpected error during Luna service request:', e);
-                }
-            } else {
-                log.warn('WebOS: window.webOS or service object is unavailable in current scope.');
-            }
-        } 
-        // 2. Samsung Tizen Power API Path
-        else if (platformInfo.isTizen) {
-            log.debug('Executing Samsung Tizen power request...');
-            
-            // Verify Samsung Tizen system global object exists
-            if (typeof tizen !== 'undefined' && tizen.power) {
-                try {
-                    // Extract Tizen OS version to handle legacy API differences
-                    const tizenVer = platformInfo.tizenVersion;
-                    
-                    /*
-                     * -----------------------------------------------------------------
-                     * TIZEN SCREEN POWER LEGACY API FALLBACK
-                     * -----------------------------------------------------------------
-                     * Samsung Tizen versions prior to 4.0 (like 2.4 or 3.0) do not
-                     * support the unified `tizen.power.request('SCREEN', 'SCREEN_OFF')`
-                     * API method. They rely on the dedicated `tizen.power.turnScreenOff()`
-                     * interface instead. We evaluate version and fall back gracefully.
-                     * -----------------------------------------------------------------
-                     */
-                    if (tizenVer !== null && tizenVer < 4) {
-                        log.info(`Tizen OS version < 4 detected (${tizenVer}). Using legacy turnScreenOff API.`);
-                        if (typeof tizen.power.turnScreenOff === 'function') {
-                            tizen.power.turnScreenOff();
-                            log.info('Tizen: tizen.power.turnScreenOff() executed successfully.');
-                        } else {
-                            log.warn('Tizen: turnScreenOff function is missing on tizen.power object.');
-                        }
-                    } else {
-                        log.info(`Tizen OS version >= 4 detected (${tizenVer || 'unknown'}). Using modern request API.`);
-                        tizen.power.request('SCREEN', 'SCREEN_OFF');
-                        log.info('Tizen: tizen.power.request SCREEN_OFF succeeded.');
-                    }
-                } catch (error) {
-                    log.error('Tizen: Failed to put screen to sleep:', error);
-                }
-            } else {
-                log.warn('Tizen: tizen.power API object is missing or unprivileged.');
-            }
-        } 
-        // 3. Standard Browser Fallback
-        else {
-            log.info('Browser: Ignoring screen turn-off command in developer browser environment.');
+    _addSleepTimerTime() {
+        // Clear any running interval first to avoid race conditions
+        if (this._sleepTimerInterval) {
+            clearInterval(this._sleepTimerInterval);
+            this._sleepTimerInterval = null;
         }
+
+        // Add 5 minutes to the active sleep timer
+        this._sleepTimerMinutes += 5;
+
+        // Reset to zero if we exceed 2 hours (120 minutes)
+        if (this._sleepTimerMinutes > 120) {
+            this._sleepTimerMinutes = 0;
+            log.info('Sleep Timer: Exceeded 120 minutes limit. Resetting to 0 (Disabled).');
+            toast.show(i18n.t('SleepTimerDisabled') || 'Sleep Timer: Off', 3000);
+            return;
+        }
+
+        log.info(`Sleep Timer: Set to ${this._sleepTimerMinutes} minutes.`);
+
+        // Format a beautiful, user-facing time message
+        let timeString = `${this._sleepTimerMinutes} min`;
+        if (this._sleepTimerMinutes >= 60) {
+            const hours = Math.floor(this._sleepTimerMinutes / 60);
+            const mins = this._sleepTimerMinutes % 60;
+            timeString = mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+        }
+
+        toast.show(`${i18n.t('SleepTimerSet') || 'Sleep Timer'}: ${timeString}`, 3000);
+
+        // Start countdown interval ticking every 1 minute (60,000 ms)
+        this._sleepTimerInterval = setInterval(() => {
+            if (this._sleepTimerMinutes > 0) {
+                this._sleepTimerMinutes -= 1;
+                log.info(`Sleep Timer Tick: ${this._sleepTimerMinutes} minutes remaining.`);
+
+                if (this._sleepTimerMinutes === 0) {
+                    this._triggerSleepTimerTimeout();
+                }
+            } else {
+                this._clearSleepTimer();
+            }
+        }, 60000);
+    }
+
+    /**
+     * Helper to clear sleep timer safely.
+     * @private
+     */
+    _clearSleepTimer() {
+        if (this._sleepTimerInterval) {
+            clearInterval(this._sleepTimerInterval);
+            this._sleepTimerInterval = null;
+        }
+        this._sleepTimerMinutes = 0;
+    }
+
+    /**
+     * Executes the actual sleep timeout workflow:
+     * 1. Pauses any active media playback globally.
+     * 2. Force-triggers the screensaver overlay.
+     * 3. Displays a final confirmation toast.
+     * @private
+     */
+    _triggerSleepTimerTimeout() {
+        log.info('Sleep Timer Finished! Pausing playback and activating screensaver.');
+
+        // Clean up the timer resources completely
+        this._clearSleepTimer();
+
+        // 1. Pause active video playback safely
+        try {
+            const currentPage = router.getCurrentPage();
+            if (currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd)) {
+                log.info('Active PlayerPage detected. Initiating remote pause sequence.');
+                if (typeof currentPage._onRemotePause === 'function') {
+                    currentPage._onRemotePause();
+                } else if (currentPage._player && typeof currentPage._player.pause === 'function') {
+                    currentPage._player.pause();
+                }
+            } else {
+                // If not on PlayerPage but we want to be safe, emit the global key:pause event
+                log.info('No active PlayerPage in focus. Emitting global playPause/pause key command.');
+                eventBus.emit('key:pause');
+            }
+        } catch (err) {
+            log.error('Failed to pause playback during sleep timer execution:', err);
+        }
+
+        // 2. Start/show screensaver
+        try {
+            if (!screensaverManager.isShowing) {
+                log.info('Launching screensaver manager...');
+                screensaverManager.show();
+            }
+        } catch (err) {
+            log.error('Failed to trigger screensaver during sleep timer execution:', err);
+        }
+
+        // 3. Inform the user with a gentle notification
+        toast.show(i18n.t('SleepTimerActivated') || 'Sleep Timer: Goodnight!', 5000);
     }
 }
 
 // Export singleton engine instance to maintain consistency across scripts
-export const remoteButtonManager = new RemoteButtonManager();
+const remoteButtonManager = new RemoteButtonManager();
+export { remoteButtonManager };
 export default remoteButtonManager;
