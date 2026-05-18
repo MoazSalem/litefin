@@ -79,7 +79,7 @@ class SettingsPage extends Page {
             {
                 id: 'appearance',
                 label: i18n.t('Display'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="13.5" cy="6.5" r="2.5"/><path d="M20.38 10.32a.86.86 0 0 0-.25-.43l-1.62-1.66c-.46-.46-1.12-.58-1.57-.28l-.34.23c-.56.37-1.32.17-1.56-.46l-.16-.62c-.17-.67-.78-1.1-1.47-1.1H13c-.69 0-1.3.43-1.47 1.1l-.16.62c-.24.63-.99.83-1.56.46l-.33-.23c-.46-.3-1.12-.18-1.57.28L6.29 9.89a.86.86 0 0 0-.25.43 3.99 3.99 0 0 0 4.6 5.56l.32-.09c.64-.18 1.22.25 1.34.9l.06.33c.12.63.74 1.08 1.4.98l.61-.1c.64-.1.97-.78.7-1.37l-.2-.43c-.27-.6.03-1.32.64-1.52l.27-.09a4.01 4.01 0 0 0 3.6-4.17Z"/><path d="M2 22h20"/></svg>'
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20Z" fill="currentColor"/></svg>'
             },
             {
                 id: 'home',
@@ -90,6 +90,11 @@ class SettingsPage extends Page {
                 id: 'sidebar',
                 label: i18n.t('Sidebar') || 'Sidebar',
                 icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
+            },
+            {
+                id: 'controls',
+                label: i18n.t('Controls') || 'Controls',
+                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="14" cy="6" r="2.5" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="8" cy="12" r="2.5" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="16" cy="18" r="2.5" fill="currentColor"/></svg>'
             },
             {
                 id: 'player',
@@ -167,6 +172,8 @@ class SettingsPage extends Page {
                 return this._renderHomeTab();
             case 'sidebar':
                 return this._renderSidebarTab();
+            case 'controls':
+                return this._renderControlsTab();
             case 'player':
                 return this._renderPlayerTab();
             case 'subtitles':
@@ -716,61 +723,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- controls Section -->
-                <h3 class="setting-section-title" data-i18n="controls">${i18n.t('controls')}</h3>                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="HoverScrollNavigation">${i18n.t('HoverScrollNavigation') || 'Scroll Navigation'}</span>
-                        <span class="setting-description" data-i18n="HoverScrollNavigationDescription">${i18n.t('HoverScrollNavigationDescription') || 'Traverse vertical lists and rows using the scroll wheel or magic remote wheel.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hoverScrollNavigation') === 'true' ? 'active' : ''}" 
-                                id="toggle-hover-scroll-nav" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnablePlayerCursor">${i18n.t('EnablePlayerCursor') || 'Enable Player Cursor'}</span>
-                        <span class="setting-description" data-i18n="EnablePlayerCursorDescription">${i18n.t('EnablePlayerCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableMagicCursor') ? 'active' : ''}" 
-                                id="toggle-magic-cursor" 
-                                data-setting="enableMagicCursor"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
-                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableHoverTrickplay') ? 'active' : ''}" 
-                                id="toggle-hover-trickplay" 
-                                data-setting="enableHoverTrickplay"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelFocusFirstItemInLibrary">${i18n.t('LabelFocusFirstItemInLibrary') || 'Focus first item in Library'}</span>
-                        <span class="setting-description" data-i18n="FocusFirstItemInLibraryDescription">${i18n.t('FocusFirstItemInLibraryDescription') || 'Automatically focus the first item when entering a library instead of the navigation tabs.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:focusFirstItemLibrary') !== 'false' ? 'active' : ''}" 
-                                 id="toggle-focus-first-item-library" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
                 <!-- Time Section -->
                 <h3 class="setting-section-title" data-i18n="Time">${i18n.t('Time') || 'Time'}</h3>
 
@@ -883,129 +835,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-                <!--
-                  =============================================================================
-                  REMOTE BUTTON MAPPING SECTION
-                  =============================================================================
-                  This premium, Apple-inspired interface panel enables TV owners to customize the
-                  exact hardware workflows triggered by the four physical colored buttons (Red,
-                  Green, Yellow, Blue) on standard Samsung Tizen and LG WebOS remote controls.
-                  Fits beautifully within our sleek dark mode dashboard.
-                -->
-                <h3 class="setting-section-title" style="margin-top: 40px;" data-i18n="HeaderRemoteButtons">${i18n.t('HeaderRemoteButtons') || 'Remote Button Mapping'}</h3>
-
-                <!-- Red Remote Button Action Select Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelRemoteRed">${i18n.t('LabelRemoteRed') || 'Red Button Action'}</span>
-                        <span class="setting-description" data-i18n="RemoteRedActionDescription">${i18n.t('RemoteRedActionDescription') || 'Action to perform when the Red button on the remote is pressed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'remote-red-select',
-                            [
-                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
-                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
-                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
-                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
-                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
-                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
-                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
-                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
-                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
-                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
-                            ],
-                            storage.getItem('pref:remoteRedAction') || 'none'
-                        )}
-                    </div>
-                </div>
-
-                <!-- Green Remote Button Action Select Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                         <span class="setting-name" data-i18n="LabelRemoteGreen">${i18n.t('LabelRemoteGreen') || 'Green Button Action'}</span>
-                        <span class="setting-description" data-i18n="RemoteGreenActionDescription">${i18n.t('RemoteGreenActionDescription') || 'Action to perform when the Green button on the remote is pressed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'remote-green-select',
-                            [
-                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
-                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
-                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
-                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
-                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
-                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
-                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
-                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
-                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
-                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
-                            ],
-                            storage.getItem('pref:remoteGreenAction') || 'none'
-                        )}
-                    </div>
-                </div>
-
-                <!-- Yellow Remote Button Action Select Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                         <span class="setting-name" data-i18n="LabelRemoteYellow">${i18n.t('LabelRemoteYellow') || 'Yellow Button Action'}</span>
-                        <span class="setting-description" data-i18n="RemoteYellowActionDescription">${i18n.t('RemoteYellowActionDescription') || 'Action to perform when the Yellow button on the remote is pressed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'remote-yellow-select',
-                            [
-                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
-                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
-                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
-                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
-                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
-                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
-                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
-                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
-                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
-                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
-                            ],
-                            storage.getItem('pref:remoteYellowAction') || 'none'
-                        )}
-                    </div>
-                </div>
-
-                <!-- Blue Remote Button Action Select Row -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                         <span class="setting-name" data-i18n="LabelRemoteBlue">${i18n.t('LabelRemoteBlue') || 'Blue Button Action'}</span>
-                        <span class="setting-description" data-i18n="RemoteBlueActionDescription">${i18n.t('RemoteBlueActionDescription') || 'Action to perform when the Blue button on the remote is pressed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'remote-blue-select',
-                            [
-                                { value: 'none', label: i18n.t('OptionNone') || 'None' },
-                                { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
-                                { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
-                                { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
-                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
-                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
-                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
-                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
-                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
-                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
-                            ],
-                            storage.getItem('pref:remoteBlueAction') || 'none'
-                        )}
-                    </div>
-                </div>
             </div>
         `;
     }
@@ -1020,20 +849,6 @@ class SettingsPage extends Page {
 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
-
-                <!-- Application Behavior -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ConfirmAppExitLabel">${i18n.t('ConfirmAppExitLabel') || 'Confirm on Exit'}</span>
-                        <span class="setting-description" data-i18n="ConfirmAppExitDescription">${i18n.t('ConfirmAppExitDescription') || 'Show a confirmation prompt before closing the application.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:confirmExit') === 'true' ? 'active' : ''}" 
-                                id="toggle-confirm-exit" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1460,6 +1275,179 @@ class SettingsPage extends Page {
                         <div class="setting-label">
                             <div class="loading-spinner small"></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    /**
+     * =========================================================================
+     * Premium Controls and Remote Button Mapping Configuration Pane
+     * =========================================================================
+     * Provides a sleek, Apple-inspired interface to configure user interface
+     * interaction behaviors (e.g. scroll wheel list navigation, hover-activated
+     * seek trickplay seekbars) and physical TV remote controller color buttons
+     * (Red, Green, Yellow, Blue). Fully responsive, layout-aware, and aligned
+     * with standard design systems.
+     *
+     * @returns {string} The fully compiled HTML template representing active tab UI.
+     */
+    _renderControlsTab() {
+        // Retrieve localized keys or fallback gracefully to default values.
+        const scrollNavEnabled = storage.getItem('pref:hoverScrollNavigation') === 'true';
+        const magicCursorEnabled = PlayerSettings.get('enableMagicCursor');
+        const hoverTrickplayEnabled = PlayerSettings.get('enableHoverTrickplay');
+        const focusFirstItemEnabled = storage.getItem('pref:focusFirstItemLibrary') !== 'false';
+
+        // Prepare physical remote button configurations.
+        const redAction = storage.getItem('pref:remoteRedAction') || 'none';
+        const greenAction = storage.getItem('pref:remoteGreenAction') || 'none';
+        const yellowAction = storage.getItem('pref:remoteYellowAction') || 'none';
+        const blueAction = storage.getItem('pref:remoteBlueAction') || 'none';
+
+        // Define dropdown options representing valid remote actions.
+        const remoteButtonOptions = [
+            { value: 'none', label: i18n.t('OptionNone') || 'None' },
+            { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
+            { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
+            { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
+            { value: 'sleepTimer', label: i18n.t('OptionSleepTimer') || 'Sleep Timer (+5 min)' },
+            { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
+            { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
+            { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
+            {
+                value: 'playerSubtitleOffset',
+                label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu'
+            },
+            { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
+            { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
+            { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
+        ];
+
+        return `
+            <div class="settings-tab-content">
+                <!-- Premium Section Title Header -->
+                <h2 class="content-title" data-i18n="Controls">${i18n.t('Controls') || 'Controls'}</h2>
+
+                <!-- Application Behavior -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ConfirmAppExitLabel">${i18n.t('ConfirmAppExitLabel') || 'Confirm on Exit'}</span>
+                        <span class="setting-description" data-i18n="ConfirmAppExitDescription">${i18n.t('ConfirmAppExitDescription') || 'Show a confirmation prompt before closing the application.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:confirmExit') === 'true' ? 'active' : ''}" 
+                                id="toggle-confirm-exit" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Scroll Navigation Configuration Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HoverScrollNavigation">${i18n.t('HoverScrollNavigation') || 'Scroll Navigation'}</span>
+                        <span class="setting-description" data-i18n="HoverScrollNavigationDescription">${i18n.t('HoverScrollNavigationDescription') || 'Traverse vertical lists and rows using the scroll wheel or magic remote wheel.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${scrollNavEnabled ? 'active' : ''}" 
+                                id="toggle-hover-scroll-nav" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- LG Magic Remote / Samsung Pointer Emulation Cursor Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnablePlayerCursor">${i18n.t('EnablePlayerCursor') || 'Enable Player Cursor'}</span>
+                        <span class="setting-description" data-i18n="EnablePlayerCursorDescription">${i18n.t('EnablePlayerCursorDescription') || 'Allow cursor/mouse interaction within the player (clicking to pause, waking the OSD on move).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${magicCursorEnabled ? 'active' : ''}" 
+                                id="toggle-magic-cursor" 
+                                data-setting="enableMagicCursor"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Seekbar Hover Trickplay Preview Frame Row -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableHoverTrickplay">${i18n.t('EnableHoverTrickplay') || 'Hover Trickplay'}</span>
+                        <span class="setting-description" data-i18n="EnableHoverTrickplayDescription">${i18n.t('EnableHoverTrickplayDescription') || 'Show timestamp and trickplay images when hovering over the seekbar with the mouse.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${hoverTrickplayEnabled ? 'active' : ''}" 
+                                id="toggle-hover-trickplay" 
+                                data-setting="enableHoverTrickplay"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Smart Library Initial Focus Management Target -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelFocusFirstItemInLibrary">${i18n.t('LabelFocusFirstItemInLibrary') || 'Focus first item in Library'}</span>
+                        <span class="setting-description" data-i18n="FocusFirstItemInLibraryDescription">${i18n.t('FocusFirstItemInLibraryDescription') || 'Automatically focus the first item when entering a library instead of the navigation tabs.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${focusFirstItemEnabled ? 'active' : ''}" 
+                                 id="toggle-focus-first-item-library" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ─────────────────────────────────────────────────────────────
+                     HARDWARE REMOTE KEYMAP ASSIGNMENTS
+                     ───────────────────────────────────────────────────────────── -->
+                <h3 class="setting-section-title" style="margin-top: 40px;" data-i18n="HeaderRemoteButtons">${i18n.t('HeaderRemoteButtons') || 'Remote Button Mapping'}</h3>
+
+                <!-- Red Remote Button Action Assignment Dropdown -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelRemoteRed">${i18n.t('LabelRemoteRed') || 'Red Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteRedActionDescription">${i18n.t('RemoteRedActionDescription') || 'Action to perform when the Red button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('remote-red-select', remoteButtonOptions, redAction)}
+                    </div>
+                </div>
+
+                <!-- Green Remote Button Action Assignment Dropdown -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                         <span class="setting-name" data-i18n="LabelRemoteGreen">${i18n.t('LabelRemoteGreen') || 'Green Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteGreenActionDescription">${i18n.t('RemoteGreenActionDescription') || 'Action to perform when the Green button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('remote-green-select', remoteButtonOptions, greenAction)}
+                    </div>
+                </div>
+
+                <!-- Yellow Remote Button Action Assignment Dropdown -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                         <span class="setting-name" data-i18n="LabelRemoteYellow">${i18n.t('LabelRemoteYellow') || 'Yellow Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteYellowActionDescription">${i18n.t('RemoteYellowActionDescription') || 'Action to perform when the Yellow button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('remote-yellow-select', remoteButtonOptions, yellowAction)}
+                    </div>
+                </div>
+
+                <!-- Blue Remote Button Action Assignment Dropdown -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                         <span class="setting-name" data-i18n="LabelRemoteBlue">${i18n.t('LabelRemoteBlue') || 'Blue Button Action'}</span>
+                        <span class="setting-description" data-i18n="RemoteBlueActionDescription">${i18n.t('RemoteBlueActionDescription') || 'Action to perform when the Blue button on the remote is pressed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown('remote-blue-select', remoteButtonOptions, blueAction)}
                     </div>
                 </div>
             </div>
@@ -3439,11 +3427,11 @@ class SettingsPage extends Page {
                 if (indicatorAnimItem) indicatorAnimItem.style.display = newValue ? '' : 'none';
                 if (intervalItem) intervalItem.style.display = newValue ? '' : 'none';
                 if (countItem) countItem.style.display = newValue ? '' : 'none';
-                
+
                 // MDBList has an additional check to make sure the server plugin is installed.
                 if (mdbItem)
                     mdbItem.style.display = newValue && pluginManager.isEnabled('mdblist-ratings') ? '' : 'none';
-                
+
                 // Toggle the ignore watched filter setting visibility.
                 if (ignoreWatchedItem) ignoreWatchedItem.style.display = newValue ? '' : 'none';
 
@@ -3583,10 +3571,10 @@ class SettingsPage extends Page {
                 // Read current filter state.
                 const isEnabled = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
                 const newValue = !isEnabled;
-                
+
                 // Save new setting state as a serialized string.
                 storage.setItem('pref:heroCarouselIgnoreWatched', newValue.toString());
-                
+
                 // Toggle active state classes to visual elements.
                 heroCarouselIgnoreWatchedBtn.classList.toggle('active', newValue);
                 log.info(`Hero Carousel Ignore Watched set to: ${newValue}`);
@@ -3664,7 +3652,7 @@ class SettingsPage extends Page {
                 if (logoSizeContainer) {
                     logoSizeContainer.style.display = newValue ? '' : 'none';
                 }
-                
+
                 // Invalidate focus cache so the newly visible items can be navigated to
                 focusManager.invalidateCache('settings-content');
             });
@@ -4459,7 +4447,7 @@ class SettingsPage extends Page {
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
             'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
-            
+
             // Centralized mappings for TV hardware remote control color buttons
             'remote-red-select': { key: 'pref:remoteRedAction', type: 'local', triggerEvent: true },
             'remote-green-select': { key: 'pref:remoteGreenAction', type: 'local', triggerEvent: true },
