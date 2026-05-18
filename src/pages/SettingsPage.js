@@ -909,7 +909,14 @@ class SettingsPage extends Page {
                                 { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
                                 { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
                                 { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
+                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
+                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
+                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
+                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
+                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
+                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
+                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
                             ],
                             storage.getItem('pref:remoteRedAction') || 'none'
                         )}
@@ -919,7 +926,7 @@ class SettingsPage extends Page {
                 <!-- Green Remote Button Action Select Row -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelRemoteGreen">${i18n.t('LabelRemoteGreen') || 'Green Button Action'}</span>
+                         <span class="setting-name" data-i18n="LabelRemoteGreen">${i18n.t('LabelRemoteGreen') || 'Green Button Action'}</span>
                         <span class="setting-description" data-i18n="RemoteGreenActionDescription">${i18n.t('RemoteGreenActionDescription') || 'Action to perform when the Green button on the remote is pressed.'}</span>
                     </div>
                     <div class="setting-control">
@@ -930,7 +937,14 @@ class SettingsPage extends Page {
                                 { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
                                 { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
                                 { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
+                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
+                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
+                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
+                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
+                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
+                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
+                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
                             ],
                             storage.getItem('pref:remoteGreenAction') || 'none'
                         )}
@@ -940,7 +954,7 @@ class SettingsPage extends Page {
                 <!-- Yellow Remote Button Action Select Row -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelRemoteYellow">${i18n.t('LabelRemoteYellow') || 'Yellow Button Action'}</span>
+                         <span class="setting-name" data-i18n="LabelRemoteYellow">${i18n.t('LabelRemoteYellow') || 'Yellow Button Action'}</span>
                         <span class="setting-description" data-i18n="RemoteYellowActionDescription">${i18n.t('RemoteYellowActionDescription') || 'Action to perform when the Yellow button on the remote is pressed.'}</span>
                     </div>
                     <div class="setting-control">
@@ -951,7 +965,14 @@ class SettingsPage extends Page {
                                 { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
                                 { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
                                 { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
+                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
+                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
+                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
+                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
+                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
+                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
+                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
                             ],
                             storage.getItem('pref:remoteYellowAction') || 'none'
                         )}
@@ -961,7 +982,7 @@ class SettingsPage extends Page {
                 <!-- Blue Remote Button Action Select Row -->
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelRemoteBlue">${i18n.t('LabelRemoteBlue') || 'Blue Button Action'}</span>
+                         <span class="setting-name" data-i18n="LabelRemoteBlue">${i18n.t('LabelRemoteBlue') || 'Blue Button Action'}</span>
                         <span class="setting-description" data-i18n="RemoteBlueActionDescription">${i18n.t('RemoteBlueActionDescription') || 'Action to perform when the Blue button on the remote is pressed.'}</span>
                     </div>
                     <div class="setting-control">
@@ -972,7 +993,14 @@ class SettingsPage extends Page {
                                 { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
                                 { value: 'playPause', label: i18n.t('OptionPlayPause') || 'Play / Pause' },
                                 { value: 'screensaver', label: i18n.t('OptionScreensaver') || 'Toggle Screensaver' },
-                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' }
+                                { value: 'powerOff', label: i18n.t('OptionPowerOff') || 'Turn Off Screen' },
+                                { value: 'playerSubtitles', label: i18n.t('OptionPlayerSubtitles') || 'Player: Open Subtitle Menu' },
+                                { value: 'playerAudio', label: i18n.t('OptionPlayerAudio') || 'Player: Open Audio Menu' },
+                                { value: 'playerSettings', label: i18n.t('OptionPlayerSettings') || 'Player: Open Settings Menu' },
+                                { value: 'playerSubtitleOffset', label: i18n.t('OptionPlayerSubtitleOffset') || 'Player: Subtitle Offset Menu' },
+                                { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
+                                { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
+                                { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
                             ],
                             storage.getItem('pref:remoteBlueAction') || 'none'
                         )}

@@ -93,11 +93,93 @@ class RemoteButtonManager {
                 this._turnOffScreen();
                 break;
 
+            case 'playerSubtitles':
+                // 5. Open Subtitles track selection overlay menu in active video player
+                log.info('Player Subtitles Mapped: Triggering active subtitle track menu.');
+                this._handlePlayerAction('subtitles');
+                break;
+
+            case 'playerAudio':
+                // 6. Open Audio track selection overlay menu in active video player
+                log.info('Player Audio Mapped: Triggering active audio track menu.');
+                this._handlePlayerAction('audio');
+                break;
+
+            case 'playerSettings':
+                // 7. Open Quick configuration settings overlay menu in active video player
+                log.info('Player Settings Mapped: Triggering active player settings menu.');
+                this._handlePlayerAction('settings');
+                break;
+
+            case 'playerSubtitleOffset':
+                // 8. Toggle Subtitle Offset adjustment overlay menu in active video player
+                log.info('Player Subtitle Offset Mapped: Triggering active subtitle offset toggle.');
+                this._handlePlayerAction('subtitleOffset');
+                break;
+
+            case 'playerQueue':
+                // 9. Open Queue selection modal in active video player
+                log.info('Player Queue Mapped: Triggering active queue overlay.');
+                this._handlePlayerAction('queue');
+                break;
+
+            case 'playerChapters':
+                // 10. Open Chapters list modal in active video player
+                log.info('Player Chapters Mapped: Triggering active chapters list.');
+                this._handlePlayerAction('chapters');
+                break;
+
+            case 'playerPlaybackInfo':
+                // 11. Toggle Stats/Playback Info panel in active video player
+                log.info('Player Playback Info Mapped: Toggling active playback info overlay.');
+                this._handlePlayerAction('playbackInfo');
+                break;
+
             case 'none':
             default:
                 // No custom operation is configured, ignore key press
                 log.debug(`None Mapped: Colored key ${color} ignored.`);
                 break;
+        }
+    }
+
+    /**
+     * ========================================================================
+     * CONTEXT-AWARE MEDIA PLAYER INTERACTION ROUTER
+     * ========================================================================
+     * Processes color remote button workflows that only apply while a video
+     * is playing. Inspects current view router state to fetch the active player,
+     * wakes the OSD, and triggers the corresponding OSD modal menu layer.
+     * ========================================================================
+     * @param {string} actionType - The target menu to open ('subtitles', 'audio', 'settings')
+     * @private
+     */
+    _handlePlayerAction(actionType) {
+        log.info(`Evaluation: Checking player page context for action: ${actionType}`);
+
+        // Fetch the currently active view page from the global single-page Router
+        const currentPage = router.getCurrentPage();
+        
+        // Match player contexts using constructor class checks or fallback properties
+        if (currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd)) {
+            // Retrieve OSDController instance from the active page using getter or internal prop
+            const osd = currentPage.osd || currentPage._osd;
+            if (osd) {
+                log.info(`Active PlayerPage located! Triggering OSD overlay for: ${actionType}`);
+                
+                // Ensure OSD overlays are rendered and visible to the user
+                osd.show();
+                
+                // Reset the auto-hide timer to prevent controls disappearing while viewing menu
+                osd.resetAutoHide();
+                
+                // Directly execute the corresponding built-in OSD action workflow
+                osd._executeAction(actionType);
+            } else {
+                log.warn('Validation Error: Active PlayerPage exists, but OSD instance is missing.');
+            }
+        } else {
+            log.info(`Ignored: Action "${actionType}" only works when video playback is active.`);
         }
     }
 

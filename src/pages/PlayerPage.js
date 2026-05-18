@@ -69,6 +69,18 @@ class PlayerPage extends Page {
         this._secondarySubtitleEndTime = null;
     }
 
+    /**
+     * ========================================================================
+     * OSD CONTROLLER PUBLIC ACCESSOR
+     * ========================================================================
+     * Exposes the active OSD Controller instance to external coordinators
+     * such as the RemoteButtonManager. Enables custom hardware remote mapping.
+     * ========================================================================
+     */
+    get osd() {
+        return this._osd;
+    }
+
     render() {
         return `
             <div class="page player-page">

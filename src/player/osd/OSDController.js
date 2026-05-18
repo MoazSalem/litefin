@@ -1843,6 +1843,9 @@ export default class OSDController extends Component {
                 // Toggle favorite
                 this._toggleFavorite();
                 break;
+            case 'subtitleOffset':
+                this.toggleSubtitleOffset(!this.subtitleOffset.isVisible);
+                break;
             case 'closeSubtitleOffset':
                 this.toggleSubtitleOffset(false);
                 break;
