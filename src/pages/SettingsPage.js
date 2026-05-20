@@ -865,6 +865,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideEpisodeCounts">${i18n.t('HideEpisodeCounts') || 'Hide Episode Counts'}</span>
+                        <span class="setting-description" data-i18n="HideEpisodeCountsDescription">${i18n.t('HideEpisodeCountsDescription') || 'Hide the unplayed episode count badge on series and season cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideEpisodeCounts') === 'true' ? 'active' : ''}" 
+                                 id="toggle-hide-episode-counts" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -3318,6 +3331,34 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // ==========================================
+        // TOGGLE HIDE EPISODE COUNTS
+        // ==========================================
+        //
+        // Accesses the DOM element representing our toggle button for hiding unplayed
+        // episode count badges on media cards. When interacted with, this event listener
+        // will toggle the user's preference state, persist it to localStorage, and 
+        // update the button's toggle class to provide instant Apple-style tactile feedback.
+        const hideEpisodeCountsBtn = this.$('#toggle-hide-episode-counts');
+        
+        // Ensure the button is present in the current view layout before binding.
+        if (hideEpisodeCountsBtn) {
+            hideEpisodeCountsBtn.addEventListener('click', () => {
+                // Read current visibility preference from persistence (defaults to shown/false).
+                const isHidden = storage.getItem('pref:hideEpisodeCounts') === 'true';
+                const newValue = !isHidden;
+                
+                // Save updated preference key so CardRenderer checks this when building card elements.
+                storage.setItem('pref:hideEpisodeCounts', newValue);
+                
+                // Update CSS styling (active state class) for iOS-style slider animation.
+                hideEpisodeCountsBtn.classList.toggle('active', newValue);
+                
+                // Log settings adjustment for user session diagnostics.
+                log.info(`Hide Episode Counts set to: ${newValue}`);
             });
         }
 

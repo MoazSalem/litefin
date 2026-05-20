@@ -354,9 +354,18 @@ class CardRenderer {
             `;
         }
 
-        // Unplayed Count Badge
+        // --- Unplayed Count Badge ---
+        // 
+        // Generates the circular badge on the top-right of media cards.
+        // On series and seasons, this indicates the total unplayed episode count.
+        // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
-        if (item.UserData && item.UserData.UnplayedItemCount > 0) {
+        
+        // Fetch the user preference (defaults to false, meaning counts are shown by default)
+        const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
+        
+        // Only render the count badge if the user hasn't explicitly disabled it
+        if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
         }
 
