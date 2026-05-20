@@ -392,7 +392,73 @@ class EpgGrid {
     }
 
     _setupEventListeners() {
+        // =====================================================================
+        // Dynamic Resize Handling
+        // =====================================================================
+        // Handle window resize to dynamically update the EPG visible boundary dimensions.
+        // This ensures the virtualization window adjusts perfectly when the display size changes.
         window.addEventListener('resize', () => this._updateVisibleDimensions());
+
+        // =====================================================================
+        // Direct Scroll Wheel Interception
+        // =====================================================================
+        // Locate the root EPG grid container to bind mouse wheel and Magic Remote scroll events.
+        const gridContainer = this.container.querySelector('.epg-grid-container');
+        if (gridContainer) {
+            // Bind the wheel event listener directly to the container to handle scrolling.
+            // Using a non-passive listener to allow preventDefault() to override the browser's
+            // native scroll propagation, which prevents the parent page from scrolling.
+            gridContainer.addEventListener(
+                'wheel',
+                (e) => {
+                    // Prevent the native wheel event from bubbling up to .page-content or the document.
+                    // This halts any native parent scroll, resolving the "8-row sticky" boundary limit
+                    // because the parent page is kept perfectly anchored while we manage the virtual coordinate updates.
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Extract raw wheel delta values for calculation.
+                    let deltaY = e.deltaY;
+                    let deltaX = e.deltaX;
+
+                    // Normalize delta values depending on the browser's scroll mode:
+                    // - Mode 0: pixels (direct value, e.g. from trackpads or precise scrolling mice)
+                    // - Mode 1: lines (40px/line, standard wheel clicks)
+                    // - Mode 2: pages (800px/page, full page jumps)
+                    if (e.deltaMode === 1) {
+                        deltaY *= 40; // Normalize line scroll to pixel scroll
+                        deltaX *= 40;
+                    } else if (e.deltaMode === 2) {
+                        deltaY *= 800; // Normalize page scroll to pixel scroll
+                        deltaX *= 800;
+                    }
+
+                    // Vertical Scroll Processing:
+                    // If vertical delta is non-zero, compute the new scrollY within absolute guide bounds.
+                    if (deltaY !== 0) {
+                        // Calculate maximum possible scroll height based on channel count and row height.
+                        const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
+                        
+                        // Compute target scrollY, clamped between 0 and maxScrollY.
+                        this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, maxScrollY));
+                    }
+
+                    // Horizontal Scroll Processing:
+                    // If horizontal delta is non-zero, compute the new scrollX within absolute 24-hour bounds.
+                    if (deltaX !== 0) {
+                        // Calculate maximum possible scroll width (24 hours timeline width).
+                        const maxScrollX = Math.max(0, 24 * this.PIXELS_PER_HOUR - this.visibleWidth);
+
+                        // Compute target scrollX, clamped between 0 and maxScrollX.
+                        this.scrollX = Math.max(0, Math.min(this.scrollX + deltaX, maxScrollX));
+                    }
+
+                    // Force rendering loop frame update to reposition virtual rows based on new scroll position.
+                    this._renderVirtualGrid();
+                },
+                { passive: false }
+            );
+        }
     }
 
     _handleMove(direction) {
