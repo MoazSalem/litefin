@@ -249,12 +249,21 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 1: Parallel Fetching of Base Data Lists
+                    // ──────────────────────────────────────────────────────────
+                    // We initiate simultaneous network requests for both in-progress items
+                    // and next-up show items to optimize load times and keep the UI highly
+                    // responsive under typical domestic network latency.
                     const [resumeRes, nextUpRes] = await Promise.all([
                         api.getResumeItems(),
                         (async () => {
+                            // Extract maximum cutoff days limit for Next Up items from local storage.
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = {};
+                            
+                            // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
                                 const cutoff = new Date();
                                 cutoff.setDate(cutoff.getDate() - daysLimit);
@@ -264,21 +273,116 @@ class HomePage extends Page {
                         })()
                     ]);
 
+                    // Extract items list safely from the server API envelopes.
                     const resumeItems = resumeRes?.Items || [];
                     const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
+                        // Filter out next-up items that have already been partially played,
+                        // as those are already accounted for in the continue watching row list.
                         const position = item.UserData?.PlaybackPositionTicks || 0;
                         return position === 0;
                     });
 
-                    // Merge Resume items first, then Next Up
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 2: Batch Fetching of Parent Show Activity Dates
+                    // ──────────────────────────────────────────────────────────
+                    // Because next-up episodes are unplayed by definition, their own
+                    // LastPlayedDate is null or undefined. To perform chronological
+                    // Plex-style sorting, we need to know exactly when the parent series
+                    // was last active. We resolve this by batch-fetching the most recent
+                    // play activity of the corresponding shows in a single network request.
+                    const nextUpSeriesIds = nextUpItems
+                        .map((item) => item.SeriesId)
+                        .filter(Boolean);
+
+                    // Initialize series activity timestamp lookup map.
+                    const seriesLastPlayedMap = {};
+
+                    if (nextUpSeriesIds.length > 0) {
+                        try {
+                            // De-duplicate the series IDs to avoid sending redundant entries in the query.
+                            const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
+                            
+                            // Query played episodes belonging to these series IDs, ordered by play date.
+                            const activeEpisodesRes = await api.getItems({
+                                SeriesIds: uniqueSeriesIds.join(','),
+                                IncludeItemTypes: 'Episode',
+                                SortBy: 'LastPlayedDate',
+                                SortOrder: 'Descending',
+                                Fields: 'LastPlayedDate',
+                                Recursive: true,
+                                Limit: 100
+                            });
+
+                            // Process the returned episodes to construct the series activity map.
+                            const activeEpisodes = activeEpisodesRes?.Items || [];
+                            for (const ep of activeEpisodes) {
+                                const seriesId = ep.SeriesId;
+                                const lastPlayed = ep.UserData?.LastPlayedDate;
+                                
+                                // Map each series to the newest played episode timestamp encountered.
+                                if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
+                                    seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
+                                }
+                            }
+                        } catch (err) {
+                            // Log warning and degrade gracefully back to using DateCreated sorting.
+                            console.warn('[HomePage] Failed to batch-fetch next-up parent activity dates:', err);
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 3: Merge, Deduplicate, and Interweave
+                    // ──────────────────────────────────────────────────────────
+                    // Combine the lists and de-duplicate by database Item ID.
                     const combined = [...resumeItems, ...nextUpItems];
                     
-                    // Deduplicate based on Id
                     const seen = new Set();
                     const deduplicated = combined.filter(item => {
                         if (seen.has(item.Id)) return false;
                         seen.add(item.Id);
                         return true;
+                    });
+
+                    // ==========================================================
+                    // PLEX-STYLE CHRONOLOGICAL SORTING
+                    // ==========================================================
+                    //
+                    // Replicates Plex's signature dashboard logic by sorting the merged 
+                    // array descending based on when the show/movie was last interacted with. 
+                    // Instead of a rigid "all resume items first" block layout, this interweaves
+                    // your partially played movies/episodes with the next upcoming episodes in 
+                    // the exact order they were last watched.
+                    //
+                    // Falls back to DateCreated (indexing date) or 0 (epoch) for safety.
+                    deduplicated.sort((a, b) => {
+                        // Retrieve or compute the most accurate activity timestamp available for item A.
+                        let timeA = 0;
+                        if (a.UserData?.LastPlayedDate) {
+                            // If it's a resume item, use its direct, precise pause timestamp.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                        } else if (a.SeriesId && seriesLastPlayedMap[a.SeriesId]) {
+                            // If it's a next-up item, retrieve its parent show's latest activity timestamp.
+                            timeA = seriesLastPlayedMap[a.SeriesId];
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeA = new Date(a.DateCreated || 0).getTime();
+                        }
+
+                        // Retrieve or compute the most accurate activity timestamp available for item B.
+                        let timeB = 0;
+                        if (b.UserData?.LastPlayedDate) {
+                            // If it's a resume item, use its direct, precise pause timestamp.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                        } else if (b.SeriesId && seriesLastPlayedMap[b.SeriesId]) {
+                            // If it's a next-up item, retrieve its parent show's latest activity timestamp.
+                            timeB = seriesLastPlayedMap[b.SeriesId];
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeB = new Date(b.DateCreated || 0).getTime();
+                        }
+                        
+                        // Sort descending: most recently active media at the start of the row.
+                        return timeB - timeA;
                     });
 
                     return deduplicated.length > 0 ? deduplicated : null;
