@@ -1902,11 +1902,36 @@ class DetailsPage extends Page {
         }
 
         if (subtitleBtn) {
-            // Only show subtitle tracks if there's at least one available to select
-            if (mediaStreams.some((s) => s.Type === 'Subtitle')) {
+            // =========================================================================
+            // PGS Subtitle Filter Guard for Button Visibility
+            //
+            // We check if there are any available subtitle streams that are NOT disabled
+            // PGS tracks. If PGS rendering is disabled completely in settings, PGS streams
+            // should not count towards whether the subtitle button is visible. This avoids
+            // showing an active subtitle button when the only subtitle tracks are PGS tracks
+            // that the user has chosen to hide/disable completely.
+            // =========================================================================
+            const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+            const hasSelectableSubtitles = mediaStreams.some((s) => {
+                // We only look at subtitle streams
+                if (s.Type !== 'Subtitle') return false;
+
+                // If PGS is disabled, skip PGS/PGSSUB codecs
+                if (disablePgs) {
+                    const codec = (s.Codec || '').toLowerCase();
+                    if (codec === 'pgs' || codec === 'pgssub') {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            // If there's at least one renderable subtitle stream, make the button visible
+            if (hasSelectableSubtitles) {
                 subtitleBtn.classList.remove('hidden');
                 subtitleBtn.setAttribute('tabindex', '0');
             } else {
+                // Otherwise, completely hide the subtitle button and remove from focus order
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
@@ -2728,25 +2753,53 @@ class DetailsPage extends Page {
     }
 
     _showSubtitleTrackMenu() {
+        // Find the selected media source (or default to the first one)
         const mediaSource =
             this._item?.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
             this._item?.MediaSources?.[0];
+        // Guard check: Ensure media source streams exist
         if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
+        
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we want to exclude PGS tracks from the list of subtitle tracks that the
+        // user can manually select in the details page subtitle menu.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+        const tracks = mediaSource.MediaStreams.filter((s) => {
+            // Match subtitle type
+            if (s.Type !== key) return false;
+            
+            // Skip disabled PGS tracks
+            if (disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    return false;
+                }
+            }
+            return true;
+        });
 
+        // Determine current track selection index
         let currentIndex = this._selectedSubtitleIndex;
         if (currentIndex === undefined) {
+            // Fallback to server default track index
             currentIndex = mediaSource.DefaultSubtitleStreamIndex; // Can be -1/null
         }
 
-        // Add "Off" option
+        // Add "Off" option to the selection track list
         const displayTracks = [{ Index: -1, DisplayTitle: i18n.t('Off'), Title: i18n.t('Off') }, ...tracks];
 
+        // Render the track selection menu modal on screen
         this._renderTrackSelectionMenu(i18n.t('Subtitles'), displayTracks, currentIndex, (index) => {
+            // Guard check: If selection did not change, skip update
             if (this._selectedSubtitleIndex === index) return;
 
+            // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
         });

@@ -590,17 +590,63 @@ export class JellyfinPlayer extends EventEmitter {
                 const fallbackSource = options.item.MediaSources[0];
                 const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                 if (ms && ms.MediaStreams) {
+                    // =========================================================================
+                    // Retrieve Subtitle Mode Setting
+                    //
+                    // Fetch the user's preferred subtitle mode setting (Default, Always, Smart, etc.).
+                    // Fall back to 'Default' if no preference has been configured yet.
+                    // =========================================================================
                     const subtitleMode = PlayerSettings.get('subtitleMode') || 'Default';
-                    const subtitleStreams = ms.MediaStreams.filter(s => s.Type === 'Subtitle');
+
+                    // =========================================================================
+                    // PGS Subtitle Filter Guard
+                    //
+                    // If the user set PGS playback to "Disable and Hide Completely" in settings,
+                    // they explicitly want PGS subtitles to be ignored. We filter them out of
+                    // the candidate pool of subtitle streams here. This prevents the player from
+                    // auto-selecting a disabled/hidden PGS track and rendering nothing, allowing
+                    // it to instead fallback to a valid, renderable SRT or VTT track.
+                    // =========================================================================
+                    const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+                    const subtitleStreams = ms.MediaStreams.filter(s => {
+                        // We only care about subtitle streams
+                        if (s.Type !== 'Subtitle') return false;
+                        
+                        // If PGS rendering is disabled, filter out PGS/PGSSUB codecs
+                        if (disablePgs) {
+                            const codec = (s.Codec || '').toLowerCase();
+                            if (codec === 'pgs' || codec === 'pgssub') {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
                     let chosenIndex = undefined;
 
+                    // Apply the corresponding selection logic depending on the mode
                     if (subtitleMode === 'None') {
                         chosenIndex = -1;
                     } else if (subtitleMode === 'Default') {
-                        // Use Server's DefaultSubtitleStreamIndex if present
-                        if (ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null) {
+                        // =====================================================================
+                        // Server Default Track Resolution with PGS Safeguard
+                        //
+                        // Verify if the server-provided default track is a PGS track. If PGS is
+                        // disabled, we discard this track and fall back to searching the rest of
+                        // the filtered candidate streams (which have PGS excluded).
+                        // =====================================================================
+                        const serverDefaultTrack = ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null
+                            ? ms.MediaStreams.find(s => s.Index === ms.DefaultSubtitleStreamIndex)
+                            : null;
+                        const isServerDefaultPgs = serverDefaultTrack && 
+                            ((serverDefaultTrack.Codec || '').toLowerCase() === 'pgs' || (serverDefaultTrack.Codec || '').toLowerCase() === 'pgssub');
+                        
+                        // Use default only if valid and not a disabled PGS track
+                        if (ms.DefaultSubtitleStreamIndex !== undefined && 
+                            ms.DefaultSubtitleStreamIndex !== null && 
+                            !(disablePgs && isServerDefaultPgs)) {
                             chosenIndex = ms.DefaultSubtitleStreamIndex;
                         } else {
+                            // Find the first default or forced track from the filtered candidate list
                             const subStream = subtitleStreams.find(s => s.IsDefault || s.IsForced);
                             if (subStream) chosenIndex = subStream.Index;
                         }

@@ -741,27 +741,58 @@ class PlayerPage extends Page {
      * @returns {number|undefined} The resolved track index, or undefined if no match
      */
     _resolveTrackByLang(mediaSource, type, targetLang, targetTitle) {
+        // Guard check: Ensure mediaSource and MediaStreams exist before proceeding
         if (!mediaSource || !mediaSource.MediaStreams) return undefined;
+        // Guard check: Ensure targetLang is valid
         if (!targetLang) return undefined;
 
-        // If the user explicitly disabled subtitles via session memory
+        // Special case: If user explicitly disabled subtitles via session memory
         if (type === 'Subtitle' && targetLang === 'none') {
             return -1;
         }
 
-        const streams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we must exclude PGS streams from candidate track resolution. This prevents
+        // session track memory from restoring a disabled PGS subtitle track and causing
+        // subtitles to end up completely off, falling back to a valid track instead.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+
+        // Filter the streams to only get the ones of the requested type (Audio/Subtitle)
+        const streams = mediaSource.MediaStreams.filter((s) => {
+            // Ensure stream type matches the requested type
+            if (s.Type !== type) return false;
+
+            // Apply PGS filter guard to subtitle streams if PGS playback mode is disabled
+            if (type === 'Subtitle' && disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    // Exclude disabled PGS track
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // If no matching candidate streams are found, return undefined
         if (streams.length === 0) return undefined;
 
-        // 1. Try exact match: Language + Title
+        // 1. Try exact match: Match both Language and Display Title/Title
         const exactMatch = streams.find(
             (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
         );
+        // If exact match found, return its index
         if (exactMatch) return exactMatch.Index;
 
-        // 2. Fall back to Language only
+        // 2. Fall back to Language only match
         const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        // If language match found, return its index
         if (langMatch) return langMatch.Index;
 
+        // Return undefined if no matches could be resolved
         return undefined;
     }
 
