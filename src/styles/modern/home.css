@@ -54,13 +54,16 @@ html[data-layout="modern"] .media-card {
 /* Sibling Shifting: Shift ALL cards that come after the focused card */
 /* We use the ~ selector combined with the focus state for immediate CSS-only shifting of visible siblings */
 html[data-layout="modern"] .media-card.has-expansion:focus ~ .media-card,
-html[data-layout="modern"] .media-card.has-expansion.focused ~ .media-card {
+html[data-layout="modern"] .media-card.has-expansion.focused ~ .media-card,
+html[data-layout="modern"] .media-card.has-expansion:hover ~ .media-card {
+    /* Translate sibling cards to the right to make room for the expanding poster card */
     transform: translateX(375px);
 }
 
-/* Posters that grow on focus */
+/* Posters that grow dynamically on remote focus or mouse hover */
 html[data-layout="modern"] .media-card.has-expansion:focus,
-html[data-layout="modern"] .media-card.has-expansion.focused {
+html[data-layout="modern"] .media-card.has-expansion.focused,
+html[data-layout="modern"] .media-card.has-expansion:hover {
     width: 600px;
     height: 337.5px !important; /* Force height lockdown during expansion */
     z-index: 100;
@@ -164,14 +167,16 @@ html[data-layout="modern"] .media-card .card-image img.poster-layer {
    Burst & Recede: Poster shrinks and vanishes, Thumb pops forward.
 */
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer {
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
     opacity: 1;
     z-index: 3;
     transform: scale(1); /* Pop forward to normal */
 }
 
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer {
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
     opacity: 0;
     transform: scale(0.95); /* Recede into the background */
     filter: brightness(0.5); /* Dim as it recedes */
@@ -186,9 +191,10 @@ html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
     transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
 }
 
-/* Reveal inside labels when expanded */
+/* Reveal inside labels when expanded via remote focus or mouse hover */
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-info.inside,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-info.inside {
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-info.inside,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -203,9 +209,10 @@ html[data-layout="modern"] .media-card.square .card-info.inside {
     pointer-events: auto;
 }
 
-/* Outside Labels (Standard): Hide when card expands into landscape */
+/* Outside Labels (Standard): Hide when card expands into landscape via focus or hover */
 html[data-layout="modern"] .media-card.has-expansion:focus .card-info:not(.inside),
-html[data-layout="modern"] .media-card.has-expansion.focused .card-info:not(.inside) {
+html[data-layout="modern"] .media-card.has-expansion.focused .card-info:not(.inside),
+html[data-layout="modern"] .media-card.has-expansion:hover .card-info:not(.inside) {
     opacity: 0;
     transition: opacity 0.2s ease;
 }
@@ -276,6 +283,7 @@ html[data-layout="modern"] .media-card .card-image .card-image-tint {
 /* Show shadow for expanded cards, native landscape cards, and square cards */
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.landscape .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.square .card-image .card-image-tint {
     opacity: 1;

@@ -73,17 +73,56 @@ export class VirtualCardRow {
 
         // Modern: Handle Poster-to-Landscape Expansion logic
         if (isModern) {
-            // Add a buffer for the expanded card width (375px) so the track doesn't clip
+            // Add a buffer for the expanded card width (375px) so the track doesn't clip.
+            // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
             const expansion = (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist') ? 0 : 375;
             this.track.style.width = `${totalWidth + expansion}px`;
 
+            /**
+             * Helper function to lazy-load the expansion thumb image (the backdrop).
+             * Prepares the image tags and triggers the CSS transition classes once loaded.
+             * 
+             * @param {HTMLElement} card - The .media-card element that is expanding.
+             */
+            const loadExpansionThumb = (card) => {
+                // Safely grab references to the lazy backdrop layer inside the card structure.
+                const thumb = card.querySelector('.thumb-layer');
+                const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
+                
+                // If a valid image element and source exists, and we haven't fetched it yet:
+                if (thumb && !thumb.getAttribute('src') && thumbSrc) {
+                    // Set src to kick off the browser's asynchronous download.
+                    thumb.setAttribute('src', thumbSrc);
+                    
+                    // On successful download, mark the card and image layers as ready.
+                    // This triggers the CSS-driven transitions (e.g. thumb fades in).
+                    thumb.onload = () => {
+                        thumb.classList.add('loaded');
+                        card.classList.add('expansion-ready');
+                    };
+                    
+                    // Graceful degradation in case of network drops or bad URLs.
+                    thumb.onerror = () => {
+                        thumb.classList.add('load-failed');
+                        card.classList.remove('expansion-ready');
+                    };
+                }
+            };
+
+            /**
+             * Focus entrypoint for focus-bound layout shifting.
+             * Triggered when the card receives focus (via remote D-pad or mouse action).
+             * 
+             * @param {HTMLElement} element - The target focused element or sub-component.
+             */
             const handleFocus = (element) => {
+                // Find the closest media-card ancestor within this row
                 const card = element.closest('.media-card');
                 if (card && this.track.contains(card)) {
                     const index = parseInt(card.dataset.virtualIndex);
-                    const itemId = card.dataset.itemId;
                     
-                    // Trigger expansion shift only if the card is explicitly marked as expandable
+                    // Shift sibling cards relative to this card's expansion state.
+                    // Marks expanding index inside the CSS custom property.
                     const isExpanding = card.classList.contains('has-expansion');
                     if (isExpanding) {
                         this.track.style.setProperty('--focused-index', index);
@@ -91,35 +130,36 @@ export class VirtualCardRow {
                         this.track.style.setProperty('--focused-index', -1);
                     }
                     
-                    // Lazy-load the expansion thumb (landscape image) on focus
-                    const thumb = card.querySelector('.thumb-layer');
-                    const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
-                    
-                    if (thumb && !thumb.getAttribute('src') && thumbSrc) {
-                        thumb.setAttribute('src', thumbSrc);
-                        thumb.onload = () => {
-                            thumb.classList.add('loaded');
-                            card.classList.add('expansion-ready');
-                        };
-                        thumb.onerror = () => {
-                            thumb.classList.add('load-failed');
-                            card.classList.remove('expansion-ready');
-                        };
-                    }
+                    // Trigger asynchronous image preloading for the expanding backdrop
+                    loadExpansionThumb(card);
                 }
             };
 
             // Listen for global focus changes from FocusManager (native focus is disabled on Tizen)
+            // Ensures our spatial navigator correctly updates states in sync.
             this._focusUnsubscribe = eventBus.on('focus:changed', (element) => {
                 handleFocus(element);
             });
 
-            // Keep native listeners for click/mouse/right-click interaction
+            // Native focus/mouse listeners.
+            // focusin handles physical focus events; mousedown handles mouse clicks/selects.
             this.track.addEventListener('focusin', (e) => handleFocus(e.target));
             this.track.addEventListener('mousedown', (e) => handleFocus(e.target));
 
+            // Mouseover hover listener:
+            // Ensure hover actions instantly fetch backdrop assets so they expand smoothly.
+            // This is key for pointer-driven platforms (Desktop browser, WebOS pointer remote).
+            this.track.addEventListener('mouseover', (e) => {
+                const card = e.target.closest('.media-card');
+                if (card && this.track.contains(card)) {
+                    // Pre-fetch assets ahead of CSS hover transitions
+                    loadExpansionThumb(card);
+                }
+            });
+
+            // Focusout listener to reset sibling translation shifts.
+            // Resets only if focus actually left the bounds of this horizontal row.
             this.track.addEventListener('focusout', (e) => {
-                // Only clear if we are actually leaving the row
                 if (!e.relatedTarget || !this.track.contains(e.relatedTarget)) {
                     this.track.style.setProperty('--focused-index', -1);
                 }
