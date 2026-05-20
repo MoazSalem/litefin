@@ -308,11 +308,12 @@ class LoginPage extends Page {
                                     </svg>
                                 </button>
                             </div>
+                            <ul class="server-list hidden" id="saved-server-list" style="display: none !important;"></ul>
+                            <ul class="server-list" id="server-list"></ul>
                             <div class="discovery-status" id="discovery-status">
                                 <div class="loading-spinner-small"></div>
                                 <span data-i18n="ScanningNetwork">Scanning network...</span>
                             </div>
-                            <ul class="server-list" id="server-list"></ul>
                         </div>
                     </div>
 
@@ -1360,134 +1361,180 @@ class LoginPage extends Page {
             }
             this._renderDiscoveredServers();
         } catch (error) {
+            // Log any unexpected error during LAN discovery
             log.error('LoginPage: Discovery failed', error);
+
+            // Display error visual state if DOM is bound
             if (this._discoveryStatus) {
                 this._discoveryStatus.innerHTML = `<span>${i18n.t('Error')}</span>`;
             }
         } finally {
+            // Always set active discovery state to false upon finalization
             this._isDiscovering = false;
+
+            // Trigger a re-render of servers to immediately hide the scan progress indicator
             this._renderDiscoveredServers();
         }
     }
 
-    /**
-     * Render discovered servers list
-     */
     _renderDiscoveredServers() {
-        if (!this._serverList || !this._savedServerList) return;
+        // Layout-aware checks: in modern layout, we only need _serverList. In classic layout, we need both.
+        const isModern = layoutManager.isModern();
+        if (!this._serverList || (!isModern && !this._savedServerList)) return;
 
-        // Remember current focus before destroying DOM
+        // Remember current focus before destroying DOM to restore it smoothly afterwards
         const activeElement = document.activeElement;
-        const isFocusInSavedList = this._savedServerList.contains(activeElement);
+        const isFocusInSavedList = this._savedServerList && this._savedServerList.contains(activeElement);
         const isFocusInDiscoveredList = this._serverList.contains(activeElement);
         const isFocusInList = isFocusInSavedList || isFocusInDiscoveredList;
 
         let focusedIndex = -1;
         let isFocusPreserved = false;
 
+        // Retrieve index of currently focused server item to restore focus later
         if (isFocusInList && activeElement && activeElement.classList.contains('server-item')) {
             focusedIndex = parseInt(activeElement.getAttribute('data-server-index'), 10);
         } else if (activeElement && document.body.contains(activeElement)) {
             isFocusPreserved = true;
         }
 
-        // Separate servers
+        // Separate servers into saved and discovered categories for traditional classic rendering
         const savedServers = this._discoveredServers.filter((s) => s.isSaved);
         const otherServers = this._discoveredServers.filter((s) => !s.isSaved);
 
-        // Update discovery status visibility
+        // Update discovery status indicator visibility based on discovery state
         if (this._discoveryStatus) {
-            // Only show scanning if actively discovering
+            // Only show scanning spinner/status if LAN discovery is active
             this._discoveryStatus.style.display = this._isDiscovering ? 'flex' : 'none';
         }
 
-        // Render saved servers
-        this._savedServerList.innerHTML = savedServers
-            .map((server) => {
-                const index = this._discoveredServers.indexOf(server);
-                return `
-                <li class="server-item" data-server-index="${index}" tabindex="0">
-                    <span class="server-name">${server.name}</span>
-                    <span class="server-badge" data-i18n="SavedBadge">Saved</span>
-                    <span class="server-address">${server.address}</span>
-                    ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
-                </li>
-            `;
-            })
-            .join('');
+        if (isModern) {
+            // ========================================================================
+            // MODERN LAYOUT: Render both Saved and Discovered servers side-by-side
+            // ========================================================================
+            // We unify saved and discovered servers into a single responsive grid
+            // to fulfill the user's preference of keeping them inline beside each other.
 
-        // Render discovered servers
-        if (otherServers.length === 0) {
-            // Only show empty message if NOT discovering AND no saved servers either
-            if (!this._isDiscovering && savedServers.length === 0) {
-                this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+            // Handle the case where no servers at all have been found yet
+            if (this._discoveredServers.length === 0) {
+                // If LAN discovery has finished and there are zero servers, show a clean fallback
+                if (!this._isDiscovering) {
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
+                } else {
+                    // Empty list while the background discovery scan is actively searching
+                    this._serverList.innerHTML = '';
+                }
             } else {
-                this._serverList.innerHTML = '';
+                // Map the full collection into beautiful glassmorphic modern UI cards
+                this._serverList.innerHTML = this._discoveredServers
+                    .map((server) => {
+                        // Retrieve the accurate index in the shared servers list for focus tracking
+                        const index = this._discoveredServers.indexOf(server);
+
+                        // If the server was already saved, render it with special badges and indicators
+                        if (server.isSaved) {
+                            return `
+                                <li class="server-item saved" data-server-index="${index}" tabindex="0">
+                                    <div class="server-icon-box">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                        </svg>
+                                        <!-- Active status dot indicating a fully saved/trusted server session -->
+                                        <div class="status-dot"></div>
+                                    </div>
+                                    <div class="server-info">
+                                        <div class="name-row">
+                                            <span class="server-name">${server.name}</span>
+                                            <!-- Elegant, Apple HIG-style glassmorphic saved badge for visual separation -->
+                                            <span class="server-badge" data-i18n="SavedBadge">${i18n.t('SavedBadge') || 'Saved'}</span>
+                                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                                        </div>
+                                        <span class="server-address">${server.address}</span>
+                                    </div>
+                                </li>
+                            `;
+                        } else {
+                            // Standard discovered server card without extra saved badge
+                            return `
+                                <li class="server-item" data-server-index="${index}" tabindex="0">
+                                    <div class="server-icon-box">
+                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
+                                            <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
+                                            <line x1="6" y1="6" x2="6.01" y2="6"></line>
+                                            <line x1="6" y1="18" x2="6.01" y2="18"></line>
+                                        </svg>
+                                    </div>
+                                    <div class="server-info">
+                                        <div class="name-row">
+                                            <span class="server-name">${server.name}</span>
+                                            ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
+                                        </div>
+                                        <span class="server-address">${server.address}</span>
+                                    </div>
+                                </li>
+                            `;
+                        }
+                    })
+                    .join('');
             }
         } else {
-            this._serverList.innerHTML = otherServers
+            // ================================================================
+            // CLASSIC LAYOUT: Traditional separate saved and discovered lists
+            // ================================================================
+            this._savedServerList.innerHTML = savedServers
                 .map((server) => {
                     const index = this._discoveredServers.indexOf(server);
                     return `
                     <li class="server-item" data-server-index="${index}" tabindex="0">
                         <span class="server-name">${server.name}</span>
+                        <span class="server-badge" data-i18n="SavedBadge">Saved</span>
                         <span class="server-address">${server.address}</span>
                         ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
                     </li>
                 `;
                 })
                 .join('');
-        }
 
-        // Render server items
-        const isModern = layoutManager.isModern();
-        this._serverList.innerHTML = this._discoveredServers
-            .map((server, index) => {
-                if (isModern) {
-                    return `
-                        <li class="server-item" data-server-index="${index}" tabindex="0">
-                            <div class="server-icon-box">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"></rect>
-                                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"></rect>
-                                    <line x1="6" y1="6" x2="6.01" y2="6"></line>
-                                    <line x1="6" y1="18" x2="6.01" y2="18"></line>
-                                </svg>
-                                <div class="status-dot"></div>
-                            </div>
-                            <div class="server-info">
-                                <div class="name-row">
-                                    <span class="server-name">${server.name}</span>
-                                    ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
-                                </div>
-                                <span class="server-address">${server.address}</span>
-                            </div>
-                        </li>
-                    `;
+            // Render newly discovered LAN servers
+            if (otherServers.length === 0) {
+                // Show empty indicator only if scanning has stopped and no saved servers either
+                if (!this._isDiscovering && savedServers.length === 0) {
+                    this._serverList.innerHTML = `<li class="server-item empty">${i18n.t('NoItemsFound')}</li>`;
                 } else {
-                    return `
+                    this._serverList.innerHTML = '';
+                }
+            } else {
+                this._serverList.innerHTML = otherServers
+                    .map((server) => {
+                        const index = this._discoveredServers.indexOf(server);
+                        return `
                         <li class="server-item" data-server-index="${index}" tabindex="0">
                             <span class="server-name">${server.name}</span>
                             <span class="server-address">${server.address}</span>
                             ${server.version ? `<span class="server-version">v${server.version}</span>` : ''}
                         </li>
                     `;
-                }
-            })
-            .join('');
+                    })
+                    .join('');
+            }
+        }
 
-        // Invalid focus cache so new items are found
+        // Invalidate spatial navigation focus cache to register the new list items
         focusManager.invalidateCache('login-server');
 
-        // Restore focus
+        // Restore focus to the previously focused item or keep the selection state
         if (isFocusInList && focusedIndex >= 0) {
             const selector = `.server-item[data-server-index="${focusedIndex}"]`;
-            let item = this._savedServerList.querySelector(selector) || this._serverList.querySelector(selector);
+            let item = (this._savedServerList && this._savedServerList.querySelector(selector)) || this._serverList.querySelector(selector);
 
             if (!item) {
-                // Fallback to nearest index if original item is gone
+                // Nearest element index fallback if original item was removed
                 const allItems = [
-                    ...this._savedServerList.querySelectorAll('.server-item:not(.empty)'),
+                    ...(this._savedServerList ? this._savedServerList.querySelectorAll('.server-item:not(.empty)') : []),
                     ...this._serverList.querySelectorAll('.server-item:not(.empty)')
                 ];
                 if (allItems.length > 0) {
@@ -1499,7 +1546,7 @@ class LoginPage extends Page {
                 focusManager.focusElement(item);
             }
         } else if (isFocusPreserved) {
-            // Restore focus if Tizen dropped it from an unaffected element (e.g. server URL input)
+            // Fallback: restore active element focus in case focus was dropped on TV
             if (document.activeElement !== activeElement && document.body.contains(activeElement)) {
                 focusManager.focusElement(activeElement);
             }

@@ -19,7 +19,6 @@ html[data-layout="modern"] .server-section .section-title::after {
 html[data-layout="modern"] .server-input-container {
     display: flex;
     flex-direction: column;
-    margin-bottom: 60px;
     position: relative;
     max-width: 700px;
 }
@@ -76,7 +75,7 @@ html[data-layout="modern"] .connect-btn {
 }
 
 html[data-layout="modern"] .connect-btn > *:not(:last-child) {
-    margin-right: 16px;
+    margin-left: 16px;
 }
 
 html[data-layout="modern"] .connect-btn:focus,
@@ -96,13 +95,18 @@ html[data-layout="modern"] .connect-btn span::before {
     margin-right: 12px;
 }
 
-/* Discovered Servers */
+/* Discovered Servers & Saved Servers Sections */
 html[data-layout="modern"] .discovered-servers {
-    border-top: 1px solid #111;
-    margin-top: 60px;
+    border-top: 1px solid rgba(255, 255, 255, 0.05); /* Premium delicate dark separator line */
     padding-top: 40px;
     position: relative;
     text-align: left;
+}
+
+/* Stacking consecutive sections gracefully if both exist simultaneously */
+html[data-layout="modern"] .saved-servers-section + #discovered-servers {
+    margin-top: 48px; /* Slightly tighter spacing for a more coherent block structure */
+    border-top: 1px solid rgba(255, 255, 255, 0.05); /* Sleek high-end accent divider */
 }
 
 html[data-layout="modern"] .discovered-header {
@@ -130,12 +134,12 @@ html[data-layout="modern"] .discovery-status {
     background: var(--jf-surface, rgba(255, 255, 255, 0.08));
     padding: 10px 20px;
     border-radius: 30px;
-    margin: 0 auto 24px auto;
+    margin: 32px auto 24px auto;
     border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
 }
 
 html[data-layout="modern"] .discovery-status > *:not(:last-child) {
-    margin-right: 12px;
+    margin-left: 12px;
 }
 
 html[data-layout="modern"] .discovery-status .loading-spinner-small {
@@ -166,11 +170,15 @@ html[data-layout="modern"] .discovery-status::after {
 }
 
 html[data-layout="modern"] .server-list {
+    /* Set up responsive flexbox grid layout for inline server items */
     display: flex;
     flex-wrap: wrap;
     padding: 0;
     list-style: none;
-    margin: -12px; /* Compensate for 12px item margin to create 24px gap */
+    margin-bottom: 12px;
+    
+    /* Sleek space-between-tiles grid spacing following Apple HIG design language */
+    gap: 24px;
 }
 
 html[data-layout="modern"] .server-item {
@@ -179,11 +187,13 @@ html[data-layout="modern"] .server-item {
     border: 4px solid transparent;
     padding: 21px;
     border-radius: 16px;
-    margin: 12px;
     position: relative;
     display: flex;
     align-items: center;
     transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Reset bottom margin from base server-item rules to ensure pure gap-based grid spacing */
+    margin: 0;
 }
 
 html[data-layout="modern"] .server-icon-box {
