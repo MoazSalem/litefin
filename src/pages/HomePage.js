@@ -273,14 +273,26 @@ class HomePage extends Page {
                         })()
                     ]);
 
-                    // Extract items list safely from the server API envelopes.
-                    const resumeItems = resumeRes?.Items || [];
-                    const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
-                        // Filter out next-up items that have already been partially played,
-                        // as those are already accounted for in the continue watching row list.
-                        const position = item.UserData?.PlaybackPositionTicks || 0;
-                        return position === 0;
-                    });
+                    // Extract items list safely and tag them with a transient _isResume flag.
+                    // This flag enables the sorting comparator to distinguish between resume items
+                    // (which should sort by direct pause dates) and next-up items (which should
+                    // sort by show activity dates).
+                    const resumeItems = (resumeRes?.Items || []).map(item => ({
+                        ...item,
+                        _isResume: true
+                    }));
+                    
+                    const nextUpItems = (nextUpRes?.Items || [])
+                        .filter((item) => {
+                            // Filter out next-up items that have already been partially played,
+                            // as those are already accounted for in the continue watching row list.
+                            const position = item.UserData?.PlaybackPositionTicks || 0;
+                            return position === 0;
+                        })
+                        .map(item => ({
+                            ...item,
+                            _isResume: false
+                        }));
 
                     // ──────────────────────────────────────────────────────────
                     // STAGE 2: Batch Fetching of Parent Show Activity Dates
@@ -302,11 +314,12 @@ class HomePage extends Page {
                             // De-duplicate the series IDs to avoid sending redundant entries in the query.
                             const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
                             
-                            // Query played episodes belonging to these series IDs, ordered by play date.
+                            // Query played and in-progress episodes belonging to these series IDs,
+                            // ordered by play date descending (using the official 'DatePlayed' parameter).
                             const activeEpisodesRes = await api.getItems({
                                 SeriesIds: uniqueSeriesIds.join(','),
                                 IncludeItemTypes: 'Episode',
-                                SortBy: 'LastPlayedDate',
+                                SortBy: 'DatePlayed',
                                 SortOrder: 'Descending',
                                 Fields: 'LastPlayedDate',
                                 Recursive: true,
@@ -357,12 +370,15 @@ class HomePage extends Page {
                     deduplicated.sort((a, b) => {
                         // Retrieve or compute the most accurate activity timestamp available for item A.
                         let timeA = 0;
-                        if (a.UserData?.LastPlayedDate) {
-                            // If it's a resume item, use its direct, precise pause timestamp.
+                        if (a._isResume && a.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
                             timeA = new Date(a.UserData.LastPlayedDate).getTime();
                         } else if (a.SeriesId && seriesLastPlayedMap[a.SeriesId]) {
-                            // If it's a next-up item, retrieve its parent show's latest activity timestamp.
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
                             timeA = seriesLastPlayedMap[a.SeriesId];
+                        } else if (a.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
                         } else {
                             // Fallback to the media creation/indexing timestamp.
                             timeA = new Date(a.DateCreated || 0).getTime();
@@ -370,12 +386,15 @@ class HomePage extends Page {
 
                         // Retrieve or compute the most accurate activity timestamp available for item B.
                         let timeB = 0;
-                        if (b.UserData?.LastPlayedDate) {
-                            // If it's a resume item, use its direct, precise pause timestamp.
+                        if (b._isResume && b.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
                             timeB = new Date(b.UserData.LastPlayedDate).getTime();
                         } else if (b.SeriesId && seriesLastPlayedMap[b.SeriesId]) {
-                            // If it's a next-up item, retrieve its parent show's latest activity timestamp.
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
                             timeB = seriesLastPlayedMap[b.SeriesId];
+                        } else if (b.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
                         } else {
                             // Fallback to the media creation/indexing timestamp.
                             timeB = new Date(b.DateCreated || 0).getTime();
