@@ -37,4 +37,6 @@ A clear and concise description of what you expected to happen.
 Add any other context about the problem here (e.g., specific file codecs, network setup).
 
 **Screenshots/Logs**
-Add logs from the app's debug settings to help explain your problem, and If applicable, add screenshots.
+For playback issues, this is a must. Add logs from the app's debug settings to help explain your problem, and if applicable, add screenshots.
+To get logs, you will first need to enable logging from the settings debug tab, then restart the app, and trigger the bug.
+Return to the debugging tab in settings, and select send to server. This should send the logs to your admin dashboard on the Jellyfin server. Disable logging after.

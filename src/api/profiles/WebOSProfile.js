@@ -271,7 +271,7 @@ function _buildMinimalProfile(caps) {
                 // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
                 MaxAudioChannels: caps.maxAudioChannels,
                 MinSegments: 1,
-                SegmentLength: 3,
+                SegmentLength: PlayerSettings.get('webosSegmentLength') || 3,
                 BreakOnNonKeyFrames: true
             },
             {
@@ -511,21 +511,54 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    // Audio codec list for HLS transcoding output.
+    // ---------------------------------------------------------------------------
+    // HLS transcoding audio codec list (TranscodingProfiles).
     //
-    // Both paths now include AAC so the server can copy AAC audio directly
-    // when the source track is already AAC (common for MP4/MOV files). This
-    // eliminates the unnecessary AAC→AC3 transcode that was causing extra
-    // server CPU load and a slightly different bitstream than the source.
+    // IMPORTANT: TrueHD is intentionally EXCLUDED here, even when the user has
+    // enabled TrueHD passthrough. Here's why:
     //
-    // AC3/EAC3 remain as fallback targets for DTS/TrueHD sources that need
-    // to be converted. If Jellyfin's internal preference selects AAC over AC3
-    // for a DTS transcode, the output will be AAC-in-TS — which is universally
-    // supported by the WebOS native pipeline and Hls.js alike.
+    //   TranscodingProfiles feeds the server's HLS pipeline. When the server
+    //   decides to DirectStream (copy video bitstream) or Transcode (re-encode
+    //   video), it wraps the output into MPEG-TS or fMP4 HLS segments.
+    //
+    //   WebOS's native HLS pipeline processes these segments through the
+    //   Chromium audio stack — it does NOT route them to the eARC hardware
+    //   bitstream output. Putting TrueHD here would cause the server to copy
+    //   TrueHD into HLS/TS segments, which WebOS cannot pass through to eARC.
+    //   The result is silence or a mangled downmix instead of lossless audio.
+    //
+    //   TrueHD passthrough only works when the server serves the raw file
+    //   (DirectPlay) or a raw MKV container (DirectStream via DirectStreamProfiles
+    //   below), because WebOSPlayer routes those through _playNativeDirect() →
+    //   video.src → native media pipeline → eARC hardware path.
+    //
+    //   DTS is similarly excluded for the same reason — DTS-in-HLS from this
+    //   pipeline doesn't reliably trigger eARC bitstream passthrough on WebOS.
+    //
+    // For HLS transcode output, AC3/EAC3 are the correct lossy fallback targets:
+    // they ARE supported by the WebOS HLS pipeline for eARC passthrough and
+    // work universally across all WebOS 4+ versions.
+    // ---------------------------------------------------------------------------
     const transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
-    if (enableDts) transAudioCodecsArr.push('dts', 'dca');
-    if (enableTrueHd) transAudioCodecsArr.push('truehd');
+    // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
     const transAudioCodecs = transAudioCodecsArr.join(',');
+
+    // ---------------------------------------------------------------------------
+    // DirectStream audio codec list (DirectStreamProfiles).
+    //
+    // DirectStreamProfiles governs what containers Jellyfin uses when it copies
+    // the video bitstream verbatim but needs to repackage the audio. Unlike the
+    // HLS pipeline, DirectStream mode serves a raw progressive MKV stream over
+    // HTTP. WebOSPlayer routes this URL through _playNativeDirect() → video.src
+    // → the WebOS native media engine → eARC hardware path.
+    //
+    // In this path, the native media engine CAN bitstream-pass TrueHD and DTS
+    // to eARC exactly like the native LG media player does for local files.
+    // ---------------------------------------------------------------------------
+    const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3', 'flac'];
+    if (enableDts) directAudioCodecsArr.push('dts', 'dca');
+    if (enableTrueHd) directAudioCodecsArr.push('truehd');
+    const directAudioCodecs = directAudioCodecsArr.join(',');
 
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
@@ -574,7 +607,7 @@ export function buildJellyfinProfile(options = {}) {
             // stream metadata, so it incorrectly applied to all HDR10/HDR10+ content
             // as well — causing the slideshow / slowmo playback reports.
             // ---------------------------------------------------------------------
-            SegmentLength: 6,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
             // Force IDR-aligned segment cuts for all TS content, not only DOVI.
             // The WebOS decoder produces visible macroblocking artifacts when split
             // mid-GOP, and the resulting non-IDR boundaries also trigger additional
@@ -640,7 +673,7 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: 1,
-            SegmentLength: 2,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
             // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });
@@ -955,6 +988,29 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
+    // -------------------------------------------------------------------------
+    // DirectStreamProfiles — raw container output for the DirectStream path.
+    //
+    // Without this, Jellyfin has no explicit guidance on what container to use
+    // when it decides to DirectStream (copy video, handle audio). It would fall
+    // through to TranscodingProfiles and emit HLS/TS — which cannot deliver
+    // TrueHD or DTS to eARC on WebOS (see transAudioCodecsArr comment above).
+    //
+    // By specifying MKV here, the server outputs a raw progressive MKV stream
+    // over HTTP. WebOSPlayer receives a non-.m3u8 URL and routes it through
+    // _playNativeDirect() → video.src, giving the native media pipeline a
+    // direct bitstream it can pass through eARC — the same path that works
+    // for DirectPlay.
+    // -------------------------------------------------------------------------
+    const directStreamProfiles = [
+        {
+            Container: 'mkv',
+            Type: 'Video',
+            VideoCodec: mkvVideoCodecs.join(','),
+            AudioCodec: directAudioCodecs
+        }
+    ];
+
     return {
         Name: `Litefin WebOS${isHtml5 ? ' (HTML5)' : ''}${playbackMode !== 'auto' ? ` (${playbackMode})` : ''}`,
         MaxStreamingBitrate: maxBitrate,
@@ -962,6 +1018,7 @@ export function buildJellyfinProfile(options = {}) {
         MaxStaticMusicBitrate: 40000000,
         MusicStreamingTranscodingBitrate: 384000,
         DirectPlayProfiles: directPlayProfiles,
+        DirectStreamProfiles: directStreamProfiles,
         TranscodingProfiles: transcodingProfiles,
         CodecProfiles: codecProfiles,
         SubtitleProfiles: BaseProfile.getSubtitleProfiles(),

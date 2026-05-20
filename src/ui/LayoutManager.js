@@ -66,6 +66,18 @@ class LayoutManager {
         // Global text scale multiplier
         this._textScale = 1.0;
 
+        // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
+        this._osdButtonBorders = 'auto';
+
+        // Low VRAM Mode: Disables GPU transitions/animations for legacy hardware
+        this._lowVramMode = false;
+
+        // Disable Card Scaling: Specifically prevents posters/thumbs from scaling on focus
+        this._disableCardScaling = false;
+
+        // Simple Loader: Lightweight rotating ring instead of pulsing dots
+        this._simpleLoader = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -91,6 +103,10 @@ class LayoutManager {
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
         const savedTextScale = parseFloat(storage.getItem('litefin:textScale') || '1.0');
+        const savedOsdBorders = storage.getItem('litefin:osdButtonBorders') || 'auto';
+        const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
+        const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
+        const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -98,13 +114,17 @@ class LayoutManager {
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
+        this.setOsdButtonBorders(savedOsdBorders, false);
+        this.setLowVramMode(savedLowVram, false);
+        this.setDisableCardScaling(savedDisableScaling, false);
+        this.setSimpleLoader(savedSimpleLoader, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
         document.documentElement.setAttribute('data-platform', platformInfo.platformString);
 
         log.info(
-            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}"`
+            `Initialized: layout="${this._layout}", mode="${this._themeMode}", color="${this._themeColor}", font="${this._uiFont}", tier="${platformInfo.layoutTier}", platform="${platformInfo.platformString}"`
         );
     }
 
@@ -207,6 +227,13 @@ class LayoutManager {
         const contrastColor = themeUtils.getContrastColor(this._themeColor);
         const contrastRgb = themeUtils.hexToRgb(contrastColor);
         const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
+
+        // Focus Indicator Logic:
+        // If the accent color is "bright" (Luminance > 0.4), the calculated contrast color 
+        // (normally for text) is very dark. Since most themes are dark, a dark focus border 
+        // would be invisible. We use a soft light variant for focus borders in these cases.
+        const isBrightAccent = themeUtils.isBright(this._themeColor);
+        const focusBorderColor = isBrightAccent ? themeUtils.getSoftLight(this._themeColor) : contrastColor;
         
         // Remove any inline flash-prevention variables injected by index.html
         // so that our dynamic stylesheet (which has lower specificity than inline style)
@@ -231,8 +258,8 @@ class LayoutManager {
             --jf-primary-btn-color: ${contrastColor};
             --jf-primary-btn-color-rgb: ${contrastRgbStr};
             --jf-switch-handle: ${contrastColor};
-            --jf-action-btn-active-border: ${contrastColor};
-            --jf-button-border-focus: ${contrastColor};
+            --jf-action-btn-active-border: ${focusBorderColor};
+            --jf-button-border-focus: ${focusBorderColor};
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
@@ -356,6 +383,105 @@ class LayoutManager {
 
     getTextScale() {
         return this._textScale;
+    }
+
+    getOsdButtonBorders() {
+        return this._osdButtonBorders;
+    }
+
+    setOsdButtonBorders(mode, save = true) {
+        if (!['auto', 'light', 'dark', 'hidden'].includes(mode)) {
+            log.warn(`Invalid OSD border mode "${mode}"`);
+            return;
+        }
+
+        this._osdButtonBorders = mode;
+        document.documentElement.setAttribute('data-osd-borders', mode);
+
+        if (save) {
+            storage.setItem('litefin:osdButtonBorders', mode);
+        }
+
+        log.info(`OSD button borders updated: ${mode}`);
+        eventBus.emit('osdButtonBorders:changed', { mode });
+    }
+
+    /**
+     * Enable or disable Low VRAM Mode
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setLowVramMode(enabled, save = true) {
+        this._lowVramMode = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-low-vram', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-low-vram');
+        }
+
+        if (save) {
+            storage.setItem('litefin:lowVramMode', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Low VRAM Mode set to: ${enabled}`);
+        eventBus.emit('lowVramMode:changed', { enabled });
+    }
+
+    getLowVramMode() {
+        return this._lowVramMode;
+    }
+
+    /**
+     * Enable or disable Card Scaling
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setDisableCardScaling(enabled, save = true) {
+        this._disableCardScaling = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-disable-card-scaling', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-disable-card-scaling');
+        }
+
+        if (save) {
+            storage.setItem('litefin:disableCardScaling', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Disable Card Scaling set to: ${enabled}`);
+        eventBus.emit('disableCardScaling:changed', { enabled });
+    }
+
+    getDisableCardScaling() {
+        return this._disableCardScaling;
+    }
+
+    /**
+     * Enable or disable Simple Loader
+     * @param {boolean} enabled 
+     * @param {boolean} [save=true] 
+     */
+    setSimpleLoader(enabled, save = true) {
+        this._simpleLoader = enabled;
+        
+        if (enabled) {
+            document.documentElement.setAttribute('data-simple-loader', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-simple-loader');
+        }
+
+        if (save) {
+            storage.setItem('litefin:simpleLoader', enabled ? 'true' : 'false');
+        }
+
+        log.info(`Simple Loader set to: ${enabled}`);
+        eventBus.emit('simpleLoader:changed', { enabled });
+    }
+
+    getSimpleLoader() {
+        return this._simpleLoader;
     }
 
     // Component registration (Existing logic maintained)

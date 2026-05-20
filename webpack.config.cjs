@@ -341,7 +341,44 @@ const ultraLegacyConfig = {
         ]
     },
 
-    plugins: getPlugins()
+    plugins: (function () {
+        /*
+         * Ultra-legacy gets its own extended plugin list:
+         *   1. A separate HTML template (index.ultra-legacy.html) that includes the
+         *      backup-logger <script> tag before any other scripts.
+         *   2. An extra CopyWebpackPlugin entry to ship backup-logger.js to dist.
+         *
+         * The backup logger patches console.* BEFORE the webpack bundle executes,
+         * which is the only effective way to intercept the boot crash on Chrome 32/38
+         * (Tizen 2.x / WebOS 3.x). All other build tiers do not need or include it.
+         */
+        var base = getPlugins();
+
+        /* Swap HtmlWebpackPlugin for the ultra-legacy-specific template */
+        base = base.map(function (p) {
+            if (p.constructor && p.constructor.name === 'HtmlWebpackPlugin') {
+                return new HtmlWebpackPlugin({
+                    filename: 'index.html',
+                    template: 'src/index.ultra-legacy.html',
+                    inject: 'body',
+                    scriptLoading: 'blocking'
+                });
+            }
+            return p;
+        });
+
+        /*
+         * Push backup-logger.js into the CopyPlugin pattern list.
+         * CopyPlugin exposes its patterns array directly.
+         */
+        base.forEach(function (p) {
+            if (p.patterns) {
+                p.patterns.push({ from: 'src/backup-logger.js', to: 'js/backup-logger.js' });
+            }
+        });
+
+        return base;
+    }())
 };
 
 // Export all configs. Run a specific one with --config-name <name>.

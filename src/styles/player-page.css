@@ -149,11 +149,13 @@ body.lyrics-active .audio-album-art {
 
 /* Glass Panel for Error */
 .error-panel {
-    width: 600px;
-    padding: 60px;
-    border-radius: var(--jf-border-radius-lg);
-    background: var(--jf-action-btn-bg, rgba(30, 30, 30, 0.9));
-    border: 1px solid var(--jf-action-btn-border, rgba(255, 255, 255, 0.2));
+    width: 960px;
+    padding: 50px 60px;
+    border-radius: 40px;
+    background: rgba(28, 28, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+
+
     display: -webkit-flex;
     display: flex;
     -webkit-flex-direction: column;
@@ -161,12 +163,11 @@ body.lyrics-active .audio-album-art {
     -webkit-align-items: center;
     align-items: center;
     text-align: center;
-    box-shadow: var(--jf-shadow-lg);
+    box-shadow: 0 30px 60px rgba(0, 0, 0, 0.5);
     -webkit-transform: translateY(20px);
     transform: translateY(20px);
     -webkit-transition: -webkit-transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
     transition: transform 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
-
 }
 
 .player-error:not(.hidden) .error-panel {
@@ -211,19 +212,19 @@ body.lyrics-active .audio-album-art {
 }
 
 .error-title {
-    font-size: 42px;
+    font-size: 52px;
     font-weight: 700;
-    color: var(--jf-text-primary, #fff);
-    margin-bottom: 16px;
-    letter-spacing: -0.5px;
+    color: #fff;
+    margin: 10px 0 15px;
+    letter-spacing: -1.5px;
+    line-height: 1.1;
 }
 
 .error-message {
-    color: var(--jf-text-secondary, rgba(255, 255, 255, 0.7));
-    font-size: 22px;
-    line-height: 1.5;
-    margin-bottom: 48px;
-    max-width: 100%;
+    font-size: 26px;
+    color: rgba(255, 255, 255, 0.6);
+    margin: 0 0 55px;
+    font-weight: 400;
 }
 
 .error-actions {
@@ -238,8 +239,10 @@ body.lyrics-active .audio-album-art {
     flex: 1;
     height: 72px;
     border-radius: var(--jf-border-radius-lg);
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 22px;
+    font-weight: 500;
+    white-space: nowrap;
+    padding: 0 20px;
     display: -webkit-flex;
     display: flex;
     -webkit-align-items: center;
@@ -436,4 +439,98 @@ body.lyrics-active .audio-album-art {
 /* Hide cursor on TV platforms during playback */
 html:not([data-platform="web"]) .player-page * {
     cursor: none;
-}
+}
+
+/* ==========================================================================
+   Ultra-Legacy Overrides (Chrome <47 / Tizen 2.x / WebOS 1-2.x)
+   ==========================================================================
+   Chrome 38 has two major bugs relevant to the player:
+
+   1. `position: fixed` elements do NOT create a containing block for
+      `position: absolute` children when the fixed element also has a
+      `transform` (or even without one in some Chrome 32 builds).
+      Fix: switch .player-page to position:relative + 100vw/100vh.
+
+   2. The #osd-overlay (position:absolute, class="player-osd") needs its
+      containing block explicitly sized to 100% of the viewport.
+      Fix: force width/height 100% on the container directly.
+   ========================================================================== */
+
+html[data-layout-tier="ultra-legacy"] .player-page {
+    /* Switch from position:fixed to relative so that absolute children
+     * (.player-osd, #osd-overlay, .subtitle-overlay) have a reliable
+     * containing block. We simulate fixed by stretching to fill the viewport.
+     *
+     * CRITICAL: position:relative alone does NOT establish a stacking context
+     * in Chrome 38 — z-index on child elements then competes unpredictably in
+     * the root stacking context. Adding an explicit z-index forces Chrome 38
+     * to treat .player-page as a proper stacking context root, so the OSD's
+     * z-index:100 is correctly above the video's z-index:auto. */
+    position: relative !important;
+    z-index: 2000 !important;
+    width: 100% !important;
+    height: 100% !important;
+    /* Ensure it still covers the full screen */
+    min-height: 100%;
+}
+
+html[data-layout-tier="ultra-legacy"] .player-container {
+    /* Without position:fixed parent, absolute children need explicit dimensions */
+    width: 100% !important;
+    height: 100% !important;
+}
+
+html[data-layout-tier="ultra-legacy"] #osd-overlay {
+    /* Explicit pixel-based full-screen anchoring.
+     * Chrome 38 right:0/bottom:0 on absolute inside relative sometimes fails
+     * if the containing block width was set via width:100% instead of explicit px.
+     * Position absolutely inside .player-page and stretch to fill. */
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+}
+
+/* Subtitle overlay: also needs explicit anchoring for the same reason as #osd-overlay.
+ * On Chrome 38, position:absolute+bottom:12% inside a position:relative parent
+ * can silently fail to resolve when the parent width/height comes from percentages.
+ * Also hard-code all CSS var() fallbacks — the ponyfill runs async and may
+ * not have resolved before the first subtitle cue renders. */
+html[data-layout-tier="ultra-legacy"] .subtitle-overlay {
+    position: absolute !important;
+    bottom: 12% !important;
+    left: 10% !important;
+    right: 10% !important;
+    width: auto !important;
+    /* Elevate above video (0) and below OSD (100) */
+    z-index: 50 !important;
+    pointer-events: none !important;
+    text-align: center !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-overlay.secondary {
+    /* Secondary subtitles sit at the top */
+    bottom: auto !important;
+    top: 10% !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .subtitle-line {
+    /* Hard-code var() fallbacks so first paint renders correctly even before
+     * the CSS-vars ponyfill has run (it initializes async after boot). */
+    display: inline-block !important;
+    background: rgba(0, 0, 0, 0.75) !important;
+    color: #ffffff !important;
+    font-size: 1.2em !important;
+    font-weight: 500 !important;
+    padding: 6px 14px !important;
+    /* border-radius: var(--jf-border-radius) → hard fallback */
+    -webkit-border-radius: 4px !important;
+    border-radius: 4px !important;
+    line-height: 1.4 !important;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9) !important;
+    /* Avoid flex/inline-flex display bugs in Chrome 38 */
+    vertical-align: baseline !important;
+}

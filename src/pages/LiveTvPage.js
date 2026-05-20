@@ -20,6 +20,7 @@ import MediaGrid from '../components/MediaGrid.js';
 import EpgGrid from '../components/EpgGrid.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { storage } from '../utils/StorageService.js';
+import { router } from '../core/Router.js';
 
 const log = logger.create('LiveTvPage');
 
@@ -86,6 +87,8 @@ class LiveTvPage extends Page {
         // Load the initial tab (usually Suggestions)
         this._loadTab(this._currentTab);
 
+        this._attachDelegatedListeners();
+
         /**
          * =====================================================================
          * INITIAL FOCUS
@@ -148,11 +151,17 @@ class LiveTvPage extends Page {
             onMove: (direction) => {
                 if (direction === 'down') {
                     // Pick the active content section dynamically
-                    const targetSection = this._currentTab === 'guide'
-                        ? 'epg-grid'
-                        : 'livetv-content-section';
-                    focusManager.setActiveSection(targetSection);
-                    return true; // Handled
+                    let targetSection = 'livetv-content-section';
+                    if (this._currentTab === 'guide') {
+                        targetSection = 'epg-grid';
+                    } else if (this._currentTab === 'suggestions') {
+                        targetSection = 'section-on-now';
+                    }
+                    
+                    if (focusManager.getConfig(targetSection)) {
+                        focusManager.setActiveSection(targetSection);
+                        return true; // Handled
+                    }
                 }
                 return false; // Let default horizontal logic handle left/right
             }
@@ -192,6 +201,19 @@ class LiveTvPage extends Page {
     _setupPaginationHandlers() {
         this.$('#btn-prev')?.addEventListener('click', () => this._handlePageChange(-1));
         this.$('#btn-next')?.addEventListener('click', () => this._handlePageChange(1));
+    }
+
+    _attachDelegatedListeners() {
+        const container = this.$('#livetv-content');
+        if (!container) return;
+
+        container.addEventListener('click', (e) => {
+            const card = e.target.closest('.media-card');
+            if (!card?.dataset?.itemId) return;
+
+            log.info('Navigating to item details:', card.dataset.itemId);
+            router.navigate(`/details/${card.dataset.itemId}`);
+        });
     }
 
     _switchTab(tabId) {
@@ -287,7 +309,9 @@ class LiveTvPage extends Page {
             this._createRow(rowsContainer, i18n.t('OnNow'), programs.Items, {
                 id: 'on-now',
                 isLandscape: true,
-                cardType: 'thumb'
+                cardType: 'thumb',
+                leaveUp: 'livetv-tabs',
+                leaveLeft: 'sidebar'
             });
         } else {
             rowsContainer.innerHTML = `
@@ -519,7 +543,7 @@ class LiveTvPage extends Page {
         const rowHtml = `
             <div class="media-row" id="${rowId}">
                 <h2 class="row-title">${title}</h2>
-                <div class="row-items-container">
+                <div class="row-items">
                     <div class="row-items-track" id="${sectionId}"></div>
                 </div>
             </div>
@@ -545,6 +569,10 @@ class LiveTvPage extends Page {
             orientation: 'horizontal',
             selector: '.media-card',
             indices: true,
+            leaveUp: options.leaveUp,
+            leaveDown: options.leaveDown,
+            leaveLeft: options.leaveLeft,
+            leaveRight: options.leaveRight,
             // Handle horizontal navigation within the virtual row
             onMove: (direction, currentElement) => {
                 if (!currentElement || currentElement.dataset.virtualIndex === undefined) {

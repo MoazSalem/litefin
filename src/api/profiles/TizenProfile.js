@@ -152,7 +152,7 @@ function _buildMinimalProfile(caps) {
                 // (MaxAudioChannels, MinSegments, SegmentLength must be numbers, not strings)
                 MaxAudioChannels: caps.maxAudioChannels,
                 MinSegments: 1,
-                SegmentLength: 3,
+                SegmentLength: PlayerSettings.get('tizenSegmentLength') || 3,
                 BreakOnNonKeyFrames: true
             },
             {
@@ -462,7 +462,7 @@ export function buildJellyfinProfile(options = {}) {
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? 1 : 2,
-            SegmentLength: isHtml5 ? 2 : 6,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('tizenSegmentLength') || 6),
             // BreakOnNonKeyFrames with fMP4 must be false — fMP4 segments must align to IDR
             // frames. For TS we keep the original behaviour (false for AVPlay, true for HTML5).
             BreakOnNonKeyFrames: forceFmp4Hls ? false : (isHtml5 ? (playbackMode !== 'remux') : false),
@@ -528,7 +528,7 @@ export function buildJellyfinProfile(options = {}) {
             // which fMP4 HLS handles without issue.
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? 1 : 2,
-            SegmentLength: isHtml5 ? 2 : 6,
+            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('tizenSegmentLength') || 6),
             // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
             BreakOnNonKeyFrames: false,
             EnableAudioVbrEncoding: isHtml5

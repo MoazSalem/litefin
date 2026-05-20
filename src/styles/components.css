@@ -19,6 +19,21 @@
 }
 
 
+.btn-small {
+    padding: 12px 24px;
+    font-size: 1.15rem;
+    min-width: 140px;
+}
+
+
+.btn:focus,
+.btn.focused {
+    border-color: var(--jf-button-border-focus);
+    outline: none;
+    -webkit-transform: scale(1.05);
+    transform: scale(1.05);
+}
+
 .btn-primary {
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color);
@@ -29,11 +44,7 @@
 .btn-primary:focus,
 .btn-primary.focused {
     background: var(--jf-accent-hover);
-    border-color: var(--jf-button-border-focus);
-    outline: none;
     color: var(--jf-primary-btn-color);
-    -webkit-transform: scale(1.05);
-    transform: scale(1.05);
 }
 
 
@@ -43,7 +54,8 @@
 }
 
 .btn-secondary:focus,
-.btn-secondary.focused {
+.btn-secondary.focused,
+.btn-secondary:hover {
     background: var(--jf-button-hover);
 }
 
@@ -55,7 +67,6 @@
 .btn-danger:focus,
 .btn-danger.focused {
     background: #ff5252;
-    outline: none;
 }
 
 .nav-btn {
@@ -350,7 +361,6 @@ progress.card-progress::-webkit-progress-value {
     font-weight: 700;
     color: rgba(255, 255, 255, 0.9);
     max-width: 90%;
-    margin-top: 10px;
     line-height: 1.6;
     display: -webkit-box;
     -webkit-line-clamp: 2;
@@ -688,7 +698,6 @@ progress.card-progress::-webkit-progress-value {
 }
 
 
-.modal-option-btn:hover,
 .modal-option-btn:focus,
 .modal-option-btn.focused {
     background: var(--jf-accent) !important; /* Force priority over .selected */
@@ -697,6 +706,13 @@ progress.card-progress::-webkit-progress-value {
     outline: none;
     transform: scale(1.03);
     border: 2px solid var(--jf-action-btn-active-border)!important;
+    will-change: transform;
+}
+
+.modal-option-btn:hover {
+    transform: scale(1.03);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    will-change: transform;
 }
 
 
@@ -1344,7 +1360,7 @@ html[data-layout-tier="ultra-legacy"] .media-info-row {
     border-bottom: 1px solid rgba(255, 255, 255, 0.03);
 }
 
-.media-info-row:last-child {
+.media-info-row:last-child:nth-child(odd) {
     border-bottom: none;
 }
 

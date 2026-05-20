@@ -348,12 +348,16 @@
 }
 
 .hero-carousel-container:focus,
-.hero-carousel-container.focused {
+.hero-carousel-container.focused,
+.hero-carousel-container:hover,
+.hero-carousel-container.hovered {
     outline: none;
 }
 
 .hero-carousel-container:focus::after,
-.hero-carousel-container.focused::after {
+.hero-carousel-container.focused::after,
+.hero-carousel-container:hover::after,
+.hero-carousel-container.hovered::after {
     opacity: 0.15;
 }
 
@@ -435,7 +439,9 @@
    ============================================================================ */
 
 .hero-carousel-container.banner:focus,
-.hero-carousel-container.banner.focused {
+.hero-carousel-container.banner.focused,
+.hero-carousel-container.banner:hover,
+.hero-carousel-container.banner.hovered {
     border-color: var(--jf-accent);
     z-index: 1000;
 }
@@ -524,4 +530,56 @@
     width: 100%;
     -webkit-animation: none !important;
     animation: none !important;
+}
+
+/* ============================================================================
+   Web-only Navigation Arrows
+   ============================================================================ */
+
+.hero-nav-arrows {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    right: 0;
+    transform: translateY(-50%);
+    display: flex;
+    justify-content: space-between;
+    padding: 0 18px;
+    z-index: 500;
+    pointer-events: none; /* Let clicks pass through container */
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.hero-carousel-container:hover .hero-nav-arrows {
+    opacity: 1;
+}
+
+.hero-arrow {
+    pointer-events: auto; /* Re-enable clicks for buttons */
+    background: rgba(0, 0, 0, 0.3);
+    color: white;
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.hero-arrow:hover {
+    background: var(--jf-accent-content-color);
+    color: var(--jf-accent);
+    transform: scale(1.05);
+    transition: background .2s, transform .2s, color .2s;
+}
+
+.hero-arrow:active {
+    transform: scale(0.95);
+}
+
+[dir="rtl"] .hero-arrow svg {
+    transform: rotate(180deg);
 }

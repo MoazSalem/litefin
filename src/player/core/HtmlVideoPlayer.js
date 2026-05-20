@@ -11,6 +11,7 @@ import Hls from 'hls.js';
 import Screenfull from 'screenfull';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('HtmlVideoPlayer');
 
@@ -240,8 +241,8 @@ export class HtmlVideoPlayer {
 
             const hls = new Hls({
                 startPosition: (options.playerStartPositionTicks || 0) / 10000000,
-                maxBufferLength: 60,
-                maxMaxBufferLength: 120,
+                maxBufferLength: PlayerSettings.get('html5MaxBufferLength') || 60,
+                maxMaxBufferLength: PlayerSettings.get('html5MaxMaxBufferLength') || 120,
                 manifestLoadingTimeOut: 20000,
                 levelLoadingTimeOut: 20000,
                 fragLoadingTimeOut: 20000,
@@ -254,11 +255,11 @@ export class HtmlVideoPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('HLS manifest parsed');
 
-                // Apply saved tracks
                 if (options.audioStreamIndex !== undefined && options.audioStreamIndex >= 0) {
-                    if (options.audioStreamIndex < hls.audioTracks.length) {
-                        hls.audioTrack = options.audioStreamIndex;
-                        log.debug('Set HLS audio track:', options.audioStreamIndex);
+                    const outputIndex = hls.audioTracks.length <= 1 ? 0 : options.audioStreamIndex;
+                    if (outputIndex < hls.audioTracks.length) {
+                        hls.audioTrack = outputIndex;
+                        log.debug('Set HLS audio track:', options.audioStreamIndex, 'mapped to', outputIndex);
                     }
                 }
 
@@ -276,22 +277,29 @@ export class HtmlVideoPlayer {
                     log.info('HLS.js path: Skipping initial play() due to autoPlay=false');
                     resolve();
                 } else {
-                    video.play().then(resolve).catch((err) => {
-                        if (err.name === 'NotAllowedError') {
-                            // Browser blocked unmuted autoplay (no prior user gesture).
-                            // Mute, retry, and queue an unmute on the next user interaction.
-                            // Any keypress or click qualifies as a gesture — this is transparent to the user.
-                            log.warn('Autoplay blocked — retrying muted (remote launch).');
-                            video.muted = true;
-                            video.play().then(() => {
-                                // Schedule unmute as soon as the user presses any key or clicks
-                                this._scheduleUnmuteOnInteraction(video);
-                                resolve();
-                            }).catch(reject);
-                        } else {
-                            reject(err);
-                        }
-                    });
+                    const playPromise = video.play();
+                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                        playPromise.then(resolve).catch((err) => {
+                            if (err.name === 'NotAllowedError') {
+                                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                                video.muted = true;
+                                const retryPromise = video.play();
+                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                    retryPromise.then(() => {
+                                        this._scheduleUnmuteOnInteraction(video);
+                                        resolve();
+                                    }).catch(reject);
+                                } else {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolve();
+                                }
+                            } else {
+                                reject(err);
+                            }
+                        });
+                    } else {
+                        resolve();
+                    }
                 }
             });
 
@@ -440,18 +448,29 @@ export class HtmlVideoPlayer {
                     resolve();
                 } else {
                     // Attempt unmuted playback.
-                    video.play().then(resolve).catch((err) => {
-                        if (err.name === 'NotAllowedError') {
-                            log.warn('Autoplay blocked — retrying muted (remote launch).');
-                            video.muted = true;
-                            video.play().then(() => {
-                                this._scheduleUnmuteOnInteraction(video);
-                                resolve();
-                            }).catch(reject);
-                        } else {
-                            reject(err);
-                        }
-                    });
+                    const playPromise = video.play();
+                    if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                        playPromise.then(resolve).catch((err) => {
+                            if (err.name === 'NotAllowedError') {
+                                log.warn('Autoplay blocked — retrying muted (remote launch).');
+                                video.muted = true;
+                                const retryPromise = video.play();
+                                if (retryPromise !== undefined && typeof retryPromise.then === 'function') {
+                                    retryPromise.then(() => {
+                                        this._scheduleUnmuteOnInteraction(video);
+                                        resolve();
+                                    }).catch(reject);
+                                } else {
+                                    this._scheduleUnmuteOnInteraction(video);
+                                    resolve();
+                                }
+                            } else {
+                                reject(err);
+                            }
+                        });
+                    } else {
+                        resolve();
+                    }
                 }
             };
 
@@ -509,6 +528,33 @@ export class HtmlVideoPlayer {
             // Use removeAttribute instead of setting src to empty string to be cleaner
             video.removeAttribute('src');
             video.load();
+
+            // ── Tizen Chromium GPU surface release ────────────────────────────
+            //
+            // On Tizen's embedded Chromium, a <video> element that remains in
+            // the DOM continues to hold its decoded frame buffer as a GPU texture
+            // even after src is cleared and load() is called. For 4K content,
+            // this surface can be 20–80MB of VRAM that the compositor cannot
+            // reclaim. The result: GPU memory fragmentation that manifests as
+            // visual glitches (flickering icons, white button flashes) on the
+            // next page.
+            //
+            // The fix: temporarily remove the element from the DOM. This signals
+            // to the compositor that the GPU surface is no longer needed and
+            // should be released. We immediately re-insert a placeholder so that
+            // _ensureVideoElement() re-uses the same DOM node on the next play()
+            // call without needing to recreate it.
+            //
+            if (video.parentNode) {
+                const parent = video.parentNode;
+                parent.removeChild(video);
+                // Re-insert so the element is still reachable — _ensureVideoElement()
+                // checks this._videoElement (not the DOM), so re-insertion order
+                // doesn't matter, but having it in the tree avoids surprises with
+                // any code that queries the container's children.
+                parent.appendChild(video);
+                log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
+            }
         }
 
         this._currentSrc = null;
@@ -671,11 +717,14 @@ export class HtmlVideoPlayer {
         // ── HLS path: delegate to hls.js which owns the audio track selection ──
         if (this._hlsPlayer) {
             const tracks = this._hlsPlayer.audioTracks;
-            if (tracks && listIndex >= 0 && listIndex < tracks.length) {
-                log.info('HLS: switching audio track to list index', listIndex, '→', tracks[listIndex]?.name);
-                this._hlsPlayer.audioTrack = listIndex;
-            } else {
-                log.warn('HLS: audio track index', listIndex, 'out of range (', tracks?.length, 'tracks)');
+            if (tracks) {
+                const outputIndex = tracks.length <= 1 ? 0 : listIndex;
+                if (outputIndex >= 0 && outputIndex < tracks.length) {
+                    log.info('HLS: switching audio track to list index', listIndex, '→ outputIndex', outputIndex, '(', tracks[outputIndex]?.name, ')');
+                    this._hlsPlayer.audioTrack = outputIndex;
+                } else {
+                    log.warn('HLS: audio track index', listIndex, 'mapped to', outputIndex, 'out of range (', tracks.length, 'tracks)');
+                }
             }
             return;
         }
@@ -687,11 +736,13 @@ export class HtmlVideoPlayer {
         const audioTracks = video.audioTracks;
         if (!audioTracks || audioTracks.length === 0) return;
 
+        const outputIndex = audioTracks.length <= 1 ? 0 : listIndex;
+
         for (let i = 0; i < audioTracks.length; i++) {
             // Enable only the track at the requested list index
-            audioTracks[i].enabled = (i === listIndex);
+            audioTracks[i].enabled = (i === outputIndex);
         }
-        log.info('Native: switched audio track to list index', listIndex);
+        log.info('Native: switched audio track to list index', listIndex, 'mapped to', outputIndex);
     }
 
     /**

@@ -76,7 +76,10 @@ class PersonPage extends Page {
                             <div class="details-meta-row" id="person-meta"></div>
 
                             <!-- Bio -->
-                            <div class="details-overview overview-text line-clamp-6" id="person-bio"></div>
+                            <div class="details-overview">
+                                <p class="overview-text line-clamp-6" id="person-bio"></p>
+                                <button class="see-more-btn" tabindex="0" data-i18n="ShowMore" style="display: none;">${i18n.t('ShowMore')}</button>
+                            </div>
 
                             <!-- Actions (Favorite) -->
                             <div class="person-actions-row" id="person-fav-actions"></div>
@@ -252,7 +255,7 @@ class PersonPage extends Page {
 
         if (posterContainer) {
             if ((p.ImageTags && p.ImageTags.Primary) || isArtist) {
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams('details-poster');
                 const url = api.getImageUrl(p.Id, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
@@ -299,10 +302,20 @@ class PersonPage extends Page {
             metaEl.textContent = parts.join(' • ');
         }
 
-        // Bio
+        // Bio Overview rendering
         const bioEl = this.$('#person-bio');
         if (bioEl) {
+            // Assign biography overview content safely
             bioEl.textContent = p.Overview || '';
+            // Initially ensure standard clamp class is applied
+            bioEl.classList.add('line-clamp-6');
+        }
+
+        // Reset "See More" button state visually and structurally
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.style.display = 'none';
+            seeMoreBtn.textContent = i18n.t('ShowMore');
         }
 
         // Force visibility immediately (bypass CSS transition issues)
@@ -310,6 +323,77 @@ class PersonPage extends Page {
         if (infoCol) {
             infoCol.style.opacity = '1';
             infoCol.classList.add('visible');
+        }
+
+        // Check for overview text truncation inside requestAnimationFrame
+        // to ensure DOM bounds are correctly computed after browser layout shifts
+        requestAnimationFrame(() => {
+            this._checkOverviewTruncation();
+        });
+    }
+
+    /**
+     * ============================================================================
+     * Truncation Handling & See More Button Bindings
+     * ============================================================================
+     * Checks if the biography/overview text length exceeds the container bounds
+     * (e.g., clientHeight is less than scrollHeight). If so, we reveal the "Show More"
+     * button, register a focus zone, and bind an event listener to toggle expansion.
+     * ============================================================================
+     */
+    _checkOverviewTruncation() {
+        const bioEl = this.$('#person-bio');
+        const seeMoreBtn = this.$('.see-more-btn');
+
+        // Safety check to ensure elements exist in the DOM
+        if (!bioEl || !seeMoreBtn) return;
+
+        // Compare scroll height against client layout height to detect overflow
+        if (bioEl.scrollHeight > bioEl.clientHeight) {
+            // Show the "Show More" button to the user
+            seeMoreBtn.style.display = 'block';
+
+            // Register a dedicated vertical focus section for the see more button
+            this.registerFocusSection('person-see-more', this.$('.details-overview'), {
+                orientation: 'vertical',
+                leaveUp: null, // Bounds at the top
+                leaveDown: 'person-fav-actions', // Navigates down to favorite action bar
+                leaveLeft: 'sidebar' // TV Sidebar navigation
+            });
+
+            // Dynamically update the leaveUp boundary of the favorite bar
+            // so TV remote users can arrow-up to focus the See More button
+            const favConfig = focusManager.getSectionConfig('person-fav-actions');
+            if (favConfig) {
+                favConfig.leaveUp = 'person-see-more';
+                focusManager.register('person-fav-actions', favConfig.container, favConfig);
+            }
+
+            // Hook up clean click and touch activation behavior
+            seeMoreBtn.onclick = () => {
+                // Determine if we are currently expanded or collapsed
+                const isExpanded = !bioEl.classList.contains('line-clamp-6');
+
+                if (isExpanded) {
+                    // Collapse: Restrict lines back to clamp class and update text
+                    bioEl.classList.add('line-clamp-6');
+                    seeMoreBtn.textContent = i18n.t('ShowMore');
+                    
+                    // Reset scroll back to top of the page view
+                    const page = this.$('.page-content');
+                    if (page) page.scrollTop = 0;
+                } else {
+                    // Expand: Remove restriction to let browser render full text height
+                    bioEl.classList.remove('line-clamp-6');
+                    seeMoreBtn.textContent = i18n.t('ShowLess');
+                }
+
+                // Immediately focus the button to prevent remote focus loss during layout shifts
+                focusManager.focusElement(seeMoreBtn);
+            };
+        } else {
+            // If the biography is short and does not overflow, hide the button completely
+            seeMoreBtn.style.display = 'none';
         }
     }
 
@@ -504,9 +588,14 @@ class PersonPage extends Page {
         // Favorite button row — always at the top
         const favActionsEl = this.$('#person-fav-actions');
         if (favActionsEl) {
+            // Dynamically check if the see more button is visible
+            // to connect navigation properly and prevent focus trapping
+            const seeMoreEl = this.$('.see-more-btn');
+            const leaveUpTarget = seeMoreEl && seeMoreEl.style.display !== 'none' ? 'person-see-more' : null;
+
             this.registerFocusSection('person-fav-actions', favActionsEl, {
                 orientation: 'horizontal',
-                leaveUp: null,
+                leaveUp: leaveUpTarget,
                 leaveDown: `artist-${firstType}-items`,
                 leaveLeft: 'sidebar',
                 scrollOffsetTop: 50
@@ -580,9 +669,14 @@ class PersonPage extends Page {
         // 1.5 Favorite Button Row
         const favActionsEl = this.$('#person-fav-actions');
         if (favActionsEl) {
+            // Dynamically check if the see more button is visible
+            // to connect navigation properly and prevent focus trapping
+            const seeMoreEl = this.$('.see-more-btn');
+            const leaveUpTarget = seeMoreEl && seeMoreEl.style.display !== 'none' ? 'person-see-more' : null;
+
             this.registerFocusSection('person-fav-actions', favActionsEl, {
                 orientation: 'horizontal',
-                leaveUp: null, // Top of page
+                leaveUp: leaveUpTarget,
                 leaveDown: `person-${firstType}-items`,
                 leaveLeft: 'sidebar',
                 scrollOffsetTop: 50 // Match standardized top alignment

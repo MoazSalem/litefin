@@ -4,18 +4,7 @@
  * Full-screen photo viewer styles.
  * ========================================================================== */
 
- .slideshow-page {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: #000;
-    overflow: hidden;
-    z-index: 50; /* Ensure it's above other things */
-    display: flex;
-    flex-direction: column;
-}
+
 
 /* Ensure no sidebar bleed */
 .no-sidebar .slideshow-page {
@@ -64,7 +53,7 @@
     position: absolute;
     top: 30px;
     left: 40px;
-    background-color: rgba(0, 0, 0, 0.6);
+    background-color: rgba(0, 0, 0, 0.8);
     color: #fff;
     font-size: 24px;
     padding: 8px 16px;
@@ -72,7 +61,16 @@
     z-index: 10;
     font-weight: 500;
     letter-spacing: 1px;
-    backdrop-filter: blur(8px);
+
+
+    opacity: 0;
+    -webkit-transition: opacity 0.4s ease;
+    transition: opacity 0.4s ease;
+}
+
+/* Show counter when user is active */
+.slideshow-page.user-active .slideshow-counter {
+    opacity: 1;
 }
 
 .slideshow-autoplay-badge {
@@ -91,34 +89,95 @@
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
 }
 
-.slideshow-arrow {
+.slideshow-nav-area {
     position: absolute;
-    top: 50%;
-    transform: translateY(-50%);
-    color: rgba(255, 255, 255, 0.8);
-    width: 80px;
-    height: 80px;
+    top: 0;
+    bottom: 0;
+    width: 18%; /* Large, generous hover/click area */
+    z-index: 100;
+    display: flex;
+    align-items: center;
+    cursor: pointer;
+}
+
+.slideshow-nav-area-left { 
+    left: 0; 
+    justify-content: flex-start;
+    padding-left: 30px;
+}
+.slideshow-nav-area-right { 
+    right: 0; 
+    justify-content: flex-end;
+    padding-right: 30px;
+}
+
+.slideshow-arrow {
+    position: relative;
+    /* Remove the absolute top:50% centering logic as parent flex handles it now */
+    color: rgba(255, 255, 255, 0.6);
+    width: 70px;
+    height: 70px;
     display: flex;
     align-items: center;
     justify-content: center;
-    background: radial-gradient(circle, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 70%);
+    background: rgba(0, 0, 0, 0.6);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
     border-radius: 50%;
     z-index: 10;
-    transition: opacity 0.2s ease-out;
+    
+    /* Reset button defaults */
+    outline: none;
+    padding: 0;
+    cursor: pointer;
+    
+    /* Hidden by default, shown on global active state or D-pad flash */
+    opacity: 0;
+    pointer-events: none;
+    -webkit-transition: opacity 0.3s ease, -webkit-transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease;
+    transition: opacity 0.3s ease, transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.2s ease, border-color 0.2s ease;
+
+
+}
+
+.slideshow-page {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    overflow: hidden;
+    z-index: 50; /* Ensure it's above other things */
+    display: flex;
+    flex-direction: column;
+    cursor: pointer; /* Signal clickable area for video/EXIF */
+}
+
+/* Shown via D-pad flash (JS toggles .is-flashing) OR global mouse activity */
+.slideshow-arrow.is-flashing,
+.slideshow-page.user-active .slideshow-arrow {
+    opacity: 1;
+    pointer-events: auto;
+}
+
+/* Premium 'pop' when hovering the arrow directly */
+.slideshow-arrow:hover {
+    background-color: rgba(0, 0, 0, 0.6);
+    border-color: var(--jf-accent, #00a4dc);
+    color: #fff;
+    -webkit-transform: scale(1.15);
+    transform: scale(1.15);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
 }
 
 .slideshow-arrow svg {
-    width: 48px;
-    height: 48px;
+    width: 40px;
+    height: 40px;
 }
 
-.slideshow-arrow-left {
-    left: 30px;
-}
-
-.slideshow-arrow-right {
-    right: 30px;
-}
+/* Position overrides handled by padding on .slideshow-nav-area */
+.slideshow-arrow-left { }
+.slideshow-arrow-right { }
 
 /* ──────────────────────────────────────────────────────────────────────────
  * EXIF Overlay Schema
@@ -202,14 +261,15 @@
     transform: translate(-50%, -50%);
     width: 96px;
     height: 96px;
-    background-color: rgba(0, 0, 0, 0.5);
+    background-color: rgba(0, 0, 0, 0.7);
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
     color: rgba(255, 255, 255, 0.9);
     z-index: 10;
-    backdrop-filter: blur(4px);
+
+
     transition: opacity 0.3s ease, transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
     pointer-events: none;
 }

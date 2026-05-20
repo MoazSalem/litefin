@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="purplehaze" data-layout="classic">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="description" content="Litefin - Native Jellyfin Client for Samsung Tizen TVs">
+    <title>Litefin</title>
+    <link rel="icon" type="image/png" href="assets/icon.png">
+    <link rel="apple-touch-icon" href="assets/icon.png">
+    <!--
+        WebOS SDK — must load before any app JS so that window.webOS and
+        window.webOS.service are available when ApiClient runs its Luna check.
+        Loaded dynamically to prevent PalmServiceBridge console errors on non-LG devices.
+    -->
+    <script>
+        if (/Web[O0]S|NetCast|LG[ -]Browser/i.test(navigator.userAgent)) {
+            document.write('<script src="js/webOSTV.js"><\\/script>');
+        }
+    </script>
+    <script src="js/backup-logger.js"></script>
+
+    <script>
+        // ====================================================================
+        // DOM API POLYFILLS (ES5 ONLY — targets Chrome 32 / WebOS 1.x WebKit)
+        // ====================================================================
+        // core-js only polyfills JavaScript language features (Symbol, Promise,
+        // Map, etc.), NOT DOM APIs. This block fills the DOM gaps that Chrome 32
+        // era browsers are missing. Must run before any app JS chunk executes.
+        // ====================================================================
+        (function() {
+
+            // ----------------------------------------------------------------
+            // Element.closest() — finds nearest ancestor matching a selector.
+            // Added in Chrome 41. Polyfill required for Chrome 32 / WebOS 1.x.
+            // Used extensively in FocusManager, ScrollController, and pages
+            // for delegated event handling (e.target.closest('.card')).
+            // ----------------------------------------------------------------
+            if (typeof Element !== 'undefined' && !Element.prototype.closest) {
+                Element.prototype.closest = function(selector) {
+                    var el = this;
+                    while (el && el.nodeType === 1) {
+                        if (el.matches ? el.matches(selector) : el.msMatchesSelector(selector)) {
+                            return el;
+                        }
+                        el = el.parentElement || el.parentNode;
+                    }
+                    return null;
+                };
+            }
+
+            // ----------------------------------------------------------------
+            // Element.matches() — checks if element matches a selector string.
+            // Vendor-prefixed in Chrome 32 (webkitMatchesSelector). Polyfilled
+            // here as the standard unprefixed name used throughout the codebase.
+            // ----------------------------------------------------------------
+            if (typeof Element !== 'undefined' && !Element.prototype.matches) {
+                Element.prototype.matches =
+                    Element.prototype.msMatchesSelector ||
+                    Element.prototype.webkitMatchesSelector ||
+                    function(selector) {
+                        // Last-resort: walk the parent's children to self-match
+                        var matches = (this.document || this.ownerDocument).querySelectorAll(selector);
+                        var i = matches.length;
+                        while (--i >= 0 && matches.item(i) !== this) {}
+                        return i > -1;
+                    };
+            }
+
+            // ----------------------------------------------------------------
+            // Element.remove() — removes the element from the DOM.
+            // Added in Chrome 23 (should be fine), but some old WebOS WebKit
+            // builds are missing it. Safe no-op if parentNode is null.
+            // ----------------------------------------------------------------
+            if (typeof Element !== 'undefined' && !Element.prototype.remove) {
+                Element.prototype.remove = function() {
+                    if (this.parentNode) {
+                        this.parentNode.removeChild(this);
+                    }
+                };
+            }
+
+            // ----------------------------------------------------------------
+            // NodeList.forEach() — iterates over a NodeList like an array.
+            // Added in Chrome 51. querySelectorAll() returns a NodeList,
+            // not a real Array, so Array.prototype.forEach doesn't apply.
+            // Used in FocusManager and LazyLoader.
+            // ----------------------------------------------------------------
+            if (typeof NodeList !== 'undefined' && NodeList.prototype && !NodeList.prototype.forEach) {
+                NodeList.prototype.forEach = Array.prototype.forEach;
+            }
+
+            // ----------------------------------------------------------------
+            // ChildNode.after() / ChildNode.before() / ChildNode.prepend()/append()
+            // DOM mutation helpers — added in Chrome 54. Some Tizen 2.x builds
+            // may be missing these edge-case methods.
+            // ----------------------------------------------------------------
+            if (typeof Element !== 'undefined' && !Element.prototype.after) {
+                Element.prototype.after = function() {
+                    var argArr = Array.prototype.slice.call(arguments);
+                    var parent = this.parentNode;
+                    if (parent) {
+                        var next = this.nextSibling;
+                        for (var i = 0; i < argArr.length; i++) {
+                            var node = typeof argArr[i] === 'string'
+                                ? document.createTextNode(argArr[i])
+                                : argArr[i];
+                            parent.insertBefore(node, next);
+                        }
+                    }
+                };
+            }
+
+        })();
+    </script>
+
+
+    <script>
+        // ====================================================================
+        // STARTUP ERROR CATCHER (ES5 ONLY — must run on Tizen 3.0+)
+        // ====================================================================
+        // Catches any JS errors during initial bundle loading, including
+        // SyntaxErrors from unsupported ES6+ features on older WebViews.
+        // Renders a full-screen diagnostic overlay so we can actually see
+        // what went wrong on a TV with no DevTools access.
+        // ====================================================================
+        (function() {
+            // Track whether the app successfully bootstrapped
+            var appLoaded = false;
+
+            // Mark app as loaded once the main bundle finishes executing
+            // (index.js sets this at the end of its bootstrap sequence)
+            window.__litefin_mark_loaded = function() {
+                appLoaded = true;
+            };
+
+            // ----------------------------------------------------------------
+            // Render a full-screen error overlay with diagnostic info
+            // ----------------------------------------------------------------
+            function showErrorOverlay(title, details) {
+                // Only show once — don't spam overlays for cascading errors
+                if (document.getElementById('startup-error-overlay')) return;
+
+                var overlay = document.createElement('div');
+                overlay.id = 'startup-error-overlay';
+                overlay.style.cssText = [
+                    'position: fixed',
+                    'top: 0',
+                    'left: 0',
+                    'right: 0',
+                    'bottom: 0',
+                    'z-index: 2147483647',
+                    'background: #1a1a2e',
+                    'color: #e0e0e0',
+                    'font-family: monospace, sans-serif',
+                    'font-size: 18px',
+                    'padding: 40px 60px',
+                    'overflow-y: auto',
+                    'box-sizing: border-box'
+                ].join(';');
+
+                // Build the error display content
+                var html = '';
+                html += '<div style="margin-bottom: 24px;">';
+                html += '<span style="font-size: 36px;">&#9888;</span> '; // Warning icon
+                html += '<span style="font-size: 28px; font-weight: bold; color: #ff6b6b;">';
+                html += title;
+                html += '</span>';
+                html += '</div>';
+
+                // Error details box
+                html += '<div style="';
+                html += 'background: #0f0f23;';
+                html += 'border: 1px solid #333;';
+                html += 'border-radius: 8px;';
+                html += 'padding: 20px 24px;';
+                html += 'margin-bottom: 24px;';
+                html += 'white-space: pre-wrap;';
+                html += 'word-break: break-word;';
+                html += 'line-height: 1.6;';
+                html += 'font-size: 16px;';
+                html += '">';
+                html += details;
+                html += '</div>';
+
+                // User agent info for diagnostics
+                html += '<div style="color: #888; font-size: 14px; margin-top: 16px;">';
+                html += '<strong>User Agent:</strong> ' + navigator.userAgent;
+                html += '</div>';
+
+                // Compatibility Tip
+                html += '<div style="background: rgba(255, 107, 107, 0.1); border-left: 4px solid #ff6b6b; padding: 16px 20px; margin-top: 32px; border-radius: 4px; color: #e0e0e0; font-size: 16px;">';
+                html += '<strong>Tip:</strong> You probably used the wrong build. Try a more compatible one like <strong>legacy</strong> or <strong>ultra-legacy</strong> builds.';
+                html += '</div>';
+
+                overlay.innerHTML = html;
+
+                // Hide the splash spinner so the error is clearly visible
+                var splash = document.getElementById('app-splash');
+                if (splash) splash.style.display = 'none';
+
+                document.body.appendChild(overlay);
+            }
+
+            // ----------------------------------------------------------------
+            // Global error handler — catches runtime errors AND parse errors
+            // when the browser attempts to evaluate the bundled script
+            // ----------------------------------------------------------------
+            window.onerror = function(message, source, lineno, colno, error) {
+                // Skip if the app already loaded successfully
+                // (post-load errors are handled by the app's own error handling)
+                if (appLoaded) return;
+
+                var details = '';
+                details += '<span style="color: #ff6b6b;">' + (message || 'Unknown error') + '</span>\n\n';
+
+                if (source) {
+                    details += '<strong>Source:</strong> ' + source + '\n';
+                }
+                if (lineno) {
+                    details += '<strong>Line:</strong> ' + lineno;
+                    if (colno) details += ', <strong>Col:</strong> ' + colno;
+                    details += '\n';
+                }
+                if (error && error.stack) {
+                    details += '\n<strong>Stack Trace:</strong>\n';
+                    details += error.stack;
+                }
+
+                showErrorOverlay('Startup Error', details);
+            };
+
+            // ----------------------------------------------------------------
+            // Unhandled promise rejection handler — catches async failures
+            // during bootstrap (e.g. failed fetch, import errors)
+            // ----------------------------------------------------------------
+            if (typeof window.addEventListener === 'function') {
+                window.addEventListener('unhandledrejection', function(event) {
+                    if (appLoaded) return;
+
+                    var reason = event.reason || {};
+                    var details = '';
+
+                    if (typeof reason === 'string') {
+                        details += '<span style="color: #ff6b6b;">' + reason + '</span>\n';
+                    } else {
+                        details += '<span style="color: #ff6b6b;">';
+                        details += (reason.message || 'Unhandled Promise Rejection');
+                        details += '</span>\n';
+
+                        if (reason.stack) {
+                            details += '\n<strong>Stack Trace:</strong>\n';
+                            details += reason.stack;
+                        }
+                    }
+
+                    showErrorOverlay('Async Startup Error', details);
+                });
+            }
+
+            // ----------------------------------------------------------------
+            // Safety net: if the app hasn't loaded after 15 seconds,
+            // something went very wrong — show a timeout diagnostic
+            // ----------------------------------------------------------------
+            setTimeout(function() {
+                if (!appLoaded && !document.getElementById('startup-error-overlay')) {
+                    showErrorOverlay(
+                        'Startup Timeout',
+                        '<span style="color: #ffa94d;">The application did not finish loading within 15 seconds.</span>\n\n' +
+                        'This may indicate:\n' +
+                        '  - A JavaScript syntax error the browser could not report\n' +
+                        '  - A network issue loading required resources\n' +
+                        '  - An incompatible WebView version\n\n' +
+                        'Check the console output for more details.'
+                    );
+                }
+            }, 15000);
+        })();
+    </script>
+
+    <script>
+        // Immediately restore theme to prevent flash of wrong color
+        (function() {
+            try {
+                var savedTheme = localStorage.getItem('litefin:theme') || 'purplehaze';
+                document.documentElement.setAttribute('data-theme', savedTheme);
+
+                // Theme variables for early loading (must match CSS)
+                var themes = {
+                    'dark': { accent: '#00a4dc', bg: '#101010', text: '#ffffff', textSec: '#999999' },
+                    'light': { accent: '#00a4dc', bg: '#f5f5f5', text: '#101010', textSec: '#666666' },
+                    'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
+                    'purplehaze': { accent: '#b24bf3', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
+                    'wmc': { accent: '#52b043', bg: '#0a120a', text: '#ffffff', textSec: '#999999' },
+                    'appletv': { accent: '#0a84ff', bg: '#000000', text: '#ffffff', textSec: '#999999' }
+                };
+
+                var currentTheme = themes[savedTheme] || themes['dark'];
+                document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
+                document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
+                document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
+                document.documentElement.style.setProperty('--jf-text-secondary', currentTheme.textSec);
+            } catch (e) {
+                console.error('Error restoring theme:', e);
+            }
+        })();
+    </script>
+    <style>
+        body,
+        html {
+            width: 100%;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+            background-color: var(--jf-background, #101010);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            font-family: var(--jf-font-family);
+            overflow: hidden;
+        }
+
+        .splash-content {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100vw;
+            height: 100vh;
+            display: block;
+            z-index: 2147483647; /* Absolute max z-index */
+            background-color: var(--jf-background, #101010);
+            transition: opacity 0.4s ease-out;
+            transform: translateZ(0); /* Hardware accelerate to compete with sidebar */
+            will-change: opacity;
+        }
+
+        .splash-content.fade-out {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .page-loading {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            z-index: 2000;
+            background-color: transparent;
+        }
+
+        .page.loading .page-loading {
+            display: block;
+        }
+
+        /* Hide the internal spinner if the global one is still up, 
+           but keep the layout active to block clicks */
+        body.app-splash-active .page-loading .loading-spinner {
+            opacity: 0;
+        }
+
+        .page-loading.hidden {
+            display: none !important;
+        }
+
+        .loading-spinner {
+            width: 48px;
+            height: 48px;
+            display: block;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            margin-top: -24px;
+            margin-left: -24px;
+            color: #FFF;
+            box-sizing: border-box;
+            animation: rotation 1s linear infinite;
+            -webkit-animation: webkit-rotation 1s linear infinite;
+            /* TIZEN PERF: Promote to its own compositor layer so the rotation
+               animation runs on the GPU, independent of main-thread JS work. */
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+            backface-visibility: hidden;
+            -webkit-backface-visibility: hidden;
+        }
+
+        .loading-spinner::after,
+        .loading-spinner::before {
+            content: '';
+            box-sizing: border-box;
+            position: absolute;
+            width: 24px;
+            height: 24px;
+            top: 0;
+            left: 0;
+            border-radius: 50%;
+            background-color: #FFF;
+            animation: animloader-gpu 1s infinite ease-in-out;
+            -webkit-animation: webkit-animloader-gpu 1s infinite ease-in-out;
+            will-change: transform;
+            transform: translateZ(0);
+            -webkit-transform: translateZ(0);
+        }
+
+        .loading-spinner::before {
+            background-color: var(--jf-accent, #00a4dc);
+            left: auto;
+            right: 0;
+            top: auto;
+            bottom: 0;
+        }
+
+        @keyframes rotation {
+            0% { transform: translateZ(0) rotate(0deg); }
+            100% { transform: translateZ(0) rotate(360deg); }
+        }
+
+        @-webkit-keyframes webkit-rotation {
+            0% { -webkit-transform: translateZ(0) rotate(0deg); }
+            100% { -webkit-transform: translateZ(0) rotate(360deg); }
+        }
+
+        @keyframes animloader-gpu {
+            0%, 100% { transform: translateZ(0) scale(0.5); }
+            50% { transform: translateZ(0) scale(1); }
+        }
+
+        @-webkit-keyframes webkit-animloader-gpu {
+            0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
+            50% { -webkit-transform: translateZ(0) scale(1); }
+        }
+    </style>
+</head>
+
+<body class="app-splash-active">
+    <!-- Main application container -->
+    <div id="app">
+        <!-- Loading screen shown before JS loads -->
+        <div id="app-splash" class="splash-content">
+            <div class="loading-spinner"></div>
+        </div>
+    </div>
+
+</body>
+
+</html>

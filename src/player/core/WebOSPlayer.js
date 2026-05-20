@@ -23,6 +23,7 @@
 import Hls from 'hls.js';
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('WebOSPlayer');
 
@@ -90,6 +91,11 @@ export class WebOSPlayer {
 
         // ---- Stall recovery timer ----
         this._stallTimer = null;
+
+        // ---- Robust resume state ----
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
+        this._cancelRobustResume = false;
 
         log.info('WebOSPlayer constructed');
     }
@@ -221,6 +227,13 @@ export class WebOSPlayer {
         this._subtitleOffset = 0;
         this._previousOffset = 0;
 
+        // Initialize robust seek state immediately to avoid race conditions with early 'playing' events.
+        // Do not attempt robust resume for live TV/streams.
+        const isLive = options.item?.Type === 'TvChannel' || options.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : (options.playerStartPositionTicks || 0) / 10000000;
+        this._robustSeekPending = false;
+        this._cancelRobustResume = false;
+
         const video = this._ensureVideoElement();
 
         // Tear down any active Hls.js session before starting fresh
@@ -309,12 +322,19 @@ export class WebOSPlayer {
                 // Attempt tracks after metadata is loaded
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    // Older browsers (Chrome < 50) don't return a Promise from play()
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onLoadError = () => {
@@ -359,12 +379,18 @@ export class WebOSPlayer {
                 // player, so doing it here (before play()) ensures the array is ready.
                 this._applyInitialTracks(options);
 
-                video.play()
-                    .then(() => {
-                        this._applyRobustResume(video, options.playerStartPositionTicks);
-                        resolve();
-                    })
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(() => {
+                            this._applyRobustResume(video, options.playerStartPositionTicks);
+                            resolve();
+                        })
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    this._applyRobustResume(video, options.playerStartPositionTicks);
+                    resolve();
+                }
             };
 
             const onError = () => {
@@ -399,9 +425,14 @@ export class WebOSPlayer {
             hls.on(Hls.Events.MANIFEST_PARSED, () => {
                 log.info('WebOSPlayer: Hls.js manifest parsed');
                 this._applyInitialTracks(options, hls);
-                video.play()
-                    .then(resolve)
-                    .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                const playPromise = video.play();
+                if (playPromise !== undefined && typeof playPromise.then === 'function') {
+                    playPromise
+                        .then(resolve)
+                        .catch(err => this._handleAutoplayError(err, video, options, resolve, reject));
+                } else {
+                    resolve();
+                }
             });
 
             if (options.playerStartPositionTicks) {
@@ -518,59 +549,73 @@ export class WebOSPlayer {
      * @param {number} ticks - Jellyfin position ticks
      */
     _applyRobustResume(video, ticks) {
-        if (!ticks) return;
-        const resumeSeconds = ticks / 10000000;
+        if (this._robustSeekTarget === null || this._robustSeekTarget === undefined) return;
 
-        if (resumeSeconds < 5) return;
+        const resumeSeconds = this._robustSeekTarget;
 
         // Safety guard: do not seek beyond the end
         if (MediaHelper.isValidDuration(video.duration) && resumeSeconds > video.duration - 10) {
             log.warn('WebOSPlayer: Resume position near end of video, ignoring', resumeSeconds);
+            this._robustSeekTarget = null;
             return;
         }
 
-        log.info('WebOSPlayer: Applying robust resume to', resumeSeconds, 's');
-
-        const seekWithRetry = (time, attempts = 5) => {
-            let tries = 0;
-            const attempt = () => {
-                tries++;
-                try {
-                    video.currentTime = time;
-                } catch (e) {}
-
-                setTimeout(() => {
-                    if (Math.abs(video.currentTime - time) < 2) {
-                        log.debug('WebOSPlayer: Seek successful on attempt', tries);
-                    } else if (tries < attempts) {
-                        log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
-                        attempt();
-                    } else {
-                        log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
-                    }
-                }, 500);
-            };
-            attempt();
-        };
-
         const tryApply = () => {
-            // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
-            if (video.readyState >= 3 && video.seekable.length > 0) {
-                seekWithRetry(resumeSeconds);
-            } else {
-                setTimeout(tryApply, 300);
+            if (this._cancelRobustResume || this._robustSeekTarget === null) return;
+
+            // Only apply proactively if we're actually resuming from significantly past 0
+            if (resumeSeconds >= 5) {
+                // readyState 3 (HAVE_FUTURE_DATA) or 4 (HAVE_ENOUGH_DATA) + seekable ranges
+                if (video.readyState >= 3 && video.seekable.length > 0) {
+                    this._seekWithRetry(resumeSeconds);
+                } else {
+                    setTimeout(tryApply, 300);
+                }
             }
         };
 
         tryApply();
+    }
 
-        const onPlaying = () => {
-            if (Math.abs(video.currentTime - resumeSeconds) > 5) {
-                log.info('WebOSPlayer: Detected snap-back, re-applying seek');
-                seekWithRetry(resumeSeconds);
+    _seekWithRetry(time, attempts = 5) {
+        this._robustSeekPending = true;
+        let tries = 0;
+        const video = this._videoElement;
+
+        log.info('WebOSPlayer: Applying robust resume seek to', time, 's');
+
+        const attempt = () => {
+            if (this._cancelRobustResume) {
+                this._robustSeekPending = false;
+                this._robustSeekTarget = null;
+                log.info('WebOSPlayer: Robust resume cancelled by manual seek or stop');
+                return;
             }
+            tries++;
+            try {
+                video.currentTime = time;
+            } catch (e) {}
+
+            setTimeout(() => {
+                if (this._cancelRobustResume) return;
+
+                if (Math.abs(video.currentTime - time) < 2) {
+                    log.debug('WebOSPlayer: Seek successful on attempt', tries);
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                } else if (tries < attempts) {
+                    log.debug('WebOSPlayer: Retrying seek... attempt', tries + 1);
+                    attempt();
+                } else {
+                    log.warn('WebOSPlayer: Seek failed after', attempts, 'retries');
+                    this._robustSeekPending = false;
+                    this._robustSeekTarget = null;
+                    if (!video.paused) this._onPlaying();
+                }
+            }, 500);
         };
-        video.addEventListener('playing', onPlaying, { once: true });
+        attempt();
     }
 
     /**
@@ -623,6 +668,9 @@ export class WebOSPlayer {
      * @returns {Promise<void>}
      */
     async stop() {
+        this._cancelRobustResume = true;
+        this._robustSeekTarget   = null;
+        this._robustSeekPending  = false;
         this._clearStallCheck();
         this._destroyHlsPlayer();
 
@@ -637,6 +685,26 @@ export class WebOSPlayer {
                 video.removeChild(video.firstChild);
             }
             video.load();
+
+            // ── WebOS Chromium GPU surface release ───────────────────────────
+            //
+            // WebOS uses the same embedded Chromium compositor as Tizen's HTML
+            // backend. A <video> element remaining in the DOM after src is cleared
+            // still holds its decoded frame buffer as a GPU texture. For 4K content
+            // this can be 20–80MB of VRAM that the compositor cannot reclaim,
+            // resulting in GPU memory fragmentation that shows up as glitching UI
+            // (flickering icons, white flashes) on the next page.
+            //
+            // Temporarily removing the element from the DOM signals the compositor
+            // to release the GPU surface. We immediately re-insert it so that
+            // _ensureVideoElement() can reuse the same DOM node on the next play().
+            //
+            if (video.parentNode) {
+                const parent = video.parentNode;
+                parent.removeChild(video);
+                parent.appendChild(video);
+                log.debug('stop(): video element cycled out/in DOM to flush GPU surface');
+            }
         }
 
         this._currentSrc         = null;
@@ -656,6 +724,10 @@ export class WebOSPlayer {
         const video = this._videoElement;
         if (!video) return;
 
+        // Cancel any pending retry loops from previous seeks
+        this._cancelRobustResume = true;
+        this._robustSeekPending = false;
+
         let seconds = positionTicks / 10000000;
 
         // Subtract the transcoding offset so the seek lands at the right place
@@ -663,6 +735,14 @@ export class WebOSPlayer {
         if (this._currentPlayOptions?.transcodingOffsetTicks) {
             seconds = (positionTicks - this._currentPlayOptions.transcodingOffsetTicks) / 10000000;
         }
+
+        // Update the robust seek target so that _onPlaying can detect if this seek snaps back.
+        // We skip this for Live TV where currentTime logic is often non-standard.
+        const isLive = this._currentPlayOptions?.item?.Type === 'TvChannel' || this._currentPlayOptions?.mediaSource?.LiveStreamId;
+        this._robustSeekTarget = isLive ? null : seconds;
+
+        // Re-enable robust check for the new seek
+        this._cancelRobustResume = false;
 
         // Skip tiny seeks — avoids decoder stutter on redundant calls
         if (Math.abs(video.currentTime - seconds) > SEEK_THRESHOLD_MS / 1000) {
@@ -953,6 +1033,8 @@ export class WebOSPlayer {
 
     /** @private */
     _onTimeUpdate() {
+        if (this._robustSeekPending) return;
+
         if (!this._timeUpdated && this._videoElement?.currentTime) {
             this._timeUpdated = true;
         }
@@ -1000,11 +1082,16 @@ export class WebOSPlayer {
     /**
      * Track progress events to log buffer state. Uses _getBufferAhead() for
      * accurate gap-aware reporting.
+     *
+     * We only log after playback has actually started — before that the
+     * progress events are just the initial segment prefetch and clutter
+     * the log while the decoder pipeline spins up.
      * @private
      */
     _onProgress() {
         const video = this._videoElement;
         if (!video || !video.buffered || video.buffered.length === 0) return;
+        if (!this._started) return;
         log.debug('WebOSPlayer: Buffer ahead', this._getBufferAhead().toFixed(1), 's');
     }
 
@@ -1050,6 +1137,23 @@ export class WebOSPlayer {
 
     /** @private */
     _onPlaying() {
+        if (this._robustSeekTarget !== null && this._robustSeekTarget !== undefined) {
+            const target = this._robustSeekTarget;
+            // If we drifted past the target
+            if (Math.abs(this.getCurrentTime() - target) > 2) {
+                log.info(`WebOSPlayer: Detected position drift (current: ${this.getCurrentTime()}, expected: ${target}), applying robust seek`);
+                this._seekWithRetry(target);
+                return; // suppress this playing event
+            } else {
+                // No drift, we are good.
+                this._robustSeekTarget = null;
+            }
+        }
+
+        if (this._robustSeekPending) {
+            return; // suppress playing event until retry loop finishes
+        }
+
         if (!this._started) {
             this._started = true;
             log.info('WebOSPlayer: Playback started');
@@ -1061,6 +1165,17 @@ export class WebOSPlayer {
 
     /** @private */
     _onWaiting() {
+        // ----------------------------------------------------------------
+        // Suppress waiting events before the first 'playing' fires.
+        // WebOS fires 'waiting' as a normal part of its decoder
+        // initialization pipeline — the hardware HLS engine needs time to
+        // parse the first IDR frame before it can emit 'playing'. Surfacing
+        // this to the UI or arming the stall timer at this stage causes the
+        // stall-recovery kick to fire 8 s later against a perfectly healthy
+        // buffer, creating the visible freeze at start of playback.
+        // ----------------------------------------------------------------
+        if (!this._started) return;
+
         this.onEvent({ type: 'waiting' });
         this._startStallCheck();
     }
@@ -1068,6 +1183,13 @@ export class WebOSPlayer {
     /** @private */
     _onStalled() {
         log.warn('WebOSPlayer: Playback stalled');
+
+        // Same guard as _onWaiting — a 'stalled' event immediately at load
+        // time is the WebOS pipeline warming up, not a genuine underrun.
+        // Let the decoder self-recover silently; only engage stall machinery
+        // once we know the player is already producing frames.
+        if (!this._started) return;
+
         this.onEvent({ type: 'waiting' });
         this._startStallCheck();
     }
@@ -1109,73 +1231,115 @@ export class WebOSPlayer {
     // ========================================================================
 
     /**
-     * Start a 2.5-second timer that fires a recovery kick ONLY if the buffer
-     * is genuinely starved (< 5 s ahead) when it expires.
+     * Adaptive stall recovery — two-tier timer based on buffer health at stall time.
      *
-     * WHY THE BUFFER GATE:
-     *   The WebOS native HLS player fires a 'waiting' or 'stalled' event at
-     *   every MPEG-TS segment boundary while the decoder pipeline is transitioning
-     *   to the next IDR frame — even when 28+ seconds of data are already buffered.
-     *   Before this change, we kicked the playhead +0.5 s unconditionally, which:
-     *     1. Skipped visible content (audible/visual jump every 6-7 s on DV content).
-     *     2. Invalidated the pre-buffered window (dropping from 28 s → 7 s).
-     *     3. Immediately re-triggered another 'waiting' event → another stall check
-     *        → infinite choppiness loop.
+     * WHY TWO TIERS:
      *
-     *   With the gate, we let the native decoder self-recover at segment
-     *   boundaries (it always does, in < 500 ms). The kick is reserved for genuine
-     *   buffer underruns (network drop, server-side transcode lag) where < 5 s
-     *   of data remain and a larger skip is the only way to resume cleanly.
+     *   Tier 1 — FAST (1.5 s): Decoder hiccup with healthy buffer.
+     *   ─────────────────────────────────────────────────────────
+     *   On Dolby Vision / HEVC content served via direct-play MKV, the WebOS
+     *   native media pipeline sometimes freezes the decoder mid-stream even
+     *   when 10–18 s of data is already buffered. This is a hardware quirk
+     *   (the decoder pipeline stalls waiting for an IDR frame that it never
+     *   initiates itself). Since the buffer is healthy, we know immediately
+     *   this is NOT a network problem — the decoder just needs a nudge.
+     *   Waiting the full 8 s to confirm this causes the visible "freeze at
+     *   start" that the user experiences. 1.5 s is long enough to confirm the
+     *   decoder won't self-recover, while keeping the stall nearly imperceptible.
      *
-     * KICK MAGNITUDE (kept at 0.5 s):
-     *   A 10 ms nudge often lands inside the same decoded frame and is silently
+     *   Tier 2 — SLOW (8 s, configurable): Thin buffer / genuine underrun.
+     *   ────────────────────────────────────────────────────────────────────
+     *   When the buffer is thin at stall time the network may still be filling
+     *   the segment. We wait the full recovery window before kicking so we
+     *   don't interrupt a segment download mid-flight and cause a worse stall.
+     *   The bufferGate check at the end ensures we only kick for real underruns
+     *   and not for HLS segment-boundary micro-stalls that always self-recover.
+     *
+     * KICK MAGNITUDE (0.5 s):
+     *   A 10 ms nudge lands inside the same decoded frame and is silently
      *   ignored by the WebOS native media engine on high-bitrate HEVC streams.
-     *   A 500 ms nudge crosses at least one HLS segment boundary, forcing a
-     *   clean IDR re-init — which is what actually clears a genuine underrun.
+     *   A 500 ms nudge crosses at least one segment boundary, forcing a clean
+     *   IDR re-init — which is what actually unblocks the decoder.
      *
      * @private
      */
     _startStallCheck() {
         this._clearStallCheck();
-        this._stallTimer = setTimeout(() => {
-            if (!this._videoElement || this._videoElement.paused || !this._started) return;
 
-            const bufferAhead = this._getBufferAhead();
+        // ----------------------------------------------------------------
+        // Sample the buffer RIGHT NOW, at the moment the stall is detected.
+        // This tells us whether the network is fine (decoder hiccup) or
+        // whether we're genuinely starved (network underrun). The buffer
+        // state at stall time is far more diagnostic than what it looks like
+        // 8 seconds later when the slow timer fires.
+        // ----------------------------------------------------------------
+        const bufferAtStall = this._getBufferAhead();
 
-            // ----------------------------------------------------------------
-            // Buffer gate: if the pipeline has data, this is a decoder micro-stall
-            // at a segment boundary — not a real underrun.
-            //
-            // NOTE: At very high bitrates (e.g. 96 Mbps 4K HEVC), each 6-second
-            // segment is ~72 MB. Even on a fast home network the native WebOS
-            // player takes 1-2 seconds to fully download a segment. The buffer
-            // at a segment boundary can drop to 0 briefly while the next chunk
-            // loads. We need the gate to be higher than 1 segment (6 s) so we
-            // don't fire a kick mid-download and restart the entire stall cycle.
-            // The native engine always self-recovers at boundaries — let it.
-            // ----------------------------------------------------------------
-            if (bufferAhead > 10) {
-                log.debug(
-                    'WebOSPlayer: Stall timer fired with',
-                    bufferAhead.toFixed(1),
-                    's buffered — segment-boundary micro-stall, letting decoder self-recover'
+        // Threshold: if we have more than this many seconds buffered at the
+        // moment of stall, the network is not the problem — the decoder froze.
+        // 3 s is conservative enough to exclude mid-segment download drops
+        // while still catching the DV/HEVC decoder hiccup pattern clearly.
+        const HICCUP_BUFFER_THRESHOLD = 3;
+
+        if (bufferAtStall > HICCUP_BUFFER_THRESHOLD) {
+            // ────────────────────────────────────────────────────────────────
+            // FAST PATH: Decoder hiccup — buffer is healthy, network is fine.
+            // Don't wait 8 s to confirm what we already know. 1.5 s is enough
+            // to rule out a transient self-recovering wobble and still feel
+            // nearly instant to the user.
+            // ────────────────────────────────────────────────────────────────
+            this._stallTimer = setTimeout(() => {
+                if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+                const bufferNow = this._getBufferAhead();
+                log.warn(
+                    'WebOSPlayer: Decoder hiccup — stalled 1.5s with',
+                    bufferNow.toFixed(1),
+                    's buffered — fast recovery kick (+0.5s)'
                 );
-                return;
-            }
+                try {
+                    this._videoElement.currentTime += 0.5;
+                } catch (e) {
+                    log.error('WebOSPlayer: Fast recovery kick failed', e);
+                }
+            }, 1500);
 
-            // Genuine underrun — kick forward half a second to force the
-            // pipeline to seek to the next clean IDR frame.
-            log.warn(
-                'WebOSPlayer: Still stalled after 8s (buffer:',
-                bufferAhead.toFixed(1),
-                's) — recovery kick (+0.5s)'
-            );
-            try {
-                this._videoElement.currentTime += 0.5;
-            } catch (e) {
-                log.error('WebOSPlayer: Recovery kick failed', e);
-            }
-        }, 8000);
+        } else {
+            // ────────────────────────────────────────────────────────────────
+            // SLOW PATH: Thin buffer at stall time — possible network underrun.
+            // Give the download time to fill the buffer. Only kick after the
+            // full recovery window, and only if still below the buffer gate.
+            // ────────────────────────────────────────────────────────────────
+            this._stallTimer = setTimeout(() => {
+                if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+                const bufferAhead = this._getBufferAhead();
+
+                // If the buffer has since refilled past the gate, this was a
+                // transient HLS segment-boundary micro-stall — let it go.
+                const bufferGate = PlayerSettings.get('webosBufferGate') || 10;
+                if (bufferAhead > bufferGate) {
+                    log.debug(
+                        'WebOSPlayer: Stall timer fired with',
+                        bufferAhead.toFixed(1),
+                        's buffered — segment-boundary micro-stall, letting decoder self-recover'
+                    );
+                    return;
+                }
+
+                // Genuine underrun — kick forward to force a clean IDR re-init.
+                log.warn(
+                    'WebOSPlayer: Still stalled after 8s (buffer:',
+                    bufferAhead.toFixed(1),
+                    's) — recovery kick (+0.5s)'
+                );
+                try {
+                    this._videoElement.currentTime += 0.5;
+                } catch (e) {
+                    log.error('WebOSPlayer: Recovery kick failed', e);
+                }
+            }, (PlayerSettings.get('webosStallRecovery') || 8) * 1000);
+        }
     }
 
     /** @private */

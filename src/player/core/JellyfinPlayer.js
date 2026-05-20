@@ -590,17 +590,63 @@ export class JellyfinPlayer extends EventEmitter {
                 const fallbackSource = options.item.MediaSources[0];
                 const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                 if (ms && ms.MediaStreams) {
+                    // =========================================================================
+                    // Retrieve Subtitle Mode Setting
+                    //
+                    // Fetch the user's preferred subtitle mode setting (Default, Always, Smart, etc.).
+                    // Fall back to 'Default' if no preference has been configured yet.
+                    // =========================================================================
                     const subtitleMode = PlayerSettings.get('subtitleMode') || 'Default';
-                    const subtitleStreams = ms.MediaStreams.filter(s => s.Type === 'Subtitle');
+
+                    // =========================================================================
+                    // PGS Subtitle Filter Guard
+                    //
+                    // If the user set PGS playback to "Disable and Hide Completely" in settings,
+                    // they explicitly want PGS subtitles to be ignored. We filter them out of
+                    // the candidate pool of subtitle streams here. This prevents the player from
+                    // auto-selecting a disabled/hidden PGS track and rendering nothing, allowing
+                    // it to instead fallback to a valid, renderable SRT or VTT track.
+                    // =========================================================================
+                    const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+                    const subtitleStreams = ms.MediaStreams.filter(s => {
+                        // We only care about subtitle streams
+                        if (s.Type !== 'Subtitle') return false;
+                        
+                        // If PGS rendering is disabled, filter out PGS/PGSSUB codecs
+                        if (disablePgs) {
+                            const codec = (s.Codec || '').toLowerCase();
+                            if (codec === 'pgs' || codec === 'pgssub') {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
                     let chosenIndex = undefined;
 
+                    // Apply the corresponding selection logic depending on the mode
                     if (subtitleMode === 'None') {
                         chosenIndex = -1;
                     } else if (subtitleMode === 'Default') {
-                        // Use Server's DefaultSubtitleStreamIndex if present
-                        if (ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null) {
+                        // =====================================================================
+                        // Server Default Track Resolution with PGS Safeguard
+                        //
+                        // Verify if the server-provided default track is a PGS track. If PGS is
+                        // disabled, we discard this track and fall back to searching the rest of
+                        // the filtered candidate streams (which have PGS excluded).
+                        // =====================================================================
+                        const serverDefaultTrack = ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null
+                            ? ms.MediaStreams.find(s => s.Index === ms.DefaultSubtitleStreamIndex)
+                            : null;
+                        const isServerDefaultPgs = serverDefaultTrack && 
+                            ((serverDefaultTrack.Codec || '').toLowerCase() === 'pgs' || (serverDefaultTrack.Codec || '').toLowerCase() === 'pgssub');
+                        
+                        // Use default only if valid and not a disabled PGS track
+                        if (ms.DefaultSubtitleStreamIndex !== undefined && 
+                            ms.DefaultSubtitleStreamIndex !== null && 
+                            !(disablePgs && isServerDefaultPgs)) {
                             chosenIndex = ms.DefaultSubtitleStreamIndex;
                         } else {
+                            // Find the first default or forced track from the filtered candidate list
                             const subStream = subtitleStreams.find(s => s.IsDefault || s.IsForced);
                             if (subStream) chosenIndex = subStream.Index;
                         }
@@ -648,61 +694,6 @@ export class JellyfinPlayer extends EventEmitter {
                  log.debug('MediaSource[0] keys:', Object.keys(playbackInfo.MediaSources[0]));
             }
 
-            /*
-             * Audio items (Music, Audiobooks) never have chapters in Jellyfin's
-             * sense — skip the chapter fetch entirely to avoid a wasted API call.
-             * Video items still go through the normal 3-step chapter resolution.
-             */
-            const isAudioItem = options.item?.MediaType === 'Audio' ||
-                                 options.item?.Type === 'AudioBook';
-
-            let chapters = [];
-
-            if (!isAudioItem) {
-                // Chapter Recovery Strategy
-                // 1. Check if passed item has chapters (from options.item passed by PlayerPage)
-                chapters = options.item?.Chapters || [];
-
-                if (chapters.length > 0) {
-                    log.info('Using chapters from item object:', chapters.length);
-                } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
-                    // 2. Check PlaybackInfo
-                    chapters = playbackInfo.Chapters;
-                    log.info('Using chapters from PlaybackInfo:', chapters.length);
-                } else {
-                    // 3. Fallback: Fetch item details to get chapters
-                    log.info('Chapters missing. Fetching item details...');
-                    try {
-                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks' });
-                        if (itemDetails && itemDetails.Chapters) {
-                            chapters = itemDetails.Chapters;
-                            log.info('Chapters fetched from API:', chapters.length);
-                        } else {
-                            log.info('No chapters found in API response.');
-                        }
-                        // Also back-fill RunTimeTicks onto options.item if it was missing
-                        // so the mediaSource back-fill below can pick it up.
-                        if (itemDetails?.RunTimeTicks && options.item && !options.item.RunTimeTicks) {
-                            log.info(`[Duration] Back-filling RunTimeTicks onto item from chapter fetch: ${itemDetails.RunTimeTicks}`);
-                            options.item.RunTimeTicks = itemDetails.RunTimeTicks;
-                        }
-                    } catch (e) {
-                        log.warn('Failed to fetch item details for chapters:', e);
-                    }
-                }
-            } else {
-                log.debug('Audio item — skipping chapter fetch');
-            }
-
-            this._chapters = chapters;
-            log.debug('Final Chapters:', this._chapters.length);
-
-            if (this._chapters.length > 0) {
-                log.info('Chapters loaded:', this._chapters.length);
-                this.emit('chaptersloaded', { chapters: this._chapters });
-            } else {
-                this.emit('chaptersloaded', { chapters: [] });
-            }
 
             if (!playbackInfo || !playbackInfo.MediaSources?.length) {
                 log.error('No media sources in PlaybackInfo');
@@ -768,6 +759,27 @@ export class JellyfinPlayer extends EventEmitter {
                      log.info('[PlaybackMode] Inferring Remux based on DirectPlayError only.');
                 }
             }
+            if (this._playbackMode === 'transcode') {
+                playMethod = 'Transcode';
+                mediaSource.SupportsDirectStream = false;
+                mediaSource.SupportsDirectPlay = false;
+                
+                // Force MediaHelper to evaluate this as a full transcode for UI overlays
+                if (!mediaSource.TranscodingInfo) {
+                    mediaSource.TranscodingInfo = {
+                        IsVideoDirect: false,
+                        IsAudioDirect: false,
+                        VideoCodec: 'h264', // Dummy value to prevent !VideoCodec fallback
+                        AudioCodec: 'aac'
+                    };
+                } else {
+                    mediaSource.TranscodingInfo.IsVideoDirect = false;
+                    mediaSource.TranscodingInfo.IsAudioDirect = false;
+                }
+                
+                log.info('[PlaybackMode] Enforcing Transcode label due to strict transcode mode.');
+            }
+
             log.info(`[PlaybackMode] Calculated PlayMethod: ${playMethod}`);
 
             // Store the resolved play method so track-switching logic can
@@ -852,6 +864,47 @@ export class JellyfinPlayer extends EventEmitter {
             this._currentItem = options.item || { Id: options.itemId };
 
             // ================================================================
+            // Chapter Resolution
+            //
+            // We resolve chapters after establishing _currentMediaSource and
+            // _currentItem. This prevents race conditions where the 'chaptersloaded'
+            // event triggers an OSD render that tries to read duration from a
+            // null media source.
+            // ================================================================
+            const isAudioItemForChapters = this._currentItem?.MediaType === 'Audio' ||
+                                 this._currentItem?.Type === 'AudioBook';
+
+            let chapters = [];
+            if (!isAudioItemForChapters) {
+                chapters = this._currentItem?.Chapters || [];
+
+                if (chapters.length > 0) {
+                    log.info('Using chapters from item object:', chapters.length);
+                } else if (playbackInfo.Chapters && playbackInfo.Chapters.length > 0) {
+                    chapters = playbackInfo.Chapters;
+                    log.info('Using chapters from PlaybackInfo:', chapters.length);
+                } else {
+                    log.info('Chapters missing. Fetching item details...');
+                    try {
+                        const itemDetails = await api.getItem(options.itemId, { Fields: 'Chapters,Trickplay,RunTimeTicks' });
+                        if (itemDetails?.Chapters) {
+                            chapters = itemDetails.Chapters;
+                            log.info('Chapters fetched from API:', chapters.length);
+                        }
+                        // Back-fill RunTimeTicks if missing
+                        if (itemDetails?.RunTimeTicks && !this._currentItem.RunTimeTicks) {
+                            this._currentItem.RunTimeTicks = itemDetails.RunTimeTicks;
+                        }
+                    } catch (e) {
+                        log.warn('Failed to fetch item details for chapters:', e);
+                    }
+                }
+            }
+
+            this._chapters = chapters;
+            this.emit('chaptersloaded', { chapters: this._chapters });
+
+            // ================================================================
             // Duration Resolution — back-fill from item metadata
             //
             // Jellyfin's PlaybackInfo often omits RunTimeTicks on the
@@ -881,6 +934,7 @@ export class JellyfinPlayer extends EventEmitter {
                 itemId:       options.itemId,
                 mediaSourceId: mediaSource.Id,
                 mediaStreams:  mediaSource.MediaStreams || [],
+                mediaAttachments: mediaSource.MediaAttachments || [],
                 // Use the resolved _backendType string so SubtitleManager knows
                 // whether it should attempt embedded-native subtitle routing
                 // (Tizen only) or always defer to external text/ASS/PGS paths.
@@ -1630,6 +1684,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         if (index === -1) {
              if (this._chapters && this._chapters.length > 0) {
+                 this._lastChapterSeekTime = Date.now();
                  this.seek(this._chapters[0].StartPositionTicks);
                  return;
              }
@@ -1650,12 +1705,22 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info('TizenAVPlayer: Applying 2.5s offset to next chapter jump');
             }
             log.info('Skipping to next chapter:', nextChapter.Name);
+            this._lastChapterSeekTime = Date.now();
             this.seek(seekTarget);
         }
     }
 
     previousChapter() {
-        const index = this.getCurrentChapterIndex();
+        // Tizen Seek Offset Workaround:
+        // On Tizen, nextChapter() applies a -2.5s offset to chapter seeks, landing slightly
+        // before the actual chapter start. To prevent previousChapter() from misidentifying
+        // the current chapter and getting stuck in a loop, we look ahead by 3s (matching nextChapter).
+        let lookAhead = 0;
+        if (this._backendType === 'tizen') {
+             lookAhead = 30000000; // 3 seconds in ticks
+        }
+
+        const index = this.getCurrentChapterIndex(this.getCurrentPositionTicks() + lookAhead);
         log.debug('Chapter Debug (Prev): Current Index', index);
 
         if (index === -1) return;
@@ -1667,18 +1732,27 @@ export class JellyfinPlayer extends EventEmitter {
         const diff = currentTicks - chapterStart;
         log.debug('Chapter Debug: Diff from start', diff);
 
-        // If we are more than 3 seconds into the chapter, restart event
-        // 3 seconds = 30,000,000 ticks
-        if (diff > 30000000) {
+        // STICKY CHAPTER SEEK PROTECTION (Bypasses restart block if user clicks quickly)
+        const now = Date.now();
+        const isRepeatedClick = this._lastChapterSeekTime && (now - this._lastChapterSeekTime < 2500);
+
+        // If we are more than 3 seconds into the chapter AND it's not a rapid repeated click, restart current chapter.
+        // On Tizen, keyframe seeking can make us land up to 8-10 seconds after the target chapter start.
+        // Therefore, if the user repeatedly clicks "Previous Chapter" (within 2.5 seconds),
+        // we bypass the restart protection entirely and skip to the previous chapter.
+        if (diff > 30000000 && !isRepeatedClick) {
             log.info('Restarting current chapter:', currentChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(chapterStart);
         } else if (index > 0) {
             // Go to previous chapter
             const prevChapter = this._chapters[index - 1];
             log.info('Skipping to previous chapter:', prevChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(prevChapter.StartPositionTicks);
         } else {
              // First chapter, just seek to start
+             this._lastChapterSeekTime = now;
              this.seek(0);
         }
     }
@@ -1824,11 +1898,13 @@ export class JellyfinPlayer extends EventEmitter {
             const hlsDur = this._backend.getHlsManifestDuration();
             if (hlsDur !== null) {
                 log.debug(`[Duration] Using HLS manifest duration: ${hlsDur.toFixed(1)}s`);
+                
+                const ticks = Math.floor(hlsDur * 10000000);
                 // Cache it on the MediaSource so subsequent calls skip this lookup
                 if (this._currentMediaSource) {
-                    this._currentMediaSource.RunTimeTicks = Math.floor(hlsDur * 10000000);
+                    this._currentMediaSource.RunTimeTicks = ticks;
                 }
-                return this._currentMediaSource.RunTimeTicks;
+                return ticks;
             }
         }
 

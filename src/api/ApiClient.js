@@ -188,13 +188,16 @@ export class ApiClient {
         this.lastUrl = url;
 
         // Build headers
-        const authHeader = this.getAuthHeader();
         const headers = {
-            'X-Emby-Authorization': authHeader,
-            'Authorization': authHeader,      // Standard header for modern servers/proxies
             'Accept': 'application/json',     // Explicitly request JSON response
             ...options.headers
         };
+
+        if (!options.skipAuth) {
+            const authHeader = this.getAuthHeader();
+            headers['X-Emby-Authorization'] = authHeader;
+            headers['Authorization'] = authHeader;      // Standard header for modern servers/proxies
+        }
 
         if (!options.body || !(options.body instanceof FormData)) {
             headers['Content-Type'] = 'application/json';
@@ -345,8 +348,8 @@ export class ApiClient {
     /**
      * GET request helper
      */
-    async get(endpoint, params = null) {
-        return this.request(endpoint, { method: 'GET', params });
+    async get(endpoint, params = null, options = {}) {
+        return this.request(endpoint, { method: 'GET', params, ...options });
     }
 
     /**
@@ -359,8 +362,8 @@ export class ApiClient {
     /**
      * DELETE request helper
      */
-    async delete(endpoint) {
-        return this.request(endpoint, { method: 'DELETE' });
+    async delete(endpoint, options = {}) {
+        return this.request(endpoint, { method: 'DELETE', ...options });
     }
 
     // ========================================================================
@@ -370,8 +373,8 @@ export class ApiClient {
     /**
      * Get server public info
      */
-    async getPublicInfo() {
-        return this.get('/System/Info/Public');
+    async getPublicInfo(options = {}) {
+        return this.get('/System/Info/Public', null, { skipAuth: true, ...options });
     }
 
     /**
@@ -461,8 +464,8 @@ export class ApiClient {
     /**
      * Get current user info
      */
-    async getCurrentUser() {
-        return this.get(`/Users/${this._userId}`);
+    async getCurrentUser(options = {}) {
+        return this.get(`/Users/${this._userId}`, null, options);
     }
 
     /**
@@ -888,7 +891,7 @@ export class ApiClient {
     async searchHints(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            SearchTerm: query,
+            searchTerm: query,
             IncludeItemTypes: 'Movie,Series,Episode,BoxSet,MusicArtist,Artist,MusicAlbum,Audio',
             Limit: 50,
             Recursive: true,
@@ -963,7 +966,7 @@ export class ApiClient {
     async searchPeople(query, params = {}) {
         const defaults = {
             UserId: this._userId,
-            SearchTerm: query,
+            searchTerm: query,
             Limit: 24,
             Fields: 'PrimaryImageAspectRatio',
             Recursive: true,
@@ -1953,12 +1956,15 @@ export async function discoverServers(onProgress = null, onServerFound = null) {
          * so this is generous while cutting worst-case scan time roughly in half
          * vs the previous 800ms.
          */
-        const CHUNK_SIZE = 30;
+        const CHUNK_SIZE = 15; // Reduced from 30 to prevent saturating network stack on older TVs
         for (let i = 0; i < batch.length; i += CHUNK_SIZE) {
             if (signal.aborted) return;
 
             const chunk = batch.slice(i, i + CHUNK_SIZE);
             const results = await Promise.all(chunk.map((addr) => testServer(addr, 400, signal)));
+
+            // Exit immediately if aborted during the probes
+            if (signal.aborted) return;
 
             results
                 .filter((s) => s)

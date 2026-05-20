@@ -10,6 +10,7 @@
 import { MediaHelper } from './MediaHelper.js';
 import { logger } from '../../utils/Logger.js';
 import { detectTizenVersion } from '../../api/profiles/TizenProfile.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 const log = logger.create('TizenAVPlayer');
 
@@ -205,8 +206,8 @@ export class TizenAVPlayer {
                     // 1. ABR Quality Kickstart: Prevent ABR jump stutter by starting at high quality.
                     // If no bitrate is provided, default to a high value (20Mbps) to ensure hardware
                     // requests high quality immediately.
-                    const bufferPlaySec = 6;
-                    const bufferResumeSec = 4;
+                    const bufferPlaySec = PlayerSettings.get('tizenInitialBuffer') || 6;
+                    const bufferResumeSec = PlayerSettings.get('tizenResumeBuffer') || 4;
                     const timeoutSec = 8;
                     const bitrate = options.mediaSource?.Bitrate || 20000000;
                     const isDirectPlay = options.playMethod === 'DirectPlay';
@@ -1232,7 +1233,45 @@ export class TizenAVPlayer {
      */
     async _stopInternal() {
         this._activeTizenSubtitleIndex = null;
+
+        // ── Cancel all pending timeouts BEFORE touching AVPlay. ──────────────
+        //
+        // These timers hold closures that reference the AVPlay instance. If they
+        // fire after close(), they attempt to call setSelectTrack / setListener
+        // on a dead decoder, which on Tizen can corrupt the hardware pipeline
+        // and prevent VRAM from being fully reclaimed (causing GPU glitches on
+        // the UI after exiting 4K playback).
+        //
+        if (this._subtitleConfirmTimerId !== null) {
+            clearTimeout(this._subtitleConfirmTimerId);
+            this._subtitleConfirmTimerId = null;
+        }
+        if (this._suppressWaitingTimeout) {
+            clearTimeout(this._suppressWaitingTimeout);
+            this._suppressWaitingTimeout = null;
+        }
+
         if (this._avplay) {
+            // ── Remove the event listener FIRST before stop/close. ────────────
+            //
+            // Per Samsung's AVPlay documentation, the listener object holds
+            // internal references to the C++ hardware decoder pipeline.
+            // Calling setListener(null) explicitly instructs the native layer
+            // to release those references BEFORE the decoder is torn down by
+            // stop() and close(). Without this, the decoder's texture surfaces
+            // (which can be 20–50MB+ for 4K content) may remain pinned in VRAM
+            // even after close() returns — causing GPU memory fragmentation that
+            // manifests as UI glitches (white flashes, icon disappearance) on
+            // the next page after playback.
+            //
+            try {
+                this._avplay.setListener(null);
+                log.debug('AVPlay listener cleared (VRAM reference released)');
+            } catch (e) {
+                // Non-fatal on older firmware — log and continue with stop/close.
+                log.debug('setListener(null) failed (non-fatal):', e.message || e);
+            }
+
             // 1. Attempt stop
             try {
                 const state = this._avplay.getState();
@@ -1243,8 +1282,8 @@ export class TizenAVPlayer {
                 log.debug('AVPlay stop failed (possibly already idle):', e.message || e);
             }
 
-            // 2. Force close (True Reset to NONE state)
-            // This is critical for episode-to-episode transitions to clear 
+            // 2. Force close (True Reset to NONE state).
+            // This is critical for episode-to-episode transitions to clear
             // stale buffers and decoder state.
             try {
                 this._avplay.close();

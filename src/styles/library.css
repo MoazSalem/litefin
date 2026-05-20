@@ -67,7 +67,6 @@
 /* Tabs (Chip Style) */
 .library-tabs {
     display: flex;
-    overflow-x: auto;
     padding: 6px 0;
     margin-bottom: 6px;
     justify-content: center;
@@ -137,6 +136,11 @@
     overflow: hidden !important;
 }
 
+.tab-btn:hover,
+.control-btn:hover {
+   border: 2px solid var(--jf-action-btn-active-border) !important;
+}
+
 /* Specific Radius Enforcement removed, using components.css logic */
 
 
@@ -177,15 +181,24 @@
     /* will-change applied only on :focus — see unified focus rule above */
 }
 
+.control-btn .icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .control-svg {
-    width: 18px;
-    height: 18px;
-    display: inline-block;
-    /* Spacing logic handled by parent flex/margins */
+    width: 20px;
+    height: 20px;
+    display: block;
+}
+
+.control-btn > *:not(:first-child) {
+    margin-left: 10px;
 }
 
 .control-btn-text {
-    margin-left: 10px;
+    line-height: 1; /* Reset line-height to ensure vertical centering in flex */
 }
 
 /* View mode toggle button sits in the controls bar next to Sort/Filter.
@@ -221,6 +234,9 @@ html[data-layout-tier="ultra-legacy"] .tab-btn {
     height: 52px;
     padding: 0 28px;
     line-height: normal;
+    /* Use font-size: 0 to strip whitespace between inline-blocks, 
+       but ensure children have their own font-size. */
+    font-size: 0; 
 }
 
 html[data-layout-tier="ultra-legacy"] .tab-btn::before {
@@ -228,6 +244,12 @@ html[data-layout-tier="ultra-legacy"] .tab-btn::before {
     display: inline-block;
     height: 100%;
     vertical-align: middle;
+}
+
+/* Ensure the text inside the tab is visible and centered */
+html[data-layout-tier="ultra-legacy"] .tab-btn-text,
+html[data-layout-tier="ultra-legacy"] .tab-btn {
+    font-size: 20px;
 }
 
 html[data-layout-tier="ultra-legacy"] .library-controls {
@@ -242,6 +264,7 @@ html[data-layout-tier="ultra-legacy"] .pagination-btn {
     height: 52px;
     padding: 0 18px;
     line-height: normal;
+    /* Use font-size: 0 to strip whitespace between inline-blocks */
     font-size: 0;
 }
 
@@ -253,6 +276,7 @@ html[data-layout-tier="ultra-legacy"] .pagination-btn::before {
     vertical-align: middle;
 }
 
+html[data-layout-tier="ultra-legacy"] .control-btn .icon,
 html[data-layout-tier="ultra-legacy"] .control-svg {
     display: inline-block;
     vertical-align: middle;
@@ -262,6 +286,55 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
     display: inline-block;
     vertical-align: middle;
     font-size: 18px;
+    /* On ultra-legacy, the ::before ghost is the first child.
+       We must ensure the text has margin only if it's NOT the first visible child. */
+}
+
+/* Correct margins on ultra-legacy.
+   Child 1 (usually .icon) should have no left margin.
+   Child 2 (usually text) should have the 10px margin.
+   Note: ::before pseudo-element is NOT a child element. */
+html[data-layout-tier="ultra-legacy"] .control-btn > *:nth-child(1),
+html[data-layout-tier="ultra-legacy"] .pagination-btn > *:nth-child(1) {
+    margin-left: 0 !important;
+}
+
+html[data-layout-tier="ultra-legacy"] .control-btn > *:nth-child(2),
+html[data-layout-tier="ultra-legacy"] .pagination-btn > *:nth-child(2) {
+    margin-left: 10px !important;
+}
+
+/* --- Alpha Picker Ultra-Legacy --- */
+html[data-layout-tier="ultra-legacy"] .alpha-picker-container {
+    display: block;
+    text-align: center;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-picker {
+    display: inline-block;
+    vertical-align: top;
+    white-space: normal;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-btn {
+    display: inline-block;
+    vertical-align: middle;
+    line-height: normal; 
+    text-align: center;
+    /* Use font-size: 0 to strip any possible remaining text node whitespace, 
+       then set font-size on the pseudo-element? No, that won't work for direct text.
+       The JS fix removed whitespace, so font-size: 18px is safe here. */
+    font-size: 18px;
+    width: 38px;
+    height: 38px;
+    padding: 0;
+}
+
+html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
+    content: '';
+    display: inline-block;
+    height: 100%;
+    vertical-align: middle;
 }
 
 
@@ -386,7 +459,8 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 }
 
 .empty-state-btn:focus,
-.empty-state-btn.focused {
+.empty-state-btn.focused,
+.empty-state-btn:hover {
     background-color: var(--jf-accent) !important;
     color: var(--jf-primary-btn-color, #ffffff) !important;
     transform: scale(1.1);
@@ -427,7 +501,7 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
    Calculated: 5 * 320px + 4 * 20px = 1680px block width. */
 .library-grid:not([class*="view-"]) {
     max-width: 1720px;
-    min-width: 1720px;
+    min-width: 1700px;
 }
 
 .library-grid:not([class*="view-"]) .media-card {
@@ -483,7 +557,7 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
    Calculated: 9 * 160px + 8 * 20px = 1600px block width. */
 .library-grid.view-small-poster {
     max-width: 1664px;
-    min-width: 1664px;
+    min-width: 1470px;
 }
 
 .library-grid.view-small-poster .media-card {
@@ -512,7 +586,7 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
    Calculated: 4 * 390px + 3 * 30px = 1650px block width. */
 .library-grid.view-thumb {
     max-width: 1680px;
-    min-width: 1680px;
+    min-width: 1670px;
 }
 
 .library-grid.view-thumb .media-card {
@@ -542,7 +616,7 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
    Calculated: 3 * 545px + 2 * 20px = 1675px block width. */
 .library-grid.view-banner {
     max-width: 1695px; 
-    min-width: 1695px;
+    min-width: 1685px;
 }
 
 .library-grid.view-banner .media-card {
@@ -628,7 +702,8 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 }
 
 .library-grid.view-list .media-card:focus,
-.library-grid.view-list .media-card.focused {
+.library-grid.view-list .media-card.focused,
+.library-grid.view-list .media-card:hover {
     background: rgba(255, 255, 255, 0.15) !important;
     -webkit-transform: scale(1.02);
     transform: scale(1.02); /* Slight pop to show selection */
@@ -816,7 +891,8 @@ html[data-layout-tier="ultra-legacy"] .control-btn-text {
 /* Premium Hover/Focus Polish for larger cards.
  * We use a deeper, more breathable shadow for the 320px cards. */
 .media-card:focus,
-.media-card.focused {
+.media-card.focused,
+.media-card:hover {
     transform: scale(1.06); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
@@ -870,11 +946,11 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     flex-wrap: wrap;
     justify-content: center;
     background: rgba(255, 255, 255, 0.05);
-    border-radius: var(--jf-border-radius-lg);
-    -webkit-border-radius: var(--jf-border-radius-lg);
+    border-radius: 36px;
+    -webkit-border-radius: 36px;
     overflow: hidden;
     background-clip: padding-box;
-    padding: 8px 24px;
+    padding: 12px 24px;
 }
 
 .alpha-btn {
@@ -884,14 +960,13 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     background: transparent;
     border: none;
     cursor: pointer;
-    padding: 8px 12px;
     text-align: center;
     border-radius: var(--jf-border-radius-lg);
     -webkit-border-radius: var(--jf-border-radius-lg);
     overflow: hidden;
     background-clip: padding-box;
-    width: 44px;
-    height: 44px;
+    width: 38px;
+    height: 38px;
     margin: 4px;
     display: flex;
     align-items: center;
@@ -908,7 +983,8 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 }
 
 .alpha-btn:focus,
-.alpha-btn.focused {
+.alpha-btn.focused,
+.alpha-btn:hover {
     outline: none !important;
     /* Remove square focus */
     color: var(--jf-primary-btn-color, #ffffff) !important;
@@ -951,7 +1027,8 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 }
 
 .pagination-btn:not(:disabled):focus,
-.pagination-btn.focused {
+.pagination-btn.focused,
+.pagination-btn:not(:disabled):hover {
     background-color: var(--jf-accent) !important;
     border-color: var(--jf-accent) !important;
     transform: scale(1.1);
@@ -1208,6 +1285,10 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     padding-left: 45px;
     outline: none;
     will-change: transform;
+}
+
+.filter-category-btn:hover {
+    border-left-color: var(--jf-primary-btn-color, #fff);
 }
 
 /* Main Content Panel — Flexbox wrap layout
@@ -1569,6 +1650,14 @@ html[data-layout-tier="ultra-legacy"] .library-row {
     border-radius: var(--jf-border-radius-lg) !important;
     -webkit-border-radius: var(--jf-border-radius-lg) !important;
     overflow: hidden !important;
+}
+
+.view-mode-option-btn:hover,
+.view-mode-option-btn.hovered {
+    transform: scale(1.08);
+    will-change: transform;
+    overflow: hidden !important;
+    border-color: var(--jf-action-btn-active-border) !important;
 }
 
 /* Icon wrapper — scaled to a consistent size; margin-bottom provides icon-to-label gap */

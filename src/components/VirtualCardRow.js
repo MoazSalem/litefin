@@ -1,6 +1,7 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
+import { platformInfo } from '../utils/PlatformInfo.js';
 
 export class VirtualCardRow {
     /**
@@ -195,6 +196,95 @@ export class VirtualCardRow {
             this._isBootRender = true;
         }
         this._updateWindow(0);
+
+        if ((platformInfo.isWeb || platformInfo.isWebOS) && this.totalItems > 4) {
+            this._injectScrollArrows();
+        }
+    }
+
+    /**
+     * Injects left/right navigation arrows for web users.
+     */
+    _injectScrollArrows() {
+        const sectionEl = this.track.parentElement?.parentElement;
+        if (!sectionEl) return;
+
+        // Prevent duplicate injection
+        if (sectionEl.querySelector('.row-scroll-arrows')) return;
+
+        sectionEl.style.position = 'relative';
+
+        const arrowContainer = document.createElement('div');
+        arrowContainer.className = 'row-scroll-arrows';
+
+        const leftBtn = document.createElement('button');
+        leftBtn.className = 'scroll-arrow left-arrow';
+        leftBtn.setAttribute('aria-label', 'Scroll left');
+        leftBtn.setAttribute('tabindex', '-1');
+        leftBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M15.41 16.59L10.83 12l4.58-4.59L14 6l-6 6 6 6 1.41-1.41z"/></svg>';
+
+        const rightBtn = document.createElement('button');
+        rightBtn.className = 'scroll-arrow right-arrow';
+        rightBtn.setAttribute('aria-label', 'Scroll right');
+        rightBtn.setAttribute('tabindex', '-1');
+        rightBtn.innerHTML =
+            '<svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M8.59 16.59L13.17 12 8.59 7.41 10 6l6 6-6 6-1.41-1.41z"/></svg>';
+
+        arrowContainer.appendChild(leftBtn);
+        arrowContainer.appendChild(rightBtn);
+
+        // Page size: roughly half the visible row width per click
+        const pageSize = Math.max(1, Math.floor(this.visibleCount / 1.5));
+
+        /**
+         * Scroll the track to center on `targetIndex` without touching focus.
+         *
+         * We replicate the exact same translate3d formula that ScrollController uses
+         * (src/ui/ScrollController.js ~L508-L564) so the visual result is identical,
+         * but we skip focusManager.focusElement() so the keyboard/remote focus ring
+         * stays exactly where the user left it.
+         */
+        const scrollToIndex = (targetIndex) => {
+            const isRtl = document.documentElement.dir === 'rtl';
+            const clamped = Math.max(0, Math.min(this.totalItems - 1, targetIndex));
+
+            // Update virtual window so the target cards are in the DOM
+            this.currentIndex = clamped;
+            this._updateWindow(this.currentIndex);
+
+            // Compute the scroll offset (mirrors ScrollController logic exactly)
+            const elementPos   = this.getItemPosition(clamped);
+            const elementWidth = this.itemWidth;
+            const containerWidth = this.track.parentElement
+                ? this.track.parentElement.clientWidth
+                : window.innerWidth;
+            const trackWidth   = this.getTrackWidth();
+
+            const targetScroll   = elementPos - containerWidth / 2 + elementWidth / 2;
+            const maxScroll      = Math.max(0, trackWidth - containerWidth);
+            const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
+
+            // Apply smooth CSS transition — same transition the track CSS already has
+            const transformValue = isRtl
+                ? `translate3d(${finalScrollLeft}px, 0, 0)`
+                : `translate3d(-${finalScrollLeft}px, 0, 0)`;
+
+            this.track.style.webkitTransform = transformValue;
+            this.track.style.transform       = transformValue;
+        };
+
+        leftBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            scrollToIndex(this.currentIndex - pageSize);
+        });
+
+        rightBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            scrollToIndex(this.currentIndex + pageSize);
+        });
+
+        sectionEl.appendChild(arrowContainer);
     }
 
     /**

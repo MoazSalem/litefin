@@ -291,7 +291,15 @@ export default {
             return { className: 'icon-trakt', assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
         }
         if (s === 'tmdb') {
-            return { className: 'icon-tmdb', assetName: 'TMDB.png', format: (v) => `${Math.round(v)}%` };
+            return { 
+                className: 'icon-tmdb', 
+                assetName: 'TMDB.png', 
+                format: (v) => {
+                    const num = parseFloat(v);
+                    // MDBList sometimes returns TMDB as out of 100 (e.g. 82) and sometimes out of 10 (e.g. 8)
+                    return (num > 10 ? num / 10 : num).toFixed(1);
+                } 
+            };
         }
         if (s === 'kinopoisk') {
             return { className: 'icon-kinopoisk', assetName: 'kinopoisk.png' };

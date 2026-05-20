@@ -293,6 +293,7 @@ export default class OSDController extends Component {
         this.syncTracks();
 
         if (this._currentItem) {
+            log.info('OSD Mounted - Setting initial metadata for:', this._currentItem.Name);
             this.setMetadata(this._currentItem);
         }
 
@@ -380,7 +381,13 @@ export default class OSDController extends Component {
                         <button class="osd-btn osd-back-btn" data-action="exit" aria-label="${i18n.t('ButtonBack')}" tabindex="0">
                             ${ICONS.arrowBack}
                         </button>
-                        <span class="osd-title" id="osdTitle"></span>
+                        <div class="osd-title-wrap">
+                            <div class="osd-title-main">
+                                <span class="osd-title" id="osdTitle"></span>
+                                <img class="osd-title-logo hidden" id="osdLogo" alt="Logo">
+                            </div>
+                            <span class="osd-title-secondary" id="osdTitleSecondary"></span>
+                        </div>
                     </div>
                     <div class="osd-header-right">
                         <span class="osd-clock" id="osdClock"></span>
@@ -438,7 +445,11 @@ export default class OSDController extends Component {
                             <div class="osd-slider-track">
                                 <div class="osd-slider-fill" id="osdPositionFill"></div>
                             </div>
-                            <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="0">
+                            <!-- tabindex=-1: prevents the browser from giving this range input native DOM focus.
+                                 On TV hardware, focusing a range input causes OK/Enter to synthesize a click
+                                 at clientX=0, which our seek math interprets as 'seek to 0%' and resets playback.
+                                 D-pad row focus is tracked internally via _currentFocusRow=2 instead. -->
+                            <input type="range" class="osd-slider" id="osdPositionSlider" min="0" max="100" step="0.01" value="0" tabindex="-1">
                         </div>
                         <span class="osd-time osd-time-total" id="osdTotalTime">00:00</span>
                     </div>
@@ -466,10 +477,134 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
-            const btn = e.target.closest('[data-action]');
+            /*
+             * ========================================================================
+             * TV SYNTHESIZED GHOST CLICK GUARD
+             * ========================================================================
+             * On WebOS/Tizen, pressing the remote OK button on a focused element
+             * synthesizes a native click event at coordinates clientX = 0, clientY = 0.
+             * Since we handle Enter/OK keydown events 100% in JS for all OSD rows
+             * (via handleInput('enter')), executing actions for these ghost clicks
+             * would trigger them twice in rapid succession.
+             * 
+             * This double-execution is extremely noticeable for cumulative,
+             * non-idempotent actions like skip forward and skip backward (fastForward /
+             * rewind), which would seek by double the user-configured step.
+             * 
+             * A real user cursor or mouse click can never land precisely at the
+             * coordinate (0, 0) of the viewport. Thus, we safely discard all
+             * synthesized click events with (0, 0) coordinates.
+             * ========================================================================
+             */
+            if (e.clientX === 0 && e.clientY === 0) {
+                return;
+            }
+
+            /* 
+             * DELIBERATE PHYSICAL CLICK EXEMPTION:
+             * We do NOT return early even if 'enableMagicCursor' is disabled.
+             * Disabling cursor controls prevents highly sensitive gyro movements
+             * (mousemove) from waking the OSD or styling hovers. However, physical clicks
+             * (via mouse or Magic Remote center/wheel clicks) are always deliberate actions
+             * and must register. If the OSD is currently showing, clicking a button
+             * should activate it.
+             */
+
+            // Every click inside the OSD resets the auto-hide timer.
+            this.resetAutoHide();
+
+            /*
+             * WEBOS / TIZEN POINTER-EVENTS BUG WORKAROUND
+             *
+             * On WebOS Chrome 108, `pointer-events: none` on .osd-overlays (z-index: 1000)
+             * is sometimes ignored, causing that transparent container to swallow all clicks
+             * that should have landed on the OSD buttons in .osd-main (z-index: 10).
+             *
+             * When we detect that the click target IS the .osd-overlays div itself
+             * (i.e. not a child widget), we use document.elementsFromPoint() to walk the
+             * full stacking order at the click coordinates and find the real intended target.
+             * This completely bypasses the z-index / pointer-events interaction.
+             */
+            let resolvedTarget = e.target;
+            if (resolvedTarget.classList && resolvedTarget.classList.contains('osd-overlays')) {
+                // Find all elements at the click position, then pick the first one that
+                // actually has a [data-action] ancestor or is inside .osd-slider-container.
+                const els = document.elementsFromPoint(e.clientX, e.clientY);
+                for (const el of els) {
+                    // Skip the problematic overlay container itself
+                    if (el.classList && el.classList.contains('osd-overlays')) continue;
+                    // Accept any element that is inside .osd-main (buttons, slider, etc.)
+                    if (el.closest?.('.osd-main') || el.closest?.('[data-action]')) {
+                        resolvedTarget = el;
+                        break;
+                    }
+                }
+            }
+
+            // Resolve the [data-action] button from the (possibly remapped) target
+            const btn = resolvedTarget.closest('[data-action]');
             if (btn) {
                 e.stopPropagation();
+
+                /*
+                 * MAGIC CURSOR STATE SYNC — keep the OSD's internal D-pad position in
+                 * sync with what was clicked so subsequent _updateFocus() calls restore
+                 * the highlight to the correct button, not some stale position.
+                 */
+                if (btn.classList.contains('osd-back-btn')) {
+                    this._currentFocusRow = 0;
+                    this._currentFocusIndex = 0;
+                } else {
+                    const controls = this._getControls();
+                    const idx = controls.indexOf(btn);
+                    if (idx !== -1) {
+                        this._currentFocusRow = 1;
+                        this._currentFocusIndex = idx;
+                    }
+                }
+
                 this._executeAction(btn.dataset.action);
+                return;
+            }
+
+            /*
+             * Magic Cursor: Clicking anywhere in the 36px tall slider container seeks to
+             * that position. Without this, the user would have to hit the 8px tall range
+             * input precisely, which is nearly impossible with a TV magic cursor.
+             */
+            const sliderContainer = resolvedTarget.closest?.('.osd-slider-container');
+            if (sliderContainer && !resolvedTarget.closest?.('.osd-overlays')) {
+                e.stopPropagation();
+
+                // Sync focus state to seekbar row so D-pad resumes from here
+                this._currentFocusRow = 2;
+
+                /*
+                 * TV SYNTHESIZED CLICK GUARD (redundant, handled globally)
+                 *
+                 * Any synthesized OK ghost click (clientX=0, clientY=0) is already discarded
+                 * at the very top of the click handler, so it never reaches this block.
+                 */
+
+                const slider = sliderContainer.querySelector('input[type="range"]');
+                if (slider) {
+                    const rect = sliderContainer.getBoundingClientRect();
+                    const percent = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+                    slider.value = percent * 100;
+                    slider.dispatchEvent(new Event('input', { bubbles: true }));
+                    slider.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                return;
+            }
+
+            /*
+             * OSD background click: any click inside the OSD that doesn't land on a
+             * specific button or the seekbar is treated as a play/pause toggle. This
+             * mirrors the standard media player convention (clicking "somewhere" = pause).
+             * Modals/overlays are excluded since their content may handle clicks internally.
+             */
+            if (!this.isModalOpen && !resolvedTarget.closest?.('.osd-overlays > *')) {
+                this._executeAction('togglePlay');
             }
         });
 
@@ -505,9 +640,68 @@ export default class OSDController extends Component {
         return this._osdEl;
     }
 
-    _onMouseMove() {
+    _onMouseMove(e) {
         this.show();
         this.resetAutoHide();
+
+        if (!e) return;
+
+        // PROGRAMMATIC HOVER SUPPORT
+        // Since WebOS 108 ignores pointer-events: none on .osd-overlays, 
+        // native CSS :hover is broken for OSD buttons. We simulate it here.
+        const els = document.elementsFromPoint(e.clientX, e.clientY);
+        let targetBtn = null;
+
+        for (const el of els) {
+            // Find the first OSD button or slider under the cursor
+            const btn = el.closest?.('[data-action], .osd-slider-container');
+            if (btn) {
+                targetBtn = btn;
+                break;
+            }
+        }
+
+        // Clean up previous hover
+        if (this._lastHoveredEl && this._lastHoveredEl !== targetBtn) {
+            this._lastHoveredEl.classList.remove('magic-hover');
+        }
+
+        // Apply new hover
+        if (targetBtn) {
+            targetBtn.classList.add('magic-hover');
+            this._lastHoveredEl = targetBtn;
+
+            /* Handle OSD slider interaction (scrubbing) */
+            if (targetBtn.classList.contains('osd-slider-container')) {
+                /* 
+                 * If the user is HOLDING the button (e.buttons === 1), we treat 
+                 * this as an active drag. This bypasses the WebOS pointer-events 
+                 * bug where the native <input type="range"> might not receive 
+                 * the drag events through the transparent overlays.
+                 */
+                if (e.buttons === 1) {
+                    this._handlePositionSliderManualDrag(e);
+                } else {
+                    this._handlePositionSliderMouseMove(e);
+                }
+            } else {
+                this._handlePositionSliderMouseLeave(e);
+            }
+        } else {
+            this._lastHoveredEl = null;
+            this._handlePositionSliderMouseLeave(e);
+        }
+    }
+
+    /**
+     * Clear all programmatic hover effects (Magic Cursor).
+     * Called when the OSD hides or when D-pad navigation resumes.
+     */
+    _clearMagicHover() {
+        if (this._osdEl) {
+            this._osdEl.querySelectorAll('.magic-hover').forEach(el => el.classList.remove('magic-hover'));
+        }
+        this._lastHoveredEl = null;
     }
 
     // ===================================
@@ -523,6 +717,14 @@ export default class OSDController extends Component {
     }
 
     show() {
+        /*
+         * Exit lock: if the player is in the process of shutting down (e.g. the back
+         * button was clicked and _stopAndExit is awaiting async operations), do not
+         * allow cursor movement to resurrect the OSD. Without this guard, _onMouseMove()
+         * calling show() during the async shutdown gap makes the OSD flicker back.
+         */
+        if (this._isExiting) return;
+
         /*
          * Cancel the pending focus-reset timer (timeout mode) if the user
          * returns to the OSD before the 10-second deadline.
@@ -781,9 +983,13 @@ export default class OSDController extends Component {
     hide() {
         // Don't hide if a modal menu is open
         if (this.isModalOpen) return;
+
         if (this._osdMainEl) this._osdMainEl.classList.add('osd-hidden');
         if (this._osdEl) this._osdEl.classList.add('osd-is-hidden');
         this._isOsdVisible = false;
+
+        // Clear Magic Cursor hover when hiding
+        this._clearMagicHover();
 
         // Potential timer stop: only stop if no menus or overlays are currently
         // active and requiring background updates (like PlaybackInfo).
@@ -819,6 +1025,11 @@ export default class OSDController extends Component {
             this._focusResetTimer = null;
         }
 
+        // Exception: Do not park focus if the subtitle offset is pinned
+        if (this.activeMenu === this.subtitleOffset && PlayerSettings.get('keepFocusOnSubtitleOffset')) {
+            return;
+        }
+
         const mode = PlayerSettings.get('osdFocusRestoreMode') || 'always';
 
         if (mode === 'always') {
@@ -830,6 +1041,9 @@ export default class OSDController extends Component {
                 this._focusResetTimer = null;
                 this._resetFocusToPlayPause();
             }, 10_000);
+        } else if (mode === 'seekbar') {
+            // Park immediately on the seekbar
+            this._resetFocusToSeekbar();
         }
         // 'remember' → do nothing, focus stays on the last button
     }
@@ -851,10 +1065,23 @@ export default class OSDController extends Component {
         this._updateFocus();
     }
 
+    /**
+     * Moves focus state to the Position Slider (seekbar) and updates the DOM.
+     *
+     * Called by hide() for 'seekbar' mode. Safe to call while the OSD is hidden.
+     * @private
+     */
+    _resetFocusToSeekbar() {
+        this._currentFocusRow = 2; // Position Slider row
+        this._currentFocusIndex = 0;
+        this._updateFocus();
+    }
+
     resetAutoHide() {
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
         // Do not auto-hide if a modal menu is open
         if (this.isModalOpen) return;
+
         this._autoHideTimer = setTimeout(() => this.hide(), this._config.autoHideDelay);
     }
 
@@ -1088,16 +1315,41 @@ export default class OSDController extends Component {
 
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
-            /*
-             * The ghost click from this OK press fires on whatever holds DOM focus
-             * right now. hide() already pre-parked focus on Play/Pause for 'always'
-             * and 'timeout' (after 10 s) modes, so the ghost click hits the correct
-             * button. For 'remember' mode, focus stayed on the last button — same
-             * as the original behaviour before this feature was added.
-             */
             if (e) e.preventDefault();
             this.show();
             this._updateFocus();
+
+            /*
+             * ========================================================================
+             * UNIFIED KEYBOARD OK/ENTER DISPATCH WHEN WAKING OSD
+             * ========================================================================
+             * When the OSD is hidden, pressing OK/Enter must wake the OSD and
+             * immediately execute the action of whatever holds the pre-parked focus.
+             * Since we discard the TV browser's synthesized ghost clicks globally
+             * to prevent double-execution, we must execute the focused action
+             * entirely in JavaScript during the wake-up sequence.
+             * ========================================================================
+             */
+            if (this._currentFocusRow === 2) {
+                // Seekbar row: OK = toggle play/pause
+                this._executeAction('togglePlay');
+            } else if (this._currentFocusRow === 1) {
+                // Controls row: execute focused action (e.g. play/pause or subtitles)
+                const controls = this._getControls();
+                const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                }
+            } else if (this._currentFocusRow === 0) {
+                // Header row (back button)
+                const btn = this._cachedHeaderRow[0];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                } else {
+                    this._executeAction('exit');
+                }
+            }
+
             return true;
         }
 
@@ -1121,6 +1373,49 @@ export default class OSDController extends Component {
             case 'left': return this._navigate('left');
             case 'right': return this._navigate('right');
             case 'back': return this._handleBack();
+            case 'enter': {
+                /*
+                 * On TV hardware, pressing OK synthesizes a click at clientX=0, clientY=0.
+                 * The OSD click handler uses elementsFromPoint(clientX, clientY) to resolve
+                 * the target — but (0,0) is the top-left corner of the viewport, nowhere near
+                 * any OSD element. As a result, button presses and slider resets all fail.
+                 *
+                 * Fix: handle OK entirely in JS for all rows, never relying on the synthesized click.
+                 */
+                if (e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                }
+
+                if (this._currentFocusRow === 2) {
+                    // Seekbar row: OK = toggle play/pause
+                    this._executeAction('togglePlay');
+                    return true;
+                }
+
+                if (this._currentFocusRow === 1) {
+                    // Controls row: activate the currently focused button's action directly
+                    const controls = this._getControls();
+                    const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                        return true;
+                    }
+                }
+
+                if (this._currentFocusRow === 0) {
+                    // Header row (back button)
+                    const btn = this._cachedHeaderRow[0];
+                    if (btn?.dataset?.action) {
+                        this._executeAction(btn.dataset.action);
+                    } else {
+                        this._executeAction('exit');
+                    }
+                    return true;
+                }
+
+                break;
+            }
         }
 
         // Media keys
@@ -1163,12 +1458,25 @@ export default class OSDController extends Component {
     }
 
     _navigate(direction) {
+        // When the user picks up the D-pad, clear any Magic Cursor hover state
+        // so the two input methods don't visually conflict.
+        this._clearMagicHover();
+
         const wasHidden = !this._isOsdVisible;
+        const seekWithArrows = PlayerSettings.get('seekWithArrows') !== false;
         
         // First D-pad press always reveals OSD if hidden
         // User requested single-press move: trigger show AND allow navigation to proceed.
         if (wasHidden) {
             this.show();
+            
+            if (seekWithArrows && (direction === 'left' || direction === 'right')) {
+                // Focus the seekbar so subsequent presses continue seeking
+                this._currentFocusRow = 2;
+                this._updateFocus();
+                this._executeAction(direction === 'left' ? 'rewind' : 'fastForward');
+                return true;
+            }
             // Do NOT return here. Let the navigation logic below run.
         } else {
             this.show(); // Always reset auto-hide if already visible
@@ -1177,6 +1485,11 @@ export default class OSDController extends Component {
         if (direction === 'up') {
             if (this._currentFocusRow === 2) {
                 this._currentFocusRow = 1;
+                // Always target Play/Pause when moving UP from the seekbar
+                const playIdx = this._findActionIndex('togglePlay');
+                if (playIdx !== -1) {
+                    this._currentFocusIndex = playIdx;
+                }
             } else if (this._currentFocusRow === 1) {
                 // If plugin widgets are visible in the overlay row, go there directly.
                 // The overlay row is visually ABOVE the controls, so Up from controls = overlay.
@@ -1417,10 +1730,19 @@ export default class OSDController extends Component {
                 btn.focus();
             }
         } else if (this._currentFocusRow === 2) {
-            const slider = this._cachedSeekbar;
-            if (slider) {
-                slider.classList.add('focused');
-                slider.focus();
+            /*
+             * Focus the slider CONTAINER, not the <input type="range"> itself.
+             * Giving the range input native DOM focus causes the TV browser to
+             * synthesize a click at clientX=0 when OK is pressed, which seeks the
+             * video to 0% via our own click handler. The container div is
+             * focusable (tabindex=0 set below) and visually identical for the user.
+             */
+            const sliderContainer = this._osdEl.querySelector('.osd-slider-container');
+            if (sliderContainer) {
+                // Make it focusable if it isn't already
+                if (!sliderContainer.hasAttribute('tabindex')) sliderContainer.setAttribute('tabindex', '0');
+                sliderContainer.classList.add('focused');
+                sliderContainer.focus();
             }
         }
     }
@@ -1462,8 +1784,16 @@ export default class OSDController extends Component {
 
         switch (action) {
             case 'back': this._handleBack(); break;
-            case 'exit': 
-                this.emit('exit'); 
+            case 'exit':
+                /*
+                 * Lock out show() immediately so cursor movement during the async
+                 * _stopAndExit() shutdown cannot flicker the OSD back into view.
+                 * Then hide the OSD visually before the event fires.
+                 */
+                this._isExiting = true;
+                clearTimeout(this._autoHideTimer);
+                this.hide();
+                this.emit('exit');
                 break;
             case 'togglePlay': 
                 if (this._player.togglePlay) this._player.togglePlay();
@@ -1512,6 +1842,9 @@ export default class OSDController extends Component {
             case 'favorite': 
                 // Toggle favorite
                 this._toggleFavorite();
+                break;
+            case 'subtitleOffset':
+                this.toggleSubtitleOffset(!this.subtitleOffset.isVisible);
                 break;
             case 'closeSubtitleOffset':
                 this.toggleSubtitleOffset(false);
@@ -1586,12 +1919,20 @@ export default class OSDController extends Component {
                 log.info(`Seek scrub session started from: ${this._formatTime(startPos)}`);
             }
 
+            /*
+             * ── SEEK ACCELERATION LOGIC ───────────────────────────────────────
+             * The longer the user holds the seek button, the faster we skip.
+             * This provides fine-grained control for short skips and massive
+             * throughput for traversing long movies.
+             */
             const seekDuration = (Date.now() - this._seekStartTime) / 1000;
             let speedMultiplier = 1;
-            if (seekDuration >= 8) speedMultiplier = 5;
-            else if (seekDuration >= 6) speedMultiplier = 4;
-            else if (seekDuration >= 4) speedMultiplier = 3;
-            else if (seekDuration >= 2) speedMultiplier = 2;
+            
+            if (seekDuration >= 12) speedMultiplier = 10;      // Warp Speed: 10x
+            else if (seekDuration >= 8) speedMultiplier = 5;   // Very Fast: 5x
+            else if (seekDuration >= 6) speedMultiplier = 4;   // Fast: 4x
+            else if (seekDuration >= 4) speedMultiplier = 3;   // Medium: 3x
+            else if (seekDuration >= 2) speedMultiplier = 2;   // Slow Ramp: 2x
 
             if (isNaN(offsetTicks)) return;
             const adjustedOffset = offsetTicks * speedMultiplier;
@@ -1667,7 +2008,10 @@ export default class OSDController extends Component {
 
         const isPaused = this._player.isPaused();
         this._osdPlayPauseBtnEl.innerHTML = isPaused ? ICONS.play : ICONS.pause;
-        this._osdPlayPauseBtnEl.className = isPaused ? 'osd-btn osd-btn-play osd-btn-paused' : 'osd-btn osd-btn-play';
+
+        // Toggle only osd-btn-paused — avoid replacing the entire className which
+        // would wipe transient classes like .magic-hover and .focused on every call.
+        this._osdPlayPauseBtnEl.classList.toggle('osd-btn-paused', isPaused);
     }
 
     _startUpdates() {
@@ -1793,8 +2137,10 @@ export default class OSDController extends Component {
         const currentVal = parseFloat(this._osdPositionSliderEl.value);
         if (Math.abs(currentVal - percent) > 0.01) {
             this._osdPositionSliderEl.value = percent;
-            this._osdPositionFillEl.style.width = percent + '%';
         }
+
+        /* Always update the fill bar width to ensure visual sync, even if the value was set manually */
+        this._osdPositionFillEl.style.width = percent + '%';
     }
 
     /**
@@ -1825,31 +2171,88 @@ export default class OSDController extends Component {
         return `${String(minutes).padStart(2,'0')}:${String(seconds).padStart(2,'0')}`;
     }
     _handlePositionSliderInput(e) {
+        if (this._suppressSliderChange) {
+            if (this._player) this._updatePositionSlider(this._player);
+            return;
+        }
+        
         this._isDraggingSeekbar = true;
         this.resetAutoHide();
+
         const percentRaw = e.target.value;
-        const fill = this._osdEl.querySelector('#osdPositionFill');
-        if (fill) fill.style.width = percentRaw + '%';
+        const percent = parseFloat(percentRaw);
 
-        const duration = this._player.getDurationTicks();
-        const percent = percentRaw / 100;
+        /* Update fill bar visually - use cached element for performance */
+        if (this._osdPositionFillEl) {
+            this._osdPositionFillEl.style.width = percent + '%';
+        }
+
+        /* Update time labels live */
+        this._syncTimeDisplayToPercent(percent);
+    }
+
+    /**
+     * Manually sync the current and remaining time displays to a given percentage.
+     * Used during dragging/scrubbing to avoid waiting for the next update loop.
+     * @param {number} percent - 0 to 100
+     * @private
+     */
+    _syncTimeDisplayToPercent(percent) {
+        if (!this._player) return;
+
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+        if (!duration) return;
+
+        const currentTicks = duration * (percent / 100);
         const forceHours = duration >= 3600 * 10000000;
-        const currentTicks = duration * percent;
-        const currentEl = this._osdEl.querySelector('#osdCurrentTime');
-        if (currentEl) currentEl.textContent = this._formatTime(currentTicks, forceHours);
 
-        // Update Duration/Remaining label live
+        if (this._osdCurrentTimeEl) {
+            this._osdCurrentTimeEl.textContent = this._formatTime(currentTicks, forceHours);
+        }
+
         const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
         const isRemaining = timeDisplayMode === 'remaining';
         const durationDisplayTicks = isRemaining ? (duration - currentTicks) : duration;
         const totalStr = (isRemaining ? '-' : '') + this._formatTime(durationDisplayTicks, forceHours);
-        if (this._osdTotalTimeEl && this._osdTotalTimeEl.textContent !== totalStr) {
+
+        if (this._osdTotalTimeEl) {
             this._osdTotalTimeEl.textContent = totalStr;
         }
     }
 
+    /**
+     * Handle manual dragging with the Magic Cursor or Mouse.
+     * This simulates the native range input behavior for smoother scrubbing.
+     * @param {MouseEvent} e 
+     * @private
+     */
+    _handlePositionSliderManualDrag(e) {
+        if (!this._osdPositionSliderEl || !this._player) return;
+
+        const rect = this._osdPositionSliderEl.getBoundingClientRect();
+        let percent = ((e.clientX - rect.left) / rect.width) * 100;
+        percent = Math.max(0, Math.min(100, percent));
+
+        /* Update the native input value so a subsequent 'change' event works */
+        this._osdPositionSliderEl.value = percent;
+
+        /* Force input logic to fire */
+        this._handlePositionSliderInput({ target: this._osdPositionSliderEl });
+        
+        /* Also show the tooltip since we are dragging */
+        this._handlePositionSliderMouseMove(e);
+    }
+
     _handlePositionSliderChange(e) {
-        this._isDraggingSeekbar = false;
+        if (this._suppressSliderChange) {
+            this._suppressSliderChange = false;
+            // Revert the rogue value=0 change that the TV browser forced upon us
+            if (this._player) {
+                this._updatePositionSlider(this._player);
+            }
+            return;
+        }
+
         try {
             const duration = this._player.getDurationTicks();
             const percent = e.target.value / 100;
@@ -1865,6 +2268,49 @@ export default class OSDController extends Component {
         } catch (err) {
             log.error('Slider seek failed:', err);
         }
+    }
+
+    _handlePositionSliderMouseMove(e) {
+        if (!PlayerSettings.get('enableHoverTrickplay') || this._seekTargetTicks !== null || !this._player) return;
+
+        const duration = this._player.getDurationTicks ? this._player.getDurationTicks() : 0;
+        if (!duration) return;
+
+        const rect = this._osdPositionSliderEl.getBoundingClientRect();
+        // Calculate relative position to the slider
+        let percent = (e.clientX - rect.left) / rect.width;
+        percent = Math.max(0, Math.min(1, percent));
+        
+        const targetTicks = duration * percent;
+
+        if (!this._cachedTooltipEl) this._cachedTooltipEl = this._osdEl.querySelector('#osdSeekTooltip');
+        const tooltip = this._cachedTooltipEl;
+
+        if (tooltip) {
+            const forceHours = duration >= 3600 * 10000000;
+            const timeText = this._formatTime(targetTicks, forceHours);
+
+            if (this._cachedTooltipTextEl) {
+                this._cachedTooltipTextEl.textContent = timeText;
+            } else {
+                tooltip.textContent = timeText;
+            }
+
+            tooltip.classList.add('visible');
+            tooltip.style.left = (percent * 100) + '%';
+
+            this._updateTrickplayTooltip(targetTicks);
+        }
+    }
+
+    _handlePositionSliderMouseLeave(e) {
+        if (this._isDraggingSeekbar || this._seekTargetTicks !== null) return; // Scrubbing handles its own hide logic
+        
+        const tooltip = this._cachedTooltipEl || this._osdEl.querySelector('#osdSeekTooltip');
+        if (tooltip) {
+            tooltip.classList.remove('visible');
+        }
+        this._hideTrickplayThumb();
     }
 
     _onMediaStreamsChange(e) {
@@ -2228,12 +2674,22 @@ export default class OSDController extends Component {
             const lastChapter = chapters[chapters.length - 1];
             const lastChapterTicks = lastChapter.StartPositionTicks || 0;
 
-            // Sanity check: the last chapter must start at least 30 s into the
-            // episode and leave at least 5 s before the end, otherwise ignore it
-            // and fall through to the time-based method.
-            const MIN_CHAPTER_OFFSET = 30 * TICKS_PER_SECOND;
+            /*
+             * =========================================================================
+             * CHAPTER SANITY CHECK & THRESHOLD
+             * =========================================================================
+             * To avoid popping up the dialog too early during normal content, we 
+             * enforce that the last chapter (credits/outro) must start at or after 
+             * 90% of the total episode duration.
+             *
+             * If the final chapter starts BEFORE this 90% mark (i.e. it's an unusually 
+             * long final chapter or incorrectly placed marker), we discard it and 
+             * fall back to the standard time-based countdown trigger (e.g. 30 seconds).
+             * =========================================================================
+             */
+            const minChapterOffsetTicks = durationTicks * 0.9;
             const MIN_REMAINING = 5 * TICKS_PER_SECOND;
-            if (lastChapterTicks >= MIN_CHAPTER_OFFSET && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
+            if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
                 showAtTicks = lastChapterTicks;
             }
         }
@@ -2392,7 +2848,100 @@ export default class OSDController extends Component {
         this._isAudio = (item?.MediaType === 'Audio' || item?.Type === 'AudioBook');
         
         const titleEl = this._osdEl.querySelector('#osdTitle');
-        if (titleEl) titleEl.textContent = this._getFormattedTitle(item);
+        const secondaryEl = this._osdEl.querySelector('#osdTitleSecondary');
+        const logoEl = this._osdEl.querySelector('#osdLogo');
+        const showLogoSetting = PlayerSettings.get('osdShowLogo');
+        const hideShowNameSetting = PlayerSettings.get('osdHideShowName');
+
+        // Reset title wrap classes
+        const wrapEl = this._osdEl.querySelector('.osd-title-wrap');
+        if (wrapEl) {
+            wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+        }
+
+        // Always reset to visible title and hidden logo initially to avoid stale images
+        if (titleEl) titleEl.classList.remove('hidden');
+        if (logoEl) {
+            logoEl.classList.add('hidden');
+            logoEl.src = '';
+            logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
+        }
+        if (secondaryEl) secondaryEl.textContent = '';
+
+        // Get the split title components
+        const titleData = this._getFormattedTitle(item);
+
+        // Set the text titles
+        if (titleEl) titleEl.textContent = titleData.main;
+        if (secondaryEl) secondaryEl.textContent = titleData.secondary;
+
+        // If logo feature is enabled, try to resolve and show the logo for the MAIN part only
+        // Skip if it's an episode and we are hiding the show name (logo represents show)
+        const isEpisode = !!item.SeriesName;
+        if (showLogoSetting && logoEl && item && !this._isAudio && !(isEpisode && hideShowNameSetting)) {
+            /* 
+             * Resolve the item ID that has the logo image.
+             * 1. Check current item (Movie, Series, Channel)
+             * 2. Check parent (Episode -> Series)
+             * 3. Check ParentLogoItemId (Metadata fallback)
+             */
+            let logoItemId = null;
+            if (item.ImageTags && item.ImageTags.Logo) {
+                logoItemId = item.Id;
+            } else if (item.SeriesId && item.SeriesImageTags && item.SeriesImageTags.Logo) {
+                logoItemId = item.SeriesId;
+            } else if (item.ParentLogoItemId && item.ParentLogoImageTag) {
+                logoItemId = item.ParentLogoItemId;
+            } else if (item.ChannelId) {
+                logoItemId = item.ChannelId;
+            }
+
+            if (logoItemId) {
+                // Get the custom logo size from player settings (default to medium)
+                const logoSize = PlayerSettings.get('osdLogoSize') || 'medium';
+                let maxImgHeight = 60;
+                if (logoSize === 'small') {
+                    maxImgHeight = 40;
+                } else if (logoSize === 'large') {
+                    maxImgHeight = 80;
+                } else if (logoSize === 'extralarge') {
+                    maxImgHeight = 100;
+                } else if (logoSize === 'xxl') {
+                    maxImgHeight = 120;
+                }
+
+                // Add size class to the logo element
+                logoEl.classList.add('logo-' + logoSize);
+
+                // Add corresponding class to title wrap to adjust row height dynamically
+                if (wrapEl) {
+                    wrapEl.classList.add('has-logo-' + logoSize);
+                }
+
+                // Max height of maxImgHeight to fit well in the OSD header
+                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: maxImgHeight });
+                
+                logoEl.onload = () => {
+                    // Only switch if this is still the active item
+                    if (this._currentItem && (this._currentItem.Id === item.Id)) {
+                        logoEl.classList.remove('hidden');
+                        if (titleEl) titleEl.classList.add('hidden');
+                    }
+                };
+                
+                logoEl.onerror = () => {
+                    if (titleEl) titleEl.classList.remove('hidden');
+                    logoEl.classList.add('hidden');
+                    logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
+                    if (wrapEl) {
+                        wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+                    }
+                };
+
+                logoEl.src = logoUrl;
+            }
+        }
+
         this._updateFavoriteButton(item);
         this._updateNavigationButtons();
 
@@ -2413,36 +2962,57 @@ export default class OSDController extends Component {
     }
 
     _getFormattedTitle(item) {
-        if (!item) return '';
+        if (!item) return { main: '', secondary: '' };
+
+        const hideYear = PlayerSettings.get('osdHideYear');
+        const hideShowName = PlayerSettings.get('osdHideShowName');
 
         // Live TV: Channel/Program handling
         if (item.Type === 'TvChannel' || item.ChannelId) {
-            const channelNumber = item.Number || item.ChannelNumber || '';
+            const channelNumber = item.Number || item.ChannelNumber;
             const channelName = item.ChannelName || (item.Type === 'TvChannel' ? item.Name : '');
-            const programName = item.Type === 'TvChannel' ? '' : item.Name;
+            const programName = (item.Type === 'TvChannel' || item.Name === channelName) ? '' : item.Name;
 
-            let text = '';
-            if (channelNumber) text += `${channelNumber} `;
-            if (channelName) text += `${channelName}`;
-            if (programName) text += ` - ${programName}`;
-            
-            return text.trim() || item.Name || '';
+            let main = '';
+            if (channelNumber) main += `${channelNumber} `;
+            if (channelName) main += `${channelName}`;
+
+            return {
+                main: main.trim() || item.Name || '',
+                secondary: programName ? ` - ${programName}` : ''
+            };
         }
 
         if (item.SeriesName) {
-            let text = item.SeriesName;
+            let secondary = '';
             if (item.IndexNumber !== undefined) {
                 const s = item.ParentIndexNumber || 1;
                 const e = item.IndexNumber;
-                text += ` S${String(s).padStart(2,'0')}:E${String(e).padStart(2,'0')}`;
+                secondary += ` S${String(s).padStart(2,'0')}:E${String(e).padStart(2,'0')}`;
             }
-            if (item.Name) text += ` - ${item.Name}`;
-            if (item.ProductionYear) text += ` (${item.ProductionYear})`;
-            return text;
+            if (item.Name) secondary += ` - ${item.Name}`;
+            
+            if (item.ProductionYear && !hideYear) {
+                secondary += ` (${item.ProductionYear})`;
+            }
+
+            const mainTitle = hideShowName ? '' : item.SeriesName;
+
+            return {
+                main: mainTitle,
+                secondary: (mainTitle && secondary) ? ` - ${secondary.trim()}` : secondary.trim()
+            };
         }
-        let text = item.Name || '';
-        if (item.ProductionYear) text += ` (${item.ProductionYear})`;
-        return text;
+
+        let secondary = '';
+        if (item.ProductionYear && !hideYear) {
+            secondary = ` (${item.ProductionYear})`;
+        }
+
+        return {
+            main: item.Name || '',
+            secondary: secondary
+        };
     }
     
     _updateFavoriteButton(item) {

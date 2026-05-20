@@ -62,6 +62,7 @@
     right: 0;
     bottom: 0;
     opacity: 1;
+    -webkit-transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     transition: opacity 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     pointer-events: none;
     z-index: 10;
@@ -109,13 +110,18 @@
     background: linear-gradient(180deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 2.4em 2.4em 4.8em;
     /* 2em*1.2, 4em*1.2 */
+    display: -webkit-box;
     display: flex;
+    -webkit-box-pack: justify;
     justify-content: space-between;
+    -webkit-box-align: center;
     align-items: center;
 }
 
 .osd-header-left {
+    display: -webkit-box;
     display: flex;
+    -webkit-box-align: center;
     align-items: center;
 }
 
@@ -124,7 +130,9 @@
 }
 
 .osd-header-right {
+    display: -webkit-box;
     display: flex;
+    -webkit-box-align: center;
     align-items: center;
 }
 
@@ -149,8 +157,99 @@
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
-    line-height: 1.2;
-    margin: 0;
+    line-height: 1.5;
+    margin: 0px 0px 2px 0px;
+}
+
+.osd-title-wrap {
+    display: flex;
+    flex-direction: row;
+    align-items: center; /* Better for mixed Logo + Text */
+    max-height: 60px;
+    gap: 0.6rem;
+}
+
+.osd-title-main {
+    display: flex;
+    align-items: center;
+    height: 60px; /* Force height to match wrapper */
+}
+
+.osd-title-logo {
+    object-fit: contain;
+    filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+    /* Force Hardware acceleration */
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
+    display: block;
+}
+
+/* Customizable logo sizes */
+.osd-title-logo.logo-small {
+    max-height: 36px;
+    max-width: 140px;
+}
+
+.osd-title-logo.logo-medium {
+    max-height: 52px;
+    max-width: 200px;
+}
+
+.osd-title-logo.logo-large {
+    max-height: 68px;
+    max-width: 260px;
+}
+
+.osd-title-logo.logo-extralarge {
+    max-height: 84px;
+    max-width: 320px;
+}
+
+.osd-title-logo.logo-xxl {
+    max-height: 100px;
+    max-width: 380px;
+}
+
+/* Adjust title wrapper and main row heights depending on logo size */
+.osd-title-wrap.has-logo-small,
+.osd-title-wrap.has-logo-small .osd-title-main {
+    height: 48px !important;
+    max-height: 48px !important;
+}
+
+.osd-title-wrap.has-logo-medium,
+.osd-title-wrap.has-logo-medium .osd-title-main {
+    height: 60px !important;
+    max-height: 60px !important;
+}
+
+.osd-title-wrap.has-logo-large,
+.osd-title-wrap.has-logo-large .osd-title-main {
+    height: 76px !important;
+    max-height: 76px !important;
+}
+
+.osd-title-wrap.has-logo-extralarge,
+.osd-title-wrap.has-logo-extralarge .osd-title-main {
+    height: 92px !important;
+    max-height: 92px !important;
+}
+
+.osd-title-wrap.has-logo-xxl,
+.osd-title-wrap.has-logo-xxl .osd-title-main {
+    height: 108px !important;
+    max-height: 108px !important;
+}
+
+.osd-title-secondary {
+    font-size: 1.6em;
+    font-weight: 500; /* Slightly lighter than main title for hierarchy */
+    text-shadow: 0 2px 4px rgba(0, 0, 0, 0.8);
+    opacity: 0.9;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.5; /* Match main title line-height */
 }
 
 
@@ -176,8 +275,11 @@
     background: linear-gradient(0deg, var(--osd-gradient-dark) 0%, rgba(0, 0, 0, 0) 100%);
     padding: 6em 2.4em 3em;
     /* 5em*1.2, 2em*1.2, 2.5em*1.2 */
+    display: -webkit-box;
     display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
     -webkit-flex-direction: column;
     flex-direction: column;
 }
@@ -188,10 +290,13 @@
 
 /* Controls Row (above slider) */
 .osd-controls-row {
+    display: -webkit-box;
     display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: justify;
     -webkit-justify-content: space-between;
     justify-content: space-between;
     margin-bottom: 0.6em;
@@ -200,8 +305,10 @@
 
 .osd-controls-left,
 .osd-controls-right {
+    display: -webkit-box;
     display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
 }
@@ -212,6 +319,7 @@
 }
 
 .osd-spacer {
+    -webkit-box-flex: 1;
     flex: 1;
 }
 
@@ -230,25 +338,28 @@
 
 
 .osd-btn {
+    display: -webkit-box;
     display: -webkit-inline-flex;
     display: inline-flex;
+    -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: center;
     -webkit-justify-content: center;
     justify-content: center;
     width: 58px;
     height: 58px;
-    border: none;
+    border: none; /* Base reset */
     background: transparent;
     color: var(--osd-text-color);
     cursor: pointer;
     border-radius: 50%;
     transition: 
         background 0.18s ease,
-        border-color 0.18s ease,
         transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1);
     padding: 0;
     margin: 0;
+    box-sizing: border-box; /* Ensure border doesn't grow the button */
 }
 
 /* 
@@ -268,31 +379,69 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     margin: 0 auto;
 }
 
-.osd-btn:hover {
-    background: var(--osd-btn-hover);
-    /* Promote only the hovered button to its own compositor layer */
+.osd-btn:hover,
+.osd-btn:focus,
+.osd-btn.focused,
+.osd-btn.magic-hover {
+    background: var(--jf-accent) !important;
+    color: var(--jf-primary-btn-color) !important;
+    outline: none !important;
+    -webkit-transform: scale(1.15);
+    transform: scale(1.15);
+    /* Promote only the focused/hovered button to its own compositor layer */
     will-change: transform;
 }
 
-.osd-btn:focus,
-.osd-btn.focused {
-    background: var(--jf-accent) !important;
-    border-color: var(--jf-button-border-focus) !important;
-    color: var(--jf-primary-btn-color) !important;
-    outline: none !important;
-    border: 2px solid var(--jf-action-btn-active-border)!important;
-    -webkit-transform: scale(1.15);
-    transform: scale(1.15);
-    /* Promote only the focused button */
-    will-change: transform;
+/* 
+ * ── OSD Button Focus Border Customization ──────────────────────────────────
+ * Controlled via Settings > Display. Adjusts the prominence of the focus
+ * ring around active player controls.
+ */
+
+/* Auto/Default Focus Border */
+html:not([data-osd-borders]) .osd-btn:hover,
+html:not([data-osd-borders]) .osd-btn:focus,
+html:not([data-osd-borders]) .osd-btn.focused,
+html:not([data-osd-borders]) .osd-btn.magic-hover,
+html[data-osd-borders="auto"] .osd-btn:hover,
+html[data-osd-borders="auto"] .osd-btn:focus,
+html[data-osd-borders="auto"] .osd-btn.focused,
+html[data-osd-borders="auto"] .osd-btn.magic-hover {
+    border: 2px solid var(--jf-action-btn-active-border) !important;
+}
+
+/* Light Focus Border (Always White) */
+html[data-osd-borders="light"] .osd-btn:hover,
+html[data-osd-borders="light"] .osd-btn:focus,
+html[data-osd-borders="light"] .osd-btn.focused,
+html[data-osd-borders="light"] .osd-btn.magic-hover {
+    border: 2px solid rgba(255, 255, 255, 1) !important;
+}
+
+/* Dark Focus Border */
+html[data-osd-borders="dark"] .osd-btn:hover,
+html[data-osd-borders="dark"] .osd-btn:focus,
+html[data-osd-borders="dark"] .osd-btn.focused,
+html[data-osd-borders="dark"] .osd-btn.magic-hover {
+    border: 2px solid rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Hidden Focus Border */
+html[data-osd-borders="hidden"] .osd-btn:hover,
+html[data-osd-borders="hidden"] .osd-btn:focus,
+html[data-osd-borders="hidden"] .osd-btn.focused,
+html[data-osd-borders="hidden"] .osd-btn.magic-hover {
+    border: none !important;
 }
 
 .osd-btn.active {
     color: var(--osd-accent-color);
 }
 
+.osd-btn.active:hover,
 .osd-btn.active:focus,
-.osd-btn.active.focused {
+.osd-btn.active.focused,
+.osd-btn.active.magic-hover {
     background: var(--jf-primary-btn-color) !important;
     color: var(--osd-accent-color) !important;
     border-color: var(--jf-primary-btn-color) !important;
@@ -326,10 +475,13 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 /* SyncPlay Indicators */
 .osd-syncplay-icon-wrap {
     position: relative;
+    display: -webkit-box;
     display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
     -webkit-align-items: center;
     align-items: center;
+    -webkit-box-pack: center;
     -webkit-justify-content: center;
     justify-content: center;
     width: 100%;
@@ -455,7 +607,11 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
    ============================================================================ */
 
 .osd-slider-row {
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
     margin-top: 0.6em;
     /* 0.5em * 1.2 */
@@ -518,8 +674,15 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     transition: opacity 0.15s ease;
     z-index: 200;
     /* Flex layout lets the thumbnail stack above the time text */
+    display: -webkit-box;
+    display: -webkit-flex;
     display: flex;
+    -webkit-box-orient: vertical;
+    -webkit-box-direction: normal;
+    -webkit-flex-direction: column;
     flex-direction: column;
+    -webkit-box-align: center;
+    -webkit-align-items: center;
     align-items: center;
     gap: 8px;
 }
@@ -686,8 +849,12 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
 
 /* Player/Offset Focus (28px Thumb on 8px Track) */
 /* Formula: (TrackHeight - ThumbHeight) / 2 = (8 - 28) / 2 = -10px */
+.osd-slider-container:hover .osd-slider::-webkit-slider-thumb,
+.osd-slider-container.focused .osd-slider::-webkit-slider-thumb,
+.osd-slider-container.magic-hover .osd-slider::-webkit-slider-thumb,
 .osd-slider.focused::-webkit-slider-thumb,
 .osd-slider:focus::-webkit-slider-thumb,
+.osd-offset-slider:hover::-webkit-slider-thumb,
 .osd-offset-slider.focused::-webkit-slider-thumb,
 .osd-offset-slider:focus::-webkit-slider-thumb {
     width: 10px !important;
@@ -704,12 +871,15 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     height: 24px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important;
-    background: #fff !important;
+    background: var(--jf-accent-content-color, #fff) !important;
 }
 
 
+.osd-slider-container:hover .osd-slider::-moz-range-thumb,
+.osd-slider-container.focused .osd-slider::-moz-range-thumb,
 .osd-slider.focused::-moz-range-thumb,
 .osd-slider:focus::-moz-range-thumb,
+.osd-offset-slider:hover::-moz-range-thumb,
 .osd-offset-slider.focused::-moz-range-thumb,
 .osd-offset-slider:focus::-moz-range-thumb {
     width: 10px;
@@ -977,14 +1147,14 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     /* border-radius removed */
 }
 
-/* When the item is focused, the fill becomes white */
+/* When the item is focused, the fill becomes the contrast color */
 .track-option.focused .menu-slider .osd-slider-fill {
-    background: #fff;
+    background: var(--jf-accent-content-color, #fff);
 }
 
-/* When the item is focused, the track becomes brighter */
+/* When the item is focused, the track becomes brighter contrast tint */
 .track-option.focused .menu-slider .osd-slider-track {
-    background: rgba(255, 255, 255, 0.4);
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.25);
 }
 
 .menu-slider .osd-slider {
@@ -1243,8 +1413,7 @@ html[data-layout-tier="ultra-legacy"] .osd-btn .osd-icon {
     width: 40vw;
     height: 100vh;
     background: rgba(10, 10, 15, 0.95);
-    backdrop-filter: blur(20px);
-    -webkit-backdrop-filter: blur(20px);
+
     border-radius: 0;
     padding: 40px;
     display: flex;
@@ -1392,9 +1561,8 @@ body.lyrics-active .subtitle-overlay {
 
 .osd-syncplay-notification-glass {
     /* Sleek Apple-style frosted glass */
-    background: rgba(30, 30, 30, 0.45);
-    backdrop-filter: blur(25px);
-    -webkit-backdrop-filter: blur(25px);
+    background: rgba(30, 30, 30, 0.8);
+
     border: 1px solid rgba(255, 255, 255, 0.15);
     border-radius: 20px;
     
@@ -1508,3 +1676,118 @@ body.lyrics-active .subtitle-overlay {
     100% { transform: rotate(360deg); }
 }
 
+/* 
+ * ── Ultra-Legacy Overrides: OSD Layout (Chrome <47 / Tizen 2.x) ────────────
+ * Chromium 32 flexbox fails silently on complex hierarchies, causing 0x0
+ * layouts or completely hidden containers.
+ * We force a block/table based layout explicitly for the OSD structure.
+ */
+
+/* 1. Container & Header */
+html[data-layout-tier="ultra-legacy"] .player-osd {
+    /* Chrome 32: translateZ(0) on an absolute container destroys fixed descendants */
+    -webkit-transform: none !important;
+    transform: none !important;
+    /* Ensure text color is always bright white regardless of var() parsing */
+    color: #ffffff !important;
+    /* Force explicit full-screen sizing — Chrome 38 doesn't always resolve
+     * right:0/bottom:0 correctly on position:absolute inside position:fixed */
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+}
+
+/* 2. Make osd-main fill its parent, disable opacity transitions (Chrome 38
+ *    fails to repaint opacity changes on composited layers), and use a hard
+ *    display:none toggle for show/hide instead. */
+html[data-layout-tier="ultra-legacy"] .osd-main {
+    width: 100% !important;
+    height: 100% !important;
+    top: 0 !important;
+    left: 0 !important;
+    /* No transitions on ultra-legacy — opacity animations cause no-repaint bugs */
+    -webkit-transition: none !important;
+    transition: none !important;
+    /* Force opacity to full so the hidden state is purely via display:none */
+    opacity: 1 !important;
+}
+
+/* 2.5 Force layout redraw on show/hide via display toggle.
+ *     This guarantees Chrome 38 repaints the subtree on every wake-up. */
+html[data-layout-tier="ultra-legacy"] .osd-main.osd-hidden {
+    display: none !important;
+}
+
+
+/* 3. Header */
+html[data-layout-tier="ultra-legacy"] .osd-header {
+    display: block !important;
+}
+html[data-layout-tier="ultra-legacy"] .osd-header-left {
+    float: left;
+}
+html[data-layout-tier="ultra-legacy"] .osd-header-right {
+    float: right;
+}
+html[data-layout-tier="ultra-legacy"] .osd-header::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+/* 4. Bottom Container.
+ *    Changed from position:fixed (broken in Chrome 38 inside a composited
+ *    ancestor) to position:absolute. Explicit left/right/bottom anchoring
+ *    is required because width:100% on absolute only works when the
+ *    containing block has a known pixel width. */
+html[data-layout-tier="ultra-legacy"] .osd-bottom {
+    display: block !important;
+    position: absolute !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: auto !important;
+    box-sizing: border-box;
+}
+
+/* 5. Controls Row */
+html[data-layout-tier="ultra-legacy"] .osd-controls-row {
+    display: block !important;
+}
+html[data-layout-tier="ultra-legacy"] .osd-controls-left {
+    float: left;
+}
+html[data-layout-tier="ultra-legacy"] .osd-controls-right {
+    float: right;
+}
+html[data-layout-tier="ultra-legacy"] .osd-controls-row::after {
+    content: "";
+    display: block;
+    clear: both;
+}
+
+/* 6. Slider Row (Table layout is perfect for fixed-width sides and flexible center) */
+html[data-layout-tier="ultra-legacy"] .osd-slider-row {
+    display: table !important;
+    width: 100%;
+    table-layout: fixed;
+}
+html[data-layout-tier="ultra-legacy"] .osd-time,
+html[data-layout-tier="ultra-legacy"] .osd-slider-container {
+    display: table-cell !important;
+    vertical-align: middle;
+    float: none !important;
+}
+html[data-layout-tier="ultra-legacy"] .osd-time {
+    width: 5em;
+}
+
+/* 7. Inline Items inside the left/right containers */
+html[data-layout-tier="ultra-legacy"] .osd-header-left > *:not(.hidden),
+html[data-layout-tier="ultra-legacy"] .osd-header-right > *:not(.hidden),
+html[data-layout-tier="ultra-legacy"] .osd-controls-left > *:not(.hidden),
+html[data-layout-tier="ultra-legacy"] .osd-controls-right > *:not(.hidden) {
+    display: inline-block !important;
+    vertical-align: middle;
+}

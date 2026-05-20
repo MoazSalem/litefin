@@ -39,7 +39,7 @@ class CardRenderer {
             const isArtist = item.Type === 'MusicArtist' || item.Type === 'Artist';
 
             if (primaryTag || (itemId && isArtist)) {
-                const params = imageService.getParams('poster'); // People usually have poster-like images
+                const params = imageService.getParams('poster', contextType); // People usually have poster-like images
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality,
@@ -48,7 +48,7 @@ class CardRenderer {
             }
         } else if (type === 'episode-primary') {
             // Force Episode Primary Image (for Person Page grid)
-            const params = imageService.getParams('card-backdrop');
+            const params = imageService.getParams('card-backdrop', contextType);
             if (item.ImageTags?.Primary) {
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -71,7 +71,7 @@ class CardRenderer {
                 });
             } else if (item.SeriesId) {
                 // Final Fallback: Series Primary if nothing else (only if SeriesId exists)
-                const seriesParams = imageService.getParams('poster'); // Series primary is usually a poster
+                const seriesParams = imageService.getParams('poster', contextType); // Series primary is usually a poster
                 imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
                     maxWidth: seriesParams.maxWidth,
                     quality: seriesParams.quality
@@ -79,7 +79,7 @@ class CardRenderer {
             }
         } else if (type === 'banner') {
             // Banner Optimization: Look for horizontal branding first
-            const params = imageService.getParams('banner');
+            const params = imageService.getParams('banner', contextType);
             
             // Priority: Banner -> Backdrop -> Thumb -> Primary
             if (item.ImageTags && item.ImageTags.Banner) {
@@ -116,7 +116,7 @@ class CardRenderer {
             // (1080px at medium quality) is a 3× scale overshoot that wastes network
             // bandwidth, JPEG decode time, and GPU texture memory on Tizen hardware.
             // 'card-backdrop' caps the request at the card's actual rendered size.
-            const params = imageService.getParams('card-backdrop');
+            const params = imageService.getParams('card-backdrop', contextType);
 
             if (item.Type === 'Episode') {
                 // Spoiler Prevention: For NextUp/Upcoming/Resume, prefer Series Thumb/Backdrop
@@ -216,7 +216,7 @@ class CardRenderer {
             }
         } else if (item.Type === 'TvChannel') {
             // Live TV Channel: Primary (Logo) -> Thumb
-            const params = imageService.getParams('square'); // Channels are usually square logos
+            const params = imageService.getParams('square', contextType); // Channels are usually square logos
             if (item.ImageTags && item.ImageTags.Primary) {
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -226,7 +226,7 @@ class CardRenderer {
             }
         } else if (item.Type === 'Program') {
             // Live TV Program: Primary (usually backdrop) -> Channel Primary (Logo)
-            const params = isLandscape ? imageService.getParams('card-backdrop') : imageService.getParams('poster');
+            const params = isLandscape ? imageService.getParams('card-backdrop', contextType) : imageService.getParams('poster', contextType);
             if (item.ImageTags && item.ImageTags.Primary) {
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -235,7 +235,7 @@ class CardRenderer {
                 });
             } else if (item.ChannelPrimaryImageTag && item.ChannelId) {
                 // Use Channel Logo as fallback
-                const logoParams = imageService.getParams('square');
+                const logoParams = imageService.getParams('square', contextType);
                 imageUrl = api.getImageUrl(item.ChannelId, 'Primary', {
                     maxWidth: logoParams.maxWidth,
                     quality: logoParams.quality,
@@ -246,7 +246,7 @@ class CardRenderer {
             // Portrait (Poster) Preference
             if (type === 'season') {
                 // Season: Own Primary -> Series Primary
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams('poster', contextType);
                 if (item.ImageTags && item.ImageTags.Primary) {
                     imageUrl = api.getImageUrl(itemId, 'Primary', {
                         maxWidth: params.maxWidth,
@@ -268,7 +268,7 @@ class CardRenderer {
                 }
             } else if (type === 'resume') {
                 // Resume cards
-                const params = imageService.getParams('thumb');
+                const params = imageService.getParams('thumb', contextType);
 
                 // Spoiler Prevention for Episodes
                 const preferEpisodeImages = storage.getItem('pref:preferEpisodeImagesLocal') === 'true';
@@ -303,12 +303,13 @@ class CardRenderer {
                 }
             } else if (item.Type === 'Episode' && item.SeriesId) {
                 // Episode as Poster: Use Series Title/Poster usually, but if requested as poster
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams('poster', contextType);
                 imageUrl = api.getImageUrl(item.SeriesId, 'Primary', {
                     maxWidth: params.maxWidth,
                     quality: params.quality
                 });
             } else if (
+                type === 'small-poster' ||
                 item.ImageTags?.Primary ||
                 item.AlbumPrimaryImageTag ||
                 (itemId &&
@@ -318,7 +319,7 @@ class CardRenderer {
                         item.Type === 'Audio'))
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
-                const params = imageService.getParams('poster');
+                const params = imageService.getParams(type === 'small-poster' ? 'small-poster' : 'poster', contextType);
                 
                 let targetId = itemId;
                 let targetTag = item.ImageTags?.Primary;
@@ -359,9 +360,18 @@ class CardRenderer {
             `;
         }
 
-        // Unplayed Count Badge
+        // --- Unplayed Count Badge ---
+        // 
+        // Generates the circular badge on the top-right of media cards.
+        // On series and seasons, this indicates the total unplayed episode count.
+        // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
-        if (item.UserData && item.UserData.UnplayedItemCount > 0) {
+        
+        // Fetch the user preference (defaults to false, meaning counts are shown by default)
+        const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
+        
+        // Only render the count badge if the user hasn't explicitly disabled it
+        if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
         }
 
@@ -564,10 +574,11 @@ class CardRenderer {
         `;
 
         return `
-            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" tabindex="0">
+            <button class="${cssClass}${expansionClass}" data-item-id="${itemId}" data-type="${item.Type}" data-item-type="${item.Type}" data-collection-type="${item.CollectionType || ''}" data-context-type="${finalContextType}" data-channel-id="${item.ChannelId || ''}" tabindex="0">
                 <div class="card-image ${imageUrl ? 'skeleton-shimmer' : ''}">
                     ${imagePart}
                     ${progressHtml}
+                    ${videoBadgeHtml}
                     ${!options.showMeta ? badgeContainer : ''}
                     ${
                         showInside

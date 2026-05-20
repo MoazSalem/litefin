@@ -6,6 +6,7 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
+import { platformInfo } from './PlatformInfo.js';
 
 /**
  * Convert HEX color to RGBA
@@ -57,6 +58,9 @@ export function getTextStyles() {
             break;
         case 'large':
             styles.push({ name: 'fontSize', value: '6vh' });
+            break;
+        case 'mediumlarge':
+            styles.push({ name: 'fontSize', value: '5.5vh' });
             break;
         case 'small':
             styles.push({ name: 'fontSize', value: '4vh' });
@@ -210,6 +214,24 @@ export function getTextStyles() {
         case 'noto-arabic':
             styles.push({ className: 'font-noto-arabic' });
             break;
+        case 'retrotech':
+            styles.push({ className: 'font-retrotech' });
+            break;
+        case 'kitty':
+            styles.push({ className: 'font-kitty' });
+            break;
+        case 'inter':
+            styles.push({ className: 'font-inter' });
+            break;
+        case 'proxima':
+            styles.push({ className: 'font-proxima' });
+            break;
+        case 'baloo':
+            /* -------------------------------------------------------------
+               Baloo Bhaijaan 2 font option injected into styles array
+               ------------------------------------------------------------- */
+            styles.push({ className: 'font-baloo' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -308,6 +330,7 @@ export function getSecondaryTextStyles() {
         extralarge: '8vh',
         larger: '7vh',
         large: '6vh',
+        mediumlarge: '5.5vh',
         medium: '5vh',
         small: '4vh',
         smaller: '3vh'
@@ -383,6 +406,11 @@ const fontClasses = [
     'font-google',
     'font-silkscreen',
     'font-space-grotesk',
+    'font-retrotech',
+    'font-kitty',
+    'font-inter',
+    'font-proxima',
+    'font-baloo',
     'font-default'
 ];
 
@@ -397,11 +425,21 @@ export function applyStyles(element, styles) {
     // First, clear any existing font classes
     element.classList.remove(...fontClasses);
 
+    // Ultra-legacy hardware uses !important in player-page.css for fallback styles.
+    // We must apply inline styles with !important priority to override them dynamically.
+    const isUltraLegacy = document.documentElement.getAttribute('data-layout-tier') === 'ultra-legacy';
+
     for (const style of styles) {
         if (style.className) {
             element.classList.add(style.className);
         } else if (style.value !== undefined) {
-            element.style[style.name] = style.value;
+            if (isUltraLegacy) {
+                // Convert camelCase to kebab-case
+                const propName = style.name.replace(/([A-Z])/g, '-$1').toLowerCase();
+                element.style.setProperty(propName, style.value, 'important');
+            } else {
+                element.style[style.name] = style.value;
+            }
         }
     }
 }
@@ -411,8 +449,8 @@ export function applyStyles(element, styles) {
  * Used by PlayerPage to trigger font preloading
  * @returns {string|null} The font ID (e.g. 'typewriter', 'cursive') or null
  */
-function getCurrentFontId() {
-    const font = PlayerSettings.get('subtitleFont') || '';
+function getCurrentFontId(settingKey = 'subtitleFont') {
+    const font = PlayerSettings.get(settingKey) || '';
     // Return null for 'default' or empty (no Google Font needed)
     return font && font !== 'default' ? font : null;
 }
@@ -451,6 +489,19 @@ export default {
                 return 'font-silkscreen';
             case 'space-grotesk':
                 return 'font-space-grotesk';
+            case 'retrotech':
+                return 'font-retrotech';
+            case 'kitty':
+                return 'font-kitty';
+            case 'inter':
+                return 'font-inter';
+            case 'proxima':
+                return 'font-proxima';
+            case 'baloo':
+                /* -------------------------------------------------------------
+                   Map internal 'baloo' ID to '.font-baloo' class name
+                   ------------------------------------------------------------- */
+                return 'font-baloo';
             default:
                 return 'font-default';
         }
@@ -480,8 +531,24 @@ export default {
                 return 'Noto Sans Arabic';
             case 'silkscreen':
                 return 'Silkscreen';
+            case 'retrotech':
+                return 'RETROTECH';
+            case 'kitty':
+                return 'Kitty';
+            case 'inter':
+                return 'Inter';
+            case 'proxima':
+                return 'Proxima Nova';
+            case 'baloo':
+                /* -------------------------------------------------------------
+                   Map internal 'baloo' ID to the CSS font-family name
+                   ------------------------------------------------------------- */
+                return 'Baloo Bhaijaan 2';
             default:
-                return 'TizenSans';
+                // Return null when no specific font is selected, so callers that
+                // respect a null value (e.g. _preProcessAssContent) won't override
+                // the ASS file's own Fontname with a platform default.
+                return null;
         }
     },
     getFontScale: (settingKey = 'subtitleFont') => {

@@ -17,9 +17,8 @@
     box-sizing: border-box;
     -webkit-box-sizing: border-box;
     overflow: hidden;
-    background: rgba(0, 0, 0, 0.4); /* Slightly lighter backdrop to let video bleed through */
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
+    background: rgba(0, 0, 0, 0.7); /* Darker backdrop to compensate for lack of blur */
+
     z-index: 9999;
     opacity: 0;
     pointer-events: none;

@@ -232,6 +232,70 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     transition: transform 150ms cubic-bezier(0.25, 0.46, 0.45, 0.94);
 }
 
+/* Web/WebOS Scroll Arrows — hidden by default, revealed on hover or Magic Remote */
+.row-scroll-arrows {
+    position: absolute;
+    top: 0;
+    right: 160px; /* Offset from right edge to clear clock */
+    display: flex;
+    z-index: 10;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+}
+
+.scroll-arrow.left-arrow {
+    margin-right: 12px;
+}
+
+[dir="rtl"] .scroll-arrow.left-arrow {
+    margin-right: 0;
+    margin-left: 12px;
+}
+
+/* Reveal on hover over the parent row section */
+.media-row:hover .row-scroll-arrows {
+    opacity: 1;
+}
+
+[dir="rtl"] .row-scroll-arrows {
+    right: auto;
+    left: 160px;
+}
+
+[dir="rtl"] .scroll-arrow svg {
+    transform: rotate(180deg);
+}
+
+.scroll-arrow {
+    background: rgba(0, 0, 0, 0.5);
+    border: none;
+    border-radius: 50%;
+    width: 44px;
+    height: 44px;
+    color: var(--jf-text-secondary);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s, transform 0.2s, color 0.2s;
+
+
+}
+
+.scroll-arrow:hover {
+    background: var(--jf-accent-content-color);
+    color: var(--jf-accent);
+    transform: scale(1.05);
+    transition: background .2s, transform .2s, color .2s;
+}
+
+.scroll-arrow:active {
+    transform: scale(0.95);
+}
+
+.scroll-arrow svg {
+    pointer-events: none;
+}
 
 /* ============================================================================
  * Sidebar Layout Support

@@ -14,6 +14,8 @@ import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { eventBus } from '../core/EventBus.js';
+import { imageService } from '../utils/ImageService.js';
+import CardRenderer from '../utils/CardRenderer.js';
 
 const log = logger.create('EpgGrid');
 
@@ -31,27 +33,27 @@ class EpgGrid {
         this.ROW_HEIGHT = 100;
         this.PIXELS_PER_MINUTE = 10; // 1 hour = 600px
         this.PIXELS_PER_HOUR = this.PIXELS_PER_MINUTE * 60;
-        
+
         // State
         this.channels = [];
         this.programsMap = new Map(); // channelId -> Array of programs
         this.startTime = this._getRoundStartTime();
         this.endTime = new Date(this.startTime.getTime() + 24 * 60 * 60 * 1000); // 24 hours EPG
-        
+
         this.scrollX = 0;
         this.scrollY = 0;
         this.visibleRows = 0;
         this.visibleWidth = 0;
         // Set a sane default height so the grid renders even before layout is measured
         this.visibleHeight = 600;
-        
+
         this.domNodes = new Map(); // channelId -> { rowEl, channelEl, programNodes: Map<programId, node> }
-        
+
         // Track which EPG element is currently "focused" for navigation.
         // FocusManager routes keypresses internally without setting real DOM focus,
         // so document.activeElement is always BODY — we must maintain our own pointer.
         this._focusedEl = null;
-        
+
         this._isMounted = false;
         this._isDestroyed = false;
     }
@@ -59,37 +61,36 @@ class EpgGrid {
     async init() {
         this._isMounted = true;
         this._renderSkeleton();
-        
+
         try {
             // 1. Fetch channels
             const channelsResult = await api.getLiveTvChannels({ userId: api.userId });
             this.channels = channelsResult.Items || [];
-            
+
             if (this._isDestroyed) return;
 
             // 2. Render initial structure
             this._renderStructure();
-            
+
             // 3. Setup Focus & Event Listeners
             this._setupFocus();
             this._setupEventListeners();
-            
+
             // 4. Measure visible area AFTER DOM is painted, then load and render
             // requestAnimationFrame ensures the container has been laid out by the browser
-            await new Promise(resolve => requestAnimationFrame(resolve));
+            await new Promise((resolve) => requestAnimationFrame(resolve));
             this._updateVisibleDimensions();
             await this._loadPrograms();
             this._startRenderLoop();
-            
+
             // 5. Start render loop and do one synchronous render to pre-populate
             //    domNodes before _focusNow() tries to look up the initial element.
             //    Without this, domNodes is empty and _focusedEl is never set.
             this._scrollToNow();
             this._renderVirtualGrid(); // Synchronous initial render
-            
+
             // 6. Focus initial program
             this._focusNow();
-            
         } catch (err) {
             log.error('EPG Init failed:', err);
             this.container.innerHTML = `<div class="epg-error">${i18n.t('ErrorLoadingData')}</div>`;
@@ -135,7 +136,7 @@ class EpgGrid {
                 </div>
             </div>
         `;
-        
+
         this.timelineTrack = this.container.querySelector('#epg-timeline-track');
         this.channelsTrack = this.container.querySelector('#epg-channels-track');
         this.programsTrack = this.container.querySelector('#epg-programs-track');
@@ -173,18 +174,17 @@ class EpgGrid {
             this.channels.length - 1,
             Math.ceil((this.scrollY + this.visibleHeight) / this.ROW_HEIGHT) + OVERSCAN
         );
-        
-        
+
         // 2. Clear nodes outside window
         for (const [channelId, data] of this.domNodes.entries()) {
-            const channelIndex = this.channels.findIndex(c => c.Id === channelId);
+            const channelIndex = this.channels.findIndex((c) => c.Id === channelId);
             if (channelIndex < startRow || channelIndex > endRow) {
                 if (data.rowEl.parentNode) this.programsTrack.removeChild(data.rowEl);
                 if (data.channelEl.parentNode) this.channelsTrack.removeChild(data.channelEl);
                 this.domNodes.delete(channelId);
             }
         }
-        
+
         // 3. Render/Update visible rows
         for (let i = startRow; i <= endRow; i++) {
             const channel = this.channels[i];
@@ -192,14 +192,53 @@ class EpgGrid {
                 this._renderRow(i, channel);
             }
         }
-        
+
         // 4. Sync transforms
         const scrollX = -this.scrollX;
         const scrollY = -this.scrollY;
-        
+
         this.timelineTrack.style.transform = `translate3d(${scrollX}px, 0, 0)`;
         this.channelsTrack.style.transform = `translate3d(0, ${scrollY}px, 0)`;
         this.programsTrack.style.transform = `translate3d(${scrollX}px, ${scrollY}px, 0)`;
+
+        // Update sticky titles to keep text visible for programs starting off-screen
+        this._updateStickyTitles();
+    }
+
+    /**
+     * Updates the horizontal offset of program titles within their boxes.
+     * If a program started before the current visible time, the title is
+     * "stuck" to the left edge of the visible area so it remains readable.
+     */
+    _updateStickyTitles() {
+        const scrollX = this.scrollX;
+
+        for (const data of this.domNodes.values()) {
+            const programNodes = data.rowEl.children;
+            for (let i = 0; i < programNodes.length; i++) {
+                const progEl = programNodes[i];
+                const contentEl = progEl._contentNode;
+                if (!contentEl) continue;
+
+                const left = progEl._epgLeft;
+                const width = progEl._epgWidth;
+
+                // Calculate how much is hidden to the left (if any)
+                const hiddenAmount = Math.max(0, scrollX - left);
+
+                // Don't push content past the end of the box (leave some padding)
+                const maxShift = Math.max(0, width - 60);
+                const shift = Math.min(hiddenAmount, maxShift);
+
+                if (shift > 0) {
+                    contentEl.style.transform = `translate3d(${shift}px, 0, 0)`;
+                    progEl._prefixNode?.classList.remove('hidden');
+                } else {
+                    contentEl.style.transform = '';
+                    progEl._prefixNode?.classList.add('hidden');
+                }
+            }
+        }
     }
 
     _renderRow(index, channel) {
@@ -221,45 +260,76 @@ class EpgGrid {
         // Clicking/pressing OK on a channel plays it directly
         channelEl.onclick = () => this._handleChannelClick(channel);
         channelEl.onfocus = () => this._handleChannelFocus(channelEl);
-        
+
+        // Channel Logo Selection Priority: Logo -> Primary
         let logoUrl = '';
-        if (channel.ImageTags && channel.ImageTags.Primary) {
-            logoUrl = api.getImageUrl(channel.Id, 'Primary', { maxWidth: 80, quality: 70, tag: channel.ImageTags.Primary });
+        let logoTag = '';
+        let imageType = 'Primary';
+
+        if (channel.ImageTags) {
+            if (channel.ImageTags.Logo) {
+                logoTag = channel.ImageTags.Logo;
+                imageType = 'Logo';
+            } else if (channel.ImageTags.Primary) {
+                logoTag = channel.ImageTags.Primary;
+                imageType = 'Primary';
+            }
         }
-        
+
+        if (logoTag) {
+            // Use ImageService to get optimized TV-friendly dimensions (around 140px for square icons)
+            const params = imageService.getParams('avatar', 'livetv');
+            logoUrl = api.getImageUrl(channel.Id, imageType, {
+                maxWidth: params.maxWidth,
+                quality: params.quality,
+                tag: logoTag
+            });
+        }
+
+        const fallbackData = CardRenderer.getFallbackData(channel.Name);
+
         channelEl.innerHTML = `
-            ${logoUrl ? `<img class="epg-channel-logo" src="${logoUrl}" loading="lazy" />` : '<div class="epg-channel-logo fallback-logo"></div>'}
+            ${
+                logoUrl
+                    ? `<img class="epg-channel-logo" src="${logoUrl}" 
+                        onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';" />`
+                    : ''
+            }
+            <div class="epg-channel-logo-fallback grad-${fallbackData.gradNum}" 
+                 style="${logoUrl ? 'display: none;' : 'display: flex;'}">
+                ${fallbackData.initials}
+            </div>
             <div class="epg-channel-info">
                 <div class="epg-channel-name">${channel.Name}</div>
                 <div class="epg-channel-number">${channel.Number || ''}</div>
             </div>
         `;
         this.channelsTrack.appendChild(channelEl);
-        
+
         // Render Row Node for programs
         const rowEl = document.createElement('div');
         rowEl.className = 'epg-row';
         rowEl.dataset.channelIndex = index;
         rowEl.style.top = `${index * this.ROW_HEIGHT}px`;
         this.programsTrack.appendChild(rowEl);
-        
+
         const data = {
             rowEl,
             channelEl,
             programNodes: new Map()
         };
         this.domNodes.set(channel.Id, data);
-        
+
         // Immediate program render for the row
         this._renderProgramsInRow(channel.Id, rowEl, index);
     }
 
     _renderProgramsInRow(channelId, rowEl, rowIndex) {
         const programs = this.programsMap.get(channelId) || [];
-        programs.forEach(program => {
+        programs.forEach((program) => {
             const left = this._getTimeOffset(new Date(program.StartDate));
             const width = this._getTimeDuration(new Date(program.StartDate), new Date(program.EndDate));
-            
+
             const progEl = document.createElement('div');
             progEl.className = 'epg-program';
             progEl.tabIndex = 0;
@@ -268,17 +338,27 @@ class EpgGrid {
             progEl.dataset.programId = program.Id;
             progEl.dataset.channelId = channelId;
             progEl.dataset.rowIndex = rowIndex;
-            // Store raw program data for focus logic
+            // Store raw program data and layout metadata for fast updates in render loop
             progEl.__programData = program;
-            
+            progEl._epgLeft = left;
+            progEl._epgWidth = width;
+
             progEl.innerHTML = `
-                <div class="epg-program-title">${program.Name}</div>
-                <div class="epg-program-time">${this._formatProgramTime(program)}</div>
+                <div class="epg-program-content">
+                    <div class="epg-program-title">
+                        <span class="epg-program-prefix hidden">‹</span>
+                        <span class="title-text">${program.Name}</span>
+                    </div>
+                    <div class="epg-program-time">${this._formatProgramTime(program)}</div>
+                </div>
             `;
-            
+
+            progEl._contentNode = progEl.querySelector('.epg-program-content');
+            progEl._prefixNode = progEl.querySelector('.epg-program-prefix');
+
             progEl.onclick = () => this._handleProgramClick(program);
             progEl.onfocus = () => this._handleProgramFocus(progEl);
-            
+
             rowEl.appendChild(progEl);
         });
     }
@@ -304,7 +384,7 @@ class EpgGrid {
                     // so _handleMove has the correct context on the very next keypress.
                     this._focusedEl = nextEl;
                     focusManager.focusElement(nextEl);
-                    return true; 
+                    return true;
                 }
                 return false;
             }
@@ -312,7 +392,73 @@ class EpgGrid {
     }
 
     _setupEventListeners() {
+        // =====================================================================
+        // Dynamic Resize Handling
+        // =====================================================================
+        // Handle window resize to dynamically update the EPG visible boundary dimensions.
+        // This ensures the virtualization window adjusts perfectly when the display size changes.
         window.addEventListener('resize', () => this._updateVisibleDimensions());
+
+        // =====================================================================
+        // Direct Scroll Wheel Interception
+        // =====================================================================
+        // Locate the root EPG grid container to bind mouse wheel and Magic Remote scroll events.
+        const gridContainer = this.container.querySelector('.epg-grid-container');
+        if (gridContainer) {
+            // Bind the wheel event listener directly to the container to handle scrolling.
+            // Using a non-passive listener to allow preventDefault() to override the browser's
+            // native scroll propagation, which prevents the parent page from scrolling.
+            gridContainer.addEventListener(
+                'wheel',
+                (e) => {
+                    // Prevent the native wheel event from bubbling up to .page-content or the document.
+                    // This halts any native parent scroll, resolving the "8-row sticky" boundary limit
+                    // because the parent page is kept perfectly anchored while we manage the virtual coordinate updates.
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    // Extract raw wheel delta values for calculation.
+                    let deltaY = e.deltaY;
+                    let deltaX = e.deltaX;
+
+                    // Normalize delta values depending on the browser's scroll mode:
+                    // - Mode 0: pixels (direct value, e.g. from trackpads or precise scrolling mice)
+                    // - Mode 1: lines (40px/line, standard wheel clicks)
+                    // - Mode 2: pages (800px/page, full page jumps)
+                    if (e.deltaMode === 1) {
+                        deltaY *= 40; // Normalize line scroll to pixel scroll
+                        deltaX *= 40;
+                    } else if (e.deltaMode === 2) {
+                        deltaY *= 800; // Normalize page scroll to pixel scroll
+                        deltaX *= 800;
+                    }
+
+                    // Vertical Scroll Processing:
+                    // If vertical delta is non-zero, compute the new scrollY within absolute guide bounds.
+                    if (deltaY !== 0) {
+                        // Calculate maximum possible scroll height based on channel count and row height.
+                        const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
+                        
+                        // Compute target scrollY, clamped between 0 and maxScrollY.
+                        this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, maxScrollY));
+                    }
+
+                    // Horizontal Scroll Processing:
+                    // If horizontal delta is non-zero, compute the new scrollX within absolute 24-hour bounds.
+                    if (deltaX !== 0) {
+                        // Calculate maximum possible scroll width (24 hours timeline width).
+                        const maxScrollX = Math.max(0, 24 * this.PIXELS_PER_HOUR - this.visibleWidth);
+
+                        // Compute target scrollX, clamped between 0 and maxScrollX.
+                        this.scrollX = Math.max(0, Math.min(this.scrollX + deltaX, maxScrollX));
+                    }
+
+                    // Force rendering loop frame update to reposition virtual rows based on new scroll position.
+                    this._renderVirtualGrid();
+                },
+                { passive: false }
+            );
+        }
     }
 
     _handleMove(direction) {
@@ -336,7 +482,7 @@ class EpgGrid {
             if (direction === 'up' || direction === 'down') {
                 // Navigate between channel rows
                 const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
-                
+
                 // At the top boundary — hand off to the tabs section
                 if (nextRowIndex < 0) {
                     if (this.options.leaveUp) {
@@ -344,20 +490,20 @@ class EpgGrid {
                     }
                     return null;
                 }
-                
+
                 if (nextRowIndex < this.channels.length) {
                     // CRITICAL: Update scrollY FIRST so the virtualization window shifts.
                     this._scrollChannelIntoView(nextRowIndex);
-                    
+
                     const nextChannel = this.channels[nextRowIndex];
-                    
+
                     // Force-render the target row synchronously if virtualization
                     // hasn't created it yet. Without this, domNodes.get() returns null
                     // and we'd need two button presses per row to actually navigate.
                     if (!this.domNodes.has(nextChannel.Id)) {
                         this._renderRow(nextRowIndex, nextChannel);
                     }
-                    
+
                     const data = this.domNodes.get(nextChannel.Id);
                     if (data && data.channelEl) {
                         return data.channelEl;
@@ -370,9 +516,11 @@ class EpgGrid {
                 const now = Date.now();
                 const target =
                     // First: prefer the program airing right now
-                    programs.find(p => now >= new Date(p.StartDate).getTime() && now < new Date(p.EndDate).getTime()) ||
+                    programs.find(
+                        (p) => now >= new Date(p.StartDate).getTime() && now < new Date(p.EndDate).getTime()
+                    ) ||
                     // Second: the next upcoming program
-                    programs.find(p => new Date(p.StartDate).getTime() > now) ||
+                    programs.find((p) => new Date(p.StartDate).getTime() > now) ||
                     // Last resort: the very first program in the list
                     programs[0];
 
@@ -407,7 +555,7 @@ class EpgGrid {
         if (direction === 'left') {
             // Find prev program in the same row
             const programs = this.programsMap.get(channelId) || [];
-            const idx = programs.findIndex(p => p.Id === program.Id);
+            const idx = programs.findIndex((p) => p.Id === program.Id);
             if (idx > 0) {
                 nextEl = this._findProgramEl(channelId, programs[idx - 1].Id);
             } else {
@@ -421,7 +569,7 @@ class EpgGrid {
         } else if (direction === 'right') {
             // Find next program in the same row
             const programs = this.programsMap.get(channelId) || [];
-            const idx = programs.findIndex(p => p.Id === program.Id);
+            const idx = programs.findIndex((p) => p.Id === program.Id);
             if (idx >= 0 && idx + 1 < programs.length) {
                 nextEl = this._findProgramEl(channelId, programs[idx + 1].Id);
             }
@@ -430,19 +578,20 @@ class EpgGrid {
             const nextRowIndex = direction === 'down' ? rowIndex + 1 : rowIndex - 1;
             if (nextRowIndex >= 0 && nextRowIndex < this.channels.length) {
                 const nextChannel = this.channels[nextRowIndex];
-                
+
                 // Scroll and force-render the target row synchronously so domNodes
                 // is populated before we try to query it for the program element.
                 this._scrollChannelIntoView(nextRowIndex);
                 if (!this.domNodes.has(nextChannel.Id)) {
                     this._renderRow(nextRowIndex, nextChannel);
                 }
-                
-                const nextRowPrograms = this.programsMap.get(nextChannel.Id) || [];
-                const midTime = new Date(program.StartDate).getTime()
-                    + (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
 
-                const overlapping = nextRowPrograms.find(p => {
+                const nextRowPrograms = this.programsMap.get(nextChannel.Id) || [];
+                const midTime =
+                    new Date(program.StartDate).getTime() +
+                    (new Date(program.EndDate).getTime() - new Date(program.StartDate).getTime()) / 2;
+
+                const overlapping = nextRowPrograms.find((p) => {
                     const start = new Date(p.StartDate).getTime();
                     const end = new Date(p.EndDate).getTime();
                     return midTime >= start && midTime < end;
@@ -470,7 +619,7 @@ class EpgGrid {
 
     _findProgramEl(channelId, programId) {
         // Since it's virtualized, it might not be in DOM yet
-        // However, for horizontal movement, if we are in the row, 
+        // However, for horizontal movement, if we are in the row,
         // all its programs are rendered (our simple virtualization renders full rows).
         const data = this.domNodes.get(channelId);
         if (data) {
@@ -552,7 +701,7 @@ class EpgGrid {
         if (!channel) return;
 
         const programs = this.programsMap.get(channel.Id) || [];
-        const current = programs.find(p => {
+        const current = programs.find((p) => {
             const start = new Date(p.StartDate).getTime();
             const end = new Date(p.EndDate).getTime();
             return now.getTime() >= start && now.getTime() < end;
@@ -594,7 +743,7 @@ class EpgGrid {
         // the total load time the same as a single request (parallel execution).
         // =====================================================================
         const BATCH_SIZE = 50;
-        const allChannelIds = this.channels.map(c => c.Id);
+        const allChannelIds = this.channels.map((c) => c.Id);
 
         // Slice the array into batches of BATCH_SIZE
         const batches = [];
@@ -602,11 +751,13 @@ class EpgGrid {
             batches.push(allChannelIds.slice(i, i + BATCH_SIZE));
         }
 
-        log.debug(`[EPG] Fetching programs for ${allChannelIds.length} channels in ${batches.length} batch(es) of ${BATCH_SIZE}`);
+        log.debug(
+            `[EPG] Fetching programs for ${allChannelIds.length} channels in ${batches.length} batch(es) of ${BATCH_SIZE}`
+        );
 
         // Fire all batch requests concurrently — much faster than sequential
         const batchResults = await Promise.all(
-            batches.map(batchIds =>
+            batches.map((batchIds) =>
                 api.getLiveTvPrograms({
                     userId: api.userId,
                     channelIds: batchIds.join(','),
@@ -679,13 +830,21 @@ class EpgGrid {
         const el = gridContainer || this.container;
         if (el) {
             this.visibleHeight = (el.clientHeight || 600) - 60; // Subtract timeline header
-            this.visibleWidth = (el.clientWidth || 1280) - 250;   // Subtract channels sidebar
+            this.visibleWidth = (el.clientWidth || 1280) - 250; // Subtract channels sidebar
         }
     }
 
     _formatProgramTime(program) {
-        const start = new Date(program.StartDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
-        const end = new Date(program.EndDate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+        const start = new Date(program.StartDate).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
+        const end = new Date(program.EndDate).toLocaleTimeString([], {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+        });
         return `${start} - ${end}`;
     }
 

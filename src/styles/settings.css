@@ -121,10 +121,16 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .settings-menu-btn:focus,
-.settings-menu-btn.focused {
+.settings-menu-btn.focused{
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color, #ffffff);
     outline: none !important;
+    transform: scale(1.05);
+    will-change: transform;
+}
+
+.settings-menu-btn:hover {
+    border-color: var(--jf-action-btn-active-border) !important;
     transform: scale(1.05);
     will-change: transform;
 }
@@ -240,12 +246,19 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .btn-option:focus,
-.btn-option.focused {
+.btn-option.focused{
     border: 2px solid var(--jf-action-btn-active-border)!important;
     /* High contrast focus */
+    color: var(--jf-primary-btn-color, #fff);
     background: var(--jf-accent-hover);
     transform: scale(1.05);
     outline: none !important;
+    will-change: transform;
+}
+
+.btn-option:hover {
+    border-color: var(--jf-action-btn-active-border) !important;
+    transform: scale(1.05);
     will-change: transform;
 }
 
@@ -272,9 +285,15 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .select-btn:focus,
-.select-btn.focused {
+.select-btn.focused{
     background: var(--jf-accent);
     color: var(--jf-primary-btn-color, #ffffff);
+    border: 2px solid var(--jf-action-btn-active-border)!important;
+    transform: scale(1.02);
+    will-change: transform;
+}
+
+.select-btn:hover {
     border: 2px solid var(--jf-action-btn-active-border)!important;
     transform: scale(1.02);
     will-change: transform;
@@ -445,7 +464,7 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 
 .switch-user-btn {
     margin-top: 10px;
-    padding: 16px 48px;
+    padding: 12px 48px;
     border-radius: var(--jf-border-radius-lg);
     font-weight: 600;
     border: 2px solid var(--jf-action-btn-border)!important;
@@ -456,10 +475,11 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .switch-user-btn:focus,
-.switch-user-btn.focused {
+.switch-user-btn.focused,
+.switch-user-btn:hover {
     background: var(--jf-error, #ff3b30);
     /* Apple Red / Theme Error */
-    border: 2px solid var(--jf-action-btn-active-border)!important;
+    border-color: var(--jf-button-border-focus) !important;
     will-change: transform;
 }
 
@@ -479,7 +499,8 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
 }
 
 .about-card:focus,
-.about-card.focused {
+.about-card.focused,
+.about-card:hover {
     background: rgba(255, 255, 255, 0.1);
     border: 2px solid var(--jf-action-btn-active-border)!important;
     outline: none;
@@ -597,7 +618,7 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
     left: 3px;
     width: 24px;
     height: 24px;
-    background-color: var(--jf-switch-handle);
+    background-color: #ffffff; /* Always light when OFF for visibility in dark themes */
     border-radius: 50%;
 }
 
@@ -607,10 +628,12 @@ html[data-layout-tier="ultra-legacy"] .identity-grid .identity-item:nth-child(ev
 
 .toggle-switch.active::after {
     transform: translateX(26px);
+    background-color: var(--jf-switch-handle); /* Use accent-contrast color when ON */
 }
 
 .toggle-switch:focus,
-.toggle-switch.focused {
+.toggle-switch.focused,
+.toggle-switch:hover {
     border-color: var(--jf-button-border-focus);
     transform: scale(1.05);
     will-change: transform;
@@ -725,13 +748,18 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
     height: 24px !important;
     border-radius: var(--jf-border-radius) !important;
     margin-top: -9px !important; /* (6 - 24) / 2 */
-    background: #fff !important;
+    background: var(--jf-accent-content-color, #fff) !important;
     box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
 }
 
 .setting-slider:focus + .slider-fill,
 .setting-slider.focused + .slider-fill {
-    background: #fff !important; /* Contrast when focused */
+    background: var(--jf-accent-content-color, #fff) !important; /* Contrast when focused */
+}
+
+/* Ensure track remains visible when item is focused */
+.setting-item.focused .slider-track {
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.2);
 }
 
 .slider-value {
@@ -993,7 +1021,12 @@ html[data-layout-tier="ultra-legacy"] .toggle-switch.active::after {
 }
 
 .color-option.active {
-    border-color: rgba(255, 255, 255, 0.5);
+    border-color: rgba(255, 255, 255, 1);
+}
+
+.color-option:hover,
+.color-option.hovered {
+    border-color: rgba(255, 255, 255, 0.7);
 }
 
 .color-option.active::after {

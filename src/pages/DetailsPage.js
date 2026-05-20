@@ -33,6 +33,7 @@ import { i18n } from '../utils/i18n.js';
 import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
+import { formatDate } from '../utils/TimeUtils.js';
 
 const log = logger.create('DetailsPage');
 
@@ -56,6 +57,17 @@ class DetailsPage extends Page {
 
         // Mark as async page for Navigation State
         this._isAsyncPage = true;
+    }
+
+    /**
+     * Override _renderMediaCard to provide a default context for all 
+     * related content rows (Similar, Next Up, Cast).
+     */
+    _renderMediaCard(item, isLandscape, type, options = {}) {
+        // Default to 'details-row' which maps to the 'home' preset (228px posters, 388px thumbs)
+        // rather than the massive 'details' primary image presets.
+        options.contextType = options.contextType || 'details-row';
+        return super._renderMediaCard(item, isLandscape, type, options);
     }
 
     render() {
@@ -265,7 +277,11 @@ class DetailsPage extends Page {
             if (pendingChain && pendingChain === this._itemId) {
                 // Consume the flag immediately so it won't re-fire on next visit
                 state.delete('details:autoChainRemote');
-                log.info('[AutoChain] Detected pending remote chain for item', this._itemId, '— opening remote trailer');
+                log.info(
+                    '[AutoChain] Detected pending remote chain for item',
+                    this._itemId,
+                    '— opening remote trailer'
+                );
 
                 // Short delay: let the page settle visually before slamming the
                 // overlay on top. Prevents a jarring instant transition.
@@ -293,50 +309,97 @@ class DetailsPage extends Page {
     }
 
     _bindActions() {
+        let lastActivateTime = 0;
+        const handleActivate = (e, callback) => {
+            const now = Date.now();
+            if (now - lastActivateTime < 400) return;
+            lastActivateTime = now;
+            e.preventDefault();
+            e.stopPropagation();
+            callback();
+        };
+
         // Play button
-        this.$('.play-btn')?.addEventListener('click', () => {
-            this._play();
-        });
+        const playBtn = this.$('.play-btn');
+        if (playBtn) {
+            playBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play()));
+            playBtn.addEventListener('click', (e) => handleActivate(e, () => this._play()));
+        }
 
         // Resume button
-        this.$('.resume-btn')?.addEventListener('click', () => {
-            this._play({ resume: true });
-        });
+        const resumeBtn = this.$('.resume-btn');
+        if (resumeBtn) {
+            resumeBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._play({ resume: true })));
+            resumeBtn.addEventListener('click', (e) => handleActivate(e, () => this._play({ resume: true })));
+        }
 
         // Watched button
-        this.$('.watched-btn')?.addEventListener('click', () => {
-            this._toggleWatched();
-        });
+        const watchedBtn = this.$('.watched-btn');
+        if (watchedBtn) {
+            watchedBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._toggleWatched()));
+            watchedBtn.addEventListener('click', (e) => handleActivate(e, () => this._toggleWatched()));
+        }
 
         // Reset button
-        this.$('.reset-btn')?.addEventListener('click', () => {
-            this._resetProgress();
-        });
+        const resetBtn = this.$('.reset-btn');
+        if (resetBtn) {
+            resetBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._resetProgress()));
+            resetBtn.addEventListener('click', (e) => handleActivate(e, () => this._resetProgress()));
+        }
 
-        // Trailer button — dispatches to dialog or directly to player/iframe
-        this.$('.trailer-btn')?.addEventListener('click', () => {
-            this._onTrailerClick();
-        });
+        // Trailer button
+        const trailerBtn = this.$('.trailer-btn');
+        if (trailerBtn) {
+            trailerBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._onTrailerClick()));
+            trailerBtn.addEventListener('click', (e) => handleActivate(e, () => this._onTrailerClick()));
+        }
 
         // Shuffle button
-        this.$('.shuffle-btn')?.addEventListener('click', () => {
-            this._shufflePlay();
-        });
+        const shuffleBtn = this.$('.shuffle-btn');
+        if (shuffleBtn) {
+            shuffleBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._shufflePlay()));
+            shuffleBtn.addEventListener('click', (e) => handleActivate(e, () => this._shufflePlay()));
+        }
 
         // Subtitle button
-        this.$('.subtitle-btn')?.addEventListener('click', () => {
-            this._showSubtitleTrackMenu();
-        });
+        const subtitleBtn = this.$('.subtitle-btn');
+        if (subtitleBtn) {
+            subtitleBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showSubtitleTrackMenu()));
+            subtitleBtn.addEventListener('click', (e) => handleActivate(e, () => this._showSubtitleTrackMenu()));
+        }
 
         // Audio button
-        this.$('.audio-btn')?.addEventListener('click', () => {
-            this._showAudioTrackMenu();
-        });
+        const audioBtn = this.$('.audio-btn');
+        if (audioBtn) {
+            audioBtn.addEventListener('mousedown', (e) => handleActivate(e, () => this._showAudioTrackMenu()));
+            audioBtn.addEventListener('click', (e) => handleActivate(e, () => this._showAudioTrackMenu()));
+        }
 
         // More button
-        this.$('.more-btn')?.addEventListener('click', () => {
-            this._showMoreOptionsModal(this._itemId);
-        });
+        const moreBtn = this.$('.more-btn');
+        if (moreBtn) {
+            moreBtn.addEventListener('mousedown', (e) =>
+                handleActivate(e, () => this._showMoreOptionsModal(this._itemId))
+            );
+            moreBtn.addEventListener('click', (e) => handleActivate(e, () => this._showMoreOptionsModal(this._itemId)));
+        }
+
+        // See more button
+        const seeMoreBtn = this.$('.see-more-btn');
+        if (seeMoreBtn) {
+            seeMoreBtn.addEventListener('mousedown', (e) => {
+                const now = Date.now();
+                if (now - lastActivateTime < 400) return;
+                lastActivateTime = now;
+                this._showFullOverview();
+            });
+            seeMoreBtn.addEventListener('click', (e) => {
+                const now = Date.now();
+                if (now - lastActivateTime < 400) return;
+                lastActivateTime = now;
+                this._showFullOverview();
+            });
+        }
     }
 
     async _loadDetails() {
@@ -347,22 +410,52 @@ class DetailsPage extends Page {
             // ────────────────────────────────────────────────────────────────────────
             // 2. Fetch Base Item Details
             // ────────────────────────────────────────────────────────────────────────
+            const hideRich = storage.getItem('pref:hideRichMetadata') === 'true';
+            const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+
+            // Build dynamic fields list based on user preferences to save bandwidth/CPU
+            const requestedFields = [
+                'MediaStreams',
+                'MediaSources',
+                'Overview',
+                'LibraryId',
+                'CanDelete',
+                'Width',
+                'Height',
+                'CameraMake',
+                'CameraModel',
+                'ExposureTime',
+                'FocalLength',
+                'Aperture',
+                'Altitude',
+                'DateCreated',
+                'PremiereDate'
+            ];
+
+            if (!hideRich) {
+                requestedFields.push('Genres', 'GenreItems', 'Studios', 'Tags');
+            }
+
+            if (!hideCast) {
+                requestedFields.push('People');
+            }
+
             const item = await api.getItem(this._itemId, {
                 // We request comprehensive fields to avoid redundant refetching.
                 // CanDelete is essential for implementing the 'Delete Media' feature.
                 // MediaSources must be explicitly requested to guarantee MediaStreams logic works reliably.
                 // We also request Photo EXIF fields so they are available immediately.
-                Fields: 'People,Genres,GenreItems,ArtistItems,Studios,Tags,MediaStreams,MediaSources,Overview,LibraryId,CanDelete,Width,Height,CameraMake,CameraModel,ExposureTime,FocalLength,Aperture,Altitude'
+                Fields: requestedFields.join(',')
             });
             this._item = item;
-            log.debug('Item loaded:', item);
+            //log.debug('Item loaded:', item);
 
             // ── Restore persisted version selection ─────────────────────────────────
             // We key by itemId so each item independently remembers its last version.
             // Only restore if the saved ID still exists in the current MediaSources list
             // (the server may have removed a version since the last visit).
             const savedSourceId = storage.getItem(`mediaSource:${this._itemId}`);
-            if (savedSourceId && item.MediaSources?.some(m => m.Id === savedSourceId)) {
+            if (savedSourceId && item.MediaSources?.some((m) => m.Id === savedSourceId)) {
                 this._selectedMediaSourceId = savedSourceId;
                 log.info('Restored persisted media source:', savedSourceId);
             } else {
@@ -488,7 +581,7 @@ class DetailsPage extends Page {
         if (!this._item?.MediaSources || this._item.MediaSources.length <= 1) return;
 
         // Map MediaSources to a format compatible with _renderTrackSelectionMenu
-        const sources = this._item.MediaSources.map(s => ({
+        const sources = this._item.MediaSources.map((s) => ({
             ...s,
             Index: s.Id, // We use the ID as the index for selection
             DisplayTitle: s.Name || i18n.t('Version') || 'Version'
@@ -546,7 +639,12 @@ class DetailsPage extends Page {
             // Determine Aspect Ratio Type
             let posterType = 'poster';
             if (item.Type === 'Episode') posterType = 'landscape';
-            if (item.Type === 'MusicAlbum' || item.Type === 'MusicArtist' || item.Type === 'Audio' || item.Type === 'TvChannel')
+            if (
+                item.Type === 'MusicAlbum' ||
+                item.Type === 'MusicArtist' ||
+                item.Type === 'Audio' ||
+                item.Type === 'TvChannel'
+            )
                 posterType = 'square';
 
             // Apply class for CSS aspect ratio
@@ -556,11 +654,10 @@ class DetailsPage extends Page {
             }
 
             if (item.ImageTags && item.ImageTags.Primary) {
-                // FORCE HIGH QUALITY for Details Page
-                // const params = imageService.getParams('poster');
+                const params = imageService.getParams('details-poster');
                 const posterUrl = api.getImageUrl(item.Id, 'Primary', {
-                    maxWidth: 600,
-                    quality: 90
+                    maxWidth: params.maxWidth,
+                    quality: params.quality
                 });
                 const img = new Image();
                 img.onload = () => {
@@ -582,10 +679,10 @@ class DetailsPage extends Page {
             }
 
             // Backdrop (Fire and forget, via Manager)
-            // FORCE HIGH QUALITY for Details Page
+            const params = imageService.getParams('details-backdrop');
             const backdropUrl = BackdropManager.getBackdropUrl(item, {
-                maxWidth: 3840,
-                quality: 90
+                maxWidth: params.maxWidth,
+                quality: params.quality
             });
             if (backdropUrl) {
                 BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
@@ -600,7 +697,16 @@ class DetailsPage extends Page {
         } else if (this._item.Type === 'Season') {
             await this._loadEpisodes(this._item.SeriesId, this._itemId);
         } else if (this._item.Type === 'Episode') {
-            await Promise.all([this._loadMoreFromSeason(), this._loadGuestStars()]);
+            const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+            const loads = [this._loadMoreFromSeason()];
+            if (!hideCast) {
+                loads.push(this._loadGuestStars());
+            } else {
+                // Ensure section is hidden if guest stars are skipped
+                const guestStarsSection = this.$('#guest-stars-section');
+                if (guestStarsSection) guestStarsSection.classList.add('hidden');
+            }
+            await Promise.all(loads);
         } else if (this._item.Type === 'BoxSet') {
             await this._loadCollectionItems();
         } else if (this._item.Type === 'MusicAlbum') {
@@ -612,8 +718,12 @@ class DetailsPage extends Page {
 
         // Render people if available
         this._people = this._item.People || [];
-        if (this._people.length > 0) {
+        const hideCast = storage.getItem('pref:hideCastSection') === 'true';
+        if (this._people.length > 0 && !hideCast) {
             this._renderPeople();
+        } else if (hideCast) {
+            const peopleSection = this.$('#people-section');
+            if (peopleSection) peopleSection.classList.add('hidden');
         }
 
         // Special Features
@@ -734,19 +844,20 @@ class DetailsPage extends Page {
         const titleEl = this.$('#playlist-items-title');
         if (titleEl) {
             const count = this._playlistItems.length;
-            titleEl.textContent = count === 1
-                ? i18n.t('ItemCountSingle') || '1 Item'
-                : i18n.t('ItemCountValue', [count]) || `${count} Items`;
+            titleEl.textContent =
+                count === 1
+                    ? i18n.t('ItemCountSingle') || '1 Item'
+                    : i18n.t('ItemCountValue', [count]) || `${count} Items`;
         }
 
         // Build the landscape grid — each card navigates to its own details page
         this._playlistGrid = new MediaGrid({
             id: 'playlist-items-grid',
             items: this._playlistItems,
-            type: 'thumb',           // Landscape thumb aspect ratio
-            contextType: 'playlist-grid',
+            type: 'thumb', // Landscape thumb aspect ratio
+            contextType: 'library',
             limit: 1000,
-            isLandscape: true,       // Landscape layout for mixed content
+            isLandscape: true, // Landscape layout for mixed content
             onClick: (card) => {
                 // Save focus context so Back navigation returns to the same card
                 const stateKey = `details:lastFocusedItem:${this._itemId}`;
@@ -798,7 +909,7 @@ class DetailsPage extends Page {
             id: 'album-songs-grid',
             items: songs,
             type: 'square', // Square posters as requested
-            contextType: 'album-grid',
+            contextType: 'library',
             limit: 60,
             moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Audio`,
             isLandscape: false, // Not landscape
@@ -868,7 +979,7 @@ class DetailsPage extends Page {
             'details-rich-meta',
             'collection-movies-section',
             'collection-shows-section',
-            'details-playlist-items',   // Playlist items grid (Playlist type)
+            'details-playlist-items', // Playlist items grid (Playlist type)
             'details-next-up',
             'details-seasons',
             'details-episodes',
@@ -1064,7 +1175,12 @@ class DetailsPage extends Page {
                 } else if (card.dataset.itemId) {
                     // Special handling for Persons and Artists: navigate to the unified PersonPage
                     const itemType = card.dataset.type;
-                    if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                    if (
+                        itemType === 'Person' ||
+                        itemType === 'MusicArtist' ||
+                        itemType === 'Artist' ||
+                        itemType === 'AlbumArtist'
+                    ) {
                         log.info('Navigating to PersonPage:', card.dataset.itemId);
                         router.navigate(`/person/${card.dataset.itemId}`);
                     } else {
@@ -1134,6 +1250,16 @@ class DetailsPage extends Page {
     }
 
     _renderRichMetadata() {
+        const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
+        let container = this.$('#rich-meta');
+        const containerWrapper = this.$('#rich-meta-container');
+
+        if (isHidden) {
+            if (container) container.innerHTML = '';
+            if (containerWrapper) containerWrapper.classList.add('hidden');
+            return;
+        }
+
         const item = this._item;
         const htmlParts = [];
 
@@ -1220,11 +1346,16 @@ class DetailsPage extends Page {
                 `;
             };
 
-            const esc = (str) => String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-            
+            const esc = (str) =>
+                String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
             let dateStr = '';
             if (item.DateCreated) {
-                try { dateStr = new Date(item.DateCreated).toLocaleDateString(); } catch (_) { dateStr = item.DateCreated; }
+                try {
+                    dateStr = new Date(item.DateCreated).toLocaleDateString();
+                } catch (_) {
+                    dateStr = item.DateCreated;
+                }
             } else if (item.ProductionYear) {
                 dateStr = String(item.ProductionYear);
             }
@@ -1233,7 +1364,8 @@ class DetailsPage extends Page {
             const aperture = item.Aperture ? `f/${item.Aperture}` : null;
             let exposure = null;
             if (item.ExposureTime) {
-                exposure = item.ExposureTime < 1 ? `1/${Math.round(1 / item.ExposureTime)} s` : `${item.ExposureTime} s`;
+                exposure =
+                    item.ExposureTime < 1 ? `1/${Math.round(1 / item.ExposureTime)} s` : `${item.ExposureTime} s`;
             }
             const focal = item.FocalLength ? `${item.FocalLength} mm` : null;
             const altitude = item.Altitude != null ? `${Math.round(item.Altitude)} m` : null;
@@ -1246,7 +1378,7 @@ class DetailsPage extends Page {
             htmlParts.push(createTextRow(i18n.t('ExifAltitude') || 'Altitude', altitude));
         }
 
-        const container = this.$('#rich-meta');
+        container = this.$('#rich-meta');
         if (container) {
             container.innerHTML = htmlParts.join('');
 
@@ -1397,11 +1529,10 @@ class DetailsPage extends Page {
         const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
 
         if (logoItemId && logoTag) {
-            const params = imageService.getParams('thumb'); // Logo usually similar resolution needs as thumb
-            // Bump logo quality slightly as it is text
+            const params = imageService.getParams('details-logo');
             const logoUrl = api.getImageUrl(logoItemId, 'Logo', {
-                maxWidth: params.maxWidth * 2,
-                quality: 70,
+                maxWidth: params.maxWidth,
+                quality: params.quality,
                 tag: logoTag
             });
             const img = new Image();
@@ -1455,6 +1586,33 @@ class DetailsPage extends Page {
         if (criticRating) metaHtml += `<span class="meta-item meta-tomato">${criticRating}</span>`;
         if (endsAtText) metaHtml += `<span class="meta-item meta-ends-at">${endsAtText}</span>`;
 
+        // --- Added & Aired Dates ---
+        // Conditionally render library metadata based on global user preferences.
+        let addedHtml = '';
+        if (storage.getItem('pref:showAddedDate') === 'true' && item.DateCreated) {
+            addedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Added')}: ${formatDate(item.DateCreated)}</span>`;
+        }
+
+        let airedHtml = '';
+        if (storage.getItem('pref:showDateAired') === 'true' && item.PremiereDate) {
+            airedHtml = `<span class="meta-item meta-item-dates">${i18n.t('Aired')}: ${formatDate(item.PremiereDate)}</span>`;
+        }
+
+        // Logic: If both are enabled and present, move them to a new row for better clarity.
+        // Otherwise, append to the main row if only one exists.
+        const bothEnabled =
+            storage.getItem('pref:showAddedDate') === 'true' &&
+            item.DateCreated &&
+            storage.getItem('pref:showDateAired') === 'true' &&
+            item.PremiereDate;
+
+        let secondaryMetaRow = '';
+        if (bothEnabled) {
+            secondaryMetaRow = `<div class="details-meta-row">${addedHtml}${airedHtml}</div>`;
+        } else {
+            metaHtml += addedHtml + airedHtml;
+        }
+
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
         const displaySubtitle = i18n.ensureBiDi(
@@ -1465,12 +1623,24 @@ class DetailsPage extends Page {
             <div id="details-logo" class="details-logo"></div>
             <h1 class="details-title">${displayTitle}</h1>
             ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
+            ${item.Type === 'Episode' ? `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
             
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
+            ${secondaryMetaRow}
         `;
+
+        // Bind clickable subtitle if present
+        const subtitleLink = this.$('#episode-subtitle-link');
+        if (subtitleLink && item.SeriesId) {
+            subtitleLink.onclick = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                log.info('Navigating to series via subtitle link:', item.SeriesId);
+                router.navigate(`/details/${item.SeriesId}`);
+            };
+        }
 
         // Overview
         const overviewEl = this.$('.overview-text');
@@ -1657,7 +1827,7 @@ class DetailsPage extends Page {
                     router.navigate(`/slideshow/${this._itemId}?parentId=${parentId}`);
                 };
             }
-            
+
             const audioBtn = this.$('.audio-btn');
             if (audioBtn) {
                 audioBtn.classList.add('hidden');
@@ -1700,7 +1870,7 @@ class DetailsPage extends Page {
                 const playIcon = `<svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg>`;
                 shuffleBtn.innerHTML = playIcon;
                 shuffleBtn.onclick = () => {
-                    // Slideshow auto-starts via query param if we wanted, but right now SlideshowPage 
+                    // Slideshow auto-starts via query param if we wanted, but right now SlideshowPage
                     // doesn't have an auto start param, user can press play themselves. Thus we just open it.
                     // Wait, we can pass autoPlay=true!
                     const parentId = this._item.LibraryId || this._item.ParentId || state.get('activeLibraryId') || '';
@@ -1732,11 +1902,36 @@ class DetailsPage extends Page {
         }
 
         if (subtitleBtn) {
-            // Only show subtitle tracks if there's at least one available to select
-            if (mediaStreams.some((s) => s.Type === 'Subtitle')) {
+            // =========================================================================
+            // PGS Subtitle Filter Guard for Button Visibility
+            //
+            // We check if there are any available subtitle streams that are NOT disabled
+            // PGS tracks. If PGS rendering is disabled completely in settings, PGS streams
+            // should not count towards whether the subtitle button is visible. This avoids
+            // showing an active subtitle button when the only subtitle tracks are PGS tracks
+            // that the user has chosen to hide/disable completely.
+            // =========================================================================
+            const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+            const hasSelectableSubtitles = mediaStreams.some((s) => {
+                // We only look at subtitle streams
+                if (s.Type !== 'Subtitle') return false;
+
+                // If PGS is disabled, skip PGS/PGSSUB codecs
+                if (disablePgs) {
+                    const codec = (s.Codec || '').toLowerCase();
+                    if (codec === 'pgs' || codec === 'pgssub') {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            // If there's at least one renderable subtitle stream, make the button visible
+            if (hasSelectableSubtitles) {
                 subtitleBtn.classList.remove('hidden');
                 subtitleBtn.setAttribute('tabindex', '0');
             } else {
+                // Otherwise, completely hide the subtitle button and remove from focus order
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
@@ -1842,7 +2037,7 @@ class DetailsPage extends Page {
                 id: 'season-episodes-grid',
                 items: this._episodes,
                 type: 'episode',
-                contextType: 'season-grid',
+                contextType: 'details',
                 limit: 60,
                 moreUrl: `/library/all?parentId=${this._itemId}&includeItemTypes=Episode&viewModeIndex=2`,
                 isLandscape: true,
@@ -2101,40 +2296,40 @@ class DetailsPage extends Page {
                 elementId: '#artists-row',
                 isVisible: () => isNotHidden('#artists-section')
             },
-            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'details-special-features',
                 elementId: '#special-features-row',
                 isVisible: () => isNotHidden('#special-features-section')
             },
+            { name: 'details-people', elementId: '#people-row', isVisible: () => isNotHidden('#people-section') },
             {
                 name: 'more-from-season-section',
                 elementId: '#more-from-season-row',
                 isVisible: () => isNotHidden('#more-from-season-section')
             },
             {
-                name: 'details-episodes',
-                elementId: '#episodes-list',
-                isVisible: () => isNotHidden('#episodes-section')
-            },
-            {
                 name: 'details-songs',
                 elementId: '#songs-list',
                 isVisible: () => isNotHidden('#songs-section')
             },
+            {
+                name: 'details-episodes',
+                elementId: '#episodes-list',
+                isVisible: () => isNotHidden('#episodes-section')
+            },
             { name: 'details-seasons', elementId: '#seasons-row', isVisible: () => isNotHidden('#seasons-section') },
             { name: 'details-next-up', elementId: '#next-up-row', isVisible: () => isNotHidden('#next-up-section') },
-            // Collection rows (BoxSet contents) - in reverse order
-            {
-                name: 'collection-shows-section',
-                elementId: '#collection-shows-row',
-                isVisible: () => isNotHidden('#collection-shows-section')
-            },
             // Playlist items — reverse position mirrors _getNextVisibleSection
             {
                 name: 'details-playlist-items',
                 elementId: '#playlist-items-list',
                 isVisible: () => isNotHidden('#playlist-items-section')
+            },
+            // Collection rows (BoxSet contents) - in reverse order
+            {
+                name: 'collection-shows-section',
+                elementId: '#collection-shows-row',
+                isVisible: () => isNotHidden('#collection-shows-section')
             },
             {
                 name: 'collection-movies-section',
@@ -2207,9 +2402,13 @@ class DetailsPage extends Page {
         // or just 'Actor' but specific to the episode.
         // In many setups, if they aren't 'Director' or 'Writer' or 'Producer', they are actors.
         const guestStars = (this._item.People || []).filter((p) => p.Type === 'GuestStar' || p.Role === 'Guest Star');
+        const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
-        if (guestStars.length > 0) {
+        if (guestStars.length > 0 && !hideCast) {
             this._renderGuestStars(guestStars);
+        } else if (hideCast) {
+            const guestStarsSection = this.$('#guest-stars-section');
+            if (guestStarsSection) guestStarsSection.classList.add('hidden');
         }
     }
 
@@ -2272,7 +2471,8 @@ class DetailsPage extends Page {
     _renderSimilar() {
         if (!this._similar || this._similar.length === 0) return;
 
-        const useSquare = this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio' || this._item.Type === 'TvChannel';
+        const useSquare =
+            this._item.Type === 'MusicAlbum' || this._item.Type === 'Audio' || this._item.Type === 'TvChannel';
 
         this._renderVirtualRow({
             sectionId: 'similar-section',
@@ -2290,13 +2490,29 @@ class DetailsPage extends Page {
     async _play({ resume = false, isShufflePlay = false } = {}) {
         let itemToPlay = this._item;
 
-        if (this._item.Type === 'BoxSet') {
+        // If it's a Live TV Program, play the parent Channel instead
+        if (this._item.Type === 'Program' && this._item.ChannelId) {
+            log.info('Live TV Program detected. Playing parent Channel instead.');
+            itemToPlay = {
+                Id: this._item.ChannelId,
+                Type: 'TvChannel',
+                Name: this._item.ChannelName || this._item.Name
+                // Pass along other context if needed, but Id and Type are the critical ones for PlayQueue
+            };
+        } else if (this._item.Type === 'BoxSet') {
             try {
                 // Fetch first item in collection (recursive)
                 // We prefer Movies over Episodes to match the visual row priority
-                const sortParams = isShufflePlay
-                    ? { SortBy: 'Random' }
-                    : { SortBy: 'SortName', SortOrder: 'Ascending' };
+                let sortBy = 'PremiereDate';
+                if (this._item?.DisplayOrder === 'SortName') {
+                    sortBy = 'SortName';
+                } else if (this._item?.DisplayOrder === 'Default') {
+                    sortBy = 'DateModified';
+                } else if (this._item?.DisplayOrder === 'PremiereDate') {
+                    sortBy = 'PremiereDate';
+                }
+
+                const sortParams = isShufflePlay ? { SortBy: 'Random' } : { SortBy: sortBy, SortOrder: 'Ascending' };
                 const [movies, episodes, audio] = await Promise.all([
                     api.getItems({
                         ParentId: this._item.Id,
@@ -2350,9 +2566,12 @@ class DetailsPage extends Page {
                     }
                 }
 
-                // Attach context so PlayQueue knows this is a collection play
+                // Attach context so PlayQueue knows this is a collection play.
+                // We also pass the resolved sortBy so _initBoxSetQueue can order
+                // the full queue the same way the display grid is ordered.
                 itemToPlay.contextType = 'boxset';
                 itemToPlay.contextId = this._item.Id;
+                itemToPlay.boxsetSortBy = sortBy;
             } catch (e) {
                 log.error('Failed to play collection', e);
                 return;
@@ -2510,7 +2729,9 @@ class DetailsPage extends Page {
     }
 
     _showAudioTrackMenu() {
-        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        const mediaSource =
+            this._item?.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item?.MediaSources?.[0];
         if (!mediaSource?.MediaStreams) return;
 
         const key = 'Audio';
@@ -2532,23 +2753,53 @@ class DetailsPage extends Page {
     }
 
     _showSubtitleTrackMenu() {
-        const mediaSource = this._item?.MediaSources?.find(m => m.Id === this._selectedMediaSourceId) || this._item?.MediaSources?.[0];
+        // Find the selected media source (or default to the first one)
+        const mediaSource =
+            this._item?.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
+            this._item?.MediaSources?.[0];
+        // Guard check: Ensure media source streams exist
         if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
+        
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we want to exclude PGS tracks from the list of subtitle tracks that the
+        // user can manually select in the details page subtitle menu.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+        const tracks = mediaSource.MediaStreams.filter((s) => {
+            // Match subtitle type
+            if (s.Type !== key) return false;
+            
+            // Skip disabled PGS tracks
+            if (disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    return false;
+                }
+            }
+            return true;
+        });
 
+        // Determine current track selection index
         let currentIndex = this._selectedSubtitleIndex;
         if (currentIndex === undefined) {
+            // Fallback to server default track index
             currentIndex = mediaSource.DefaultSubtitleStreamIndex; // Can be -1/null
         }
 
-        // Add "Off" option
+        // Add "Off" option to the selection track list
         const displayTracks = [{ Index: -1, DisplayTitle: i18n.t('Off'), Title: i18n.t('Off') }, ...tracks];
 
+        // Render the track selection menu modal on screen
         this._renderTrackSelectionMenu(i18n.t('Subtitles'), displayTracks, currentIndex, (index) => {
+            // Guard check: If selection did not change, skip update
             if (this._selectedSubtitleIndex === index) return;
 
+            // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
         });
@@ -2591,7 +2842,7 @@ class DetailsPage extends Page {
                 // For version selection, add resolution metadata
                 if (title === i18n.t('SelectVersion') && track.Id) {
                     const resolution = track.Height ? `${track.Height}p` : '';
-                    
+
                     if (resolution) {
                         metadataHtml = `
                             <span class="track-badge">${resolution}</span>
@@ -3021,11 +3272,13 @@ class DetailsPage extends Page {
         ];
 
         const optionsHtml = options
-            .map((opt) => `
+            .map(
+                (opt) => `
                 <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
-            `)
+            `
+            )
             .join('');
 
         overlay.innerHTML = `
@@ -3212,12 +3465,11 @@ class DetailsPage extends Page {
             // If we are on the details page for this item, we must leave
             // Close all modals first
             if (this._closeMoreMenu) this._closeMoreMenu();
-            
+
             // Navigate back to parent or home
             setTimeout(() => {
                 router.back();
             }, 100);
-
         } catch (error) {
             log.error('Failed to delete item:', error);
             eventBus.emit('notify', {
@@ -3251,11 +3503,13 @@ class DetailsPage extends Page {
         ];
 
         const optionsHtml = options
-            .map((opt) => `
+            .map(
+                (opt) => `
                 <button class="modal-option-btn" data-id="${opt.id}" tabindex="0">
                     <span>${opt.label}</span>
                 </button>
-            `)
+            `
+            )
             .join('');
 
         overlay.innerHTML = `
@@ -3334,7 +3588,7 @@ class DetailsPage extends Page {
             this._item.DisplayOrder = value;
 
             // Construct a clean metadata object to avoid corruption.
-            // We only send the fields that are intended for metadata updates, 
+            // We only send the fields that are intended for metadata updates,
             // avoiding large, read-only data like MediaSources and MediaStreams.
             const updateObj = {
                 Id: this._item.Id,
@@ -3347,8 +3601,8 @@ class DetailsPage extends Page {
                 ProductionYear: this._item.ProductionYear,
                 Genres: this._item.Genres || [],
                 Tags: this._item.Tags || [],
-                Studios: (this._item.Studios || []).map(s => ({ Name: s.Name || s })),
-                People: (this._item.People || []).map(p => ({
+                Studios: (this._item.Studios || []).map((s) => ({ Name: s.Name || s })),
+                People: (this._item.People || []).map((p) => ({
                     Name: p.Name,
                     Id: p.Id,
                     Role: p.Role,
@@ -3366,7 +3620,7 @@ class DetailsPage extends Page {
             await api.updateItem(updateObj);
 
             log.info('Display order updated on server');
-            
+
             eventBus.emit('notify', {
                 text: i18n.t('Success'),
                 type: 'success'
@@ -3374,7 +3628,6 @@ class DetailsPage extends Page {
 
             // Reload the collection items to reflect the new order
             this._loadCollectionItems();
-
         } catch (error) {
             log.error('Failed to update display order:', error);
             eventBus.emit('notify', {
@@ -3399,7 +3652,7 @@ class DetailsPage extends Page {
     _updateTrailerButton() {
         const item = this._item;
 
-        this._hasLocalTrailers  = (item.LocalTrailerCount || 0) > 0;
+        this._hasLocalTrailers = (item.LocalTrailerCount || 0) > 0;
         this._hasRemoteTrailers = !!(item.RemoteTrailers && item.RemoteTrailers.length > 0);
 
         // Fallback Crawler Activation: Force remote trailers flag for standard media
@@ -3426,7 +3679,9 @@ class DetailsPage extends Page {
             // Let FocusManager know there is a new element in this section
             focusManager.invalidateCache('details-actions');
 
-            log.debug(`Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers} (Fallback: ${this._isProxyFallback})`);
+            log.debug(
+                `Trailer button visible — local: ${this._hasLocalTrailers}, remote: ${this._hasRemoteTrailers} (Fallback: ${this._isProxyFallback})`
+            );
         }
     }
 
@@ -3439,7 +3694,7 @@ class DetailsPage extends Page {
      *   - Only remote → open inline iframe player (Phase 2)
      */
     _onTrailerClick() {
-        const hasLocal  = this._hasLocalTrailers;
+        const hasLocal = this._hasLocalTrailers;
         const hasRemote = this._hasRemoteTrailers;
 
         if (hasLocal && hasRemote) {
@@ -3464,8 +3719,14 @@ class DetailsPage extends Page {
         }
 
         // Only one type available — skip the dialog entirely
-        if (hasLocal)  { this._playLocalTrailer();       return; }
-        if (hasRemote) { this._showRemoteTrailerPlayer(); return; }
+        if (hasLocal) {
+            this._playLocalTrailer();
+            return;
+        }
+        if (hasRemote) {
+            this._showRemoteTrailerPlayer();
+            return;
+        }
     }
 
     /**
@@ -3622,18 +3883,20 @@ class DetailsPage extends Page {
 
     _showRemoteTrailerPlayer() {
         const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
-        
+
         let trailers = this._item.RemoteTrailers || [];
         if (this._isProxyFallback && trailers.length === 0) {
-            trailers = [{
-                Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
-                Url: '',
-                IsProxyFallback: true,
-                TmdbId: this._item.ProviderIds?.Tmdb,
-                ItemName: this._item.OriginalTitle || this._item.Name,
-                ItemYear: this._item.ProductionYear,
-                ItemType: this._item.Type
-            }];
+            trailers = [
+                {
+                    Name: (this._item.Name || this._item.OriginalTitle || 'Video') + ' Trailer',
+                    Url: '',
+                    IsProxyFallback: true,
+                    TmdbId: this._item.ProviderIds?.Tmdb,
+                    ItemName: this._item.OriginalTitle || this._item.Name,
+                    ItemYear: this._item.ProductionYear,
+                    ItemType: this._item.Type
+                }
+            ];
         }
 
         if (mode === 'external') {

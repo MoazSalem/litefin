@@ -69,6 +69,18 @@ class PlayerPage extends Page {
         this._secondarySubtitleEndTime = null;
     }
 
+    /**
+     * ========================================================================
+     * OSD CONTROLLER PUBLIC ACCESSOR
+     * ========================================================================
+     * Exposes the active OSD Controller instance to external coordinators
+     * such as the RemoteButtonManager. Enables custom hardware remote mapping.
+     * ========================================================================
+     */
+    get osd() {
+        return this._osd;
+    }
+
     render() {
         return `
             <div class="page player-page">
@@ -95,6 +107,7 @@ class PlayerPage extends Page {
                         </div>
                         <div class="error-actions">
                             <button class="btn btn-primary focusable" id="error-retry-btn" tabindex="0">Retry</button>
+                            <button class="btn btn-secondary focusable" id="error-force-transcode-btn" tabindex="0">Force Transcode</button>
                             <button class="btn btn-secondary focusable" id="error-back-btn" tabindex="0">Go Back</button>
                         </div>
                     </div>
@@ -229,8 +242,11 @@ class PlayerPage extends Page {
             // Initialize Play Queue
             const contextType = state.get('player:contextType');
             const contextId = state.get('player:contextId');
-            log.debug('Initializing PlayQueue with context:', { contextType, contextId });
-            await playQueue.init(this._item, contextType, contextId);
+            // For BoxSet queues, the sort order is forwarded from DetailsPage so the
+            // full queue is ordered the same way the collection display grid is ordered.
+            const boxsetSortBy = state.get('player:boxsetSortBy');
+            log.debug('Initializing PlayQueue with context:', { contextType, contextId, boxsetSortBy });
+            await playQueue.init(this._item, contextType, contextId, boxsetSortBy);
 
             // Sync the active item to the instance that PlayQueue just minted.
             // This prevents duplicate-fetch bugs with plugins like Local Intros.
@@ -242,6 +258,7 @@ class PlayerPage extends Page {
             // Clear context state so it doesn't leak to next playback
             state.set('player:contextType', null);
             state.set('player:contextId', null);
+            state.set('player:boxsetSortBy', null);
 
             // Calculate resume position if needed
             if (startPositionTicks !== null && !isNaN(startPositionTicks)) {
@@ -529,13 +546,73 @@ class PlayerPage extends Page {
             };
             eventBus.on('remote:userdatachanged', this._onRemoteUserDataChanged);
 
-
             // Channel Up/Down for Live TV
             this._onChannelUp = () => this._handleChannelChange(1);
             eventBus.on('key:channelUp', this._onChannelUp);
 
             this._onChannelDown = () => this._handleChannelChange(-1);
             eventBus.on('key:channelDown', this._onChannelDown);
+
+            // ================================================================
+            // MAGIC CURSOR SUPPORT (WebOS / Tizen Pointer)
+            // ================================================================
+
+            // 1. Moving the magic remote wakes up the OSD.
+            //    Throttled to 200ms — without throttling, every pixel of cursor movement
+            //    spams show() + resetAutoHide(), causing the timer to reset continuously
+            //    and making it impossible for the OSD to settle before the user clicks.
+            let _mouseMoveThrottle = null;
+            this.el.addEventListener('mousemove', (e) => {
+                if (!PlayerSettings.get('enableMagicCursor')) return;
+
+                if (_mouseMoveThrottle) return;
+                _mouseMoveThrottle = setTimeout(() => {
+                    _mouseMoveThrottle = null;
+                }, 200);
+                if (this._osd) {
+                    this._osd._onMouseMove(e);
+                }
+            });
+
+            // 2. Clicking the video background shows/hides the OSD.
+            //    Use a robust contains() guard against the entire #osd-overlay subtree
+            //    so OSD button clicks can never accidentally reach this handler even if
+            //    stopPropagation() is still in flight on older TV browsers.
+            this.el.addEventListener('click', (e) => {
+                /*
+                 * DELIBERATE PHYSICAL CLICK EXEMPTION:
+                 * We do NOT bypass physical clicks when 'enableMagicCursor' is false.
+                 * The user turned off "enableMagicCursor" to prevent accidental pointer
+                 * movements (gyro shakes) from waking the OSD. But if they physically
+                 * click the video background, it is a deliberate intent to wake up the
+                 * OSD or toggle playback state.
+                 */
+
+                const osdOverlay = this.el.querySelector('#osd-overlay');
+
+                // If the click originated from anywhere inside the OSD container, ignore it.
+                // This covers buttons, slider, modals, overlays — anything inside #osd-overlay.
+                if (osdOverlay && osdOverlay.contains(e.target)) {
+                    return;
+                }
+
+                // Ignore the error panel
+                if (e.target.closest('.error-panel')) {
+                    return;
+                }
+
+                // Click landed on the raw video background.
+                // - If OSD is hidden: wake it up.
+                // - If OSD is visible: toggle play/pause (standard media player behaviour).
+                //   This branch is only reached for genuine background clicks — OSD buttons
+                //   and the slider are fully guarded by the contains() check above.
+                if (this._osd && !this._osd._isOsdVisible) {
+                    this._osd.show();
+                    this._osd.resetAutoHide();
+                } else {
+                    this._onRemotePlayPause();
+                }
+            });
 
             // ================================================================
             // PHYSICAL REMOTE CONTROL HANDLERS (WebOS/Tizen)
@@ -549,6 +626,8 @@ class PlayerPage extends Page {
             this.on('key:stop', () => this._onRemoteStop());
             this.on('key:next', () => this._onRemoteNext());
             this.on('key:previous', () => this._onRemotePrevious());
+            this.on('key:channelUp', () => this._onRemoteChannelUp());
+            this.on('key:channelDown', () => this._onRemoteChannelDown());
 
             this.on('key:rewind', () => {
                 if (this._player) {
@@ -662,27 +741,58 @@ class PlayerPage extends Page {
      * @returns {number|undefined} The resolved track index, or undefined if no match
      */
     _resolveTrackByLang(mediaSource, type, targetLang, targetTitle) {
+        // Guard check: Ensure mediaSource and MediaStreams exist before proceeding
         if (!mediaSource || !mediaSource.MediaStreams) return undefined;
+        // Guard check: Ensure targetLang is valid
         if (!targetLang) return undefined;
 
-        // If the user explicitly disabled subtitles via session memory
+        // Special case: If user explicitly disabled subtitles via session memory
         if (type === 'Subtitle' && targetLang === 'none') {
             return -1;
         }
 
-        const streams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we must exclude PGS streams from candidate track resolution. This prevents
+        // session track memory from restoring a disabled PGS subtitle track and causing
+        // subtitles to end up completely off, falling back to a valid track instead.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+
+        // Filter the streams to only get the ones of the requested type (Audio/Subtitle)
+        const streams = mediaSource.MediaStreams.filter((s) => {
+            // Ensure stream type matches the requested type
+            if (s.Type !== type) return false;
+
+            // Apply PGS filter guard to subtitle streams if PGS playback mode is disabled
+            if (type === 'Subtitle' && disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    // Exclude disabled PGS track
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // If no matching candidate streams are found, return undefined
         if (streams.length === 0) return undefined;
 
-        // 1. Try exact match: Language + Title
+        // 1. Try exact match: Match both Language and Display Title/Title
         const exactMatch = streams.find(
             (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
         );
+        // If exact match found, return its index
         if (exactMatch) return exactMatch.Index;
 
-        // 2. Fall back to Language only
+        // 2. Fall back to Language only match
         const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        // If language match found, return its index
         if (langMatch) return langMatch.Index;
 
+        // Return undefined if no matches could be resolved
         return undefined;
     }
 
@@ -694,7 +804,7 @@ class PlayerPage extends Page {
         // Allow plugins to perform late-stage preparation before playback actually
         // initializes. This is where Local Intros injects pre-roll videos into the queue.
         try {
-            // Note: We pass the current _resumePosition so plugins (like Local Intros) 
+            // Note: We pass the current _resumePosition so plugins (like Local Intros)
             // can decide whether to skip their logic if the user is resuming a session.
             await pluginManager.prepareItemPlayback(this._item, {
                 resumePosition: this._resumePosition
@@ -713,7 +823,9 @@ class PlayerPage extends Page {
 
             // If OSD is already up (restarting playback), update its title/metadata
             if (this._osd) {
-                this._osd.updateItem(this._item);
+                // If we have a cached program for this channel, prefer it over the generic channel item
+                const metadataItem = this._currentLiveTvProgram || this._item;
+                this._osd.updateItem(metadataItem);
             }
         }
 
@@ -735,8 +847,10 @@ class PlayerPage extends Page {
             : item.MediaSources?.[0];
 
         // 2. Resolve Tracks
-        let savedAudioIndex = preSelectedAudio !== null && preSelectedAudio !== undefined ? preSelectedAudio : undefined;
-        let savedSubtitleIndex = preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
+        let savedAudioIndex =
+            preSelectedAudio !== null && preSelectedAudio !== undefined ? preSelectedAudio : undefined;
+        let savedSubtitleIndex =
+            preSelectedSubtitle !== null && preSelectedSubtitle !== undefined ? preSelectedSubtitle : undefined;
 
         // If no explicit selection from DetailsPage, try to restore from session memory (if enabled)
         if (PlayerSettings.get('rememberTracksForSession') !== false) {
@@ -744,10 +858,17 @@ class PlayerPage extends Page {
                 const sessionAudioLang = storage.getItem('session:lastAudioLang');
                 const sessionAudioTitle = storage.getItem('session:lastAudioTitle');
                 if (sessionAudioLang) {
-                    const resolvedAudio = this._resolveTrackByLang(mediaSource, 'Audio', sessionAudioLang, sessionAudioTitle);
+                    const resolvedAudio = this._resolveTrackByLang(
+                        mediaSource,
+                        'Audio',
+                        sessionAudioLang,
+                        sessionAudioTitle
+                    );
                     if (resolvedAudio !== undefined) {
                         savedAudioIndex = resolvedAudio;
-                        log.info(`[Track Memory] Restored Audio: ${sessionAudioLang} - ${sessionAudioTitle} -> Index ${resolvedAudio}`);
+                        log.info(
+                            `[Track Memory] Restored Audio: ${sessionAudioLang} - ${sessionAudioTitle} -> Index ${resolvedAudio}`
+                        );
                     }
                 }
             }
@@ -756,10 +877,17 @@ class PlayerPage extends Page {
                 const sessionSubtitleLang = storage.getItem('session:lastSubtitleLang');
                 const sessionSubtitleTitle = storage.getItem('session:lastSubtitleTitle');
                 if (sessionSubtitleLang) {
-                    const resolvedSubtitle = this._resolveTrackByLang(mediaSource, 'Subtitle', sessionSubtitleLang, sessionSubtitleTitle);
+                    const resolvedSubtitle = this._resolveTrackByLang(
+                        mediaSource,
+                        'Subtitle',
+                        sessionSubtitleLang,
+                        sessionSubtitleTitle
+                    );
                     if (resolvedSubtitle !== undefined) {
                         savedSubtitleIndex = resolvedSubtitle;
-                        log.info(`[Track Memory] Restored Subtitle: ${sessionSubtitleLang} - ${sessionSubtitleTitle} -> Index ${resolvedSubtitle}`);
+                        log.info(
+                            `[Track Memory] Restored Subtitle: ${sessionSubtitleLang} - ${sessionSubtitleTitle} -> Index ${resolvedSubtitle}`
+                        );
                     }
                 }
             }
@@ -782,7 +910,7 @@ class PlayerPage extends Page {
         // Start playback using the player's internal logic
         // This handles PlaybackInfo fetching, media source selection, and stream URL building
         try {
-            await this._player.play({
+            const playOptions = {
                 item: item, // Pass full item which might have Chapters
                 itemId: item.Id,
                 userId: api.userId, // Required for playback info
@@ -791,7 +919,14 @@ class PlayerPage extends Page {
                 audioStreamIndex: savedAudioIndex,
                 subtitleStreamIndex: savedSubtitleIndex,
                 autoPlay: syncPlayManager.wantsAutoPlay()
-            });
+            };
+
+            if (this._forceTranscode) {
+                playOptions.playbackMode = 'transcode';
+                this._forceTranscode = false; // Reset after applying
+            }
+
+            await this._player.play(playOptions);
         } catch (err) {
             if (err.name === 'NotAllowedError') {
                 log.warn('_startPlayback: Autoplay blocked. Forcing mute and retrying.');
@@ -1047,6 +1182,14 @@ class PlayerPage extends Page {
         // Register as child component for automatic cleanup on page destroy
         this.addChild(this._osd);
 
+        // SYNC INITIAL METADATA:
+        // If _updateLiveTvTitle already fetched the program before the OSD was ready,
+        // push it now so the title element populates immediately on render.
+        if (this._currentLiveTvProgram) {
+            log.info('OSD ready - Syncing cached program metadata:', this._currentLiveTvProgram.Name);
+            this._osd.updateItem(this._currentLiveTvProgram);
+        }
+
         if (this._player) {
             const resolvedSource = this._player.getCurrentMediaSource?.();
             if (resolvedSource?.Id) {
@@ -1179,16 +1322,11 @@ class PlayerPage extends Page {
             return;
         }
 
-        // Natural end of playback - report and navigate back
-        this._isExiting = true;
-        this._reportPlaybackStopped().then(() => {
-            // Notify any listeners (e.g., DetailsPage auto-chain) that this playback
-            // session has ended naturally before we navigate away from the player.
-            eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'ended' });
-            router.back();
-        });
-
+        // Natural end of playback - delegate to centralized exit logic.
+        // We pass false for clearChain so the auto-chain flag is preserved if it exists.
+        log.info('Natural end of playback reached. Triggering exit.');
         eventBus.emit('player:ended', { item: this._item });
+        this._stopAndExit(false, 'ended');
     }
 
     /**
@@ -1253,6 +1391,12 @@ class PlayerPage extends Page {
                 // Reset Up Next and Lyrics state for the new track
                 this._osd.resetUpNext();
                 this._osd.resetLyrics();
+            }
+
+            // Update title for Live TV items to show current program
+            if (this._item.Type === 'TvChannel') {
+                this._currentLiveTvProgram = null;
+                this._updateLiveTvTitle();
             }
 
             // Restart playback
@@ -1377,6 +1521,12 @@ class PlayerPage extends Page {
                         this._osd.resetLyrics();
                     }
 
+                    // Update title for Live TV items to show current program
+                    if (this._item.Type === 'TvChannel') {
+                        this._currentLiveTvProgram = null;
+                        this._updateLiveTvTitle();
+                    }
+
                     await this._startPlayback();
 
                     this._showLoading(false);
@@ -1438,6 +1588,12 @@ class PlayerPage extends Page {
                     this._osd.resetLyrics();
                 }
 
+                // Update title for Live TV items to show current program
+                if (this._item.Type === 'TvChannel') {
+                    this._currentLiveTvProgram = null;
+                    this._updateLiveTvTitle();
+                }
+
                 await this._startPlayback();
 
                 // Hide loading
@@ -1468,10 +1624,15 @@ class PlayerPage extends Page {
         // 1. Audio Track Capture
         const activeAudioIndex = this._player._currentAudioStreamIndex;
         if (activeAudioIndex !== undefined && activeAudioIndex !== -1) {
-            const activeAudioTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Audio' && s.Index === activeAudioIndex);
+            const activeAudioTrack = mediaSource.MediaStreams.find(
+                (s) => s.Type === 'Audio' && s.Index === activeAudioIndex
+            );
             if (activeAudioTrack) {
                 storage.setItem('session:lastAudioLang', activeAudioTrack.Language || 'none');
-                storage.setItem('session:lastAudioTitle', activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none');
+                storage.setItem(
+                    'session:lastAudioTitle',
+                    activeAudioTrack.DisplayTitle || activeAudioTrack.Title || 'none'
+                );
                 log.info(`[Track Memory] Saved Audio: ${activeAudioTrack.Language} - ${activeAudioTrack.DisplayTitle}`);
             }
         }
@@ -1485,11 +1646,18 @@ class PlayerPage extends Page {
                 storage.setItem('session:lastSubtitleTitle', 'none');
                 log.info(`[Track Memory] Saved Subtitle: none`);
             } else {
-                const activeSubtitleTrack = mediaSource.MediaStreams.find((s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex);
+                const activeSubtitleTrack = mediaSource.MediaStreams.find(
+                    (s) => s.Type === 'Subtitle' && s.Index === activeSubtitleIndex
+                );
                 if (activeSubtitleTrack) {
                     storage.setItem('session:lastSubtitleLang', activeSubtitleTrack.Language || 'none');
-                    storage.setItem('session:lastSubtitleTitle', activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none');
-                    log.info(`[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`);
+                    storage.setItem(
+                        'session:lastSubtitleTitle',
+                        activeSubtitleTrack.DisplayTitle || activeSubtitleTrack.Title || 'none'
+                    );
+                    log.info(
+                        `[Track Memory] Saved Subtitle: ${activeSubtitleTrack.Language} - ${activeSubtitleTrack.DisplayTitle}`
+                    );
                 }
             }
         }
@@ -1563,6 +1731,11 @@ class PlayerPage extends Page {
                 /* Reset OSD states so they trigger fresh for the new item. */
                 this._osd.resetUpNext();
                 this._osd.resetLyrics();
+            }
+
+            // Update title for Live TV items to show current program
+            if (this._item.Type === 'TvChannel') {
+                this._updateLiveTvTitle();
             }
 
             await this._startPlayback();
@@ -2023,10 +2196,15 @@ class PlayerPage extends Page {
 
             // Bind buttons
             const retryBtn = this.$('#error-retry-btn');
+            const forceTranscodeBtn = this.$('#error-force-transcode-btn');
             const backBtn = this.$('#error-back-btn');
 
             if (retryBtn) {
                 retryBtn.onclick = () => this._retryPlayback();
+            }
+
+            if (forceTranscodeBtn) {
+                forceTranscodeBtn.onclick = () => this._retryPlayback(true);
             }
 
             if (backBtn) {
@@ -2048,7 +2226,7 @@ class PlayerPage extends Page {
     /**
      * Attempt to restart playback after an error
      */
-    async _retryPlayback() {
+    async _retryPlayback(forceTranscode = false) {
         // Hide error and unregister focus
         const errorEl = this.$('#player-error');
         if (errorEl) {
@@ -2058,6 +2236,10 @@ class PlayerPage extends Page {
 
         try {
             this._showLoading(true);
+
+            if (forceTranscode) {
+                this._forceTranscode = true;
+            }
 
             // Re-initialize if player instance was lost or in bad state
             if (!this._player || this._player.isDestroyed) {
@@ -2152,7 +2334,7 @@ class PlayerPage extends Page {
             if (mediaSource?.LiveStreamId) {
                 log.info('Closing Live Stream:', mediaSource.LiveStreamId);
                 // Call asynchronously to avoid blocking the stopped report
-                api.closeLiveStream(mediaSource.LiveStreamId).catch(err => {
+                api.closeLiveStream(mediaSource.LiveStreamId).catch((err) => {
                     log.warn('Failed to close live stream:', err);
                 });
             }
@@ -2247,8 +2429,11 @@ class PlayerPage extends Page {
      *   Pass false when exiting as part of an intentional chain (Next button,
      *   natural end-of-file) so the flag is preserved for DetailsPage to
      *   consume and fire the remote trailer player.
+     *
+     * @param {string} [reason='userStop']
+     *   The reason for stopping playback, passed to the 'player:stopped' event.
      */
-    async _stopAndExit(clearChain = true) {
+    async _stopAndExit(clearChain = true, reason = 'userStop') {
         // Prevent multiple calls
         if (this._isExiting) {
             return;
@@ -2274,7 +2459,6 @@ class PlayerPage extends Page {
             log.warn('Error during stop:', error);
         }
 
-        // ----------------------------------------------------------------
         // If clearChain is true (user pressed Back), remove the auto-chain
         // flag so DetailsPage.onInit() does not launch the remote trailer.
         // If clearChain is false (Next/chain exit), leave the flag so the
@@ -2286,10 +2470,39 @@ class PlayerPage extends Page {
 
         // Emit for any general listeners; no longer used by the chain logic
         // but kept for potential future use (e.g., analytics, remote control).
-        eventBus.emit('player:stopped', { itemId: this._item?.Id, reason: 'userStop' });
+        eventBus.emit('player:stopped', { itemId: this._item?.Id, reason });
 
-        // Navigate back to the Details page
-        router.back();
+        // ----------------------------------------------------------------
+        // Navigation Override: Ensure we return to the Details page of the
+        // item that was LAST playing, not the one that started the session.
+        //
+        // This is critical for series, collections, and playlists where the
+        // user may skip multiple tracks. Returning to the metadata page of
+        // the item they were just watching is more intuitive than returning
+        // to the initial entry point.
+        // ----------------------------------------------------------------
+        if (
+            this._item &&
+            this._item.Id &&
+            !this._item.isIntro &&
+            this._item.Type !== 'TvChannel' &&
+            this._item.Type !== 'Trailer'
+        ) {
+            const detailsPath = `/details/${this._item.Id}`;
+
+            // The PlayerPage always replaces the page that launched it in history (to prevent bloat).
+            // HOWEVER: if we came from a slideshow, we want to go BACK to the slideshow exactly
+            // where we left off. In that case, App.js pushed the player instead of replacing,
+            // so we just call router.back().
+            if (this.params.fromSlideshow === 'true') {
+                router.back();
+            } else {
+                router.navigate(detailsPath, { replace: true, isBack: true });
+            }
+        } else {
+            // Standard back navigation for special types (Live TV, Intros) or if no item state exists.
+            router.back();
+        }
     }
 
     // ========================================================================
@@ -2382,6 +2595,8 @@ class PlayerPage extends Page {
     async _updateLiveTvTitle() {
         if (!this._item || this._item.Type !== 'TvChannel') return;
 
+        const channelIdAtStart = this._item.Id;
+
         try {
             log.info('Fetching current program for channel:', this._item.Name);
             const programs = await api.getLiveTvPrograms({
@@ -2391,13 +2606,22 @@ class PlayerPage extends Page {
             });
 
             if (programs && programs.Items && programs.Items.length > 0) {
+                // IMPORTANT: Only apply if we are still on the SAME channel
+                if (this._item.Id !== channelIdAtStart) {
+                    log.info('Program fetch returned but channel has changed. Ignoring.');
+                    return;
+                }
+
                 const program = programs.Items[0];
                 log.info('Current program:', program.Name);
+
+                // Enrich program with channel info for better OSD display
+                program.ChannelName = this._item.Name;
+                program.ChannelNumber = this._item.Number || this._item.ChannelNumber;
                 
-                // Set the page title to "Channel: Program"
-                this.title = `${this._item.Name}: ${program.Name}`;
-                
-                // Update OSD if it exists
+                // Cache for OSD init sync and playback start sync
+                this._currentLiveTvProgram = program;
+
                 if (this._osd) {
                     this._osd.updateItem(program);
                 }
@@ -2412,6 +2636,16 @@ class PlayerPage extends Page {
      * @param {number} direction - 1 for Up, -1 for Down
      * @private
      */
+    _onRemoteChannelUp() {
+        log.info('Remote: Channel Up');
+        this._handleChannelChange(1);
+    }
+
+    _onRemoteChannelDown() {
+        log.info('Remote: Channel Down');
+        this._handleChannelChange(-1);
+    }
+
     async _handleChannelChange(direction) {
         if (this._isSwitching) return;
         if (!this._item || this._item.Type !== 'TvChannel') {
@@ -2424,10 +2658,9 @@ class PlayerPage extends Page {
 
         try {
             // 1. Ensure we have the channel list
-            if (!this._channels) {
-                log.info('Fetching channel list for navigation...');
-                const result = await api.getLiveTvChannels();
-                this._channels = result.Items || [];
+            if (!this._channels || this._channels.length === 0) {
+                this._channels = playQueue.getQueue() || [];
+                log.info(`Using ${this._channels.length} channels from PlayQueue for navigation.`);
             }
 
             if (this._channels.length <= 1) {
@@ -2438,10 +2671,17 @@ class PlayerPage extends Page {
             }
 
             // 2. Find current channel index
-            const currentIndex = this._channels.findIndex(c => c.Id === this._item.Id);
+            const currentIndex = this._channels.findIndex((c) => c.Id === this._item.Id);
             if (currentIndex === -1) {
-                // Not in current list (maybe list updated?), just take first
-                await this._switchChannel(this._channels[0]);
+                log.warn(`Current channel (${this._item.Name}, ${this._item.Id}) not found in navigation list. Falling back to first channel.`);
+                const firstChannel = this._channels[0];
+                if (firstChannel.Id === this._item.Id) {
+                    log.info('Fallback channel is already playing - ignoring switch.');
+                    this._showLoading(false);
+                    this._isSwitching = false;
+                    return;
+                }
+                await this._switchChannel(firstChannel);
                 return;
             }
 
@@ -2470,6 +2710,13 @@ class PlayerPage extends Page {
      * @private
      */
     async _switchChannel(nextChannel) {
+        if (!nextChannel || nextChannel.Id === this._item.Id) {
+            log.debug('Ignoring channel switch: already on this channel or invalid target');
+            return;
+        }
+
+        log.info(`[ChannelSwitch] Transitioning from ${this._item.Name} (${this._item.Id}) to ${nextChannel.Name} (${nextChannel.Id})`);
+
         // Stop current playback cleanly
         if (this._player?.stop) {
             // Capture current info for reporting
@@ -2480,15 +2727,17 @@ class PlayerPage extends Page {
             await this._reportPlaybackStopped(mediaSource, positionTicks, false);
         }
 
-        // Briefly settle hardware
-        await new Promise(r => setTimeout(r, 300));
+        // Briefly settle hardware to prevent decoder state overlaps
+        await new Promise((r) => setTimeout(r, 400));
 
         // Update state for new channel
+        const oldItem = this._item;
         this._item = nextChannel;
         this.title = nextChannel.Name;
         this._resumePosition = 0;
         this._hasReportedStart = false;
         this._cachedMediaSource = null;
+        this._currentLiveTvProgram = null;
 
         // Fetch current program info asynchronously so we don't block start
         this._updateLiveTvTitle();
@@ -2499,6 +2748,8 @@ class PlayerPage extends Page {
             this._osd.resetUpNext();
         }
 
+        log.info('[ChannelSwitch] State updated, initializing new playback session...');
+
         // Start new playback
         await this._startPlayback();
 
@@ -2507,4 +2758,3 @@ class PlayerPage extends Page {
 }
 
 export default PlayerPage;
-

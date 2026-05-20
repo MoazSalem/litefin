@@ -93,6 +93,7 @@ const syncPlayPlugin = {
             // can read them from `this.params` and seek to the right point before
             // SyncPlay sync takes over.
             router.navigate(`/player/${itemId}/false?startPositionTicks=${startPositionTicks}&syncplay=1`, {
+                replace: true,
                 state: {
                     playlistItemId
                 }

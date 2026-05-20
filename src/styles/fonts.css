@@ -113,6 +113,57 @@
     font-display: swap;
 }
 
+/* RETROTECH - Retro style */
+@font-face {
+    font-family: 'RETROTECH';
+    src: url('../assets/fonts/RETROTECH.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Kitty - Playful style */
+@font-face {
+    font-family: 'Kitty';
+    src: url('../assets/fonts/Kitty.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Inter - Modern geometric sans-serif */
+@font-face {
+    font-family: 'Inter';
+    src: url('../assets/fonts/Inter.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Proxima Nova - Modern geometric sans-serif */
+@font-face {
+    /* ---------------------------------------------------------
+       Proxima Nova font definition
+       --------------------------------------------------------- */
+    font-family: 'Proxima Nova';
+    src: url('../assets/fonts/ProximaNova.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Baloo Bhaijaan 2 - Playful, bold Arabic/Latin sans-serif */
+@font-face {
+    /* ---------------------------------------------------------
+       Baloo Bhaijaan 2 font definition - Premium typography
+       --------------------------------------------------------- */
+    font-family: 'Baloo Bhaijaan 2';
+    src: url('../assets/fonts/BalooBhaijaan2.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -145,8 +196,13 @@
 .font-smallcaps { font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
 .font-silkscreen { font-family: 'Silkscreen', 'Courier New', monospace; }
 .font-space-grotesk { font-family: 'Space Grotesk', sans-serif; }
+.font-retrotech { font-family: 'RETROTECH', sans-serif; }
+.font-kitty { font-family: 'Kitty', cursive; }
+.font-inter { font-family: 'Inter', sans-serif; }
+.font-proxima { font-family: 'Proxima Nova', sans-serif; }
+.font-baloo { font-family: 'Baloo Bhaijaan 2', sans-serif; }
 
-.font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', Roboto, Helvetica, Arial, sans-serif; }
+.font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
 
 /* 
    Nuclear font override: 

@@ -164,6 +164,20 @@ class HomePage extends Page {
 
     onDestroyed() {
         this._isMounted = false;
+
+        /*
+         * CRITICAL: Cancel all pending background image preloads immediately.
+         *
+         * The home page queues dozens of `new Image()` preload requests. Each
+         * one holds an HTTP connection slot. Chromium's per-host connection pool
+         * is only 6 slots — if these preloads are still in-flight when the user
+         * navigates to the next page, every API XHR/fetch call blocks for up to
+         * 30s waiting for a free slot. cancel() sets img.src = '' on every
+         * in-flight Image, which causes the browser to abort the TCP request
+         * synchronously and return the slot to the pool.
+         */
+        imageCache.cancel();
+
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
@@ -235,12 +249,21 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 1: Parallel Fetching of Base Data Lists
+                    // ──────────────────────────────────────────────────────────
+                    // We initiate simultaneous network requests for both in-progress items
+                    // and next-up show items to optimize load times and keep the UI highly
+                    // responsive under typical domestic network latency.
                     const [resumeRes, nextUpRes] = await Promise.all([
                         api.getResumeItems(),
                         (async () => {
+                            // Extract maximum cutoff days limit for Next Up items from local storage.
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = {};
+                            
+                            // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
                                 const cutoff = new Date();
                                 cutoff.setDate(cutoff.getDate() - daysLimit);
@@ -250,21 +273,135 @@ class HomePage extends Page {
                         })()
                     ]);
 
-                    const resumeItems = resumeRes?.Items || [];
-                    const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
-                        const position = item.UserData?.PlaybackPositionTicks || 0;
-                        return position === 0;
-                    });
+                    // Extract items list safely and tag them with a transient _isResume flag.
+                    // This flag enables the sorting comparator to distinguish between resume items
+                    // (which should sort by direct pause dates) and next-up items (which should
+                    // sort by show activity dates).
+                    const resumeItems = (resumeRes?.Items || []).map(item => ({
+                        ...item,
+                        _isResume: true
+                    }));
+                    
+                    const nextUpItems = (nextUpRes?.Items || [])
+                        .filter((item) => {
+                            // Filter out next-up items that have already been partially played,
+                            // as those are already accounted for in the continue watching row list.
+                            const position = item.UserData?.PlaybackPositionTicks || 0;
+                            return position === 0;
+                        })
+                        .map(item => ({
+                            ...item,
+                            _isResume: false
+                        }));
 
-                    // Merge Resume items first, then Next Up
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 2: Batch Fetching of Parent Show Activity Dates
+                    // ──────────────────────────────────────────────────────────
+                    // Because next-up episodes are unplayed by definition, their own
+                    // LastPlayedDate is null or undefined. To perform chronological
+                    // Plex-style sorting, we need to know exactly when the parent series
+                    // was last active. We resolve this by batch-fetching the most recent
+                    // play activity of the corresponding shows in a single network request.
+                    const nextUpSeriesIds = nextUpItems
+                        .map((item) => item.SeriesId)
+                        .filter(Boolean);
+
+                    // Initialize series activity timestamp lookup map.
+                    const seriesLastPlayedMap = {};
+
+                    if (nextUpSeriesIds.length > 0) {
+                        try {
+                            // De-duplicate the series IDs to avoid sending redundant entries in the query.
+                            const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
+                            
+                            // Query played and in-progress episodes belonging to these series IDs,
+                            // ordered by play date descending (using the official 'DatePlayed' parameter).
+                            const activeEpisodesRes = await api.getItems({
+                                SeriesIds: uniqueSeriesIds.join(','),
+                                IncludeItemTypes: 'Episode',
+                                SortBy: 'DatePlayed',
+                                SortOrder: 'Descending',
+                                Fields: 'LastPlayedDate',
+                                Recursive: true,
+                                Limit: 100
+                            });
+
+                            // Process the returned episodes to construct the series activity map.
+                            const activeEpisodes = activeEpisodesRes?.Items || [];
+                            for (const ep of activeEpisodes) {
+                                const seriesId = ep.SeriesId;
+                                const lastPlayed = ep.UserData?.LastPlayedDate;
+                                
+                                // Map each series to the newest played episode timestamp encountered.
+                                if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
+                                    seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
+                                }
+                            }
+                        } catch (err) {
+                            // Log warning and degrade gracefully back to using DateCreated sorting.
+                            console.warn('[HomePage] Failed to batch-fetch next-up parent activity dates:', err);
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 3: Merge, Deduplicate, and Interweave
+                    // ──────────────────────────────────────────────────────────
+                    // Combine the lists and de-duplicate by database Item ID.
                     const combined = [...resumeItems, ...nextUpItems];
-
-                    // Deduplicate based on Id
+                    
                     const seen = new Set();
                     const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
                         seen.add(item.Id);
                         return true;
+                    });
+
+                    // ==========================================================
+                    // PLEX-STYLE CHRONOLOGICAL SORTING
+                    // ==========================================================
+                    //
+                    // Replicates Plex's signature dashboard logic by sorting the merged 
+                    // array descending based on when the show/movie was last interacted with. 
+                    // Instead of a rigid "all resume items first" block layout, this interweaves
+                    // your partially played movies/episodes with the next upcoming episodes in 
+                    // the exact order they were last watched.
+                    //
+                    // Falls back to DateCreated (indexing date) or 0 (epoch) for safety.
+                    deduplicated.sort((a, b) => {
+                        // Retrieve or compute the most accurate activity timestamp available for item A.
+                        let timeA = 0;
+                        if (a._isResume && a.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                        } else if (a.SeriesId && seriesLastPlayedMap[a.SeriesId]) {
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
+                            timeA = seriesLastPlayedMap[a.SeriesId];
+                        } else if (a.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeA = new Date(a.DateCreated || 0).getTime();
+                        }
+
+                        // Retrieve or compute the most accurate activity timestamp available for item B.
+                        let timeB = 0;
+                        if (b._isResume && b.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                        } else if (b.SeriesId && seriesLastPlayedMap[b.SeriesId]) {
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
+                            timeB = seriesLastPlayedMap[b.SeriesId];
+                        } else if (b.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeB = new Date(b.DateCreated || 0).getTime();
+                        }
+                        
+                        // Sort descending: most recently active media at the start of the row.
+                        return timeB - timeA;
                     });
 
                     return deduplicated.length > 0 ? deduplicated : null;
@@ -932,10 +1069,22 @@ class HomePage extends Page {
         const container = this.$('#home-rows');
         if (!container) return;
 
-        // ── Click → Navigate ──────────────────────────────────────────────────
-        container.addEventListener('click', (e) => {
+        // ── Click / Mousedown → Navigate ──────────────────────────────────────
+        // We handle both mousedown (fast/snappy) and click (standard/fallback).
+        // This parity with Sidebar.js ensures a responsive "snap" when selecting cards.
+        let lastActivateTime = 0;
+
+        const handleActivate = (e) => {
             const card = e.target.closest('.media-card');
             if (!card?.dataset?.itemId) return;
+
+            const now = Date.now();
+            // Debounce to prevent double-navigation on hardware that fires both events
+            if (now - lastActivateTime < 400) return;
+            lastActivateTime = now;
+
+            // Stop propagation to avoid bubbling to unwanted handlers
+            e.stopPropagation();
 
             // Save focused item + its row ID for exact focus restoration on back-nav
             const sectionEl = card.closest('section[data-row-id]');
@@ -949,14 +1098,12 @@ class HomePage extends Page {
             // Navigate based on context type
             const ctxType = card.dataset.contextType;
             if (ctxType === 'library') {
-                // Special handling for Live TV: redirect to the unified Live TV page
                 if (card.dataset.collectionType === 'livetv') {
                     router.navigate('/livetv');
                 } else {
                     router.navigate(`/library/${card.dataset.itemId}`);
                 }
             } else {
-                // Special handling for Persons and Artists: navigate to the unified PersonPage
                 const itemType = card.dataset.type;
                 if (
                     itemType === 'Person' ||
@@ -964,14 +1111,16 @@ class HomePage extends Page {
                     itemType === 'Artist' ||
                     itemType === 'AlbumArtist'
                 ) {
-                    log.info('Navigating to PersonPage:', card.dataset.itemId);
                     router.navigate(`/person/${card.dataset.itemId}`);
                 } else {
-                    log.info('Navigating to item details:', card.dataset.itemId);
                     router.navigate(`/details/${card.dataset.itemId}`);
                 }
             }
-        });
+        };
+
+        // Bind both events for parity with Sidebar.js snappy behavior
+        container.addEventListener('mousedown', handleActivate);
+        container.addEventListener('click', handleActivate);
 
         // ── FocusIn → Sync VirtualCardRow index ──────────────────────────────
         // When focus jumps to a card via SpatialNavigator (bypassing onMove),
@@ -1068,6 +1217,16 @@ class HomePage extends Page {
             const heroCount = storage.getItem('pref:heroCarouselCount');
             const limit = heroCount ? parseInt(heroCount, 10) : 5;
 
+            // =================================================================
+            // HERO CAROUSEL DATA FILTERS RESOLUTION
+            // =================================================================
+            // Check if the user has enabled the "Ignore Watched Content" preference.
+            // If active, we append the 'IsUnplayed' item filter to the request so that
+            // the Jellyfin backend returns only unplayed Movies and Series for the banner.
+            const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
+            const filters = ignoreWatched ? 'HasBackdrop,IsUnplayed' : 'HasBackdrop';
+
+            // Fetch random items with backdrops from user libraries.
             const response = await api.getItems({
                 SortBy: 'Random',
                 Recursive: true,
@@ -1075,7 +1234,7 @@ class HomePage extends Page {
                 Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
-                Filters: 'HasBackdrop'
+                Filters: filters
             });
 
             if (!this._isMounted) return;
@@ -1182,7 +1341,7 @@ class HomePage extends Page {
         const urls = [];
         const isLandscape = descriptor.layout === 'landscape';
         const sizeType = isLandscape ? 'backdrop' : 'poster';
-        const { maxWidth, quality } = imageService.getParams(sizeType);
+        const { maxWidth, quality } = imageService.getParams(sizeType, descriptor.contextType);
 
         const subset = items.slice(0, IMAGE_PREWARM_PER_ROW);
 

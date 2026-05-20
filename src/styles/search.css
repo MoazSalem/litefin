@@ -7,7 +7,7 @@
 .search-controls {
     display: flex;
     align-items: center;
-    padding: 30px 60px 0 60px;
+    padding: 48px 60px 0 60px;
 }
 
 #search-header {
@@ -55,7 +55,8 @@ html[data-layout-tier="ultra-legacy"] .search-input {
 
 
 .search-input:focus,
-.search-input.focused {
+.search-input.focused,
+.search-input:hover {
     border-color: var(--jf-accent);
     outline: none;
 }

@@ -1,6 +1,7 @@
 import BaseMenu from './BaseMenu.js';
 import { PlayerSettings } from '../../utils/PlayerSettings.js';
 import { i18n } from '../../utils/i18n.js';
+import { platformInfo } from '../../utils/PlatformInfo.js';
 
 /**
  * SubtitleQuickSettings
@@ -76,6 +77,9 @@ export default class SubtitleQuickSettings extends BaseMenu {
 
         // Whether the outline/shadow user overrides are enabled (default: true)
         const overrideOutlineShadow = PlayerSettings.get( 'subtitleOverrideAssOutlineShadow' ) !== false;
+        
+        // Whether ASS fonts override is enabled (default: false)
+        const overrideAssFonts = PlayerSettings.get('subtitleOverrideAssFonts') === true;
 
         // Check if a secondary subtitle track is active
         // osd.currentSecondarySubtitleIndex is -1 when no secondary track is selected
@@ -122,6 +126,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 options: [
                     { value: 'small', label: i18n.t('Small') },
                     { value: 'medium', label: i18n.t('Medium') },
+                    { value: 'mediumlarge', label: i18n.t('MediumLarge') },
                     { value: 'large', label: i18n.t('Large') },
                     { value: 'larger', label: i18n.t('Larger') },
                     { value: 'extralarge', label: i18n.t('ExtraLarge') },
@@ -134,7 +139,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 label: i18n.t('CustomSize'),
                 labelKey: 'CustomSize',
                 key: 'subtitleSizeCustomValue',
-                min: 1, max: 20, step: 1, unit: 'vh',
+                min: 1, max: 20, step: 0.1, unit: 'vh',
                 visible: !isASS && PlayerSettings.get('subtitleSize') === 'custom'
             },
             {
@@ -145,7 +150,7 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 key: 'subtitleFont',
                 visible: !isASS,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -153,7 +158,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'console', label: i18n.t('Console') },
                     { value: 'cursive', label: i18n.t('Cursive') },
                     { value: 'casual', label: i18n.t('Casual') },
-                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                    { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                    { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                    { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                    { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                    { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                    { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                    { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                 ]
             },
             {
@@ -282,14 +294,26 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 visible: !isASS && shadowType !== 'none' && shadowType !== 'border'
             }, 
             {
+                id: 'overrideAssFonts',
+                type: 'select',
+                label: i18n.t('OverrideAssFonts'),
+                labelKey: 'OverrideAssFonts',
+                key: 'subtitleOverrideAssFonts',
+                visible: isASS,
+                options: [
+                    { value: true,  label: i18n.t('On') },
+                    { value: false, label: i18n.t('Off') }
+                ]
+            },
+            {
                 id: 'fontAss',
                 type: 'select',
                 label: i18n.t('AssFontFamily'),
                 labelKey: 'AssFontFamily',
                 key: 'subtitleFontAss',
-                visible: isASS,
+                visible: isASS && overrideAssFonts,
                 options: [
-                    { value: '', label: i18n.t('DefaultTizenSans') },
+                    { value: '', label: i18n.t(platformInfo.isWebOS ? 'DefaultWebOSSans' : 'DefaultTizenSans') },
                     { value: 'poppins', label: i18n.t('ModernPoppins') },
                     { value: 'noto-arabic', label: i18n.t('ArabicNotoSans') },
                     { value: 'typewriter', label: i18n.t('Typewriter') },
@@ -297,7 +321,14 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: 'console', label: i18n.t('Console') },
                     { value: 'cursive', label: i18n.t('Cursive') },
                     { value: 'casual', label: i18n.t('Casual') },
-                    { value: 'smallcaps', label: i18n.t('SmallCaps') }
+                    { value: 'smallcaps', label: i18n.t('SmallCaps') },
+                    { value: 'silkscreen', label: i18n.t('FontSilkscreen') || 'Silkscreen' },
+                    { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
+                    { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
+                    { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
+                    { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
+                    { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
+                    { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
                 ]
             },
             {

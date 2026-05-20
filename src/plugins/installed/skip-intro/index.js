@@ -266,10 +266,29 @@ const skipIntroPlugin = {
                 continue;
             }
 
+            // ----------------------------------------------------------------
+            // Determine total video duration to avoid seeking past the file boundaries.
+            // On hardware players like Tizen's AVPlay, seeking to or beyond the
+            // media's actual duration results in an invalid operation that freezes
+            // the video decoder rather than completing naturally.
+            // ----------------------------------------------------------------
+            const durationTicks = player.getDurationTicks ? player.getDurationTicks() : 0;
+
             // Seek 1 second past segment end for a clean boundary
             const seekTarget = segment.end + TICKS_PER_SECOND;
-            api.log.info(`Skip Intro: auto-skipping [${type}] → ${seekTarget / TICKS_PER_SECOND}s`);
-            player.seek(seekTarget);
+
+            // ----------------------------------------------------------------
+            // If the seek target reaches or exceeds the absolute duration of the video,
+            // we bypass the native seek pipeline entirely and emit the 'ended' event.
+            // This triggers the player page to halt playback and clean up properly.
+            // ----------------------------------------------------------------
+            if (durationTicks > 0 && seekTarget >= durationTicks) {
+                api.log.info(`Skip Intro: auto-skip target [${type}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`);
+                player.emit('ended');
+            } else {
+                api.log.info(`Skip Intro: auto-skipping [${type}] → ${seekTarget / TICKS_PER_SECOND}s`);
+                player.seek(seekTarget);
+            }
 
             // Only handle one auto-skip per tick
             break;
@@ -450,16 +469,34 @@ const skipIntroPlugin = {
              * @param {import('../../PluginAPI.js').default} pluginApi
              */
             onSelect(pluginApi) {
+                // ------------------------------------------------------------
+                // Retrieve player instance to execute the seek or playback end.
+                // ------------------------------------------------------------
                 const player = pluginApi.getPlayer();
                 if (!player) {
                     pluginApi.log.warn(`Skip Intro: onSelect for [${type}] — player is null`);
                     return;
                 }
 
-                // Add 1 second buffer so we land cleanly after the boundary
+                // ------------------------------------------------------------
+                // Calculate the target seek location with a 1-second safety buffer
+                // past the segment boundary. Also fetch total video duration ticks.
+                // ------------------------------------------------------------
                 const seekTarget = segment.end + TICKS_PER_SECOND;
-                player.seek(seekTarget);
-                pluginApi.log.info(`Skip ${type}: seeking to ${seekTarget / TICKS_PER_SECOND}s`);
+                const durationTicks = player.getDurationTicks ? player.getDurationTicks() : 0;
+
+                // ------------------------------------------------------------
+                // Guard: If our seek target exceeds the media duration (e.g. Skip Outro
+                // at the very end of an episode), seeking on AVPlay gets stuck/fails.
+                // We bypass seek and trigger the 'ended' flow directly.
+                // ------------------------------------------------------------
+                if (durationTicks > 0 && seekTarget >= durationTicks) {
+                    pluginApi.log.info(`Skip ${type}: target ${seekTarget / TICKS_PER_SECOND}s is past duration ${durationTicks / TICKS_PER_SECOND}s. Ending playback.`);
+                    player.emit('ended');
+                } else {
+                    pluginApi.log.info(`Skip ${type}: seeking to ${seekTarget / TICKS_PER_SECOND}s`);
+                    player.seek(seekTarget);
+                }
 
                 // Snap focus away immediately so the button disappears from
                 // the UI before the next timeupdate tick officially hides it
