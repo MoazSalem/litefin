@@ -1315,7 +1315,17 @@ class PlayerPage extends Page {
         }
 
         // 2. Main Flow: Check if we can play next item (RepeatAll is handled inside hasNext())
-        if (playQueue.hasNext()) {
+        // ---------------------------------------------------------------------
+        // Check if the current item is a TV show episode, and if so, respect
+        // the user's "Play next episode automatically" preference. If the setting
+        // is disabled, we should exit the player instead of playing the next episode.
+        // For non-episode media types (e.g. movies, music tracks), we always
+        // advance automatically through the playlist queue.
+        // ---------------------------------------------------------------------
+        const isEpisodeItem = this._item?.Type === 'Episode';
+        const isAutoPlayEnabled = !isEpisodeItem || PlayerSettings.get('enableNextEpisodeAutoPlay');
+
+        if (playQueue.hasNext() && isAutoPlayEnabled) {
             log.info('Item ended, auto-advancing to next item');
             this._playNextItem();
             eventBus.emit('player:ended', { item: this._item });

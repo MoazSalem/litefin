@@ -2651,8 +2651,10 @@ export default class OSDController extends Component {
          */
         if (!playQueue.hasNext()) return;
 
-        // Check user setting
-        if (!PlayerSettings.get('enableNextEpisodeAutoPlay')) return;
+        // Check the dedicated user setting for whether the Up Next dialog
+        // should be displayed. Toggling autoplay off no longer prevents the dialog
+        // from showing, allowing users to manually click "Play Now" or dismiss it.
+        if (!PlayerSettings.get('enableNextUpDialog')) return;
 
         // -------------------------------------------------------------------
         // Calculate the "show at" threshold

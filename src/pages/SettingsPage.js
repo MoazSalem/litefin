@@ -1657,6 +1657,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- Up Next Countdown Dialog Toggle -->
+                <!-- Allows users to independently enable or disable the interactive card that shows up near the end of an episode -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PlayNextUpDialog">${i18n.t('PlayNextUpDialog') || 'Show Up Next dialog'}</span>
+                        <span class="setting-description" data-i18n="PlayNextUpDialogDescription">${i18n.t('PlayNextUpDialogDescription') || 'Show the countdown dialog for the next episode before the current one ends'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableNextUpDialog') ? 'active' : ''}" 
+                                id="toggle-next-up-dialog" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableTrickplay">${i18n.t('EnableTrickplay') || 'Thumbnail Preview'}</span>
@@ -3665,6 +3680,25 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableNextEpisodeAutoPlay', newValue);
                 autoNextBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Up Next Countdown Dialog Visibility
+        // This button controls whether the Up Next overlay is visible
+        // at the tail end of TV show episodes. Toggling this will not
+        // affect autoplay itself, as it operates completely independently.
+        const nextUpDialogBtn = this.$('#toggle-next-up-dialog');
+        if (nextUpDialogBtn) {
+            // Register click listener to toggle the setting
+            nextUpDialogBtn.addEventListener('click', () => {
+                // Fetch the current setting value from PlayerSettings
+                const currentValue = PlayerSettings.get('enableNextUpDialog');
+                // Negate the current state to calculate the new state
+                const newValue = !currentValue;
+                // Persist the updated configuration state
+                PlayerSettings.set('enableNextUpDialog', newValue);
+                // Dynamically toggle the CSS class 'active' to reflect state
+                nextUpDialogBtn.classList.toggle('active', newValue);
             });
         }
 

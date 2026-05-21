@@ -290,6 +290,17 @@ const DEFAULTS = {
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
 
+    /**
+     * =========================================================================
+     * UP NEXT DIALOG TOGGLE
+     * =========================================================================
+     * Controls whether the interactive countdown card (Up Next dialog) is shown 
+     * near the end of an episode playthrough. When enabled, it allows the user 
+     * to manually advance early or hide the prompt.
+     * =========================================================================
+     */
+    enableNextUpDialog: true,
+
     // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
     // Disable to skip all trickplay calculations and image fetches entirely.
     enableTrickplay: true,
