@@ -607,7 +607,7 @@ export class JellyfinPlayer extends EventEmitter {
                     // auto-selecting a disabled/hidden PGS track and rendering nothing, allowing
                     // it to instead fallback to a valid, renderable SRT or VTT track.
                     // =========================================================================
-                    const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+                                        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
                     const subtitleStreams = ms.MediaStreams.filter(s => {
                         // We only care about subtitle streams
                         if (s.Type !== 'Subtitle') return false;
@@ -621,6 +621,56 @@ export class JellyfinPlayer extends EventEmitter {
                         }
                         return true;
                     });
+
+                    // =========================================================================
+                    // Prioritize and Sort Subtitle Streams
+                    //
+                    // To resolve selection ambiguity, sort candidate tracks based on type
+                    // and delivery attributes before running the auto-selection queries:
+                    //
+                    // 1. External (EXT) tracks first: External files added explicitly by the user
+                    //    should take priority over embedded/internal streams.
+                    // 2. Codec-level priority: Prefer formats in this order:
+                    //    ASS/SSA (highest styled styling fidelity) -> SRT/SUBRIP -> PGS/PGSSUB -> others.
+                    // =========================================================================
+                    const getCodecPriority = (codec) => {
+                        const c = (codec || '').toLowerCase();
+                        if (c === 'ass' || c === 'ssa') {
+                            return 4; // Styled subtitles preferred first
+                        }
+                        if (c === 'srt' || c === 'subrip') {
+                            return 3; // Clean text-based standard fallback
+                        }
+                        if (c === 'pgs' || c === 'pgssub') {
+                            return 2; // Picture-based subtitle tracks
+                        }
+                        return 1; // Any other uncategorized format
+                    };
+
+                    subtitleStreams.sort((a, b) => {
+                        // Extract external status
+                        const aExt = !!a.IsExternal;
+                        const bExt = !!b.IsExternal;
+
+                        // Check if one is external and the other is internal
+                        if (aExt !== bExt) {
+                            // Put external tracks first
+                            return aExt ? -1 : 1;
+                        }
+
+                        // Determine codec priority for both streams
+                        const aPriority = getCodecPriority(a.Codec);
+                        const bPriority = getCodecPriority(b.Codec);
+
+                        // If priorities differ, place higher priority first
+                        if (aPriority !== bPriority) {
+                            return bPriority - aPriority;
+                        }
+
+                        // Keep original sequence stable if identical priority
+                        return 0;
+                    });
+
                     let chosenIndex = undefined;
 
                     // Apply the corresponding selection logic depending on the mode
