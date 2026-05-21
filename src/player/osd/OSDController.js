@@ -1295,6 +1295,19 @@ export default class OSDController extends Component {
     }
 
     handleInput(key, e) {
+        // ====================================================================
+        // INPUT PROCESSING TRANSITION GUARD
+        // ====================================================================
+        // If the parent PlayerPage is transitioning between tracks, swallow all
+        // remote navigation, clicks, and keys immediately. This isolates the 
+        // OSD UI from any stray inputs or focus resets caused by cycling 
+        // the video element out of/into the DOM.
+        // ====================================================================
+        if (this._playerPage && this._playerPage._isSwitching) {
+            log.debug('OSDController: Ignoring input key event during active track switch:', key);
+            return true;
+        }
+
         const wasHidden = !this._isOsdVisible;
 
         // Delegate to modal menu first (TrackMenu, SettingsMenu)
@@ -1759,6 +1772,24 @@ export default class OSDController extends Component {
     // ===================================
     
     _executeAction(action) {
+        // ====================================================================
+        // ACTIVE TRACK SWITCH GUARD
+        // ====================================================================
+        // When transitioning between media tracks (e.g., auto-advancing to the 
+        // next episode in the queue), the player temporarily cycles the video 
+        // element out of and back into the DOM to purge webOS GPU surfaces. 
+        // This DOM manipulation triggers synthetic focus resets, blurs, or 
+        // ghost key events on Chromium-based TV platforms.
+        //
+        // If the player page is currently switching tracks, we discard all OSD 
+        // actions globally to prevent these synthetic signals from closing 
+        // the player mid-transition.
+        // ====================================================================
+        if (this._playerPage && this._playerPage._isSwitching) {
+            log.info('OSDController: Ignoring action during active track switch:', action);
+            return;
+        }
+
         if (action !== 'fastForward' && action !== 'rewind') {
             log.info('Execute Action:', action);
         }

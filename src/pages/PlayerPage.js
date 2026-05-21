@@ -1167,7 +1167,23 @@ class PlayerPage extends Page {
         });
 
         // Bind events
-        this._osd.on('exit', () => this._stopAndExit());
+        this._osd.on('exit', () => {
+            // ================================================================
+            // TRANSITION GUARD FOR EXIT SIGNALS
+            // ================================================================
+            // In webOS and other smart TV browsers, DOM manipulation (such as 
+            // cycling the video container to clear hardware buffers) triggers 
+            // focus loss which can synthesize back / exit signals. 
+            //
+            // If the player is currently in the process of switching tracks,
+            // ignore this command entirely to prevent unexpected shutdowns.
+            // ================================================================
+            if (this._isSwitching) {
+                log.warn('Ignoring OSD exit command during track transition.');
+                return;
+            }
+            this._stopAndExit();
+        });
         this._osd.on('next', () => this._playNextItem()); // Ensure OSD emits this
         this._osd.on('previous', () => this._playPreviousItem()); // Ensure OSD emits this
         /* Queue modal: instant skip to a specific index in the play queue. */
@@ -2415,6 +2431,19 @@ class PlayerPage extends Page {
 
     onBack() {
         log.info('onBack() called');
+
+        // ====================================================================
+        // PHYSICAL / PLATFORM BACK BUTTON TRANSITION GUARD
+        // ====================================================================
+        // Discard any back button presses or synthetic back key events from 
+        // the host environment while transitioning tracks. This ensures that 
+        // focus jumps or physical remote hits during the brief settle window 
+        // do not cancel the upcoming playback session.
+        // ====================================================================
+        if (this._isSwitching) {
+            log.info('Ignoring back event during in-progress track switch.');
+            return true;
+        }
 
         // Delegate to OSD — it handles menu close → OSD hide → exit chain
         if (this._osd?.handleBack?.()) {
