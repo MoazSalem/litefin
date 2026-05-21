@@ -608,8 +608,30 @@ class HomePage extends Page {
             // Notify base Page that async content is ready for scroll/focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // If nothing received focus yet (e.g. all rows empty), fall back to sidebar
-            if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+            // =================================================================
+            // CHRONOLOGICAL INITIAL FOCUS RACE CONDITION RESOLUTION
+            // =================================================================
+            // When the Hero Carousel is disabled and My Media is hidden, the 
+            // merged Continue Watching and Next Up row is the physical top row. 
+            // Because this row makes complex backend queries (including batch
+            // fetching parent show activity dates), it finishes rendering later
+            // than other simple components.
+            //
+            // If the row rendering process finishes, it schedules a deferred 
+            // focus routine via requestAnimationFrame to guarantee the DOM is painted.
+            // However, the microtask-based render pipeline finishes Step 6 and reaches
+            // Step 7 before the animation frame callback executes. 
+            //
+            // Without checking `_focusInitialized`, the synchronous check below would 
+            // see that no focus has been claimed yet, forcefully grab the sidebar, 
+            // and set `focusManager.getFocused()` to a sidebar element. When the 
+            // animation frame finally fires on the next paint tick, it would see that 
+            // a focus target already exists and gracefully decline to override it, 
+            // leaving the user stranded on the sidebar.
+            //
+            // Checking `!this._focusInitialized` prevents this premature fallback.
+            // =================================================================
+            if (!this._focusInitialized && !focusManager.getActiveSection() && !focusManager.getFocused()) {
                 this.setActiveSection('sidebar');
             }
         } catch (error) {
