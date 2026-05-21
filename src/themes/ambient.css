@@ -1,0 +1,285 @@
+/**
+ * ============================================================================
+ * Litefin Tizen - Ambient Glow Mode
+ * ============================================================================
+ * An Apple / macOS inspired theme mode that creates a highly premium,
+ * immersive dynamic background glow matching the active accent color.
+ * Surfaces are set to semi-translucent material variables for a gorgeous,
+ * integrated volumetric layout.
+ * ============================================================================
+ */
+
+[data-theme-mode="ambient"] {
+    /* Main overlays are deep translucent blacks */
+    --jf-overlay-bg: rgba(0, 0, 0, 0.85);
+
+    /* Text definitions with rich alpha-channel hierarchies */
+    --jf-text-primary: #ffffff;
+    --jf-text-secondary: rgba(255, 255, 255, 0.7);
+    --jf-text-tertiary: rgba(255, 255, 255, 0.5);
+    --jf-text-disabled: rgba(255, 255, 255, 0.3);
+
+    /* Contextual coloring guidelines */
+    --jf-success: #4caf50;
+    --jf-warning: #ff9800;
+    --jf-error: #f44336;
+    --jf-info: #2196f3;
+
+    /* Semi-translucent material surfaces for modern look */
+    --jf-input-bg: rgba(255, 255, 255, 0.05);
+    --jf-input-border: rgba(255, 255, 255, 0.1);
+    --jf-button-bg: rgba(255, 255, 255, 0.08);
+    --jf-button-hover: rgba(255, 255, 255, 0.15);
+    --jf-switch-bg: rgba(255, 255, 255, 0.15);
+    --jf-switch-handle: var(--jf-accent-content-color, #ffffff);
+
+    /* Dynamic shadows with volumetric spread */
+    --jf-shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.4);
+    --jf-shadow-md: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --jf-shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.7);
+
+    /* High-contrast scrollbars for sleek aesthetic */
+    --jf-scrollbar: rgba(255, 255, 255, 0.15);
+    --jf-scrollbar-hover: rgba(255, 255, 255, 0.35);
+
+    /* Focus visual properties */
+    --jf-button-border-focus: #ffffff;
+
+    /* Action Buttons material adjustments */
+    --jf-action-btn-bg: rgba(255, 255, 255, 0.06);
+    --jf-action-btn-border: rgba(255, 255, 255, 0.1);
+    --jf-action-btn-color: var(--jf-text-primary);
+    --jf-action-btn-active-bg: var(--jf-accent);
+    --jf-action-btn-active-border: var(--jf-accent-content-color, #ffffff);
+    --jf-action-btn-active-color: var(--jf-accent-content-color);
+
+    /* Primary buttons (Play/Resume) */
+    --jf-primary-btn-bg: var(--jf-accent);
+    --jf-primary-btn-color: var(--jf-accent-content-color);
+}
+
+/*
+ * ============================================================================
+ * ACCENT-DYNAMIC AMBIENT GLOW BACKDROP (FULL SCREEN IMMERSION)
+ * ============================================================================
+ * Applies the ultra-dark charcoal foundation color combined with layered
+ * accent-dynamic radial gradient mesh glows directly to the body element.
+ * Moving the background from the .page container to the body ensures that the
+ * ambient lights span the entire viewport starting from x:0, bleeding seamlessly
+ * behind the collapsed sidebar and settings side menus instead of clipping.
+ */
+[data-theme-mode="ambient"] body {
+    /* 1. Base Apple-inspired deep charcoal color layer */
+    background-color: var(--jf-background) !important;
+    
+    /* 2. Composed volumetric light layers reflecting the active accent */
+    background-image: 
+        /* Primary Spotlight (Top-Right): Rich atmospheric scattering glow. 
+           Utilizes a double-stop core-bloom (30% at center, 10% mid-way) 
+           falling off to transparent at 70% radius for extreme smoothness. */
+        radial-gradient(
+            circle at 85% 15%, 
+            rgba(var(--jf-accent-rgb), 0.30) 0%, 
+            rgba(var(--jf-accent-rgb), 0.10) 35%, 
+            transparent 70%
+        ),
+        /* Secondary Spotlight (Bottom-Left): Symmetrical high-vibrancy core-bloom.
+           Matches the primary spotlight's intense scattering (30% core, 10% mid-way)
+           to create organic atmospheric layout depth and full sidebar immersion. */
+        radial-gradient(
+            circle at 15% 85%, 
+            rgba(var(--jf-accent-rgb), 0.30) 0%, 
+            rgba(var(--jf-accent-rgb), 0.10) 35%, 
+            transparent 70%
+        ) !important;
+        
+    /* 3. Keep gradients locked relative to viewport during page scrolls */
+    background-attachment: fixed !important;
+    
+    /* 4. Ensure background fills the entire screen canvas properly */
+    background-size: cover !important;
+}
+
+[data-theme-mode="ambient"] .page {
+    /* 1. Reset page background to transparent so body's atmospheric gradient shows through */
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * VIDEO PLAYBACK OPTIMIZATION
+ * ============================================================================
+ * Completely removes all backdrop paints and image overlays when video
+ * playback is active. This ensures 0% CPU/GPU overhead on TV decoders.
+ */
+[data-theme-mode="ambient"] body.player-active {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+[data-theme-mode="ambient"] body.player-active .page {
+    background: transparent !important;
+    background-image: none !important;
+}
+
+/*
+ * ============================================================================
+ * HIGH-PERFORMANCE GLASS-FREE IMMERSIVE SIDEBARS (APPLE HIG CRITERIA)
+ * ============================================================================
+ * Optimized specifically for low-overhead Smart TV graphic pipelines. 
+ * Completely avoids expensive GPU blur filters (backdrop-filter) and heavy 
+ * box shadows. Sidebars are kept fully transparent when collapsed to let the 
+ * underlying atmospheric gradient bleed through unimpeded. When the navigation
+ * sidebar expands, it renders a gorgeous, solid linear gradient that dynamically
+ * blends a soft hint of the accent color with the deep charcoal theme foundation.
+ */
+
+[data-theme-mode="ambient"] .sidebar {
+    /* 1. Fully transparent when collapsed to maximize ambient bleeding */
+    background: transparent !important;
+    
+    /* 2. Deactivates complex hardware-heavy graphic operations */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    
+    /* 3. Hairline border boundary to maintain layout structure */
+    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+    
+    /* 4. Keeps rendering thread locked for fast GPU translations */
+    will-change: transform;
+}
+
+[data-theme-mode="ambient"] .sidebar.expanded,
+[data-theme-mode="ambient"] .sidebar:hover {
+    /* 1. Seamless Apple-style solid gradient when expanded */
+    /* Flows from a rich accent glow (15%) at the top-left to a deep matte charcoal at the bottom-right */
+    background: linear-gradient(
+        135deg, 
+        rgba(var(--jf-accent-rgb), 0.15) 0%, 
+        rgba(10, 11, 12, 0.98) 50%, 
+        rgba(5, 5, 6, 0.99) 100%
+    ) !important;
+    
+    /* 2. Keep shadows off to maintain flawless scroll frames */
+    box-shadow: none !important;
+}
+
+[data-theme-mode="ambient"] .settings-sidebar {
+    /* 1. Fully transparent split-view menu so background gradient shines through */
+    background: transparent !important;
+    
+    /* 2. Disables filters and shadows for high performance */
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+    
+    /* 3. Soft clean separator border */
+    border-right: 1px solid rgba(255, 255, 255, 0.05) !important;
+}
+
+/*
+ * ============================================================================
+ * HIGH-PERFORMANCE NAVIGATION HIGHLIGHTS & INTERACTIONS
+ * ============================================================================
+ * Clean focus/active states optimized for speed and maximum legibility.
+ * Restricts complex operations while preserving a premium spring-like feel.
+ */
+
+[data-theme-mode="ambient"] .sidebar-item {
+    /* Fast spring transition for active scale adjustments */
+    transition: transform 0.22s cubic-bezier(0.25, 0.8, 0.25, 1), color 0.15s ease !important;
+}
+
+/*
+ * ============================================================================
+ * HIGH-CONTRAST FOCUS ACCESSIBILITY OVERRIDES (APPLE HIG & MACOS STYLE)
+ * ============================================================================
+ * On macOS and Apple-inspired systems, focus states must remain beautifully
+ * legible even when placed on top of high-vibrancy colored backing layers.
+ * Since the sliding focus indicator capsule is colored using --jf-accent (the
+ * active accent color, e.g. vibrant pink/red), any text or SVGs on top of it
+ * must be forced to use --jf-primary-btn-color (typically pure white) to 
+ * avoid blending into the capsule and becoming invisible.
+ * We apply a high-specificity override to all descendants of the focused item.
+ */
+[data-theme-mode="ambient"] .sidebar-item:focus,
+[data-theme-mode="ambient"] .sidebar-item.focused,
+[data-theme-mode="ambient"] .sidebar-item:focus *,
+[data-theme-mode="ambient"] .sidebar-item.focused * {
+    /* Explicitly override standard active-state specificities to guarantee AAA legibility */
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+[data-theme-mode="ambient"] .sidebar-item:focus,
+[data-theme-mode="ambient"] .sidebar-item.focused {
+    /* Sleek volumetric Apple-style spring scaling transition on focus */
+    transform: scale(1.04) translateZ(0) !important;
+    
+    /* 
+     * Stacking Context Stacking Bugfix (Apple HIG Interface Integrity):
+     * CSS transforms create a new stacking context that flattens internal children
+     * (the SVG .item-icon at z-index 10 and text at z-index 6). Because the sliding 
+     * indicator is a sibling of the sidebar content, it paints on top of the flattened 
+     * item. Elevating the focused item's z-index to 10 forces the entire stacking 
+     * context above the indicator (z-index: 5), letting text and icons shine through.
+     */
+    z-index: 10 !important;
+    
+    /* Dedicated spring Bezier curve to simulate physical inertia during focus transitions */
+    transition: transform 0.25s cubic-bezier(0.25, 1.25, 0.5, 1), color 0.15s ease !important;
+}
+
+[data-theme-mode="ambient"] .sidebar-focus-indicator {
+    /* Inset macOS-style capsule indicator */
+    border-radius: 12px !important;
+    width: calc(100% - 24px) !important;
+    left: 12px !important;
+    /* Explicitly disable shadows to avoid paint lag during sliding transitions */
+    box-shadow: none !important;
+}
+
+[data-theme-mode="ambient"] .settings-menu-btn {
+    /* Snap spring transition curve */
+    transition: transform 0.2s cubic-bezier(0.25, 0.8, 0.25, 1), background-color 0.15s ease, color 0.15s ease !important;
+}
+
+[data-theme-mode="ambient"] .settings-menu-btn.active {
+    /* Sleek transparent white active tab backing */
+    background: rgba(255, 255, 255, 0.08) !important;
+    color: #ffffff !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+[data-theme-mode="ambient"] .settings-menu-btn:focus,
+[data-theme-mode="ambient"] .settings-menu-btn.focused,
+[data-theme-mode="ambient"] .settings-menu-btn:focus *,
+[data-theme-mode="ambient"] .settings-menu-btn.focused * {
+    /* Explicitly override child specificities (like .menu-icon svg) to maintain pure high contrast */
+    color: var(--jf-primary-btn-color, #ffffff) !important;
+}
+
+[data-theme-mode="ambient"] .settings-menu-btn:focus,
+[data-theme-mode="ambient"] .settings-menu-btn.focused {
+    /* Solid high-contrast focus state with zero box shadow overhead */
+    background: var(--jf-accent) !important;
+    transform: scale(1.05) translateZ(0) !important;
+    box-shadow: none !important;
+    transition: transform 0.25s cubic-bezier(0.25, 1.25, 0.5, 1), background-color 0.15s ease, color 0.15s ease !important;
+}
+
+/* Soft divider color within settings sidebars for refined visual hierarchy */
+[data-theme-mode="ambient"] .settings-sidebar-header {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05) !important;
+    padding-bottom: 15px !important;
+}
+
+/* Fallback cleanup for active video playback sessions */
+body.player-active[data-theme-mode="ambient"] .sidebar,
+body.player-active[data-theme-mode="ambient"] .settings-sidebar {
+    background: transparent !important;
+    border-right: none !important;
+}
+
+

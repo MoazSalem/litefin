@@ -872,6 +872,7 @@
     "TextShadowStyle": "Text Shadow Style",
     "TextShadowStyleDescription": "Subtitle shadow type",
     "TextSizeDescription": "Adjust the size of the subtitle text",
+    "ThemeAmbient": "Ambient Glow",
     "ThemeBlack": "Black (OLED)",
     "ThemeColor": "Theme Color",
     "ThemeColorDescription": "Choose your primary accent color.",

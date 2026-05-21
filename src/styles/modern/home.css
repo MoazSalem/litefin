@@ -432,9 +432,7 @@ html[data-layout="modern"] .episode-badge {
     position: absolute;
     top: 22px;
     z-index: 5;
-    background: rgba(0, 0, 0, 0.45);
-    -webkit-backdrop-filter: blur(12px);
-    backdrop-filter: blur(12px);
+    background: rgba(0, 0, 0, 0.65);
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: #fff;
     font-weight: 700;
@@ -453,23 +451,10 @@ html[data-layout="modern"] .media-card.focused .episode-badge {
     transform: scale(1.05);
 }
 
-html[data-layout="modern"] .count-badge {
+html[data-layout="modern"] .count-badge, .played-badge {
     right: 22px;
-    min-width: 36px;
-    height: 36px;
-    padding: 0 8px;
-    border-radius: 24px;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    font-size: 1.1rem;
-    background: var(--jf-accent);
-}
-
-html[data-layout="modern"] .played-badge {
-    right: 22px;
-    width: 36px;
-    height: 36px;
+    width: 44px;
+    height: 44px;
     border-radius: 24px;
     display: flex;
     align-items: center;

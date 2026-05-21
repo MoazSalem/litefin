@@ -34,8 +34,10 @@ const THEME_MODES = {
     CLASSIC_DARK: 'classic-dark',
     CLASSIC_LIGHT: 'classic-light',
     BLACK: 'black',
-    TINTED: 'tinted'
+    TINTED: 'tinted',
+    AMBIENT: 'ambient'
 };
+
 
 // Default Theme Color (Lavender)
 const DEFAULT_THEME_COLOR = '#af52de';
@@ -294,7 +296,20 @@ class LayoutManager {
             --jf-card-bg-hover: ${tints.cardBgHover};
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
+        } else if (this._themeMode === THEME_MODES.AMBIENT) {
+            // Elegant, matte ultra-dark background matching Apple's Human Interface Guidelines.
+            // A deeply saturated charcoal canvas serves as the foundation.
+            // Translucent material cards absorb the dynamically-cast ambient gradients.
+            dynamicCss += `
+            --jf-background: #0a0b0c;
+            --jf-background-alt: #070809;
+            --jf-surface: rgba(255, 255, 255, 0.035);
+            --jf-card-bg: rgba(255, 255, 255, 0.045);
+            --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
+            --jf-divider: rgba(255, 255, 255, 0.06);
+            --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
         } else if (this._themeMode === THEME_MODES.BLACK) {
+
             dynamicCss += `
             --jf-background: #000000;
             --jf-background-alt: #000000;

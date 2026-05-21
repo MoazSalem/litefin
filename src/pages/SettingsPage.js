@@ -390,9 +390,21 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'theme-mode-select',
                             [
+                                // ====================================================================
+                                // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
+                                // ====================================================================
+                                { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
+
+                                // Tinted background theme mapping closely with specific selected colors.
                                 { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+
+                                // Black OLED theme for extreme battery saving and deep contrast profiles.
                                 { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+
+                                // Traditional Dark Theme with deep charcoal shades.
                                 { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+
+                                // Traditional Light Theme utilizing classic paper/white gradients.
                                 { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
                             ],
                             layoutManager.getThemeMode()
