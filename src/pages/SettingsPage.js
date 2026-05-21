@@ -1012,7 +1012,31 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'hero-carousel-style-select',
                             [
+                                /* 
+                                 * ==========================================================
+                                 * Choice 1: Banner Mode
+                                 * ==========================================================
+                                 * Sits at the top of the home screen with beautiful outer 
+                                 * margins, fully rounded corners, and a sharp focus ring.
+                                 */
                                 { value: 'banner', label: i18n.t('StyleBanner') || 'Banner' },
+                                
+                                /* 
+                                 * ==========================================================
+                                 * Choice 2: Semi-Immersive Mode (Previously Immersive)
+                                 * ==========================================================
+                                 * Spans the full width of the screen at the top, without 
+                                 * any margins, acting as a clean full-viewport header.
+                                 */
+                                { value: 'semi-immersive', label: i18n.t('StyleSemiImmersive') || 'Semi-Immersive' },
+                                
+                                /* 
+                                 * ==========================================================
+                                 * Choice 3: Immersive Mode (New tvOS-Style Design)
+                                 * ==========================================================
+                                 * A highly premium, deep full-screen background backdrop 
+                                 * that extends visually beneath the first horizontal row.
+                                 */
                                 { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
                             ],
                             storage.getItem('pref:heroCarouselStyle') || 'banner'

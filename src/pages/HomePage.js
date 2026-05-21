@@ -1276,6 +1276,20 @@ class HomePage extends Page {
 
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
+                // Determine current carousel style and compact settings
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+                const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+                // Reset existing classes to prevent state leaking when settings change
+                placeholder.className = '';
+
+                // Apply style-specific and layout-specific classes to the wrapper
+                placeholder.classList.add(`style-${carouselStyle}`);
+                if (isCompact) {
+                    placeholder.classList.add('style-compact');
+                }
+
+                // Render the hero carousel and initialize its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
             }
