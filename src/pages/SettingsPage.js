@@ -2661,13 +2661,29 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="TextOpacity">${i18n.t('TextOpacity')}</span>
-                        <span class="setting-description" data-i18n="TextOpacityDescription">${i18n.t('TextOpacityDescription')}</span>
+                        <span class="setting-name" data-i18n="TextOpacitySdr">${i18n.t('TextOpacitySdr')}</span>
+                        <span class="setting-description" data-i18n="TextOpacitySdrDescription">${i18n.t('TextOpacitySdrDescription')}</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
                             'subtitle-text-opacity',
                             PlayerSettings.get('subtitleTextOpacity'),
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TextOpacityHdr">${i18n.t('TextOpacityHdr')}</span>
+                        <span class="setting-description" data-i18n="TextOpacityHdrDescription">${i18n.t('TextOpacityHdrDescription')}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-text-opacity-hdr',
+                            PlayerSettings.get('subtitleTextOpacityHdr'),
                             0,
                             100,
                             5
@@ -4244,6 +4260,7 @@ class SettingsPage extends Page {
     _bindSliderEvents() {
         const sliderMap = {
             'subtitle-text-opacity': 'subtitleTextOpacity',
+            'subtitle-text-opacity-hdr': 'subtitleTextOpacityHdr',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',

@@ -1877,8 +1877,13 @@ class PlayerPage extends Page {
             overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
             overlay.classList.remove('hidden');
 
-            // Apply user styles
-            const styles = SubtitleStyles.getTextStyles();
+            /* -------------------------------------------------------------
+               Determine if active media source represents HDR content.
+               Pass HDR context to get independent opacity styles.
+               ------------------------------------------------------------- */
+            const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+            const styles = SubtitleStyles.getTextStyles(isHdr);
+            
             // Apply to the span
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
@@ -1939,8 +1944,13 @@ class PlayerPage extends Page {
             overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
             overlay.classList.remove('hidden');
 
-            // Apply secondary text styles — inherits primary appearance, overrides size
-            const styles = SubtitleStyles.getSecondaryTextStyles();
+            /* -------------------------------------------------------------
+               Retrieve player HDR state to fetch appropriate opacity values.
+               Secondary subtitles inherit opacity and styling from primary settings.
+               ------------------------------------------------------------- */
+            const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+            const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
+            
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
@@ -2011,6 +2021,12 @@ class PlayerPage extends Page {
      * Both primary and secondary overlays are refreshed here.
      */
     _refreshSubtitleStyles() {
+        /* -------------------------------------------------------------
+           Determine active playback HDR format to correctly choose
+           between SDR and HDR text opacity settings.
+           ------------------------------------------------------------- */
+        const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+
         // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay && !overlay.classList.contains('hidden')) {
@@ -2018,8 +2034,8 @@ class PlayerPage extends Page {
             if (span) {
                 log.debug('Refreshing primary subtitle styles');
 
-                // Re-apply text styles
-                const styles = SubtitleStyles.getTextStyles();
+                // Re-apply text styles with current HDR status
+                const styles = SubtitleStyles.getTextStyles(isHdr);
                 SubtitleStyles.applyStyles(span, styles);
 
                 // Re-apply container styles (position/window)
@@ -2043,8 +2059,8 @@ class PlayerPage extends Page {
             if (span) {
                 log.debug('Refreshing secondary subtitle styles');
 
-                // Secondary uses inherited styles with its own size override
-                const styles = SubtitleStyles.getSecondaryTextStyles();
+                // Secondary uses inherited styles with its own size override and respects HDR opacity settings
+                const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
                 SubtitleStyles.applyStyles(span, styles);
 
                 const windowStyles = SubtitleStyles.getSecondaryWindowStyles();

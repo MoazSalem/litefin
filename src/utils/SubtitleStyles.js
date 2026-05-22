@@ -35,9 +35,14 @@ function _hexToRgba(hex, opacity) {
 
 /**
  * Generate text CSS styles from settings
+ * 
+ * Supports dynamic selection of subtitle opacity settings depending on
+ * whether the current playing video is encoded in SDR or HDR format.
+ *
+ * @param {boolean} isHdr - Whether the active playback stream is High Dynamic Range
  * @returns {Object[]} Array of {name, value} CSS properties
  */
-export function getTextStyles() {
+export function getTextStyles(isHdr = false) {
     const styles = [];
 
     // Reset properties that might have been set by other modes (like 'border')
@@ -92,8 +97,16 @@ export function getTextStyles() {
     // ========================================================================
     // ========================================================================
     // Text Opacity
+    // Select the appropriate opacity configuration key dynamically.
+    // HDR content requires distinct luminance levels for overlay transparency.
     // ========================================================================
-    const textOpacity = PlayerSettings.get('subtitleTextOpacity') ?? 100;
+    const opacityKey = isHdr ? 'subtitleTextOpacityHdr' : 'subtitleTextOpacity';
+    
+    /* -------------------------------------------------------------
+       Fetch transparency percentage from player settings backend.
+       Fallback value defaults to 100% (fully opaque).
+       ------------------------------------------------------------- */
+    const textOpacity = PlayerSettings.get(opacityKey) ?? 100;
 
     // ========================================================================
     // Text Shadow / Drop Shadow
@@ -317,12 +330,15 @@ export function getWindowStyles() {
  * Inherits all primary text styles, then overrides fontSize with the
  * secondary-specific size setting.
  *
+ * @param {boolean} isHdr - Whether the active playback stream is High Dynamic Range
  * @returns {Object[]} Array of {name, value} CSS properties
  */
-export function getSecondaryTextStyles() {
-    // Start with the full primary text style set as a base
-    // (font family, color, shadow, weight, opacity, background all inherited)
-    const styles = getTextStyles();
+export function getSecondaryTextStyles(isHdr = false) {
+    /* -------------------------------------------------------------
+       Fetch baseline visual attributes from the primary text styles.
+       Pass down HDR context to apply appropriate opacity setting.
+       ------------------------------------------------------------- */
+    const styles = getTextStyles(isHdr);
 
     // Override just the font size with the secondary-specific size preference
     const size = PlayerSettings.get('secondarySubtitleSize') || 'medium';

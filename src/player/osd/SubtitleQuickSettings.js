@@ -199,7 +199,40 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                 ]
             },
-            { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), labelKey: 'TextOpacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
+            
+            /* -------------------------------------------------------------
+               SDR Subtitle Opacity Slider (Apple HIG Elegant Layout)
+               Allows precise opacity adjustments when viewing standard range media.
+               ------------------------------------------------------------- */
+            {
+                id: 'textOpacitySdr',
+                type: 'slider',
+                label: i18n.t('TextOpacitySdr'),
+                labelKey: 'TextOpacitySdr',
+                key: 'subtitleTextOpacity',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: !isASS
+            },
+
+            /* -------------------------------------------------------------
+               HDR Subtitle Opacity Slider (Apple HIG Elegant Layout)
+               Allows separate precise control when viewing HDR media (high peak brightness).
+               ------------------------------------------------------------- */
+            {
+                id: 'textOpacityHdr',
+                type: 'slider',
+                label: i18n.t('TextOpacityHdr'),
+                labelKey: 'TextOpacityHdr',
+                key: 'subtitleTextOpacityHdr',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: !isASS
+            },
 
             // Background
             {

@@ -2028,6 +2028,49 @@ export class JellyfinPlayer extends EventEmitter {
         return this._currentMediaSource;
     }
 
+    /* =========================================================================
+       HDR DETECTION UTILITY
+       =========================================================================
+       Determines if the currently loaded/playing media source contains a video
+       stream in High Dynamic Range (HDR). Checks the video stream properties
+       which are parsed dynamically from the Jellyfin media metadata.
+       ========================================================================= */
+    isCurrentMediaHDR() {
+        // Retrieve the selected active media source
+        const mediaSource = this.getCurrentMediaSource();
+        if (!mediaSource) {
+            // No active playback media loaded
+            return false;
+        }
+
+        // Locate the primary video stream within the streams list
+        const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
+        if (!videoStream) {
+            // No valid video tracks found
+            return false;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 1: Coarse range description (e.g. HDR vs SDR)
+        // ---------------------------------------------------------------------
+        const videoRange = (videoStream.VideoRange || '').toUpperCase();
+        if (videoRange.includes('HDR')) {
+            return true;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 2: Fine-grained Range Type (e.g., HDR10, HDR10Plus, DOVI, HLG)
+        // Ensure we filter out explicit 'SDR' values
+        // ---------------------------------------------------------------------
+        const videoRangeType = (videoStream.VideoRangeType || '').toUpperCase();
+        if (videoRangeType && videoRangeType !== 'SDR') {
+            return true;
+        }
+
+        // Content is fallback SDR (Standard Dynamic Range)
+        return false;
+    }
+
     // ========================================================================
     // Fullscreen
     // ========================================================================

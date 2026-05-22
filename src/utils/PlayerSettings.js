@@ -132,7 +132,18 @@ const DEFAULTS = {
     subtitleTextColor: '#ffffff',
 
     // Subtitle text opacity (0-100)
+    // Used specifically when rendering subtitles over SDR content
     subtitleTextOpacity: 100,
+
+    /* -------------------------------------------------------------------------
+       HDR SUBTITLE TEXT OPACITY
+       -------------------------------------------------------------------------
+       Separate transparency setting (0-100) dedicated for HDR playback.
+       This enables dialing down the blinding intensity of subtitles when the TV
+       switches into high-brightness HDR/Dolby Vision video modes, without
+       affecting the standard readability of subtitles in SDR content.
+       ------------------------------------------------------------------------- */
+    subtitleTextOpacityHdr: 100,
 
     // Subtitle background color
     subtitleTextBackground: 'transparent',
