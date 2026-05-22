@@ -1844,8 +1844,33 @@ class DetailsPage extends Page {
         resumeBtn.classList.remove('btn-secondary');
         resumeBtn.classList.add('btn-primary');
 
+        // Retrieve the resume position from UserData playback position.
+        // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
         const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-        const resumeLabel = i18n.t('ResumeAt', [resumeTime + 'm']);
+        
+        // Define a variable to store our sleekly formatted timestamp string.
+        let timeString = '';
+        
+        // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
+        // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
+        if (resumeTime >= 60) {
+            // Compute the absolute number of whole hours.
+            const hours = Math.floor(resumeTime / 60);
+            // Calculate the remaining minutes left over.
+            const minutes = resumeTime % 60;
+            
+            // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
+            // show only the hour to maintain a clean and beautiful Apple-like minimal aesthetic.
+            timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+        } else {
+            // Under 60 minutes, display in simple minute format (e.g., "45m").
+            timeString = `${resumeTime}m`;
+        }
+
+        // Apply localization to the formatted time label to construct the full button label text.
+        const resumeLabel = i18n.t('ResumeAt', [timeString]);
+        
+        // Update the inner HTML of the resume button with a play icon and the formatted label.
         resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${resumeLabel}</span>`;
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
