@@ -1189,9 +1189,23 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {boolean} [options.suppressWaitingEvent] - Don't emit 'waiting' during this seek's buffer phase
      */
     seek(positionTicks, options = {}) {
+        // High-Priority State Update: Indicate that seeking is actively occurring
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
+
+        // INSTANT SUBTITLE WIPE:
+        // Clear all active subtitles instantly when seeking. This prevents the currently
+        // displayed cue from lingering as a ghost overlay during the buffering/loading phase
+        // of a seek operation (whether scrubbing, chapter skips, or direct d-pad seeks).
+        if (this._subtitleManager) {
+            // Fancy explanation: reset active state caches and flush any DOM / canvas subtitle layers
+            this._subtitleManager.resetActiveCues();
+        }
+
+        // Delegate the core seek execution to our underlying player backend (AVPlay, HTML5, WebOS)
         this._backend?.seek(positionTicks, options);
+
+        // Notify all registered UI/OSD event listeners that seek has successfully fired
         this.emit('seek', { positionTicks });
     }
 
