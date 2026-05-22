@@ -128,8 +128,17 @@ const DEFAULTS = {
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 
-    // Subtitle text color
+    // Subtitle text color for SDR content
     subtitleTextColor: '#ffffff',
+
+    /* -------------------------------------------------------------------------
+       HDR SUBTITLE TEXT COLOR
+       -------------------------------------------------------------------------
+       Separate color configuration dedicated for HDR/Dolby Vision playback.
+       Allows customizing subtitle text chromaticity independently under high-contrast
+       high peak-luminance dynamic ranges.
+       ------------------------------------------------------------------------- */
+    subtitleTextColorHdr: '#ffffff',
 
     // Subtitle text opacity (0-100)
     // Used specifically when rendering subtitles over SDR content

@@ -173,8 +173,16 @@ export function getTextStyles(isHdr = false) {
 
     // ========================================================================
     // Text Color
+    // Select the appropriate color configuration key dynamically.
+    // HDR media might benefit from softer gray/yellow tones to prevent eye strain.
     // ========================================================================
-    const textColor = PlayerSettings.get('subtitleTextColor') || '#ffffff';
+    const colorKey = isHdr ? 'subtitleTextColorHdr' : 'subtitleTextColor';
+    
+    /* -------------------------------------------------------------
+       Fetch selected hex code from player settings backend.
+       Fallback value defaults to standard White (#ffffff).
+       ------------------------------------------------------------- */
+    const textColor = PlayerSettings.get(colorKey) || '#ffffff';
     // textOpacity is already defined above for shadows
     styles.push({ name: 'color', value: _hexToRgba(textColor, textOpacity) });
 

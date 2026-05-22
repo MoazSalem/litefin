@@ -2639,8 +2639,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelTextColor">${i18n.t('LabelTextColor')}</span>
-                        <span class="setting-description" data-i18n="TextColorDescription">${i18n.t('TextColorDescription')}</span>
+                        <span class="setting-name" data-i18n="LabelTextColorSdr">${i18n.t('LabelTextColorSdr')}</span>
+                        <span class="setting-description" data-i18n="TextColorSdrDescription">${i18n.t('TextColorSdrDescription')}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -2655,6 +2655,28 @@ class SettingsPage extends Page {
                                 { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                             ],
                             PlayerSettings.get('subtitleTextColor') || '#ffffff'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelTextColorHdr">${i18n.t('LabelTextColorHdr')}</span>
+                        <span class="setting-description" data-i18n="TextColorHdrDescription">${i18n.t('TextColorHdrDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-color-select-hdr',
+                            [
+                                { value: '#ffffff', label: i18n.t('SubtitleWhite') },
+                                { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                                { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                                { value: '#000000', label: i18n.t('SubtitleBlack') },
+                                { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                                { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                                { value: '#0000ff', label: i18n.t('SubtitleBlue') }
+                            ],
+                            PlayerSettings.get('subtitleTextColorHdr') || '#ffffff'
                         )}
                     </div>
                 </div>
@@ -4604,6 +4626,7 @@ class SettingsPage extends Page {
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
+            'subtitle-color-select-hdr': { key: 'subtitleTextColorHdr', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
