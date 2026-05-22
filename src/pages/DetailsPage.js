@@ -2581,6 +2581,25 @@ class DetailsPage extends Page {
     }
 
     async _loadSimilar() {
+        // -------------------------------------------------------------------------
+        // Performance & Visibility Control Check
+        // -------------------------------------------------------------------------
+        // Check if the user has enabled the "Hide More Like This" appearance option.
+        // By handling this check first, we can short-circuit the entire block,
+        // preventing unnecessary network requests and API server load.
+        const hideSimilar = storage.getItem('pref:hideSimilarSection') === 'true';
+
+        if (hideSimilar) {
+            // Find the container section in the DOM
+            const similarSection = this.$('#similar-section');
+            if (similarSection) {
+                // Keep the section hidden to prevent empty layout gaps
+                similarSection.classList.add('hidden');
+            }
+            // Exit early to completely avoid fetching metadata from the server
+            return;
+        }
+
         try {
             const cacheKey = `details:similar:${this._itemId}`;
             const cachedSimilar = state.get(cacheKey);

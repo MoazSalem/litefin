@@ -599,6 +599,8 @@
     "DetailsTitleStyleDescription": "Choose how the title and logo/icon are displayed on the details page.",
     "LabelHideOriginalTitle": "Hide Original Language Title",
     "HideOriginalTitleDescription": "Do not show the original language title under the main title on the details page.",
+    "LabelHideSimilarSection": "Hide More Like This",
+    "HideSimilarSectionDescription": "Do not load or display the similar recommendations section on the details page.",
     "LabelRichMetadataStyle": "Rich Metadata Display",
     "RichMetadataStyleDescription": "Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.",
     "OptionRichMetadataAll": "Show Full Rich Metadata",

@@ -713,6 +713,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Fluid toggle switch for Similar Recommendations section on details page -->
+                        <span class="setting-name" data-i18n="LabelHideSimilarSection">${i18n.t('LabelHideSimilarSection') || 'Hide More Like This'}</span>
+                        <span class="setting-description" data-i18n="HideSimilarSectionDescription">${i18n.t('HideSimilarSectionDescription') || 'Do not load or display the similar recommendations section on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideSimilarSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-similar-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -3607,6 +3621,21 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideCastSection', newValue.toString());
                 hideCastBtn.classList.toggle('active', newValue);
                 log.info(`Hide Cast & Guest Stars set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hide More Like This Recommendations Section
+        const hideSimilarBtn = this.$('#toggle-hide-similar-section');
+        if (hideSimilarBtn) {
+            hideSimilarBtn.addEventListener('click', () => {
+                // Fetch the current toggled status of Similar recommendations
+                const isHidden = storage.getItem('pref:hideSimilarSection') === 'true';
+                const newValue = !isHidden;
+                
+                // Save setting locally and toggle the active HIG switch class
+                storage.setItem('pref:hideSimilarSection', newValue.toString());
+                hideSimilarBtn.classList.toggle('active', newValue);
+                log.info(`Hide Similar Recommendations set to: ${newValue}`);
             });
         }
 
