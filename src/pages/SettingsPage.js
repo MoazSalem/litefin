@@ -625,6 +625,21 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Clean label for toggling original language subtitle display -->
+                        <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
+                        <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <!-- Sleek fluid iOS-style toggle matching general appearance preferences, off by default -->
+                        <button class="toggle-switch ${storage.getItem('pref:hideOriginalTitle') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-original-title" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
@@ -4976,6 +4991,25 @@ class SettingsPage extends Page {
                 storage.setItem('pref:showAddedDate', newValue.toString());
                 showAddedDateToggle.classList.toggle('active', newValue);
                 log.info(`Show Added Date set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hiding Original Language Title on Details page
+        // Standard iOS switch behavior targeting pref:hideOriginalTitle (off by default)
+        const hideOriginalTitleToggle = this.$('#toggle-hide-original-title');
+        if (hideOriginalTitleToggle) {
+            hideOriginalTitleToggle.addEventListener('click', () => {
+                // Fetch the current setting (string coerced to boolean, false by default if not set)
+                const currentValue = storage.getItem('pref:hideOriginalTitle') === 'true';
+                // Negate the current state for toggling
+                const newValue = !currentValue;
+                
+                // Commit to localStorage matching standard preferences format
+                storage.setItem('pref:hideOriginalTitle', newValue.toString());
+                // Smoothly update the active class on the DOM for sleek toggle switch transition
+                hideOriginalTitleToggle.classList.toggle('active', newValue);
+                // Log state changes internally for better diagnostics and traceability
+                log.info(`Hide Original Title set to: ${newValue}`);
             });
         }
 

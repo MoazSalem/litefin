@@ -1647,10 +1647,17 @@ class DetailsPage extends Page {
             logoClass = 'details-logo';
         }
 
+        // Retrieve setting to hide the original language title on the details page.
+        // It defaults to 'false' (off), so it's shown unless explicitly toggled to 'true'.
+        const hideOriginalTitle = storage.getItem('pref:hideOriginalTitle') === 'true';
+
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
+        
+        // Define display subtitle (original title) based on settings.
+        // Season titles are unaffected; we only hide original titles for movies/shows when configured.
         const displaySubtitle = i18n.ensureBiDi(
-            isSeason ? item.Name : item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : ''
+            isSeason ? item.Name : (!hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : '')
         );
 
         // Build the dynamic inner HTML for the hero-info block.

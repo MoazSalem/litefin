@@ -597,6 +597,8 @@
     "LabelScoreVisibility": "Score Visibility",
     "LabelDetailsTitleStyle": "Title and Icon Style",
     "DetailsTitleStyleDescription": "Choose how the title and logo/icon are displayed on the details page.",
+    "LabelHideOriginalTitle": "Hide Original Language Title",
+    "HideOriginalTitleDescription": "Do not show the original language title under the main title on the details page.",
     "OptionDetailsTitleStyleBoth": "Text Title and Icon",
     "OptionDetailsTitleStyleLogoOnly": "Only Icon as Title (Large)",
     "OptionDetailsTitleStyleTextOnly": "Only Text Title",
