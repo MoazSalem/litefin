@@ -1612,6 +1612,40 @@ class DetailsPage extends Page {
         } else {
             metaHtml += addedHtml + airedHtml;
         }
+        // Retrieve the user's preferred title display style from localized preferences.
+        // Default style is 'both' (displaying both text title and logo icon).
+        const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+
+        // Retrieve and check for logo references using Jellyfin image tags.
+        // Determines if a localized image tag or series/parent image tag is available.
+        const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
+        const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
+        const hasLogo = !!(logoItemId && logoTag);
+
+        // Control flags for rendering logo and text title dynamically.
+        let showLogo = false;
+        let showTitle = true;
+        let logoClass = 'details-logo';
+
+        // Apply chosen Title Display Style preference with elegant fallbacks.
+        if (titleStyle === 'text-only') {
+            // Completely hide the logo and force text title display.
+            showLogo = false;
+            showTitle = true;
+        } else if (titleStyle === 'logo-only' && hasLogo) {
+            // Display only the logo icon and hide the text title.
+            // Assign a completely separate details-title-logo CSS class.
+            // This prevents inheriting any absolute alignment styling from details-logo.
+            showLogo = true;
+            showTitle = false;
+            logoClass = 'details-title-logo';
+        } else {
+            // Default option ('both'): render both if a logo exists.
+            // Fall back to this mode if 'logo-only' was chosen but no logo image exists for this item.
+            showLogo = hasLogo;
+            showTitle = true;
+            logoClass = 'details-logo';
+        }
 
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
@@ -1619,17 +1653,56 @@ class DetailsPage extends Page {
             isSeason ? item.Name : item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : ''
         );
 
-        this.$('#hero-info').innerHTML = `
-            <div id="details-logo" class="details-logo"></div>
-            <h1 class="details-title">${displayTitle}</h1>
-            ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
+        // Build the dynamic inner HTML for the hero-info block.
+        let heroHtml = '';
+
+        // If enabled, prepend the logo container div at the top of the header info.
+        if (showLogo) {
+            heroHtml += `<div id="details-logo" class="${logoClass}"></div>`;
+        }
+
+        // If enabled, append the h1 details title.
+        if (showTitle) {
+            // If there is no logo displayed, style the title to span the full width of the container.
+            const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+        }
+
+        // Add the subtitle element underneath if present.
+        if (displaySubtitle && displaySubtitle !== displayTitle) {
+            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+        }
+
+        // Render episode season/number details for TV episodes.
+        if (item.Type === 'Episode') {
+            // When in 'logo-only' mode with a logo, the main header visual is the Series Logo.
+            // Since the text title (Episode Name) is hidden, we dynamically swap the subtitle 
+            // text from showing the Series Name to showing the Episode Name (item.Name).
+            // Under any other mode (where text title is shown as the header), we keep
+            // the classic 'SxxExx - Series Name' pattern.
+            const showLogoAsTitle = (titleStyle === 'logo-only' && hasLogo);
             
+            // Format the episode identification string (SxxExx)
+            const seasonPrefix = `S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}`;
+            const episodePrefix = `E${(item.IndexNumber || 0).toString().padStart(2, '0')}`;
+            
+            // Construct the final display string based on layout preferences
+            const subtitleText = showLogoAsTitle
+                ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
+                : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
+
+            heroHtml += `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+        }
+
+        // Finish appending standard metadata row and secondary date labels.
+        heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
             ${secondaryMetaRow}
         `;
+
+        this.$('#hero-info').innerHTML = heroHtml;
 
         // Bind clickable subtitle if present
         const subtitleLink = this.$('#episode-subtitle-link');

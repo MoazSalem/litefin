@@ -607,6 +607,24 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
+                        <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'details-title-style-select',
+                            [
+                                { value: 'both', label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon' },
+                                { value: 'logo-only', label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)' },
+                                { value: 'text-only', label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title' }
+                            ],
+                            storage.getItem('pref:detailsTitleStyle') || 'both'
+                        )}
+                    </div>
+                </div>
+
                 <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
@@ -4582,6 +4600,7 @@ class SettingsPage extends Page {
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
+            'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
