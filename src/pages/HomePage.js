@@ -464,9 +464,35 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
-                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'portrait',
-                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'poster',
+                // Music, Live TV, Home Video, and Music Video libraries use square cards, everything else uses portrait
+                /*
+                 * ============================================================
+                 * UI Layout Aspect Determination (Apple HIG Compliance)
+                 * ============================================================
+                 * 
+                 * Following Apple's Human Interface Guidelines, grid systems 
+                 * should display items in card aspect ratios that match their 
+                 * media type semantics. 
+                 * 
+                 *   - Audio/Music albums, live tuner sources, personal/home 
+                 *     recordings, and music videos require a symmetrical 
+                 *     1:1 aspect ratio ("square") for ideal presentation.
+                 * 
+                 *   - Movies and TV Shows align beautifully to a 2:3 aspect 
+                 *     ratio ("portrait" or "poster" card type).
+                 */
+                layout: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'portrait',
+                cardType: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
