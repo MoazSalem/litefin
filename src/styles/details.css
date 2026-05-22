@@ -92,6 +92,16 @@
     margin-bottom: 40px;
     padding: 60px 60px 0 60px;
     padding-top: 5%;
+    
+    /* --------------------------------------------------------------------- */
+    /* Viewport Constraint & Box Model Optimization                          */
+    /* --------------------------------------------------------------------- */
+    /* Force border-box sizing and full-width bounding to guarantee the      */
+    /* grid layout occupies exactly 100% of the active page scroller. This   */
+    /* prevents legacy content-box overflow and visual bleed on 1080p TVs.  */
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 }
 
 .hero-poster {
@@ -137,6 +147,13 @@
 
 .details-info-col {
     flex: 1;
+    /* --------------------------------------------------------------------- */
+    /* Flexbox Width Containment                                             */
+    /* --------------------------------------------------------------------- */
+    /* Establish a hard min-width bound to prevent children from expanding   */
+    /* this container beyond the flexbox column limits. Ensures long titles  */
+    /* and unwrapped button rows do not overflow the right margin.          */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -144,6 +161,8 @@
     opacity: 0;
     /* Start hidden to prevent layout jumps */
     transition: opacity 0.4s ease-out;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 }
 
 .details-info-col.visible {
@@ -337,9 +356,16 @@
 
 .details-actions {
     display: flex;
+    /* --------------------------------------------------------------------- */
+    /* Responsive Fluid Actions Wrap                                         */
+    /* --------------------------------------------------------------------- */
+    /* Allow the row of circular action buttons to wrap onto multiple lines  */
+    /* dynamically if the user is running on a lower resolution viewport,   */
+    /* has the sidebar expanded, or localized button text is extremely long. */
+    flex-wrap: wrap;
     align-items: center;
-    /* Fix alignment */
-    margin-bottom: 32px;
+    /* Reduce margin-bottom slightly to compensate for button margins below  */
+    margin-bottom: 20px;
 }
 
 .details-actions>* {
@@ -367,6 +393,8 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     border: 3px solid transparent;
     background-clip: padding-box;
+    /* Add bottom spacing to prevent overlapping when buttons wrap dynamically */
+    margin-bottom: 12px;
 }
 
 
