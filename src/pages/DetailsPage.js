@@ -410,7 +410,11 @@ class DetailsPage extends Page {
             // ────────────────────────────────────────────────────────────────────────
             // 2. Fetch Base Item Details
             // ────────────────────────────────────────────────────────────────────────
-            const hideRich = storage.getItem('pref:hideRichMetadata') === 'true';
+            // Backward-compatible custom metadata selector options.
+            // Check the new pref:richMetadataStyle select preference, fallback cleanly to standard hideRichMetadata.
+            // Under HIG Guidelines, this guarantees lightweight layouts on spatial networks.
+            const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+            const hideRich = richMetadataStyle === 'none';
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
             // Build dynamic fields list based on user preferences to save bandwidth/CPU
@@ -433,11 +437,31 @@ class DetailsPage extends Page {
             ];
 
             if (!hideRich) {
-                requestedFields.push('Genres', 'GenreItems', 'Studios', 'Tags');
+                // Genres are always loaded if not hidden.
+                requestedFields.push('Genres', 'GenreItems');
+                
+                // Studios are required for 'all' or 'genres-studios-writers'.
+                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
+                    requestedFields.push('Studios');
+                }
+                
+                // Tags are only required when showing full metadata.
+                if (richMetadataStyle === 'all') {
+                    requestedFields.push('Tags');
+                }
+                
+                // Directors and Writers come from the 'People' collection in Jellyfin.
+                // If they are requested via the rich metadata dropdown, ensure we include 'People' even if the cast section is hidden.
+                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+                    requestedFields.push('People');
+                }
             }
 
             if (!hideCast) {
-                requestedFields.push('People');
+                // Ensure People is loaded for cast display (avoid duplicates using unique tracking or simple array inclusion check)
+                if (!requestedFields.includes('People')) {
+                    requestedFields.push('People');
+                }
             }
 
             const item = await api.getItem(this._itemId, {
@@ -1250,7 +1274,10 @@ class DetailsPage extends Page {
     }
 
     _renderRichMetadata() {
-        const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
+        // Retrieve setting to customize rich metadata fields display.
+        // Falls back to backward-compatible hideRichMetadata if new setting is not set.
+        const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+        const isHidden = richMetadataStyle === 'none';
         let container = this.$('#rich-meta');
         const containerWrapper = this.$('#rich-meta-container');
 
@@ -1312,30 +1339,38 @@ class DetailsPage extends Page {
             htmlParts.push(createRow('Genres', genres));
         }
 
-        // Directors
-        const directors = (item.People || []).filter((p) => p.Type === 'Director');
-        if (directors.length > 0) {
-            htmlParts.push(createRow('Directors', directors));
+        // Directors (only shown in 'all')
+        if (richMetadataStyle === 'all') {
+            const directors = (item.People || []).filter((p) => p.Type === 'Director');
+            if (directors.length > 0) {
+                htmlParts.push(createRow('Directors', directors));
+            }
         }
 
-        // Writers
-        const writers = (item.People || []).filter((p) => p.Type === 'Writer');
-        if (writers.length > 0) {
-            htmlParts.push(createRow('Writers', writers));
+        // Writers (shown in 'all', 'genres-studios-writers', or 'genres-writers')
+        if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+            const writers = (item.People || []).filter((p) => p.Type === 'Writer');
+            if (writers.length > 0) {
+                htmlParts.push(createRow('Writers', writers));
+            }
         }
 
-        // Studios
-        if (item.Studios && item.Studios.length > 0) {
-            htmlParts.push(createRow('Studios', item.Studios));
+        // Studios (shown in 'all' or 'genres-studios-writers')
+        if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
+            if (item.Studios && item.Studios.length > 0) {
+                htmlParts.push(createRow('Studios', item.Studios));
+            }
         }
 
-        // Tags (No limit as requested)
-        if (item.Tags && item.Tags.length > 0) {
-            htmlParts.push(createRow('Tags', item.Tags));
+        // Tags (only shown in 'all')
+        if (richMetadataStyle === 'all') {
+            if (item.Tags && item.Tags.length > 0) {
+                htmlParts.push(createRow('Tags', item.Tags));
+            }
         }
 
-        // Photo EXIF Data
-        if (item.Type === 'Photo') {
+        // Photo EXIF Data (only shown in 'all')
+        if (item.Type === 'Photo' && richMetadataStyle === 'all') {
             const createTextRow = (label, value) => {
                 if (!value) return '';
                 return `

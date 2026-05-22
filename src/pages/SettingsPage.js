@@ -681,14 +681,22 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideRichMetadata">${i18n.t('LabelHideRichMetadata') || 'Hide Rich Metadata'}</span>
-                        <span class="setting-description" data-i18n="HideRichMetadataDescription">${i18n.t('HideRichMetadataDescription') || 'Hide the genres, directors, and studios table on the details page.'}</span>
+                        <!-- Apple HIG: Elegant multi-choice selector for rich metadata details customization -->
+                        <span class="setting-name" data-i18n="LabelRichMetadataStyle">${i18n.t('LabelRichMetadataStyle') || 'Rich Metadata Display'}</span>
+                        <span class="setting-description" data-i18n="RichMetadataStyleDescription">${i18n.t('RichMetadataStyleDescription') || 'Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hideRichMetadata') === 'true' ? 'active' : ''}" 
-                                id="toggle-hide-rich-metadata" 
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'rich-metadata-select',
+                            [
+                                { value: 'all', label: i18n.t('OptionRichMetadataAll') || 'Show Full Rich Metadata' },
+                                { value: 'genres-studios-writers', label: i18n.t('OptionRichMetadataGenresStudiosWriters') || 'Show Genres, Studios & Writers' },
+                                { value: 'genres-writers', label: i18n.t('OptionRichMetadataGenresWriters') || 'Show Genres & Writers' },
+                                { value: 'genres-only', label: i18n.t('OptionRichMetadataGenresOnly') || 'Show Only Genres' },
+                                { value: 'none', label: i18n.t('OptionRichMetadataNone') || 'Hide All' }
+                            ],
+                            storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all')
+                        )}
                     </div>
                 </div>
 
@@ -3558,17 +3566,7 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Hide Rich Metadata
-        const hideRichMetaBtn = this.$('#toggle-hide-rich-metadata');
-        if (hideRichMetaBtn) {
-            hideRichMetaBtn.addEventListener('click', () => {
-                const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
-                const newValue = !isHidden;
-                storage.setItem('pref:hideRichMetadata', newValue.toString());
-                hideRichMetaBtn.classList.toggle('active', newValue);
-                log.info(`Hide Rich Metadata set to: ${newValue}`);
-            });
-        }
+
 
         // Toggle Low VRAM Mode
         const lowVramBtn = this.$('#toggle-low-vram-mode');
@@ -4616,6 +4614,7 @@ class SettingsPage extends Page {
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
             'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
+            'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
