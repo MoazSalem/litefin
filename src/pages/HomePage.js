@@ -1433,15 +1433,34 @@ class HomePage extends Page {
                         }
                     }
 
-                    // Determine item types most likely to have rich artwork
+                    // ==========================================================
+                    // Dynamic Thumbnail Candidate Typing
+                    // ==========================================================
+                    // Map the library collection type to the most appropriate
+                    // Jellyfin item type that yields high-resolution artwork:
+                    //
+                    // - music: MusicAlbum works better than track/artist stubs.
+                    // - musicvideos: Query MusicVideo items recursively.
+                    // - livetv: Query TvChannel items to pull in channel logo artwork.
+                    // - photos: Include both Photo and Video contents since camera
+                    //   rolls naturally mix images and videos.
+                    // - homevideos: Query Video items recursively since they
+                    //   never have standard "Movie" or "Series" tags.
+                    // ==========================================================
                     const includeItemTypes = (() => {
                         switch (lib.CollectionType) {
                             case 'music':
                                 return 'MusicAlbum';
+                            case 'musicvideos':
+                                return 'MusicVideo';
+                            case 'livetv':
+                                return 'TvChannel';
                             case 'boxsets':
                                 return 'BoxSet';
                             case 'photos':
-                                return 'Photo';
+                                return 'Photo,Video';
+                            case 'homevideos':
+                                return 'Video';
                             case 'playlists':
                                 return 'Playlist';
                             default:
@@ -1449,17 +1468,34 @@ class HomePage extends Page {
                         }
                     })();
 
-                    const response = await api.getItems({
-                        ParentId: lib.Id,
-                        SortBy: 'Random',
-                        Recursive: true,
-                        Limit: 5,
-                        Fields: 'BackdropImageTags,ImageTags',
-                        ImageTypeLimit: 1,
-                        IncludeItemTypes: includeItemTypes,
-                        EnableImageTypes: 'Backdrop,Thumb,Primary',
-                        Filters: 'HasImage' // Only items with guaranteed artwork
-                    });
+                    // ==========================================================
+                    // Dynamic Thumbnail Library Query
+                    // ==========================================================
+                    // Live TV (livetv) libraries are not standard folder structures
+                    // and do not have child items under a ParentId. Instead, they 
+                    // store global TV Channels, which we fetch using the specialized
+                    // getLiveTvChannels API endpoint. Everything else uses standard
+                    // child item queries.
+                    // ==========================================================
+                    let response;
+                    if (lib.CollectionType === 'livetv') {
+                        response = await api.getLiveTvChannels({
+                            Limit: 5,
+                            Fields: 'PrimaryImageAspectRatio'
+                        });
+                    } else {
+                        response = await api.getItems({
+                            ParentId: lib.Id,
+                            SortBy: 'Random',
+                            Recursive: true,
+                            Limit: 5,
+                            Fields: 'BackdropImageTags,ImageTags',
+                            ImageTypeLimit: 1,
+                            IncludeItemTypes: includeItemTypes,
+                            EnableImageTypes: 'Backdrop,Thumb,Primary',
+                            Filters: 'HasImage' // Only items with guaranteed artwork
+                        });
+                    }
 
                     if (response?.Items?.length > 0) {
                         const { maxWidth, quality } = imageService.getParams('card-backdrop');
@@ -1547,8 +1583,39 @@ class HomePage extends Page {
                                         tag: item.ImageTags.Primary
                                     });
                                 }
+                            } else if (
+                                lib.CollectionType === 'photos' || 
+                                lib.CollectionType === 'homevideos' ||
+                                lib.CollectionType === 'musicvideos' ||
+                                lib.CollectionType === 'livetv'
+                            ) {
+                                // ==========================================================
+                                // Photo, Home Videos, Music Videos & Live TV Fallbacks
+                                // ==========================================================
+                                // These libraries do not rely on standard theatrical backdrops.
+                                // Instead, we prioritize the Primary tag (photos, channel logos,
+                                // video snapshots) to immediately capture the authentic artwork.
+                                // ==========================================================
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                }
                             } else {
-                                // Standard: Backdrop → Thumb → Primary
+                                // ==========================================================
+                                // Standard Fallback Chain (Movies, Series, etc.)
+                                // ==========================================================
+                                // backdrop is always prioritized for library landscape cards
+                                // to create a dramatic theatrical header feel.
+                                // ==========================================================
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
@@ -1580,16 +1647,24 @@ class HomePage extends Page {
                                 `[DynamicThumb] ${lib.Name}: typed candidates had no image, trying broad fallback`
                             );
 
-                            const fallbackResponse = await api.getItems({
-                                ParentId: lib.Id,
-                                SortBy: 'Random',
-                                Recursive: true,
-                                Limit: 10,
-                                Fields: 'BackdropImageTags,ImageTags',
-                                ImageTypeLimit: 1,
-                                EnableImageTypes: 'Backdrop,Thumb,Primary',
-                                Filters: 'HasImage'
-                            });
+                            let fallbackResponse;
+                            if (lib.CollectionType === 'livetv') {
+                                fallbackResponse = await api.getLiveTvChannels({
+                                    Limit: 10,
+                                    Fields: 'PrimaryImageAspectRatio'
+                                });
+                            } else {
+                                fallbackResponse = await api.getItems({
+                                    ParentId: lib.Id,
+                                    SortBy: 'Random',
+                                    Recursive: true,
+                                    Limit: 10,
+                                    Fields: 'BackdropImageTags,ImageTags',
+                                    ImageTypeLimit: 1,
+                                    EnableImageTypes: 'Backdrop,Thumb,Primary',
+                                    Filters: 'HasImage'
+                                });
+                            }
 
                             for (const item of fallbackResponse?.Items ?? []) {
                                 if (item.BackdropImageTags?.length > 0) {
