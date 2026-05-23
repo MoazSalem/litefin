@@ -510,7 +510,7 @@ class CardRenderer {
         let thumbPart = '';
         if (canExpand) {
             // Resolve Thumb (Backdrop) URL for the expanded state
-            const thumbParams = imageService.getParams('card-backdrop');
+            const thumbParams = imageService.getParams('expanded-poster');
             let thumbUrl = '';
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
                 thumbUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.BackdropImageTags[0] });
