@@ -1074,6 +1074,54 @@ export class ApiClient {
         return this.buildUrl(queryString ? `${path}?${queryString}` : path);
     }
 
+    /**
+     * ========================================================================
+     * Theme Media Queries
+     * ========================================================================
+     * Fetches background theme songs or theme videos configured for a given show,
+     * season, or episode. Under the hood, this queries the Jellyfin server's
+     * library controller endpoint.
+     *
+     * @param {string} itemId - The Jellyfin item ID (Movie, Series, Season, etc.)
+     * @param {Object} [params] - Optional custom query parameters to override defaults
+     * @returns {Promise<Object>} The AllThemeMediaResult object containing items
+     */
+    async getThemeMedia(itemId, params = {}) {
+        // Build robust defaults matching standard web client configurations.
+        // InheritFromParent=true guarantees that if we visit a Season or Episode
+        // page, it falls back to the parent Show's theme song if defined.
+        const defaults = {
+            UserId: this._userId,
+            InheritFromParent: true
+        };
+        
+        // Dispatch the standard GET request to retrieve theme media lists
+        return this.get(`/Items/${itemId}/ThemeMedia`, { ...defaults, ...params });
+    }
+
+    /**
+     * ========================================================================
+     * Authorized Audio Stream URL Generator
+     * ========================================================================
+     * Compiles a direct streaming URL for a specific audio item on the server.
+     * Appends the active session token to the query parameters since the native
+     * HTML5 Audio element cannot pass custom request authorization headers.
+     *
+     * @param {string} itemId - The target audio/song item ID
+     * @returns {string} The fully compiled direct stream URL
+     */
+    getAudioStreamUrl(itemId) {
+        // Capture active auth token from memory
+        const token = this._accessToken;
+        
+        // Define direct media path on the server, asking for static playback
+        // to bypass redundant transcoding whenever possible on the TV client.
+        const path = `/Audio/${itemId}/stream?static=true`;
+        
+        // Append the API key query parameter to authorize the browser's playback fetch
+        return this.buildUrl(token ? `${path}&api_key=${token}` : path);
+    }
+
     // ========================================================================
     // Playback Endpoints
     // ========================================================================

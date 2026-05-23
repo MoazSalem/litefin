@@ -756,6 +756,20 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Dynamic background theme score toggle switch, off by default -->
+                        <span class="setting-name" data-i18n="LabelPlayThemeSongs">${i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play show theme songs in the background when viewing details pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongs') === 'true' ? 'active' : ''}" 
+                                id="toggle-play-theme-songs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -3736,6 +3750,21 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
                 log.info(`Hide Similar Recommendations set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Play Theme Songs
+        const playThemeSongsBtn = this.$('#toggle-play-theme-songs');
+        if (playThemeSongsBtn) {
+            playThemeSongsBtn.addEventListener('click', () => {
+                // Read persistence state of background score playback (defaults to off/false)
+                const isEnabled = storage.getItem('pref:playThemeSongs') === 'true';
+                const newValue = !isEnabled;
+                
+                // Save new setting locally to toggle DetailsPage behavior instantly
+                storage.setItem('pref:playThemeSongs', newValue ? 'true' : 'false');
+                playThemeSongsBtn.classList.toggle('active', newValue);
+                log.info(`Play Theme Songs background audio set to: ${newValue}`);
             });
         }
 

@@ -34,6 +34,7 @@ import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
+import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 
 const log = logger.create('DetailsPage');
 
@@ -521,6 +522,11 @@ class DetailsPage extends Page {
             }
 
             await Promise.all(loadTasks);
+
+            // Trigger theme song background audio if user has activated it in display settings
+            if (storage.getItem('pref:playThemeSongs') === 'true') {
+                void this._playThemeSong();
+            }
 
             // 4. Rebuild navigation chain after everything is in the DOM
             // We use requestAnimationFrame to ensure the browser has parsed the new HTML
@@ -1581,6 +1587,55 @@ class DetailsPage extends Page {
             };
             img.src = logoUrl;
             // img.alt = item.Name + " Logo"; // Alt might show if transparent PNG fails?
+        }
+    }
+
+    /**
+     * ========================================================================
+     * Background Theme Song Loader and Player
+     * ========================================================================
+     * Dynamically queries the theme media associated with the active item.
+     * If a theme song is available, compiles the stream source URL and initiates
+     * background score looping via ThemeSongPlayer.
+     */
+    async _playThemeSong() {
+        // Assert that the loaded item supports theme media playback
+        if (!['Series', 'Season', 'Episode'].includes(this._item.Type)) {
+            return;
+        }
+
+        try {
+            log.info('Fetching theme media details for item ID', this._itemId);
+            // Fetch list of theme media options from Jellyfin
+            const themeMedia = await api.getThemeMedia(this._itemId);
+            
+            // ----------------------------------------------------------------
+            // Safety Guard: Avoid async race conditions.
+            // If the user navigated away from the details page before the
+            // network fetch returned, playing the audio now would create a
+            // "ghost" track playing forever. Abort immediately.
+            // ----------------------------------------------------------------
+            if (this._isDestroyed) {
+                log.warn('Theme media API request resolved after page destroy; aborting playback');
+                return;
+            }
+            
+            // Check if any theme songs were successfully retrieved
+            if (themeMedia && themeMedia.ThemeSongsResult?.Items?.length > 0) {
+                const song = themeMedia.ThemeSongsResult.Items[0];
+                
+                // Compile authenticated direct stream URL
+                const streamUrl = api.getAudioStreamUrl(song.Id);
+                
+                // Leverage the show owner ID to sustain music across dynamic parent navigations
+                const ownerId = themeMedia.ThemeSongsResult.OwnerId;
+
+                log.debug('Initiating background theme playback:', song.Name);
+                // Dispatch play command to the global background manager
+                themeSongPlayer.play(streamUrl, ownerId);
+            }
+        } catch (error) {
+            log.error('Failed to query or play theme media score:', error);
         }
     }
 
@@ -4041,6 +4096,14 @@ class DetailsPage extends Page {
     }
 
     _showRemoteTrailerPlayer() {
+        // --------------------------------------------------------------------
+        // Stop background ambient theme music instantly when starting a
+        // remote trailer. This prevents audio overlap since remote trailers
+        // are loaded inside a custom iframe overlay rather than navigating
+        // away to the dedicated native player page.
+        // --------------------------------------------------------------------
+        themeSongPlayer.stopInstant();
+
         const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
 
         let trailers = this._item.RemoteTrailers || [];
@@ -4175,6 +4238,37 @@ class DetailsPage extends Page {
     }
 
     destroy() {
+        // --------------------------------------------------------------------
+        // Flag this instance as destroyed.
+        // This acts as a circuit breaker for any pending, asynchronous API calls
+        // (such as getThemeMedia) resolving after page exit, preventing audio
+        // race conditions from launching theme playback in the background.
+        // --------------------------------------------------------------------
+        this._isDestroyed = true;
+
+        // --------------------------------------------------------------------
+        // Stop background ambient theme score loop playback.
+        // Under Apple's HIG principles, when transitioning between distinct
+        // navigational spaces, the audio scape must cleanly fade or cease to
+        // make room for the new destination's sensory focus.
+        // 
+        // Elegant Sustain Logic: If the next destination is also a DetailsPage
+        // (e.g. going from a Series details to a Season/Episode details, or back),
+        // we defer stopping by a 2.0-second grace period. If the new page shares
+        // the same theme song (common parent owner), the play command cancels
+        // this deferred stop and playback continues seamlessly without a single
+        // audio hiccup! Otherwise, if we are leaving details entirely, stop and
+        // fade out immediately.
+        // --------------------------------------------------------------------
+        const nextPath = router.getCurrentPath?.() || '';
+        const isNextDetails = nextPath.startsWith('/details/');
+
+        if (isNextDetails) {
+            themeSongPlayer.stopDeferred(2000);
+        } else {
+            themeSongPlayer.stop();
+        }
+
         if (this._header) {
             this._header.destroy();
             this._header = null;
