@@ -341,9 +341,9 @@ class CardRenderer {
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
             imageInnerHtml = CardRenderer.getFallbackHtml(item, isLandscape);
-        } else if (isModern) {
-            // Modern cards always get a shadow tint to ensure title readability
-            // We prepend it if imageInnerHtml already has content (like library labels)
+        } else if (isModern && !isGrid) {
+            // Modern horizontal cards get a shadow tint to ensure inside title readability.
+            // We bypass this for grid-based cards to keep their artwork fully bright and clear.
             imageInnerHtml = `<div class="card-image-tint"></div>${imageInnerHtml}`;
         }
 
@@ -644,8 +644,10 @@ class CardRenderer {
         //      interfaces and prevent visual clipping.
         // ====================================================================
         const isSquare = type === 'square' || type === 'artist';
-        const renderInside = isModern && (isLandscape || isSquare || canExpand);
-        const renderOutside = !isModern || (!isLandscape && !isSquare);
+        // In vertical 2D grids (!isGrid is false), we disable inside integrated labels
+        // and force standard outside labels to keep the entire grid uniform and clean.
+        const renderInside = isModern && !isGrid && (isLandscape || isSquare || canExpand);
+        const renderOutside = !isModern || isGrid || (!isLandscape && !isSquare);
         
         // Final visibility logic (Classic vs Modern)
         const showInside = renderInside && !isHiddenLibraryLabel;

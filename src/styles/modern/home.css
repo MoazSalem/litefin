@@ -73,11 +73,11 @@ html[data-layout="modern"] .media-card.has-expansion:hover {
     z-index: 100;
 }
 
-html[data-layout="modern"] .media-card.landscape {
+html[data-layout="modern"] .media-card.landscape:not(.grid-card) {
     width: 600px; /* Height: 600 * 0.5625 = 337.5px */
 }
 
-html[data-layout="modern"] .media-card.square {
+html[data-layout="modern"] .media-card.square:not(.grid-card) {
     width: 338px; /* Height: 338 * 1 = 338px */
 }
 
