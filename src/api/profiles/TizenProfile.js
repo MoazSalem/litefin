@@ -542,17 +542,25 @@ export function buildJellyfinProfile(options = {}) {
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
         : [];
 
-    // Samsung TVs can play the HDR10/HDR10+ fallback of Dolby Vision Profile 7/8.
-    // DOVIWithHDR10Plus is a distinct type from DOVIWithHDR10 and must be listed separately —
-    // Jellyfin reports these based on the actual base layer of the encode, not just the DV type.
-    // Full Dolby Vision subtype list — each mode is a distinct value Jellyfin reports.
-    // DOVIWithEL = DV with Enhancement Layer (EL-only profile, common in remuxes).
-    // DOVIWithELHDR10Plus = DV EL + HDR10+ base (the type that triggered the transcode here).
-    // Omitting any of these causes VideoRangeTypeNotSupported → unnecessary full video transcode.
-    // WebProfile.js already includes both: keep Tizen in sync.
+    // Samsung TVs do not natively support Dolby Vision and lack a hardware DV decoder.
+    // However, they can play the HDR10/HDR10+ compatibility/fallback layer of Dolby Vision
+    // Profile 7 and Profile 8 encodes flawlessly.
+    //
+    // CRITICAL DETAIL:
+    // Raw 'DOVI' (typically Profile 5) lacks a fallback layer and must be transcoded to SDR.
+    // More importantly, advertising raw 'DOVI' support in the profile makes the Jellyfin server
+    // assume the client has native Dolby Vision support, causing it to copy the video stream
+    // and tag it as 'dvh1' inside HLS fMP4 segments. The Tizen AVPlay engine cannot parse
+    // Dolby Vision configuration parameters inside the MP4 headers, leading to indefinite buffering.
+    //
+    // By excluding raw 'DOVI' but retaining compatibility range types ('DOVIWithHDR10', etc.),
+    // we tell the server that we only support playing the base compatibility layer. The server
+    // will copy the HEVC video stream but tag it as standard HEVC 'hvc1' without the DV boxes,
+    // which plays perfectly on Tizen (exactly as it does in the official client).
     const hevcVideoRangeTypes = enableHDR
-        ? 'SDR|HDR10|HDR10Plus|HLG|DOVI|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus'
+        ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus|DOVIInvalid'
         : 'SDR|DOVIWithSDR';
+
 
     const codecProfiles = [
         {

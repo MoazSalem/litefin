@@ -636,6 +636,39 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
+                        <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'details-title-style-select',
+                            [
+                                { value: 'both', label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon' },
+                                { value: 'logo-only', label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)' },
+                                { value: 'text-only', label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title' }
+                            ],
+                            storage.getItem('pref:detailsTitleStyle') || 'both'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Clean label for toggling original language subtitle display -->
+                        <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
+                        <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <!-- Sleek fluid iOS-style toggle matching general appearance preferences, off by default -->
+                        <button class="toggle-switch ${storage.getItem('pref:hideOriginalTitle') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-original-title" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
@@ -677,14 +710,22 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideRichMetadata">${i18n.t('LabelHideRichMetadata') || 'Hide Rich Metadata'}</span>
-                        <span class="setting-description" data-i18n="HideRichMetadataDescription">${i18n.t('HideRichMetadataDescription') || 'Hide the genres, directors, and studios table on the details page.'}</span>
+                        <!-- Apple HIG: Elegant multi-choice selector for rich metadata details customization -->
+                        <span class="setting-name" data-i18n="LabelRichMetadataStyle">${i18n.t('LabelRichMetadataStyle') || 'Rich Metadata Display'}</span>
+                        <span class="setting-description" data-i18n="RichMetadataStyleDescription">${i18n.t('RichMetadataStyleDescription') || 'Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.'}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hideRichMetadata') === 'true' ? 'active' : ''}" 
-                                id="toggle-hide-rich-metadata" 
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'rich-metadata-select',
+                            [
+                                { value: 'all', label: i18n.t('OptionRichMetadataAll') || 'Show Full Rich Metadata' },
+                                { value: 'genres-studios-writers', label: i18n.t('OptionRichMetadataGenresStudiosWriters') || 'Show Genres, Studios & Writers' },
+                                { value: 'genres-writers', label: i18n.t('OptionRichMetadataGenresWriters') || 'Show Genres & Writers' },
+                                { value: 'genres-only', label: i18n.t('OptionRichMetadataGenresOnly') || 'Show Only Genres' },
+                                { value: 'none', label: i18n.t('OptionRichMetadataNone') || 'Hide All' }
+                            ],
+                            storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all')
+                        )}
                     </div>
                 </div>
 
@@ -696,6 +737,20 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${storage.getItem('pref:hideCastSection') === 'true' ? 'active' : ''}" 
                                 id="toggle-hide-cast-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Fluid toggle switch for Similar Recommendations section on details page -->
+                        <span class="setting-name" data-i18n="LabelHideSimilarSection">${i18n.t('LabelHideSimilarSection') || 'Hide More Like This'}</span>
+                        <span class="setting-description" data-i18n="HideSimilarSectionDescription">${i18n.t('HideSimilarSectionDescription') || 'Do not load or display the similar recommendations section on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideSimilarSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-similar-section" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -1056,7 +1111,31 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'hero-carousel-style-select',
                             [
+                                /* 
+                                 * ==========================================================
+                                 * Choice 1: Banner Mode
+                                 * ==========================================================
+                                 * Sits at the top of the home screen with beautiful outer 
+                                 * margins, fully rounded corners, and a sharp focus ring.
+                                 */
                                 { value: 'banner', label: i18n.t('StyleBanner') || 'Banner' },
+                                
+                                /* 
+                                 * ==========================================================
+                                 * Choice 2: Semi-Immersive Mode (Previously Immersive)
+                                 * ==========================================================
+                                 * Spans the full width of the screen at the top, without 
+                                 * any margins, acting as a clean full-viewport header.
+                                 */
+                                { value: 'semi-immersive', label: i18n.t('StyleSemiImmersive') || 'Semi-Immersive' },
+                                
+                                /* 
+                                 * ==========================================================
+                                 * Choice 3: Immersive Mode (New tvOS-Style Design)
+                                 * ==========================================================
+                                 * A highly premium, deep full-screen background backdrop 
+                                 * that extends visually beneath the first horizontal row.
+                                 */
                                 { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
                             ],
                             storage.getItem('pref:heroCarouselStyle') || 'banner'
@@ -1696,6 +1775,21 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                         <button class="toggle-switch ${PlayerSettings.get('enableNextEpisodeAutoPlay') ? 'active' : ''}" 
                                 id="toggle-auto-next" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Up Next Countdown Dialog Toggle -->
+                <!-- Allows users to independently enable or disable the interactive card that shows up near the end of an episode -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="PlayNextUpDialog">${i18n.t('PlayNextUpDialog') || 'Show Up Next dialog'}</span>
+                        <span class="setting-description" data-i18n="PlayNextUpDialogDescription">${i18n.t('PlayNextUpDialogDescription') || 'Show the countdown dialog for the next episode before the current one ends'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('enableNextUpDialog') ? 'active' : ''}" 
+                                id="toggle-next-up-dialog" 
                                 tabindex="0">
                         </button>
                     </div>
@@ -2589,8 +2683,8 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelTextColor">${i18n.t('LabelTextColor')}</span>
-                        <span class="setting-description" data-i18n="TextColorDescription">${i18n.t('TextColorDescription')}</span>
+                        <span class="setting-name" data-i18n="LabelTextColorSdr">${i18n.t('LabelTextColorSdr')}</span>
+                        <span class="setting-description" data-i18n="TextColorSdrDescription">${i18n.t('TextColorSdrDescription')}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
@@ -2611,13 +2705,51 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="TextOpacity">${i18n.t('TextOpacity')}</span>
-                        <span class="setting-description" data-i18n="TextOpacityDescription">${i18n.t('TextOpacityDescription')}</span>
+                        <span class="setting-name" data-i18n="LabelTextColorHdr">${i18n.t('LabelTextColorHdr')}</span>
+                        <span class="setting-description" data-i18n="TextColorHdrDescription">${i18n.t('TextColorHdrDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'subtitle-color-select-hdr',
+                            [
+                                { value: '#ffffff', label: i18n.t('SubtitleWhite') },
+                                { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                                { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                                { value: '#000000', label: i18n.t('SubtitleBlack') },
+                                { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                                { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                                { value: '#0000ff', label: i18n.t('SubtitleBlue') }
+                            ],
+                            PlayerSettings.get('subtitleTextColorHdr') || '#ffffff'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TextOpacitySdr">${i18n.t('TextOpacitySdr')}</span>
+                        <span class="setting-description" data-i18n="TextOpacitySdrDescription">${i18n.t('TextOpacitySdrDescription')}</span>
                     </div>
                     <div class="setting-control slider-control">
                         ${this._renderSlider(
                             'subtitle-text-opacity',
                             PlayerSettings.get('subtitleTextOpacity'),
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TextOpacityHdr">${i18n.t('TextOpacityHdr')}</span>
+                        <span class="setting-description" data-i18n="TextOpacityHdrDescription">${i18n.t('TextOpacityHdrDescription')}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'subtitle-text-opacity-hdr',
+                            PlayerSettings.get('subtitleTextOpacityHdr'),
                             0,
                             100,
                             5
@@ -3548,17 +3680,7 @@ class SettingsPage extends Page {
             });
         }
 
-        // Toggle Hide Rich Metadata
-        const hideRichMetaBtn = this.$('#toggle-hide-rich-metadata');
-        if (hideRichMetaBtn) {
-            hideRichMetaBtn.addEventListener('click', () => {
-                const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
-                const newValue = !isHidden;
-                storage.setItem('pref:hideRichMetadata', newValue.toString());
-                hideRichMetaBtn.classList.toggle('active', newValue);
-                log.info(`Hide Rich Metadata set to: ${newValue}`);
-            });
-        }
+
 
         // Toggle Low VRAM Mode
         const lowVramBtn = this.$('#toggle-low-vram-mode');
@@ -3599,6 +3721,21 @@ class SettingsPage extends Page {
                 storage.setItem('pref:hideCastSection', newValue.toString());
                 hideCastBtn.classList.toggle('active', newValue);
                 log.info(`Hide Cast & Guest Stars set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Hide More Like This Recommendations Section
+        const hideSimilarBtn = this.$('#toggle-hide-similar-section');
+        if (hideSimilarBtn) {
+            hideSimilarBtn.addEventListener('click', () => {
+                // Fetch the current toggled status of Similar recommendations
+                const isHidden = storage.getItem('pref:hideSimilarSection') === 'true';
+                const newValue = !isHidden;
+                
+                // Save setting locally and toggle the active HIG switch class
+                storage.setItem('pref:hideSimilarSection', newValue.toString());
+                hideSimilarBtn.classList.toggle('active', newValue);
+                log.info(`Hide Similar Recommendations set to: ${newValue}`);
             });
         }
 
@@ -3727,6 +3864,25 @@ class SettingsPage extends Page {
                 const newValue = !currentValue;
                 PlayerSettings.set('enableNextEpisodeAutoPlay', newValue);
                 autoNextBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Up Next Countdown Dialog Visibility
+        // This button controls whether the Up Next overlay is visible
+        // at the tail end of TV show episodes. Toggling this will not
+        // affect autoplay itself, as it operates completely independently.
+        const nextUpDialogBtn = this.$('#toggle-next-up-dialog');
+        if (nextUpDialogBtn) {
+            // Register click listener to toggle the setting
+            nextUpDialogBtn.addEventListener('click', () => {
+                // Fetch the current setting value from PlayerSettings
+                const currentValue = PlayerSettings.get('enableNextUpDialog');
+                // Negate the current state to calculate the new state
+                const newValue = !currentValue;
+                // Persist the updated configuration state
+                PlayerSettings.set('enableNextUpDialog', newValue);
+                // Dynamically toggle the CSS class 'active' to reflect state
+                nextUpDialogBtn.classList.toggle('active', newValue);
             });
         }
 
@@ -4188,6 +4344,7 @@ class SettingsPage extends Page {
     _bindSliderEvents() {
         const sliderMap = {
             'subtitle-text-opacity': 'subtitleTextOpacity',
+            'subtitle-text-opacity-hdr': 'subtitleTextOpacityHdr',
             'subtitle-bg-opacity': 'subtitleBackgroundOpacity',
             'subtitle-shadow-opacity': 'subtitleDropShadowOpacity',
             'subtitle-shadow-blur': 'subtitleDropShadowBlur',
@@ -4531,6 +4688,7 @@ class SettingsPage extends Page {
             'subtitle-font-select': { key: 'subtitleFont', type: 'player' },
             'subtitle-font-ass-select': { key: 'subtitleFontAss', type: 'player' },
             'subtitle-color-select': { key: 'subtitleTextColor', type: 'player' },
+            'subtitle-color-select-hdr': { key: 'subtitleTextColorHdr', type: 'player' },
             'subtitle-shadow-select': { key: 'subtitleDropShadow', type: 'player' },
             'subtitle-shadow-color-select': { key: 'subtitleDropShadowColor', type: 'player' },
             'subtitle-bg-select': { key: 'subtitleTextBackground', type: 'player' },
@@ -4586,6 +4744,8 @@ class SettingsPage extends Page {
             'text-scale-select': { key: 'litefin:textScale', type: 'local' },
             'next-up-max-days-select': { key: 'pref:nextUpMaxDays', type: 'local' },
             'score-visibility-select': { key: 'pref:scoreVisibility', type: 'local' },
+            'details-title-style-select': { key: 'pref:detailsTitleStyle', type: 'local' },
+            'rich-metadata-select': { key: 'pref:richMetadataStyle', type: 'local' },
             'library-page-size-select': { key: 'pref:libraryPageSize', type: 'local' },
             'hero-carousel-style-select': { key: 'pref:heroCarouselStyle', type: 'local' },
             'hero-image-quality-select': { key: 'pref:heroImageQuality', type: 'local' },
@@ -4961,6 +5121,25 @@ class SettingsPage extends Page {
                 storage.setItem('pref:showAddedDate', newValue.toString());
                 showAddedDateToggle.classList.toggle('active', newValue);
                 log.info(`Show Added Date set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Hiding Original Language Title on Details page
+        // Standard iOS switch behavior targeting pref:hideOriginalTitle (off by default)
+        const hideOriginalTitleToggle = this.$('#toggle-hide-original-title');
+        if (hideOriginalTitleToggle) {
+            hideOriginalTitleToggle.addEventListener('click', () => {
+                // Fetch the current setting (string coerced to boolean, false by default if not set)
+                const currentValue = storage.getItem('pref:hideOriginalTitle') === 'true';
+                // Negate the current state for toggling
+                const newValue = !currentValue;
+                
+                // Commit to localStorage matching standard preferences format
+                storage.setItem('pref:hideOriginalTitle', newValue.toString());
+                // Smoothly update the active class on the DOM for sleek toggle switch transition
+                hideOriginalTitleToggle.classList.toggle('active', newValue);
+                // Log state changes internally for better diagnostics and traceability
+                log.info(`Hide Original Title set to: ${newValue}`);
             });
         }
 

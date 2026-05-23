@@ -622,6 +622,29 @@ html[data-layout-tier="ultra-legacy"] .libjass-wrapper.override-bottom-offset .l
     }
 
     /**
+     * Forcefully wipes all currently displayed ASS/SSA dialogue overlays off the screen.
+     * 
+     * When seeking to a new timeline coordinate, the existing subtitles can linger as "ghost" cues.
+     * Ticking our ManualClock back to -1 forces libjass to look up active cues at a negative index.
+     * Because no valid subtitle cue starts before 0.0s, this instantly flushes the DOM.
+     */
+    clear() {
+        // Validate that our clock instance exists and is interactive
+        if (this._clock) {
+            // Perform high-priority logging for audit trails
+            log.info('ASSRenderer: Seeking initiated. Clearing DOM subtitles.');
+            
+            try {
+                // Reset the clock time to -1.0s to invoke full canvas/DOM wipeout
+                this._clock.tick(-1);
+            } catch (err) {
+                // Catch and log any libjass internal rendering exceptions gracefully
+                log.warn('Failed to clear ASS subtitles on seek:', err);
+            }
+        }
+    }
+
+    /**
      * Destroy the renderer and clean up all resources.
      * Safe to call multiple times.
      */

@@ -498,9 +498,17 @@ const skipIntroPlugin = {
                     player.seek(seekTarget);
                 }
 
-                // Snap focus away immediately so the button disappears from
-                // the UI before the next timeupdate tick officially hides it
-                if (document.activeElement?.classList.contains(widgetId)) {
+                /*
+                 * ====================================================================
+                 * SNAP FOCUS AWAY:
+                 * We blur the active element immediately to clear native focus
+                 * from the button. This prevents the button from rendering
+                 * in a focused/hovered state while it transitions out.
+                 * Using el.contains() is generic and works perfectly for all
+                 * segment widget variations (intro, outro, recap, etc.).
+                 * ====================================================================
+                 */
+                if (document.activeElement && el.contains(document.activeElement)) {
                     document.activeElement.blur();
                 }
             }

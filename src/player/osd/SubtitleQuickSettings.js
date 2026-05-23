@@ -181,12 +181,15 @@ export default class SubtitleQuickSettings extends BaseMenu {
                 ]
             },
 
-            // Colors & Opacity
+            /* -------------------------------------------------------------
+               SDR Subtitle Text Color (Apple HIG Dropdown Option)
+               Allows setting the text color when viewing SDR content.
+               ------------------------------------------------------------- */
             {
-                id: 'color',
+                id: 'textColorSdr',
                 type: 'select',
-                label: i18n.t('TextColor'),
-                labelKey: 'TextColor',
+                label: i18n.t('TextColorSdr'),
+                labelKey: 'TextColorSdr',
                 key: 'subtitleTextColor',
                 visible: !isASS,
                 options: [
@@ -199,7 +202,62 @@ export default class SubtitleQuickSettings extends BaseMenu {
                     { value: '#0000ff', label: i18n.t('SubtitleBlue') }
                 ]
             },
-            { id: 'textOpacity', type: 'slider', label: i18n.t('TextOpacity'), labelKey: 'TextOpacity', key: 'subtitleTextOpacity', min: 0, max: 100, step: 5, unit: '%', visible: !isASS },
+
+            /* -------------------------------------------------------------
+               HDR Subtitle Text Color (Apple HIG Dropdown Option)
+               Allows setting a dedicated text color when viewing HDR content.
+               ------------------------------------------------------------- */
+            {
+                id: 'textColorHdr',
+                type: 'select',
+                label: i18n.t('TextColorHdr'),
+                labelKey: 'TextColorHdr',
+                key: 'subtitleTextColorHdr',
+                visible: !isASS,
+                options: [
+                    { value: '#ffffff', label: i18n.t('SubtitleWhite') },
+                    { value: '#d3d3d3', label: i18n.t('LightGrey') },
+                    { value: '#a9a9a9', label: i18n.t('DarkGrey') },
+                    { value: '#000000', label: i18n.t('SubtitleBlack') },
+                    { value: '#ffff00', label: i18n.t('SubtitleYellow') },
+                    { value: '#00ffff', label: i18n.t('SubtitleCyan') },
+                    { value: '#0000ff', label: i18n.t('SubtitleBlue') }
+                ]
+            },
+            
+            /* -------------------------------------------------------------
+               SDR Subtitle Opacity Slider (Apple HIG Elegant Layout)
+               Allows precise opacity adjustments when viewing standard range media.
+               ------------------------------------------------------------- */
+            {
+                id: 'textOpacitySdr',
+                type: 'slider',
+                label: i18n.t('TextOpacitySdr'),
+                labelKey: 'TextOpacitySdr',
+                key: 'subtitleTextOpacity',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: !isASS
+            },
+
+            /* -------------------------------------------------------------
+               HDR Subtitle Opacity Slider (Apple HIG Elegant Layout)
+               Allows separate precise control when viewing HDR media (high peak brightness).
+               ------------------------------------------------------------- */
+            {
+                id: 'textOpacityHdr',
+                type: 'slider',
+                label: i18n.t('TextOpacityHdr'),
+                labelKey: 'TextOpacityHdr',
+                key: 'subtitleTextOpacityHdr',
+                min: 0,
+                max: 100,
+                step: 5,
+                unit: '%',
+                visible: !isASS
+            },
 
             // Background
             {

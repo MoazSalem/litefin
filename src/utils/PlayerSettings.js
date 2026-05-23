@@ -128,11 +128,31 @@ const DEFAULTS = {
     // Force text-only rendering for ASS/SSA (disables libjass)
     disableAssStyling: false,
 
-    // Subtitle text color
+    // Subtitle text color for SDR content
     subtitleTextColor: '#ffffff',
 
+    /* -------------------------------------------------------------------------
+       HDR SUBTITLE TEXT COLOR
+       -------------------------------------------------------------------------
+       Separate color configuration dedicated for HDR/Dolby Vision playback.
+       Allows customizing subtitle text chromaticity independently under high-contrast
+       high peak-luminance dynamic ranges.
+       ------------------------------------------------------------------------- */
+    subtitleTextColorHdr: '#ffffff',
+
     // Subtitle text opacity (0-100)
+    // Used specifically when rendering subtitles over SDR content
     subtitleTextOpacity: 100,
+
+    /* -------------------------------------------------------------------------
+       HDR SUBTITLE TEXT OPACITY
+       -------------------------------------------------------------------------
+       Separate transparency setting (0-100) dedicated for HDR playback.
+       This enables dialing down the blinding intensity of subtitles when the TV
+       switches into high-brightness HDR/Dolby Vision video modes, without
+       affecting the standard readability of subtitles in SDR content.
+       ------------------------------------------------------------------------- */
+    subtitleTextOpacityHdr: 100,
 
     // Subtitle background color
     subtitleTextBackground: 'transparent',
@@ -289,6 +309,17 @@ const DEFAULTS = {
 
     // Auto-play next episode when current finishes
     enableNextEpisodeAutoPlay: true,
+
+    /**
+     * =========================================================================
+     * UP NEXT DIALOG TOGGLE
+     * =========================================================================
+     * Controls whether the interactive countdown card (Up Next dialog) is shown 
+     * near the end of an episode playthrough. When enabled, it allows the user 
+     * to manually advance early or hide the prompt.
+     * =========================================================================
+     */
+    enableNextUpDialog: true,
 
     // Show trickplay (sprite-sheet) thumbnail previews when scrubbing through videos.
     // Disable to skip all trickplay calculations and image fetches entirely.

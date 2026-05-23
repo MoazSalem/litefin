@@ -506,6 +506,52 @@ export default class SubtitleManager {
         return this._primaryDelivery === DeliveryMethod.ASS_CANVAS;
     }
 
+    /**
+     * Resets all active subtitle cues and clears all visible screen overlays immediately.
+     * 
+     * Driven by the JellyfinPlayer seek pipeline to prevent stale/ghost cues from lingering on-screen.
+     */
+    resetActiveCues() {
+        // Log action with high priority for player tracing
+        log.info('Resetting active subtitle cues on player seek');
+        let primaryChanged = false;
+        let secondaryChanged = false;
+
+        // Reset primary active cue tracking reference to prevent stale display
+        if (this._activePrimaryCue !== null) {
+            this._activePrimaryCue = null;
+            primaryChanged = true;
+        }
+        this._primaryActiveIndex = -1;
+
+        // Reset secondary active cue tracking reference to prevent stale display
+        if (this._activeSecondaryCue !== null) {
+            this._activeSecondaryCue = null;
+            secondaryChanged = true;
+        }
+        this._secondaryActiveIndex = -1;
+
+        // Force callback triggers with empty text to clear DOM text overlays immediately
+        if (primaryChanged) {
+            this._onPrimaryCue({ text: '' });
+        }
+        if (secondaryChanged) {
+            this._onSecondaryCue({ text: '' });
+        }
+
+        // Clear ASS renderer canvas if active and currently selected as primary delivery
+        if (this._assRenderer && this._primaryDelivery === DeliveryMethod.ASS_CANVAS) {
+            // Ticks manual clock to -1 to clear libjass DOM overlays
+            this._assRenderer.clear();
+        }
+
+        // Clear PGS renderer canvas if active and currently selected as primary delivery
+        if (this._pgsRenderer && this._primaryDelivery === DeliveryMethod.PGS_BITMAP) {
+            // Renders timestamp -1 to wipe the OffscreenCanvas clean
+            this._pgsRenderer.clear();
+        }
+    }
+
     // ========================================================================
     // Cleanup
     // ========================================================================

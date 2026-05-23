@@ -465,19 +465,35 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
-                layout:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos'
-                        ? 'square'
-                        : 'portrait',
-                cardType:
-                    lib.CollectionType === 'music' ||
-                    lib.CollectionType === 'livetv' ||
-                    lib.CollectionType === 'homevideos'
-                        ? 'square'
-                        : 'poster',
+                // Music, Live TV, Home Video, and Music Video libraries use square cards, everything else uses portrait
+                /*
+                 * ============================================================
+                 * UI Layout Aspect Determination (Apple HIG Compliance)
+                 * ============================================================
+                 * 
+                 * Following Apple's Human Interface Guidelines, grid systems 
+                 * should display items in card aspect ratios that match their 
+                 * media type semantics. 
+                 * 
+                 *   - Audio/Music albums, live tuner sources, personal/home 
+                 *     recordings, and music videos require a symmetrical 
+                 *     1:1 aspect ratio ("square") for ideal presentation.
+                 * 
+                 *   - Movies and TV Shows align beautifully to a 2:3 aspect 
+                 *     ratio ("portrait" or "poster" card type).
+                 */
+                layout: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'portrait',
+                cardType: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -640,8 +656,30 @@ class HomePage extends Page {
             // Notify base Page that async content is ready for scroll/focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // If nothing received focus yet (e.g. all rows empty), fall back to sidebar
-            if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+            // =================================================================
+            // CHRONOLOGICAL INITIAL FOCUS RACE CONDITION RESOLUTION
+            // =================================================================
+            // When the Hero Carousel is disabled and My Media is hidden, the 
+            // merged Continue Watching and Next Up row is the physical top row. 
+            // Because this row makes complex backend queries (including batch
+            // fetching parent show activity dates), it finishes rendering later
+            // than other simple components.
+            //
+            // If the row rendering process finishes, it schedules a deferred 
+            // focus routine via requestAnimationFrame to guarantee the DOM is painted.
+            // However, the microtask-based render pipeline finishes Step 6 and reaches
+            // Step 7 before the animation frame callback executes. 
+            //
+            // Without checking `_focusInitialized`, the synchronous check below would 
+            // see that no focus has been claimed yet, forcefully grab the sidebar, 
+            // and set `focusManager.getFocused()` to a sidebar element. When the 
+            // animation frame finally fires on the next paint tick, it would see that 
+            // a focus target already exists and gracefully decline to override it, 
+            // leaving the user stranded on the sidebar.
+            //
+            // Checking `!this._focusInitialized` prevents this premature fallback.
+            // =================================================================
+            if (!this._focusInitialized && !focusManager.getActiveSection() && !focusManager.getFocused()) {
                 this.setActiveSection('sidebar');
             }
         } catch (error) {
@@ -1293,6 +1331,20 @@ class HomePage extends Page {
 
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
+                // Determine current carousel style and compact settings
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+                const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+                // Reset existing classes to prevent state leaking when settings change
+                placeholder.className = '';
+
+                // Apply style-specific and layout-specific classes to the wrapper
+                placeholder.classList.add(`style-${carouselStyle}`);
+                if (isCompact) {
+                    placeholder.classList.add('style-compact');
+                }
+
+                // Render the hero carousel and initialize its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
             }

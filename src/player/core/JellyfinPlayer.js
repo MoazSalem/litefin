@@ -607,7 +607,7 @@ export class JellyfinPlayer extends EventEmitter {
                     // auto-selecting a disabled/hidden PGS track and rendering nothing, allowing
                     // it to instead fallback to a valid, renderable SRT or VTT track.
                     // =========================================================================
-                    const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+                                        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
                     const subtitleStreams = ms.MediaStreams.filter(s => {
                         // We only care about subtitle streams
                         if (s.Type !== 'Subtitle') return false;
@@ -621,6 +621,56 @@ export class JellyfinPlayer extends EventEmitter {
                         }
                         return true;
                     });
+
+                    // =========================================================================
+                    // Prioritize and Sort Subtitle Streams
+                    //
+                    // To resolve selection ambiguity, sort candidate tracks based on type
+                    // and delivery attributes before running the auto-selection queries:
+                    //
+                    // 1. External (EXT) tracks first: External files added explicitly by the user
+                    //    should take priority over embedded/internal streams.
+                    // 2. Codec-level priority: Prefer formats in this order:
+                    //    ASS/SSA (highest styled styling fidelity) -> SRT/SUBRIP -> PGS/PGSSUB -> others.
+                    // =========================================================================
+                    const getCodecPriority = (codec) => {
+                        const c = (codec || '').toLowerCase();
+                        if (c === 'ass' || c === 'ssa') {
+                            return 4; // Styled subtitles preferred first
+                        }
+                        if (c === 'srt' || c === 'subrip') {
+                            return 3; // Clean text-based standard fallback
+                        }
+                        if (c === 'pgs' || c === 'pgssub') {
+                            return 2; // Picture-based subtitle tracks
+                        }
+                        return 1; // Any other uncategorized format
+                    };
+
+                    subtitleStreams.sort((a, b) => {
+                        // Extract external status
+                        const aExt = !!a.IsExternal;
+                        const bExt = !!b.IsExternal;
+
+                        // Check if one is external and the other is internal
+                        if (aExt !== bExt) {
+                            // Put external tracks first
+                            return aExt ? -1 : 1;
+                        }
+
+                        // Determine codec priority for both streams
+                        const aPriority = getCodecPriority(a.Codec);
+                        const bPriority = getCodecPriority(b.Codec);
+
+                        // If priorities differ, place higher priority first
+                        if (aPriority !== bPriority) {
+                            return bPriority - aPriority;
+                        }
+
+                        // Keep original sequence stable if identical priority
+                        return 0;
+                    });
+
                     let chosenIndex = undefined;
 
                     // Apply the corresponding selection logic depending on the mode
@@ -1139,9 +1189,23 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {boolean} [options.suppressWaitingEvent] - Don't emit 'waiting' during this seek's buffer phase
      */
     seek(positionTicks, options = {}) {
+        // High-Priority State Update: Indicate that seeking is actively occurring
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
+
+        // INSTANT SUBTITLE WIPE:
+        // Clear all active subtitles instantly when seeking. This prevents the currently
+        // displayed cue from lingering as a ghost overlay during the buffering/loading phase
+        // of a seek operation (whether scrubbing, chapter skips, or direct d-pad seeks).
+        if (this._subtitleManager) {
+            // Fancy explanation: reset active state caches and flush any DOM / canvas subtitle layers
+            this._subtitleManager.resetActiveCues();
+        }
+
+        // Delegate the core seek execution to our underlying player backend (AVPlay, HTML5, WebOS)
         this._backend?.seek(positionTicks, options);
+
+        // Notify all registered UI/OSD event listeners that seek has successfully fired
         this.emit('seek', { positionTicks });
     }
 
@@ -1962,6 +2026,49 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getCurrentMediaSource() {
         return this._currentMediaSource;
+    }
+
+    /* =========================================================================
+       HDR DETECTION UTILITY
+       =========================================================================
+       Determines if the currently loaded/playing media source contains a video
+       stream in High Dynamic Range (HDR). Checks the video stream properties
+       which are parsed dynamically from the Jellyfin media metadata.
+       ========================================================================= */
+    isCurrentMediaHDR() {
+        // Retrieve the selected active media source
+        const mediaSource = this.getCurrentMediaSource();
+        if (!mediaSource) {
+            // No active playback media loaded
+            return false;
+        }
+
+        // Locate the primary video stream within the streams list
+        const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
+        if (!videoStream) {
+            // No valid video tracks found
+            return false;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 1: Coarse range description (e.g. HDR vs SDR)
+        // ---------------------------------------------------------------------
+        const videoRange = (videoStream.VideoRange || '').toUpperCase();
+        if (videoRange.includes('HDR')) {
+            return true;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 2: Fine-grained Range Type (e.g., HDR10, HDR10Plus, DOVI, HLG)
+        // Ensure we filter out explicit 'SDR' values
+        // ---------------------------------------------------------------------
+        const videoRangeType = (videoStream.VideoRangeType || '').toUpperCase();
+        if (videoRangeType && videoRangeType !== 'SDR') {
+            return true;
+        }
+
+        // Content is fallback SDR (Standard Dynamic Range)
+        return false;
     }
 
     // ========================================================================
