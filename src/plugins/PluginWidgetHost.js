@@ -184,6 +184,17 @@ class PluginWidgetHost {
         // Bind Enter key action on the element (via click — standard OSD click delegation)
         if (typeof widget.onSelect === 'function') {
             el.addEventListener('click', (e) => {
+                /*
+                 * ========================================================================
+                 * STOP EVENT BUBBLING:
+                 * Prevent the click event (whether physical mouse/pointer click or JS
+                 * focusedEl.click()) from bubbling up to OSDController's global click
+                 * handler. This completely avoids executing OSD background click rules
+                 * (e.g. togglePlay) for elements inside plugin widgets.
+                 * ========================================================================
+                 */
+                e.stopPropagation();
+
                 // Only handle clicks directly on focusable children (buttons)
                 const btn = e.target.closest('button, [data-action]');
                 if (btn) {

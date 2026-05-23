@@ -126,6 +126,16 @@ export default class OSDController extends Component {
 
         /* Cached media source ID set by PlayerPage after playback starts */
         this._currentMediaSourceId = null;
+
+        /*
+         * ========================================================================
+         * GHOST CLICK LOCKOUT STATE:
+         * Tracks whether we are currently in the 350ms lockout protection window
+         * right after focus has transitioned back from overlay widgets (Row -1).
+         * ========================================================================
+         */
+        this._focusRestoreLockout = false;
+        this._focusRestoreLockoutTimer = null;
     }
 
     _handleQueueUpdate() {
@@ -479,6 +489,23 @@ export default class OSDController extends Component {
         this._osdEl.addEventListener('click', (e) => {
             /*
              * ========================================================================
+             * GHOST CLICK LOCKOUT CHECK
+             * ========================================================================
+             * If focus was recently restored back to the controls row from the overlay
+             * widgets (e.g. after selecting Skip Intro), we ignore all click events
+             * within a 350ms window. This completely blocks any browser-synthesized
+             * ghost click events that might target the newly focused Play/Pause button.
+             * ========================================================================
+             */
+            if (this._focusRestoreLockout) {
+                log.info('OSDController: Discarding click event during focus restore lockout window');
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            /*
+             * ========================================================================
              * TV SYNTHESIZED GHOST CLICK GUARD
              * ========================================================================
              * On WebOS/Tizen, pressing the remote OK button on a focused element
@@ -494,9 +521,18 @@ export default class OSDController extends Component {
              * A real user cursor or mouse click can never land precisely at the
              * coordinate (0, 0) of the viewport. Thus, we safely discard all
              * synthesized click events with (0, 0) coordinates.
+             * 
+             * ADDITIONAL PROTECTION:
+             * When focus is shifted synchronously during an Enter keydown handler
+             * (e.g., from the skip-intro button to the Play/Pause button on seek),
+             * the browser may synthesize a click event on the newly focused element
+             * (Play/Pause) with coordinates corresponding to its center (non-zero).
+             * However, all keyboard-synthesized click events natively carry a
+             * detail count of 0 (e.detail === 0). Discarding them prevents ghost
+             * events from double-triggering actions like play/pause.
              * ========================================================================
              */
-            if (e.clientX === 0 && e.clientY === 0) {
+            if ((e.clientX === 0 && e.clientY === 0) || e.detail === 0) {
                 return;
             }
 
@@ -807,7 +843,37 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            this._updateFocus();
+            
+            /*
+             * ========================================================================
+             * GHOST CLICK LOCKOUT WINDOW:
+             * Activating the Skip Intro button synchronously hides the widget, which
+             * triggers this focus restore. To prevent TV browser-synthesized ghost click
+             * events from immediately triggering the newly focused Play/Pause button,
+             * we trigger a 350ms lockout during which OSD click events are completely
+             * discarded.
+             * ========================================================================
+             */
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
+
+            /*
+             * ========================================================================
+             * DEFER DOM FOCUS TRANSITION:
+             * Deferring the _updateFocus() call by 50ms ensures that all events of the
+             * current Enter/Click event cycle are completely finished propagating
+             * before the DOM focus is shifted to the playback controls.
+             * ========================================================================
+             */
+            setTimeout(() => {
+                this._updateFocus();
+            }, 50);
         }
 
         // Resume normal auto-hide behaviour
@@ -1027,6 +1093,15 @@ export default class OSDController extends Component {
 
         // Exception: Do not park focus if the subtitle offset is pinned
         if (this.activeMenu === this.subtitleOffset && PlayerSettings.get('keepFocusOnSubtitleOffset')) {
+            return;
+        }
+
+        // Exception: Do not park focus if a plugin widget currently holds focus
+        // (overlay row / Row -1). The widget stays visible even when the main OSD
+        // controls hide — e.g. the skip-intro button floats above the video
+        // independently. Resetting focus to play/pause here would cause the NEXT
+        // OK/Enter press (intended for the widget) to fire togglePlay instead.
+        if (this._currentFocusRow === -1) {
             return;
         }
 
@@ -1328,6 +1403,20 @@ export default class OSDController extends Component {
 
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
+            /*
+             * ========================================================================
+             * GHOST KEY LOCKOUT GUARD:
+             * Discards any wake-up Enter key events received during the active 350ms
+             * lockout window. This blocks rapid TV key bounces or repeat inputs from
+             * waking the OSD and triggering double executions.
+             * ========================================================================
+             */
+            if (this._focusRestoreLockout) {
+                log.info('OSDController: Discarding wake-up enter key event during focus restore lockout window');
+                if (e) e.preventDefault();
+                return true;
+            }
+
             if (e) e.preventDefault();
             this.show();
             this._updateFocus();
@@ -1343,7 +1432,15 @@ export default class OSDController extends Component {
              * entirely in JavaScript during the wake-up sequence.
              * ========================================================================
              */
-            if (this._currentFocusRow === 2) {
+            if (this._currentFocusRow === -1) {
+                // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
+                // The widget's container has a click listener registered by PluginWidgetHost
+                // that routes to the widget's onSelect() callback — so clicking the
+                // focused button is sufficient to dispatch the action correctly.
+                // We do NOT fall through to togglePlay; the widget owns this press.
+                const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                if (focusedEl) focusedEl.click();
+            } else if (this._currentFocusRow === 2) {
                 // Seekbar row: OK = toggle play/pause
                 this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 1) {
@@ -1388,6 +1485,23 @@ export default class OSDController extends Component {
             case 'back': return this._handleBack();
             case 'enter': {
                 /*
+                 * ========================================================================
+                 * GHOST KEY LOCKOUT GUARD:
+                 * Discards any standard Enter key events received during the active 350ms
+                 * lockout window. This blocks rapid TV key bounces or repeat inputs from
+                 * triggering double executions.
+                 * ========================================================================
+                 */
+                if (this._focusRestoreLockout) {
+                    log.info('OSDController: Discarding enter key event during focus restore lockout window');
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return true;
+                }
+
+                /*
                  * On TV hardware, pressing OK synthesizes a click at clientX=0, clientY=0.
                  * The OSD click handler uses elementsFromPoint(clientX, clientY) to resolve
                  * the target — but (0,0) is the top-left corner of the viewport, nowhere near
@@ -1398,6 +1512,16 @@ export default class OSDController extends Component {
                 if (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                }
+
+                if (this._currentFocusRow === -1) {
+                    // Overlay row (Row -1): plugin widget holds focus.
+                    // Click the focused button directly in JavaScript.
+                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    if (focusedEl) {
+                        focusedEl.click();
+                        return true;
+                    }
                 }
 
                 if (this._currentFocusRow === 2) {
