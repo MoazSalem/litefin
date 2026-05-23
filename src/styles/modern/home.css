@@ -55,22 +55,39 @@ html[data-layout="modern"] .media-card:not(.grid-card) {
     /* This calculation is slightly complex to avoid shifting the focused item itself */
 }
 
-/* Sibling Shifting: Shift ALL cards that come after the focused card */
-/* We use the ~ selector combined with the focus state for immediate CSS-only shifting of visible siblings */
-html[data-layout="modern"] .media-card.has-expansion:focus ~ .media-card,
-html[data-layout="modern"] .media-card.has-expansion.focused ~ .media-card,
+/* =========================================================================
+   Interactive Sibling Shifting Logic
+   =========================================================================
+   Shift ALL media cards that sit downstream from the expanding poster.
+   We combine structural focus states with active hovering rules.
+   
+   CRITICAL DUAL-MODE REFINEMENT (Mouse + D-Pad Coexistence):
+   If the parent .media-row is being hovered by a mouse pointer, we temporarily
+   suppress the D-Pad focus shifting on non-hovered items. This prevents a focused
+   item from fighting with a hovered item over column space, ensuring only ONE
+   expanded poster claims layout territory at any given instant.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus ~ .media-card,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
 html[data-layout="modern"] .media-card.has-expansion:hover ~ .media-card {
-    /* Translate sibling cards to the right to make room for the expanding poster card */
+    /* Translate downstream siblings cleanly to make room for the 600px expanded asset */
     transform: translateX(375px);
 }
 
-/* Posters that grow dynamically on remote focus or mouse hover */
-html[data-layout="modern"] .media-card.has-expansion:focus,
-html[data-layout="modern"] .media-card.has-expansion.focused,
+/* =========================================================================
+   Poster Expansion Triggers
+   =========================================================================
+   Forces the card width from 225px to 600px.
+   When the mouse hovers over the row container, we disable the D-Pad expansion
+   on the focused card (unless it is the card currently under the mouse pointer)
+   to ensure the UI follows the user's immediate visual attention.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused,
 html[data-layout="modern"] .media-card.has-expansion:hover {
     width: 600px;
-    height: 337.5px !important; /* Force height lockdown during expansion */
-    z-index: 100;
+    height: 337.5px !important; /* Lockdown physical dimensions to avoid layout jumps */
+    z-index: 100; /* Stack on top of surrounding collapsed assets */
 }
 
 html[data-layout="modern"] .media-card.landscape:not(.grid-card) {
@@ -87,9 +104,10 @@ html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
     transition: opacity 0.3s ease 0.3s; /* Delay until expansion finishes */
 }
 
-html[data-layout="modern"] .media-card.has-expansion:focus .card-info.inside,
-html[data-layout="modern"] .media-card.has-expansion.focused .card-info.inside {
-    opacity: 1;
+/* Inside Label reveal during D-pad navigation */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside {
+    opacity: 1; /* Match the active visual expansion */
 }
 
 html[data-layout="modern"] .media-card.landscape .card-info.inside,
@@ -170,23 +188,26 @@ html[data-layout="modern"] .media-card .card-image img.poster-layer {
                 transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* On focus expansion: 
-   Burst & Recede: Poster shrinks and vanishes, Thumb pops forward.
-*/
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
+/* =========================================================================
+   Image Layer Stack Crossfade Transitions
+   =========================================================================
+   Fades out the front poster and pops the widescreen back-drop thumb layer 
+   forward on active visual expansion states.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
     opacity: 1;
     z-index: 3;
-    transform: scale(1); /* Pop forward to normal */
+    transform: scale(1); /* Return to scale 1.0 */
 }
 
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
     opacity: 0;
-    transform: scale(0.95); /* Recede into the background */
-    filter: brightness(0.5); /* Dim as it recedes */
+    transform: scale(0.95); /* Scale down and hide gracefully */
+    filter: brightness(0.5); /* Reduce light intensity */
 }
 
 /* Integrated Labels (Inside): Hidden by default for posters, visible for native landscape/square */
@@ -198,14 +219,18 @@ html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
     transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
 }
 
-/* Reveal inside labels when expanded via remote focus or mouse hover */
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-info.inside,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-info.inside,
+/* =========================================================================
+   Label Overlays Visibility
+   =========================================================================
+   Brings up inside labels only when the card is in an active expanding state.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-info.inside,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-info.inside,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transition: opacity 0.3s ease 0.25s, visibility 0.3s ease 0.25s; /* Delayed reveal */
+    transition: opacity 0.3s ease 0.25s, visibility 0.3s ease 0.25s; /* Allow animation to settle first */
 }
 
 /* Native landscape/square cards always show their inside labels */
@@ -217,8 +242,9 @@ html[data-layout="modern"] .media-card.square .card-info.inside {
 }
 
 /* Outside Labels (Standard): Hide when card expands into landscape via focus or hover */
-html[data-layout="modern"] .media-card.has-expansion:focus .card-info:not(.inside),
-html[data-layout="modern"] .media-card.has-expansion.focused .card-info:not(.inside),
+/* Hide standard outside labels once the card expands */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info:not(.inside),
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info:not(.inside),
 html[data-layout="modern"] .media-card.has-expansion:hover .card-info:not(.inside) {
     opacity: 0;
     transition: opacity 0.2s ease;
@@ -288,9 +314,13 @@ html[data-layout="modern"] .media-card .card-image .card-image-tint {
     transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
 }
 
-/* Show shadow for expanded cards, native landscape cards, and square cards */
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
+/* =========================================================================
+   Card Dimming Tint Layer
+   =========================================================================
+   Show standard overlay gradient backdrop to maximize white text legibility.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.landscape .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.square .card-image .card-image-tint {
@@ -506,8 +536,8 @@ html[data-layout="modern"] .media-row--skeleton .card-image {
    with a clean ease curve so they don't overlap or clash with the beautiful
    title and subtitle text overlay that fades in over the expanded card.
 */
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .media-fallback-initials,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .media-fallback-initials,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .media-fallback-initials,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .media-fallback-initials,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .media-fallback-initials {
     opacity: 0;
     transition: opacity 0.25s ease;
