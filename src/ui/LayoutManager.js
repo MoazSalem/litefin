@@ -34,8 +34,10 @@ const THEME_MODES = {
     CLASSIC_DARK: 'classic-dark',
     CLASSIC_LIGHT: 'classic-light',
     BLACK: 'black',
-    TINTED: 'tinted'
+    TINTED: 'tinted',
+    AMBIENT: 'ambient'
 };
+
 
 // Default Theme Color (Lavender)
 const DEFAULT_THEME_COLOR = '#af52de';
@@ -151,6 +153,13 @@ class LayoutManager {
             log.info(`Layout changed from "${oldLayout}" to "${layout}"`);
             eventBus.emit('layout:changed', { layout, previousLayout: oldLayout });
         }
+    }
+
+    /**
+     * Get the current layout
+     */
+    getLayout() {
+        return this._layout;
     }
 
     /**
@@ -276,7 +285,7 @@ class LayoutManager {
             --text-muted: var(--jf-text-secondary);`;
         }
 
-        // 2. Clear or apply tinted background variables
+        // 2. Apply background variables based on theme mode
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
             dynamicCss += `
@@ -287,6 +296,37 @@ class LayoutManager {
             --jf-card-bg-hover: ${tints.cardBgHover};
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
+        } else if (this._themeMode === THEME_MODES.AMBIENT) {
+            // Elegant, matte ultra-dark background matching Apple's Human Interface Guidelines.
+            // A deeply saturated charcoal canvas serves as the foundation.
+            // Translucent material cards absorb the dynamically-cast ambient gradients.
+            dynamicCss += `
+            --jf-background: #0a0b0c;
+            --jf-background-alt: #070809;
+            --jf-surface: rgba(255, 255, 255, 0.035);
+            --jf-card-bg: rgba(255, 255, 255, 0.045);
+            --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
+            --jf-divider: rgba(255, 255, 255, 0.06);
+            --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
+        } else if (this._themeMode === THEME_MODES.BLACK) {
+
+            dynamicCss += `
+            --jf-background: #000000;
+            --jf-background-alt: #000000;
+            --jf-surface: #0a0a0a;
+            --jf-card-bg: #080808;
+            --jf-card-bg-hover: #121212;
+            --jf-divider: rgba(255, 255, 255, 0.05);
+            --jf-navbar-bg: #000000;`;
+        } else if (this._themeMode === THEME_MODES.CLASSIC_DARK) {
+            dynamicCss += `
+            --jf-background: #101010;
+            --jf-background-alt: #151515;
+            --jf-surface: #1a1a1a;
+            --jf-card-bg: #151515;
+            --jf-card-bg-hover: #252525;
+            --jf-divider: rgba(255, 255, 255, 0.08);
+            --jf-navbar-bg: #151515;`;
         }
 
         dynamicCss += `\n        }`;

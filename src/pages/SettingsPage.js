@@ -281,6 +281,23 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LayoutMode">${i18n.t('LayoutMode') || 'Layout'}</span>
+                        <span class="setting-description" data-i18n="LayoutModeDescription">${i18n.t('LayoutModeDescription') || 'Choose between the classic and modern user interface.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'layout-mode-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' }
+                            ],
+                            layoutManager.getLayout() || 'classic'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LayoutDirection">${i18n.t('LayoutDirection')}</span>
                         <span class="setting-description" data-i18n="LayoutDirectionDescription">${i18n.t('LayoutDirectionDescription')}</span>
                     </div>
@@ -296,7 +313,7 @@ class SettingsPage extends Page {
                         )}
                     </div>
                 </div>
-
+                        
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="AppFont">${i18n.t('AppFont')}</span>
@@ -373,9 +390,21 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'theme-mode-select',
                             [
+                                // ====================================================================
+                                // Ambient Glow Theme Mode (Mac/Apple TV inspired dynamic accent gradients)
+                                // ====================================================================
+                                { value: 'ambient', label: i18n.t('ThemeAmbient') || 'Ambient Glow' },
+
+                                // Tinted background theme mapping closely with specific selected colors.
                                 { value: 'tinted', label: i18n.t('ThemeTinted') || 'Tinted' },
+
+                                // Black OLED theme for extreme battery saving and deep contrast profiles.
                                 { value: 'black', label: i18n.t('ThemeBlack') || 'Black (OLED)' },
+
+                                // Traditional Dark Theme with deep charcoal shades.
                                 { value: 'classic-dark', label: i18n.t('ThemeDarkClassic') || 'Dark Classic' },
+
+                                // Traditional Light Theme utilizing classic paper/white gradients.
                                 { value: 'classic-light', label: i18n.t('ThemeLightClassic') || 'Light Classic' }
                             ],
                             layoutManager.getThemeMode()
@@ -904,6 +933,21 @@ class SettingsPage extends Page {
 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
+
+                ${layoutManager.getLayout() === 'modern' ? `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
+                        <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:homeForceExpandablePosters') === 'true' ? 'active' : ''}" 
+                                 id="toggle-home-force-expandable-posters" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -3467,6 +3511,24 @@ class SettingsPage extends Page {
         }
 
         // ==========================================
+        // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
+        // ==========================================
+        // Accesses the DOM toggle switch to let the user force every row in their 
+        // homepage to use the Apple-inspired expanding poster card layout.
+        // Toggling this will persist the value to local storage so the Home Page layout 
+        // engine applies the configuration seamlessly when the user returns.
+        const forceExpandablePostersBtn = this.$('#toggle-home-force-expandable-posters');
+        if (forceExpandablePostersBtn) {
+            forceExpandablePostersBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:homeForceExpandablePosters') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:homeForceExpandablePosters', newValue.toString());
+                forceExpandablePostersBtn.classList.toggle('active', newValue);
+                log.info(`Force Expandable Posters on Home set to: ${newValue}`);
+            });
+        }
+
+        // ==========================================
         // TOGGLE HIDE EPISODE COUNTS
         // ==========================================
         //
@@ -4604,7 +4666,7 @@ class SettingsPage extends Page {
             'library-thumb-mode-select': { key: 'pref:libraryThumbMode', type: 'local' },
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
-            layout: { key: 'layout', type: 'local' },
+            'layout-mode-select': { key: 'litefin:layout', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -4735,7 +4797,7 @@ class SettingsPage extends Page {
                             }
 
                             if (
-                                settingConfig.key === 'layout' ||
+                                settingConfig.key === 'litefin:layout' ||
                                 settingConfig.key === 'layout_direction' ||
                                 settingConfig.key === 'app_language'
                             ) {

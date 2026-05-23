@@ -1,0 +1,290 @@
+/* ============================================================================
+   Modern Layout - Server Selection & Discovery
+   ============================================================================ */
+
+html[data-layout="modern"] .server-section {
+    max-width: 1110px;
+    width: 100%;
+}
+
+html[data-layout="modern"] .server-section .section-title::after {
+    content: 'Enter the URL or IP address of your Jellyfin server.';
+    display: block;
+    font-size: 1.3rem;
+    font-weight: 400;
+    opacity: 0.4;
+    margin-top: 12px;
+}
+
+html[data-layout="modern"] .server-input-container {
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    max-width: 700px;
+}
+
+html[data-layout="modern"] .server-input-container > *:not(:last-child) {
+    margin-right: 0;
+    margin-bottom: 24px;
+}
+
+html[data-layout="modern"] .server-url-input {
+    background: var(--jf-surface, #0f0f0f);
+    border: 4px solid transparent;
+    padding: 21px 21px 21px 69px;
+    border-radius: 14px;
+    font-size: 1.6rem;
+    width: 100%;
+    box-sizing: border-box;
+    color: var(--jf-text-primary);
+    transition: all 0.2s ease;
+}
+
+html[data-layout="modern"] .server-url-input:focus,
+html[data-layout="modern"] .server-url-input.focused {
+    border-color: var(--jf-accent, #448aff);
+    background: var(--jf-card-bg-hover, #151515);
+}
+
+html[data-layout="modern"] .server-input-container::before {
+    content: '';
+    position: absolute;
+    left: 24px;
+    top: 26px;
+    width: 28px;
+    height: 28px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='rgba(255,255,255,0.2)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71'%3E%3C/path%3E%3Cpath d='M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71'%3E%3C/path%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    z-index: 5;
+}
+
+html[data-layout="modern"] .connect-btn {
+    width: 100%;
+    height: 72px;
+    background: var(--jf-accent, #7c4dff);
+    border: 4px solid transparent;
+    border-radius: 14px;
+    font-size: 1.7rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--jf-text-primary);
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+html[data-layout="modern"] .connect-btn > *:not(:last-child) {
+    margin-left: 16px;
+}
+
+html[data-layout="modern"] .connect-btn:focus,
+html[data-layout="modern"] .connect-btn.focused {
+    transform: scale(1.02);
+    border-color: var(--jf-button-border-focus, #ffffff);
+}
+
+html[data-layout="modern"] .connect-btn span::before {
+    content: '';
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='white' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4'%3E%3C/path%3E%3Cpolyline points='10 17 15 12 10 7'%3E%3C/polyline%3E%3Cline x1='15' y1='12' x2='3' y2='12'%3E%3C/line%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    vertical-align: middle;
+    margin-right: 12px;
+}
+
+/* Discovered Servers & Saved Servers Sections */
+html[data-layout="modern"] .discovered-servers {
+    border-top: 1px solid rgba(255, 255, 255, 0.05); /* Premium delicate dark separator line */
+    padding-top: 40px;
+    position: relative;
+    text-align: left;
+}
+
+/* Stacking consecutive sections gracefully if both exist simultaneously */
+html[data-layout="modern"] .saved-servers-section + #discovered-servers {
+    margin-top: 48px; /* Slightly tighter spacing for a more coherent block structure */
+    border-top: 1px solid rgba(255, 255, 255, 0.05); /* Sleek high-end accent divider */
+}
+
+html[data-layout="modern"] .discovered-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+    width: 100%;
+}
+
+html[data-layout="modern"] .discovered-header h3 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 1px;
+    color: rgba(255, 255, 255, 0.25);
+    text-transform: uppercase;
+    margin-right: 12px;
+}
+
+/* Scanning Indicator */
+html[data-layout="modern"] .discovery-status {
+    display: flex;
+    align-items: center;
+    width: fit-content;
+    background: var(--jf-surface, rgba(255, 255, 255, 0.08));
+    padding: 10px 20px;
+    border-radius: 30px;
+    margin: 32px auto 24px auto;
+    border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
+}
+
+html[data-layout="modern"] .discovery-status > *:not(:last-child) {
+    margin-left: 12px;
+}
+
+html[data-layout="modern"] .discovery-status .loading-spinner-small {
+    display: block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-top-color: #fff;
+    border-radius: 50%;
+    animation: rotate 1s linear infinite;
+    order: 2;
+}
+
+html[data-layout="modern"] .discovery-status span {
+    font-size: 1rem;
+    opacity: 0.5;
+    font-weight: 500;
+    order: 1;
+}
+
+html[data-layout="modern"] .discovery-status::after {
+    display: none;
+}
+
+@keyframes rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+html[data-layout="modern"] .server-list {
+    /* Set up responsive flexbox grid layout for inline server items */
+    display: flex;
+    flex-wrap: wrap;
+    padding: 0;
+    list-style: none;
+    margin-bottom: 12px;
+    
+    /* Sleek space-between-tiles grid spacing following Apple HIG design language */
+    gap: 24px;
+}
+
+html[data-layout="modern"] .server-item {
+    width: 388px;
+    background: var(--jf-card-bg, #0d0d0d);
+    border: 4px solid transparent;
+    padding: 21px;
+    border-radius: 16px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    
+    /* Reset bottom margin from base server-item rules to ensure pure gap-based grid spacing */
+    margin: 0;
+}
+
+html[data-layout="modern"] .server-icon-box {
+    width: 56px;
+    height: 56px;
+    background: var(--jf-surface, #151515);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-right: 24px;
+    flex-shrink: 0;
+    position: relative;
+    color: var(--jf-accent);
+}
+
+html[data-layout="modern"] .server-icon-box svg {
+    width: 28px;
+    height: 28px;
+    opacity: 0.8;
+}
+
+html[data-layout="modern"] .server-info {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+}
+
+html[data-layout="modern"] .name-row {
+    display: flex;
+    align-items: center;
+    margin-bottom: 4px;
+    width: fit-content;
+}
+
+html[data-layout="modern"] .name-row > *:not(:last-child) {
+    margin-right: 8px;
+}
+
+html[data-layout="modern"] .server-name {
+    font-size: 1.4rem;
+    font-weight: 700;
+    color: var(--jf-text-primary);
+    white-space: nowrap;
+    width: auto;
+    flex: 0 1 auto;
+}
+
+html[data-layout="modern"] .server-address {
+    font-size: 1.1rem;
+    opacity: 0.4;
+    padding: 0;
+    color: var(--jf-text-primary);
+}
+
+html[data-layout="modern"] .server-version {
+    position: static;
+    display: inline-block;
+    background: var(--jf-accent-15, rgba(124, 77, 255, 0.15));
+    color: var(--jf-accent, #7c4dff);
+    font-size: 0.8rem;
+    font-weight: 700;
+    padding: 2px 8px;
+    border-radius: 6px;
+    border: 1px solid var(--jf-accent-20, rgba(124, 77, 255, 0.2));
+    margin-left: 4px;
+}
+
+html[data-layout="modern"] .status-dot {
+    display: block;
+    width: 10px;
+    height: 10px;
+    background: #2ecc71;
+    border-radius: 50%;
+    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+    position: absolute;
+    top: 6px;
+    left: 41px;
+    z-index: 10;
+    border: 2px solid var(--jf-card-bg, #0d0d0d);
+}
+
+html[data-layout="modern"] .server-item:focus,
+html[data-layout="modern"] .server-item.focused {
+    background: var(--jf-card-bg-hover, #1a1a1a);
+    border-color: var(--jf-accent, #448aff);
+    transform: translateY(-4px);
+    outline: none;
+}
+
+html[data-layout="modern"] .server-item:focus .server-name,
+html[data-layout="modern"] .server-item.focused .server-name {
+    color: var(--jf-text-primary);
+}

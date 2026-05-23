@@ -34,6 +34,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
@@ -350,7 +351,7 @@ class HomePage extends Page {
                     const combined = [...resumeItems, ...nextUpItems];
                     
                     const seen = new Set();
-                    const deduplicated = combined.filter(item => {
+                    const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
                         seen.add(item.Id);
                         return true;
@@ -509,6 +510,27 @@ class HomePage extends Page {
 
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
+
+        // ====================================================================
+        // Force Expandable Posters Layout Override
+        // ====================================================================
+        // If the user is running the Modern layout and has toggled on the force-poster
+        // preference under settings, we dynamically coerce all horizontal track rows 
+        // to use standard portrait layouts ('portrait') with 'poster' cards.
+        // This ensures the custom expanding-backdrops and visual transitions apply 
+        // universally, aligning with unified grids (Apple HIG style).
+        // ====================================================================
+        const isModern = layoutManager.getLayout() === 'modern';
+        const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
+        if (forceExpandablePosters) {
+            for (const desc of descriptors) {
+                // The "My Media" row uses library folder cards that must remain as static landscape cards
+                if (desc.id !== 'my-media') {
+                    desc.layout = 'portrait';
+                    desc.cardType = 'poster';
+                }
+            }
+        }
 
         // Apply dynamic user layout sorting and visibility filtering
         return homeLayoutManager.applyLayout(descriptors);
@@ -710,7 +732,12 @@ class HomePage extends Page {
             // Build skeleton interior — title + shimmer cards
             // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
             const skeletonCardCount = landscape ? 5 : 8;
-            const skeletonHtml = CardRenderer.createSkeletonHtml(skeletonCardCount, landscape);
+            const skeletonHtml = CardRenderer.createSkeletonHtml(
+                skeletonCardCount,
+                landscape,
+                descriptor.cardType || 'poster',
+                shouldHideLabels
+            );
 
             sectionEl.innerHTML = `
                 <h2 class="row-title">${descriptor.title}</h2>
@@ -982,7 +1009,7 @@ class HomePage extends Page {
         this._focusInitialized = true; // Prevent double-initialization
 
         // [RACE CONDITION FIX] Capture and clear _pendingNavState synchronously!
-        // The render pipeline yields via Promise (microtasks), so if data is cached, 
+        // The render pipeline yields via Promise (microtasks), so if data is cached,
         // the pipeline reaches Step 7 and calls NavigationState BEFORE this requestAnimationFrame
         // can clear the state. That leads to NavigationState firing a 50ms fallback timeout
         // which clobbers our correct focus back to "sidebar" or whatever just as the user
@@ -1284,13 +1311,15 @@ class HomePage extends Page {
                 if (mdblist && mdblist.plugin) {
                     log.info('Enriching hero items with MDBList data...');
                     try {
-                        await Promise.all(items.map(async (item) => {
-                            // Fetch and attach to the item object
-                            // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
-                            // We pass false for includeAwards to optimize for carousel performance.
-                            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                            item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
-                        }));
+                        await Promise.all(
+                            items.map(async (item) => {
+                                // Fetch and attach to the item object
+                                // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
+                                // We pass false for includeAwards to optimize for carousel performance.
+                                const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                                item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                            })
+                        );
                     } catch (err) {
                         log.warn('Enriching hero items failed, continuing with partial data', err);
                     }
@@ -1456,15 +1485,36 @@ class HomePage extends Page {
                         }
                     }
 
-                    // Determine item types most likely to have rich artwork
+                    // ==========================================================
+                    // Dynamic Thumbnail Candidate Typing
+                    // ==========================================================
+                    // Map the library collection type to the most appropriate
+                    // Jellyfin item type that yields high-resolution artwork:
+                    //
+                    // - music: MusicAlbum works better than track/artist stubs.
+                    // - musicvideos: Query MusicVideo items recursively.
+                    // - livetv: Query TvChannel items to pull in channel logo artwork.
+                    // - photos: Include both Photo and Video contents since camera
+                    //   rolls naturally mix images and videos.
+                    // - homevideos: Query Video items recursively since they
+                    //   never have standard "Movie" or "Series" tags.
+                    // ==========================================================
                     const includeItemTypes = (() => {
                         switch (lib.CollectionType) {
                             case 'music':
                                 return 'MusicAlbum';
+                            case 'musicvideos':
+                                return 'MusicVideo';
+                            case 'livetv':
+                                return 'TvChannel';
                             case 'boxsets':
                                 return 'BoxSet';
                             case 'photos':
-                                return 'Photo';
+                                return 'Photo,Video';
+                            case 'homevideos':
+                                // Allow both photo and video items from home video libraries
+                                // to act as candidates for dynamic fallback thumbnail generation.
+                                return 'Photo,Video';
                             case 'playlists':
                                 return 'Playlist';
                             default:
@@ -1472,17 +1522,57 @@ class HomePage extends Page {
                         }
                     })();
 
-                    const response = await api.getItems({
-                        ParentId: lib.Id,
-                        SortBy: 'Random',
-                        Recursive: true,
-                        Limit: 5,
-                        Fields: 'BackdropImageTags,ImageTags',
-                        ImageTypeLimit: 1,
-                        IncludeItemTypes: includeItemTypes,
-                        EnableImageTypes: 'Backdrop,Thumb,Primary',
-                        Filters: 'HasImage' // Only items with guaranteed artwork
-                    });
+                    // ==========================================================
+                    // Dynamic Thumbnail Library Query
+                    // ==========================================================
+                    // Live TV (livetv) libraries are not standard folder structures
+                    // and do not have child items under a ParentId. Instead, they 
+                    // store global TV Channels, which we fetch using the specialized
+                    // getLiveTvChannels API endpoint. Everything else uses standard
+                    // child item queries.
+                    // ==========================================================
+                    let response;
+                    if (lib.CollectionType === 'livetv') {
+                        // -----------------------------------------------------
+                        // Live TV Dynamic Thumbnail Randomization
+                        // -----------------------------------------------------
+                        // We query the first 50 channels with image types explicitly enabled
+                        // to guarantee that the server delivers proper ImageTags and aspect ratios.
+                        // Then we filter out any channels without valid images before shuffling
+                        // to ensure a successful rotating thumbnail selection.
+                        // -----------------------------------------------------
+                        const ltvResponse = await api.getLiveTvChannels({
+                            Limit: 50,
+                            EnableImageTypes: 'Primary,Thumb,Backdrop',
+                            Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                        });
+                        
+                        // Extract channel items safely
+                        const ltvItems = ltvResponse?.Items || [];
+                        
+                        // Filter channels to only those with valid primary, thumb or backdrop artwork
+                        const validLtvItems = ltvItems.filter((item) => 
+                            item.ImageTags?.Primary || 
+                            item.ImageTags?.Thumb || 
+                            item.BackdropImageTags?.length > 0
+                        );
+                        
+                        // Local shuffle to randomize the logo across loads
+                        const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
+                        response = { Items: shuffledLtv.slice(0, 5) };
+                    } else {
+                        response = await api.getItems({
+                            ParentId: lib.Id,
+                            SortBy: 'Random',
+                            Recursive: true,
+                            Limit: 5,
+                            Fields: 'BackdropImageTags,ImageTags',
+                            ImageTypeLimit: 1,
+                            IncludeItemTypes: includeItemTypes,
+                            EnableImageTypes: 'Backdrop,Thumb,Primary',
+                            Filters: 'HasImage' // Only items with guaranteed artwork
+                        });
+                    }
 
                     if (response?.Items?.length > 0) {
                         const { maxWidth, quality } = imageService.getParams('card-backdrop');
@@ -1513,18 +1603,18 @@ class HomePage extends Page {
                                 }
                             } else if (lib.CollectionType === 'playlists') {
                                 // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
-                                // To get a true landscape backdrop for the home page, we fetch the items 
+                                // To get a true landscape backdrop for the home page, we fetch the items
                                 // inside the playlist and grab a backdrop from one of them.
                                 try {
                                     const pResponse = await api.getPlaylistItems(item.Id, {
                                         Limit: 20,
                                         Fields: 'BackdropImageTags'
                                     });
-                                    
+
                                     const pItems = pResponse?.Items || [];
                                     // Shuffle locally so the backdrop changes across reloads
                                     const shuffled = pItems.sort(() => 0.5 - Math.random());
-                                    
+
                                     for (const pItem of shuffled) {
                                         if (pItem.BackdropImageTags?.length > 0) {
                                             resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {
@@ -1570,8 +1660,39 @@ class HomePage extends Page {
                                         tag: item.ImageTags.Primary
                                     });
                                 }
+                            } else if (
+                                lib.CollectionType === 'photos' || 
+                                lib.CollectionType === 'homevideos' ||
+                                lib.CollectionType === 'musicvideos' ||
+                                lib.CollectionType === 'livetv'
+                            ) {
+                                // ==========================================================
+                                // Photo, Home Videos, Music Videos & Live TV Fallbacks
+                                // ==========================================================
+                                // These libraries do not rely on standard theatrical backdrops.
+                                // Instead, we prioritize the Primary tag (photos, channel logos,
+                                // video snapshots) to immediately capture the authentic artwork.
+                                // ==========================================================
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                }
                             } else {
-                                // Standard: Backdrop → Thumb → Primary
+                                // ==========================================================
+                                // Standard Fallback Chain (Movies, Series, etc.)
+                                // ==========================================================
+                                // backdrop is always prioritized for library landscape cards
+                                // to create a dramatic theatrical header feel.
+                                // ==========================================================
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
@@ -1603,16 +1724,46 @@ class HomePage extends Page {
                                 `[DynamicThumb] ${lib.Name}: typed candidates had no image, trying broad fallback`
                             );
 
-                            const fallbackResponse = await api.getItems({
-                                ParentId: lib.Id,
-                                SortBy: 'Random',
-                                Recursive: true,
-                                Limit: 10,
-                                Fields: 'BackdropImageTags,ImageTags',
-                                ImageTypeLimit: 1,
-                                EnableImageTypes: 'Backdrop,Thumb,Primary',
-                                Filters: 'HasImage'
-                            });
+                            let fallbackResponse;
+                            if (lib.CollectionType === 'livetv') {
+                                // -----------------------------------------------------
+                                // Live TV Fallback Thumbnail Randomization
+                                // -----------------------------------------------------
+                                // Query a wider set of 50 channels with image types enabled.
+                                // We filter to channels with valid images and shuffle them locally
+                                // to guarantee a working fallback thumbnail.
+                                // -----------------------------------------------------
+                                const ltvFallback = await api.getLiveTvChannels({
+                                    Limit: 50,
+                                    EnableImageTypes: 'Primary,Thumb,Backdrop',
+                                    Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                                });
+                                
+                                // Extract items safely
+                                const ltvFallbackItems = ltvFallback?.Items || [];
+                                
+                                // Keep only channels that have valid visual assets
+                                const validFallbackItems = ltvFallbackItems.filter((item) =>
+                                    item.ImageTags?.Primary ||
+                                    item.ImageTags?.Thumb ||
+                                    item.BackdropImageTags?.length > 0
+                                );
+                                
+                                // Randomize the list of candidate fallback cards
+                                const shuffledFallback = validFallbackItems.sort(() => 0.5 - Math.random());
+                                fallbackResponse = { Items: shuffledFallback.slice(0, 10) };
+                            } else {
+                                fallbackResponse = await api.getItems({
+                                    ParentId: lib.Id,
+                                    SortBy: 'Random',
+                                    Recursive: true,
+                                    Limit: 10,
+                                    Fields: 'BackdropImageTags,ImageTags',
+                                    ImageTypeLimit: 1,
+                                    EnableImageTypes: 'Backdrop,Thumb,Primary',
+                                    Filters: 'HasImage'
+                                });
+                            }
 
                             for (const item of fallbackResponse?.Items ?? []) {
                                 if (item.BackdropImageTags?.length > 0) {

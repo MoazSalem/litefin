@@ -223,10 +223,19 @@ class MediaGrid extends Component {
      * just implment it here. Implementing here for now to match `Page.js` exactly.
      */
     _createCardHtml(item) {
+        // ==========================================================
+        // Grid Card Rendering
+        // ==========================================================
+        // Passes 'isGrid: true' to the CardRenderer. This flags the renderer 
+        // that the cards are rendered inside a strict vertical grid column 
+        // layout (like libraries and search results), disabling expanding 
+        // animations to prevent cards from overlapping with their neighbors.
+        // ==========================================================
         return CardRenderer.createCardHtml(item, {
             isLandscape: this.isLandscape,
             type: this.type,
-            contextType: this.contextType
+            contextType: this.contextType,
+            isGrid: true
         });
     }
 }

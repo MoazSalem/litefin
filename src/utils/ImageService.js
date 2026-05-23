@@ -126,6 +126,10 @@ class ImageService {
                 'music-artist': 231, // 308 * 0.75
                 'music-genre': 171, // 228 * 0.75
                 'player-cover': 375, // 500 * 0.75
+                'modern-poster': 169, // 225 * 0.75
+                'modern-thumb': 450, // 600 * 0.75
+                'modern-square': 254, // 338 * 0.75
+                'modern-expanded': 450, // 600 * 0.75
                 backdrop: 640,
                 'card-backdrop': 280,
                 'hero-banner': 554,
@@ -161,6 +165,10 @@ class ImageService {
                 'music-artist': 277, // 308 * 0.9
                 'music-genre': 205, // 228 * 0.9
                 'player-cover': 450, // 500 * 0.9
+                'modern-poster': 203, // 225 * 0.9
+                'modern-thumb': 540, // 600 * 0.9
+                'modern-square': 304, // 338 * 0.9
+                'modern-expanded': 540, // 600 * 0.9
                 backdrop: 972,
                 'card-backdrop': 360,
                 'hero-banner': 1100,
@@ -196,6 +204,10 @@ class ImageService {
                 'music-artist': 308,
                 'music-genre': 228,
                 'player-cover': 500,
+                'modern-poster': 225,
+                'modern-thumb': 600,
+                'modern-square': 338,
+                'modern-expanded': 600,
                 backdrop: 1080,
                 'card-backdrop': 400,
                 'hero-banner': 1662,
@@ -231,6 +243,10 @@ class ImageService {
                 'music-artist': 339, // 308 * 1.1
                 'music-genre': 251, // 228 * 1.1
                 'player-cover': 550, // 500 * 1.1
+                'modern-poster': 248, // 225 * 1.1
+                'modern-thumb': 660, // 600 * 1.1
+                'modern-square': 372, // 338 * 1.1
+                'modern-expanded': 660, // 600 * 1.1
                 backdrop: 1188,
                 'card-backdrop': 440,
                 'hero-banner': 1790,
@@ -266,6 +282,10 @@ class ImageService {
                 'music-artist': 370, // 308 * 1.2
                 'music-genre': 274, // 228 * 1.2
                 'player-cover': 600, // 500 * 1.2
+                'modern-poster': 270, // 225 * 1.2
+                'modern-thumb': 720, // 600 * 1.2
+                'modern-square': 406, // 338 * 1.2
+                'modern-expanded': 720, // 600 * 1.2
                 backdrop: 1296,
                 'card-backdrop': 480,
                 'hero-banner': 1920,
@@ -301,6 +321,10 @@ class ImageService {
                 'music-artist': 462, // 308 * 1.5
                 'music-genre': 342, // 228 * 1.5
                 'player-cover': 750, // 500 * 1.5
+                'modern-poster': 338, // 225 * 1.5
+                'modern-thumb': 900, // 600 * 1.5
+                'modern-square': 507, // 338 * 1.5
+                'modern-expanded': 900, // 600 * 1.5
                 backdrop: 1620,
                 'card-backdrop': 600,
                 'hero-banner': 2560,
@@ -336,6 +360,10 @@ class ImageService {
                 'music-artist': 616, // 308 * 2.0
                 'music-genre': 456, // 228 * 2.0
                 'player-cover': 1000, // 500 * 2.0
+                'modern-poster': 450, // 225 * 2.0
+                'modern-thumb': 1200, // 600 * 2.0
+                'modern-square': 676, // 338 * 2.0
+                'modern-expanded': 1200, // 600 * 2.0
                 backdrop: 2160,
                 'card-backdrop': 800,
                 'hero-banner': 3840,
@@ -371,6 +399,10 @@ class ImageService {
                 'music-artist': null,
                 'music-genre': null,
                 'player-cover': null,
+                'modern-poster': null,
+                'modern-thumb': null,
+                'modern-square': null,
+                'modern-expanded': null,
                 backdrop: null,
                 'card-backdrop': null,
                 'hero-banner': null,
@@ -415,6 +447,20 @@ class ImageService {
             // We check the 'medium' group as a representative for existence.
             if (presets.medium[contextType] !== undefined) {
                 type = contextType;
+            }
+        }
+
+        // 1.5 Intercept and map to modern layout card sizes if modern layout is active
+        const isModern = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-layout') === 'modern';
+        if (isModern && !type.startsWith('details-') && !type.startsWith('hero-')) {
+            if (type === 'expanded-poster') {
+                type = 'modern-expanded';
+            } else if (type.endsWith('poster')) {
+                type = 'modern-poster';
+            } else if (type.endsWith('thumb') || type === 'card-backdrop') {
+                type = 'modern-thumb';
+            } else if (type.endsWith('square') || type.endsWith('artist') || type.endsWith('small')) {
+                type = 'modern-square';
             }
         }
 

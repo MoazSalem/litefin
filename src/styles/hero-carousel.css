@@ -142,7 +142,7 @@
 .hero-content {
     position: relative;
     z-index: 10;
-    padding: 0 80px;
+    padding: 0 60px;
     max-width: 1600px;
     display: flex;
     flex-direction: column;
@@ -747,48 +747,73 @@
 }
 
 
-/* Premium multi-stop linear gradient bottom legibility shield */
-.hero-carousel-container.immersive .hero-item::after {
-    /* 
-     * Proportional height-adapted legibility shield for standard widescreen viewports.
-     * Shifted up by 100px to align perfectly with the -400px card overlap height.
-     * Reduces vertical solid/semi-solid zones aggressively to keep artwork details prominent.
-     * Fades to transparent at only 440px to expose maximum canvas height.
-     */
-    background: linear-gradient(to top, 
-        /* Deep baseline integration with the primary dark theme canvas */
-        var(--jf-background) 0%, 
-        /* Solid background anchor kept exceptionally low to keep screen clear */
-        var(--jf-background) 160px, 
-        /* Soft, high-transparency cushion overlay for row titles */
-        rgba(0, 0, 0, 0.7) 260px, 
-        /* Micro-tint layer mapping perfectly to smaller card layouts */
-        rgba(0, 0, 0, 0.3) 360px, 
-        /* Smooth, imperceptible fade-out point */
-        transparent 440px
-    );
+/* 
+ * ============================================================================
+ * Apple HIG - Dynamic Masking & Alpha-Blending (Immersive & Semi-Immersive)
+ * ============================================================================
+ * Rather than drawing solid dark color gradients (which block page backgrounds)
+ * on top of the carousel, we apply a high-performance linear-gradient alpha mask
+ * directly to the backdrop image element and the left-to-right text shadow layer.
+ * 
+ * This smoothly fades out the bottom of the carousel to fully transparent,
+ * letting card rows, titles, and theme backgrounds blend with organic unity.
+ * ============================================================================
+ */
+
+/* Standard widescreen backdrop masking */
+.hero-carousel-container.immersive .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
+}
+.hero-carousel-container.semi-immersive .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
+    mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
 }
 
-/* Multi-stop bottom legibility shield for compact immersive mode */
-.hero-carousel-container.immersive.compact .hero-item::after {
-    /* 
-     * Sleek, high-transparency gradient overlay designed according to Apple's Human Interface Guidelines.
-     * Shifted up by 50px to align perfectly with the -550px compact card overlap height.
-     * Softened to maximize artwork visibility, letting the gorgeous backdrop bleed through behind cards.
-     * A highly refined dark transition preserves text legibility without muddying the visual presence.
-     */
-    background: linear-gradient(to top, 
-        /* Solid black base anchor matching Jellyfin's primary page background colors */
-        var(--jf-background) 0%, 
-        /* Keep solid region extremely narrow at the very bottom edge */
-        var(--jf-background) 150px, 
-        /* A gentle shadow to ensure media card titles remain visible when scrolling over */
-        rgba(0, 0, 0, 0.7) 290px, 
-        /* Micro-opacity light tint that cushions the bottom of the overview metadata */
-        rgba(0, 0, 0, 0.3) 430px, 
-        /* Complete transition to transparent, opening up the entire upper artwork region */
-        transparent 530px
-    );
+/* Compact widescreen backdrop masking */
+.hero-carousel-container.immersive.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
+    mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
+}
+.hero-carousel-container.semi-immersive.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
+}
+
+/* Widescreen text shadow overlay masking (::before left-to-right mask) */
+.hero-carousel-container.immersive .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+}
+.hero-carousel-container.semi-immersive .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 85%) !important;
+    mask-image: linear-gradient(to bottom, black 40%, transparent 85%) !important;
+}
+
+/* Compact widescreen text shadow overlay masking */
+.hero-carousel-container.immersive.compact .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 70%) !important;
+    mask-image: linear-gradient(to bottom, black 30%, transparent 70%) !important;
+}
+.hero-carousel-container.semi-immersive.compact .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+}
+
+/* Remove bottom shadow gradients entirely to let dynamic background shine through */
+.hero-carousel-container.immersive .hero-item::after,
+.hero-carousel-container.semi-immersive .hero-item::after,
+.hero-carousel-container.immersive.compact .hero-item::after,
+.hero-carousel-container.semi-immersive.compact .hero-item::after {
+    background: transparent !important;
+}
+
+/* Ensure the main container frames remain transparent */
+.hero-carousel-container.immersive,
+.hero-carousel-container.semi-immersive,
+.hero-carousel-container.immersive .hero-carousel,
+.hero-carousel-container.semi-immersive .hero-carousel {
+    background: transparent !important;
 }
 
 /* Elevate indicator dots to align perfectly with the elevated text */

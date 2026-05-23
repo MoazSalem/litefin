@@ -1,5 +1,6 @@
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
 
 export class VirtualCardRow {
@@ -34,15 +35,32 @@ export class VirtualCardRow {
 
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
-        this.itemWidth = this.isLandscape ? 400 : 240;
-        this.itemMargin = 24;
+        // Modern override: 600px / 260px with 28px margin
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        if (isModern) {
+            // Target Height: 600px * 56.25% (16:9) = 337.5px
+            if (this.isLandscape) {
+                this.itemWidth = 600;
+            } else if (this.cardType === 'square' || this.cardType === 'artist') {
+                this.itemWidth = 338; // 338px * 100% = 338px height
+            } else {
+                this.itemWidth = 225; // 225px * 150% = 337.5px height
+            }
+            this.itemMargin = 40; // Increased gap for premium feel
+            this.sidePadding = 60; // Match classic alignment (60px)
+        } else {
+            this.itemWidth = this.isLandscape ? 400 : 240;
+            this.itemMargin = 24;
+            this.sidePadding = 60;
+        }
+
         this.totalItemWidth = this.itemWidth + this.itemMargin;
 
         this.totalItems = this.items.length;
 
         // Set the total width of the track to simulate all items existing
-        // Add 60px padding-left and padding-right from layout.css
-        const totalWidth = this.totalItems * this.totalItemWidth + 120;
+        // Add sidePadding on left and right from layout.css
+        const totalWidth = this.totalItems * this.totalItemWidth + this.sidePadding * 2;
         this.track.style.width = `${totalWidth}px`;
         // Ensure track is relative for absolute positioned children
         this.track.style.position = 'relative';
@@ -52,6 +70,112 @@ export class VirtualCardRow {
         // Link the instance to the DOM element so ScrollController can access computationally
         // derived layout values instead of forcing synchronous layout flushes.
         this.track.__virtualRow = this;
+
+        // Modern: Handle Poster-to-Landscape Expansion logic
+        if (isModern) {
+            // Add a buffer for the expanded card width (375px) so the track doesn't clip.
+            // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
+            const expansion = (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist') ? 0 : 375;
+            this.track.style.width = `${totalWidth + expansion}px`;
+
+            /**
+             * Helper function to lazy-load the expansion thumb image (the backdrop).
+             * Prepares the image tags and triggers the CSS transition classes once loaded.
+             * 
+             * @param {HTMLElement} card - The .media-card element that is expanding.
+             */
+            const loadExpansionThumb = (card) => {
+                // Safely grab references to the lazy backdrop layer inside the card structure.
+                const thumb = card.querySelector('.thumb-layer');
+                const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
+                
+                // If a valid image element and source exists, and we haven't fetched it yet:
+                if (thumb && !thumb.getAttribute('src') && thumbSrc) {
+                    // Set src to kick off the browser's asynchronous download.
+                    thumb.setAttribute('src', thumbSrc);
+                    
+                    // On successful download, mark the card and image layers as ready.
+                    // This triggers the CSS-driven transitions (e.g. thumb fades in).
+                    thumb.onload = () => {
+                        thumb.classList.add('loaded');
+                        card.classList.add('expansion-ready');
+                    };
+                    
+                    // Graceful degradation in case of network drops or bad URLs.
+                    thumb.onerror = () => {
+                        thumb.classList.add('load-failed');
+                        card.classList.remove('expansion-ready');
+                    };
+                } else if (!thumb) {
+                    // ---------------------------------------------------------
+                    // GRADIENT FALLBACK EXPANSION DISPATCHER
+                    // ---------------------------------------------------------
+                    // If this card does not have an image layer (meaning it is
+                    // using the premium gradient fallback with initials), it
+                    // has no assets to lazy-fetch! We immediately mark it as
+                    // 'expansion-ready' so the expand transforms and inside
+                    // metadata overlays can fade in on focus/hover.
+                    // ---------------------------------------------------------
+                    card.classList.add('expansion-ready');
+                }
+            };
+
+            /**
+             * Focus entrypoint for focus-bound layout shifting.
+             * Triggered when the card receives focus (via remote D-pad or mouse action).
+             * 
+             * @param {HTMLElement} element - The target focused element or sub-component.
+             */
+            const handleFocus = (element) => {
+                // Find the closest media-card ancestor within this row
+                const card = element.closest('.media-card');
+                if (card && this.track.contains(card)) {
+                    const index = parseInt(card.dataset.virtualIndex);
+                    
+                    // Shift sibling cards relative to this card's expansion state.
+                    // Marks expanding index inside the CSS custom property.
+                    const isExpanding = card.classList.contains('has-expansion');
+                    if (isExpanding) {
+                        this.track.style.setProperty('--focused-index', index);
+                    } else {
+                        this.track.style.setProperty('--focused-index', -1);
+                    }
+                    
+                    // Trigger asynchronous image preloading for the expanding backdrop
+                    loadExpansionThumb(card);
+                }
+            };
+
+            // Listen for global focus changes from FocusManager (native focus is disabled on Tizen)
+            // Ensures our spatial navigator correctly updates states in sync.
+            this._focusUnsubscribe = eventBus.on('focus:changed', (element) => {
+                handleFocus(element);
+            });
+
+            // Native focus/mouse listeners.
+            // focusin handles physical focus events; mousedown handles mouse clicks/selects.
+            this.track.addEventListener('focusin', (e) => handleFocus(e.target));
+            this.track.addEventListener('mousedown', (e) => handleFocus(e.target));
+
+            // Mouseover hover listener:
+            // Ensure hover actions instantly fetch backdrop assets so they expand smoothly.
+            // This is key for pointer-driven platforms (Desktop browser, WebOS pointer remote).
+            this.track.addEventListener('mouseover', (e) => {
+                const card = e.target.closest('.media-card');
+                if (card && this.track.contains(card)) {
+                    // Pre-fetch assets ahead of CSS hover transitions
+                    loadExpansionThumb(card);
+                }
+            });
+
+            // Focusout listener to reset sibling translation shifts.
+            // Resets only if focus actually left the bounds of this horizontal row.
+            this.track.addEventListener('focusout', (e) => {
+                if (!e.relatedTarget || !this.track.contains(e.relatedTarget)) {
+                    this.track.style.setProperty('--focused-index', -1);
+                }
+            });
+        }
 
         // Inject a hidden dummy element to natively expand the track's height.
         // Since absolute children collapse the parent, this static element prevents
@@ -71,7 +195,8 @@ export class VirtualCardRow {
             // Inner wrapper provides the actual pixel context for height calculation
             const dummyContent = document.createElement('div');
             dummyContent.style.width = `${this.itemWidth}px`;
-            dummyContent.style.border = '3px solid transparent';
+            const borderWidth = isModern ? '4px' : '3px';
+            dummyContent.style.border = `${borderWidth} solid transparent`;
             dummyContent.style.display = 'block';
 
             // Emulate .card-image
@@ -82,14 +207,25 @@ export class VirtualCardRow {
             if (this.isLandscape) padding = '56.25%';
             else if (this.cardType === 'square' || this.cardType === 'artist') padding = '100%';
             imageRatioDiv.style.paddingBottom = padding;
-            imageRatioDiv.style.border = '3px solid transparent';
+            imageRatioDiv.style.border = `${borderWidth} solid transparent`;
             dummyContent.appendChild(imageRatioDiv);
 
             // Emulate .card-info
-            if (!this.hideLabels) {
+            const isIntegratedModern = isModern && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
+            const isPortraitModern = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+
+            if (!this.hideLabels && !isIntegratedModern && !isPortraitModern) {
                 const infoDiv = document.createElement('div');
-                infoDiv.style.padding = '12px 4px 0 4px';
-                infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
+                const infoPadding = isModern ? '16px 8px 0 8px' : '12px 4px 0 4px';
+                infoDiv.style.padding = infoPadding;
+
+                if (isModern) {
+                    // Modern: 1.6rem title (1.2 line-height) + 4px margin + 1.2rem subtitle
+                    infoDiv.innerHTML = `<div style="height: 1.92rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1.2rem; margin-top: 4px; line-height: normal;">&nbsp;</div>`;
+                } else {
+                    // Classic: 1.2rem title + 6px margin + 1rem subtitle
+                    infoDiv.innerHTML = `<div style="height: 1.2rem; margin: 0; line-height: normal;">&nbsp;</div><div style="height: 1rem; margin-top: 6px; line-height: normal;">&nbsp;</div>`;
+                }
                 dummyContent.appendChild(infoDiv);
             }
 
@@ -170,7 +306,19 @@ export class VirtualCardRow {
 
             // Compute the scroll offset (mirrors ScrollController logic exactly)
             const elementPos   = this.getItemPosition(clamped);
-            const elementWidth = this.itemWidth;
+            
+            // -----------------------------------------------------------------
+            // Card Centering Geometry (Expanded Posters)
+            // -----------------------------------------------------------------
+            // If we are running the modern layout and the cards can expand,
+            // we center the card based on its EXPANDED width (600px).
+            // This prevents the card's right boundary from clipping and centers
+            // the expanded card perfectly in the middle of the viewport.
+            // -----------------------------------------------------------------
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const elementWidth = canExpand ? 600 : this.itemWidth;
+
             const containerWidth = this.track.parentElement
                 ? this.track.parentElement.clientWidth
                 : window.innerWidth;
@@ -227,7 +375,7 @@ export class VirtualCardRow {
                     tempDiv.innerHTML = this.renderCard(this.items[i]).trim();
                     const cardNode = tempDiv.firstElementChild;
                     if (cardNode) {
-                        const leftPos = 60 + i * this.totalItemWidth;
+                        const leftPos = this.sidePadding + i * this.totalItemWidth;
                         cardNode.style.position = 'absolute';
                         const isRtl = document.documentElement.dir === 'rtl';
                         if (isRtl) {
@@ -315,8 +463,8 @@ export class VirtualCardRow {
 
                 if (cardNode) {
                     // Position the card absolutely within the relative track
-                    // Include 60px padding-left from layout.css
-                    const leftPos = 60 + i * this.totalItemWidth;
+                    // Include sidePadding from layout.css
+                    const leftPos = this.sidePadding + i * this.totalItemWidth;
                     cardNode.style.position = 'absolute';
 
                     const isRtl = document.documentElement.dir === 'rtl';
@@ -397,9 +545,9 @@ export class VirtualCardRow {
             relativeX = documentX - trackRect.left;
         }
 
-        // Items are placed at: 60 + i * totalItemWidth
+        // Items are placed at: sidePadding + i * totalItemWidth
         // We want to find index i where target center is closest
-        bestIndex = Math.round((relativeX - 60 - this.itemWidth / 2) / this.totalItemWidth);
+        bestIndex = Math.round((relativeX - this.sidePadding - this.itemWidth / 2) / this.totalItemWidth);
         bestIndex = Math.max(0, Math.min(this.totalItems - 1, bestIndex));
 
         this.currentIndex = bestIndex;
@@ -477,7 +625,18 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getTrackWidth() {
-        return this.totalItems * this.totalItemWidth + 120; // Matches totalWidth calculation in constructor
+        // -------------------------------------------------------------
+        // Mathematical Scroll Boundary Logic
+        // -------------------------------------------------------------
+        // In the modern layout, we expand posters by exactly 375px on focus.
+        // To prevent layout clipping and allow the last card in the row to
+        // scroll fully into view, we must include the 375px expansion buffer
+        // in our calculated mathematical track width (matching the DOM track
+        // width style set inside the constructor).
+        // -------------------------------------------------------------
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const expansion = (isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist') ? 375 : 0;
+        return this.totalItems * this.totalItemWidth + this.sidePadding * 2 + expansion;
     }
 
     /**
@@ -487,6 +646,6 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getItemPosition(index) {
-        return 60 + index * this.totalItemWidth; // Matches leftPos calculation in constructor / _updateWindow
+        return this.sidePadding + index * this.totalItemWidth; // Matches leftPos calculation in constructor / _updateWindow
     }
 }

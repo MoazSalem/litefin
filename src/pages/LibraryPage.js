@@ -759,7 +759,12 @@ class LibraryPage extends Page {
             // Show a skeleton whose shape matches the active view mode.
             // For forced landscape tab types, ignore viewMode and show landscape skeletons.
             const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
-            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode);
+            const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isLibraryView = this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
+            const shouldHideLabels = (isLibraryView && hideLibraryLabels) || (isLibraryView && isModern);
+
+            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
         try {
@@ -2001,6 +2006,14 @@ class LibraryPage extends Page {
         // Generate HTML using the correct card type and view mode flag
         const html = items
             .map((item) =>
+                // ==========================================================
+                // Grid Card Rendering Configuration
+                // ==========================================================
+                // Here we set 'isGrid: true' to tell the card renderer that 
+                // this card is rendered inside the vertical library grid.
+                // This disables horizontal poster expansions to maintain 
+                // clean, stable column layouts and prevent shifts on TV displays.
+                // ==========================================================
                 CardRenderer.createCardHtml(item, {
                     isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
                     type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
@@ -2011,7 +2024,8 @@ class LibraryPage extends Page {
                               ? 'music'
                               : 'library',
                     // Only show rich meta row in list view (rating, score, runtime)
-                    showMeta: !isLandscape && this.state.viewMode === 'list'
+                    showMeta: !isLandscape && this.state.viewMode === 'list',
+                    isGrid: true
                 })
             )
             .join('');
@@ -2200,6 +2214,9 @@ class LibraryPage extends Page {
                 </div>
             `;
 
+            // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
+            const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
+
             // Grid Items (Max 12)
             const displayItems = (row.items || []).slice(0, 12);
             let contentHtml = '';
@@ -2207,19 +2224,27 @@ class LibraryPage extends Page {
             if (displayItems.length > 0) {
                 contentHtml = displayItems
                     .map((item) =>
+                        // -----------------------------------------------------
+                        // Static/Grid Card Rendering
+                        // -----------------------------------------------------
+                        // If this is a static vertical sub-grid (like a Genre list
+                        // under the Genres tab), we set 'isGrid: true' (which is
+                        // !isHorizontalRow) so cards render safely without
+                        // expanding transitions. For horizontal slider rows
+                        // (Upcoming/Suggestions), we leave 'isGrid: false' so they
+                        // can expand beautifully.
+                        // -----------------------------------------------------
                         CardRenderer.createCardHtml(item, {
                             isLandscape: row.isLandscape || false,
                             type: row.cardType || 'poster',
-                            contextType: row.contextType || null
+                            contextType: row.contextType || null,
+                            isGrid: !isHorizontalRow
                         })
                     )
                     .join('');
             } else {
                 contentHtml = '<div class="empty-msg">No items</div>';
             }
-
-            // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
-            const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
 
             let virtualRow = null;
 
@@ -2444,9 +2469,17 @@ class LibraryPage extends Page {
 
             const html = items
                 .map((item) =>
+                    // ==========================================================
+                    // Sub-Grid Item Rendering
+                    // ==========================================================
+                    // These genre category row items are rendered as a vertical grid 
+                    // (.genre-grid-items), so they must use isGrid: true to avoid
+                    // horizontal expansions that would overlap column siblings.
+                    // ==========================================================
                     CardRenderer.createCardHtml(item, {
                         isLandscape: false, // Genres usually mix, but mostly posters
-                        type: 'poster'
+                        type: 'poster',
+                        isGrid: true
                     })
                 )
                 .join('');
