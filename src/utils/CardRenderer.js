@@ -595,12 +595,26 @@ class CardRenderer {
             }
         }
 
-        // --- 5. Integrated vs External Labels (Modern Layout) ---
-        // For native landscape/square, labels are ALWAYS inside.
-        // For expandable posters, we render BOTH to allow a smooth CSS transition from outside to inside.
+        // ====================================================================
+        // --- 5. Integrated vs External Labels (Modern vs Classic Layout) ---
+        // ====================================================================
+        // The display architecture differs dramatically between our layout engines:
+        //
+        // 1. In the Modern layout:
+        //    - Landscape and square cards integrate labels INSIDE the card image
+        //      containers as high-end premium overlays.
+        //    - Standard posters render labels OUTSIDE.
+        //    - Expandable posters render BOTH to enable a seamless crossfade and 
+        //      CSS scale transition from outside to inside on hover/focus.
+        //
+        // 2. In the Classic layout (isModern is false):
+        //    - ALL cards (posters, landscape, and square) must render their labels
+        //      OUTSIDE (underneath the card structure) to align with standard TV
+        //      interfaces and prevent visual clipping.
+        // ====================================================================
         const isSquare = type === 'square' || type === 'artist';
         const renderInside = isModern && (isLandscape || isSquare || canExpand);
-        const renderOutside = !isLandscape && !isSquare; // Posters always have outside labels available
+        const renderOutside = !isModern || (!isLandscape && !isSquare);
         
         // Final visibility logic (Classic vs Modern)
         const showInside = renderInside && !isHiddenLibraryLabel;

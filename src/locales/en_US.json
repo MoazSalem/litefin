@@ -79,6 +79,8 @@
     "HeaderVideoTypes": "Video Types",
     "HeaderYears": "Years",
     "Home": "Home",
+    "HomeForceExpandablePosters": "Force Expandable Posters",
+    "HomeForceExpandablePostersDescription": "Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.",
     "ItemCount": "{0} items",
     "ItemCountSingle": "1 item",
     "ItemCountValue": "{0} items",

@@ -879,6 +879,21 @@ class SettingsPage extends Page {
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
 
+                ${layoutManager.getLayout() === 'modern' ? `
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
+                        <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:homeForceExpandablePosters') === 'true' ? 'active' : ''}" 
+                                 id="toggle-home-force-expandable-posters" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+                ` : ''}
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
@@ -3360,6 +3375,24 @@ class SettingsPage extends Page {
                 const newValue = !isHidden;
                 storage.setItem('pref:hideLibraryLabels', newValue);
                 hideLabelsBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // ==========================================
+        // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
+        // ==========================================
+        // Accesses the DOM toggle switch to let the user force every row in their 
+        // homepage to use the Apple-inspired expanding poster card layout.
+        // Toggling this will persist the value to local storage so the Home Page layout 
+        // engine applies the configuration seamlessly when the user returns.
+        const forceExpandablePostersBtn = this.$('#toggle-home-force-expandable-posters');
+        if (forceExpandablePostersBtn) {
+            forceExpandablePostersBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:homeForceExpandablePosters') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:homeForceExpandablePosters', newValue.toString());
+                forceExpandablePostersBtn.classList.toggle('active', newValue);
+                log.info(`Force Expandable Posters on Home set to: ${newValue}`);
             });
         }
 

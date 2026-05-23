@@ -34,6 +34,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
@@ -493,6 +494,27 @@ class HomePage extends Page {
 
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
+
+        // ====================================================================
+        // Force Expandable Posters Layout Override
+        // ====================================================================
+        // If the user is running the Modern layout and has toggled on the force-poster
+        // preference under settings, we dynamically coerce all horizontal track rows 
+        // to use standard portrait layouts ('portrait') with 'poster' cards.
+        // This ensures the custom expanding-backdrops and visual transitions apply 
+        // universally, aligning with unified grids (Apple HIG style).
+        // ====================================================================
+        const isModern = layoutManager.getLayout() === 'modern';
+        const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
+        if (forceExpandablePosters) {
+            for (const desc of descriptors) {
+                // The "My Media" row uses library folder cards that must remain as static landscape cards
+                if (desc.id !== 'my-media') {
+                    desc.layout = 'portrait';
+                    desc.cardType = 'poster';
+                }
+            }
+        }
 
         // Apply dynamic user layout sorting and visibility filtering
         return homeLayoutManager.applyLayout(descriptors);

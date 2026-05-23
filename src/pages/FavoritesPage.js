@@ -8,6 +8,7 @@ import { VirtualCardRow } from '../components/VirtualCardRow.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('FavoritesPage');
 
@@ -268,16 +269,33 @@ class FavoritesPage extends Page {
 
         let virtualRow = null;
 
+        // ==========================================================
+        // Force Expandable Posters Logic for Favorites
+        // ==========================================================
+        // Checks if the user is running the Modern layout and has toggled on
+        // the "Force Expandable Posters" preference under display settings.
+        // If active, we dynamically coerce all horizontal favorite tracks
+        // to render as portrait posters that expand horizontally on focus.
+        // This creates a gorgeous, unified visual aesthetic that matches
+        // Apple HIG style and matches our homepage layout conversion.
+        // ==========================================================
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
+
+        // Coerce types to portrait/poster if preference is enabled
+        const targetCardType = forceExpandablePosters ? 'poster' : type;
+        const targetIsLandscape = forceExpandablePosters ? false : (type === 'episode');
+
         // Initialize VirtualCardRow
         virtualRow = new VirtualCardRow(trackContainer, items, {
-            isLandscape: type === 'episode',
-            cardType: type, // Pass through for height calculation
-            visibleCount: type === 'episode' ? 8 : 12,
+            isLandscape: targetIsLandscape,
+            cardType: targetCardType, // Pass through for height calculation
+            visibleCount: targetIsLandscape ? 8 : 12,
             focusSectionId: sectionId,
             renderCard: (item) =>
                 CardRenderer.createCardHtml(item, {
-                    isLandscape: type === 'episode',
-                    type: type
+                    isLandscape: targetIsLandscape,
+                    type: targetCardType
                 })
         });
 
