@@ -1512,7 +1512,9 @@ class HomePage extends Page {
                             case 'photos':
                                 return 'Photo,Video';
                             case 'homevideos':
-                                return 'Video';
+                                // Allow both photo and video items from home video libraries
+                                // to act as candidates for dynamic fallback thumbnail generation.
+                                return 'Photo,Video';
                             case 'playlists':
                                 return 'Playlist';
                             default:
@@ -1531,10 +1533,33 @@ class HomePage extends Page {
                     // ==========================================================
                     let response;
                     if (lib.CollectionType === 'livetv') {
-                        response = await api.getLiveTvChannels({
-                            Limit: 5,
-                            Fields: 'PrimaryImageAspectRatio'
+                        // -----------------------------------------------------
+                        // Live TV Dynamic Thumbnail Randomization
+                        // -----------------------------------------------------
+                        // We query the first 50 channels with image types explicitly enabled
+                        // to guarantee that the server delivers proper ImageTags and aspect ratios.
+                        // Then we filter out any channels without valid images before shuffling
+                        // to ensure a successful rotating thumbnail selection.
+                        // -----------------------------------------------------
+                        const ltvResponse = await api.getLiveTvChannels({
+                            Limit: 50,
+                            EnableImageTypes: 'Primary,Thumb,Backdrop',
+                            Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                         });
+                        
+                        // Extract channel items safely
+                        const ltvItems = ltvResponse?.Items || [];
+                        
+                        // Filter channels to only those with valid primary, thumb or backdrop artwork
+                        const validLtvItems = ltvItems.filter((item) => 
+                            item.ImageTags?.Primary || 
+                            item.ImageTags?.Thumb || 
+                            item.BackdropImageTags?.length > 0
+                        );
+                        
+                        // Local shuffle to randomize the logo across loads
+                        const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
+                        response = { Items: shuffledLtv.slice(0, 5) };
                     } else {
                         response = await api.getItems({
                             ParentId: lib.Id,
@@ -1701,10 +1726,32 @@ class HomePage extends Page {
 
                             let fallbackResponse;
                             if (lib.CollectionType === 'livetv') {
-                                fallbackResponse = await api.getLiveTvChannels({
-                                    Limit: 10,
-                                    Fields: 'PrimaryImageAspectRatio'
+                                // -----------------------------------------------------
+                                // Live TV Fallback Thumbnail Randomization
+                                // -----------------------------------------------------
+                                // Query a wider set of 50 channels with image types enabled.
+                                // We filter to channels with valid images and shuffle them locally
+                                // to guarantee a working fallback thumbnail.
+                                // -----------------------------------------------------
+                                const ltvFallback = await api.getLiveTvChannels({
+                                    Limit: 50,
+                                    EnableImageTypes: 'Primary,Thumb,Backdrop',
+                                    Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                                 });
+                                
+                                // Extract items safely
+                                const ltvFallbackItems = ltvFallback?.Items || [];
+                                
+                                // Keep only channels that have valid visual assets
+                                const validFallbackItems = ltvFallbackItems.filter((item) =>
+                                    item.ImageTags?.Primary ||
+                                    item.ImageTags?.Thumb ||
+                                    item.BackdropImageTags?.length > 0
+                                );
+                                
+                                // Randomize the list of candidate fallback cards
+                                const shuffledFallback = validFallbackItems.sort(() => 0.5 - Math.random());
+                                fallbackResponse = { Items: shuffledFallback.slice(0, 10) };
                             } else {
                                 fallbackResponse = await api.getItems({
                                     ParentId: lib.Id,
