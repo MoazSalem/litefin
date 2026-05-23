@@ -502,26 +502,67 @@ class CardRenderer {
         const hideInitials = type === 'library';
         const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
+        // ====================================================================
         // Support for Dual-Image Modern Posters (Poster -> Landscape Expansion)
-        // ONLY expand if we actually HAVE a landscape image to transition to.
-        const hasBackdrop = (item.BackdropImageTags && item.BackdropImageTags.length > 0) || (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0);
-        const canExpand = isModern && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series') && hasBackdrop;
+        // ====================================================================
+        // We allow every eligible poster card in the modern layout to expand on focus/hover,
+        // delivering a sleek, uninterrupted aesthetic. If a landscape backdrop is available,
+        // we'll load and crossfade to it. Otherwise, we fetch the primary poster image itself
+        // at the higher resolution required by the expanded card format to prevent blurry stretching.
+        // ====================================================================
+        const canExpand = isModern && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series') && !!imageUrl;
 
         let thumbPart = '';
         if (canExpand) {
-            // Resolve Thumb (Backdrop) URL for the expanded state
+            // Retrieve resolution boundaries for the modern-expanded card format.
             const thumbParams = imageService.getParams('expanded-poster');
             let thumbUrl = '';
+            
+            // 1. Prioritize native backdrops for the classic theatrical landscape feel.
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.BackdropImageTags[0] });
-            } else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.ParentBackdropImageTags[0] });
-            } else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
-                thumbUrl = api.getImageUrl(item.SeriesId, 'Backdrop', { maxWidth: thumbParams.maxWidth, quality: thumbParams.quality, tag: item.SeriesBackdropImageTags[0] });
+                thumbUrl = api.getImageUrl(itemId, 'Backdrop', {
+                    maxWidth: thumbParams.maxWidth,
+                    quality: thumbParams.quality,
+                    tag: item.BackdropImageTags[0]
+                });
+            }
+            // 2. Fall back to parent-level backdrops (for episodes/seasons where series backdrop applies).
+            else if (item.ParentBackdropImageTags && item.ParentBackdropImageTags.length > 0) {
+                thumbUrl = api.getImageUrl(item.ParentBackdropItemId || item.SeriesId, 'Backdrop', {
+                    maxWidth: thumbParams.maxWidth,
+                    quality: thumbParams.quality,
+                    tag: item.ParentBackdropImageTags[0]
+                });
+            }
+            // 3. Fall back to series-level backdrops.
+            else if (item.SeriesId && item.SeriesBackdropImageTags && item.SeriesBackdropImageTags.length > 0) {
+                thumbUrl = api.getImageUrl(item.SeriesId, 'Backdrop', {
+                    maxWidth: thumbParams.maxWidth,
+                    quality: thumbParams.quality,
+                    tag: item.SeriesBackdropImageTags[0]
+                });
+            }
+            // 4. Ultimate Fallback: Utilize the high-resolution primary poster image itself.
+            // When expanded, the CSS crops this horizontally using object-fit cover.
+            else {
+                const primaryTag = item.ImageTags?.Primary || item.AlbumPrimaryImageTag;
+                let targetId = itemId;
+                
+                // Fallback to album art for tracks.
+                if (item.Type === 'Audio' && item.AlbumId && !primaryTag) {
+                    targetId = item.AlbumId;
+                }
+                
+                thumbUrl = api.getImageUrl(targetId, 'Primary', {
+                    maxWidth: thumbParams.maxWidth,
+                    quality: thumbParams.quality,
+                    ...(primaryTag ? { tag: primaryTag } : {})
+                });
             }
             
             if (thumbUrl) {
-                // We add data-thumb-src but NO src. We will load it only on focus in VirtualCardRow.
+                // Return image tag with data-thumb-src. The image is downloaded eagerly
+                // on-demand when the card receives focus to preserve precious memory.
                 thumbPart = `<img data-thumb-src="${thumbUrl}" class="thumb-layer" alt="" />`;
             }
         }
