@@ -23,7 +23,7 @@ class CardRenderer {
      * @returns {string} HTML string
      */
     static createCardHtml(item, options = {}) {
-        const { isLandscape = false, type = 'poster', contextType = null } = options;
+        const { isLandscape = false, type = 'poster', contextType = null, isGrid = false } = options;
         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
 
         let imageUrl = '';
@@ -495,6 +495,18 @@ class CardRenderer {
         let cssClass = isLandscape ? 'media-card landscape' : 'media-card';
         // 'artist' is an alias for the square type — same 1:1 aspect ratio card
         if (type === 'square' || type === 'artist') cssClass = 'media-card square';
+
+        // -------------------------------------------------------------
+        // GRID CARD MARKER
+        // -------------------------------------------------------------
+        // If this card is rendered in a 2D vertical grid context (like a
+        // Library grid, Search grid, or Genre category sub-grid), we append
+        // the 'grid-card' class. This allows us to cleanly exclude grid cards
+        // from modern expanding transformations and label positioning in CSS.
+        // -------------------------------------------------------------
+        if (isGrid) {
+            cssClass += ' grid-card';
+        }
         // LAZY LOAD: Use data-src and 1x1 transparent gif placeholder
         const placeholder = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
         // Attach fallback data for LazyLoader to use on error
@@ -505,12 +517,14 @@ class CardRenderer {
         // ====================================================================
         // Support for Dual-Image Modern Posters (Poster -> Landscape Expansion)
         // ====================================================================
-        // We allow every eligible poster card in the modern layout to expand on focus/hover,
-        // delivering a sleek, uninterrupted aesthetic. If a landscape backdrop is available,
-        // we'll load and crossfade to it. Otherwise, we fetch the primary poster image itself
-        // at the higher resolution required by the expanded card format to prevent blurry stretching.
+        // We allow eligible poster cards in horizontal tracks to expand horizontally on focus/hover
+        // for a premium, interactive TV layout.
+        //
+        // CRITICAL GRID SAFETY: We must explicitly check if the card is inside a vertical grid (!isGrid).
+        // If a card inside a vertical grid expands horizontally, it will shift and overlap with the
+        // neighboring cards in the grid column structure, breaking grid alignment.
         // ====================================================================
-        const canExpand = isModern && !isLandscape && (type === 'poster' || type === 'movie' || type === 'series') && !!imageUrl;
+        const canExpand = isModern && !isLandscape && !isGrid && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person') && !!imageUrl;
 
         let thumbPart = '';
         if (canExpand) {
