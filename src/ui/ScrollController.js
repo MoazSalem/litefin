@@ -512,7 +512,19 @@ class ScrollController {
                     if (track.__virtualRow) {
                         const vIndex = parseInt(element.dataset.virtualIndex || '0', 10);
                         elementPos = track.__virtualRow.getItemPosition(vIndex);
-                        elementWidth = track.__virtualRow.itemWidth;
+                        
+                        // -----------------------------------------------------------------
+                        // Mathematical Centering Sync (Expanded Posters)
+                        // -----------------------------------------------------------------
+                        // Just like in VirtualCardRow.js scrollToIndex(), if we are in
+                        // the modern layout and the card can expand, we center it based on
+                        // its EXPANDED width (600px). This centers the active expanded poster
+                        // cleanly inside the viewport, preventing the right edge from clipping.
+                        // -----------------------------------------------------------------
+                        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+                        const canExpand = isModern && !track.__virtualRow.isLandscape && track.__virtualRow.cardType !== 'square' && track.__virtualRow.cardType !== 'artist';
+                        
+                        elementWidth = canExpand ? 600 : track.__virtualRow.itemWidth;
                         trackWidth = track.__virtualRow.getTrackWidth();
                     } else {
                         if (isRtl) {

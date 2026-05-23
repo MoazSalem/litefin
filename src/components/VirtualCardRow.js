@@ -306,7 +306,19 @@ export class VirtualCardRow {
 
             // Compute the scroll offset (mirrors ScrollController logic exactly)
             const elementPos   = this.getItemPosition(clamped);
-            const elementWidth = this.itemWidth;
+            
+            // -----------------------------------------------------------------
+            // Card Centering Geometry (Expanded Posters)
+            // -----------------------------------------------------------------
+            // If we are running the modern layout and the cards can expand,
+            // we center the card based on its EXPANDED width (600px).
+            // This prevents the card's right boundary from clipping and centers
+            // the expanded card perfectly in the middle of the viewport.
+            // -----------------------------------------------------------------
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const elementWidth = canExpand ? 600 : this.itemWidth;
+
             const containerWidth = this.track.parentElement
                 ? this.track.parentElement.clientWidth
                 : window.innerWidth;
@@ -613,7 +625,18 @@ export class VirtualCardRow {
      * @returns {number}
      */
     getTrackWidth() {
-        return this.totalItems * this.totalItemWidth + this.sidePadding * 2; // Matches totalWidth calculation in constructor
+        // -------------------------------------------------------------
+        // Mathematical Scroll Boundary Logic
+        // -------------------------------------------------------------
+        // In the modern layout, we expand posters by exactly 375px on focus.
+        // To prevent layout clipping and allow the last card in the row to
+        // scroll fully into view, we must include the 375px expansion buffer
+        // in our calculated mathematical track width (matching the DOM track
+        // width style set inside the constructor).
+        // -------------------------------------------------------------
+        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const expansion = (isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist') ? 375 : 0;
+        return this.totalItems * this.totalItemWidth + this.sidePadding * 2 + expansion;
     }
 
     /**
