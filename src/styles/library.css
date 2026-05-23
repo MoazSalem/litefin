@@ -1439,7 +1439,6 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     border-color: var(--jf-action-btn-active-border)!important;
     transform: scale(1.10);
     background-color: var(--jf-accent);
-    color: white;
     z-index: 10;
     outline: none;
     will-change: transform;
