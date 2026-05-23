@@ -567,9 +567,22 @@ class CardRenderer {
             }
         }
 
+        // ====================================================================
+        // --- Image/Fallback Part Assembly ---
+        // ====================================================================
+        // If an image URL exists, we construct the image tags with both lazy-loading
+        // and expanding-poster support. If no image is available, we construct
+        // the premium gradient fallback.
+        //
+        // NOTE ON LIBRARY CARDS: In the Modern layout, library card labels are hidden
+        // by default from the normal card-info sections. Instead, they are overlaid
+        // directly on the card image. If a library has no preview image (falling back
+        // to a gradient), we must explicitly append the overlay label on top of the 
+        // gradient block so the card is not rendered completely blank.
+        // ====================================================================
         const imagePart = imageUrl
             ? `${imageInnerHtml}${thumbPart}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
-            : CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials });
+            : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
         const isHiddenLibraryLabel = type === 'library' && (storage.getItem('pref:hideLibraryLabels') === 'true' || isModern);
