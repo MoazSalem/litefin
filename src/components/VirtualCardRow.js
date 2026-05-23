@@ -106,6 +106,17 @@ export class VirtualCardRow {
                         thumb.classList.add('load-failed');
                         card.classList.remove('expansion-ready');
                     };
+                } else if (!thumb) {
+                    // ---------------------------------------------------------
+                    // GRADIENT FALLBACK EXPANSION DISPATCHER
+                    // ---------------------------------------------------------
+                    // If this card does not have an image layer (meaning it is
+                    // using the premium gradient fallback with initials), it
+                    // has no assets to lazy-fetch! We immediately mark it as
+                    // 'expansion-ready' so the expand transforms and inside
+                    // metadata overlays can fade in on focus/hover.
+                    // ---------------------------------------------------------
+                    card.classList.add('expansion-ready');
                 }
             };
 

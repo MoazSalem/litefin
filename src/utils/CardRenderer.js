@@ -515,16 +515,20 @@ class CardRenderer {
         const dataAttributes = `data-src="${imageUrl}" data-fb-name="${fbData.name}" data-fb-init="${fbData.initials}" data-fb-grad="${fbData.gradNum}" ${hideInitials ? 'data-fb-hide-initials="true"' : ''}`;
 
         // ====================================================================
-        // Support for Dual-Image Modern Posters (Poster -> Landscape Expansion)
+        // Expansion Eligibility Strategy
         // ====================================================================
-        // We allow eligible poster cards in horizontal tracks to expand horizontally on focus/hover
-        // for a premium, interactive TV layout.
+        // We allow eligible poster cards on horizontal tracks to expand 
+        // horizontally on focus/hover.
+        //
+        // NOTE: We now allow posters to expand even if they do not have a valid
+        // imageUrl (falling back to a premium gradient). In this case, the gradient
+        // will expand smoothly and overlay the inside title and subtitle on focus/hover.
         //
         // CRITICAL GRID SAFETY: We must explicitly check if the card is inside a vertical grid (!isGrid).
         // If a card inside a vertical grid expands horizontally, it will shift and overlap with the
         // neighboring cards in the grid column structure, breaking grid alignment.
         // ====================================================================
-        const canExpand = isModern && !isLandscape && !isGrid && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person') && !!imageUrl;
+        const canExpand = isModern && !isLandscape && !isGrid && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person');
 
         let thumbPart = '';
         if (canExpand) {

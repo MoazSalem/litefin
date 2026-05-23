@@ -494,3 +494,21 @@ html[data-layout="modern"] .media-row--skeleton .card-image {
     0% { background-position: 200% 0; }
     100% { background-position: -200% 0; }
 }
+
+/* =========================================================================
+   Modern Gradient Fallback Expansion Improvements
+   ========================================================================= */
+
+/* 
+   Apple-Style Initials Dissolve Transition:
+   When a poster using a fallback gradient is hovered or D-pad focused, it
+   smoothly expands to 600px width. We dissolve the initials (opacity: 0)
+   with a clean ease curve so they don't overlap or clash with the beautiful
+   title and subtitle text overlay that fades in over the expanded card.
+*/
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:focus .media-fallback-initials,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready.focused .media-fallback-initials,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .media-fallback-initials {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}
