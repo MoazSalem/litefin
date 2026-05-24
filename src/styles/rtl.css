@@ -21,6 +21,11 @@
     transform: translate3d(0, 0, 0) !important;
 }
 
+[dir="rtl"] .sidebar:not(.expanded):not(:hover) .sidebar-section-header {
+    /* Reverse margin offsets in RTL mode to span the visible 100px width on the right edge */
+    margin: 22px 250px 21px 0 !important;
+}
+
 /* Sidebar Hover Trigger for RTL - Flip to the right edge */
 [dir="rtl"] .sidebar-hover-trigger {
     left: auto;
@@ -108,25 +113,9 @@
     padding-right: 0;
 }
 
-[dir="rtl"] .library-item {
-    /* Add the requested spacing on the left (inner side) for library items */
-    padding-left: 20px;
-}
-
-[dir="rtl"] .library-item .item-text {
-    padding-right: 20px;
-    padding-left: 0;
-    text-align: right;
-}
-
 [dir="rtl"] .item-text {
     padding-right: 20px; 
     padding-left: 20px; /* Keep padding equal */
-}
-
-[dir="rtl"] .library-item .item-text {
-    padding-left: 0;
-    padding-right: 32px;
 }
 
 [dir="rtl"] .sidebar-focus-indicator {

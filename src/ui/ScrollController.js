@@ -119,31 +119,125 @@ class ScrollController {
      * @param {number} [duration=200] - Animation duration in ms
      * @param {'vertical'|'horizontal'} [direction='vertical'] - Scroll axis
      */
+    /**
+     * ========================================================================
+     * VERTICAL SCROLL VALUE RETRIEVAL
+     * ========================================================================
+     * Resolves the current vertical scrolling position in pixels. Supports:
+     *   - Standard native containers (using container.scrollTop).
+     *   - GPU-accelerated transformed containers (using the vertical track style).
+     *
+     * @param {HTMLElement} container - The scrollable container element.
+     * @returns {number} Current vertical scroll offset in px.
+     * ========================================================================
+     */
+    getVerticalScroll(container) {
+        if (!container) return 0;
+
+        // Retrieve active vertical scroll style preference.
+        const scrollMode = storage.getItem('pref:verticalScrollMode') || 'native';
+
+        // Check if GPU mode is active and parse the translate3d string coordinate.
+        if (scrollMode === 'gpu') {
+            const track = container.querySelector('.vertical-scroll-track');
+            if (track) {
+                const transform = track.style.transform || track.style.webkitTransform || '';
+                // Extracts the vertical translation coordinate value.
+                const match = transform.match(/translate3d\(0px,\s*-?([\d.]+)px/);
+                return match ? parseFloat(match[1]) : 0;
+            }
+        }
+
+        return container.scrollTop;
+    }
+
+    /**
+     * Smooth scroll with easeOutQuad easing and retarget support.
+     *
+     * Uses a time-based animation with proper easing curve.
+     * If called again while an animation is in progress for the same
+     * direction, the target is updated and timing resets from the
+     * current position (retargeting), avoiding jarring jumps.
+     *
+     * @param {HTMLElement} container - The scrollable container element
+     * @param {number} targetScroll - Target scroll position in px
+     * @param {number} [duration=200] - Animation duration in ms
+     * @param {'vertical'|'horizontal'} [direction='vertical'] - Scroll axis
+     */
     smoothScrollTo(container, targetScroll, duration = SCROLL_DURATION_VERTICAL, direction = 'vertical') {
         const isVertical = direction === 'vertical';
         const stateKey = isVertical ? '_verticalScrollState' : '_horizontalScrollState';
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
 
-        const currentScroll = isVertical ? container.scrollTop : container.scrollLeft;
+        // Resolve active scroll mode from stored user preferences.
+        const scrollMode = isVertical ? (storage.getItem('pref:verticalScrollMode') || 'native') : 'current';
+
+        /* ====================================================================
+         * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
+         * ====================================================================
+         * Under Apple Human Interface Guidelines and premium responsiveness goals,
+         * we allow users to opt for an "Instant" snapping scroll behavior.
+         * If 'pref:verticalScrollMode' is set to 'instant', we override the scroll
+         * duration parameter to 0, which immediately diverts the execution flow
+         * into the optimized instant coordinates snapping branch.
+         * ==================================================================== */
+        let durationToUse = duration;
+        if (isVertical && scrollMode === 'instant') {
+            durationToUse = 0;
+        }
+
+        // Reset the vertical track's transform if we've switched away from GPU mode.
+        if (!isVertical || scrollMode !== 'gpu') {
+            const existingTrack = container.querySelector('.vertical-scroll-track');
+            if (existingTrack && (existingTrack.style.transform || existingTrack.style.webkitTransform)) {
+                existingTrack.style.transform = 'translate3d(0px, 0px, 0px)';
+                existingTrack.style.webkitTransform = 'translate3d(0px, 0px, 0px)';
+            }
+        }
+
+        // Initialize or retrieve the vertical scroll track in GPU mode.
+        let track = null;
+        if (isVertical && scrollMode === 'gpu') {
+            track = container.querySelector('.vertical-scroll-track');
+            if (!track) {
+                // Wrap all direct children inside a hardware-accelerated wrapper container.
+                track = document.createElement('div');
+                track.className = 'vertical-scroll-track';
+                while (container.firstChild) {
+                    track.appendChild(container.firstChild);
+                }
+                container.appendChild(track);
+
+                // Configure CSS layout rules to bypass composition reflows cleanly.
+                container.style.overflow = 'hidden';
+                track.style.width = '100%';
+                track.style.height = 'auto';
+                track.style.willChange = 'transform';
+                container.scrollTop = 0;
+            }
+        }
+
+        // Resolve current coordinates through our unified scroll reader.
+        const currentScroll = isVertical ? this.getVerticalScroll(container) : container.scrollLeft;
 
         // Already at target or instant scroll requested — snap and bail.
         // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
-        // If we don't, the RAF loop from a previous smooth scroll fires again
-        // on the very next frame and sets scrollTop back to its old in-progress
-        // target, causing a single-frame jump (the jitter the user sees).
-        if (duration <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+        if (durationToUse <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;
                 this[stateKey] = null;
             }
             if (isVertical) {
-                container.scrollTop = targetScroll;
+                if (scrollMode === 'gpu' && track) {
+                    // Update transform coordinates on GPU compositor track.
+                    track.style.transform = `translate3d(0px, -${targetScroll}px, 0px)`;
+                    track.style.webkitTransform = `translate3d(0px, -${targetScroll}px, 0px)`;
+                    container.scrollTop = 0;
+                } else {
+                    container.scrollTop = targetScroll;
+                }
                 // STABILIZATION: Force reset of horizontal drift on vertical containers.
-                // Browsers may auto-scroll the page container
-                // horizontally if a focused element is centered via justify-content but
-                // perceived as overflowing. Forcing scrollLeft=0 here ensures the UI
-                // remains perfectly pinned to the left edge.
                 if (container.scrollLeft !== 0) {
                     container.scrollLeft = 0;
                 }
@@ -153,26 +247,56 @@ class ScrollController {
             return;
         }
 
+        // ====================================================================
+        // NATIVE SMOOTH SCROLL ROUTINE (Let TV Handle It)
+        // ====================================================================
+        // Offloads standard vertical scrolling animations fully to the native
+        // rendering thread.
+        //
+        // COMPATIBILITY FALLBACK:
+        // Older LG WebOS models (WebOS 3.x/4.x running Chrome < 61) do not
+        // support `Element.prototype.scrollTo` on container elements.
+        //
+        // If the method is undefined or throws an error, we gracefully fall
+        // through to the custom JS RAF time-based animation loop below to
+        // keep navigation completely functional.
+        // ====================================================================
+        if (isVertical && scrollMode === 'native' && typeof container.scrollTo === 'function') {
+            if (this[animIdKey]) {
+                cancelAnimationFrame(this[animIdKey]);
+                this[animIdKey] = null;
+                this[stateKey] = null;
+            }
+
+            try {
+                container.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
+
+                // Prevent horizontal shifts on layout boundaries.
+                if (container.scrollLeft !== 0) {
+                    container.scrollLeft = 0;
+                }
+                return;
+            } catch (nativeError) {
+                // Log warning and fall through to standard JS RAF smooth scroll fallback.
+                console.warn('[ScrollController] Native smooth scrollTo failed, falling back to JS RAF:', nativeError);
+            }
+        }
+
         // ----------------------------------------------------------------
         // RETARGETING LOGIC (The "Zeno's Paradox" Fix)
         // ----------------------------------------------------------------
         // If an animation is already running for this axis, check if the
         // new target is exactly the same as the current target.
-        // If it's the same, DO NOT touch the startTime or startScroll. Just
-        // return early and let the existing animation finish organically.
-        // Re-assigning startScroll to the current mid-animation position and
-        // resetting startTime to 'now' causes the velocity to drop to 0 and
-        // the remaining distance to stretch out, creating a slow crawl if
-        // the user rapidly taps keys (e.g. moving horizontally along a row).
         if (this[stateKey] && this[animIdKey]) {
             if (Math.abs(this[stateKey].target - targetScroll) < SCROLL_SNAP_THRESHOLD) {
                 // Target is unchanged, do nothing, let existing animation complete
                 return;
             } else {
                 // The target HAS changed (e.g. the user pressed Down while mid-scroll).
-                // Scale the duration proportionally to the *remaining* distance — otherwise
-                // redirecting to a target that's only 50px away from the current position
-                // would still take the full 200ms, making it feel sluggish.
+                // Scale the duration proportionally to the *remaining* distance.
                 const remainingDistance = Math.abs(targetScroll - currentScroll);
                 const originalDistance = Math.abs(targetScroll - this[stateKey].startScroll) || 1;
                 const scaledDuration = Math.round(duration * Math.min(remainingDistance / originalDistance, 1));
@@ -217,9 +341,18 @@ class ScrollController {
 
             // Apply scroll position (Layout-triggering, but unavoidable without transform scroll)
             if (isVertical) {
-                state.container.scrollTop = newScroll;
+                if (scrollMode === 'gpu') {
+                    // Update GPU transform coordinates
+                    const currentTrack = container.querySelector('.vertical-scroll-track');
+                    if (currentTrack) {
+                        currentTrack.style.transform = `translate3d(0px, -${newScroll}px, 0px)`;
+                        currentTrack.style.webkitTransform = `translate3d(0px, -${newScroll}px, 0px)`;
+                    }
+                    container.scrollTop = 0;
+                } else {
+                    state.container.scrollTop = newScroll;
+                }
                 // STABILIZATION: Prevent horizontal drift on vertical containers.
-                // Ensures the page doesn't accidentally scroll horizontally during vertical animation.
                 if (state.container.scrollLeft !== 0) {
                     state.container.scrollLeft = 0;
                 }
@@ -233,7 +366,16 @@ class ScrollController {
             } else {
                 // Snap to exact target and clean up
                 if (isVertical) {
-                    state.container.scrollTop = state.target;
+                    if (scrollMode === 'gpu') {
+                        const currentTrack = container.querySelector('.vertical-scroll-track');
+                        if (currentTrack) {
+                            currentTrack.style.transform = `translate3d(0px, -${state.target}px, 0px)`;
+                            currentTrack.style.webkitTransform = `translate3d(0px, -${state.target}px, 0px)`;
+                        }
+                        container.scrollTop = 0;
+                    } else {
+                        state.container.scrollTop = state.target;
+                    }
                 } else {
                     state.container.scrollLeft = state.target;
                 }
@@ -245,6 +387,7 @@ class ScrollController {
         // Note: For the very first frame, we don't have a 'time' yet,
         // so we let the animate function initialize it.
         this[animIdKey] = requestAnimationFrame(animate);
+
     }
 
     /**
@@ -357,7 +500,7 @@ class ScrollController {
                 // the scrollTop at the next call site.
                 const elRect = el.getBoundingClientRect();
                 const relRect = relativeTo.getBoundingClientRect();
-                top = elRect.top - relRect.top + relativeTo.scrollTop;
+                top = elRect.top - relRect.top + this.getVerticalScroll(relativeTo);
                 // NOT cached — value is volatile
             }
 
@@ -378,7 +521,7 @@ class ScrollController {
 
             if (isHero) {
                 // Force scroll to absolute top for hero sections
-                if (pageContent.scrollTop > 0) {
+                if (this.getVerticalScroll(pageContent) > 0) {
                     this.smoothScrollTo(pageContent, 0);
                 }
                 // Disable further row logic and generic vertical scroll
@@ -413,7 +556,7 @@ class ScrollController {
             const rowTop = getCumulativeOffsetTop(row, pageContent);
             const padding = config.scrollOffsetTop || DEFAULT_SCROLL_OFFSET_TOP;
             const viewHeight = pageContent.clientHeight;
-            const currentScroll = pageContent.scrollTop;
+            const currentScroll = this.getVerticalScroll(pageContent);
 
             // Ideal target: row top sits at the configured offset from viewport top
             let targetScroll = rowTop - padding;
@@ -480,7 +623,7 @@ class ScrollController {
                     const rowHeight = parentRow.offsetHeight;
                     const rowBottom = rowTop + rowHeight;
                     const viewHeight = pageContent.clientHeight;
-                    const currentScroll = pageContent.scrollTop;
+                    const currentScroll = this.getVerticalScroll(pageContent);
                     const viewBottom = currentScroll + viewHeight;
 
                     // Check if row is outside viewport with buffers
@@ -512,7 +655,19 @@ class ScrollController {
                     if (track.__virtualRow) {
                         const vIndex = parseInt(element.dataset.virtualIndex || '0', 10);
                         elementPos = track.__virtualRow.getItemPosition(vIndex);
-                        elementWidth = track.__virtualRow.itemWidth;
+                        
+                        // -----------------------------------------------------------------
+                        // Mathematical Centering Sync (Expanded Posters)
+                        // -----------------------------------------------------------------
+                        // Just like in VirtualCardRow.js scrollToIndex(), if we are in
+                        // the modern layout and the card can expand, we center it based on
+                        // its EXPANDED width (600px). This centers the active expanded poster
+                        // cleanly inside the viewport, preventing the right edge from clipping.
+                        // -----------------------------------------------------------------
+                        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+                        const canExpand = isModern && !track.__virtualRow.isLandscape && track.__virtualRow.cardType !== 'square' && track.__virtualRow.cardType !== 'artist';
+                        
+                        elementWidth = canExpand ? 600 : track.__virtualRow.itemWidth;
                         trackWidth = track.__virtualRow.getTrackWidth();
                     } else {
                         if (isRtl) {
@@ -618,7 +773,7 @@ class ScrollController {
                 const elementTop = getCumulativeOffsetTop(element, activePageContent);
                 const elementHeight = element.offsetHeight;
                 const viewHeight = activePageContent.clientHeight;
-                const currentScroll = activePageContent.scrollTop;
+                const currentScroll = this.getVerticalScroll(activePageContent);
 
                 // Comfort margins for top and bottom visibility
                 const topMargin = GENERIC_SCROLL_MARGIN;

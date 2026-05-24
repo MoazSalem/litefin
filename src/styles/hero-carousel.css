@@ -70,7 +70,15 @@
     display: flex;
     align-items: flex-end;
     padding-bottom: 120px;
-    overflow: hidden;
+    /* 
+     * CRITICAL BUG RESOLUTION: Changed overflow to visible.
+     * With deep-overlap immersive mode, padding-bottom is elevated to 420px/570px.
+     * On smaller viewports (or logical canvas heights below 1080p), the remaining
+     * content box height shrinks below the actual height of the title/overview info.
+     * Keeping overflow: hidden would clip and completely hide the text details.
+     * Outer container retains overflow: hidden, keeping boundaries clean on GPU.
+     */
+    overflow: visible;
     /* Pre-promote inactive slides too so the cross-fade is GPU-only */
     transform: translateZ(0);
     will-change: opacity;
@@ -134,7 +142,7 @@
 .hero-content {
     position: relative;
     z-index: 10;
-    padding: 0 80px;
+    padding: 0 60px;
     max-width: 1600px;
     display: flex;
     flex-direction: column;
@@ -583,3 +591,274 @@
 [dir="rtl"] .hero-arrow svg {
     transform: rotate(180deg);
 }
+
+/* ============================================================================
+   Immersive Home Carousel Layout Overrides
+   ============================================================================
+   This section defines the new 'immersive' mode. It expands the backdrop taller,
+   and overlaps it elegantly behind the first horizontal media row, replicating
+   the premium tvOS user interface standard. It features strict composite isolation
+   for smooth rendering on low-power TV chipsets.
+   ============================================================================ */
+
+/* Push backdrop artwork up slightly to focus on characters' faces and actions */
+.hero-carousel-container.immersive .hero-backdrop {
+    background-position: center 15%;
+}
+
+/* Tall Canvas Height for Immersive mode */
+.hero-carousel-container.immersive .hero-carousel {
+    /* 
+     * Full-scale 90vh viewport canvas for the immersive background artwork.
+     * Retains the maximum available artwork aspect ratio across large displays.
+     */
+    height: 90vh;
+    min-height: 650px;
+}
+
+/* Compact Immersive Canvas Height */
+.hero-carousel-container.immersive.compact .hero-carousel {
+    /* 
+     * In compact mode, we expand this to 90vh as well to match the highly requested
+     * deep-overlap immersive standard, bringing full-canvas richness to compact setups.
+     */
+    height: 90vh;
+    min-height: 650px;
+}
+
+/* Upward Section Overlap to place home-rows over the lower section of immersive backdrop */
+#home-hero-placeholder.style-immersive + .home-rows {
+    /* 
+     * Pull content rows higher up over the backdrop image in standard mode.
+     * Shifted up to the -450px range for an incredibly sleek, high-end overlap.
+     * Creates an extremely elegant, balanced TV home layout.
+     */
+    margin-top: -450px;
+    position: relative;
+    /* Ensure the row cards float cleanly above the lower backdrop layer for spatial focus */
+    z-index: 10;
+}
+
+/* Upward Section Overlap for compact mode */
+#home-hero-placeholder.style-immersive.style-compact + .home-rows {
+    /* 
+     * Compact layout inherits the previous deeply immersive standard.
+     * Pulls the home-rows extremely high (-550px, shifted up by 50px) over the background for high information density.
+     */
+    margin-top: -550px;
+    position: relative;
+    z-index: 10;
+}
+
+/* Elevated Text Content padding to push meta/description above the home-rows overlap */
+.hero-carousel-container.immersive .hero-item {
+    /* 
+     * Elevate text content by 470px to match the higher -450px sibling overlap.
+     * Keeps titles, ratings, and descriptions perfectly aligned above the row.
+     */
+    padding-bottom: 470px;
+}
+
+/* Elevated Text Content padding for compact immersive mode */
+.hero-carousel-container.immersive.compact .hero-item {
+    /* 
+     * Pushes text up by 570px in compact mode to perfectly avoid occlusion 
+     * from the deep -550px overlap.
+     */
+    padding-bottom: 570px;
+}
+
+/* 
+ * ============================================================================
+ * Apple Human Interface Guidelines - Responsive Space & Density Controls
+ * ============================================================================
+ * Since TV viewports have a strict 1080p logical grid canvas, we must balance
+ * the vertical space extremely carefully. By scaling down logo heights, font
+ * sizes, line-clamping, and margins, we protect the upper boundaries of the 
+ * screen from clipping (out-of-bounds rendering) while keeping text aligned
+ * with the gorgeous card rows.
+ * ============================================================================
+ */
+
+/* Standard Immersive Size Tuning */
+.hero-carousel-container.immersive .hero-logo-container {
+    /* 
+     * Sleek logo dimensions scaled down to give 20px of extra vertical relief.
+     * Preserves visual presence while avoiding crowding on 1080p screens.
+     */
+    height: 100px;
+    margin-bottom: 16px;
+}
+
+.hero-carousel-container.immersive .hero-item-title {
+    /* 
+     * Text title typography fallback (when logo assets are missing).
+     * Scaled down from 4rem to 3.2rem (approx 51px) to prevent vertical bloat.
+     */
+    font-size: 3.2rem;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.immersive .hero-meta-row {
+    /* Tighten spatial gap between metadata badges and description text */
+    margin-bottom: 16px;
+}
+
+.hero-carousel-container.immersive .hero-description {
+    /* 
+     * Outfit/Inter high-legibility standard text size (20px).
+     * Keeps synopsis perfectly clear while conserving critical screen real estate.
+     */
+    font-size: 1.25rem;
+    margin-bottom: 20px;
+}
+
+/* Compact Immersive Size Tuning */
+.hero-carousel-container.immersive.compact .hero-logo-container {
+    /* 
+     * Ultra-compact 80px height designed for extreme information density.
+     * Replicates Apple tvOS home screen app channel preview proportions.
+     */
+    height: 80px;
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.immersive.compact .hero-item-title {
+    /* Elegant, slim text title for the compact immersive configuration */
+    font-size: 2.4rem;
+    margin-bottom: 10px;
+}
+
+.hero-carousel-container.immersive.compact .hero-meta-row {
+    /* Minimum possible spacing to keep items perfectly clustered */
+    margin-bottom: 12px;
+}
+
+.hero-carousel-container.immersive.compact .hero-description {
+    /* 
+     * Sleek 18px body copy typography.
+     * Clamp to 2 lines instead of 3 to save massive vertical space.
+     * Prevents any clipping while maintaining deep backdrop transparency.
+     */
+    font-size: 1.15rem;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    margin-bottom: 14px;
+}
+
+
+/* 
+ * ============================================================================
+ * Apple HIG - Dynamic Masking & Alpha-Blending (Immersive & Semi-Immersive)
+ * ============================================================================
+ * Rather than drawing solid dark color gradients (which block page backgrounds)
+ * on top of the carousel, we apply a high-performance linear-gradient alpha mask
+ * directly to the backdrop image element and the left-to-right text shadow layer.
+ * 
+ * This smoothly fades out the bottom of the carousel to fully transparent,
+ * letting card rows, titles, and theme backgrounds blend with organic unity.
+ * ============================================================================
+ */
+
+/* Standard widescreen backdrop masking */
+.hero-carousel-container.immersive .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 85%) !important;
+}
+.hero-carousel-container.semi-immersive .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
+    mask-image: linear-gradient(to bottom, black 40%, transparent 90%) !important;
+}
+
+/* Compact widescreen backdrop masking */
+.hero-carousel-container.immersive.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
+    mask-image: linear-gradient(to bottom, black 30%, transparent 80%) !important;
+}
+.hero-carousel-container.semi-immersive.compact .hero-backdrop {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 80%) !important;
+}
+
+/* Widescreen text shadow overlay masking (::before left-to-right mask) */
+.hero-carousel-container.immersive .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+}
+.hero-carousel-container.semi-immersive .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 40%, transparent 85%) !important;
+    mask-image: linear-gradient(to bottom, black 40%, transparent 85%) !important;
+}
+
+/* Compact widescreen text shadow overlay masking */
+.hero-carousel-container.immersive.compact .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 30%, transparent 70%) !important;
+    mask-image: linear-gradient(to bottom, black 30%, transparent 70%) !important;
+}
+.hero-carousel-container.semi-immersive.compact .hero-item::before {
+    -webkit-mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+    mask-image: linear-gradient(to bottom, black 35%, transparent 75%) !important;
+}
+
+/* Remove bottom shadow gradients entirely to let dynamic background shine through */
+.hero-carousel-container.immersive .hero-item::after,
+.hero-carousel-container.semi-immersive .hero-item::after,
+.hero-carousel-container.immersive.compact .hero-item::after,
+.hero-carousel-container.semi-immersive.compact .hero-item::after {
+    background: transparent !important;
+}
+
+/* Ensure the main container frames remain transparent */
+.hero-carousel-container.immersive,
+.hero-carousel-container.semi-immersive,
+.hero-carousel-container.immersive .hero-carousel,
+.hero-carousel-container.semi-immersive .hero-carousel {
+    background: transparent !important;
+}
+
+/* Elevate indicator dots to align perfectly with the elevated text */
+.hero-carousel-container.immersive .hero-indicators {
+    /* 
+     * Align dot indicators with the baseline of the description paragraph for the -450px overlap.
+     * Elevated to 430px to guarantee zero horizontal collision/overlapping with the side chevrons.
+     */
+    bottom: 430px;
+}
+
+/* Elevate indicator dots for compact immersive mode */
+.hero-carousel-container.immersive.compact .hero-indicators {
+    /* 
+     * Align dot indicators perfectly with the elevated text at the 570px boundary.
+     * Elevated to 530px to clear navigation chevrons completely on lower viewport heights.
+     */
+    bottom: 530px;
+}
+
+/* 
+ * ============================================================================
+ * Immersive Navigation Arrow Position Overrides
+ * ============================================================================
+ * Pushes the side navigation chevrons upward to visually center them within
+ * the remaining exposed backdrop canvas (above the card overlap zones).
+ * ============================================================================
+ */
+
+/* Elevate navigation arrows in standard immersive mode */
+.hero-carousel-container.immersive .hero-nav-arrows {
+    /* 
+     * Shift standard mode arrows up to 30% viewport height.
+     * Aligns perfectly with the visual center of the backdrop above the -450px row overlap.
+     */
+    top: 30%;
+}
+
+/* Elevate navigation arrows for compact immersive mode */
+.hero-carousel-container.immersive.compact .hero-nav-arrows {
+    /* 
+     * Shift compact mode arrows further up to 24% viewport height.
+     * Centers arrows relative to the taller -550px bottom overlap.
+     */
+    top: 24%;
+}
+
+

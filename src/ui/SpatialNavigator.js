@@ -35,6 +35,53 @@ const CROSS_AXIS_WEIGHT = 3.0;
 // tricking the navigator into thinking neighboring rows/columns are aligned.
 const MIN_OVERLAP_THRESHOLD = 20;
 
+// ============================================================================
+// Helper Functions
+// ============================================================================
+
+/**
+ * 💡 Focus Engine Row Analyzer Helper
+ * ----------------------------------------------------------------------------
+ * Counts the active focusable elements inside a settings container (.setting-item).
+ *
+ * Performance Check:
+ * To avoid triggering forced layouts (layout thrashing) on TV hardware, this
+ * helper relies strictly on DOM-tree lookups (querySelectorAll) and fast,
+ * non-reflowing string checks (display properties, class list, and HTML attributes).
+ *
+ * @param {HTMLElement} row - The settings item parent container
+ * @returns {number} The count of active, visible focusable controls
+ */
+const getFocusableCountInRow = (row) => {
+    // Return early if row is invalid
+    if (!row) return 0;
+
+    // Leverage identical selector query used by main FocusManager architecture
+    const selector = 'a, button, input, select, [tabindex]:not([tabindex="-1"])';
+    const focusables = row.querySelectorAll(selector);
+
+    let count = 0;
+    for (let i = 0; i < focusables.length; i++) {
+        const el = focusables[i];
+
+        // Skip natively disabled elements (e.g. disabled buttons)
+        if (el.disabled) continue;
+
+        // Skip elements hidden via inline styles
+        if (el.style.display === 'none') continue;
+
+        // Skip elements marked hidden via common utility classes
+        if (el.classList.contains('hidden')) continue;
+
+        // Skip elements with structural HTML hidden attributes
+        if (el.hasAttribute('hidden')) continue;
+
+        count++;
+    }
+
+    return count;
+};
+
 class SpatialNavigator {
     // ========================================================================
     // Public API
@@ -147,9 +194,42 @@ class SpatialNavigator {
                 overlap = Math.max(0, bottom - top);
             } else {
                 // Horizontal overlap (shared X range)
-                const left = Math.max(rect1.left, rect2.left);
-                const right = Math.min(rect1.right, rect2.right);
-                overlap = Math.max(0, right - left);
+
+                // ------------------------------------------------------------
+                // 💎 Premium Settings Navigation Optimization
+                // ------------------------------------------------------------
+                // If both the current element and the candidate element belong to
+                // settings items (.setting-item) and they reside in different rows,
+                // we evaluate their respective focusable counts.
+                //
+                // If at least one of these settings rows contains exactly one (or zero)
+                // focusable controls (e.g., a row containing only a single wide slider
+                // or a narrow toggle switch), they do not represent a grid/column structure
+                // that requires alignment preservation.
+                //
+                // In this case, we treat them as perfectly aligned horizontally (overlap = 9999)
+                // to prevent narrow, right-aligned controls from being skipped when navigating
+                // vertically (up/down).
+                // ------------------------------------------------------------
+                const row1 = current.closest('.setting-item');
+                const row2 = el.closest('.setting-item');
+
+                if (row1 && row2 && row1 !== row2) {
+                    const count1 = getFocusableCountInRow(row1);
+                    const count2 = getFocusableCountInRow(row2);
+
+                    if (count1 <= 1 || count2 <= 1) {
+                        overlap = 9999; // Force a perfect alignment score
+                    }
+                }
+
+                // Fall back to standard physical bounding box overlap calculation
+                // if the settings item row rule did not apply.
+                if (overlap === 0) {
+                    const left = Math.max(rect1.left, rect2.left);
+                    const right = Math.min(rect1.right, rect2.right);
+                    overlap = Math.max(0, right - left);
+                }
             }
 
             // Zero out cross penalty if elements are significantly aligned

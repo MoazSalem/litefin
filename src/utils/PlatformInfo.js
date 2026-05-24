@@ -121,6 +121,29 @@ class PlatformInfo {
         return this._platform === 'tizen';
     }
 
+    /** 
+     * =========================================================================
+     * Tizen OS Version Getter
+     * =========================================================================
+     * Retrieves the decimal Tizen version directly from the platform User Agent.
+     * Essential for handling legacy API differences (e.g., power controls on <4.0).
+     * @returns {number|null} Parsed version float (e.g., 3.0, 4.0) or null if not Tizen.
+     */
+    get tizenVersion() {
+        if (!this.isTizen) {
+            return null;
+        }
+        
+        const match = navigator.userAgent.match(/Tizen\s+(\d+(?:\.\d+)?)/i);
+        if (match) {
+            const version = parseFloat(match[1]);
+            log.debug(`Parsed Tizen OS Version: ${version}`);
+            return version;
+        }
+        
+        return null;
+    }
+
     /** @returns {boolean} True if running on an LG WebOS TV */
     get isWebOS() {
         return this._platform === 'webos';

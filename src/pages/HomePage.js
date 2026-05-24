@@ -34,6 +34,7 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 import { eventBus } from '../core/EventBus.js';
 import { focusManager } from '../ui/FocusManager.js';
+import { layoutManager } from '../ui/LayoutManager.js';
 import { scrollController } from '../ui/ScrollController.js';
 import { lazyLoader } from '../utils/LazyLoader.js';
 import { storage } from '../utils/StorageService.js';
@@ -249,12 +250,21 @@ class HomePage extends Page {
                 cardType: 'resume',
                 contextType: 'resume',
                 fetchFn: async () => {
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 1: Parallel Fetching of Base Data Lists
+                    // ──────────────────────────────────────────────────────────
+                    // We initiate simultaneous network requests for both in-progress items
+                    // and next-up show items to optimize load times and keep the UI highly
+                    // responsive under typical domestic network latency.
                     const [resumeRes, nextUpRes] = await Promise.all([
                         api.getResumeItems(),
                         (async () => {
+                            // Extract maximum cutoff days limit for Next Up items from local storage.
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = {};
+                            
+                            // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
                                 const cutoff = new Date();
                                 cutoff.setDate(cutoff.getDate() - daysLimit);
@@ -264,21 +274,135 @@ class HomePage extends Page {
                         })()
                     ]);
 
-                    const resumeItems = resumeRes?.Items || [];
-                    const nextUpItems = (nextUpRes?.Items || []).filter((item) => {
-                        const position = item.UserData?.PlaybackPositionTicks || 0;
-                        return position === 0;
-                    });
+                    // Extract items list safely and tag them with a transient _isResume flag.
+                    // This flag enables the sorting comparator to distinguish between resume items
+                    // (which should sort by direct pause dates) and next-up items (which should
+                    // sort by show activity dates).
+                    const resumeItems = (resumeRes?.Items || []).map(item => ({
+                        ...item,
+                        _isResume: true
+                    }));
+                    
+                    const nextUpItems = (nextUpRes?.Items || [])
+                        .filter((item) => {
+                            // Filter out next-up items that have already been partially played,
+                            // as those are already accounted for in the continue watching row list.
+                            const position = item.UserData?.PlaybackPositionTicks || 0;
+                            return position === 0;
+                        })
+                        .map(item => ({
+                            ...item,
+                            _isResume: false
+                        }));
 
-                    // Merge Resume items first, then Next Up
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 2: Batch Fetching of Parent Show Activity Dates
+                    // ──────────────────────────────────────────────────────────
+                    // Because next-up episodes are unplayed by definition, their own
+                    // LastPlayedDate is null or undefined. To perform chronological
+                    // Plex-style sorting, we need to know exactly when the parent series
+                    // was last active. We resolve this by batch-fetching the most recent
+                    // play activity of the corresponding shows in a single network request.
+                    const nextUpSeriesIds = nextUpItems
+                        .map((item) => item.SeriesId)
+                        .filter(Boolean);
+
+                    // Initialize series activity timestamp lookup map.
+                    const seriesLastPlayedMap = {};
+
+                    if (nextUpSeriesIds.length > 0) {
+                        try {
+                            // De-duplicate the series IDs to avoid sending redundant entries in the query.
+                            const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
+                            
+                            // Query played and in-progress episodes belonging to these series IDs,
+                            // ordered by play date descending (using the official 'DatePlayed' parameter).
+                            const activeEpisodesRes = await api.getItems({
+                                SeriesIds: uniqueSeriesIds.join(','),
+                                IncludeItemTypes: 'Episode',
+                                SortBy: 'DatePlayed',
+                                SortOrder: 'Descending',
+                                Fields: 'LastPlayedDate',
+                                Recursive: true,
+                                Limit: 100
+                            });
+
+                            // Process the returned episodes to construct the series activity map.
+                            const activeEpisodes = activeEpisodesRes?.Items || [];
+                            for (const ep of activeEpisodes) {
+                                const seriesId = ep.SeriesId;
+                                const lastPlayed = ep.UserData?.LastPlayedDate;
+                                
+                                // Map each series to the newest played episode timestamp encountered.
+                                if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
+                                    seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
+                                }
+                            }
+                        } catch (err) {
+                            // Log warning and degrade gracefully back to using DateCreated sorting.
+                            console.warn('[HomePage] Failed to batch-fetch next-up parent activity dates:', err);
+                        }
+                    }
+
+                    // ──────────────────────────────────────────────────────────
+                    // STAGE 3: Merge, Deduplicate, and Interweave
+                    // ──────────────────────────────────────────────────────────
+                    // Combine the lists and de-duplicate by database Item ID.
                     const combined = [...resumeItems, ...nextUpItems];
                     
-                    // Deduplicate based on Id
                     const seen = new Set();
-                    const deduplicated = combined.filter(item => {
+                    const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
                         seen.add(item.Id);
                         return true;
+                    });
+
+                    // ==========================================================
+                    // PLEX-STYLE CHRONOLOGICAL SORTING
+                    // ==========================================================
+                    //
+                    // Replicates Plex's signature dashboard logic by sorting the merged 
+                    // array descending based on when the show/movie was last interacted with. 
+                    // Instead of a rigid "all resume items first" block layout, this interweaves
+                    // your partially played movies/episodes with the next upcoming episodes in 
+                    // the exact order they were last watched.
+                    //
+                    // Falls back to DateCreated (indexing date) or 0 (epoch) for safety.
+                    deduplicated.sort((a, b) => {
+                        // Retrieve or compute the most accurate activity timestamp available for item A.
+                        let timeA = 0;
+                        if (a._isResume && a.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                        } else if (a.SeriesId && seriesLastPlayedMap[a.SeriesId]) {
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
+                            timeA = seriesLastPlayedMap[a.SeriesId];
+                        } else if (a.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeA = new Date(a.UserData.LastPlayedDate).getTime();
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeA = new Date(a.DateCreated || 0).getTime();
+                        }
+
+                        // Retrieve or compute the most accurate activity timestamp available for item B.
+                        let timeB = 0;
+                        if (b._isResume && b.UserData?.LastPlayedDate) {
+                            // If it's a resume item, we prioritize its direct, precise pause timestamp.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                        } else if (b.SeriesId && seriesLastPlayedMap[b.SeriesId]) {
+                            // If it's a next-up item, we prioritize its parent show's latest activity timestamp.
+                            timeB = seriesLastPlayedMap[b.SeriesId];
+                        } else if (b.UserData?.LastPlayedDate) {
+                            // Fallback to the item's own LastPlayedDate if available.
+                            timeB = new Date(b.UserData.LastPlayedDate).getTime();
+                        } else {
+                            // Fallback to the media creation/indexing timestamp.
+                            timeB = new Date(b.DateCreated || 0).getTime();
+                        }
+                        
+                        // Sort descending: most recently active media at the start of the row.
+                        return timeB - timeA;
                     });
 
                     return deduplicated.length > 0 ? deduplicated : null;
@@ -341,9 +465,35 @@ class HomePage extends Page {
                 id: `latest-${lib.Id}`,
                 title: i18n.t('LatestFromLibrary', [lib.Name]),
                 priority: 2,
-                // Music, Live TV, and Home Video libraries use square cards, everything else uses portrait
-                layout: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'portrait',
-                cardType: (lib.CollectionType === 'music' || lib.CollectionType === 'livetv' || lib.CollectionType === 'homevideos') ? 'square' : 'poster',
+                // Music, Live TV, Home Video, and Music Video libraries use square cards, everything else uses portrait
+                /*
+                 * ============================================================
+                 * UI Layout Aspect Determination (Apple HIG Compliance)
+                 * ============================================================
+                 * 
+                 * Following Apple's Human Interface Guidelines, grid systems 
+                 * should display items in card aspect ratios that match their 
+                 * media type semantics. 
+                 * 
+                 *   - Audio/Music albums, live tuner sources, personal/home 
+                 *     recordings, and music videos require a symmetrical 
+                 *     1:1 aspect ratio ("square") for ideal presentation.
+                 * 
+                 *   - Movies and TV Shows align beautifully to a 2:3 aspect 
+                 *     ratio ("portrait" or "poster" card type).
+                 */
+                layout: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'portrait',
+                cardType: (
+                    lib.CollectionType === 'music' || 
+                    lib.CollectionType === 'livetv' || 
+                    lib.CollectionType === 'homevideos' || 
+                    lib.CollectionType === 'musicvideos'
+                ) ? 'square' : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -360,6 +510,27 @@ class HomePage extends Page {
 
         // Sort by ascending priority so we render in order
         descriptors.sort((a, b) => a.priority - b.priority);
+
+        // ====================================================================
+        // Force Expandable Posters Layout Override
+        // ====================================================================
+        // If the user is running the Modern layout and has toggled on the force-poster
+        // preference under settings, we dynamically coerce all horizontal track rows 
+        // to use standard portrait layouts ('portrait') with 'poster' cards.
+        // This ensures the custom expanding-backdrops and visual transitions apply 
+        // universally, aligning with unified grids (Apple HIG style).
+        // ====================================================================
+        const isModern = layoutManager.getLayout() === 'modern';
+        const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
+        if (forceExpandablePosters) {
+            for (const desc of descriptors) {
+                // The "My Media" row uses library folder cards that must remain as static landscape cards
+                if (desc.id !== 'my-media') {
+                    desc.layout = 'portrait';
+                    desc.cardType = 'poster';
+                }
+            }
+        }
 
         // Apply dynamic user layout sorting and visibility filtering
         return homeLayoutManager.applyLayout(descriptors);
@@ -485,8 +656,30 @@ class HomePage extends Page {
             // Notify base Page that async content is ready for scroll/focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // If nothing received focus yet (e.g. all rows empty), fall back to sidebar
-            if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+            // =================================================================
+            // CHRONOLOGICAL INITIAL FOCUS RACE CONDITION RESOLUTION
+            // =================================================================
+            // When the Hero Carousel is disabled and My Media is hidden, the 
+            // merged Continue Watching and Next Up row is the physical top row. 
+            // Because this row makes complex backend queries (including batch
+            // fetching parent show activity dates), it finishes rendering later
+            // than other simple components.
+            //
+            // If the row rendering process finishes, it schedules a deferred 
+            // focus routine via requestAnimationFrame to guarantee the DOM is painted.
+            // However, the microtask-based render pipeline finishes Step 6 and reaches
+            // Step 7 before the animation frame callback executes. 
+            //
+            // Without checking `_focusInitialized`, the synchronous check below would 
+            // see that no focus has been claimed yet, forcefully grab the sidebar, 
+            // and set `focusManager.getFocused()` to a sidebar element. When the 
+            // animation frame finally fires on the next paint tick, it would see that 
+            // a focus target already exists and gracefully decline to override it, 
+            // leaving the user stranded on the sidebar.
+            //
+            // Checking `!this._focusInitialized` prevents this premature fallback.
+            // =================================================================
+            if (!this._focusInitialized && !focusManager.getActiveSection() && !focusManager.getFocused()) {
                 this.setActiveSection('sidebar');
             }
         } catch (error) {
@@ -539,7 +732,12 @@ class HomePage extends Page {
             // Build skeleton interior — title + shimmer cards
             // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
             const skeletonCardCount = landscape ? 5 : 8;
-            const skeletonHtml = CardRenderer.createSkeletonHtml(skeletonCardCount, landscape);
+            const skeletonHtml = CardRenderer.createSkeletonHtml(
+                skeletonCardCount,
+                landscape,
+                descriptor.cardType || 'poster',
+                shouldHideLabels
+            );
 
             sectionEl.innerHTML = `
                 <h2 class="row-title">${descriptor.title}</h2>
@@ -811,7 +1009,7 @@ class HomePage extends Page {
         this._focusInitialized = true; // Prevent double-initialization
 
         // [RACE CONDITION FIX] Capture and clear _pendingNavState synchronously!
-        // The render pipeline yields via Promise (microtasks), so if data is cached, 
+        // The render pipeline yields via Promise (microtasks), so if data is cached,
         // the pipeline reaches Step 7 and calls NavigationState BEFORE this requestAnimationFrame
         // can clear the state. That leads to NavigationState firing a 50ms fallback timeout
         // which clobbers our correct focus back to "sidebar" or whatever just as the user
@@ -1079,6 +1277,16 @@ class HomePage extends Page {
             const heroCount = storage.getItem('pref:heroCarouselCount');
             const limit = heroCount ? parseInt(heroCount, 10) : 5;
 
+            // =================================================================
+            // HERO CAROUSEL DATA FILTERS RESOLUTION
+            // =================================================================
+            // Check if the user has enabled the "Ignore Watched Content" preference.
+            // If active, we append the 'IsUnplayed' item filter to the request so that
+            // the Jellyfin backend returns only unplayed Movies and Series for the banner.
+            const ignoreWatched = storage.getItem('pref:heroCarouselIgnoreWatched') === 'true';
+            const filters = ignoreWatched ? 'HasBackdrop,IsUnplayed' : 'HasBackdrop';
+
+            // Fetch random items with backdrops from user libraries.
             const response = await api.getItems({
                 SortBy: 'Random',
                 Recursive: true,
@@ -1086,7 +1294,7 @@ class HomePage extends Page {
                 Fields: 'Overview,ImageTags,ProductionYear,RunTimeTicks,OfficialRating,CommunityRating,ParentLogoImageTag,ParentLogoItemId,SeriesId,ProviderIds',
                 EnableImageTypes: 'Primary,Backdrop,Logo',
                 IncludeItemTypes: 'Movie,Series',
-                Filters: 'HasBackdrop'
+                Filters: filters
             });
 
             if (!this._isMounted) return;
@@ -1103,13 +1311,15 @@ class HomePage extends Page {
                 if (mdblist && mdblist.plugin) {
                     log.info('Enriching hero items with MDBList data...');
                     try {
-                        await Promise.all(items.map(async (item) => {
-                            // Fetch and attach to the item object
-                            // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
-                            // We pass false for includeAwards to optimize for carousel performance.
-                            const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
-                            item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
-                        }));
+                        await Promise.all(
+                            items.map(async (item) => {
+                                // Fetch and attach to the item object
+                                // Note: We prioritize item.ProviderIds.Imdb if present to avoid extra API calls.
+                                // We pass false for includeAwards to optimize for carousel performance.
+                                const imdbId = item.ProviderIds?.Imdb || item.ProviderIds?.imdb;
+                                item._mdbMetadata = await mdblist.plugin.getItemMetadata(item.Id, imdbId, false);
+                            })
+                        );
                     } catch (err) {
                         log.warn('Enriching hero items failed, continuing with partial data', err);
                     }
@@ -1121,6 +1331,20 @@ class HomePage extends Page {
 
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
+                // Determine current carousel style and compact settings
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+                const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
+
+                // Reset existing classes to prevent state leaking when settings change
+                placeholder.className = '';
+
+                // Apply style-specific and layout-specific classes to the wrapper
+                placeholder.classList.add(`style-${carouselStyle}`);
+                if (isCompact) {
+                    placeholder.classList.add('style-compact');
+                }
+
+                // Render the hero carousel and initialize its event listeners
                 placeholder.innerHTML = this._hero.render();
                 this._hero.init(placeholder.firstElementChild);
             }
@@ -1261,15 +1485,36 @@ class HomePage extends Page {
                         }
                     }
 
-                    // Determine item types most likely to have rich artwork
+                    // ==========================================================
+                    // Dynamic Thumbnail Candidate Typing
+                    // ==========================================================
+                    // Map the library collection type to the most appropriate
+                    // Jellyfin item type that yields high-resolution artwork:
+                    //
+                    // - music: MusicAlbum works better than track/artist stubs.
+                    // - musicvideos: Query MusicVideo items recursively.
+                    // - livetv: Query TvChannel items to pull in channel logo artwork.
+                    // - photos: Include both Photo and Video contents since camera
+                    //   rolls naturally mix images and videos.
+                    // - homevideos: Query Video items recursively since they
+                    //   never have standard "Movie" or "Series" tags.
+                    // ==========================================================
                     const includeItemTypes = (() => {
                         switch (lib.CollectionType) {
                             case 'music':
                                 return 'MusicAlbum';
+                            case 'musicvideos':
+                                return 'MusicVideo';
+                            case 'livetv':
+                                return 'TvChannel';
                             case 'boxsets':
                                 return 'BoxSet';
                             case 'photos':
-                                return 'Photo';
+                                return 'Photo,Video';
+                            case 'homevideos':
+                                // Allow both photo and video items from home video libraries
+                                // to act as candidates for dynamic fallback thumbnail generation.
+                                return 'Photo,Video';
                             case 'playlists':
                                 return 'Playlist';
                             default:
@@ -1277,17 +1522,57 @@ class HomePage extends Page {
                         }
                     })();
 
-                    const response = await api.getItems({
-                        ParentId: lib.Id,
-                        SortBy: 'Random',
-                        Recursive: true,
-                        Limit: 5,
-                        Fields: 'BackdropImageTags,ImageTags',
-                        ImageTypeLimit: 1,
-                        IncludeItemTypes: includeItemTypes,
-                        EnableImageTypes: 'Backdrop,Thumb,Primary',
-                        Filters: 'HasImage' // Only items with guaranteed artwork
-                    });
+                    // ==========================================================
+                    // Dynamic Thumbnail Library Query
+                    // ==========================================================
+                    // Live TV (livetv) libraries are not standard folder structures
+                    // and do not have child items under a ParentId. Instead, they 
+                    // store global TV Channels, which we fetch using the specialized
+                    // getLiveTvChannels API endpoint. Everything else uses standard
+                    // child item queries.
+                    // ==========================================================
+                    let response;
+                    if (lib.CollectionType === 'livetv') {
+                        // -----------------------------------------------------
+                        // Live TV Dynamic Thumbnail Randomization
+                        // -----------------------------------------------------
+                        // We query the first 50 channels with image types explicitly enabled
+                        // to guarantee that the server delivers proper ImageTags and aspect ratios.
+                        // Then we filter out any channels without valid images before shuffling
+                        // to ensure a successful rotating thumbnail selection.
+                        // -----------------------------------------------------
+                        const ltvResponse = await api.getLiveTvChannels({
+                            Limit: 50,
+                            EnableImageTypes: 'Primary,Thumb,Backdrop',
+                            Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                        });
+                        
+                        // Extract channel items safely
+                        const ltvItems = ltvResponse?.Items || [];
+                        
+                        // Filter channels to only those with valid primary, thumb or backdrop artwork
+                        const validLtvItems = ltvItems.filter((item) => 
+                            item.ImageTags?.Primary || 
+                            item.ImageTags?.Thumb || 
+                            item.BackdropImageTags?.length > 0
+                        );
+                        
+                        // Local shuffle to randomize the logo across loads
+                        const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
+                        response = { Items: shuffledLtv.slice(0, 5) };
+                    } else {
+                        response = await api.getItems({
+                            ParentId: lib.Id,
+                            SortBy: 'Random',
+                            Recursive: true,
+                            Limit: 5,
+                            Fields: 'BackdropImageTags,ImageTags',
+                            ImageTypeLimit: 1,
+                            IncludeItemTypes: includeItemTypes,
+                            EnableImageTypes: 'Backdrop,Thumb,Primary',
+                            Filters: 'HasImage' // Only items with guaranteed artwork
+                        });
+                    }
 
                     if (response?.Items?.length > 0) {
                         const { maxWidth, quality } = imageService.getParams('card-backdrop');
@@ -1318,18 +1603,18 @@ class HomePage extends Page {
                                 }
                             } else if (lib.CollectionType === 'playlists') {
                                 // Playlists themselves usually only have a 4-item grid (Primary) and no Backdrop.
-                                // To get a true landscape backdrop for the home page, we fetch the items 
+                                // To get a true landscape backdrop for the home page, we fetch the items
                                 // inside the playlist and grab a backdrop from one of them.
                                 try {
                                     const pResponse = await api.getPlaylistItems(item.Id, {
                                         Limit: 20,
                                         Fields: 'BackdropImageTags'
                                     });
-                                    
+
                                     const pItems = pResponse?.Items || [];
                                     // Shuffle locally so the backdrop changes across reloads
                                     const shuffled = pItems.sort(() => 0.5 - Math.random());
-                                    
+
                                     for (const pItem of shuffled) {
                                         if (pItem.BackdropImageTags?.length > 0) {
                                             resolvedUrl = api.getImageUrl(pItem.Id, 'Backdrop', {
@@ -1375,8 +1660,39 @@ class HomePage extends Page {
                                         tag: item.ImageTags.Primary
                                     });
                                 }
+                            } else if (
+                                lib.CollectionType === 'photos' || 
+                                lib.CollectionType === 'homevideos' ||
+                                lib.CollectionType === 'musicvideos' ||
+                                lib.CollectionType === 'livetv'
+                            ) {
+                                // ==========================================================
+                                // Photo, Home Videos, Music Videos & Live TV Fallbacks
+                                // ==========================================================
+                                // These libraries do not rely on standard theatrical backdrops.
+                                // Instead, we prioritize the Primary tag (photos, channel logos,
+                                // video snapshots) to immediately capture the authentic artwork.
+                                // ==========================================================
+                                if (item.ImageTags?.Primary) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Primary', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Primary
+                                    });
+                                } else if (item.ImageTags?.Thumb) {
+                                    resolvedUrl = api.getImageUrl(item.Id, 'Thumb', {
+                                        maxWidth,
+                                        quality,
+                                        tag: item.ImageTags.Thumb
+                                    });
+                                }
                             } else {
-                                // Standard: Backdrop → Thumb → Primary
+                                // ==========================================================
+                                // Standard Fallback Chain (Movies, Series, etc.)
+                                // ==========================================================
+                                // backdrop is always prioritized for library landscape cards
+                                // to create a dramatic theatrical header feel.
+                                // ==========================================================
                                 if (item.BackdropImageTags?.length > 0) {
                                     resolvedUrl = api.getImageUrl(item.Id, 'Backdrop', {
                                         maxWidth,
@@ -1408,16 +1724,46 @@ class HomePage extends Page {
                                 `[DynamicThumb] ${lib.Name}: typed candidates had no image, trying broad fallback`
                             );
 
-                            const fallbackResponse = await api.getItems({
-                                ParentId: lib.Id,
-                                SortBy: 'Random',
-                                Recursive: true,
-                                Limit: 10,
-                                Fields: 'BackdropImageTags,ImageTags',
-                                ImageTypeLimit: 1,
-                                EnableImageTypes: 'Backdrop,Thumb,Primary',
-                                Filters: 'HasImage'
-                            });
+                            let fallbackResponse;
+                            if (lib.CollectionType === 'livetv') {
+                                // -----------------------------------------------------
+                                // Live TV Fallback Thumbnail Randomization
+                                // -----------------------------------------------------
+                                // Query a wider set of 50 channels with image types enabled.
+                                // We filter to channels with valid images and shuffle them locally
+                                // to guarantee a working fallback thumbnail.
+                                // -----------------------------------------------------
+                                const ltvFallback = await api.getLiveTvChannels({
+                                    Limit: 50,
+                                    EnableImageTypes: 'Primary,Thumb,Backdrop',
+                                    Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
+                                });
+                                
+                                // Extract items safely
+                                const ltvFallbackItems = ltvFallback?.Items || [];
+                                
+                                // Keep only channels that have valid visual assets
+                                const validFallbackItems = ltvFallbackItems.filter((item) =>
+                                    item.ImageTags?.Primary ||
+                                    item.ImageTags?.Thumb ||
+                                    item.BackdropImageTags?.length > 0
+                                );
+                                
+                                // Randomize the list of candidate fallback cards
+                                const shuffledFallback = validFallbackItems.sort(() => 0.5 - Math.random());
+                                fallbackResponse = { Items: shuffledFallback.slice(0, 10) };
+                            } else {
+                                fallbackResponse = await api.getItems({
+                                    ParentId: lib.Id,
+                                    SortBy: 'Random',
+                                    Recursive: true,
+                                    Limit: 10,
+                                    Fields: 'BackdropImageTags,ImageTags',
+                                    ImageTypeLimit: 1,
+                                    EnableImageTypes: 'Backdrop,Thumb,Primary',
+                                    Filters: 'HasImage'
+                                });
+                            }
 
                             for (const item of fallbackResponse?.Items ?? []) {
                                 if (item.BackdropImageTags?.length > 0) {

@@ -9,6 +9,7 @@
 
 import { logger } from './Logger.js';
 import { eventBus } from '../core/EventBus.js';
+import BlurHashDecoder from './BlurHashDecoder.js';
 
 const log = logger.create('LazyLoader');
 
@@ -87,14 +88,22 @@ class LazyLoader {
 
         const images = row.querySelectorAll('img[data-src]');
         images.forEach((img) => {
+            this._decodeAndDrawBlurhash(img);
+
             img.src = img.dataset.src;
             img.onload = () => {
                 img.classList.add('loaded');
 
-                // Remove shimmer from parent card-image
+                // Remove shimmer from parent card-image and handle BlurHash fade out
                 const parent = img.parentElement;
                 if (parent && parent.classList.contains('card-image')) {
                     parent.classList.remove('skeleton-shimmer');
+
+                    const canvas = parent.querySelector('.blurhash-canvas');
+                    if (canvas) {
+                        canvas.classList.add('fade-out');
+                        setTimeout(() => canvas.remove(), 160);
+                    }
                 }
 
                 img.removeAttribute('data-src');
@@ -113,14 +122,22 @@ class LazyLoader {
     _loadImage(img) {
         if (!img || !img.dataset.src) return;
 
+        this._decodeAndDrawBlurhash(img);
+
         img.src = img.dataset.src;
         img.onload = () => {
             img.classList.add('loaded');
 
-            // Remove shimmer from parent card-image
+            // Remove shimmer from parent card-image and handle BlurHash fade out
             const parent = img.parentElement;
             if (parent && parent.classList.contains('card-image')) {
                 parent.classList.remove('skeleton-shimmer');
+
+                const canvas = parent.querySelector('.blurhash-canvas');
+                if (canvas) {
+                    canvas.classList.add('fade-out');
+                    setTimeout(() => canvas.remove(), 160);
+                }
             }
 
             img.removeAttribute('data-src');
@@ -132,6 +149,46 @@ class LazyLoader {
         if (this.observer) {
             this.observer.unobserve(img);
         }
+    }
+
+    /**
+     * Decode and draw the BlurHash string onto the sibling canvas element.
+     * Run asynchronously to keep the main thread and D-pad event loops responsive on TV hardware.
+     * @param {HTMLImageElement} img - The image element being loaded
+     * @private
+     */
+    _decodeAndDrawBlurhash(img) {
+        const parent = img.parentElement;
+        if (!parent) return;
+
+        const canvas = parent.querySelector('.blurhash-canvas');
+        if (!canvas || canvas.classList.contains('blurhash-decoded')) return;
+
+        const blurHashStr = canvas.dataset.blurhash;
+        if (!blurHashStr) return;
+
+        // Mark it decoded immediately to prevent duplicate decoding attempts
+        canvas.classList.add('blurhash-decoded');
+
+        // Defer decoding to keep UI/focus animations perfectly butter-smooth
+        setTimeout(() => {
+            // Decoded dimensions are kept extremely small (20x20) for optimal CPU/GPU usage
+            const width = 20;
+            const height = 20;
+
+            const pixels = BlurHashDecoder.decode(blurHashStr, width, height);
+            if (!pixels) return;
+
+            // Prepare the 2D canvas context and write pixels
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            if (ctx) {
+                const imgData = ctx.createImageData(width, height);
+                imgData.data.set(pixels);
+                ctx.putImageData(imgData, 0, 0);
+            }
+        }, 0);
     }
 
     /**
@@ -150,11 +207,13 @@ class LazyLoader {
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');
 
-            // Remove any dynamic overlays (tints/labels) that might conflict with the fallback
-            const overlays = parent.querySelectorAll('.card-overlay-tint, .card-overlay-label');
+            // Remove any dynamic overlays (tints/labels) and BlurHash canvases that might conflict with the fallback
+            const overlays = parent.querySelectorAll('.card-overlay-tint, .card-overlay-label, .blurhash-canvas');
             overlays.forEach((el) => el.remove());
 
             // Construct and inject fallback if attributes exist
@@ -167,7 +226,7 @@ class LazyLoader {
                 const fallbackHtml = `
                     <div class="media-fallback grad-${gradNum}">
                         ${!hideInitials ? `<div class="media-fallback-initials">${initials}</div>` : ''}
-                        <div class="media-fallback-name">${name}</div>
+                        ${!isModern ? `<div class="media-fallback-name">${name}</div>` : ''}
                     </div>
                 `;
                 // Insert at the beginning so overlays (like progress/badges) render on top

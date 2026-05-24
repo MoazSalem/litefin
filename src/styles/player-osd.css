@@ -176,14 +176,69 @@
 }
 
 .osd-title-logo {
-    max-height: 52px;
-    max-width: 200px;
     object-fit: contain;
     filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
     /* Force Hardware acceleration */
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
     display: block;
+}
+
+/* Customizable logo sizes */
+.osd-title-logo.logo-small {
+    max-height: 36px;
+    max-width: 140px;
+}
+
+.osd-title-logo.logo-medium {
+    max-height: 52px;
+    max-width: 200px;
+}
+
+.osd-title-logo.logo-large {
+    max-height: 68px;
+    max-width: 260px;
+}
+
+.osd-title-logo.logo-extralarge {
+    max-height: 84px;
+    max-width: 320px;
+}
+
+.osd-title-logo.logo-xxl {
+    max-height: 100px;
+    max-width: 380px;
+}
+
+/* Adjust title wrapper and main row heights depending on logo size */
+.osd-title-wrap.has-logo-small,
+.osd-title-wrap.has-logo-small .osd-title-main {
+    height: 48px !important;
+    max-height: 48px !important;
+}
+
+.osd-title-wrap.has-logo-medium,
+.osd-title-wrap.has-logo-medium .osd-title-main {
+    height: 60px !important;
+    max-height: 60px !important;
+}
+
+.osd-title-wrap.has-logo-large,
+.osd-title-wrap.has-logo-large .osd-title-main {
+    height: 76px !important;
+    max-height: 76px !important;
+}
+
+.osd-title-wrap.has-logo-extralarge,
+.osd-title-wrap.has-logo-extralarge .osd-title-main {
+    height: 92px !important;
+    max-height: 92px !important;
+}
+
+.osd-title-wrap.has-logo-xxl,
+.osd-title-wrap.has-logo-xxl .osd-title-main {
+    height: 108px !important;
+    max-height: 108px !important;
 }
 
 .osd-title-secondary {

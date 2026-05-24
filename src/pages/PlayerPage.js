@@ -69,6 +69,18 @@ class PlayerPage extends Page {
         this._secondarySubtitleEndTime = null;
     }
 
+    /**
+     * ========================================================================
+     * OSD CONTROLLER PUBLIC ACCESSOR
+     * ========================================================================
+     * Exposes the active OSD Controller instance to external coordinators
+     * such as the RemoteButtonManager. Enables custom hardware remote mapping.
+     * ========================================================================
+     */
+    get osd() {
+        return this._osd;
+    }
+
     render() {
         return `
             <div class="page player-page">
@@ -567,7 +579,14 @@ class PlayerPage extends Page {
             //    so OSD button clicks can never accidentally reach this handler even if
             //    stopPropagation() is still in flight on older TV browsers.
             this.el.addEventListener('click', (e) => {
-                if (!PlayerSettings.get('enableMagicCursor')) return;
+                /*
+                 * DELIBERATE PHYSICAL CLICK EXEMPTION:
+                 * We do NOT bypass physical clicks when 'enableMagicCursor' is false.
+                 * The user turned off "enableMagicCursor" to prevent accidental pointer
+                 * movements (gyro shakes) from waking the OSD. But if they physically
+                 * click the video background, it is a deliberate intent to wake up the
+                 * OSD or toggle playback state.
+                 */
 
                 const osdOverlay = this.el.querySelector('#osd-overlay');
 
@@ -722,27 +741,58 @@ class PlayerPage extends Page {
      * @returns {number|undefined} The resolved track index, or undefined if no match
      */
     _resolveTrackByLang(mediaSource, type, targetLang, targetTitle) {
+        // Guard check: Ensure mediaSource and MediaStreams exist before proceeding
         if (!mediaSource || !mediaSource.MediaStreams) return undefined;
+        // Guard check: Ensure targetLang is valid
         if (!targetLang) return undefined;
 
-        // If the user explicitly disabled subtitles via session memory
+        // Special case: If user explicitly disabled subtitles via session memory
         if (type === 'Subtitle' && targetLang === 'none') {
             return -1;
         }
 
-        const streams = mediaSource.MediaStreams.filter((s) => s.Type === type);
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we must exclude PGS streams from candidate track resolution. This prevents
+        // session track memory from restoring a disabled PGS subtitle track and causing
+        // subtitles to end up completely off, falling back to a valid track instead.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+
+        // Filter the streams to only get the ones of the requested type (Audio/Subtitle)
+        const streams = mediaSource.MediaStreams.filter((s) => {
+            // Ensure stream type matches the requested type
+            if (s.Type !== type) return false;
+
+            // Apply PGS filter guard to subtitle streams if PGS playback mode is disabled
+            if (type === 'Subtitle' && disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    // Exclude disabled PGS track
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        // If no matching candidate streams are found, return undefined
         if (streams.length === 0) return undefined;
 
-        // 1. Try exact match: Language + Title
+        // 1. Try exact match: Match both Language and Display Title/Title
         const exactMatch = streams.find(
             (s) => (s.Language || 'none') === targetLang && (s.DisplayTitle || s.Title || 'none') === targetTitle
         );
+        // If exact match found, return its index
         if (exactMatch) return exactMatch.Index;
 
-        // 2. Fall back to Language only
+        // 2. Fall back to Language only match
         const langMatch = streams.find((s) => (s.Language || 'none') === targetLang);
+        // If language match found, return its index
         if (langMatch) return langMatch.Index;
 
+        // Return undefined if no matches could be resolved
         return undefined;
     }
 
@@ -1117,7 +1167,23 @@ class PlayerPage extends Page {
         });
 
         // Bind events
-        this._osd.on('exit', () => this._stopAndExit());
+        this._osd.on('exit', () => {
+            // ================================================================
+            // TRANSITION GUARD FOR EXIT SIGNALS
+            // ================================================================
+            // In webOS and other smart TV browsers, DOM manipulation (such as 
+            // cycling the video container to clear hardware buffers) triggers 
+            // focus loss which can synthesize back / exit signals. 
+            //
+            // If the player is currently in the process of switching tracks,
+            // ignore this command entirely to prevent unexpected shutdowns.
+            // ================================================================
+            if (this._isSwitching) {
+                log.warn('Ignoring OSD exit command during track transition.');
+                return;
+            }
+            this._stopAndExit();
+        });
         this._osd.on('next', () => this._playNextItem()); // Ensure OSD emits this
         this._osd.on('previous', () => this._playPreviousItem()); // Ensure OSD emits this
         /* Queue modal: instant skip to a specific index in the play queue. */
@@ -1265,7 +1331,17 @@ class PlayerPage extends Page {
         }
 
         // 2. Main Flow: Check if we can play next item (RepeatAll is handled inside hasNext())
-        if (playQueue.hasNext()) {
+        // ---------------------------------------------------------------------
+        // Check if the current item is a TV show episode, and if so, respect
+        // the user's "Play next episode automatically" preference. If the setting
+        // is disabled, we should exit the player instead of playing the next episode.
+        // For non-episode media types (e.g. movies, music tracks), we always
+        // advance automatically through the playlist queue.
+        // ---------------------------------------------------------------------
+        const isEpisodeItem = this._item?.Type === 'Episode';
+        const isAutoPlayEnabled = !isEpisodeItem || PlayerSettings.get('enableNextEpisodeAutoPlay');
+
+        if (playQueue.hasNext() && isAutoPlayEnabled) {
             log.info('Item ended, auto-advancing to next item');
             this._playNextItem();
             eventBus.emit('player:ended', { item: this._item });
@@ -1801,8 +1877,13 @@ class PlayerPage extends Page {
             overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
             overlay.classList.remove('hidden');
 
-            // Apply user styles
-            const styles = SubtitleStyles.getTextStyles();
+            /* -------------------------------------------------------------
+               Determine if active media source represents HDR content.
+               Pass HDR context to get independent opacity styles.
+               ------------------------------------------------------------- */
+            const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+            const styles = SubtitleStyles.getTextStyles(isHdr);
+            
             // Apply to the span
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
@@ -1863,8 +1944,13 @@ class PlayerPage extends Page {
             overlay.innerHTML = `<span class="subtitle-line">${data.text}</span>`;
             overlay.classList.remove('hidden');
 
-            // Apply secondary text styles — inherits primary appearance, overrides size
-            const styles = SubtitleStyles.getSecondaryTextStyles();
+            /* -------------------------------------------------------------
+               Retrieve player HDR state to fetch appropriate opacity values.
+               Secondary subtitles inherit opacity and styling from primary settings.
+               ------------------------------------------------------------- */
+            const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+            const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
+            
             const span = overlay.querySelector('.subtitle-line');
             if (span) {
                 SubtitleStyles.applyStyles(span, styles);
@@ -1935,6 +2021,12 @@ class PlayerPage extends Page {
      * Both primary and secondary overlays are refreshed here.
      */
     _refreshSubtitleStyles() {
+        /* -------------------------------------------------------------
+           Determine active playback HDR format to correctly choose
+           between SDR and HDR text opacity settings.
+           ------------------------------------------------------------- */
+        const isHdr = this._player?.isCurrentMediaHDR?.() || false;
+
         // Refresh primary overlay
         const overlay = document.getElementById('subtitle-overlay');
         if (overlay && !overlay.classList.contains('hidden')) {
@@ -1942,8 +2034,8 @@ class PlayerPage extends Page {
             if (span) {
                 log.debug('Refreshing primary subtitle styles');
 
-                // Re-apply text styles
-                const styles = SubtitleStyles.getTextStyles();
+                // Re-apply text styles with current HDR status
+                const styles = SubtitleStyles.getTextStyles(isHdr);
                 SubtitleStyles.applyStyles(span, styles);
 
                 // Re-apply container styles (position/window)
@@ -1967,8 +2059,8 @@ class PlayerPage extends Page {
             if (span) {
                 log.debug('Refreshing secondary subtitle styles');
 
-                // Secondary uses inherited styles with its own size override
-                const styles = SubtitleStyles.getSecondaryTextStyles();
+                // Secondary uses inherited styles with its own size override and respects HDR opacity settings
+                const styles = SubtitleStyles.getSecondaryTextStyles(isHdr);
                 SubtitleStyles.applyStyles(span, styles);
 
                 const windowStyles = SubtitleStyles.getSecondaryWindowStyles();
@@ -2355,6 +2447,19 @@ class PlayerPage extends Page {
 
     onBack() {
         log.info('onBack() called');
+
+        // ====================================================================
+        // PHYSICAL / PLATFORM BACK BUTTON TRANSITION GUARD
+        // ====================================================================
+        // Discard any back button presses or synthetic back key events from 
+        // the host environment while transitioning tracks. This ensures that 
+        // focus jumps or physical remote hits during the brief settle window 
+        // do not cancel the upcoming playback session.
+        // ====================================================================
+        if (this._isSwitching) {
+            log.info('Ignoring back event during in-progress track switch.');
+            return true;
+        }
 
         // Delegate to OSD — it handles menu close → OSD hide → exit chain
         if (this._osd?.handleBack?.()) {

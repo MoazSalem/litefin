@@ -9,4 +9,4 @@
 // Core UI utilities
 export { focusManager } from './FocusManager.js';
 
-export { layoutManager, LAYOUT, THEMES } from './LayoutManager.js';
+export { layoutManager, LAYOUT, THEME_MODES } from './LayoutManager.js';

@@ -266,12 +266,13 @@ class LibraryPage extends Page {
             Object.assign(this.state, savedState.stateData);
 
             // ------------------------------------------------------------------
-            // Load persisted view mode for this library.
+            // Load persisted view mode, sort configurations, and active filters.
             // We do this AFTER the Object.assign so the cache doesn't overwrite
             // a preference the user changed while browsing back and forth.
             // ------------------------------------------------------------------
             this._loadPersistedViewMode();
             this._loadPersistedSortMode();
+            this._loadPersistedFilters();
 
             // 1. Setup UI Components
             this._renderTabs();
@@ -344,10 +345,12 @@ class LibraryPage extends Page {
             await this._fetchLibraryInfo();
         }
 
-        // Load persisted view mode now that we know the libraryId and collectionType.
-        // This happens before _renderGrid() so the correct mode is active from the start.
+        // Load persisted view mode, sort configurations, and filters now that we know
+        // the libraryId and collectionType. This happens before _renderGrid() so the correct
+        // display modes and subsets are active from the very beginning.
         this._loadPersistedViewMode();
         this._loadPersistedSortMode();
+        this._loadPersistedFilters();
 
         // 2. Setup UI Components
         this._renderTabs();
@@ -756,7 +759,12 @@ class LibraryPage extends Page {
             // Show a skeleton whose shape matches the active view mode.
             // For forced landscape tab types, ignore viewMode and show landscape skeletons.
             const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
-            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode);
+            const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
+            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isLibraryView = this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
+            const shouldHideLabels = (isLibraryView && hideLibraryLabels) || (isLibraryView && isModern);
+
+            grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
         }
 
         try {
@@ -1578,6 +1586,39 @@ class LibraryPage extends Page {
     }
 
     /**
+     * ========================================================================
+     * Filter State Preservation and Rehydration
+     * ========================================================================
+     * Load the user's previously applied filters for this specific library.
+     * Preserving filter preferences ensures a personalized and streamlined
+     * navigation experience across sessions, conforming to state-preservation
+     * recommendations from Apple's Human Interface Guidelines.
+     */
+    _loadPersistedFilters() {
+        // Skip sub-views (genre, studio, tag pages, etc.) to prevent overriding
+        // their specific query parameters with the general library filters.
+        if (this._isSubView()) {
+            return;
+        }
+
+        // Retrieve saved filters for this library from local storage
+        const filtersKey = `pref:library:filters:${this.state.libraryId}`;
+        const savedFilters = storage.getItem(filtersKey);
+
+        if (savedFilters) {
+            try {
+                // Parse the JSON string back into a filters object
+                this.state.filters = JSON.parse(savedFilters);
+                log.info(`[Filters] Rehydrated persisted filters for library ${this.state.libraryId}:`, this.state.filters);
+            } catch (e) {
+                // Fallback gracefully on parsing errors to keep the application stable
+                log.error('Failed to parse persisted filters, falling back to empty state', e);
+                this.state.filters = {};
+            }
+        }
+    }
+
+    /**
      * Resolve the CardRenderer card type string based on the active viewMode,
      * viewType override (Episodes, Networks), and library collection type.
      *
@@ -1965,6 +2006,14 @@ class LibraryPage extends Page {
         // Generate HTML using the correct card type and view mode flag
         const html = items
             .map((item) =>
+                // ==========================================================
+                // Grid Card Rendering Configuration
+                // ==========================================================
+                // Here we set 'isGrid: true' to tell the card renderer that 
+                // this card is rendered inside the vertical library grid.
+                // This disables horizontal poster expansions to maintain 
+                // clean, stable column layouts and prevent shifts on TV displays.
+                // ==========================================================
                 CardRenderer.createCardHtml(item, {
                     isLandscape: isLandscape || this.state.viewMode === 'thumb' || this.state.viewMode === 'banner',
                     type: this.state.viewMode === 'banner' ? 'banner' : resolvedCardType,
@@ -1975,7 +2024,8 @@ class LibraryPage extends Page {
                               ? 'music'
                               : 'library',
                     // Only show rich meta row in list view (rating, score, runtime)
-                    showMeta: !isLandscape && this.state.viewMode === 'list'
+                    showMeta: !isLandscape && this.state.viewMode === 'list',
+                    isGrid: true
                 })
             )
             .join('');
@@ -2164,6 +2214,9 @@ class LibraryPage extends Page {
                 </div>
             `;
 
+            // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
+            const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
+
             // Grid Items (Max 12)
             const displayItems = (row.items || []).slice(0, 12);
             let contentHtml = '';
@@ -2171,19 +2224,27 @@ class LibraryPage extends Page {
             if (displayItems.length > 0) {
                 contentHtml = displayItems
                     .map((item) =>
+                        // -----------------------------------------------------
+                        // Static/Grid Card Rendering
+                        // -----------------------------------------------------
+                        // If this is a static vertical sub-grid (like a Genre list
+                        // under the Genres tab), we set 'isGrid: true' (which is
+                        // !isHorizontalRow) so cards render safely without
+                        // expanding transitions. For horizontal slider rows
+                        // (Upcoming/Suggestions), we leave 'isGrid: false' so they
+                        // can expand beautifully.
+                        // -----------------------------------------------------
                         CardRenderer.createCardHtml(item, {
                             isLandscape: row.isLandscape || false,
                             type: row.cardType || 'poster',
-                            contextType: row.contextType || null
+                            contextType: row.contextType || null,
+                            isGrid: !isHorizontalRow
                         })
                     )
                     .join('');
             } else {
                 contentHtml = '<div class="empty-msg">No items</div>';
             }
-
-            // Use row-items (horizontal scroll) for Upcoming/Suggestions, genre-grid-items (grid) for Genres
-            const isHorizontalRow = this.state.viewType === 'Upcoming' || this.state.viewType === 'Suggestions';
 
             let virtualRow = null;
 
@@ -2408,9 +2469,17 @@ class LibraryPage extends Page {
 
             const html = items
                 .map((item) =>
+                    // ==========================================================
+                    // Sub-Grid Item Rendering
+                    // ==========================================================
+                    // These genre category row items are rendered as a vertical grid 
+                    // (.genre-grid-items), so they must use isGrid: true to avoid
+                    // horizontal expansions that would overlap column siblings.
+                    // ==========================================================
                     CardRenderer.createCardHtml(item, {
                         isLandscape: false, // Genres usually mix, but mostly posters
-                        type: 'poster'
+                        type: 'poster',
+                        isGrid: true
                     })
                 )
                 .join('');
@@ -2700,6 +2769,15 @@ class LibraryPage extends Page {
         this.state.filters = {};
         this.state.nameStartsWith = null;
         this.state.startIndex = 0;
+
+        // ------------------------------------------------------------------
+        // Persist the clean state to local storage.
+        // Clearing persisted filters prevents old selections from lingering.
+        // ------------------------------------------------------------------
+        if (!this._isSubView()) {
+            const filtersKey = `pref:library:filters:${this.state.libraryId}`;
+            storage.removeItem(filtersKey);
+        }
 
         // Update UI components that reflect these states
         this._renderAlphaPicker();
@@ -3108,12 +3186,12 @@ class LibraryPage extends Page {
         if (this.state.libraryInfo) {
             const type = this.state.libraryInfo.CollectionType;
             if (type === 'movies') includeItemTypes = 'Movie';
-            else if (type === 'tvshows') includeItemTypes = 'Series,Episode';
+            else if (type === 'tvshows') includeItemTypes = 'Series';
             else if (type === 'music') includeItemTypes = 'MusicArtist,MusicAlbum,Audio';
         }
 
         const params = {
-            ParentId: this.state.parentId,
+            ParentId: this.state.parentId ? this.state.parentId : this.state.libraryId,
             IncludeItemTypes: includeItemTypes,
             Recursive: true
         };
@@ -3474,11 +3552,31 @@ class LibraryPage extends Page {
         // Actions
         this.$('#btn-filter-clear').addEventListener('click', () => {
             this.state.filters = {};
+
+            // ------------------------------------------------------------------
+            // Remove the persisted filter configuration since user cleared all.
+            // ------------------------------------------------------------------
+            if (!this._isSubView()) {
+                const filtersKey = `pref:library:filters:${this.state.libraryId}`;
+                storage.removeItem(filtersKey);
+            }
+
             renderItems(this.state.activeFilterSection);
         });
 
         this.$('#btn-filter-apply').addEventListener('click', async () => {
             this.state.startIndex = 0;
+
+            // ------------------------------------------------------------------
+            // Persist the newly selected filters.
+            // We stringify the filters object and store it locally so the active
+            // filters are remembered across reloads and pages.
+            // ------------------------------------------------------------------
+            if (!this._isSubView()) {
+                const filtersKey = `pref:library:filters:${this.state.libraryId}`;
+                storage.setItem(filtersKey, JSON.stringify(this.state.filters));
+            }
+
             await this._loadItems();
             this._closeFilterModal();
 

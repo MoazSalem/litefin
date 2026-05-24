@@ -496,7 +496,7 @@ export class ApiClient {
             SortOrder: 'Ascending',
             IncludeItemTypes: '',
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             Limit: 100
@@ -526,7 +526,7 @@ export class ApiClient {
         const defaults = {
             // 20 items gives a comfortable scrollable collection per library row
             Limit: 20,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             ParentId: parentId
@@ -544,7 +544,7 @@ export class ApiClient {
             // users can scroll through up to 20 continue-watching entries
             Limit: 20,
             Recursive: true,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb',
             EnableTotalRecordCount: false,
@@ -593,7 +593,7 @@ export class ApiClient {
         const defaults = {
             UserId: this._userId,
             Limit: 24,
-            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag',
+            Fields: 'PrimaryImageAspectRatio,BasicSyncInfo,SeriesThumbImageTag,ParentThumbImageTag,BackdropImageTags,ParentBackdropImageTags',
             ImageTypeLimit: 1,
             EnableImageTypes: 'Primary,Backdrop,Thumb'
         };
@@ -1072,6 +1072,54 @@ export class ApiClient {
         const path = `/Users/${userId}/Images/Primary`;
 
         return this.buildUrl(queryString ? `${path}?${queryString}` : path);
+    }
+
+    /**
+     * ========================================================================
+     * Theme Media Queries
+     * ========================================================================
+     * Fetches background theme songs or theme videos configured for a given show,
+     * season, or episode. Under the hood, this queries the Jellyfin server's
+     * library controller endpoint.
+     *
+     * @param {string} itemId - The Jellyfin item ID (Movie, Series, Season, etc.)
+     * @param {Object} [params] - Optional custom query parameters to override defaults
+     * @returns {Promise<Object>} The AllThemeMediaResult object containing items
+     */
+    async getThemeMedia(itemId, params = {}) {
+        // Build robust defaults matching standard web client configurations.
+        // InheritFromParent=true guarantees that if we visit a Season or Episode
+        // page, it falls back to the parent Show's theme song if defined.
+        const defaults = {
+            UserId: this._userId,
+            InheritFromParent: true
+        };
+        
+        // Dispatch the standard GET request to retrieve theme media lists
+        return this.get(`/Items/${itemId}/ThemeMedia`, { ...defaults, ...params });
+    }
+
+    /**
+     * ========================================================================
+     * Authorized Audio Stream URL Generator
+     * ========================================================================
+     * Compiles a direct streaming URL for a specific audio item on the server.
+     * Appends the active session token to the query parameters since the native
+     * HTML5 Audio element cannot pass custom request authorization headers.
+     *
+     * @param {string} itemId - The target audio/song item ID
+     * @returns {string} The fully compiled direct stream URL
+     */
+    getAudioStreamUrl(itemId) {
+        // Capture active auth token from memory
+        const token = this._accessToken;
+        
+        // Define direct media path on the server, asking for static playback
+        // to bypass redundant transcoding whenever possible on the TV client.
+        const path = `/Audio/${itemId}/stream?static=true`;
+        
+        // Append the API key query parameter to authorize the browser's playback fetch
+        return this.buildUrl(token ? `${path}&api_key=${token}` : path);
     }
 
     // ========================================================================

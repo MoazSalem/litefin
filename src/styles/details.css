@@ -92,6 +92,16 @@
     margin-bottom: 40px;
     padding: 60px 60px 0 60px;
     padding-top: 5%;
+    
+    /* --------------------------------------------------------------------- */
+    /* Viewport Constraint & Box Model Optimization                          */
+    /* --------------------------------------------------------------------- */
+    /* Force border-box sizing and full-width bounding to guarantee the      */
+    /* grid layout occupies exactly 100% of the active page scroller. This   */
+    /* prevents legacy content-box overflow and visual bleed on 1080p TVs.  */
+    width: 100%;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 }
 
 .hero-poster {
@@ -137,6 +147,13 @@
 
 .details-info-col {
     flex: 1;
+    /* --------------------------------------------------------------------- */
+    /* Flexbox Width Containment                                             */
+    /* --------------------------------------------------------------------- */
+    /* Establish a hard min-width bound to prevent children from expanding   */
+    /* this container beyond the flexbox column limits. Ensures long titles  */
+    /* and unwrapped button rows do not overflow the right margin.          */
+    min-width: 0;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -144,6 +161,8 @@
     opacity: 0;
     /* Start hidden to prevent layout jumps */
     transition: opacity 0.4s ease-out;
+    box-sizing: border-box;
+    -webkit-box-sizing: border-box;
 }
 
 .details-info-col.visible {
@@ -182,6 +201,60 @@
 .details-logo img.loaded {
     opacity: 1;
 }
+
+/* 
+ * ============================================================================
+ * Apple Human Interface Guidelines - Sleek Logo As Title Display
+ * ============================================================================
+ * When 'logo-only' title style is enabled, we completely bypass the standard 
+ * absolute positioning on the top-right and instead pull the logo into the 
+ * primary in-flow layout container (like standard text headers).
+ * This class is dedicated exclusively for the title-replacement logo.
+ */
+.details-title-logo {
+    /* Set block/inline layout behavior to align exactly where the title is */
+    display: flex;
+    /* Left-align to match the text hierarchy */
+    justify-content: flex-start;
+    align-items: flex-end;
+    /* Balanced scale: cinematic presence without overwhelming other metadata */
+    width: 100%;
+    max-width: 360px;
+    /* Clean vertical spacing for widescreen dynamic logos */
+    height: 110px;
+    /* Generous breathing room above actions and meta rows */
+    margin-top: 10px;
+    margin-bottom: 24px;
+    pointer-events: none;
+}
+
+/* 
+ * Premium Apple-Inspired Spring Dynamics
+ * Apply fluid spring mechanics to the logo entry by using high-tension 
+ * cubic-bezier curves that scale and lift the image on successful load.
+ */
+.details-title-logo img {
+    /* Scale the image elements to perfectly fit within parent constraints */
+    max-width: 100%;
+    max-height: 100%;
+    /* Keep native logo aspect ratio while scaling to prevent distortion */
+    object-fit: contain;
+    /* Initial physical state: shrunk and drifted downwards */
+    opacity: 0;
+    transform: scale(0.92) translateY(12px);
+    /* High-tension spring curve simulating lightweight mass */
+    transition: 
+        opacity 0.85s cubic-bezier(0.25, 1, 0.5, 1), 
+        transform 0.85s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Smoothly snap the logo image back to resting state upon load trigger */
+.details-title-logo img.loaded {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+}
+
+
 
 .details-title {
     font-size: 3.5rem;
@@ -283,9 +356,16 @@
 
 .details-actions {
     display: flex;
+    /* --------------------------------------------------------------------- */
+    /* Responsive Fluid Actions Wrap                                         */
+    /* --------------------------------------------------------------------- */
+    /* Allow the row of circular action buttons to wrap onto multiple lines  */
+    /* dynamically if the user is running on a lower resolution viewport,   */
+    /* has the sidebar expanded, or localized button text is extremely long. */
+    flex-wrap: wrap;
     align-items: center;
-    /* Fix alignment */
-    margin-bottom: 32px;
+    /* Reduce margin-bottom slightly to compensate for button margins below  */
+    margin-bottom: 20px;
 }
 
 .details-actions>* {
@@ -313,6 +393,8 @@
     transition: transform 0.18s cubic-bezier(0.34, 1.56, 0.64, 1), background-color 0.18s ease, color 0.18s ease, border-color 0.18s ease;
     border: 3px solid transparent;
     background-clip: padding-box;
+    /* Add bottom spacing to prevent overlapping when buttons wrap dynamically */
+    margin-bottom: 12px;
 }
 
 
@@ -521,6 +603,13 @@ html[data-layout-tier="ultra-legacy"] .details-actions .btn-icon svg {
     margin-bottom: 12px;
     /* Text rendering opt */
     text-rendering: optimizeLegibility;
+    /*
+     * ── Line Break Preservation ────────────────────────────────────────────────
+     * Retain native newline formatting (\n or \r\n) from biography and movie
+     * overviews, preventing text from looking compressed or "clinched", while
+     * still collapsing sequential whitespace and wrapping lines normally.
+     */
+    white-space: pre-line;
 }
 
 .line-clamp-6 {

@@ -169,6 +169,26 @@
     opacity: 1;
 }
 
+.media-card .card-image .blurhash-canvas {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    border-radius: calc(var(--jf-border-radius) - 3px);
+    z-index: 0;
+    opacity: 1;
+    transition: opacity 250ms ease-out;
+    pointer-events: none;
+    filter: blur(16px);
+    transform: scale(1.15); /* Scale up to crop out blurred edge bleeding artifacts */
+}
+
+.media-card .card-image .blurhash-canvas.fade-out {
+    opacity: 0;
+}
+
 .media-card .card-info {
     padding: 12px 4px 0 4px;
 }

@@ -249,6 +249,29 @@ class PGSRenderer {
     }
 
     /**
+     * Clear the PGS canvas immediately (e.g. on seek).
+     * 
+     * Forces libpgs to render timestamp -1, which is before the timeline begins.
+     * This triggers a clean wipe of the OffscreenCanvas rendering context 
+     * and clears any current subtitle frames from the screen instantly.
+     */
+    clear() {
+        // Only trigger clear if the renderer is fully active and not destroyed
+        if (this._renderer && !this._isDestroyed) {
+            // Fancy Logging: track seek clearing action
+            log.info('Clearing PGS canvas instantly on seek');
+            
+            try {
+                // Ticking/rendering to -1 forces a canvas repaint to blank
+                this._renderer.renderAtTimestamp(-1);
+            } catch (e) {
+                // Safeguard against any internal worker sync exceptions
+                log.warn('Failed to clear PGS renderer canvas:', e);
+            }
+        }
+    }
+
+    /**
      * Destroy the renderer
      */
     destroy() {

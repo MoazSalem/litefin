@@ -378,11 +378,15 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 }
 
 .sidebar-item.active .item-icon .icon-outline,
+.sidebar-item.focused .item-icon .icon-outline,
+.sidebar-item:focus .item-icon .icon-outline,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-outline {
     display: none;
 }
 
 .sidebar-item.active .item-icon .icon-filled,
+.sidebar-item.focused .item-icon .icon-filled,
+.sidebar-item:focus .item-icon .icon-filled,
 .sidebar-item.sidebar-syncplay-btn.syncplay-active .item-icon .icon-filled {
     display: block;
 }
@@ -461,10 +465,44 @@ html[data-layout-tier="ultra-legacy"] .item-text {
     font-weight: 600;
     opacity: 0.7;
     flex-shrink: 0;
+    
+    /* -------------------------------------------------------------------------
+       LAYOUT SHIFT PREVENTATIVE SMOOTH TRANSITIONS
+       -------------------------------------------------------------------------
+       Enforces smooth transition properties across the header bounding box.
+       This prevents jumping and cumulative layout shifts (CLS) when morphing
+       from a minimalist horizontal separation line to a full text label.
+       ------------------------------------------------------------------------- */
+    border-top: 1px solid transparent;
+    margin: 0;
+    height: auto;
+    transition: margin 0.25s cubic-bezier(0.2, 0, 0, 1),
+                padding 0.25s cubic-bezier(0.2, 0, 0, 1),
+                border-color 0.25s cubic-bezier(0.2, 0, 0, 1),
+                opacity 0.25s cubic-bezier(0.2, 0, 0, 1),
+                font-size 0.25s cubic-bezier(0.2, 0, 0, 1),
+                color 0.25s cubic-bezier(0.2, 0, 0, 1);
 }
 
-.sidebar:not(.expanded):not(:hover) .sidebar-section-header,
-.sidebar:not(.expanded):not(:hover) .library-item {
+.sidebar:not(.expanded):not(:hover) .sidebar-section-header {
+    /* 
+       Morph the header into a gorgeous horizontal divider line.
+       Occupies the exact same total vertical height (45px) as the expanded state
+       to completely eliminate layout shifting. Spans the full visible 100px width
+       of the collapsed sidebar by shifting margins (margin-left: 250px).
+    */
+    font-size: 0;
+    color: transparent;
+    padding: 0;
+    height: 0;
+    margin: 22px 0 21px 250px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    opacity: 0.6;
+    overflow: hidden;
+}
+
+.sidebar:not(.expanded):not(:hover):not(.show-lib-icons-collapsed) .sidebar-section-header,
+.sidebar:not(.expanded):not(:hover):not(.show-lib-icons-collapsed) .library-item {
     display: none;
 }
 
@@ -483,11 +521,15 @@ html[data-layout-tier="ultra-legacy"] .item-text {
 .library-item .item-text {
     font-size: 1.2rem;
     font-weight: 500;
-    padding-left: 32px;
-    opacity: 1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
+}
+
+.sidebar.expanded .library-item .item-text,
+.sidebar:hover .library-item .item-text {
+    opacity: 1;
+    visibility: visible;
 }
 
 /* Page Pushing */

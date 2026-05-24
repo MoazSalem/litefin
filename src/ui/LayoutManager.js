@@ -34,8 +34,10 @@ const THEME_MODES = {
     CLASSIC_DARK: 'classic-dark',
     CLASSIC_LIGHT: 'classic-light',
     BLACK: 'black',
-    TINTED: 'tinted'
+    TINTED: 'tinted',
+    AMBIENT: 'ambient'
 };
+
 
 // Default Theme Color (Lavender)
 const DEFAULT_THEME_COLOR = '#af52de';
@@ -78,6 +80,12 @@ class LayoutManager {
         // Simple Loader: Lightweight rotating ring instead of pulsing dots
         this._simpleLoader = false;
 
+        // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
+        this._disableBlurhash = false;
+
+        // Only BlurHash Backdrop: Uses only decoded blurhash for details backdrop background without loading image
+        this._onlyBlurHashBackdrop = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -107,6 +115,8 @@ class LayoutManager {
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
+        const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
+        const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -118,6 +128,8 @@ class LayoutManager {
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
         this.setSimpleLoader(savedSimpleLoader, false);
+        this.setDisableBlurhash(savedDisableBlurhash, false);
+        this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -151,6 +163,13 @@ class LayoutManager {
             log.info(`Layout changed from "${oldLayout}" to "${layout}"`);
             eventBus.emit('layout:changed', { layout, previousLayout: oldLayout });
         }
+    }
+
+    /**
+     * Get the current layout
+     */
+    getLayout() {
+        return this._layout;
     }
 
     /**
@@ -276,7 +295,7 @@ class LayoutManager {
             --text-muted: var(--jf-text-secondary);`;
         }
 
-        // 2. Clear or apply tinted background variables
+        // 2. Apply background variables based on theme mode
         if (this._themeMode === THEME_MODES.TINTED) {
             const tints = themeUtils.getTintedColors(this._themeColor);
             dynamicCss += `
@@ -287,6 +306,37 @@ class LayoutManager {
             --jf-card-bg-hover: ${tints.cardBgHover};
             --jf-divider: ${tints.divider};
             --jf-navbar-bg: ${tints.background};`;
+        } else if (this._themeMode === THEME_MODES.AMBIENT) {
+            // Elegant, matte ultra-dark background matching Apple's Human Interface Guidelines.
+            // A deeply saturated charcoal canvas serves as the foundation.
+            // Translucent material cards absorb the dynamically-cast ambient gradients.
+            dynamicCss += `
+            --jf-background: #0a0b0c;
+            --jf-background-alt: #070809;
+            --jf-surface: rgba(255, 255, 255, 0.035);
+            --jf-card-bg: rgba(255, 255, 255, 0.045);
+            --jf-card-bg-hover: rgba(255, 255, 255, 0.1);
+            --jf-divider: rgba(255, 255, 255, 0.06);
+            --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
+        } else if (this._themeMode === THEME_MODES.BLACK) {
+
+            dynamicCss += `
+            --jf-background: #000000;
+            --jf-background-alt: #000000;
+            --jf-surface: #0a0a0a;
+            --jf-card-bg: #080808;
+            --jf-card-bg-hover: #121212;
+            --jf-divider: rgba(255, 255, 255, 0.05);
+            --jf-navbar-bg: #000000;`;
+        } else if (this._themeMode === THEME_MODES.CLASSIC_DARK) {
+            dynamicCss += `
+            --jf-background: #101010;
+            --jf-background-alt: #151515;
+            --jf-surface: #1a1a1a;
+            --jf-card-bg: #151515;
+            --jf-card-bg-hover: #252525;
+            --jf-divider: rgba(255, 255, 255, 0.08);
+            --jf-navbar-bg: #151515;`;
         }
 
         dynamicCss += `\n        }`;
@@ -457,6 +507,80 @@ class LayoutManager {
 
     getSimpleLoader() {
         return this._simpleLoader;
+    }
+
+    /**
+     * Disable or enable BlurHash Placeholders
+     * Toggles whether color-accurate blurred canvases are initialized on lazy media cards.
+     * 
+     * @param {boolean} disabled - True to disable canvases; false to enable them.
+     * @param {boolean} [save=true] - Persist the preference locally.
+     * @public
+     */
+    setDisableBlurhash(disabled, save = true) {
+        // Update local property tracking
+        this._disableBlurhash = disabled;
+        
+        // Write the HTML attribute flag so that stylesheets and card rendering can adapt
+        if (disabled) {
+            document.documentElement.setAttribute('data-disable-blurhash', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-disable-blurhash');
+        }
+
+        // Persist setting inside the StorageService database
+        if (save) {
+            storage.setItem('litefin:disableBlurhash', disabled ? 'true' : 'false');
+        }
+
+        // Dispatch status updates to observers and listeners
+        log.info(`Disable BlurHash set to: ${disabled}`);
+        eventBus.emit('disableBlurhash:changed', { disabled });
+    }
+
+    /**
+     * Check if BlurHash placeholders are globally disabled.
+     * Used by card renderers to determine element injection.
+     * 
+     * @returns {boolean} True if disabled; false otherwise.
+     * @public
+     */
+    getDisableBlurhash() {
+        return this._disableBlurhash;
+    }
+
+    /**
+     * Set onlyBlurHashBackdrop setting
+     * 
+     * @param {boolean} only - True to use only BlurHash for Details Backdrop; false to load backdrop image too.
+     * @param {boolean} [save=true] - Persist the preference locally.
+     * @public
+     */
+    setOnlyBlurHashBackdrop(only, save = true) {
+        this._onlyBlurHashBackdrop = only;
+        
+        if (only) {
+            document.documentElement.setAttribute('data-only-blurhash-backdrop', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-only-blurhash-backdrop');
+        }
+
+        if (save) {
+            storage.setItem('litefin:onlyBlurHashBackdrop', only ? 'true' : 'false');
+        }
+
+        log.info(`Only BlurHash Backdrop set to: ${only}`);
+        eventBus.emit('onlyBlurHashBackdrop:changed', { only });
+    }
+
+    /**
+     * Get onlyBlurHashBackdrop setting value
+     * 
+     * @returns {boolean}
+     * @public
+     */
+    getOnlyBlurHashBackdrop() {
+        return this._onlyBlurHashBackdrop;
     }
 
     // Component registration (Existing logic maintained)

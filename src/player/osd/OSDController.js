@@ -126,6 +126,16 @@ export default class OSDController extends Component {
 
         /* Cached media source ID set by PlayerPage after playback starts */
         this._currentMediaSourceId = null;
+
+        /*
+         * ========================================================================
+         * GHOST CLICK LOCKOUT STATE:
+         * Tracks whether we are currently in the 350ms lockout protection window
+         * right after focus has transitioned back from overlay widgets (Row -1).
+         * ========================================================================
+         */
+        this._focusRestoreLockout = false;
+        this._focusRestoreLockoutTimer = null;
     }
 
     _handleQueueUpdate() {
@@ -477,7 +487,64 @@ export default class OSDController extends Component {
 
         // Bind clicks (Delegate for dynamic content)
         this._osdEl.addEventListener('click', (e) => {
-            if (!PlayerSettings.get('enableMagicCursor')) return;
+            /*
+             * ========================================================================
+             * GHOST CLICK LOCKOUT CHECK
+             * ========================================================================
+             * If focus was recently restored back to the controls row from the overlay
+             * widgets (e.g. after selecting Skip Intro), we ignore all click events
+             * within a 350ms window. This completely blocks any browser-synthesized
+             * ghost click events that might target the newly focused Play/Pause button.
+             * ========================================================================
+             */
+            if (this._focusRestoreLockout) {
+                log.info('OSDController: Discarding click event during focus restore lockout window');
+                e.preventDefault();
+                e.stopPropagation();
+                return;
+            }
+
+            /*
+             * ========================================================================
+             * TV SYNTHESIZED GHOST CLICK GUARD
+             * ========================================================================
+             * On WebOS/Tizen, pressing the remote OK button on a focused element
+             * synthesizes a native click event at coordinates clientX = 0, clientY = 0.
+             * Since we handle Enter/OK keydown events 100% in JS for all OSD rows
+             * (via handleInput('enter')), executing actions for these ghost clicks
+             * would trigger them twice in rapid succession.
+             * 
+             * This double-execution is extremely noticeable for cumulative,
+             * non-idempotent actions like skip forward and skip backward (fastForward /
+             * rewind), which would seek by double the user-configured step.
+             * 
+             * A real user cursor or mouse click can never land precisely at the
+             * coordinate (0, 0) of the viewport. Thus, we safely discard all
+             * synthesized click events with (0, 0) coordinates.
+             * 
+             * ADDITIONAL PROTECTION:
+             * When focus is shifted synchronously during an Enter keydown handler
+             * (e.g., from the skip-intro button to the Play/Pause button on seek),
+             * the browser may synthesize a click event on the newly focused element
+             * (Play/Pause) with coordinates corresponding to its center (non-zero).
+             * However, all keyboard-synthesized click events natively carry a
+             * detail count of 0 (e.detail === 0). Discarding them prevents ghost
+             * events from double-triggering actions like play/pause.
+             * ========================================================================
+             */
+            if ((e.clientX === 0 && e.clientY === 0) || e.detail === 0) {
+                return;
+            }
+
+            /* 
+             * DELIBERATE PHYSICAL CLICK EXEMPTION:
+             * We do NOT return early even if 'enableMagicCursor' is disabled.
+             * Disabling cursor controls prevents highly sensitive gyro movements
+             * (mousemove) from waking the OSD or styling hovers. However, physical clicks
+             * (via mouse or Magic Remote center/wheel clicks) are always deliberate actions
+             * and must register. If the OSD is currently showing, clicking a button
+             * should activate it.
+             */
 
             // Every click inside the OSD resets the auto-hide timer.
             this.resetAutoHide();
@@ -549,17 +616,11 @@ export default class OSDController extends Component {
                 this._currentFocusRow = 2;
 
                 /*
-                 * TV SYNTHESIZED CLICK GUARD (seekbar only)
+                 * TV SYNTHESIZED CLICK GUARD (redundant, handled globally)
                  *
-                 * On WebOS/Tizen, pressing OK synthesizes a click at clientX=0, clientY=0.
-                 * Our seek math computes (0 - rect.left) / rect.width → 0% → seeks to start.
-                 * A real magic cursor click can never land at the absolute top-left corner
-                 * of the viewport, so (0,0) is an unambiguous signature of a rogue event.
-                 * Block it here — inside the slider path only — so button clicks are unaffected.
+                 * Any synthesized OK ghost click (clientX=0, clientY=0) is already discarded
+                 * at the very top of the click handler, so it never reaches this block.
                  */
-                if (e.clientX === 0 && e.clientY === 0) {
-                    return;
-                }
 
                 const slider = sliderContainer.querySelector('input[type="range"]');
                 if (slider) {
@@ -782,7 +843,37 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1;
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            this._updateFocus();
+            
+            /*
+             * ========================================================================
+             * GHOST CLICK LOCKOUT WINDOW:
+             * Activating the Skip Intro button synchronously hides the widget, which
+             * triggers this focus restore. To prevent TV browser-synthesized ghost click
+             * events from immediately triggering the newly focused Play/Pause button,
+             * we trigger a 350ms lockout during which OSD click events are completely
+             * discarded.
+             * ========================================================================
+             */
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
+
+            /*
+             * ========================================================================
+             * DEFER DOM FOCUS TRANSITION:
+             * Deferring the _updateFocus() call by 50ms ensures that all events of the
+             * current Enter/Click event cycle are completely finished propagating
+             * before the DOM focus is shifted to the playback controls.
+             * ========================================================================
+             */
+            setTimeout(() => {
+                this._updateFocus();
+            }, 50);
         }
 
         // Resume normal auto-hide behaviour
@@ -1002,6 +1093,15 @@ export default class OSDController extends Component {
 
         // Exception: Do not park focus if the subtitle offset is pinned
         if (this.activeMenu === this.subtitleOffset && PlayerSettings.get('keepFocusOnSubtitleOffset')) {
+            return;
+        }
+
+        // Exception: Do not park focus if a plugin widget currently holds focus
+        // (overlay row / Row -1). The widget stays visible even when the main OSD
+        // controls hide — e.g. the skip-intro button floats above the video
+        // independently. Resetting focus to play/pause here would cause the NEXT
+        // OK/Enter press (intended for the widget) to fire togglePlay instead.
+        if (this._currentFocusRow === -1) {
             return;
         }
 
@@ -1270,6 +1370,19 @@ export default class OSDController extends Component {
     }
 
     handleInput(key, e) {
+        // ====================================================================
+        // INPUT PROCESSING TRANSITION GUARD
+        // ====================================================================
+        // If the parent PlayerPage is transitioning between tracks, swallow all
+        // remote navigation, clicks, and keys immediately. This isolates the 
+        // OSD UI from any stray inputs or focus resets caused by cycling 
+        // the video element out of/into the DOM.
+        // ====================================================================
+        if (this._playerPage && this._playerPage._isSwitching) {
+            log.debug('OSDController: Ignoring input key event during active track switch:', key);
+            return true;
+        }
+
         const wasHidden = !this._isOsdVisible;
 
         // Delegate to modal menu first (TrackMenu, SettingsMenu)
@@ -1291,15 +1404,62 @@ export default class OSDController extends Component {
         // Show OSD on Enter press if hidden (Directional keys fall through to _navigate)
         if (wasHidden && key === 'enter') {
             /*
-             * The ghost click from this OK press fires on whatever holds DOM focus
-             * right now. hide() already pre-parked focus on Play/Pause for 'always'
-             * and 'timeout' (after 10 s) modes, so the ghost click hits the correct
-             * button. For 'remember' mode, focus stayed on the last button — same
-             * as the original behaviour before this feature was added.
+             * ========================================================================
+             * GHOST KEY LOCKOUT GUARD:
+             * Discards any wake-up Enter key events received during the active 350ms
+             * lockout window. This blocks rapid TV key bounces or repeat inputs from
+             * waking the OSD and triggering double executions.
+             * ========================================================================
              */
+            if (this._focusRestoreLockout) {
+                log.info('OSDController: Discarding wake-up enter key event during focus restore lockout window');
+                if (e) e.preventDefault();
+                return true;
+            }
+
             if (e) e.preventDefault();
             this.show();
             this._updateFocus();
+
+            /*
+             * ========================================================================
+             * UNIFIED KEYBOARD OK/ENTER DISPATCH WHEN WAKING OSD
+             * ========================================================================
+             * When the OSD is hidden, pressing OK/Enter must wake the OSD and
+             * immediately execute the action of whatever holds the pre-parked focus.
+             * Since we discard the TV browser's synthesized ghost clicks globally
+             * to prevent double-execution, we must execute the focused action
+             * entirely in JavaScript during the wake-up sequence.
+             * ========================================================================
+             */
+            if (this._currentFocusRow === -1) {
+                // Overlay row (Row -1): a plugin widget (e.g. skip-intro) holds focus.
+                // The widget's container has a click listener registered by PluginWidgetHost
+                // that routes to the widget's onSelect() callback — so clicking the
+                // focused button is sufficient to dispatch the action correctly.
+                // We do NOT fall through to togglePlay; the widget owns this press.
+                const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                if (focusedEl) focusedEl.click();
+            } else if (this._currentFocusRow === 2) {
+                // Seekbar row: OK = toggle play/pause
+                this._executeAction('togglePlay');
+            } else if (this._currentFocusRow === 1) {
+                // Controls row: execute focused action (e.g. play/pause or subtitles)
+                const controls = this._getControls();
+                const btn = controls[Math.min(this._currentFocusIndex, controls.length - 1)];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                }
+            } else if (this._currentFocusRow === 0) {
+                // Header row (back button)
+                const btn = this._cachedHeaderRow[0];
+                if (btn?.dataset?.action) {
+                    this._executeAction(btn.dataset.action);
+                } else {
+                    this._executeAction('exit');
+                }
+            }
+
             return true;
         }
 
@@ -1325,6 +1485,23 @@ export default class OSDController extends Component {
             case 'back': return this._handleBack();
             case 'enter': {
                 /*
+                 * ========================================================================
+                 * GHOST KEY LOCKOUT GUARD:
+                 * Discards any standard Enter key events received during the active 350ms
+                 * lockout window. This blocks rapid TV key bounces or repeat inputs from
+                 * triggering double executions.
+                 * ========================================================================
+                 */
+                if (this._focusRestoreLockout) {
+                    log.info('OSDController: Discarding enter key event during focus restore lockout window');
+                    if (e) {
+                        e.preventDefault();
+                        e.stopPropagation();
+                    }
+                    return true;
+                }
+
+                /*
                  * On TV hardware, pressing OK synthesizes a click at clientX=0, clientY=0.
                  * The OSD click handler uses elementsFromPoint(clientX, clientY) to resolve
                  * the target — but (0,0) is the top-left corner of the viewport, nowhere near
@@ -1335,6 +1512,16 @@ export default class OSDController extends Component {
                 if (e) {
                     e.preventDefault();
                     e.stopPropagation();
+                }
+
+                if (this._currentFocusRow === -1) {
+                    // Overlay row (Row -1): plugin widget holds focus.
+                    // Click the focused button directly in JavaScript.
+                    const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
+                    if (focusedEl) {
+                        focusedEl.click();
+                        return true;
+                    }
                 }
 
                 if (this._currentFocusRow === 2) {
@@ -1709,6 +1896,24 @@ export default class OSDController extends Component {
     // ===================================
     
     _executeAction(action) {
+        // ====================================================================
+        // ACTIVE TRACK SWITCH GUARD
+        // ====================================================================
+        // When transitioning between media tracks (e.g., auto-advancing to the 
+        // next episode in the queue), the player temporarily cycles the video 
+        // element out of and back into the DOM to purge webOS GPU surfaces. 
+        // This DOM manipulation triggers synthetic focus resets, blurs, or 
+        // ghost key events on Chromium-based TV platforms.
+        //
+        // If the player page is currently switching tracks, we discard all OSD 
+        // actions globally to prevent these synthetic signals from closing 
+        // the player mid-transition.
+        // ====================================================================
+        if (this._playerPage && this._playerPage._isSwitching) {
+            log.info('OSDController: Ignoring action during active track switch:', action);
+            return;
+        }
+
         if (action !== 'fastForward' && action !== 'rewind') {
             log.info('Execute Action:', action);
         }
@@ -1778,20 +1983,65 @@ export default class OSDController extends Component {
                 break;
             case 'nextTrack': this.emit('next'); break;
             case 'subtitles': 
-                this.activeMenu = this.subtitleMenu;
-                this.subtitleMenu.open('subtitles'); 
+                /*
+                 * ============================================================================
+                 * SUBTITLES OVERLAY TOGGLE
+                 * ============================================================================
+                 * If the subtitle track selection menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.subtitleMenu && this.subtitleMenu.isVisible) {
+                    log.info('Subtitles menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening subtitles menu.');
+                    this.activeMenu = this.subtitleMenu;
+                    this.subtitleMenu.open('subtitles'); 
+                }
                 break;
             case 'audio': 
-                this.activeMenu = this.audioMenu;
-                this.audioMenu.open('audio'); 
+                /*
+                 * ============================================================================
+                 * AUDIO OVERLAY TOGGLE
+                 * ============================================================================
+                 * If the audio track selection menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.audioMenu && this.audioMenu.isVisible) {
+                    log.info('Audio menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening audio menu.');
+                    this.activeMenu = this.audioMenu;
+                    this.audioMenu.open('audio'); 
+                }
                 break;
             case 'settings': 
-                this.activeMenu = this.settingsMenu;
-                this.settingsMenu.open(); 
+                /*
+                 * ============================================================================
+                 * QUICK SETTINGS MENU TOGGLE
+                 * ============================================================================
+                 * If the quick settings menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.settingsMenu && this.settingsMenu.isVisible) {
+                    log.info('Settings menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening settings menu.');
+                    this.activeMenu = this.settingsMenu;
+                    this.settingsMenu.open(); 
+                }
                 break;
             case 'favorite': 
                 // Toggle favorite
                 this._toggleFavorite();
+                break;
+            case 'subtitleOffset':
+                this.toggleSubtitleOffset(!this.subtitleOffset.isVisible);
                 break;
             case 'closeSubtitleOffset':
                 this.toggleSubtitleOffset(false);
@@ -1807,12 +2057,38 @@ export default class OSDController extends Component {
                 this.togglePlaybackInfo(!this.playbackInfo.isVisible);
                 break;
             case 'chapters':
-                /* Open the chapters list modal for the currently playing item. */
-                this.toggleChaptersModal(true);
+                /*
+                 * ============================================================================
+                 * CHAPTERS OVERLAY TOGGLE
+                 * ============================================================================
+                 * Toggle the full list of chapters. If the chapters modal is currently open,
+                 * close it. Otherwise, construct the list, render layout, and open it.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.chaptersModal && this.chaptersModal.isVisible) {
+                    log.info('Chapters modal already open, closing.');
+                    this.toggleChaptersModal(false);
+                } else {
+                    log.info('Opening chapters modal.');
+                    this.toggleChaptersModal(true);
+                }
                 break;
             case 'queue':
-                /* Open the queue list modal. */
-                this.toggleQueueModal(true);
+                /*
+                 * ============================================================================
+                 * PLAYBACK QUEUE OVERLAY TOGGLE
+                 * ============================================================================
+                 * Toggle the Up Next playback queue overlay. If the queue modal is open,
+                 * close it. Otherwise, retrieve the active list and show it.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.queueModal && this.queueModal.isVisible) {
+                    log.info('Queue modal already open, closing.');
+                    this.toggleQueueModal(false);
+                } else {
+                    log.info('Opening queue modal.');
+                    this.toggleQueueModal(true);
+                }
                 break;
             case 'lyrics':
                 this.toggleLyricsModal(true);
@@ -2598,8 +2874,10 @@ export default class OSDController extends Component {
          */
         if (!playQueue.hasNext()) return;
 
-        // Check user setting
-        if (!PlayerSettings.get('enableNextEpisodeAutoPlay')) return;
+        // Check the dedicated user setting for whether the Up Next dialog
+        // should be displayed. Toggling autoplay off no longer prevents the dialog
+        // from showing, allowing users to manually click "Play Now" or dismiss it.
+        if (!PlayerSettings.get('enableNextUpDialog')) return;
 
         // -------------------------------------------------------------------
         // Calculate the "show at" threshold
@@ -2621,10 +2899,20 @@ export default class OSDController extends Component {
             const lastChapter = chapters[chapters.length - 1];
             const lastChapterTicks = lastChapter.StartPositionTicks || 0;
 
-            // Sanity check: the last chapter must start at least 80% into the
-            // episode and leave at least 5 s before the end, otherwise ignore it
-            // and fall through to the time-based method.
-            const minChapterOffsetTicks = durationTicks * 0.8;
+            /*
+             * =========================================================================
+             * CHAPTER SANITY CHECK & THRESHOLD
+             * =========================================================================
+             * To avoid popping up the dialog too early during normal content, we 
+             * enforce that the last chapter (credits/outro) must start at or after 
+             * 90% of the total episode duration.
+             *
+             * If the final chapter starts BEFORE this 90% mark (i.e. it's an unusually 
+             * long final chapter or incorrectly placed marker), we discard it and 
+             * fall back to the standard time-based countdown trigger (e.g. 30 seconds).
+             * =========================================================================
+             */
+            const minChapterOffsetTicks = durationTicks * 0.9;
             const MIN_REMAINING = 5 * TICKS_PER_SECOND;
             if (lastChapterTicks >= minChapterOffsetTicks && (durationTicks - lastChapterTicks) >= MIN_REMAINING) {
                 showAtTicks = lastChapterTicks;
@@ -2790,11 +3078,18 @@ export default class OSDController extends Component {
         const showLogoSetting = PlayerSettings.get('osdShowLogo');
         const hideShowNameSetting = PlayerSettings.get('osdHideShowName');
 
+        // Reset title wrap classes
+        const wrapEl = this._osdEl.querySelector('.osd-title-wrap');
+        if (wrapEl) {
+            wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+        }
+
         // Always reset to visible title and hidden logo initially to avoid stale images
         if (titleEl) titleEl.classList.remove('hidden');
         if (logoEl) {
             logoEl.classList.add('hidden');
             logoEl.src = '';
+            logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
         }
         if (secondaryEl) secondaryEl.textContent = '';
 
@@ -2827,8 +3122,29 @@ export default class OSDController extends Component {
             }
 
             if (logoItemId) {
-                // Max height of 60px to fit well in the OSD header
-                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: 60 });
+                // Get the custom logo size from player settings (default to medium)
+                const logoSize = PlayerSettings.get('osdLogoSize') || 'medium';
+                let maxImgHeight = 60;
+                if (logoSize === 'small') {
+                    maxImgHeight = 40;
+                } else if (logoSize === 'large') {
+                    maxImgHeight = 80;
+                } else if (logoSize === 'extralarge') {
+                    maxImgHeight = 100;
+                } else if (logoSize === 'xxl') {
+                    maxImgHeight = 120;
+                }
+
+                // Add size class to the logo element
+                logoEl.classList.add('logo-' + logoSize);
+
+                // Add corresponding class to title wrap to adjust row height dynamically
+                if (wrapEl) {
+                    wrapEl.classList.add('has-logo-' + logoSize);
+                }
+
+                // Max height of maxImgHeight to fit well in the OSD header
+                const logoUrl = this._api.getImageUrl(logoItemId, 'Logo', { maxHeight: maxImgHeight });
                 
                 logoEl.onload = () => {
                     // Only switch if this is still the active item
@@ -2841,6 +3157,10 @@ export default class OSDController extends Component {
                 logoEl.onerror = () => {
                     if (titleEl) titleEl.classList.remove('hidden');
                     logoEl.classList.add('hidden');
+                    logoEl.classList.remove('logo-small', 'logo-medium', 'logo-large', 'logo-extralarge', 'logo-xxl');
+                    if (wrapEl) {
+                        wrapEl.classList.remove('has-logo-small', 'has-logo-medium', 'has-logo-large', 'has-logo-extralarge', 'has-logo-xxl');
+                    }
                 };
 
                 logoEl.src = logoUrl;

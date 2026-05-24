@@ -1,0 +1,571 @@
+/* =========================================================================
+   Modern Home Layout
+   ========================================================================= */
+html[data-layout="modern"] .home-rows {
+    padding-top: 18px;
+    padding-bottom: var(--row-padding-bottom, 30px);
+}
+
+/* =========================================================================
+   Modern Row Headers
+   ========================================================================= */
+
+html[data-layout="modern"] .row-title {
+    font-size: 2.4rem;
+    font-weight: 800;
+    padding: 0 60px;
+    color: var(--jf-text-primary);
+    letter-spacing: -0.5px;
+    /* PERFORMANCE: Reduced blur radius from 10px to 2px for lightning-fast hardware rendering.
+       Smart TV GPUs struggle with high-radius Gaussian blurs on text. */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Focus hint for the row title when a card in it is focused */
+html[data-layout="modern"] .media-row:focus-within .row-title {
+    transform: translateX(4px);
+    color: #fff;
+}
+
+/* =========================================================================
+   Modern Media Card Design
+   ========================================================================= */
+
+/* =========================================================================
+   Modern Media Card (Row Tracks Only)
+   ========================================================================= */
+/* Exclude grid-based cards using :not(.grid-card) to preserve their classic sizing. */
+html[data-layout="modern"] .media-card:not(.grid-card) {
+    width: 225px;
+    height: 337.5px !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
+    margin-right: 40px;
+    margin-left: 0;
+    overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
+    
+    /* PERFORMANCE: Shortened transition duration from 0.4s to 0.25s. Smart TV CPUs spend 
+       almost half the time processing row layout recalculations, making navigation feel incredibly snappy. */
+    -webkit-transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), -webkit-transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* PERFORMANCE: Promoted expanding card elements to their own composited layers on the GPU.
+       This tells the TV browser's rendering engine to pre-allocate rendering pipelines and avoid layout thread-blocking. */
+    will-change: width, transform;
+    
+    /* Sibling Shifting Logic:
+       ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
+       Difference = 600px - 225px = 375px.
+     */
+    --expansion-amount: 375px;
+    --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
+    /* Note: We only shift if we are NOT the focused item ourselves and we are AFTER it */
+    /* This calculation is slightly complex to avoid shifting the focused item itself */
+}
+
+/* =========================================================================
+   Interactive Sibling Shifting Logic
+   =========================================================================
+   Shift ALL media cards that sit downstream from the expanding poster.
+   We combine structural focus states with active hovering rules.
+   
+   CRITICAL DUAL-MODE REFINEMENT (Mouse + D-Pad Coexistence):
+   If the parent .media-row is being hovered by a mouse pointer, we temporarily
+   suppress the D-Pad focus shifting on non-hovered items. This prevents a focused
+   item from fighting with a hovered item over column space, ensuring only ONE
+   expanded poster claims layout territory at any given instant.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus ~ .media-card,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
+html[data-layout="modern"] .media-card.has-expansion:hover ~ .media-card {
+    /* Translate downstream siblings cleanly to make room for the 600px expanded asset */
+    transform: translateX(375px);
+}
+
+/* =========================================================================
+   Poster Expansion Triggers
+   =========================================================================
+   Forces the card width from 225px to 600px.
+   When the mouse hovers over the row container, we disable the D-Pad expansion
+   on the focused card (unless it is the card currently under the mouse pointer)
+   to ensure the UI follows the user's immediate visual attention.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused,
+html[data-layout="modern"] .media-card.has-expansion:hover {
+    width: 600px;
+    height: 337.5px !important; /* Lockdown physical dimensions to avoid layout jumps */
+    z-index: 100; /* Stack on top of surrounding collapsed assets */
+}
+
+html[data-layout="modern"] .media-card.landscape:not(.grid-card) {
+    width: 600px; /* Height: 600 * 0.5625 = 337.5px */
+}
+
+html[data-layout="modern"] .media-card.square:not(.grid-card) {
+    width: 338px; /* Height: 338 * 1 = 338px */
+}
+
+/* Integrated Labels: Reveal timing */
+html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
+    opacity: 0;
+    /* PERFORMANCE: Fast transition aligned with 0.25s card expansion. */
+    transition: opacity 0.2s ease 0.2s;
+}
+
+/* Inside Label reveal during D-pad navigation */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside {
+    opacity: 1; /* Match the active visual expansion */
+}
+
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1; /* Always visible for items that don't expand */
+}
+
+/* Apply modern relative container overrides only to horizontal cards */
+html[data-layout="modern"] .media-card:not(.grid-card) .card-image {
+    width: 100%;
+    height: 100% !important; /* Force height to match parent .media-card */
+    padding-bottom: 0 !important; /* KILL the global aspect-ratio padding hack */
+    border-radius: 24px; /* Premium rounding */
+    border: none !important; /* Fix: Remove border entirely to eliminate ghosting */
+    box-shadow: none; /* Removed outer shadow as requested */
+    
+    /* PERFORMANCE: Snappier transition and GPU layer promotion. */
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease;
+    will-change: transform;
+    
+    background: var(--jf-surface, rgba(255, 255, 255, 0.05));
+    position: relative;
+    overflow: hidden;
+}
+
+/* Exclude grid cards from modern focus transformations to prevent interference with classic scaling */
+html[data-layout="modern"] .media-card:not(.grid-card):focus .card-image,
+html[data-layout="modern"] .media-card:not(.grid-card).focused .card-image {
+    /* Focus ring is handled by ::after; outer shadows removed */
+    box-shadow: none;
+    transform: translateY(-8px);
+    background: var(--jf-surface-hover, rgba(255, 255, 255, 0.1));
+}
+
+/* The Focus Ring Overlay: Using ::after ensures it sits on top of the image and tint */
+html[data-layout="modern"] .media-card:not(.grid-card):focus .card-image::after,
+html[data-layout="modern"] .media-card:not(.grid-card).focused .card-image::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    border-radius: 24px;
+    box-shadow: inset 0 0 0 4px var(--jf-accent);
+    z-index: 10;
+    pointer-events: none;
+    
+    /* PERFORMANCE: Removed the 'focusPulse' infinite keyframe animation entirely.
+       Continuous box-shadow/opacity animations drive continuous browser repaints, which severely
+       lags weaker TV hardware. Apple HIG favors a static, elegant, instant visual focus accent. */
+}
+
+/* Exclude grid cards from modern absolute image sizing */
+html[data-layout="modern"] .media-card:not(.grid-card) .card-image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    position: absolute;
+    top: 0;
+    left: 0;
+    border-radius: 24px; /* Match full radius since border is removed */
+    transition: opacity 0.3s ease;
+}
+
+/* Layer Stack: 
+   1. Thumb (Back)
+   2. Poster (Front)
+   3. Thumb Loaded (Top Front on focus)
+*/
+html[data-layout="modern"] .media-card .card-image img.thumb-layer {
+    z-index: 1; /* Behind poster initially */
+    opacity: 0;
+    
+    /* PERFORMANCE: Removed the 'transform: scale' transition. Texture resampling during 
+       card expansion layout shifts is extremely CPU/GPU intensive on TV browsers.
+       Fading opacity alone provides a cleaner, butter-smooth transition. */
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-layout="modern"] .media-card .card-image img.poster-layer {
+    z-index: 2; /* In front of thumb */
+    opacity: 1;
+    
+    /* PERFORMANCE: Removed the scale transform transition for extreme TV performance. */
+    transition: opacity 0.2s ease-in;
+}
+
+/* =========================================================================
+   Image Layer Stack Crossfade Transitions
+   =========================================================================
+   Fades out the front poster and pops the widescreen back-drop thumb layer 
+   forward on active visual expansion states.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.thumb-layer,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
+    opacity: 1;
+    z-index: 3;
+    /* PERFORMANCE: Scale-transforms removed to prioritize composited rendering speed. */
+}
+
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
+    opacity: 0;
+    /* PERFORMANCE: Removed scale down and expensive CSS filters. CSS brightness/filters 
+       require rendering context passes, causing noticeable frames-per-second drop on TVs. */
+}
+
+/* Integrated Labels (Inside): Hidden by default for posters, visible for native landscape/square */
+html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
+    opacity: 0;
+    visibility: hidden;
+    z-index: 5;
+    pointer-events: none;
+    transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
+}
+
+/* =========================================================================
+   Label Overlays Visibility
+   =========================================================================
+   Brings up inside labels only when the card is in an active expanding state. */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-info.inside,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-info.inside,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-info.inside {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+    /* PERFORMANCE: Fast reveal timing mapped to 0.25s expansion duration. */
+    transition: opacity 0.2s ease 0.15s, visibility 0.2s ease 0.15s;
+}
+
+/* Native landscape/square cards always show their inside labels */
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1;
+    visibility: visible;
+    pointer-events: auto;
+}
+
+/* Outside Labels (Standard): Hide when card expands into landscape via focus or hover */
+/* Hide standard outside labels once the card expands */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info:not(.inside),
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info:not(.inside),
+html[data-layout="modern"] .media-card.has-expansion:hover .card-info:not(.inside) {
+    opacity: 0;
+    transition: opacity 0.2s ease;
+}
+
+html[data-layout="modern"] .media-card.landscape .card-info.inside,
+html[data-layout="modern"] .media-card.square .card-info.inside {
+    opacity: 1;
+    z-index: 5;
+}
+
+/* =========================================================================
+   Modern Card Info & Typography
+   ========================================================================= */
+
+html[data-layout="modern"] .media-card .card-info {
+    padding: 16px 8px 0 8px;
+    transition: opacity 0.3s ease, transform 0.3s ease;
+    opacity: 1; /* Visible for landscape/square */
+}
+
+/* Hide outside labels for modern posters to keep the grid clean */
+/* Hide outside labels only for modern expanding horizontal posters, NOT grid posters! */
+html[data-layout="modern"] .media-card:not(.landscape):not(.square):not(.grid-card) .card-info:not(.inside) {
+    opacity: 0;
+}
+
+html[data-layout="modern"] .card-title {
+    font-size: 1.35rem;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: rgba(255, 255, 255, 0.9);
+}
+
+html[data-layout="modern"] .card-subtitle {
+    font-size: 1.1rem;
+    font-weight: 500;
+    margin-top: 0px;
+    color: rgba(255, 255, 255, 0.5);
+}
+
+html[data-layout="modern"] .media-card:focus .card-title,
+html[data-layout="modern"] .media-card.focused .card-title {
+    color: #fff;
+}
+
+html[data-layout="modern"] .media-card:focus .card-subtitle,
+html[data-layout="modern"] .media-card.focused .card-subtitle {
+    color: rgba(255, 255, 255, 0.7);
+}
+
+/* =========================================================================
+   Modern Card Overlays (Labels/Badges)
+   ========================================================================= */
+
+html[data-layout="modern"] .media-card .card-image .card-image-tint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 35%, rgba(0,0,0,0) 75%);
+    z-index: 4;
+    pointer-events: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
+}
+
+/* =========================================================================
+   Card Dimming Tint Layer
+   =========================================================================
+   Show standard overlay gradient backdrop to maximize white text legibility.
+   ========================================================================= */
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.landscape .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.square .card-image .card-image-tint {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity 0.3s ease 0.2s, visibility 0.3s ease 0.2s; /* Delayed reveal to match expansion */
+}
+
+html[data-layout="modern"] .card-overlay-tint {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 25%, transparent 60%);
+    border-radius: 24px; /* Fix: Match card radius */
+    z-index: 2;
+    pointer-events: none;
+}
+
+/* Specificity Fix: Modern layout must preserve its gradient on focus */
+html[data-layout="modern"] .media-card:focus .card-overlay-tint,
+html[data-layout="modern"] .media-card.focused .card-overlay-tint {
+    /* Restore modern gradient and ensure it's below the pseudo-element focus ring */
+    background: linear-gradient(0deg, rgba(0, 0, 0, .9) 0, rgba(0, 0, 0, .5) 25%, transparent 60%) !important;
+}
+
+html[data-layout="modern"] .card-overlay-label,
+html[data-layout="modern"] .card-info.inside {
+    position: absolute;
+    bottom: 40px; /* Positioned above the progress bar (which ends at ~24px) */
+    left: 30px;
+    right: 30px; /* NEW: Constrain width so text wraps */
+    top: auto;
+    transform: none;
+    padding: 0;
+    z-index: 10;
+    text-align: left;
+    pointer-events: none;
+}
+
+html[data-layout="modern"] .card-info.inside .card-title {
+    font-size: 1.5rem; /* Slightly larger for inside placement */
+    
+    /* PERFORMANCE: Replaced 6px blur text-shadow with a highly efficient 2px blur offset. */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    
+    text-align: left;
+    /* Allow up to 2 lines for longer titles */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+    line-height: 1.2;
+    max-height: 3.6rem; /* 2 lines * 1.5rem * 1.2 */
+    white-space: normal; /* Override classic nowrap */
+}
+
+html[data-layout="modern"] .card-info.inside .card-subtitle {
+    font-size: 1.2rem;
+    color: rgba(255, 255, 255, 0.8);
+    
+    /* PERFORMANCE: Replaced expensive high-blur shadow. */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    
+    text-align: left;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    display: block;
+    width: 100%;
+}
+
+html[data-layout="modern"] .card-info.inside .card-meta {
+    margin-top: 6px;
+    color: rgba(255, 255, 255, 0.6);
+}
+
+html[data-layout="modern"] .card-overlay-label {
+    width: 85%;
+    font-size: 1.8rem; 
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -0.8px;
+    
+    /* PERFORMANCE: Lowered blur radius from 15px to 4px for immediate hardware acceleration. */
+    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+    
+    text-transform: none;
+}
+
+/* Hide the redundant info box for library cards in modern mode */
+/* Hide the redundant info box for library cards on horizontal tracks, but KEEP them for grid library cards */
+html[data-layout="modern"] .media-card[data-context-type="library"]:not(.grid-card) .card-info,
+html[data-layout="modern"] .media-card[data-item-type="CollectionFolder"]:not(.grid-card) .card-info {
+    display: none;
+}
+
+html[data-layout="modern"] .media-card:focus .card-overlay-label,
+html[data-layout="modern"] .media-card.focused .card-overlay-label {
+    transform: translateY(-4px) translateX(10px) scale(1.02);
+}
+
+/* =========================================================================
+   Animations
+   ========================================================================= */
+
+@-webkit-keyframes focusPulse {
+    0% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
+    50% { box-shadow: inset 0 0 0 5px var(--jf-accent); opacity: 0.85; }
+    100% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
+}
+
+@keyframes focusPulse {
+    0% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
+    50% { box-shadow: inset 0 0 0 5px var(--jf-accent); opacity: 0.85; }
+    100% { box-shadow: inset 0 0 0 4px var(--jf-accent); opacity: 1; }
+}
+
+/* =========================================================================
+   Modern Progress Bar (Floating Style)
+   ========================================================================= */
+
+html[data-layout="modern"] .card-progress-container {
+    bottom: 20px;
+    left: 32px;
+    right: 32px;
+    height: 8px;
+    background: rgba(var(--jf-accent-content-color-rgb, 255, 255, 255), 0.6);
+    border-radius: 10px;
+    overflow: hidden;
+}
+
+html[data-layout="modern"] progress.card-progress {
+    height: 100%;
+}
+
+html[data-layout="modern"] progress.card-progress::-webkit-progress-bar {
+    background: transparent;
+}
+
+html[data-layout="modern"] progress.card-progress::-webkit-progress-value {
+    background-color: var(--jf-accent);
+    border-radius: 10px;
+    /* Spring-like transition for progress updates */
+    -webkit-transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    transition: width 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* =========================================================================
+   Modern Badges & Indicators
+   ========================================================================= */
+
+html[data-layout="modern"] .count-badge,
+html[data-layout="modern"] .played-badge,
+html[data-layout="modern"] .episode-badge {
+    position: absolute;
+    top: 22px;
+    z-index: 5;
+    background: rgba(0, 0, 0, 0.65);
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    color: #fff;
+    font-weight: 700;
+    
+    /* PERFORMANCE: Replaced 15px blur shadow with highly optimized 4px shadow to save GPU composition bandwidth. */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+html[data-layout="modern"] .media-card:focus .count-badge,
+html[data-layout="modern"] .media-card:focus .played-badge,
+html[data-layout="modern"] .media-card:focus .episode-badge,
+html[data-layout="modern"] .media-card.focused .count-badge,
+html[data-layout="modern"] .media-card.focused .played-badge,
+html[data-layout="modern"] .media-card.focused .episode-badge {
+    transform: scale(1.05);
+}
+
+html[data-layout="modern"] .count-badge, .played-badge {
+    right: 22px;
+    width: 44px;
+    height: 44px;
+    border-radius: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+html[data-layout="modern"] .episode-badge {
+    left: 22px;
+    padding: 5px 12px;
+    border-radius: 10px;
+    font-size: 1.2rem;
+    letter-spacing: 0.5px;
+    /* Subtle glow for episode context */
+    border-color: rgba(255, 255, 255, 0.25);
+}
+
+html[data-layout="modern"] .media-row--skeleton .card-image {
+    background: linear-gradient(90deg, 
+        var(--jf-surface, rgba(255,255,255,0.05)) 25%, 
+        var(--jf-surface-hover, rgba(255,255,255,0.1)) 50%, 
+        var(--jf-surface, rgba(255,255,255,0.05)) 75%
+    );
+    background-size: 200% 100%;
+    animation: modern-shimmer 2s infinite linear;
+}
+
+@keyframes modern-shimmer {
+    0% { background-position: 200% 0; }
+    100% { background-position: -200% 0; }
+}
+
+/* =========================================================================
+   Modern Gradient Fallback Expansion Improvements
+   ========================================================================= */
+
+/* 
+   Apple-Style Initials Dissolve Transition:
+   When a poster using a fallback gradient is hovered or D-pad focused, it
+   smoothly expands to 600px width. We dissolve the initials (opacity: 0)
+   with a clean ease curve so they don't overlap or clash with the beautiful
+   title and subtitle text overlay that fades in over the expanded card.
+*/
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .media-fallback-initials,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .media-fallback-initials,
+html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .media-fallback-initials {
+    opacity: 0;
+    transition: opacity 0.25s ease;
+}

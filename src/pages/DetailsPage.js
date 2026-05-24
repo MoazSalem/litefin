@@ -34,6 +34,7 @@ import CardRenderer from '../utils/CardRenderer.js';
 import { shouldShowScore } from '../utils/visibility.js';
 import { storage } from '../utils/StorageService.js';
 import { formatDate } from '../utils/TimeUtils.js';
+import { themeSongPlayer } from '../utils/ThemeSongPlayer.js';
 
 const log = logger.create('DetailsPage');
 
@@ -410,7 +411,11 @@ class DetailsPage extends Page {
             // ────────────────────────────────────────────────────────────────────────
             // 2. Fetch Base Item Details
             // ────────────────────────────────────────────────────────────────────────
-            const hideRich = storage.getItem('pref:hideRichMetadata') === 'true';
+            // Backward-compatible custom metadata selector options.
+            // Check the new pref:richMetadataStyle select preference, fallback cleanly to standard hideRichMetadata.
+            // Under HIG Guidelines, this guarantees lightweight layouts on spatial networks.
+            const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+            const hideRich = richMetadataStyle === 'none';
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
             // Build dynamic fields list based on user preferences to save bandwidth/CPU
@@ -433,11 +438,31 @@ class DetailsPage extends Page {
             ];
 
             if (!hideRich) {
-                requestedFields.push('Genres', 'GenreItems', 'Studios', 'Tags');
+                // Genres are always loaded if not hidden.
+                requestedFields.push('Genres', 'GenreItems');
+                
+                // Studios are required for 'all' or 'genres-studios-writers'.
+                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
+                    requestedFields.push('Studios');
+                }
+                
+                // Tags are only required when showing full metadata.
+                if (richMetadataStyle === 'all') {
+                    requestedFields.push('Tags');
+                }
+                
+                // Directors and Writers come from the 'People' collection in Jellyfin.
+                // If they are requested via the rich metadata dropdown, ensure we include 'People' even if the cast section is hidden.
+                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+                    requestedFields.push('People');
+                }
             }
 
             if (!hideCast) {
-                requestedFields.push('People');
+                // Ensure People is loaded for cast display (avoid duplicates using unique tracking or simple array inclusion check)
+                if (!requestedFields.includes('People')) {
+                    requestedFields.push('People');
+                }
             }
 
             const item = await api.getItem(this._itemId, {
@@ -497,6 +522,11 @@ class DetailsPage extends Page {
             }
 
             await Promise.all(loadTasks);
+
+            // Trigger theme song background audio if user has activated it in display settings
+            if (storage.getItem('pref:playThemeSongs') === 'true') {
+                void this._playThemeSong();
+            }
 
             // 4. Rebuild navigation chain after everything is in the DOM
             // We use requestAnimationFrame to ensure the browser has parsed the new HTML
@@ -659,13 +689,64 @@ class DetailsPage extends Page {
                     maxWidth: params.maxWidth,
                     quality: params.quality
                 });
+
+                // Resolve Poster BlurHash
+                const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+                let posterBlurHash = '';
+                if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
+                    const keys = Object.keys(item.ImageBlurHashes.Primary);
+                    if (keys.length > 0) {
+                        posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
+                    }
+                }
+
+                // Render dynamic BlurHash canvas placeholder
+                let posterCanvas = null;
+                if (posterBlurHash) {
+                    posterCanvas = document.createElement('canvas');
+                    posterCanvas.className = 'blurhash-canvas poster-blurhash';
+                    posterCanvas.style.position = 'absolute';
+                    posterCanvas.style.top = '0';
+                    posterCanvas.style.left = '0';
+                    posterCanvas.style.width = '100%';
+                    posterCanvas.style.height = '100%';
+                    posterCanvas.style.objectFit = 'cover';
+                    posterCanvas.style.zIndex = '0';
+                    posterCanvas.style.transition = 'opacity 250ms ease-out';
+                    posterCanvas.style.pointerEvents = 'none';
+                    posterCanvas.style.opacity = '1';
+                    
+                    posterContainer.appendChild(posterCanvas);
+
+                    // Decode at a lightweight size asynchronously
+                    import('../utils/BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
+                        const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                        if (pixels && posterCanvas) {
+                            posterCanvas.width = 32;
+                            posterCanvas.height = 48;
+                            const ctx = posterCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(32, 48);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                        }
+                    }).catch(err => log.error('Failed to decode poster blurhash', err));
+                }
+
                 const img = new Image();
                 img.onload = () => {
                     img.classList.add('loaded');
+                    // Fade out and remove canvas when image loads
+                    if (posterCanvas) {
+                        posterCanvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (posterCanvas && posterCanvas.parentNode) {
+                                posterCanvas.parentNode.removeChild(posterCanvas);
+                            }
+                        }, 250);
+                    }
                     onPosterReady();
                 };
                 img.onerror = () => {
-                    // If it fails, we still want to resolve to show the page
                     onPosterReady();
                 };
                 img.src = posterUrl;
@@ -684,8 +765,18 @@ class DetailsPage extends Page {
                 maxWidth: params.maxWidth,
                 quality: params.quality
             });
+
+            // Resolve Backdrop BlurHash
+            let backdropBlurHash = '';
+            if (item.ImageBlurHashes?.Backdrop) {
+                const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+                if (keys.length > 0) {
+                    backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+                }
+            }
+
             if (backdropUrl) {
-                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
+                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
             }
         });
     }
@@ -1250,7 +1341,10 @@ class DetailsPage extends Page {
     }
 
     _renderRichMetadata() {
-        const isHidden = storage.getItem('pref:hideRichMetadata') === 'true';
+        // Retrieve setting to customize rich metadata fields display.
+        // Falls back to backward-compatible hideRichMetadata if new setting is not set.
+        const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+        const isHidden = richMetadataStyle === 'none';
         let container = this.$('#rich-meta');
         const containerWrapper = this.$('#rich-meta-container');
 
@@ -1312,30 +1406,38 @@ class DetailsPage extends Page {
             htmlParts.push(createRow('Genres', genres));
         }
 
-        // Directors
-        const directors = (item.People || []).filter((p) => p.Type === 'Director');
-        if (directors.length > 0) {
-            htmlParts.push(createRow('Directors', directors));
+        // Directors (only shown in 'all')
+        if (richMetadataStyle === 'all') {
+            const directors = (item.People || []).filter((p) => p.Type === 'Director');
+            if (directors.length > 0) {
+                htmlParts.push(createRow('Directors', directors));
+            }
         }
 
-        // Writers
-        const writers = (item.People || []).filter((p) => p.Type === 'Writer');
-        if (writers.length > 0) {
-            htmlParts.push(createRow('Writers', writers));
+        // Writers (shown in 'all', 'genres-studios-writers', or 'genres-writers')
+        if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+            const writers = (item.People || []).filter((p) => p.Type === 'Writer');
+            if (writers.length > 0) {
+                htmlParts.push(createRow('Writers', writers));
+            }
         }
 
-        // Studios
-        if (item.Studios && item.Studios.length > 0) {
-            htmlParts.push(createRow('Studios', item.Studios));
+        // Studios (shown in 'all' or 'genres-studios-writers')
+        if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
+            if (item.Studios && item.Studios.length > 0) {
+                htmlParts.push(createRow('Studios', item.Studios));
+            }
         }
 
-        // Tags (No limit as requested)
-        if (item.Tags && item.Tags.length > 0) {
-            htmlParts.push(createRow('Tags', item.Tags));
+        // Tags (only shown in 'all')
+        if (richMetadataStyle === 'all') {
+            if (item.Tags && item.Tags.length > 0) {
+                htmlParts.push(createRow('Tags', item.Tags));
+            }
         }
 
-        // Photo EXIF Data
-        if (item.Type === 'Photo') {
+        // Photo EXIF Data (only shown in 'all')
+        if (item.Type === 'Photo' && richMetadataStyle === 'all') {
             const createTextRow = (label, value) => {
                 if (!value) return '';
                 return `
@@ -1549,6 +1651,55 @@ class DetailsPage extends Page {
         }
     }
 
+    /**
+     * ========================================================================
+     * Background Theme Song Loader and Player
+     * ========================================================================
+     * Dynamically queries the theme media associated with the active item.
+     * If a theme song is available, compiles the stream source URL and initiates
+     * background score looping via ThemeSongPlayer.
+     */
+    async _playThemeSong() {
+        // Assert that the loaded item supports theme media playback
+        if (!['Series', 'Season', 'Episode'].includes(this._item.Type)) {
+            return;
+        }
+
+        try {
+            log.info('Fetching theme media details for item ID', this._itemId);
+            // Fetch list of theme media options from Jellyfin
+            const themeMedia = await api.getThemeMedia(this._itemId);
+            
+            // ----------------------------------------------------------------
+            // Safety Guard: Avoid async race conditions.
+            // If the user navigated away from the details page before the
+            // network fetch returned, playing the audio now would create a
+            // "ghost" track playing forever. Abort immediately.
+            // ----------------------------------------------------------------
+            if (this._isDestroyed) {
+                log.warn('Theme media API request resolved after page destroy; aborting playback');
+                return;
+            }
+            
+            // Check if any theme songs were successfully retrieved
+            if (themeMedia && themeMedia.ThemeSongsResult?.Items?.length > 0) {
+                const song = themeMedia.ThemeSongsResult.Items[0];
+                
+                // Compile authenticated direct stream URL
+                const streamUrl = api.getAudioStreamUrl(song.Id);
+                
+                // Leverage the show owner ID to sustain music across dynamic parent navigations
+                const ownerId = themeMedia.ThemeSongsResult.OwnerId;
+
+                log.debug('Initiating background theme playback:', song.Name);
+                // Dispatch play command to the global background manager
+                themeSongPlayer.play(streamUrl, ownerId);
+            }
+        } catch (error) {
+            log.error('Failed to query or play theme media score:', error);
+        }
+    }
+
     _renderHeroText() {
         const item = this._item;
 
@@ -1612,24 +1763,104 @@ class DetailsPage extends Page {
         } else {
             metaHtml += addedHtml + airedHtml;
         }
+        // Retrieve the user's preferred title display style from localized preferences.
+        // Default style is 'both' (displaying both text title and logo icon).
+        const titleStyle = storage.getItem('pref:detailsTitleStyle') || 'both';
+
+        // Retrieve and check for logo references using Jellyfin image tags.
+        // Determines if a localized image tag or series/parent image tag is available.
+        const logoTag = item.ImageTags?.Logo || item.ParentLogoImageTag;
+        const logoItemId = item.ImageTags?.Logo ? item.Id : item.ParentLogoItemId || item.SeriesId;
+        const hasLogo = !!(logoItemId && logoTag);
+
+        // Control flags for rendering logo and text title dynamically.
+        let showLogo = false;
+        let showTitle = true;
+        let logoClass = 'details-logo';
+
+        // Apply chosen Title Display Style preference with elegant fallbacks.
+        if (titleStyle === 'text-only') {
+            // Completely hide the logo and force text title display.
+            showLogo = false;
+            showTitle = true;
+        } else if (titleStyle === 'logo-only' && hasLogo) {
+            // Display only the logo icon and hide the text title.
+            // Assign a completely separate details-title-logo CSS class.
+            // This prevents inheriting any absolute alignment styling from details-logo.
+            showLogo = true;
+            showTitle = false;
+            logoClass = 'details-title-logo';
+        } else {
+            // Default option ('both'): render both if a logo exists.
+            // Fall back to this mode if 'logo-only' was chosen but no logo image exists for this item.
+            showLogo = hasLogo;
+            showTitle = true;
+            logoClass = 'details-logo';
+        }
+
+        // Retrieve setting to hide the original language title on the details page.
+        // It defaults to 'false' (off), so it's shown unless explicitly toggled to 'true'.
+        const hideOriginalTitle = storage.getItem('pref:hideOriginalTitle') === 'true';
 
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
+        
+        // Define display subtitle (original title) based on settings.
+        // Season titles are unaffected; we only hide original titles for movies/shows when configured.
         const displaySubtitle = i18n.ensureBiDi(
-            isSeason ? item.Name : item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : ''
+            isSeason ? item.Name : (!hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : '')
         );
 
-        this.$('#hero-info').innerHTML = `
-            <div id="details-logo" class="details-logo"></div>
-            <h1 class="details-title">${displayTitle}</h1>
-            ${displaySubtitle && displaySubtitle !== displayTitle ? `<h2 class="details-original-title">${displaySubtitle}</h2>` : ''}
-            ${item.Type === 'Episode' ? `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(`S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}E${(item.IndexNumber || 0).toString().padStart(2, '0')} - ${item.SeriesName}`)}</p>` : ''}
+        // Build the dynamic inner HTML for the hero-info block.
+        let heroHtml = '';
+
+        // If enabled, prepend the logo container div at the top of the header info.
+        if (showLogo) {
+            heroHtml += `<div id="details-logo" class="${logoClass}"></div>`;
+        }
+
+        // If enabled, append the h1 details title.
+        if (showTitle) {
+            // If there is no logo displayed, style the title to span the full width of the container.
+            const titleStyleAttr = !showLogo ? 'style="max-width: 100%;"' : '';
+            heroHtml += `<h1 class="details-title" ${titleStyleAttr}>${displayTitle}</h1>`;
+        }
+
+        // Add the subtitle element underneath if present.
+        if (displaySubtitle && displaySubtitle !== displayTitle) {
+            heroHtml += `<h2 class="details-original-title">${displaySubtitle}</h2>`;
+        }
+
+        // Render episode season/number details for TV episodes.
+        if (item.Type === 'Episode') {
+            // When in 'logo-only' mode with a logo, the main header visual is the Series Logo.
+            // Since the text title (Episode Name) is hidden, we dynamically swap the subtitle 
+            // text from showing the Series Name to showing the Episode Name (item.Name).
+            // Under any other mode (where text title is shown as the header), we keep
+            // the classic 'SxxExx - Series Name' pattern.
+            const showLogoAsTitle = (titleStyle === 'logo-only' && hasLogo);
             
+            // Format the episode identification string (SxxExx)
+            const seasonPrefix = `S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}`;
+            const episodePrefix = `E${(item.IndexNumber || 0).toString().padStart(2, '0')}`;
+            
+            // Construct the final display string based on layout preferences
+            const subtitleText = showLogoAsTitle
+                ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
+                : `${seasonPrefix}${episodePrefix} - ${item.SeriesName}`;
+
+            heroHtml += `<p class="details-episode-info clickable-subtitle" id="episode-subtitle-link">${i18n.ensureBiDi(subtitleText)}</p>`;
+        }
+
+        // Finish appending standard metadata row and secondary date labels.
+        heroHtml += `
             <div class="details-meta-row">
                 ${metaHtml}
             </div>
             ${secondaryMetaRow}
         `;
+
+        this.$('#hero-info').innerHTML = heroHtml;
 
         // Bind clickable subtitle if present
         const subtitleLink = this.$('#episode-subtitle-link');
@@ -1844,8 +2075,33 @@ class DetailsPage extends Page {
         resumeBtn.classList.remove('btn-secondary');
         resumeBtn.classList.add('btn-primary');
 
+        // Retrieve the resume position from UserData playback position.
+        // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
         const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-        const resumeLabel = i18n.t('ResumeAt', [resumeTime + 'm']);
+        
+        // Define a variable to store our sleekly formatted timestamp string.
+        let timeString = '';
+        
+        // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
+        // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
+        if (resumeTime >= 60) {
+            // Compute the absolute number of whole hours.
+            const hours = Math.floor(resumeTime / 60);
+            // Calculate the remaining minutes left over.
+            const minutes = resumeTime % 60;
+            
+            // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
+            // show only the hour to maintain a clean and beautiful Apple-like minimal aesthetic.
+            timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
+        } else {
+            // Under 60 minutes, display in simple minute format (e.g., "45m").
+            timeString = `${resumeTime}m`;
+        }
+
+        // Apply localization to the formatted time label to construct the full button label text.
+        const resumeLabel = i18n.t('ResumeAt', [timeString]);
+        
+        // Update the inner HTML of the resume button with a play icon and the formatted label.
         resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${resumeLabel}</span>`;
 
         // CRITICAL: If we hid the Play button (which probably had focus or would get it),
@@ -1902,11 +2158,36 @@ class DetailsPage extends Page {
         }
 
         if (subtitleBtn) {
-            // Only show subtitle tracks if there's at least one available to select
-            if (mediaStreams.some((s) => s.Type === 'Subtitle')) {
+            // =========================================================================
+            // PGS Subtitle Filter Guard for Button Visibility
+            //
+            // We check if there are any available subtitle streams that are NOT disabled
+            // PGS tracks. If PGS rendering is disabled completely in settings, PGS streams
+            // should not count towards whether the subtitle button is visible. This avoids
+            // showing an active subtitle button when the only subtitle tracks are PGS tracks
+            // that the user has chosen to hide/disable completely.
+            // =========================================================================
+            const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+            const hasSelectableSubtitles = mediaStreams.some((s) => {
+                // We only look at subtitle streams
+                if (s.Type !== 'Subtitle') return false;
+
+                // If PGS is disabled, skip PGS/PGSSUB codecs
+                if (disablePgs) {
+                    const codec = (s.Codec || '').toLowerCase();
+                    if (codec === 'pgs' || codec === 'pgssub') {
+                        return false;
+                    }
+                }
+                return true;
+            });
+
+            // If there's at least one renderable subtitle stream, make the button visible
+            if (hasSelectableSubtitles) {
                 subtitleBtn.classList.remove('hidden');
                 subtitleBtn.setAttribute('tabindex', '0');
             } else {
+                // Otherwise, completely hide the subtitle button and remove from focus order
                 subtitleBtn.classList.add('hidden');
                 subtitleBtn.setAttribute('tabindex', '-1');
             }
@@ -2416,6 +2697,25 @@ class DetailsPage extends Page {
     }
 
     async _loadSimilar() {
+        // -------------------------------------------------------------------------
+        // Performance & Visibility Control Check
+        // -------------------------------------------------------------------------
+        // Check if the user has enabled the "Hide More Like This" appearance option.
+        // By handling this check first, we can short-circuit the entire block,
+        // preventing unnecessary network requests and API server load.
+        const hideSimilar = storage.getItem('pref:hideSimilarSection') === 'true';
+
+        if (hideSimilar) {
+            // Find the container section in the DOM
+            const similarSection = this.$('#similar-section');
+            if (similarSection) {
+                // Keep the section hidden to prevent empty layout gaps
+                similarSection.classList.add('hidden');
+            }
+            // Exit early to completely avoid fetching metadata from the server
+            return;
+        }
+
         try {
             const cacheKey = `details:similar:${this._itemId}`;
             const cachedSimilar = state.get(cacheKey);
@@ -2728,25 +3028,53 @@ class DetailsPage extends Page {
     }
 
     _showSubtitleTrackMenu() {
+        // Find the selected media source (or default to the first one)
         const mediaSource =
             this._item?.MediaSources?.find((m) => m.Id === this._selectedMediaSourceId) ||
             this._item?.MediaSources?.[0];
+        // Guard check: Ensure media source streams exist
         if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        const tracks = mediaSource.MediaStreams.filter((s) => s.Type === key);
+        
+        // =========================================================================
+        // PGS Subtitle Filter Guard
+        //
+        // If the user has disabled PGS rendering completely in settings ('disable'),
+        // we want to exclude PGS tracks from the list of subtitle tracks that the
+        // user can manually select in the details page subtitle menu.
+        // =========================================================================
+        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+        const tracks = mediaSource.MediaStreams.filter((s) => {
+            // Match subtitle type
+            if (s.Type !== key) return false;
+            
+            // Skip disabled PGS tracks
+            if (disablePgs) {
+                const codec = (s.Codec || '').toLowerCase();
+                if (codec === 'pgs' || codec === 'pgssub') {
+                    return false;
+                }
+            }
+            return true;
+        });
 
+        // Determine current track selection index
         let currentIndex = this._selectedSubtitleIndex;
         if (currentIndex === undefined) {
+            // Fallback to server default track index
             currentIndex = mediaSource.DefaultSubtitleStreamIndex; // Can be -1/null
         }
 
-        // Add "Off" option
+        // Add "Off" option to the selection track list
         const displayTracks = [{ Index: -1, DisplayTitle: i18n.t('Off'), Title: i18n.t('Off') }, ...tracks];
 
+        // Render the track selection menu modal on screen
         this._renderTrackSelectionMenu(i18n.t('Subtitles'), displayTracks, currentIndex, (index) => {
+            // Guard check: If selection did not change, skip update
             if (this._selectedSubtitleIndex === index) return;
 
+            // Update local selected index and log the choice
             this._selectedSubtitleIndex = index;
             log.info('Selected Subtitle Index:', index);
         });
@@ -3829,6 +4157,14 @@ class DetailsPage extends Page {
     }
 
     _showRemoteTrailerPlayer() {
+        // --------------------------------------------------------------------
+        // Stop background ambient theme music instantly when starting a
+        // remote trailer. This prevents audio overlap since remote trailers
+        // are loaded inside a custom iframe overlay rather than navigating
+        // away to the dedicated native player page.
+        // --------------------------------------------------------------------
+        themeSongPlayer.stopInstant();
+
         const mode = PlayerSettings.get('trailerPlaybackMode') || 'internal_proxy';
 
         let trailers = this._item.RemoteTrailers || [];
@@ -3963,6 +4299,37 @@ class DetailsPage extends Page {
     }
 
     destroy() {
+        // --------------------------------------------------------------------
+        // Flag this instance as destroyed.
+        // This acts as a circuit breaker for any pending, asynchronous API calls
+        // (such as getThemeMedia) resolving after page exit, preventing audio
+        // race conditions from launching theme playback in the background.
+        // --------------------------------------------------------------------
+        this._isDestroyed = true;
+
+        // --------------------------------------------------------------------
+        // Stop background ambient theme score loop playback.
+        // Under Apple's HIG principles, when transitioning between distinct
+        // navigational spaces, the audio scape must cleanly fade or cease to
+        // make room for the new destination's sensory focus.
+        // 
+        // Elegant Sustain Logic: If the next destination is also a DetailsPage
+        // (e.g. going from a Series details to a Season/Episode details, or back),
+        // we defer stopping by a 2.0-second grace period. If the new page shares
+        // the same theme song (common parent owner), the play command cancels
+        // this deferred stop and playback continues seamlessly without a single
+        // audio hiccup! Otherwise, if we are leaving details entirely, stop and
+        // fade out immediately.
+        // --------------------------------------------------------------------
+        const nextPath = router.getCurrentPath?.() || '';
+        const isNextDetails = nextPath.startsWith('/details/');
+
+        if (isNextDetails) {
+            themeSongPlayer.stopDeferred(2000);
+        } else {
+            themeSongPlayer.stop();
+        }
+
         if (this._header) {
             this._header.destroy();
             this._header = null;

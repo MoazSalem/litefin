@@ -590,17 +590,113 @@ export class JellyfinPlayer extends EventEmitter {
                 const fallbackSource = options.item.MediaSources[0];
                 const ms = options.item.MediaSources.find(m => m.Id === options.mediaSourceId) || fallbackSource;
                 if (ms && ms.MediaStreams) {
+                    // =========================================================================
+                    // Retrieve Subtitle Mode Setting
+                    //
+                    // Fetch the user's preferred subtitle mode setting (Default, Always, Smart, etc.).
+                    // Fall back to 'Default' if no preference has been configured yet.
+                    // =========================================================================
                     const subtitleMode = PlayerSettings.get('subtitleMode') || 'Default';
-                    const subtitleStreams = ms.MediaStreams.filter(s => s.Type === 'Subtitle');
+
+                    // =========================================================================
+                    // PGS Subtitle Filter Guard
+                    //
+                    // If the user set PGS playback to "Disable and Hide Completely" in settings,
+                    // they explicitly want PGS subtitles to be ignored. We filter them out of
+                    // the candidate pool of subtitle streams here. This prevents the player from
+                    // auto-selecting a disabled/hidden PGS track and rendering nothing, allowing
+                    // it to instead fallback to a valid, renderable SRT or VTT track.
+                    // =========================================================================
+                                        const disablePgs = PlayerSettings.get('pgsPlaybackMode') === 'disable';
+                    const subtitleStreams = ms.MediaStreams.filter(s => {
+                        // We only care about subtitle streams
+                        if (s.Type !== 'Subtitle') return false;
+                        
+                        // If PGS rendering is disabled, filter out PGS/PGSSUB codecs
+                        if (disablePgs) {
+                            const codec = (s.Codec || '').toLowerCase();
+                            if (codec === 'pgs' || codec === 'pgssub') {
+                                return false;
+                            }
+                        }
+                        return true;
+                    });
+
+                    // =========================================================================
+                    // Prioritize and Sort Subtitle Streams
+                    //
+                    // To resolve selection ambiguity, sort candidate tracks based on type
+                    // and delivery attributes before running the auto-selection queries:
+                    //
+                    // 1. External (EXT) tracks first: External files added explicitly by the user
+                    //    should take priority over embedded/internal streams.
+                    // 2. Codec-level priority: Prefer formats in this order:
+                    //    ASS/SSA (highest styled styling fidelity) -> SRT/SUBRIP -> PGS/PGSSUB -> others.
+                    // =========================================================================
+                    const getCodecPriority = (codec) => {
+                        const c = (codec || '').toLowerCase();
+                        if (c === 'ass' || c === 'ssa') {
+                            return 4; // Styled subtitles preferred first
+                        }
+                        if (c === 'srt' || c === 'subrip') {
+                            return 3; // Clean text-based standard fallback
+                        }
+                        if (c === 'pgs' || c === 'pgssub') {
+                            return 2; // Picture-based subtitle tracks
+                        }
+                        return 1; // Any other uncategorized format
+                    };
+
+                    subtitleStreams.sort((a, b) => {
+                        // Extract external status
+                        const aExt = !!a.IsExternal;
+                        const bExt = !!b.IsExternal;
+
+                        // Check if one is external and the other is internal
+                        if (aExt !== bExt) {
+                            // Put external tracks first
+                            return aExt ? -1 : 1;
+                        }
+
+                        // Determine codec priority for both streams
+                        const aPriority = getCodecPriority(a.Codec);
+                        const bPriority = getCodecPriority(b.Codec);
+
+                        // If priorities differ, place higher priority first
+                        if (aPriority !== bPriority) {
+                            return bPriority - aPriority;
+                        }
+
+                        // Keep original sequence stable if identical priority
+                        return 0;
+                    });
+
                     let chosenIndex = undefined;
 
+                    // Apply the corresponding selection logic depending on the mode
                     if (subtitleMode === 'None') {
                         chosenIndex = -1;
                     } else if (subtitleMode === 'Default') {
-                        // Use Server's DefaultSubtitleStreamIndex if present
-                        if (ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null) {
+                        // =====================================================================
+                        // Server Default Track Resolution with PGS Safeguard
+                        //
+                        // Verify if the server-provided default track is a PGS track. If PGS is
+                        // disabled, we discard this track and fall back to searching the rest of
+                        // the filtered candidate streams (which have PGS excluded).
+                        // =====================================================================
+                        const serverDefaultTrack = ms.DefaultSubtitleStreamIndex !== undefined && ms.DefaultSubtitleStreamIndex !== null
+                            ? ms.MediaStreams.find(s => s.Index === ms.DefaultSubtitleStreamIndex)
+                            : null;
+                        const isServerDefaultPgs = serverDefaultTrack && 
+                            ((serverDefaultTrack.Codec || '').toLowerCase() === 'pgs' || (serverDefaultTrack.Codec || '').toLowerCase() === 'pgssub');
+                        
+                        // Use default only if valid and not a disabled PGS track
+                        if (ms.DefaultSubtitleStreamIndex !== undefined && 
+                            ms.DefaultSubtitleStreamIndex !== null && 
+                            !(disablePgs && isServerDefaultPgs)) {
                             chosenIndex = ms.DefaultSubtitleStreamIndex;
                         } else {
+                            // Find the first default or forced track from the filtered candidate list
                             const subStream = subtitleStreams.find(s => s.IsDefault || s.IsForced);
                             if (subStream) chosenIndex = subStream.Index;
                         }
@@ -1093,9 +1189,23 @@ export class JellyfinPlayer extends EventEmitter {
      * @param {boolean} [options.suppressWaitingEvent] - Don't emit 'waiting' during this seek's buffer phase
      */
     seek(positionTicks, options = {}) {
+        // High-Priority State Update: Indicate that seeking is actively occurring
         this._isSeeking = true;
         this._seekTargetTicks = positionTicks;
+
+        // INSTANT SUBTITLE WIPE:
+        // Clear all active subtitles instantly when seeking. This prevents the currently
+        // displayed cue from lingering as a ghost overlay during the buffering/loading phase
+        // of a seek operation (whether scrubbing, chapter skips, or direct d-pad seeks).
+        if (this._subtitleManager) {
+            // Fancy explanation: reset active state caches and flush any DOM / canvas subtitle layers
+            this._subtitleManager.resetActiveCues();
+        }
+
+        // Delegate the core seek execution to our underlying player backend (AVPlay, HTML5, WebOS)
         this._backend?.seek(positionTicks, options);
+
+        // Notify all registered UI/OSD event listeners that seek has successfully fired
         this.emit('seek', { positionTicks });
     }
 
@@ -1638,6 +1748,7 @@ export class JellyfinPlayer extends EventEmitter {
 
         if (index === -1) {
              if (this._chapters && this._chapters.length > 0) {
+                 this._lastChapterSeekTime = Date.now();
                  this.seek(this._chapters[0].StartPositionTicks);
                  return;
              }
@@ -1658,12 +1769,22 @@ export class JellyfinPlayer extends EventEmitter {
                 log.info('TizenAVPlayer: Applying 2.5s offset to next chapter jump');
             }
             log.info('Skipping to next chapter:', nextChapter.Name);
+            this._lastChapterSeekTime = Date.now();
             this.seek(seekTarget);
         }
     }
 
     previousChapter() {
-        const index = this.getCurrentChapterIndex();
+        // Tizen Seek Offset Workaround:
+        // On Tizen, nextChapter() applies a -2.5s offset to chapter seeks, landing slightly
+        // before the actual chapter start. To prevent previousChapter() from misidentifying
+        // the current chapter and getting stuck in a loop, we look ahead by 3s (matching nextChapter).
+        let lookAhead = 0;
+        if (this._backendType === 'tizen') {
+             lookAhead = 30000000; // 3 seconds in ticks
+        }
+
+        const index = this.getCurrentChapterIndex(this.getCurrentPositionTicks() + lookAhead);
         log.debug('Chapter Debug (Prev): Current Index', index);
 
         if (index === -1) return;
@@ -1675,18 +1796,27 @@ export class JellyfinPlayer extends EventEmitter {
         const diff = currentTicks - chapterStart;
         log.debug('Chapter Debug: Diff from start', diff);
 
-        // If we are more than 3 seconds into the chapter, restart event
-        // 3 seconds = 30,000,000 ticks
-        if (diff > 30000000) {
+        // STICKY CHAPTER SEEK PROTECTION (Bypasses restart block if user clicks quickly)
+        const now = Date.now();
+        const isRepeatedClick = this._lastChapterSeekTime && (now - this._lastChapterSeekTime < 2500);
+
+        // If we are more than 3 seconds into the chapter AND it's not a rapid repeated click, restart current chapter.
+        // On Tizen, keyframe seeking can make us land up to 8-10 seconds after the target chapter start.
+        // Therefore, if the user repeatedly clicks "Previous Chapter" (within 2.5 seconds),
+        // we bypass the restart protection entirely and skip to the previous chapter.
+        if (diff > 30000000 && !isRepeatedClick) {
             log.info('Restarting current chapter:', currentChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(chapterStart);
         } else if (index > 0) {
             // Go to previous chapter
             const prevChapter = this._chapters[index - 1];
             log.info('Skipping to previous chapter:', prevChapter.Name);
+            this._lastChapterSeekTime = now;
             this.seek(prevChapter.StartPositionTicks);
         } else {
              // First chapter, just seek to start
+             this._lastChapterSeekTime = now;
              this.seek(0);
         }
     }
@@ -1896,6 +2026,49 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getCurrentMediaSource() {
         return this._currentMediaSource;
+    }
+
+    /* =========================================================================
+       HDR DETECTION UTILITY
+       =========================================================================
+       Determines if the currently loaded/playing media source contains a video
+       stream in High Dynamic Range (HDR). Checks the video stream properties
+       which are parsed dynamically from the Jellyfin media metadata.
+       ========================================================================= */
+    isCurrentMediaHDR() {
+        // Retrieve the selected active media source
+        const mediaSource = this.getCurrentMediaSource();
+        if (!mediaSource) {
+            // No active playback media loaded
+            return false;
+        }
+
+        // Locate the primary video stream within the streams list
+        const videoStream = (mediaSource.MediaStreams || []).find(s => s.Type === 'Video');
+        if (!videoStream) {
+            // No valid video tracks found
+            return false;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 1: Coarse range description (e.g. HDR vs SDR)
+        // ---------------------------------------------------------------------
+        const videoRange = (videoStream.VideoRange || '').toUpperCase();
+        if (videoRange.includes('HDR')) {
+            return true;
+        }
+
+        // ---------------------------------------------------------------------
+        // Check 2: Fine-grained Range Type (e.g., HDR10, HDR10Plus, DOVI, HLG)
+        // Ensure we filter out explicit 'SDR' values
+        // ---------------------------------------------------------------------
+        const videoRangeType = (videoStream.VideoRangeType || '').toUpperCase();
+        if (videoRangeType && videoRangeType !== 'SDR') {
+            return true;
+        }
+
+        // Content is fallback SDR (Standard Dynamic Range)
+        return false;
     }
 
     // ========================================================================

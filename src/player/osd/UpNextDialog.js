@@ -26,6 +26,7 @@
 import BaseMenu from './BaseMenu.js';
 import { i18n } from '../../utils/i18n.js';
 import { shouldShowScore } from '../../utils/visibility.js';
+import { PlayerSettings } from '../../utils/PlayerSettings.js';
 
 /**
  * UpNextDialog
@@ -95,17 +96,42 @@ export default class UpNextDialog extends BaseMenu {
      * Update the countdown text ("Starting in X seconds" / static next-up label).
      * Called every second from showUpNextIfNeeded() in OSDController.
      *
+     * =========================================================================
+     * AUTO PLAY ADAPTIVITY GUARD
+     * =========================================================================
+     * If the user disabled 'enableNextEpisodeAutoPlay' (play next episode
+     * automatically), we STILL want to show the dialog so they can manually
+     * trigger playback if desired. However, telling them that the episode is
+     * "Starting in X seconds" when autoplay is off is extremely misleading.
+     * In this case, we simply blank out the countdown text entirely.
+     * =========================================================================
+     *
      * @param {number} secondsRemaining - Number of full seconds left in the episode
      */
     updateCountdown(secondsRemaining) {
+        // Fast exit: do nothing if DOM element is not ready or the dialog isn't visible
         if (!this.$el || !this.isVisible) return;
 
+        // Cache the remaining seconds for potential subsequent updates
         this._initialSecondsRemaining = secondsRemaining;
 
+        // Locate the countdown text wrapper inside our card template
         const countdownEl = this.$el.querySelector('.upnext-countdown');
+        
+        // Ensure the element is found before manipulating it
         if (countdownEl) {
-            // "Starting in 28s" — i18n key falls back to literal if not found in locale
-            countdownEl.textContent = i18n.t('NextEpisodeStartsIn', [secondsRemaining]);
+            // =================================================================
+            // AutoPlay State Branching
+            // =================================================================
+            // Read active preference to see if automatic queue traversal is active.
+            if (PlayerSettings.get('enableNextEpisodeAutoPlay')) {
+                // Autoplay is enabled: show the standard live countdown text
+                // "Starting in 28s" - falls back gracefully to default translation
+                countdownEl.textContent = i18n.t('NextEpisodeStartsIn', [secondsRemaining]);
+            } else {
+                // Autoplay is disabled: blank out countdown to avoid false promises
+                countdownEl.textContent = '';
+            }
         }
     }
 
