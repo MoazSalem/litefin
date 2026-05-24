@@ -135,7 +135,7 @@ class ScrollController {
         if (!container) return 0;
 
         // Retrieve active vertical scroll style preference.
-        const scrollMode = storage.getItem('pref:verticalScrollMode') || 'current';
+        const scrollMode = storage.getItem('pref:verticalScrollMode') || 'native';
 
         // Check if GPU mode is active and parse the translate3d string coordinate.
         if (scrollMode === 'gpu') {
@@ -170,7 +170,21 @@ class ScrollController {
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
 
         // Resolve active scroll mode from stored user preferences.
-        const scrollMode = isVertical ? (storage.getItem('pref:verticalScrollMode') || 'current') : 'current';
+        const scrollMode = isVertical ? (storage.getItem('pref:verticalScrollMode') || 'native') : 'current';
+
+        /* ====================================================================
+         * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
+         * ====================================================================
+         * Under Apple Human Interface Guidelines and premium responsiveness goals,
+         * we allow users to opt for an "Instant" snapping scroll behavior.
+         * If 'pref:verticalScrollMode' is set to 'instant', we override the scroll
+         * duration parameter to 0, which immediately diverts the execution flow
+         * into the optimized instant coordinates snapping branch.
+         * ==================================================================== */
+        let durationToUse = duration;
+        if (isVertical && scrollMode === 'instant') {
+            durationToUse = 0;
+        }
 
         // Reset the vertical track's transform if we've switched away from GPU mode.
         if (!isVertical || scrollMode !== 'gpu') {
@@ -208,7 +222,7 @@ class ScrollController {
 
         // Already at target or instant scroll requested — snap and bail.
         // CRITICAL: Cancel any running animation in this axis BEFORE snapping.
-        if (duration <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
+        if (durationToUse <= 0 || Math.abs(targetScroll - currentScroll) < SCROLL_SNAP_THRESHOLD) {
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;

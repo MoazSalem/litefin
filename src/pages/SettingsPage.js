@@ -468,11 +468,24 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'vertical-scroll-mode-select',
                             [
-                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Current (JS RAF)' },
-                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Let TV Handle It (Native)' },
-                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'GPU Accelerated (Transforms)' }
+                                /* -------------------------------------------------------------
+                                 * Normal (Current) scroll mode uses standard custom JS RAF loops
+                                 * ------------------------------------------------------------- */
+                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Normal (Current)' },
+                                /* -------------------------------------------------------------
+                                 * Smooth (Native) mode delegates scrolling directly to the browser
+                                 * ------------------------------------------------------------- */
+                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },
+                                /* -------------------------------------------------------------
+                                 * Fast (GPU Accelerated) mode transforms page contents using CSS
+                                 * ------------------------------------------------------------- */
+                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'Fast (GPU Accelerated)' },
+                                /* -------------------------------------------------------------
+                                 * Instant (No Animation) mode snaps content immediately to target
+                                 * ------------------------------------------------------------- */
+                                { value: 'instant', label: i18n.t('ScrollModeInstant') || 'Instant (No Animation)' }
                             ],
-                            storage.getItem('pref:verticalScrollMode') || 'current'
+                            storage.getItem('pref:verticalScrollMode') || 'native'
                         )}
                     </div>
                 </div>

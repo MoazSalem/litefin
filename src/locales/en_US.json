@@ -791,6 +791,7 @@
     "ScreensaverTypeDescription": "Visual style of the screensaver",
     "ScrollModeCurrent": "Current (JS RAF)",
     "ScrollModeGpu": "GPU Accelerated (Transforms)",
+    "ScrollModeInstant": "Instant (No Animation)",
     "ScrollModeNative": "Let TV Handle It (Native)",
     "SDROnly": "SDR Only",
     "Searching": "Searching...",
