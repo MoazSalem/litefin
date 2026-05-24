@@ -1983,16 +1983,58 @@ export default class OSDController extends Component {
                 break;
             case 'nextTrack': this.emit('next'); break;
             case 'subtitles': 
-                this.activeMenu = this.subtitleMenu;
-                this.subtitleMenu.open('subtitles'); 
+                /*
+                 * ============================================================================
+                 * SUBTITLES OVERLAY TOGGLE
+                 * ============================================================================
+                 * If the subtitle track selection menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.subtitleMenu && this.subtitleMenu.isVisible) {
+                    log.info('Subtitles menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening subtitles menu.');
+                    this.activeMenu = this.subtitleMenu;
+                    this.subtitleMenu.open('subtitles'); 
+                }
                 break;
             case 'audio': 
-                this.activeMenu = this.audioMenu;
-                this.audioMenu.open('audio'); 
+                /*
+                 * ============================================================================
+                 * AUDIO OVERLAY TOGGLE
+                 * ============================================================================
+                 * If the audio track selection menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.audioMenu && this.audioMenu.isVisible) {
+                    log.info('Audio menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening audio menu.');
+                    this.activeMenu = this.audioMenu;
+                    this.audioMenu.open('audio'); 
+                }
                 break;
             case 'settings': 
-                this.activeMenu = this.settingsMenu;
-                this.settingsMenu.open(); 
+                /*
+                 * ============================================================================
+                 * QUICK SETTINGS MENU TOGGLE
+                 * ============================================================================
+                 * If the quick settings menu is already visible on the screen,
+                 * close it. Otherwise, open the menu and focus the first element.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.settingsMenu && this.settingsMenu.isVisible) {
+                    log.info('Settings menu already open, closing.');
+                    this.closeMenu();
+                } else {
+                    log.info('Opening settings menu.');
+                    this.activeMenu = this.settingsMenu;
+                    this.settingsMenu.open(); 
+                }
                 break;
             case 'favorite': 
                 // Toggle favorite
@@ -2015,12 +2057,38 @@ export default class OSDController extends Component {
                 this.togglePlaybackInfo(!this.playbackInfo.isVisible);
                 break;
             case 'chapters':
-                /* Open the chapters list modal for the currently playing item. */
-                this.toggleChaptersModal(true);
+                /*
+                 * ============================================================================
+                 * CHAPTERS OVERLAY TOGGLE
+                 * ============================================================================
+                 * Toggle the full list of chapters. If the chapters modal is currently open,
+                 * close it. Otherwise, construct the list, render layout, and open it.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.chaptersModal && this.chaptersModal.isVisible) {
+                    log.info('Chapters modal already open, closing.');
+                    this.toggleChaptersModal(false);
+                } else {
+                    log.info('Opening chapters modal.');
+                    this.toggleChaptersModal(true);
+                }
                 break;
             case 'queue':
-                /* Open the queue list modal. */
-                this.toggleQueueModal(true);
+                /*
+                 * ============================================================================
+                 * PLAYBACK QUEUE OVERLAY TOGGLE
+                 * ============================================================================
+                 * Toggle the Up Next playback queue overlay. If the queue modal is open,
+                 * close it. Otherwise, retrieve the active list and show it.
+                 * ============================================================================
+                 */
+                if (this.activeMenu === this.queueModal && this.queueModal.isVisible) {
+                    log.info('Queue modal already open, closing.');
+                    this.toggleQueueModal(false);
+                } else {
+                    log.info('Opening queue modal.');
+                    this.toggleQueueModal(true);
+                }
                 break;
             case 'lyrics':
                 this.toggleLyricsModal(true);
