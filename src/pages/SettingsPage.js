@@ -633,6 +633,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOnlyBlurHashBackdrop">${i18n.t('LabelOnlyBlurHashBackdrop') || 'Only Use BlurHash for Details Backdrop'}</span>
+                        <span class="setting-description" data-i18n="OnlyBlurHashBackdropDescription">${i18n.t('OnlyBlurHashBackdropDescription') || 'Use only the lightweight decoded color blurhash as the details page background. Does not fetch or load the heavy high-resolution backdrop image, saving network bandwidth and GPU VRAM.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getOnlyBlurHashBackdrop() ? 'active' : ''}" 
+                                id="toggle-only-blurhash-backdrop" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LabelScoreVisibility">${i18n.t('LabelScoreVisibility') || 'Score Visibility'}</span>
                         <span class="setting-description" data-i18n="ScoreVisibilityDescription">${i18n.t('ScoreVisibilityDescription') || 'Control how community and critic scores are displayed.'}</span>
                     </div>
@@ -3826,6 +3839,16 @@ class SettingsPage extends Page {
                 
                 // Toggle active class state on the premium UI toggle-switch switch
                 disableBlurhashBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Only BlurHash Backdrop
+        const onlyBlurhashBackdropBtn = this.$('#toggle-only-blurhash-backdrop');
+        if (onlyBlurhashBackdropBtn) {
+            onlyBlurhashBackdropBtn.addEventListener('click', () => {
+                const newValue = !layoutManager.getOnlyBlurHashBackdrop();
+                layoutManager.setOnlyBlurHashBackdrop(newValue);
+                onlyBlurhashBackdropBtn.classList.toggle('active', newValue);
             });
         }
 

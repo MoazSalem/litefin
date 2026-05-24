@@ -83,6 +83,9 @@ class LayoutManager {
         // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
         this._disableBlurhash = false;
 
+        // Only BlurHash Backdrop: Uses only decoded blurhash for details backdrop background without loading image
+        this._onlyBlurHashBackdrop = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -113,6 +116,7 @@ class LayoutManager {
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
+        const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -125,6 +129,7 @@ class LayoutManager {
         this.setDisableCardScaling(savedDisableScaling, false);
         this.setSimpleLoader(savedSimpleLoader, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
+        this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -542,6 +547,40 @@ class LayoutManager {
      */
     getDisableBlurhash() {
         return this._disableBlurhash;
+    }
+
+    /**
+     * Set onlyBlurHashBackdrop setting
+     * 
+     * @param {boolean} only - True to use only BlurHash for Details Backdrop; false to load backdrop image too.
+     * @param {boolean} [save=true] - Persist the preference locally.
+     * @public
+     */
+    setOnlyBlurHashBackdrop(only, save = true) {
+        this._onlyBlurHashBackdrop = only;
+        
+        if (only) {
+            document.documentElement.setAttribute('data-only-blurhash-backdrop', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-only-blurhash-backdrop');
+        }
+
+        if (save) {
+            storage.setItem('litefin:onlyBlurHashBackdrop', only ? 'true' : 'false');
+        }
+
+        log.info(`Only BlurHash Backdrop set to: ${only}`);
+        eventBus.emit('onlyBlurHashBackdrop:changed', { only });
+    }
+
+    /**
+     * Get onlyBlurHashBackdrop setting value
+     * 
+     * @returns {boolean}
+     * @public
+     */
+    getOnlyBlurHashBackdrop() {
+        return this._onlyBlurHashBackdrop;
     }
 
     // Component registration (Existing logic maintained)
