@@ -1305,7 +1305,7 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
     height: auto !important; /* It stretches vertically because of align-items: stretch on parent */
     min-width: 0 !important; 
     min-height: 0 !important;    
-    padding: 30px 40px !important;
+    padding: 30px 25px !important;
     overflow-y: auto !important;
     display: flex !important;
     flex-wrap: wrap !important;
