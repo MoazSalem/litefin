@@ -3186,12 +3186,12 @@ class LibraryPage extends Page {
         if (this.state.libraryInfo) {
             const type = this.state.libraryInfo.CollectionType;
             if (type === 'movies') includeItemTypes = 'Movie';
-            else if (type === 'tvshows') includeItemTypes = 'Series,Episode';
+            else if (type === 'tvshows') includeItemTypes = 'Series';
             else if (type === 'music') includeItemTypes = 'MusicArtist,MusicAlbum,Audio';
         }
 
         const params = {
-            ParentId: this.state.parentId,
+            ParentId: this.state.parentId ? this.state.parentId : this.state.libraryId,
             IncludeItemTypes: includeItemTypes,
             Recursive: true
         };
