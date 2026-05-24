@@ -3,7 +3,7 @@ export const availableLanguages = [
     {
         "value": "de",
         "label": "Deutsch",
-        "completeness": 95.44
+        "completeness": 95.43
     },
     {
         "value": "en-us",
@@ -13,67 +13,67 @@ export const availableLanguages = [
     {
         "value": "es",
         "label": "Español",
-        "completeness": 97.57
+        "completeness": 97.61
     },
     {
         "value": "fr",
         "label": "Français",
-        "completeness": 96.35
+        "completeness": 96.52
     },
     {
         "value": "hr",
         "label": "Hrvatski",
-        "completeness": 90.27
+        "completeness": 90.46
     },
     {
         "value": "it",
         "label": "Italiano",
-        "completeness": 96.86
+        "completeness": 96.92
     },
     {
         "value": "nl",
         "label": "Nederlands",
-        "completeness": 90.98
+        "completeness": 91.25
     },
     {
         "value": "pl",
         "label": "Polski",
-        "completeness": 94.02
+        "completeness": 94.14
     },
     {
         "value": "pt-br",
         "label": "Português (Brasil)",
-        "completeness": 97.37
+        "completeness": 97.42
     },
     {
         "value": "sv",
         "label": "Svenska",
-        "completeness": 89.26
+        "completeness": 89.46
     },
     {
         "value": "vi",
         "label": "Tiếng Việt",
-        "completeness": 95.14
+        "completeness": 95.23
     },
     {
         "value": "tr",
         "label": "Türkçe",
-        "completeness": 94.33
+        "completeness": 94.43
     },
     {
         "value": "ru",
         "label": "Русский",
-        "completeness": 99.39
+        "completeness": 99.4
     },
     {
         "value": "sr",
         "label": "Српски",
-        "completeness": 90.48
+        "completeness": 90.66
     },
     {
         "value": "uk",
         "label": "Українська",
-        "completeness": 95.85
+        "completeness": 95.92
     },
     {
         "value": "ar",
@@ -83,12 +83,12 @@ export const availableLanguages = [
     {
         "value": "hi-in",
         "label": "हिन्दी (भारत)",
-        "completeness": 89.77
+        "completeness": 89.96
     },
     {
         "value": "bn",
         "label": "বাংলা",
-        "completeness": 89.67
+        "completeness": 89.86
     },
     {
         "value": "ko",
@@ -108,22 +108,22 @@ export const availableLanguages = [
     {
         "value": "ab",
         "label": "Abkhazian",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "af",
         "label": "Afrikaans",
-        "completeness": 12.46
+        "completeness": 12.33
     },
     {
         "value": "en_US",
         "label": "American English",
-        "completeness": 3.44
+        "completeness": 3.48
     },
     {
         "value": "br",
         "label": "Brezhoneg",
-        "completeness": 3.85
+        "completeness": 3.88
     },
     {
         "value": "en-gb",
@@ -133,117 +133,117 @@ export const availableLanguages = [
     {
         "value": "ca",
         "label": "Català",
-        "completeness": 24.01
+        "completeness": 23.66
     },
     {
         "value": "cs",
         "label": "Čeština",
-        "completeness": 24.42
+        "completeness": 24.06
     },
     {
         "value": "ch",
         "label": "Chamorro",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "cy",
         "label": "Cymraeg",
-        "completeness": 16.72
+        "completeness": 16.5
     },
     {
         "value": "da",
         "label": "Dansk",
-        "completeness": 23.71
+        "completeness": 23.36
     },
     {
         "value": "dv",
         "label": "Divehi",
-        "completeness": 6.99
+        "completeness": 6.96
     },
     {
         "value": "et",
         "label": "Eesti",
-        "completeness": 24.32
+        "completeness": 23.96
     },
     {
         "value": "es-ar",
         "label": "Español (Argentina)",
-        "completeness": 23.91
+        "completeness": 23.56
     },
     {
         "value": "es_DO",
         "label": "Español (República Dominicana)",
-        "completeness": 4.86
+        "completeness": 4.87
     },
     {
         "value": "es-mx",
         "label": "Español de México",
-        "completeness": 23.81
+        "completeness": 23.46
     },
     {
         "value": "es_419",
         "label": "Español latinoamericano",
-        "completeness": 22.59
+        "completeness": 22.27
     },
     {
         "value": "eo",
         "label": "Esperanto",
-        "completeness": 22.49
+        "completeness": 22.17
     },
     {
         "value": "eu",
         "label": "Euskara",
-        "completeness": 24.32
+        "completeness": 23.96
     },
     {
         "value": "fil",
         "label": "Filipino",
-        "completeness": 20.26
+        "completeness": 19.98
     },
     {
         "value": "fo",
         "label": "Føroyskt",
-        "completeness": 9.02
+        "completeness": 8.95
     },
     {
         "value": "fr-ca",
         "label": "Français canadien",
-        "completeness": 23.3
+        "completeness": 22.96
     },
     {
         "value": "ga",
         "label": "Gaeilge",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "gl",
         "label": "Galego",
-        "completeness": 18.74
+        "completeness": 18.49
     },
     {
         "value": "ht",
         "label": "Haitian Creole",
-        "completeness": 5.88
+        "completeness": 5.86
     },
     {
         "value": "he_IL",
         "label": "HE_IL",
-        "completeness": 3.95
+        "completeness": 3.98
     },
     {
         "value": "id",
         "label": "Indonesia",
-        "completeness": 23.81
+        "completeness": 23.46
     },
     {
         "value": "zu",
         "label": "IsiZulu",
-        "completeness": 6.79
+        "completeness": 6.76
     },
     {
         "value": "is-is",
         "label": "Íslenska (Ísland)",
-        "completeness": 12.06
+        "completeness": 11.93
     },
     {
         "value": "kw",
@@ -253,22 +253,22 @@ export const availableLanguages = [
     {
         "value": "sw",
         "label": "Kiswahili",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "lv",
         "label": "Latviešu",
-        "completeness": 24.21
+        "completeness": 23.86
     },
     {
         "value": "lb",
         "label": "Lëtzebuergesch",
-        "completeness": 22.59
+        "completeness": 22.27
     },
     {
         "value": "lt-lt",
         "label": "Lietuvių (Lietuva)",
-        "completeness": 24.52
+        "completeness": 24.16
     },
     {
         "value": "jbo",
@@ -278,147 +278,147 @@ export const availableLanguages = [
     {
         "value": "hu",
         "label": "Magyar",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "mg",
         "label": "Malagasy",
-        "completeness": 3.85
+        "completeness": 3.88
     },
     {
         "value": "mt",
         "label": "Malti",
-        "completeness": 4.76
+        "completeness": 4.77
     },
     {
         "value": "mi",
         "label": "Māori",
-        "completeness": 4.05
+        "completeness": 4.08
     },
     {
         "value": "ms",
         "label": "Melayu",
-        "completeness": 8.81
+        "completeness": 8.75
     },
     {
         "value": "enm",
         "label": "Middle English",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "nb",
         "label": "Norsk bokmål",
-        "completeness": 24.01
+        "completeness": 23.66
     },
     {
         "value": "nn",
         "label": "Norsk nynorsk",
-        "completeness": 23.71
+        "completeness": 23.36
     },
     {
         "value": "uz",
         "label": "O‘zbek",
-        "completeness": 11.35
+        "completeness": 11.23
     },
     {
         "value": "oc",
         "label": "Occitan",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "pt",
         "label": "Português",
-        "completeness": 23.71
+        "completeness": 23.36
     },
     {
         "value": "pt-pt",
         "label": "Português europeu",
-        "completeness": 23.81
+        "completeness": 23.46
     },
     {
         "value": "pr",
         "label": "Pr",
-        "completeness": 6.28
+        "completeness": 6.26
     },
     {
         "value": "ro",
         "label": "Română",
-        "completeness": 23.81
+        "completeness": 23.46
     },
     {
         "value": "gsw",
         "label": "Schwiizertüütsch",
-        "completeness": 7.8
+        "completeness": 7.75
     },
     {
         "value": "sq",
         "label": "Shqip",
-        "completeness": 10.64
+        "completeness": 10.54
     },
     {
         "value": "sk",
         "label": "Slovenčina",
-        "completeness": 24.21
+        "completeness": 23.86
     },
     {
         "value": "sl-si",
         "label": "Slovenščina (Slovenija)",
-        "completeness": 24.11
+        "completeness": 23.76
     },
     {
         "value": "so",
         "label": "Soomaali",
-        "completeness": 3.85
+        "completeness": 3.88
     },
     {
         "value": "fi",
         "label": "Suomi",
-        "completeness": 24.32
+        "completeness": 23.96
     },
     {
         "value": "kab",
         "label": "Taqbaylit",
-        "completeness": 4.15
+        "completeness": 4.17
     },
     {
         "value": "el",
         "label": "Ελληνικά",
-        "completeness": 24.52
+        "completeness": 24.16
     },
     {
         "value": "be-by",
         "label": "Беларуская (Беларусь)",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "bg-bg",
         "label": "Български (България)",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "ky",
         "label": "Кыргызча",
-        "completeness": 3.55
+        "completeness": 3.58
     },
     {
         "value": "kk",
         "label": "Қазақ тілі",
-        "completeness": 22.7
+        "completeness": 22.37
     },
     {
         "value": "mk",
         "label": "Македонски",
-        "completeness": 10.54
+        "completeness": 10.44
     },
     {
         "value": "mn",
         "label": "Монгол",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "ka",
         "label": "Ქართული",
-        "completeness": 6.59
+        "completeness": 6.56
     },
     {
         "value": "hy",
@@ -428,52 +428,52 @@ export const availableLanguages = [
     {
         "value": "he",
         "label": "עברית",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "ug",
         "label": "ئۇيغۇرچە",
-        "completeness": 4.96
+        "completeness": 4.97
     },
     {
         "value": "ur_PK",
         "label": "اردو (پاکستان)",
-        "completeness": 23.3
+        "completeness": 22.96
     },
     {
         "value": "fa",
         "label": "فارسی",
-        "completeness": 21.48
+        "completeness": 21.17
     },
     {
         "value": "ckb",
         "label": "کوردیی ناوەندی",
-        "completeness": 3.95
+        "completeness": 3.98
     },
     {
         "value": "ne",
         "label": "नेपाली",
-        "completeness": 6.08
+        "completeness": 6.06
     },
     {
         "value": "mr",
         "label": "मराठी",
-        "completeness": 17.22
+        "completeness": 17
     },
     {
         "value": "as",
         "label": "অসমীয়া",
-        "completeness": 4.56
+        "completeness": 4.57
     },
     {
         "value": "bn_BD",
         "label": "বাংলা (বাংলাদেশ)",
-        "completeness": 8.11
+        "completeness": 8.05
     },
     {
         "value": "pa",
         "label": "ਪੰਜਾਬੀ",
-        "completeness": 6.89
+        "completeness": 6.86
     },
     {
         "value": "gu",
@@ -483,46 +483,46 @@ export const availableLanguages = [
     {
         "value": "ta",
         "label": "தமிழ்",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "te",
         "label": "తెలుగు",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "kn",
         "label": "ಕನ್ನಡ",
-        "completeness": 4.96
+        "completeness": 4.97
     },
     {
         "value": "ml",
         "label": "മലയാളം",
-        "completeness": 21.58
+        "completeness": 21.27
     },
     {
         "value": "si",
         "label": "සිංහල",
-        "completeness": 3.85
+        "completeness": 3.88
     },
     {
         "value": "th",
         "label": "ไทย",
-        "completeness": 9.02
+        "completeness": 8.95
     },
     {
         "value": "my",
         "label": "မြန်မာ",
-        "completeness": 7.8
+        "completeness": 7.75
     },
     {
         "value": "zh-hk",
         "label": "中文（中國香港特別行政區）",
-        "completeness": 24.62
+        "completeness": 24.25
     },
     {
         "value": "zh-tw",
         "label": "中文（台灣）",
-        "completeness": 24.62
+        "completeness": 24.25
     }
 ];
