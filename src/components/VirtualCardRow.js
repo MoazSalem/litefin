@@ -72,6 +72,7 @@ export class VirtualCardRow {
         this.track.__virtualRow = this;
 
         // Modern: Handle Poster-to-Landscape Expansion logic
+        let loadExpansionThumb;
         if (isModern) {
             // Add a buffer for the expanded card width (375px) so the track doesn't clip.
             // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
@@ -84,7 +85,7 @@ export class VirtualCardRow {
              * 
              * @param {HTMLElement} card - The .media-card element that is expanding.
              */
-            const loadExpansionThumb = (card) => {
+            loadExpansionThumb = (card) => {
                 // Safely grab references to the lazy backdrop layer inside the card structure.
                 const thumb = card.querySelector('.thumb-layer');
                 const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
@@ -129,12 +130,17 @@ export class VirtualCardRow {
             const handleFocus = (element) => {
                 // Find the closest media-card ancestor within this row
                 const card = element.closest('.media-card');
+                
+                // Ensure the card exists and belongs strictly to this row track
                 if (card && this.track.contains(card)) {
+                    // Extract the mathematical virtual index from the dataset
                     const index = parseInt(card.dataset.virtualIndex);
                     
                     // Shift sibling cards relative to this card's expansion state.
                     // Marks expanding index inside the CSS custom property.
                     const isExpanding = card.classList.contains('has-expansion');
+                    
+                    // Apply focused index to track custom properties for modern styling layout shifts
                     if (isExpanding) {
                         this.track.style.setProperty('--focused-index', index);
                     } else {
@@ -143,6 +149,21 @@ export class VirtualCardRow {
                     
                     // Trigger asynchronous image preloading for the expanding backdrop
                     loadExpansionThumb(card);
+
+                    // =========================================================
+                    // 🚀 ACTIVE SLIDING WINDOW BACKDROP PRELOADING
+                    // =========================================================
+                    // To keep navigation feeling lightning fast and premium (Apple HIG style),
+                    // we pre-fetch the next card's backdrop while focused on card N.
+                    // This creates a 1-item ahead sliding buffer, so the subsequent
+                    // expansion backdrop is completely ready before focus lands on it.
+                    // =========================================================
+                    const nextCard = this.domNodes.get(index + 1);
+                    
+                    // If the next card is rendered and in the DOM, preload its asset
+                    if (nextCard) {
+                        loadExpansionThumb(nextCard);
+                    }
                 }
             };
 
@@ -247,6 +268,28 @@ export class VirtualCardRow {
             this._isBootRender = true;
         }
         this._updateWindow(0);
+
+        // =================================================================
+        // 💎 STARTUP BACKDROP CACHING
+        // =================================================================
+        // Eagerly preloads the backdrops for index 0 and index 1 on startup.
+        // This ensures the current row has at least 2 backdrops cached
+        // immediately when the page loads, giving a gorgeous, lag-free first
+        // impression exactly matching the Apple HIG standard.
+        // =================================================================
+        if (isModern) {
+            // Retrieve the first card (index 0) and preload its backdrop
+            const firstCard = this.domNodes.get(0);
+            if (firstCard) {
+                loadExpansionThumb(firstCard);
+            }
+            
+            // Retrieve the second card (index 1) and preload its backdrop
+            const secondCard = this.domNodes.get(1);
+            if (secondCard) {
+                loadExpansionThumb(secondCard);
+            }
+        }
 
         if ((platformInfo.isWeb || platformInfo.isWebOS) && this.totalItems > 4) {
             this._injectScrollArrows();
