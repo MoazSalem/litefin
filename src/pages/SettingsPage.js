@@ -512,6 +512,19 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableBlurHash">${i18n.t('LabelDisableBlurHash') || 'Disable BlurHash'}</span>
+                        <span class="setting-description" data-i18n="DisableBlurHashDescription">${i18n.t('DisableBlurHashDescription') || 'Stop showing color-accurate blurred backgrounds while images are loading. Uses standard dark skeletons instead.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getDisableBlurhash() ? 'active' : ''}" 
+                                id="toggle-disable-blurhash" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
                 <!-- OSD Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="OSDCustomization">${i18n.t('OSDCustomization') || 'OSD Customization'}</h3>
@@ -3797,6 +3810,22 @@ class SettingsPage extends Page {
                 const newValue = !layoutManager.getSimpleLoader();
                 layoutManager.setSimpleLoader(newValue);
                 simpleLoaderBtn.classList.toggle('active', newValue);
+            });
+        }
+
+        // Toggle Disable BlurHash
+        // Toggles the state of our TV-optimized canvas blurhash background system
+        const disableBlurhashBtn = this.$('#toggle-disable-blurhash');
+        if (disableBlurhashBtn) {
+            disableBlurhashBtn.addEventListener('click', () => {
+                // Invert the current Disable BlurHash state
+                const newValue = !layoutManager.getDisableBlurhash();
+                
+                // Write setting to LayoutManager which handles DOM and local persistence
+                layoutManager.setDisableBlurhash(newValue);
+                
+                // Toggle active class state on the premium UI toggle-switch switch
+                disableBlurhashBtn.classList.toggle('active', newValue);
             });
         }
 

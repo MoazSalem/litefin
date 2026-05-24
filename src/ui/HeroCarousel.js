@@ -161,9 +161,21 @@ class HeroCarousel {
             metaHtml += this._renderMdbMetadata(item._mdbMetadata);
         }
 
+        // Resolve BlurHash for the hero backdrop
+        const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+        let blurHash = '';
+        if (!isBlurHashDisabled && item.ImageBlurHashes?.Backdrop) {
+            const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+            if (keys.length > 0) {
+                blurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+            }
+        }
+
         return `
             <div class="hero-item ${isActive ? 'active' : ''}" data-index="${index}">
-                <div class="hero-backdrop" style="background-image: url('${backdropUrl}')"></div>
+                <div class="hero-backdrop" style="background-image: url('${backdropUrl}')">
+                    ${blurHash ? `<canvas class="hero-blurhash-canvas" data-blurhash="${blurHash}" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: cover; transition: opacity 500ms ease-out; z-index: 0; pointer-events: none; opacity: 1;"></canvas>` : ''}
+                </div>
                 <div class="hero-content">
                     ${logoHtml}
                     <div class="hero-meta-row">
@@ -301,6 +313,50 @@ class HeroCarousel {
 
         // Start auto-scroll
         this._startAutoScroll();
+
+        // ────────────────────────────────────────────────────────────────────
+        // BlurHash Background Placeholders for Hero Carousel items
+        // ────────────────────────────────────────────────────────────────────
+        const canvases = this._container.querySelectorAll('.hero-blurhash-canvas');
+        canvases.forEach(canvas => {
+            const hash = canvas.dataset.blurhash;
+            if (!hash) return;
+            
+            // Resolve the backdrop background-image URL
+            const parentHeroItem = canvas.closest('.hero-item');
+            const heroBackdrop = parentHeroItem.querySelector('.hero-backdrop');
+            
+            const style = heroBackdrop.style.backgroundImage;
+            const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
+            if (match && match[1]) {
+                const url = match[1];
+                
+                // Decode blurhash at low resolution asynchronously
+                import('../utils/BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
+                    const pixels = BlurHashDecoder.decode(hash, 64, 36);
+                    if (pixels && canvas) {
+                        canvas.width = 64;
+                        canvas.height = 36;
+                        const ctx = canvas.getContext('2d');
+                        const imageData = ctx.createImageData(64, 36);
+                        imageData.data.set(pixels);
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+                }).catch(err => log.error('Failed to decode hero blurhash', err));
+
+                // Listen for backdrop image to finish preloading
+                const img = new Image();
+                img.onload = () => {
+                    requestAnimationFrame(() => {
+                        canvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                        }, 500);
+                    });
+                };
+                img.src = url;
+            }
+        });
     }
 
     /**

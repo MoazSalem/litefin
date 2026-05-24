@@ -689,13 +689,64 @@ class DetailsPage extends Page {
                     maxWidth: params.maxWidth,
                     quality: params.quality
                 });
+
+                // Resolve Poster BlurHash
+                const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+                let posterBlurHash = '';
+                if (!isBlurHashDisabled && item.ImageBlurHashes?.Primary) {
+                    const keys = Object.keys(item.ImageBlurHashes.Primary);
+                    if (keys.length > 0) {
+                        posterBlurHash = item.ImageBlurHashes.Primary[keys[0]];
+                    }
+                }
+
+                // Render dynamic BlurHash canvas placeholder
+                let posterCanvas = null;
+                if (posterBlurHash) {
+                    posterCanvas = document.createElement('canvas');
+                    posterCanvas.className = 'blurhash-canvas poster-blurhash';
+                    posterCanvas.style.position = 'absolute';
+                    posterCanvas.style.top = '0';
+                    posterCanvas.style.left = '0';
+                    posterCanvas.style.width = '100%';
+                    posterCanvas.style.height = '100%';
+                    posterCanvas.style.objectFit = 'cover';
+                    posterCanvas.style.zIndex = '0';
+                    posterCanvas.style.transition = 'opacity 250ms ease-out';
+                    posterCanvas.style.pointerEvents = 'none';
+                    posterCanvas.style.opacity = '1';
+                    
+                    posterContainer.appendChild(posterCanvas);
+
+                    // Decode at a lightweight size asynchronously
+                    import('../utils/BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
+                        const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                        if (pixels && posterCanvas) {
+                            posterCanvas.width = 32;
+                            posterCanvas.height = 48;
+                            const ctx = posterCanvas.getContext('2d');
+                            const imageData = ctx.createImageData(32, 48);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                        }
+                    }).catch(err => log.error('Failed to decode poster blurhash', err));
+                }
+
                 const img = new Image();
                 img.onload = () => {
                     img.classList.add('loaded');
+                    // Fade out and remove canvas when image loads
+                    if (posterCanvas) {
+                        posterCanvas.style.opacity = '0';
+                        setTimeout(() => {
+                            if (posterCanvas && posterCanvas.parentNode) {
+                                posterCanvas.parentNode.removeChild(posterCanvas);
+                            }
+                        }, 250);
+                    }
                     onPosterReady();
                 };
                 img.onerror = () => {
-                    // If it fails, we still want to resolve to show the page
                     onPosterReady();
                 };
                 img.src = posterUrl;
@@ -714,8 +765,18 @@ class DetailsPage extends Page {
                 maxWidth: params.maxWidth,
                 quality: params.quality
             });
+
+            // Resolve Backdrop BlurHash
+            let backdropBlurHash = '';
+            if (item.ImageBlurHashes?.Backdrop) {
+                const keys = Object.keys(item.ImageBlurHashes.Backdrop);
+                if (keys.length > 0) {
+                    backdropBlurHash = item.ImageBlurHashes.Backdrop[keys[0]];
+                }
+            }
+
             if (backdropUrl) {
-                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl);
+                BackdropManager.applyBackdrop(this.$('#backdrop'), backdropUrl, backdropBlurHash);
             }
         });
     }

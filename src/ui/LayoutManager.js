@@ -80,6 +80,9 @@ class LayoutManager {
         // Simple Loader: Lightweight rotating ring instead of pulsing dots
         this._simpleLoader = false;
 
+        // Disable BlurHash: Disables color-accurate blurred canvas rendering during image load
+        this._disableBlurhash = false;
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -109,6 +112,7 @@ class LayoutManager {
         const savedLowVram = storage.getItem('litefin:lowVramMode') === 'true';
         const savedDisableScaling = storage.getItem('litefin:disableCardScaling') === 'true';
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
+        const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -120,6 +124,7 @@ class LayoutManager {
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
         this.setSimpleLoader(savedSimpleLoader, false);
+        this.setDisableBlurhash(savedDisableBlurhash, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -497,6 +502,46 @@ class LayoutManager {
 
     getSimpleLoader() {
         return this._simpleLoader;
+    }
+
+    /**
+     * Disable or enable BlurHash Placeholders
+     * Toggles whether color-accurate blurred canvases are initialized on lazy media cards.
+     * 
+     * @param {boolean} disabled - True to disable canvases; false to enable them.
+     * @param {boolean} [save=true] - Persist the preference locally.
+     * @public
+     */
+    setDisableBlurhash(disabled, save = true) {
+        // Update local property tracking
+        this._disableBlurhash = disabled;
+        
+        // Write the HTML attribute flag so that stylesheets and card rendering can adapt
+        if (disabled) {
+            document.documentElement.setAttribute('data-disable-blurhash', 'true');
+        } else {
+            document.documentElement.removeAttribute('data-disable-blurhash');
+        }
+
+        // Persist setting inside the StorageService database
+        if (save) {
+            storage.setItem('litefin:disableBlurhash', disabled ? 'true' : 'false');
+        }
+
+        // Dispatch status updates to observers and listeners
+        log.info(`Disable BlurHash set to: ${disabled}`);
+        eventBus.emit('disableBlurhash:changed', { disabled });
+    }
+
+    /**
+     * Check if BlurHash placeholders are globally disabled.
+     * Used by card renderers to determine element injection.
+     * 
+     * @returns {boolean} True if disabled; false otherwise.
+     * @public
+     */
+    getDisableBlurhash() {
+        return this._disableBlurhash;
     }
 
     // Component registration (Existing logic maintained)

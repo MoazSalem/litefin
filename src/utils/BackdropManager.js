@@ -10,6 +10,8 @@
 import { api } from '../api/index.js';
 import { imageService } from './ImageService.js';
 
+import { storage } from './StorageService.js';
+
 import { logger } from './Logger.js';
 
 const log = logger.create('BackdropManager');
@@ -79,19 +81,77 @@ class BackdropManager {
     /**
      * Preloads and applies a backdrop to a DOM element.
      * Sets the element's backgroundImage and handles fade-in opacity.
+     * Also supports optional BlurHash decoding to display a color-accurate background instantly.
      * @param {HTMLElement} element - The target DOM element
      * @param {string} url - The backdrop image URL
+     * @param {string} [blurHash=''] - Optional BlurHash string
      */
-    static applyBackdrop(element, url) {
+    static applyBackdrop(element, url, blurHash = '') {
         if (!element || !url) return;
+
+        // Check if BlurHash is disabled globally
+        const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+        let canvas = null;
+
+        // Render BlurHash placeholder canvas if enabled
+        if (blurHash && !isBlurHashDisabled) {
+            // Remove any pre-existing blurhash canvas to avoid stacking duplicates
+            const oldCanvas = element.querySelector('.backdrop-blurhash');
+            if (oldCanvas) oldCanvas.parentNode.removeChild(oldCanvas);
+
+            canvas = document.createElement('canvas');
+            canvas.className = 'backdrop-blurhash blurhash-canvas';
+            canvas.style.position = 'absolute';
+            canvas.style.top = '0';
+            canvas.style.left = '0';
+            canvas.style.width = '100%';
+            canvas.style.height = '100%';
+            canvas.style.objectFit = 'cover';
+            canvas.style.zIndex = '0';
+            canvas.style.transition = 'opacity 500ms ease-out';
+            canvas.style.pointerEvents = 'none';
+            canvas.style.opacity = '1';
+
+            // Insert at the bottom to remain underneath layout overlays
+            if (element.firstChild) {
+                element.insertBefore(canvas, element.firstChild);
+            } else {
+                element.appendChild(canvas);
+            }
+
+            // Immediately make backdrop container visible so the blurhash shows
+            element.style.opacity = '1';
+
+            // Decodes the backdrop blurhash at low resolution asynchronously
+            import('./BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
+                const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
+                if (pixels && canvas) {
+                    canvas.width = 64;
+                    canvas.height = 36;
+                    const ctx = canvas.getContext('2d');
+                    const imageData = ctx.createImageData(64, 36);
+                    imageData.data.set(pixels);
+                    ctx.putImageData(imageData, 0, 0);
+                }
+            }).catch(err => log.error('Failed to decode backdrop blurhash', err));
+        }
 
         // Preload image
         const img = new Image();
         img.onload = () => {
             element.style.backgroundImage = `url('${url}')`;
-            // Force reflow/repaint might be needed in some cases, but usually direct style set is fine
+            
             requestAnimationFrame(() => {
+                // Ensure backdrop container is fully visible
                 element.style.opacity = '1';
+                
+                // Fade out and remove the BlurHash canvas cleanly
+                if (canvas) {
+                    canvas.style.opacity = '0';
+                    setTimeout(() => {
+                        if (canvas && canvas.parentNode) canvas.parentNode.removeChild(canvas);
+                    }, 500);
+                }
             });
         };
         img.onerror = () => {

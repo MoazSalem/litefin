@@ -30,6 +30,16 @@ class CardRenderer {
         let imageInnerHtml = '';
         const itemId = item.Id;
 
+        // Spy on getImageUrl to capture the exact image type and tag resolved during execution
+        let resolvedImageType = '';
+        let resolvedImageTag = '';
+        const originalGetImageUrl = api.getImageUrl;
+        api.getImageUrl = function (id, imageType, options = {}) {
+            resolvedImageType = imageType;
+            resolvedImageTag = options.tag || '';
+            return originalGetImageUrl.call(api, id, imageType, options);
+        };
+
         // --- 1. Image Resolution Strategy ---
         // By default, we expect an image. We DO NOT render the fallback DOM yet to save memory.
         imageInnerHtml = '';
@@ -337,6 +347,43 @@ class CardRenderer {
                 });
             }
         }
+        // Restore getImageUrl and resolve the BlurHash string for the rendered card
+        api.getImageUrl = originalGetImageUrl;
+
+        // =====================================================================
+        // BlurHash Resolution Strategy
+        // =====================================================================
+        // We look up the BlurHash in three tiers, from most to least specific:
+        //
+        // 1. Exact Match:  type + tag captured by the spy (e.g. Primary + "abc123")
+        // 2. Type Match:   the spy resolved an image type but the tag was absent
+        //                  (happens with fallback URLs like series Backdrop without
+        //                  an explicit tag). Grab any available hash for that type.
+        // 3. Primary Fallback: grab the first Primary hash as a last resort.
+        // =====================================================================
+        let blurHash = '';
+
+        // Tier 1: Exact image type + tag match
+        if (resolvedImageType && resolvedImageTag) {
+            blurHash = item.ImageBlurHashes?.[resolvedImageType]?.[resolvedImageTag] || '';
+        }
+
+        // Tier 2: Image type matched but no tag — grab any hash for that type
+        if (!blurHash && resolvedImageType && item.ImageBlurHashes?.[resolvedImageType]) {
+            const typeHashes = item.ImageBlurHashes[resolvedImageType];
+            const keys = Object.keys(typeHashes);
+            if (keys.length > 0) {
+                blurHash = typeHashes[keys[0]];
+            }
+        }
+
+        // Tier 3: Absolute fallback to Primary hash (last resort, may not match)
+        if (!blurHash && item.ImageBlurHashes?.Primary) {
+            const keys = Object.keys(item.ImageBlurHashes.Primary);
+            if (keys.length > 0) {
+                blurHash = item.ImageBlurHashes.Primary[keys[0]];
+            }
+        }
 
         // --- 1.5 Premium Fallbacks & Modern Shadow ---
         if (!imageUrl) {
@@ -598,8 +645,12 @@ class CardRenderer {
         // to a gradient), we must explicitly append the overlay label on top of the 
         // gradient block so the card is not rendered completely blank.
         // ====================================================================
+        // Check if the user has disabled BlurHash placeholders in Display Settings
+        // Fall back to the default dark grey skeletons (no canvas injected) if disabled for raw performance.
+        const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
+        const blurHashHtml = (blurHash && !isBlurHashDisabled) ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>` : '';
         const imagePart = imageUrl
-            ? `${imageInnerHtml}${thumbPart}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
+            ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
             : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
