@@ -140,6 +140,34 @@ class RemoteButtonManager {
                 this._handlePlayerAction('playbackInfo');
                 break;
 
+            case 'playerPreviousChapter':
+                /*
+                 * ====================================================================
+                 * ACTION: NAVIGATE TO PREVIOUS CHAPTER
+                 * ====================================================================
+                 * If video playback is currently active, this will immediately skip
+                 * backward to the start of the previous chapter. Operates dynamically
+                 * by sending a 'previousChapter' directive to the player's OSD layer.
+                 * ====================================================================
+                 */
+                log.info('Player Previous Chapter Mapped: Skipping backward one chapter.');
+                this._handlePlayerAction('previousChapter');
+                break;
+
+            case 'playerNextChapter':
+                /*
+                 * ====================================================================
+                 * ACTION: NAVIGATE TO NEXT CHAPTER
+                 * ====================================================================
+                 * If video playback is currently active, this will immediately skip
+                 * forward to the start of the next chapter. Operates dynamically
+                 * by sending a 'nextChapter' directive to the player's OSD layer.
+                 * ====================================================================
+                 */
+                log.info('Player Next Chapter Mapped: Skipping forward one chapter.');
+                this._handlePlayerAction('nextChapter');
+                break;
+
             case 'none':
             default:
                 // No custom operation is configured, ignore key press

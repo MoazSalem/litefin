@@ -1457,6 +1457,15 @@ class SettingsPage extends Page {
         const blueAction = storage.getItem('pref:remoteBlueAction') || 'none';
 
         // Define dropdown options representing valid remote actions.
+        /*
+         * ============================================================================
+         * USER-CONFIGURABLE REMOTE CONTROL KEY BINDINGS
+         * ============================================================================
+         * These objects represent the fully supported action targets that the user
+         * can bind to any physical remote colored key. Keep alphabetically ordered
+         * where appropriate to maintain a clean layout under the Settings Controls.
+         * ============================================================================
+         */
         const remoteButtonOptions = [
             { value: 'none', label: i18n.t('OptionNone') || 'None' },
             { value: 'home', label: i18n.t('OptionHome') || 'Return to Home' },
@@ -1472,7 +1481,17 @@ class SettingsPage extends Page {
             },
             { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
             { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-            { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' }
+            { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' },
+            /*
+             * ========================================================================
+             * NEW PREMIUM CHAPTER NAVIGATION ACTIONS
+             * ========================================================================
+             * Allows quick chapter skipping via physical buttons without bringing
+             * up the Chapters List Modal interface. Excellent for long-form content.
+             * ========================================================================
+             */
+            { value: 'playerPreviousChapter', label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter' },
+            { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' }
         ];
 
         return `
