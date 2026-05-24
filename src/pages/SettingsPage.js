@@ -1548,6 +1548,39 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- 
+                  * ============================================================================
+                  * VERTICAL SCROLL ANIMATION METHOD SELECTION
+                  * ============================================================================
+                  * Allows the user to select the optimal mechanism for vertical scrolling.
+                  * Incredibly useful on weak TV CPUs/GPUs (like Tizen or WebOS) where custom
+                  * JS animations might stutter, but native or GPU layouts remain fluid.
+                  *
+                  * Options:
+                  *   1. Current (JS RAF): Time-based custom easing loop (standard)
+                  *   2. Let TV Handle It (Native): Leverages the browser's compositor thread
+                  *   3. GPU Accelerated (Transforms): Uses hardware translate3d, zero-reflow
+                  * ============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
+                        <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'vertical-scroll-mode-select',
+                            [
+                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Current (JS RAF)' },
+                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Let TV Handle It (Native)' },
+                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'GPU Accelerated (Transforms)' }
+                            ],
+                            storage.getItem('pref:verticalScrollMode') || 'current'
+                        )}
+                    </div>
+                </div>
+
                 
                 <!-- LG Magic Remote / Samsung Pointer Emulation Cursor Row -->
                 <div class="setting-item">
@@ -4778,6 +4811,7 @@ class SettingsPage extends Page {
             'screensaver-delay-select': { key: 'pref:screensaverDelay', type: 'local', triggerEvent: true },
             'screensaver-type-select': { key: 'pref:screensaverType', type: 'local', triggerEvent: true },
             'backdrop-dimmer-select': { key: 'pref:backdropDimmer', type: 'local', triggerEvent: true },
+            'vertical-scroll-mode-select': { key: 'pref:verticalScrollMode', type: 'local', triggerEvent: true },
 
             // Centralized mappings for TV hardware remote control color buttons
             'remote-red-select': { key: 'pref:remoteRedAction', type: 'local', triggerEvent: true },
