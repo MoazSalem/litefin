@@ -459,6 +459,23 @@ class SettingsPage extends Page {
 
                 <!-- Performance Tweaks Section -->
                 <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
+                        <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'vertical-scroll-mode-select',
+                            [
+                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Current (JS RAF)' },
+                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Let TV Handle It (Native)' },
+                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'GPU Accelerated (Transforms)' }
+                            ],
+                            storage.getItem('pref:verticalScrollMode') || 'current'
+                        )}
+                    </div>
+                </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -1575,39 +1592,6 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
-                <!-- 
-                  * ============================================================================
-                  * VERTICAL SCROLL ANIMATION METHOD SELECTION
-                  * ============================================================================
-                  * Allows the user to select the optimal mechanism for vertical scrolling.
-                  * Incredibly useful on weak TV CPUs/GPUs (like Tizen or WebOS) where custom
-                  * JS animations might stutter, but native or GPU layouts remain fluid.
-                  *
-                  * Options:
-                  *   1. Current (JS RAF): Time-based custom easing loop (standard)
-                  *   2. Let TV Handle It (Native): Leverages the browser's compositor thread
-                  *   3. GPU Accelerated (Transforms): Uses hardware translate3d, zero-reflow
-                  * ============================================================================
-                -->
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
-                        <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'vertical-scroll-mode-select',
-                            [
-                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Current (JS RAF)' },
-                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Let TV Handle It (Native)' },
-                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'GPU Accelerated (Transforms)' }
-                            ],
-                            storage.getItem('pref:verticalScrollMode') || 'current'
-                        )}
-                    </div>
-                </div>
-
-                
                 <!-- LG Magic Remote / Samsung Pointer Emulation Cursor Row -->
                 <div class="setting-item">
                     <div class="setting-label">

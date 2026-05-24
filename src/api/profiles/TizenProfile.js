@@ -415,20 +415,48 @@ export function buildJellyfinProfile(options = {}) {
     // =========================================================================
     // Transcode codec selection
     //
-    // transVideoCodecs determines which input video codecs Jellyfin is ALLOWED
-    // to "copy" (pass-through, no re-encode) into the output HLS segments.
+    // transVideoCodecs — video codecs Jellyfin is ALLOWED to copy (no re-encode)
+    // into the HLS output segments. We maintain TWO separate lists because the
+    // container determines what codecs are muxable:
     //
-    // MPEG-TS can natively carry H264, HEVC, MPEG-2 Video, and VC1 — so listing
-    // all of these lets Jellyfin copy any of them while only transcoding the audio.
+    //   MPEG-TS (tsCompatibleVideoCodecs):
+    //     Supports H264, HEVC, MPEG-2 Video, VC1 — but NOT AV1 or VP9.
+    //     When an AV1/VP9 source has incompatible audio (e.g. DTS-HD MA), the
+    //     MPEG-TS profile can't copy the video — it must re-encode to H264.
     //
-    // VP9 and AV1 are intentionally EXCLUDED: they cannot be muxed into MPEG-TS.
-    // When a VP9/AV1 file has an incompatible audio codec, the video must be
-    // re-encoded to H264 regardless — no way around it with an HLS/TS container.
+    //   fMP4/MP4 (fmp4TransVideoCodecs):
+    //     The MP4 container CAN carry AV1 and VP9 natively. By adding them here,
+    //     we tell Jellyfin: "use the fMP4 HLS profile to copy AV1/VP9 video while
+    //     only transcoding the audio (DTS→AC3)." This turns a full re-encode into
+    //     a fast, lightweight audio-only transcode — exactly what DirectStream is.
+    //
+    // directVideoCodecs is used in DirectStreamProfiles (progressive HTTP remux).
     // =========================================================================
     const tsCompatibleVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
     if (enableHEVC) tsCompatibleVideoCodecs.push('hevc');
 
+    // TS-compatible list (AV1/VP9 intentionally excluded — not muxable into MPEG-TS)
     let transVideoCodecs = tsCompatibleVideoCodecs.join(',');
+
+    // fMP4-compatible list — built from scratch, NOT by spreading tsCompatibleVideoCodecs.
+    //
+    // The ISO Base Media File Format (MP4/fMP4) only supports a specific set of modern
+    // codecs via standardised codec boxes (avc1, hvc1, av01, vp09). Crucially:
+    //
+    //   mpeg2video → NOT supported in MP4. No standard codec box exists for it.
+    //               It belongs only in MPEG-TS. Including it here causes the server
+    //               to re-encode it anyway (server-side container compat check wins).
+    //
+    //   vc1 → similarly TS-only in practice; MP4 carrying vc1 is non-standard.
+    //
+    // So we explicitly list only H264 and HEVC (always fMP4-safe), plus AV1/VP9
+    // when enabled. mpeg2video/vc1 fall back to the TS HLS profile instead.
+    const fmp4CompatibleVideoCodecs = ['h264'];
+    if (enableHEVC) fmp4CompatibleVideoCodecs.push('hevc');
+    if (enableAV1) fmp4CompatibleVideoCodecs.push('av1');
+    if (enableVP9) fmp4CompatibleVideoCodecs.push('vp9');
+    const fmp4TransVideoCodecs = fmp4CompatibleVideoCodecs.join(',');
+
     let directVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {
@@ -447,15 +475,19 @@ export function buildJellyfinProfile(options = {}) {
              *
              * Container selection:
              *   forceFmp4Hls — use fMP4 (mp4) as the primary container. This unlocks
-             *     HEVC/AV1 copy-stream remuxing over HLS on Tizen devices where fMP4
+             *     AV1/VP9 copy-stream remuxing over HLS on Tizen devices where fMP4
              *     is known-good but the tizenVersion >= 6 gate would normally block it.
+             *     When forced, we use fmp4TransVideoCodecs which includes AV1/VP9.
              *   default (no force) — use MPEG-TS, which is the only AVPlay-safe
-             *     container on Tizen 5.x and below.
+             *     container on Tizen 5.x and below. TS cannot carry AV1/VP9.
              */
             Container: primaryHlsContainer,
             Type: 'Video',
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs, // fMP4 also safely carries h264/hevc
+            // When forceFmp4Hls is active the primary container is MP4, so we use
+            // fmp4TransVideoCodecs (includes AV1/VP9). Otherwise it's MPEG-TS, which
+            // cannot carry AV1/VP9, so we use the TS-restricted transVideoCodecs.
+            VideoCodec: forceFmp4Hls ? fmp4TransVideoCodecs : transVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             // Tizen 5.x: capped at 2 channels (stereo AAC only); Tizen 6+: full surround (AC3/EAC3)
@@ -520,8 +552,12 @@ export function buildJellyfinProfile(options = {}) {
         transcodingProfiles.push({
             Container: 'mp4',
             Type: 'Video',
+            // Use fmp4TransVideoCodecs here — this is the key difference from the TS profile.
+            // fMP4 (MP4 container) can carry AV1 and VP9, so we advertise them as copyable.
+            // This allows Jellyfin to pick this profile for AV1/VP9 sources with incompatible
+            // audio (e.g. DTS-HD MA): it will copy the video stream and only transcode audio.
             AudioCodec: transAudioCodecs,
-            VideoCodec: transVideoCodecs,
+            VideoCodec: fmp4TransVideoCodecs,
             Context: 'Streaming',
             Protocol: 'hls',
             // On Tizen 6+ the transMaxAudioChannels is full surround (AC3/EAC3),
