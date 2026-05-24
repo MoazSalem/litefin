@@ -41,7 +41,8 @@ html[data-layout="modern"] .text-input.tv-input {
     width: 100%;
     box-sizing: border-box;
     color: var(--jf-text-primary);
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 html[data-layout="modern"] .text-input.tv-input:focus,
@@ -92,7 +93,8 @@ html[data-layout="modern"] .manual-signin-btn {
     font-weight: 600;
     color: var(--jf-text-primary);
     cursor: pointer;
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 html[data-layout="modern"] .manual-signin-btn:focus,
@@ -110,7 +112,8 @@ html[data-layout="modern"] .back-btn {
     font-size: 1.5rem;
     font-weight: 600;
     color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6));
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
     margin: 0px;
 }
 
@@ -132,7 +135,8 @@ html[data-layout="modern"] .change-server-btn {
     font-size: 1.4rem;
     font-weight: 600;
     color: var(--jf-text-secondary, rgba(255, 255, 255, 0.6)) !important;
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
 html[data-layout="modern"] .manual-login-btn:focus,

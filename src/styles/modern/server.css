@@ -37,7 +37,8 @@ html[data-layout="modern"] .server-url-input {
     width: 100%;
     box-sizing: border-box;
     color: var(--jf-text-primary);
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced expensive 'transition: all' with targeted layout-friendly properties. */
+    transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
 html[data-layout="modern"] .server-url-input:focus,
@@ -71,7 +72,8 @@ html[data-layout="modern"] .connect-btn {
     justify-content: center;
     color: var(--jf-text-primary);
     cursor: pointer;
-    transition: all 0.2s ease;
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 html[data-layout="modern"] .connect-btn > *:not(:last-child) {
@@ -190,7 +192,8 @@ html[data-layout="modern"] .server-item {
     position: relative;
     display: flex;
     align-items: center;
-    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), background-color 0.2s cubic-bezier(0.4, 0, 0.2, 1), transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
     
     /* Reset bottom margin from base server-item rules to ensure pure gap-based grid spacing */
     margin: 0;
@@ -268,7 +271,8 @@ html[data-layout="modern"] .status-dot {
     height: 10px;
     background: #2ecc71;
     border-radius: 50%;
-    box-shadow: 0 0 10px rgba(46, 204, 113, 0.5);
+    /* PERFORMANCE: Reduced blur size from 10px to 4px. */
+    box-shadow: 0 0 4px rgba(46, 204, 113, 0.5);
     position: absolute;
     top: 6px;
     left: 41px;

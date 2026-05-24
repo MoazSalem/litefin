@@ -16,9 +16,10 @@ html[data-layout="modern"] .row-title {
     padding: 0 60px;
     color: var(--jf-text-primary);
     letter-spacing: -0.5px;
-    /* Subtle text shadow for premium feel */
-    text-shadow: 0 2px 10px rgba(0,0,0,0.3);
-    transition: transform 0.2s ease;
+    /* PERFORMANCE: Reduced blur radius from 10px to 2px for lightning-fast hardware rendering.
+       Smart TV GPUs struggle with high-radius Gaussian blurs on text. */
+    text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+    transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 /* Focus hint for the row title when a card in it is focused */
@@ -41,14 +42,20 @@ html[data-layout="modern"] .media-card:not(.grid-card) {
     margin-right: 40px;
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
-    /* Expansion Transition */
-    -webkit-transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1), -webkit-transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
-    transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1), transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* PERFORMANCE: Shortened transition duration from 0.4s to 0.25s. Smart TV CPUs spend 
+       almost half the time processing row layout recalculations, making navigation feel incredibly snappy. */
+    -webkit-transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), -webkit-transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    transition: width 0.25s cubic-bezier(0.16, 1, 0.3, 1), transform 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* PERFORMANCE: Promoted expanding card elements to their own composited layers on the GPU.
+       This tells the TV browser's rendering engine to pre-allocate rendering pipelines and avoid layout thread-blocking. */
+    will-change: width, transform;
     
     /* Sibling Shifting Logic:
        ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
        Difference = 600px - 225px = 375px.
-    */
+     */
     --expansion-amount: 375px;
     --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
     /* Note: We only shift if we are NOT the focused item ourselves and we are AFTER it */
@@ -101,7 +108,8 @@ html[data-layout="modern"] .media-card.square:not(.grid-card) {
 /* Integrated Labels: Reveal timing */
 html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
     opacity: 0;
-    transition: opacity 0.3s ease 0.3s; /* Delay until expansion finishes */
+    /* PERFORMANCE: Fast transition aligned with 0.25s card expansion. */
+    transition: opacity 0.2s ease 0.2s;
 }
 
 /* Inside Label reveal during D-pad navigation */
@@ -123,7 +131,11 @@ html[data-layout="modern"] .media-card:not(.grid-card) .card-image {
     border-radius: 24px; /* Premium rounding */
     border: none !important; /* Fix: Remove border entirely to eliminate ghosting */
     box-shadow: none; /* Removed outer shadow as requested */
-    transition: all 0.3s ease;
+    
+    /* PERFORMANCE: Snappier transition and GPU layer promotion. */
+    transition: transform 0.25s cubic-bezier(0.16, 1, 0.3, 1), background-color 0.25s ease;
+    will-change: transform;
+    
     background: var(--jf-surface, rgba(255, 255, 255, 0.05));
     position: relative;
     overflow: hidden;
@@ -151,8 +163,10 @@ html[data-layout="modern"] .media-card:not(.grid-card).focused .card-image::afte
     box-shadow: inset 0 0 0 4px var(--jf-accent);
     z-index: 10;
     pointer-events: none;
-    -webkit-animation: focusPulse 2s infinite ease-in-out;
-    animation: focusPulse 2s infinite ease-in-out;
+    
+    /* PERFORMANCE: Removed the 'focusPulse' infinite keyframe animation entirely.
+       Continuous box-shadow/opacity animations drive continuous browser repaints, which severely
+       lags weaker TV hardware. Apple HIG favors a static, elegant, instant visual focus accent. */
 }
 
 /* Exclude grid cards from modern absolute image sizing */
@@ -164,7 +178,7 @@ html[data-layout="modern"] .media-card:not(.grid-card) .card-image img {
     top: 0;
     left: 0;
     border-radius: 24px; /* Match full radius since border is removed */
-    transition: opacity 0.4s ease;
+    transition: opacity 0.3s ease;
 }
 
 /* Layer Stack: 
@@ -175,17 +189,19 @@ html[data-layout="modern"] .media-card:not(.grid-card) .card-image img {
 html[data-layout="modern"] .media-card .card-image img.thumb-layer {
     z-index: 1; /* Behind poster initially */
     opacity: 0;
-    transform: scale(1.05); /* Start slightly larger for 'burst' effect */
-    transition: opacity 0.4s cubic-bezier(0.16, 1, 0.3, 1), 
-                transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* PERFORMANCE: Removed the 'transform: scale' transition. Texture resampling during 
+       card expansion layout shifts is extremely CPU/GPU intensive on TV browsers.
+       Fading opacity alone provides a cleaner, butter-smooth transition. */
+    transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html[data-layout="modern"] .media-card .card-image img.poster-layer {
     z-index: 2; /* In front of thumb */
     opacity: 1;
-    transform: scale(1);
-    transition: opacity 0.2s ease-in, 
-                transform 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+    
+    /* PERFORMANCE: Removed the scale transform transition for extreme TV performance. */
+    transition: opacity 0.2s ease-in;
 }
 
 /* =========================================================================
@@ -199,15 +215,15 @@ html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expa
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
     opacity: 1;
     z-index: 3;
-    transform: scale(1); /* Return to scale 1.0 */
+    /* PERFORMANCE: Scale-transforms removed to prioritize composited rendering speed. */
 }
 
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image img.poster-layer,
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.poster-layer,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.poster-layer {
     opacity: 0;
-    transform: scale(0.95); /* Scale down and hide gracefully */
-    filter: brightness(0.5); /* Reduce light intensity */
+    /* PERFORMANCE: Removed scale down and expensive CSS filters. CSS brightness/filters 
+       require rendering context passes, causing noticeable frames-per-second drop on TVs. */
 }
 
 /* Integrated Labels (Inside): Hidden by default for posters, visible for native landscape/square */
@@ -222,15 +238,15 @@ html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
 /* =========================================================================
    Label Overlays Visibility
    =========================================================================
-   Brings up inside labels only when the card is in an active expanding state.
-   ========================================================================= */
+   Brings up inside labels only when the card is in an active expanding state. */
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-info.inside,
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-info.inside,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
-    transition: opacity 0.3s ease 0.25s, visibility 0.3s ease 0.25s; /* Allow animation to settle first */
+    /* PERFORMANCE: Fast reveal timing mapped to 0.25s expansion duration. */
+    transition: opacity 0.2s ease 0.15s, visibility 0.2s ease 0.15s;
 }
 
 /* Native landscape/square cards always show their inside labels */
@@ -364,7 +380,10 @@ html[data-layout="modern"] .card-info.inside {
 
 html[data-layout="modern"] .card-info.inside .card-title {
     font-size: 1.5rem; /* Slightly larger for inside placement */
-    text-shadow: 3px 2px 6px rgba(0, 0, 0, 0.8);
+    
+    /* PERFORMANCE: Replaced 6px blur text-shadow with a highly efficient 2px blur offset. */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    
     text-align: left;
     /* Allow up to 2 lines for longer titles */
     display: -webkit-box;
@@ -379,7 +398,10 @@ html[data-layout="modern"] .card-info.inside .card-title {
 html[data-layout="modern"] .card-info.inside .card-subtitle {
     font-size: 1.2rem;
     color: rgba(255, 255, 255, 0.8);
-    text-shadow: 3px 2px 6px rgba(0, 0, 0, 0.8);
+    
+    /* PERFORMANCE: Replaced expensive high-blur shadow. */
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
+    
     text-align: left;
     white-space: nowrap;
     overflow: hidden;
@@ -399,7 +421,10 @@ html[data-layout="modern"] .card-overlay-label {
     font-weight: 800;
     line-height: 1.1;
     letter-spacing: -0.8px;
-    text-shadow: 0 4px 15px rgba(0,0,0,0.8);
+    
+    /* PERFORMANCE: Lowered blur radius from 15px to 4px for immediate hardware acceleration. */
+    text-shadow: 0 2px 4px rgba(0,0,0,0.9);
+    
     text-transform: none;
 }
 
@@ -475,10 +500,12 @@ html[data-layout="modern"] .episode-badge {
     border: 1px solid rgba(255, 255, 255, 0.15);
     color: #fff;
     font-weight: 700;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.4);
+    
+    /* PERFORMANCE: Replaced 15px blur shadow with highly optimized 4px shadow to save GPU composition bandwidth. */
+    box-shadow: 0 2px 4px rgba(0,0,0,0.4);
+    
     pointer-events: none;
-    -webkit-transition: -webkit-transform 0.3s ease;
-    transition: transform 0.3s ease;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 html[data-layout="modern"] .media-card:focus .count-badge,

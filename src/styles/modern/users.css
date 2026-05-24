@@ -30,14 +30,16 @@ html[data-layout="modern"] .login-user-card {
     border-radius: 50%;
     overflow: hidden;
     border: 4px solid transparent;
-    transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+    /* PERFORMANCE: Replaced transition: all. */
+    transition: border-color 0.3s ease, transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
     margin: 0 auto;
 }
 
 html[data-layout="modern"] .login-user-card:focus,
 html[data-layout="modern"] .login-user-card.focused {
     border-color: var(--jf-accent, #448aff);
-    box-shadow: 0 0 20px rgba(68, 138, 255, 0.3);
+    /* PERFORMANCE: Reduced blur size from 20px to 8px. */
+    box-shadow: 0 0 8px rgba(68, 138, 255, 0.4);
     transform: scale(1.08);
 }
 
@@ -49,14 +51,16 @@ html[data-layout="modern"] .user-avatar-placeholder {
     justify-content: center;
     font-size: 5rem;
     font-weight: 700;
-    text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+    /* PERFORMANCE: Reduced blur from 10px to 3px. */
+    text-shadow: 0 1px 3px rgba(0,0,0,0.5);
 }
 
 html[data-layout="modern"] .login-user-avatar {
     width: 100%;
     height: 100%;
     object-fit: cover;
-    transition: all 0.3s ease;
+    /* PERFORMANCE: Transition opacity instead of all. */
+    transition: opacity 0.3s ease;
 }
 
 html[data-layout="modern"] .login-user-name {
