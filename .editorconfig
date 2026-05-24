@@ -1,0 +1,59 @@
+# ============================================================================
+# EditorConfig - Litefin Coding Standards
+# ============================================================================
+# This file defines and enforces consistent coding styles between different
+# editors and IDEs used by developers working on the Litefin project.
+# For more details, visit: https://editorconfig.org/
+# ============================================================================
+
+# This is the root EditorConfig file for this project
+root = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 1. Global Defaults for All Files
+# ─────────────────────────────────────────────────────────────────────────────
+# Set the baseline rules for every file in the codebase.
+[*]
+# Ensure we use standard UTF-8 encoding across all source and text files
+charset = utf-8
+
+# Use uniform Unix-style line endings for cross-platform visual consistency
+end_of_line = lf
+
+# Ensure all files end with a clean trailing newline (POSIX compliance)
+insert_final_newline = true
+
+# Automatically strip trailing whitespaces on save to keep commits clean
+trim_trailing_whitespace = true
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 2. Web Development Core Standard Styles (JS, CSS, HTML, JSON)
+# ─────────────────────────────────────────────────────────────────────────────
+# Apply project-specific code style settings matching the Prettier layout.
+[*.{js,css,html,json}]
+# Enforce spaces instead of hard tabs
+indent_style = space
+# Indentation depth matching Prettier width standard (4 spaces)
+indent_size = 4
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 3. YAML Metadata and Serialization Formats
+# ─────────────────────────────────────────────────────────────────────────────
+# Custom indentation for nested structure configurations.
+[*.{yml,yaml}]
+# YAML structures mandate a strict 2-space nesting syntax
+indent_style = space
+indent_size = 2
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 4. Documentation Standards (Markdown)
+# ─────────────────────────────────────────────────────────────────────────────
+# Refine Markdown documents for readable structures.
+[*.md]
+# Markdown text indentation uses a light 2-space depth
+indent_style = space
+indent_size = 2
+
+# In Markdown, trailing double-spaces signify manual line breaks.
+# We must disable trailing whitespace trimming to preserve this syntax.
+trim_trailing_whitespace = false
