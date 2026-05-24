@@ -995,5 +995,7 @@
     "YearLabel": "Year: {0}",
     "YearValue": "{0} year",
     "Yes": "Yes",
+    "ShowCollapsedLibraryIcons": "Show Collapsed Library Icons",
+    "ShowCollapsedLibraryIconsDescription": "Show library icons in the sidebar even when it is collapsed.",
     "Zoom": "Zoom"
 }

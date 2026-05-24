@@ -1382,9 +1382,31 @@ class SettingsPage extends Page {
                         <span class="setting-description" data-i18n="DisableSidebarAnimationDescription">${i18n.t('DisableSidebarAnimationDescription') || 'Sidebar will open and close instantly without animation.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:disableSidebarAnimation') === 'true' ? 'active' : ''}" 
-                                 id="toggle-disable-sidebar-animation" 
-                                 tabindex="0">
+                          <button class="toggle-switch ${storage.getItem('pref:disableSidebarAnimation') === 'true' ? 'active' : ''}" 
+                                  id="toggle-disable-sidebar-animation" 
+                                  tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 
+                  =============================================================================
+                  COLLAPSED SIDEBAR LIBRARY SHORTCUTS TOGGLE (Apple HIG-Compliant)
+                  =============================================================================
+                  Allows library shortcuts to remain visible in their iconic format even when
+                  the global navigation sidebar is fully collapsed. Promotes extreme visual
+                  continuity and immediate single-press entry targets for large libraries.
+                  =============================================================================
+                -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowCollapsedLibraryIcons">${i18n.t('ShowCollapsedLibraryIcons') || 'Show Collapsed Library Icons'}</span>
+                        <span class="setting-description" data-i18n="ShowCollapsedLibraryIconsDescription">${i18n.t('ShowCollapsedLibraryIconsDescription') || 'Show library icons in the sidebar even when it is collapsed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                          <button class="toggle-switch ${storage.getItem('pref:showCollapsedLibraryIcons') === 'true' ? 'active' : ''}" 
+                                  id="toggle-show-collapsed-library-icons" 
+                                  tabindex="0">
                         </button>
                     </div>
                 </div>
@@ -5097,6 +5119,31 @@ class SettingsPage extends Page {
                 disableAnimationToggle.classList.toggle('active', newValue);
                 eventBus.emit('prefChanged:disableSidebarAnimation', newValue);
                 log.info(`Disable Sidebar Animation set to: ${newValue}`);
+            });
+        }
+
+        // ---------------------------------------------------------------------
+        // TOGGLE SWITCH EVENT HANDLER: SHOW COLLAPSED LIBRARY ICONS
+        // ---------------------------------------------------------------------
+        // Monitors user action on the collapsed library icons preference switch.
+        // Commits changes immediately to localStorage and broadcasts the state
+        // shift globally across our application bus so components (such as the
+        // main Sidebar controller) can apply immediate DOM updates.
+        // ---------------------------------------------------------------------
+        const showCollapsedLibraryIconsToggle = this.$('#toggle-show-collapsed-library-icons');
+        if (showCollapsedLibraryIconsToggle) {
+            showCollapsedLibraryIconsToggle.addEventListener('click', () => {
+                // Fetch cached value, coercion fallback to false (disabled by default)
+                const currentValue = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
+                const newValue = !currentValue;
+                
+                // Save setting as string serialized format
+                storage.setItem('pref:showCollapsedLibraryIcons', newValue.toString());
+                // Instantly update active class mapping for tactile feedback on hardware TV
+                showCollapsedLibraryIconsToggle.classList.toggle('active', newValue);
+                // Broadcast custom event so active Sidebar component updates reactive classes
+                eventBus.emit('prefChanged:showCollapsedLibraryIcons', newValue);
+                log.info(`Show Collapsed Library Icons set to: ${newValue}`);
             });
         }
 

@@ -199,6 +199,25 @@ class Sidebar extends Component {
         this._onAnimationModeChanged = () => this._updateAnimationMode();
         eventBus.on('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
 
+        // ---------------------------------------------------------------------
+        // COLLAPSED SIDEBAR LIBRARY SHORTCUT ICONS CONFIGURATION
+        // ---------------------------------------------------------------------
+        // Read the user preference for collapsed library shortcuts. If enabled,
+        // we append the reactive class 'show-lib-icons-collapsed' directly to the 
+        // root sidebar container. Register event bus subscription to listen for
+        // user changes dynamically and perform clean layout hot-reloads.
+        // ---------------------------------------------------------------------
+        const showLibIcons = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
+        this.el.classList.toggle('show-lib-icons-collapsed', showLibIcons);
+
+        this._onShowLibIconsChanged = (newValue) => {
+            const enabled = newValue === true || newValue === 'true';
+            this.el.classList.toggle('show-lib-icons-collapsed', enabled);
+            // Re-apply DOM layout to refresh cache
+            this._applySidebarLayout();
+        };
+        eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -297,6 +316,11 @@ class Sidebar extends Component {
 
         if (this._onAnimationModeChanged) {
             eventBus.off('prefChanged:disableSidebarAnimation', this._onAnimationModeChanged);
+        }
+
+        // Unsubscribe from preference change events cleanly
+        if (this._onShowLibIconsChanged) {
+            eventBus.off('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
         }
     }
 
@@ -551,6 +575,9 @@ class Sidebar extends Component {
                 btn.dataset.path = buttonPath;
                 btn.dataset.layoutId = `lib-${lib.Id}`;
                 btn.innerHTML = `
+                    <div class="item-icon">
+                        ${this._getLibraryIcon(lib.CollectionType)}
+                    </div>
                     <span class="item-text">${lib.Name}</span>
                 `;
 
@@ -590,6 +617,92 @@ class Sidebar extends Component {
     _getUserName() {
         const user = auth.getCurrentUser();
         return user && user.Name ? user.Name : i18n.t('LabelUsername');
+    }
+
+    /**
+     * =========================================================================
+     * SEMANTIC COLLECTION-TYPE ICON DICTIONARY (Apple HIG-Compliant)
+     * =========================================================================
+     * Maps the database library types (Movies, TV Shows, Music, Playlists, etc.)
+     * directly to sleek, hand-crafted outlined and solid-filled SVG structures.
+     * Aligns with the Apple Human Interface Guidelines to give each library card
+     * shortcut a unified and unique visual weight in the navigation pane.
+     * =========================================================================
+     * @param {string} type - Jellyfin collection type category string
+     * @returns {string} The constructed HTML containing both SVG variants
+     * @private
+     */
+    _getLibraryIcon(type) {
+        // Normalize strings to avoid mismatching cases
+        const colType = (type || '').toLowerCase();
+        
+        let outlinePath = '';
+        let filledPath = '';
+        let viewBox = '0 0 24 24';
+
+        // Precise path configurations for extreme visual sharpness
+        switch (colType) {
+            case 'movies':
+                // Premium film clapperboard design with slanted slates and play center
+                outlinePath = `<path d="M4 18h16a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2zm0-10h16M2 8l4-4M18 8l-4-4M10 8L6 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M20 4H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 6h3.5L6 8.5H3.5L5 6zm5.5 0h3.5l-1.5 2.5H9L10.5 6zM15 6h3.5l-1.5 2.5h-3.5L15 6zm5 10H4V10h16v6zm-10-1.5l4-2.5-4-2.5v5z" fill="currentColor"/>`;
+                break;
+            case 'tvshows':
+                // Elegant TV display monitor with pedestal stand (differentiates beautifully from Live TV rabbit-ears)
+                outlinePath = `<rect x="2" y="3" width="20" height="14" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="8" y1="21" x2="16" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><line x1="12" y1="17" x2="12" y2="21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M21 2H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h7v2H8v2h8v-2h-2v-2h7c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-3 12H6v-8h12v8z" fill="currentColor"/>`;
+                break;
+            case 'music':
+                // Linked musical notes
+                outlinePath = `<path d="M9 18V5l12-2v13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="6" cy="18" r="3" stroke="currentColor" stroke-width="2"/><circle cx="18" cy="16" r="3" stroke="currentColor" stroke-width="2"/>`;
+                filledPath = `<path d="M12 3v10.55c-.59-.34-1.27-.55-2-.55-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4V7h6V3h-8z" fill="currentColor"/>`;
+                break;
+            case 'photos':
+            case 'photo':
+                // Classic camera or landscape picture frame
+                outlinePath = `<rect x="3" y="3" width="18" height="18" rx="2" ry="2" stroke="currentColor" stroke-width="2"/><circle cx="8.5" cy="8.5" r="1.5" stroke="currentColor" stroke-width="2"/><polyline points="21 15 16 10 5 21" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-4.5 6c.83 0 1.5.67 1.5 1.5s-.67 1.5-1.5 1.5-1.5-.67-1.5-1.5.67-1.5 1.5-1.5zM5 19l3-3.86 2.14 2.58 3-3.86L19 19H5z" fill="currentColor"/>`;
+                break;
+            case 'books':
+            case 'book':
+                // Detailed ledger/book outline
+                outlinePath = `<path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M18 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 4h2v5L9 8l-2 1V4h2z" fill="currentColor"/>`;
+                break;
+            case 'homevideos':
+            case 'homevideo':
+                // Retro camcorder icon
+                outlinePath = `<path d="M23 7l-7 5 7 5V7z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z" fill="currentColor"/>`;
+                break;
+            case 'boxsets':
+                // Visual dimensional layered sheets
+                outlinePath = `<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>`;
+                break;
+            case 'playlists':
+                // Menu lines layered with an action chevron
+                outlinePath = `<path d="M12 12H3M16 6H3M12 18H3M16 12l5 3-5 3v-6z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M3 10h11v2H3zm0-4h11v2H3zm0 8h7v2H3zm13-1v6l5-3-5-3z" fill="currentColor"/>`;
+                break;
+            case 'livetv':
+                // Elegant TV sets with antenna (matches static OSD and TV Shows styling)
+                outlinePath = `<rect x="2" y="7" width="20" height="15" rx="2" ry="2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/><polyline points="17 2 12 7 7 2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M21 6h-7.59l3.29-3.29c.39-.39.39-1.02 0-1.41c-.39-.39-1.02-.39-1.41,0L12 4.59L8.71 1.3c-.39-.39-1.02-.39-1.41,0c-.39.39-.39 1.02 0 1.41L10.59 6H3C1.9 6 1 6.9 1 8v12c0 1.1.9 2 2 2h18c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2zM21 20H3V8h18v12z" fill="currentColor"/>`;
+                break;
+            case 'folders':
+            case 'folder':
+            default:
+                // Universal tabbed document folder
+                outlinePath = `<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>`;
+                filledPath = `<path d="M10 4H4c-1.1 0-1.99.9-1.99 2L2 18c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V8c0-1.1-.9-2-2-2h-8l-2-2z" fill="currentColor"/>`;
+                break;
+        }
+
+        return `
+            <svg class="icon-outline" viewBox="${viewBox}" width="24" height="24" fill="none">${outlinePath}</svg>
+            <svg class="icon-filled" viewBox="${viewBox}" width="24" height="24" fill="none">${filledPath}</svg>
+        `;
     }
 
     /**
