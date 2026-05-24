@@ -237,25 +237,38 @@ class ScrollController {
         // NATIVE SMOOTH SCROLL ROUTINE (Let TV Handle It)
         // ====================================================================
         // Offloads standard vertical scrolling animations fully to the native
-        // rendering thread, preventing frame drops even if the main thread is active.
+        // rendering thread.
+        //
+        // COMPATIBILITY FALLBACK:
+        // Older LG WebOS models (WebOS 3.x/4.x running Chrome < 61) do not
+        // support `Element.prototype.scrollTo` on container elements.
+        //
+        // If the method is undefined or throws an error, we gracefully fall
+        // through to the custom JS RAF time-based animation loop below to
+        // keep navigation completely functional.
         // ====================================================================
-        if (isVertical && scrollMode === 'native') {
+        if (isVertical && scrollMode === 'native' && typeof container.scrollTo === 'function') {
             if (this[animIdKey]) {
                 cancelAnimationFrame(this[animIdKey]);
                 this[animIdKey] = null;
                 this[stateKey] = null;
             }
 
-            container.scrollTo({
-                top: targetScroll,
-                behavior: 'smooth'
-            });
+            try {
+                container.scrollTo({
+                    top: targetScroll,
+                    behavior: 'smooth'
+                });
 
-            // Prevent horizontal shifts on layout boundaries.
-            if (container.scrollLeft !== 0) {
-                container.scrollLeft = 0;
+                // Prevent horizontal shifts on layout boundaries.
+                if (container.scrollLeft !== 0) {
+                    container.scrollLeft = 0;
+                }
+                return;
+            } catch (nativeError) {
+                // Log warning and fall through to standard JS RAF smooth scroll fallback.
+                console.warn('[ScrollController] Native smooth scrollTo failed, falling back to JS RAF:', nativeError);
             }
-            return;
         }
 
         // ----------------------------------------------------------------
