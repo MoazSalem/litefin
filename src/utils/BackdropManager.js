@@ -37,6 +37,10 @@ class BackdropManager {
             item.BackdropImageTags && item.BackdropImageTags.length > 0 ? item.Id : item.ParentBackdropItemId;
 
         if (backdropId) {
+            if (item.BackdropImageTags?.length > 0) {
+                options.tag = item.BackdropImageTags[0];
+            }
+
             return api.getImageUrl(backdropId, 'Backdrop', options);
         }
 
@@ -60,6 +64,10 @@ class BackdropManager {
         }
         // 1. Try Person's own backdrop
         if (person.BackdropImageTags && person.BackdropImageTags.length > 0) {
+            if (person.BackdropImageTags?.length > 0) {
+                options.tag = person.BackdropImageTags[0];
+            }
+
             return api.getImageUrl(person.Id, 'Backdrop', options);
         }
 
@@ -71,7 +79,7 @@ class BackdropManager {
             );
 
             if (bestWork) {
-                return api.getImageUrl(bestWork.Id, 'Backdrop', options);
+                return api.getImageUrl(bestWork.Id, 'Backdrop', { ...options, tag: bestWork.BackdropImageTags[0] });
             }
         }
 
