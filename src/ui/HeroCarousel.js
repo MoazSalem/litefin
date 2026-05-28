@@ -109,7 +109,7 @@ class HeroCarousel {
         const backdropUrl = api.getImageUrl(item.Id, 'Backdrop', {
             maxWidth: params.maxWidth,
             quality: params.quality,
-            tag: item.ImageTags?.Backdrop
+            tag: item.BackdropImageTags[0]
         });
 
         // Get Logo URL (prefer Logo, then ParentLogo)
