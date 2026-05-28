@@ -687,7 +687,8 @@ class DetailsPage extends Page {
                 const params = imageService.getParams('details-poster');
                 const posterUrl = api.getImageUrl(item.Id, 'Primary', {
                     maxWidth: params.maxWidth,
-                    quality: params.quality
+                    quality: params.quality,
+                    tag: item.ImageTags.Primary
                 });
 
                 // Resolve Poster BlurHash
@@ -2351,7 +2352,7 @@ class DetailsPage extends Page {
                     return `
                         <button class="episode-card media-card" data-episode-id="${ep.Id}" data-item-id="${ep.Id}" tabindex="0">
                             <div class="episode-thumb">
-                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality })}" alt="" class="lazy">
+                                <img src="${api.getImageUrl(ep.Id, 'Primary', { maxWidth: imageService.getParams('thumb').maxWidth, quality: imageService.getParams('thumb').quality, tag: ep.ImageTags.Primary })}" alt="" class="lazy">
                                 ${progress > 0 ? `<div style="position: absolute; bottom: 0; left: 0; width: 100%; height: 6px; background-color: rgba(0,0,0,0.7); z-index: 100;"><div style="width: ${progress}%; height: 100%; background-color: var(--jf-accent);"></div></div>` : ''}
                             </div>
                             <div class="episode-info">

@@ -957,7 +957,7 @@ class PlayerPage extends Page {
                     title: item.Name,
                     artist: item.ProductionYear ? item.ProductionYear.toString() : '',
                     album: item.SeriesName || 'Litefin',
-                    artworkUrl: api.getImageUrl(item.Id, 'Primary', { maxWidth: 400 })
+                    artworkUrl: api.getImageUrl(item.Id, 'Primary', { maxWidth: 400, tag: item.ImageTags?.Primary })
                 },
                 {
                     onPlay: () => this._onRemotePlay(),
@@ -1084,7 +1084,7 @@ class PlayerPage extends Page {
         // Try Backdrop, then fallback to the same Album Art we just found
         let backdropUrl = null;
         if (this._item.BackdropImageTags && this._item.BackdropImageTags.length > 0) {
-            backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80 });
+            backdropUrl = api.getImageUrl(itemId, 'Backdrop', { maxWidth: screenWidth, quality: 80, tag: this._item.BackdropImageTags[0] });
         } else if (
             this._item.ParentBackdropImageTags &&
             this._item.ParentBackdropImageTags.length > 0 &&
@@ -1092,7 +1092,8 @@ class PlayerPage extends Page {
         ) {
             backdropUrl = api.getImageUrl(this._item.ParentBackdropItemId, 'Backdrop', {
                 maxWidth: screenWidth,
-                quality: 80
+                quality: 80,
+                tag: this._item.ParentBackdropImageTags[0]
             });
         } else {
             backdropUrl = artUrl; // Fallback to square art, which gets blurred heavily

@@ -192,7 +192,8 @@ class CardRenderer {
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
                     imageUrl = api.getImageUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.BackdropImageTags[0]
                     });
                 }
 
@@ -214,7 +215,8 @@ class CardRenderer {
                 } else if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
                     imageUrl = api.getImageUrl(itemId, 'Backdrop', {
                         maxWidth: params.maxWidth,
-                        quality: params.quality
+                        quality: params.quality,
+                        tag: item.BackdropImageTags[0]
                     });
                 } else if (item.ImageTags?.Primary) {
                     imageUrl = api.getImageUrl(itemId, 'Primary', {

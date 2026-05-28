@@ -1428,7 +1428,7 @@ class HomePage extends Page {
                 if (item.ImageTags?.Thumb) {
                     url = api.getImageUrl(itemId, 'Thumb', { maxWidth, quality, tag: item.ImageTags.Thumb });
                 } else if (item.BackdropImageTags?.length > 0) {
-                    url = api.getImageUrl(itemId, 'Backdrop', { maxWidth, quality });
+                    url = api.getImageUrl(itemId, 'Backdrop', { maxWidth, quality, tag: item.BackdropImageTags[0] });
                 } else if (item.SeriesId && item.SeriesThumbImageTag) {
                     url = api.getImageUrl(item.SeriesId, 'Thumb', { maxWidth, quality, tag: item.SeriesThumbImageTag });
                 } else if (item.ImageTags?.Primary) {
