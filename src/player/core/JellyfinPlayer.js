@@ -1074,6 +1074,7 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSource,
                 startPositionTicks: streamInfo.playerStartPositionTicks, // Use adjusted start position
                 audioStreamIndex: this._currentAudioStreamIndex,
+                audioTrackListIndex: this._getBackendAudioTrackListIndex(this._currentAudioStreamIndex, mediaSource),
                 subtitleStreamIndex: options.subtitleStreamIndex,
                 // Tell the backend what play method was negotiated — critical so
                 // TizenAVPlayer knows NOT to apply native track selection when
