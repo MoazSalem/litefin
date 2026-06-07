@@ -15,6 +15,8 @@
    --jf-surface: #ffffff;
    --jf-card-bg: #ffffff;
    --jf-card-bg-hover: #f0f0f0;
+   --jf-overlay-bg: rgba(255, 255, 255, 0.9);
+   --jf-overlay-bg-rgb: 255, 255, 255;
 
    /* ========================================================================
        Accent Colors

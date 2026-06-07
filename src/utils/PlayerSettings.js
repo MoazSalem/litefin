@@ -393,7 +393,10 @@ const DEFAULTS = {
     osdHideShowName: false,
 
     // Size of the show/movie logo in OSD ('small', 'medium', 'large')
-    osdLogoSize: 'medium'
+    osdLogoSize: 'medium',
+
+    // Background opacity of the track menus (0-100)
+    osdTrackMenuBgOpacity: 85
 };
 
 /**

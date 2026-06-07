@@ -657,6 +657,22 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTrackMenuBgOpacity">${i18n.t('LabelOsdTrackMenuBgOpacity') || 'OSD Track Menu Opacity'}</span>
+                        <span class="setting-description" data-i18n="OsdTrackMenuBgOpacityDescription">${i18n.t('OsdTrackMenuBgOpacityDescription') || 'Adjust the background opacity of the audio and subtitle selection overlay menus.'}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'osd-track-menu-bg-opacity',
+                            PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
                 <!-- Details Page Section -->
                 <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
                 <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
@@ -4507,7 +4523,8 @@ class SettingsPage extends Page {
             'subtitle-line-height': 'subtitleLineHeight',
             'subtitle-letter-spacing': 'subtitleLetterSpacing',
             'subtitle-bottom-offset': 'subtitleBottomOffset',
-            'subtitle-custom-size': 'subtitleSizeCustomValue'
+            'subtitle-custom-size': 'subtitleSizeCustomValue',
+            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity'
         };
 
         this.$$('.setting-slider').forEach((slider) => {

@@ -911,7 +911,7 @@ html[data-osd-borders="hidden"] .osd-btn.magic-hover {
     left: 0;
     right: 0;
     bottom: 0;
-    background: var(--jf-overlay-bg, rgba(0, 0, 0, 0.85));
+    background: rgba(var(--jf-overlay-bg-rgb, 0, 0, 0), var(--osd-track-menu-bg-opacity, 0.85));
     display: flex;
     align-items: center;
     justify-content: center;

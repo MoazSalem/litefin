@@ -39,6 +39,7 @@ import Sidebar from '../components/Sidebar.js';
 
 import { logger } from '../utils/Logger.js';
 import { storage } from '../utils/StorageService.js';
+import { PlayerSettings } from '../utils/PlayerSettings.js';
 import { debugOverlay } from '../ui/DebugOverlay.js';
 import { pluginManager } from '../plugins/PluginManager.js';
 import { focusManager } from '../ui/FocusManager.js';
@@ -109,6 +110,10 @@ class App {
 
         // 3. Initialize layout manager
         layoutManager.init();
+
+        // 3.0. Initialize OSD track menu bg opacity CSS variable
+        const trackMenuBgOpacity = PlayerSettings.get('osdTrackMenuBgOpacity');
+        document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (trackMenuBgOpacity / 100).toFixed(2));
 
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
@@ -349,6 +354,12 @@ class App {
      * @private
      */
     _setupEventHandlers() {
+        // Listen for OSD track menu bg opacity changes
+        eventBus.on('pref:osdTrackMenuBgOpacity', (value) => {
+            document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (value / 100).toFixed(2));
+            cssVarsPolyfill.update();
+        });
+
         // Handle back button / return key
         eventBus.on('key:back', () => {
             // 1. Check for standalone global overlays
