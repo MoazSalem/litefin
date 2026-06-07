@@ -1074,6 +1074,7 @@ export class JellyfinPlayer extends EventEmitter {
                 mediaSource,
                 startPositionTicks: streamInfo.playerStartPositionTicks, // Use adjusted start position
                 audioStreamIndex: this._currentAudioStreamIndex,
+                audioTrackListIndex: this._getBackendAudioTrackListIndex(this._currentAudioStreamIndex, mediaSource),
                 subtitleStreamIndex: options.subtitleStreamIndex,
                 // Tell the backend what play method was negotiated — critical so
                 // TizenAVPlayer knows NOT to apply native track selection when
@@ -1388,8 +1389,8 @@ export class JellyfinPlayer extends EventEmitter {
         // Both Tizen (AVPlay) and HtmlVideoPlayer work with 0-based list
         // indices of available audio tracks, NOT the raw Jellyfin stream ID.
         // Convert here so both backends share the same simple interface.
-        const tracks = this.getAudioTracks();
-        const listIndex = tracks.findIndex((t) => t.Index === index);
+        const tracks = this._getBackendAudioTracks();
+        const listIndex = this._getBackendAudioTrackListIndex(index);
 
         if (listIndex === -1) {
             log.warn('StreamID', index, 'not found in audio tracks:', tracks.map(t => t.Index));
@@ -1855,6 +1856,54 @@ export class JellyfinPlayer extends EventEmitter {
      */
     getAudioTracks() {
         return this._currentMediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+    }
+
+    /**
+     * Get audio tracks as exposed by the current native backend.
+     *
+     * Jellyfin keeps original stream IDs, including tracks the WebOS native
+     * audioTracks API will not expose when passthrough codecs are disabled.
+     * Counting those hidden tracks shifts the backend list index by one.
+     *
+     * @param {Object} [mediaSource]
+     * @returns {Array} Backend-visible audio streams
+     * @private
+     */
+    _getBackendAudioTracks(mediaSource = this._currentMediaSource) {
+        const tracks = mediaSource?.MediaStreams?.filter((s) => s.Type === 'Audio') || [];
+
+        if (this._backendType !== 'webos') {
+            return tracks;
+        }
+
+        return tracks.filter((track) => {
+            const codec = (track.Codec || '').toLowerCase();
+
+            if (codec === 'truehd' && !PlayerSettings.get('enableTrueHd')) {
+                return false;
+            }
+
+            if ((codec.includes('dts') || codec === 'dca') && !PlayerSettings.get('enableDts')) {
+                return false;
+            }
+
+            return true;
+        });
+    }
+
+    /**
+     * Convert a Jellyfin audio stream Index to the 0-based backend track index.
+     * @param {number} streamIndex
+     * @param {Object} [mediaSource]
+     * @returns {number}
+     * @private
+     */
+    _getBackendAudioTrackListIndex(streamIndex, mediaSource = this._currentMediaSource) {
+        if (streamIndex === undefined || streamIndex === null) {
+            return -1;
+        }
+
+        return this._getBackendAudioTracks(mediaSource).findIndex((t) => t.Index === streamIndex);
     }
 
     /**

@@ -484,11 +484,9 @@ export class WebOSPlayer {
     _applyInitialTracks(options, hls) {
         // ---- Audio track ----
         if (options.audioStreamIndex !== undefined && options.audioStreamIndex !== null) {
-            // Convert Jellyfin stream index (e.g. 1) to 0-based audio-only list index (e.g. 0)
-            // so it maps correctly onto hls.audioTracks / video.audioTracks arrays.
-            const audioStreams = (options.mediaSource?.MediaStreams || []).filter(s => s.Type === 'Audio');
-            const listIndex = audioStreams.findIndex(s => s.Index === options.audioStreamIndex);
-            const resolvedIndex = listIndex >= 0 ? listIndex : 0;
+            // JellyfinPlayer precomputes the backend-visible list index because
+            // WebOS may hide unsupported passthrough tracks from audioTracks.
+            const resolvedIndex = options.audioTrackListIndex >= 0 ? options.audioTrackListIndex : 0;
 
             if (hls) {
                 // Single-track = Transcode/DirectStream (server picked one); multi-track = Remux/DirectPlay.
