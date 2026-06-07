@@ -497,9 +497,6 @@ html[data-layout="modern"] .quality-badge {
     position: absolute;
     top: 22px;
     z-index: 5;
-    background: rgba(0, 0, 0, 0.65);
-    border: 1px solid rgba(255, 255, 255, 0.15);
-    color: #fff;
     font-weight: 700;
     
     /* PERFORMANCE: Replaced 15px blur shadow with highly optimized 4px shadow to save GPU composition bandwidth. */
@@ -536,8 +533,6 @@ html[data-layout="modern"] .episode-badge {
     border-radius: 10px;
     font-size: 1.2rem;
     letter-spacing: 0.5px;
-    /* Subtle glow for episode context */
-    border-color: rgba(255, 255, 255, 0.25);
 }
 
 html[data-layout="modern"] .quality-badge {
@@ -546,12 +541,18 @@ html[data-layout="modern"] .quality-badge {
     border-radius: 10px;
     font-size: 1.2rem;
     letter-spacing: 0.5px;
-    border-color: rgba(255, 255, 255, 0.25);
 }
 
-/* Offset if both episode-badge and quality-badge are present in modern */
+/* If both episode-badge and quality-badge are present in modern, place quality badge on the right */
 html[data-layout="modern"] .episode-badge ~ .quality-badge {
-    top: 68px;
+    left: auto;
+    right: 22px;
+    top: 22px;
+}
+
+/* If played-badge is also present, shift quality badge to the left of it */
+html[data-layout="modern"] .played-badge ~ .episode-badge ~ .quality-badge {
+    right: 74px; /* 22px + 44px (played-badge width) + 8px spacing */
 }
 
 html[data-layout="modern"] .media-row--skeleton .card-image {

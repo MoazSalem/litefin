@@ -86,6 +86,9 @@ class LayoutManager {
         // Only BlurHash Backdrop: Uses only decoded blurhash for details backdrop background without loading image
         this._onlyBlurHashBackdrop = false;
 
+        // Badge style: 'auto', 'tinted', 'dark'
+        this._badgeStyle = 'auto';
+
         // Internal style element for dynamic variables
         this._dynamicStyleEl = null;
     }
@@ -117,6 +120,7 @@ class LayoutManager {
         const savedSimpleLoader = storage.getItem('litefin:simpleLoader') === 'true';
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
+        const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
 
         this.setLayout(savedLayout, false);
         this.setThemeMode(initialMode, false);
@@ -130,6 +134,7 @@ class LayoutManager {
         this.setSimpleLoader(savedSimpleLoader, false);
         this.setDisableBlurhash(savedDisableBlurhash, false);
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
+        this.setBadgeStyle(savedBadgeStyle, false);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -154,6 +159,12 @@ class LayoutManager {
 
         document.documentElement.setAttribute('data-layout', layout);
         state.set('app:layout', layout, true);
+
+        // Update badge style if it is auto
+        if (this._badgeStyle === 'auto') {
+            const resolvedStyle = layout === 'modern' ? 'dark' : 'tinted';
+            document.documentElement.setAttribute('data-badge-style', resolvedStyle);
+        }
 
         if (save) {
             storage.setItem('litefin:layout', layout);
@@ -383,6 +394,19 @@ class LayoutManager {
         document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
         if (save) storage.setItem('litefin:roundedCorners', enabled ? 'true' : 'false');
         eventBus.emit('roundedCorners:changed', { enabled });
+    }
+
+    getBadgeStyle() { return this._badgeStyle; }
+    setBadgeStyle(style, save = true) {
+        this._badgeStyle = style;
+        let resolvedStyle = style;
+        if (style === 'auto') {
+            resolvedStyle = this._layout === 'modern' ? 'dark' : 'tinted';
+        }
+        document.documentElement.setAttribute('data-badge-style', resolvedStyle);
+        if (save) storage.setItem('litefin:badgeStyle', style);
+        log.info(`Badge style set to: ${style} (resolved: ${resolvedStyle})`);
+        eventBus.emit('badgeStyle:changed', { style, resolvedStyle });
     }
 
     /**

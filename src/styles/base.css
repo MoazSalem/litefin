@@ -599,8 +599,6 @@ body {
     height: 40px;
     padding: 0 8px;
     border-radius: var(--jf-border-radius-lg);
-    background-color: var(--jf-accent);
-    color: var(--jf-accent-content-color);
     font-size: 1.1rem;
     font-weight: 700;
     display: flex;
@@ -616,8 +614,6 @@ body {
     width: 40px;
     height: 40px;
     border-radius: var(--jf-border-radius-lg);
-    background-color: var(--jf-accent);
-    color: var(--jf-accent-content-color);
     display: flex;
     align-items: center;
     justify-content: center;
@@ -648,26 +644,56 @@ body {
     /* Optical alignment for play triangle */
 }
 
+.episode-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 4px 8px;
+    border-radius: var(--jf-border-radius);
+    font-size: 1.1rem;
+    font-weight: 700;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
 .quality-badge {
     position: absolute;
     top: 12px;
     left: 12px;
     padding: 4px 8px;
     border-radius: var(--jf-border-radius);
-    background-color: rgba(0, 0, 0, 0.65);
-    color: #ffffff;
-    font-size: 0.9rem;
+    font-size: 1.1rem;
     font-weight: 700;
     z-index: 2;
-    border: 1px solid rgba(255, 255, 255, 0.15);
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* Offset if both episode-badge and quality-badge are present */
-html[data-layout="modern"] .episode-badge~.quality-badge {
-    top: 48px;
+/* The episode badge (e.g. S1:E1) should only be shown in modern layout */
+html[data-layout="classic"] .episode-badge {
+    display: none !important;
+}
+
+/* Badge Skins: Tinted vs Translucent Dark */
+html[data-badge-style="tinted"] .count-badge,
+html[data-badge-style="tinted"] .played-badge,
+html[data-badge-style="tinted"] .episode-badge,
+html[data-badge-style="tinted"] .quality-badge {
+    background-color: var(--jf-accent);
+    color: var(--jf-accent-content-color);
+    border: none;
+}
+
+html[data-badge-style="dark"] .count-badge,
+html[data-badge-style="dark"] .played-badge,
+html[data-badge-style="dark"] .episode-badge,
+html[data-badge-style="dark"] .quality-badge {
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* ============================================================================
