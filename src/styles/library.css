@@ -724,10 +724,12 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* List: move badges from image to be inline after the title */
 .library-grid.view-list .played-badge,
-.library-grid.view-list .count-badge {
+.library-grid.view-list .count-badge,
+.library-grid.view-list .quality-badge {
     position: relative !important;
     top: 0 !important;
     right: 0 !important;
+    left: 0 !important;
     transform: none !important;
     margin-left: 10px !important; /* Perfect gap after the title text */
     flex-shrink: 0;

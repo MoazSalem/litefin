@@ -288,7 +288,6 @@
     "Videos": "Videos",
     "Writer": "Writer",
     "Writers": "Writers",
-
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minutes",
     "1Minute": "1 Minute",
@@ -558,6 +557,8 @@
     "HideEpisodeCountsDescription": "Hide the unplayed episode count badge on series and season cards",
     "HideLibraryLabels": "Hide Library Labels",
     "HideLibraryLabelsDescription": "Hide the text label beneath library cards on the home screen",
+    "ShowQualityBadges": "Show Quality Badges",
+    "ShowQualityBadgesDescription": "Display quality badges (e.g. 4K, 1080p, HDR) on media poster cards.",
     "HideLiveTvInMyMedia": "Hide Live TV from My Media",
     "HideLiveTvInMyMediaDescription": "Hide the Live TV library card from the 'My Media' row on the home screen",
     "HideOriginalTitleDescription": "Do not show the original language title under the main title on the details page.",

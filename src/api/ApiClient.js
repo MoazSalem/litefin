@@ -13,6 +13,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('ApiClient');
 
@@ -164,6 +165,30 @@ export class ApiClient {
     async request(endpoint, options = {}, isRetry = false) {
         if (!this._serverUrl) {
             throw new Error('Server URL not configured');
+        }
+
+        // Conditionally request quality/resolution metadata if enabled
+        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+            const fieldsKey = Object.keys(options.params).find(k => k.toLowerCase() === 'fields');
+            const isItemsEndpoint = endpoint.includes('/Items') || 
+                                    endpoint.includes('/Latest') || 
+                                    endpoint.includes('/Resume') || 
+                                    endpoint.includes('/NextUp') || 
+                                    endpoint.includes('/Upcoming') || 
+                                    endpoint.includes('/Similar') || 
+                                    endpoint.includes('/Episodes') || 
+                                    endpoint.includes('/Search/Hints');
+
+            if (isItemsEndpoint) {
+                const targetKey = fieldsKey || 'Fields';
+                const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
+                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach(f => {
+                    if (!fieldsList.includes(f)) {
+                        fieldsList.push(f);
+                    }
+                });
+                options.params[targetKey] = fieldsList.join(',');
+            }
         }
 
         let url = this.buildUrl(endpoint);

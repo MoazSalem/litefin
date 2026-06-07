@@ -39,7 +39,8 @@
     /* Legacy Aliases (Compatibility for untracked CSS files) */
     --text-primary: var(--jf-text-primary);
     --text-secondary: var(--jf-text-secondary);
-    --text-muted: var(--jf-text-secondary); /* Standardize muted to secondary */
+    --text-muted: var(--jf-text-secondary);
+    /* Standardize muted to secondary */
     --text-tertiary: var(--jf-text-tertiary);
 
     /* Global Rounded Corner Defaults (Setting-controlled) */
@@ -54,26 +55,86 @@ html[data-rounded-corners="true"] {
 }
 
 /* Custom UI Font Overrides */
-html[data-ui-font="system"] { --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
-html[data-ui-font="poppins"] { --jf-font-family: 'Poppins', sans-serif; }
-html[data-ui-font="noto-arabic"] { --jf-font-family: 'Noto Sans Arabic', sans-serif; }
-html[data-ui-font="roboto"] { --jf-font-family: 'Roboto', sans-serif; }
-html[data-ui-font="google"] { --jf-font-family: 'Google Sans', sans-serif; }
-html[data-ui-font="typewriter"] { --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier; }
-html[data-ui-font="print"] { --jf-font-family: 'Merriweather', serif; }
-html[data-ui-font="console"] { --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }
-html[data-ui-font="cursive"] { --jf-font-family: 'Dancing Script', cursive; }
-html[data-ui-font="casual"] { --jf-font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
-html[data-ui-font="smallcaps"] { --jf-font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
-html[data-ui-font="silkscreen"] { --jf-font-family: 'Silkscreen', 'Courier New', monospace; }
-html[data-ui-font="space-grotesk"] { --jf-font-family: 'Space Grotesk', sans-serif; }
-html[data-ui-font="retrotech"] { --jf-font-family: 'RETROTECH', sans-serif; }
-html[data-ui-font="kitty"] { --jf-font-family: 'Kitty', cursive; }
-html[data-ui-font="inter"] { --jf-font-family: 'Inter', sans-serif; }
-html[data-ui-font="proxima"] { --jf-font-family: 'Proxima Nova', sans-serif; }
-html[data-ui-font="baloo"] { --jf-font-family: 'Baloo Bhaijaan 2', sans-serif; }
-html[data-ui-font="opendyslexic"] { --jf-font-family: 'OpenDyslexic', sans-serif; }
-html[data-ui-font="atkinson"] { --jf-font-family: 'Atkinson Hyperlegible', sans-serif; }
+html[data-ui-font="system"] {
+    --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html[data-ui-font="poppins"] {
+    --jf-font-family: 'Poppins', sans-serif;
+}
+
+html[data-ui-font="noto-arabic"] {
+    --jf-font-family: 'Noto Sans Arabic', sans-serif;
+}
+
+html[data-ui-font="roboto"] {
+    --jf-font-family: 'Roboto', sans-serif;
+}
+
+html[data-ui-font="google"] {
+    --jf-font-family: 'Google Sans', sans-serif;
+}
+
+html[data-ui-font="typewriter"] {
+    --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier;
+}
+
+html[data-ui-font="print"] {
+    --jf-font-family: 'Merriweather', serif;
+}
+
+html[data-ui-font="console"] {
+    --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco;
+}
+
+html[data-ui-font="cursive"] {
+    --jf-font-family: 'Dancing Script', cursive;
+}
+
+html[data-ui-font="casual"] {
+    --jf-font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print';
+}
+
+html[data-ui-font="smallcaps"] {
+    --jf-font-family: 'Cinzel', 'Copperplate', serif;
+    font-variant: small-caps;
+}
+
+html[data-ui-font="silkscreen"] {
+    --jf-font-family: 'Silkscreen', 'Courier New', monospace;
+}
+
+html[data-ui-font="space-grotesk"] {
+    --jf-font-family: 'Space Grotesk', sans-serif;
+}
+
+html[data-ui-font="retrotech"] {
+    --jf-font-family: 'RETROTECH', sans-serif;
+}
+
+html[data-ui-font="kitty"] {
+    --jf-font-family: 'Kitty', cursive;
+}
+
+html[data-ui-font="inter"] {
+    --jf-font-family: 'Inter', sans-serif;
+}
+
+html[data-ui-font="proxima"] {
+    --jf-font-family: 'Proxima Nova', sans-serif;
+}
+
+html[data-ui-font="baloo"] {
+    --jf-font-family: 'Baloo Bhaijaan 2', sans-serif;
+}
+
+html[data-ui-font="opendyslexic"] {
+    --jf-font-family: 'OpenDyslexic', sans-serif;
+}
+
+html[data-ui-font="atkinson"] {
+    --jf-font-family: 'Atkinson Hyperlegible', sans-serif;
+}
 
 html {
     /* Apply global font-family here so it inherits downwards to * */
@@ -154,7 +215,8 @@ body.player-active #sidebar-container {
 .person-row .person-card,
 .person-dot {
     border-radius: var(--jf-border-radius);
-    overflow: hidden; /* Ensure images/content respect the radius */
+    overflow: hidden;
+    /* Ensure images/content respect the radius */
 }
 
 /* Ensure fallbacks and overlays also get rounded */
@@ -163,6 +225,7 @@ body.player-active #sidebar-container {
 .skeleton-image {
     border-radius: var(--jf-border-radius);
 }
+
 .focusable:focus,
 .focusable.focused,
 [tabindex]:focus,
@@ -239,13 +302,23 @@ body.app-splash-active .page-loading .loading-spinner {
 }
 
 @keyframes shimmer-gpu {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(100%); }
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
 }
 
 @-webkit-keyframes webkit-shimmer-gpu {
-    from { -webkit-transform: translateX(-100%); }
-    to { -webkit-transform: translateX(100%); }
+    from {
+        -webkit-transform: translateX(-100%);
+    }
+
+    to {
+        -webkit-transform: translateX(100%);
+    }
 }
 
 
@@ -322,42 +395,81 @@ body.app-splash-active .page-loading .loading-spinner {
 }
 
 @keyframes rotation {
-    0% { transform: translateZ(0) rotate(0deg); }
-    100% { transform: translateZ(0) rotate(360deg); }
+    0% {
+        transform: translateZ(0) rotate(0deg);
+    }
+
+    100% {
+        transform: translateZ(0) rotate(360deg);
+    }
 }
 
 @-webkit-keyframes rotation {
-    0% { -webkit-transform: translateZ(0) rotate(0deg); }
-    100% { -webkit-transform: translateZ(0) rotate(360deg); }
+    0% {
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: translateZ(0) rotate(360deg);
+    }
 }
 
 
 @keyframes animloader-gpu {
-    0%, 100% { transform: translateZ(0) scale(0.5); }
-    50% { transform: translateZ(0) scale(1); }
+
+    0%,
+    100% {
+        transform: translateZ(0) scale(0.5);
+    }
+
+    50% {
+        transform: translateZ(0) scale(1);
+    }
 }
 
 @-webkit-keyframes animloader-gpu {
-    0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
-    50% { -webkit-transform: translateZ(0) scale(1); }
+
+    0%,
+    100% {
+        -webkit-transform: translateZ(0) scale(0.5);
+    }
+
+    50% {
+        -webkit-transform: translateZ(0) scale(1);
+    }
 }
 
 
 /* Base Animations */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @-webkit-keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 
 @-webkit-keyframes webkit-fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 
@@ -532,7 +644,30 @@ body {
 }
 
 .video-badge svg {
-    margin-left: 4px; /* Optical alignment for play triangle */
+    margin-left: 4px;
+    /* Optical alignment for play triangle */
+}
+
+.quality-badge {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 4px 8px;
+    border-radius: var(--jf-border-radius);
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    font-size: 0.9rem;
+    font-weight: 700;
+    z-index: 2;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Offset if both episode-badge and quality-badge are present */
+html[data-layout="modern"] .episode-badge~.quality-badge {
+    top: 48px;
 }
 
 /* ============================================================================
@@ -557,6 +692,7 @@ body.webos-cursor-active .focused {
     transform: none !important;
     box-shadow: none !important;
 }
+
 /* ============================================================================
    Performance Tweaks (Legacy Hardware Mitigation)
    ============================================================================ */
@@ -570,7 +706,7 @@ body.webos-cursor-active .focused {
 html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom) {
     /* Stop forcing GPU promotion for every moving part */
     will-change: auto !important;
-    
+
     /* Disable all animations and transitions for non-essential UI elements */
     -webkit-transition: none !important;
     transition: none !important;

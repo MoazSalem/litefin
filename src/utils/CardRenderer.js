@@ -458,6 +458,56 @@ class CardRenderer {
             episodeBadgeHtml = `<div class="episode-badge">Season ${item.IndexNumber}</div>`;
         }
 
+        // Quality Badge (Resolution/HDR)
+        let qualityBadgeHtml = '';
+        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
+        if (showQualityBadges) {
+            let width = item.Width;
+            let height = item.Height;
+            let isHdr = false;
+
+            if (item.MediaSources && item.MediaSources.length > 0) {
+                const source = item.MediaSources[0];
+                if (source.Width) width = source.Width;
+                if (source.Height) height = source.Height;
+                if (source.MediaStreams) {
+                    const videoStream = source.MediaStreams.find(s => s.Type === 'Video');
+                    if (videoStream) {
+                        if (videoStream.Width) width = videoStream.Width;
+                        if (videoStream.Height) height = videoStream.Height;
+                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType;
+                        if (videoRange && videoRange.toLowerCase().includes('hdr')) {
+                            isHdr = true;
+                        }
+                    }
+                }
+            }
+
+            if (width || height) {
+                let resolutionLabel = '';
+                const maxDim = Math.max(width || 0, height || 0);
+                const minDim = Math.min(width || 0, height || 0);
+
+                if (maxDim >= 3840 || minDim >= 2160) {
+                    resolutionLabel = '4K';
+                } else if (maxDim >= 1920 || minDim >= 1080) {
+                    resolutionLabel = '1080p';
+                } else if (maxDim >= 1280 || minDim >= 720) {
+                    resolutionLabel = '720p';
+                } else if (maxDim > 0) {
+                    resolutionLabel = 'SD';
+                }
+
+                if (isHdr) {
+                    resolutionLabel = resolutionLabel ? `${resolutionLabel} HDR` : 'HDR';
+                }
+
+                if (resolutionLabel) {
+                    qualityBadgeHtml = `<div class="quality-badge">${resolutionLabel}</div>`;
+                }
+            }
+        }
+
         // --- 3. Text Generation ---
 
         let titleText = i18n.ensureBiDi(item.Name);
@@ -710,6 +760,7 @@ class CardRenderer {
             ${playedBadgeHtml}
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
+            ${qualityBadgeHtml}
         `;
 
         return `

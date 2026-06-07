@@ -1065,6 +1065,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowQualityBadges">${i18n.t('ShowQualityBadges') || 'Show Quality Badges'}</span>
+                        <span class="setting-description" data-i18n="ShowQualityBadgesDescription">${i18n.t('ShowQualityBadgesDescription') || 'Display quality badges (e.g. 4K, 1080p, HDR) on media poster cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showQualityBadges') === 'true' ? 'active' : ''}" 
+                                 id="toggle-show-quality-badges" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -3686,6 +3699,18 @@ class SettingsPage extends Page {
                 
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Show Quality Badges
+        const showQualityBadgesBtn = this.$('#toggle-show-quality-badges');
+        if (showQualityBadgesBtn) {
+            showQualityBadgesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showQualityBadges') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showQualityBadges', newValue);
+                showQualityBadgesBtn.classList.toggle('active', newValue);
+                log.info(`Show Quality Badges set to: ${newValue}`);
             });
         }
 
