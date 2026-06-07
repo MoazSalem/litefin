@@ -81,6 +81,16 @@ export default class SubtitleOffset extends BaseMenu {
                     }
                 });
             }
+
+            // Bind close button
+            const closeBtn = this.$el.querySelector('.osd-offset-close');
+            if (closeBtn) {
+                closeBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    this.osd.toggleSubtitleOffset(false);
+                });
+            }
         }
     }
 
