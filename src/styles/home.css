@@ -26,6 +26,25 @@
     pointer-events: none;
 }
 
+/* Align skeleton cards with the row titles and loaded cards (60px padding) */
+.media-row--skeleton .row-items-track {
+    padding-left: 48px;
+}
+
+html[data-layout="modern"] .media-row--skeleton .row-items-track {
+    padding-left: 60px;
+}
+
+[dir="rtl"] .media-row--skeleton .row-items-track {
+    padding-left: 0;
+    padding-right: 48px;
+}
+
+[dir="rtl"] html[data-layout="modern"] .media-row--skeleton .row-items-track {
+    padding-left: 0;
+    padding-right: 60px;
+}
+
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
 .media-row--skeleton .row-title {
     /* Dim the title slightly to signal "loading" state */
