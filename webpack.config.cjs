@@ -70,6 +70,7 @@ function getPlugins() {
 const es6Config = {
     name: 'es6',
     mode: 'production',
+    performance: { hints: false },
     // No source maps — keeps the bundle lean for production deployment
     entry: './src/index.js',
 
@@ -108,6 +109,7 @@ const es6Config = {
 const debugConfig = {
     name: 'debug',
     mode: 'production',
+    performance: { hints: false },
     devtool: 'source-map', // Full source maps for on-TV debugging via sdb
     entry: './src/index.js',
 
