@@ -253,6 +253,12 @@ export function getTextStyles(isHdr = false) {
                ------------------------------------------------------------- */
             styles.push({ className: 'font-baloo' });
             break;
+        case 'opendyslexic':
+            styles.push({ className: 'font-opendyslexic' });
+            break;
+        case 'atkinson':
+            styles.push({ className: 'font-atkinson' });
+            break;
         default:
             styles.push({ className: 'font-default' });
             break;
@@ -435,6 +441,8 @@ const fontClasses = [
     'font-inter',
     'font-proxima',
     'font-baloo',
+    'font-opendyslexic',
+    'font-atkinson',
     'font-default'
 ];
 
@@ -526,6 +534,10 @@ export default {
                    Map internal 'baloo' ID to '.font-baloo' class name
                    ------------------------------------------------------------- */
                 return 'font-baloo';
+            case 'opendyslexic':
+                return 'font-opendyslexic';
+            case 'atkinson':
+                return 'font-atkinson';
             default:
                 return 'font-default';
         }
@@ -568,6 +580,10 @@ export default {
                    Map internal 'baloo' ID to the CSS font-family name
                    ------------------------------------------------------------- */
                 return 'Baloo Bhaijaan 2';
+            case 'opendyslexic':
+                return 'OpenDyslexic';
+            case 'atkinson':
+                return 'Atkinson Hyperlegible';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override

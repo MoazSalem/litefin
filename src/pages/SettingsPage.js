@@ -343,7 +343,9 @@ class SettingsPage extends Page {
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -2708,7 +2710,9 @@ class SettingsPage extends Page {
                                 { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -3044,7 +3048,9 @@ class SettingsPage extends Page {
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}

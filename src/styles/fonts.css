@@ -164,6 +164,24 @@
     font-display: swap;
 }
 
+/* OpenDyslexic - Designed for dyslexia */
+@font-face {
+    font-family: 'OpenDyslexic';
+    src: url('../assets/fonts/OpenDyslexic.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Atkinson Hyperlegible - Highly legible print/sans-serif */
+@font-face {
+    font-family: 'Atkinson Hyperlegible';
+    src: url('../assets/fonts/Atkinson-Hyperlegible.woff2') format('woff2');
+    font-weight: 400;
+    font-style: normal;
+    font-display: swap;
+}
+
 /* ============================================================================
    Font Classes - Applied to subtitle elements via SubtitleStyles.js
    ============================================================================ */
@@ -201,6 +219,8 @@
 .font-inter { font-family: 'Inter', sans-serif; }
 .font-proxima { font-family: 'Proxima Nova', sans-serif; }
 .font-baloo { font-family: 'Baloo Bhaijaan 2', sans-serif; }
+.font-opendyslexic { font-family: 'OpenDyslexic', sans-serif; }
+.font-atkinson { font-family: 'Atkinson Hyperlegible', sans-serif; }
 
 .font-default { font-family: TizenSans, 'Tizen Sans', 'SamsungOne', 'LG Smart UI', Roboto, Helvetica, Arial, sans-serif; }
 

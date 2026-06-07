@@ -35,7 +35,9 @@ class FontLoader {
             /* ---------------------------------------------------------
                Baloo Bhaijaan 2 - Rounded high-quality font
                --------------------------------------------------------- */
-            baloo: 'Baloo Bhaijaan 2'
+            baloo: 'Baloo Bhaijaan 2',
+            opendyslexic: 'OpenDyslexic',
+            atkinson: 'Atkinson Hyperlegible'
         };
 
         // Cache for successfully preloaded static fonts to prevent redundant DOM/API calls
