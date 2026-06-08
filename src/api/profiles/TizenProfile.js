@@ -254,8 +254,9 @@ export function buildJellyfinProfile(options = {}) {
 
     const videoAudioCodecString = videoAudioCodecs.join(',');
 
-    // Music audio: FLAC always included — audio-only containers have no sync issue
-    const musicAudioCodecString = ['flac', ...baseAudioCodecs].join(',');
+    // Music audio: FLAC always included — audio-only containers have no sync issue.
+    // Exclude 'opus' because Samsung TVs do not support playing standalone Opus audio files (only inside video containers).
+    const musicAudioCodecString = ['flac', ...baseAudioCodecs].filter(codec => codec !== 'opus').join(',');
 
     // Removed legacy alias audioCodecString to fix lint warning
 
@@ -370,7 +371,8 @@ export function buildJellyfinProfile(options = {}) {
 
         // Music/audio-only files: FLAC always allowed regardless of enableFlacInVideo.
         // Audio-only containers don't have the video-sync drift issue.
-        const musicContainers = ['mp3', 'flac', 'aac', 'm4a', 'm4b', 'ogg', 'opus', 'wav', 'webma'];
+        // Exclude 'opus' and 'webma' because Samsung TVs do not support playing standalone Opus audio files.
+        const musicContainers = ['mp3', 'flac', 'aac', 'm4a', 'm4b', 'ogg', 'wav'];
         if (caps.wma) musicContainers.push('wma');
         directPlayProfiles.push({
             Container: musicContainers.join(','),
@@ -550,13 +552,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'http'
         },
-        {
-            Container: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
-            Type: 'Audio',
-            AudioCodec: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
-            Context: 'Streaming',
-            Protocol: 'http'
-        },
+
         {
             Container: 'mp4',
             Type: 'Video',
