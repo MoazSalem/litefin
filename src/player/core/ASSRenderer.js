@@ -20,6 +20,48 @@ import libjass from 'libjass';
 import 'libjass/libjass.css';
 import { logger } from '../../utils/Logger.js';
 
+// Polyfill SVGPathElement.prototype.pathSegList for modern browsers where it was removed.
+// Required for libjass's ASS vector drawing (\p tag) support.
+if (typeof window !== 'undefined' && typeof SVGPathElement !== 'undefined' && !SVGPathElement.prototype.pathSegList) {
+    Object.defineProperty(SVGPathElement.prototype, 'pathSegList', {
+        get() {
+            const path = this;
+            return {
+                appendItem(item) {
+                    let d = path.getAttribute('d') || '';
+                    if (d) d += ' ';
+                    if (item.type === 'M') {
+                        d += `M ${item.x} ${item.y}`;
+                    } else if (item.type === 'L') {
+                        d += `L ${item.x} ${item.y}`;
+                    } else if (item.type === 'C') {
+                        d += `C ${item.x1} ${item.y1}, ${item.x2} ${item.y2}, ${item.x} ${item.y}`;
+                    }
+                    path.setAttribute('d', d);
+                    return item;
+                },
+                clear() {
+                    path.setAttribute('d', '');
+                }
+            };
+        },
+        configurable: true,
+        enumerable: true
+    });
+
+    SVGPathElement.prototype.createSVGPathSegMovetoAbs = function (x, y) {
+        return { type: 'M', x, y };
+    };
+
+    SVGPathElement.prototype.createSVGPathSegLinetoAbs = function (x, y) {
+        return { type: 'L', x, y };
+    };
+
+    SVGPathElement.prototype.createSVGPathSegCurvetoCubicAbs = function (x, y, x1, y1, x2, y2) {
+        return { type: 'C', x, y, x1, y1, x2, y2 };
+    };
+}
+
 const log = logger.create('ASSRenderer');
 
 
