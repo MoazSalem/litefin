@@ -120,6 +120,14 @@ class HomePage extends Page {
         this._focusInitialized = false;
 
         /**
+         * Whether the app:hideSplash event has already been emitted.
+         * Used to ensure we only reveal the screen once focus is on the
+         * correct row, not as soon as the skeleton rows are painted.
+         * @type {boolean}
+         */
+        this._splashHidden = false;
+
+        /**
          * Holds fetched libraries — shared across multiple descriptor fetchFns.
          * @type {Array}
          */
@@ -130,6 +138,18 @@ class HomePage extends Page {
          * @type {HeroCarousel}
          */
         this._hero = null;
+
+        /**
+         * Callback stored by _tryInitializeFocus() when a target row renders.
+         * Step 7's rAF calls this after ALL rows are done to restore focus and
+         * then hide the loading overlay. This ensures the page layout is stable
+         * before scroll calculations and before the spinner disappears.
+         * @type {Function|null}
+         */
+        this._pendingFocusRestore = null;
+
+        // Mark as async page for Navigation State so scroll/focus restoration is deferred
+        this._isAsyncPage = true;
     }
 
     render() {
@@ -182,6 +202,56 @@ class HomePage extends Page {
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
+        }
+    }
+
+    /**
+     * Override Page.setLoading to suppress the premature app:hideSplash
+     * that the base implementation emits when hiding the spinner.
+     *
+     * On the home page, the loading screen must stay visible until focus
+     * has been placed on the correct row (handled in _tryInitializeFocus).
+     * Revealing the UI before that causes a visible jump: the screen shows
+     * with focus on row 1, then snaps to the restored row a frame later.
+     *
+     * The base setLoading(false) still removes the 'loading' CSS class so
+     * the skeleton rows become interactive, but we swallow the hideSplash
+     * event here and re-emit it ourselves at the end of _tryInitializeFocus.
+     */
+    setLoading(show) {
+        if (!this.el) return;
+
+        const isCurrentlyLoading = this.el.classList.contains('loading');
+
+        if (show) {
+            let loader = this.el.querySelector('.page-loading');
+            if (!loader) {
+                loader = document.createElement('div');
+                loader.className = 'page-loading';
+                loader.innerHTML = '<div class="loading-spinner"></div>';
+                this.el.appendChild(loader);
+            }
+            if (!isCurrentlyLoading) {
+                this.el.classList.add('loading');
+            }
+        } else if (isCurrentlyLoading) {
+            // Remove loading class so the skeletons become interactive,
+            // but do NOT emit app:hideSplash yet — that happens in
+            // _tryInitializeFocus after the correct row is focused.
+            this.el.classList.remove('loading');
+        }
+    }
+
+    /**
+     * Emit app:hideSplash exactly once.
+     * Called either from _tryInitializeFocus (normal path, after focus is set)
+     * or from error paths in the pipeline where no rows will ever render.
+     */
+    _hideSplash() {
+        if (!this._splashHidden) {
+            this._splashHidden = true;
+            this.setLoading(false);
+            eventBus.emit('app:hideSplash');
         }
     }
 
@@ -621,7 +691,7 @@ class HomePage extends Page {
 
             if (descriptors.length === 0) {
                 this.showError(i18n.t('NoLibraries'));
-                this.setLoading(false);
+                this._hideSplash();
                 return;
             }
 
@@ -635,8 +705,22 @@ class HomePage extends Page {
             const priorityGroups = this._groupByPriority(descriptors);
             const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
 
-            // Dismiss initial spinner — skeletons are now visible
-            this.setLoading(false);
+            // Dismiss the spinner visually — skeletons are now visible.
+            // NOTE: We suppress the app:hideSplash event here. The overridden
+            // setLoading() below skips emitting it so the splash stays visible
+            // until _tryInitializeFocus() has placed focus on the correct row.
+            //
+            // [FOCUS RESTORATION FIX]: Keep the loading spinner active whenever
+            // we have a saved focus target to restore — either from a back-button
+            // navigation (_pendingNavState) or from sidebar/forward navigation where
+            // home:lastFocusedItem was stored. In both cases we must wait until
+            // _tryInitializeFocus() has run inside its double rAF and set the correct
+            // focus + scroll before revealing the page, to prevent the visible flash
+            // of the page at scroll-top with no focused element.
+            const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
+            if (!hasFocusTarget) {
+                this.setLoading(false);
+            }
 
             // ─── Step 6: Render groups sequentially by priority ───────────────
             for (const priority of priorities) {
@@ -656,32 +740,38 @@ class HomePage extends Page {
             // Notify base Page that async content is ready for scroll/focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // =================================================================
-            // CHRONOLOGICAL INITIAL FOCUS RACE CONDITION RESOLUTION
-            // =================================================================
-            // When the Hero Carousel is disabled and My Media is hidden, the 
-            // merged Continue Watching and Next Up row is the physical top row. 
-            // Because this row makes complex backend queries (including batch
-            // fetching parent show activity dates), it finishes rendering later
-            // than other simple components.
-            //
-            // If the row rendering process finishes, it schedules a deferred 
-            // focus routine via requestAnimationFrame to guarantee the DOM is painted.
-            // However, the microtask-based render pipeline finishes Step 6 and reaches
-            // Step 7 before the animation frame callback executes. 
-            //
-            // Without checking `_focusInitialized`, the synchronous check below would 
-            // see that no focus has been claimed yet, forcefully grab the sidebar, 
-            // and set `focusManager.getFocused()` to a sidebar element. When the 
-            // animation frame finally fires on the next paint tick, it would see that 
-            // a focus target already exists and gracefully decline to override it, 
-            // leaving the user stranded on the sidebar.
-            //
-            // Checking `!this._focusInitialized` prevents this premature fallback.
-            // =================================================================
-            if (!this._focusInitialized && !focusManager.getActiveSection() && !focusManager.getFocused()) {
-                this.setActiveSection('sidebar');
+            // Mark the page as fully loaded and ready, resolving the ready Promise
+            this.markReady();
+
+            // Safety net: if no row triggered _tryInitializeFocus during rendering
+            // (e.g. all rows failed or there was no target row), initialize now.
+            if (!this._focusInitialized) {
+                this._tryInitializeFocus(this.$('#home-rows'));
             }
+
+            // ── Reveal page with focus already in place ───────────────────────
+            // We wait until ALL rows have finished rendering before hiding the
+            // loading overlay. We use a rAF so that the browser paints the final
+            // fully-rendered row layout BEFORE we call _hideSplash(), and so that
+            // any focus-restoring rAF queued by _tryInitializeFocus() (which runs
+            // during Step 6) has already fired and placed focus correctly.
+            requestAnimationFrame(() => {
+                if (!this._isMounted) return;
+
+                // Execute any pending focus restoration callback
+                // (queued by _tryInitializeFocus when the target row rendered during Step 6)
+                if (typeof this._pendingFocusRestore === 'function') {
+                    this._pendingFocusRestore();
+                    this._pendingFocusRestore = null;
+                }
+
+                // Final fallback: if nothing focused yet, go to sidebar
+                if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+                    this.setActiveSection('sidebar');
+                }
+
+                this._hideSplash();
+            });
         } catch (error) {
             log.error('Pipeline failed', error);
 
@@ -698,7 +788,7 @@ class HomePage extends Page {
             const debug = `UID:${preAuth.uid} Dev:${preAuth.dev} Tok:${preAuth.hasTok ? 'OK' : 'MISS'}`;
             const status = error.status ? `HTTP ${error.status}` : 'ERR';
             this.showError(`${status}: ${error.message} [${debug}]`);
-            this.setLoading(false);
+            this._hideSplash();
         }
     }
 
@@ -1017,8 +1107,12 @@ class HomePage extends Page {
         const pendingNav = this._pendingNavState;
         this._pendingNavState = null;
 
-        // Defer the focus setup to after the browser has painted this first row
-        requestAnimationFrame(() => {
+        // ── Store focus-restoration logic as a callback ────────────────────────
+        // We do NOT set focus or hide the splash here. Instead we store a callback
+        // that Step 7 will call from inside a rAF, AFTER all rows have finished
+        // rendering. This guarantees the full page layout is stable before scroll
+        // calculations are made and before the loading overlay is removed.
+        this._pendingFocusRestore = () => {
             if (!this._isMounted) return;
 
             // ─── Try restoring focus from back-navigation ─────────────────────
@@ -1111,7 +1205,7 @@ class HomePage extends Page {
                     }
                 }
             }
-        });
+        };
     }
 
     // =========================================================================
