@@ -384,7 +384,8 @@ progress.card-progress::-webkit-progress-value {
 }
 
 .skeleton-image {
-    background-color: #1a1a1a;
+    background-color: #1a1a1a; /* Fallback */
+    background-color: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.08);
 }
 
 .skeleton-line {

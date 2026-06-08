@@ -187,7 +187,7 @@ html[data-layout="modern"] .media-card:not(.grid-card) .card-image img {
    3. Thumb Loaded (Top Front on focus)
 */
 html[data-layout="modern"] .media-card .card-image img.thumb-layer {
-    z-index: 1; /* Behind poster initially */
+    z-index: 3; /* Behind poster initially, but above shimmer (z-index 2) */
     opacity: 0;
     
     /* PERFORMANCE: Removed the 'transform: scale' transition. Texture resampling during 
@@ -197,7 +197,7 @@ html[data-layout="modern"] .media-card .card-image img.thumb-layer {
 }
 
 html[data-layout="modern"] .media-card .card-image img.poster-layer {
-    z-index: 2; /* In front of thumb */
+    z-index: 4; /* In front of thumb, above shimmer */
     opacity: 1;
     
     /* PERFORMANCE: Removed the scale transform transition for extreme TV performance. */
@@ -214,7 +214,7 @@ html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expa
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image img.thumb-layer,
 html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image img.thumb-layer {
     opacity: 1;
-    z-index: 3;
+    z-index: 5; /* Render above poster and shimmer on expansion */
     /* PERFORMANCE: Scale-transforms removed to prioritize composited rendering speed. */
 }
 

@@ -174,7 +174,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     height: 100%;
     object-fit: cover;
     border-radius: calc(var(--jf-border-radius) - 3px);
-    z-index: 1;
+    z-index: 3; /* Render on top of shimmer (z-index 2) */
 
     /* No per-image will-change — the browser handles image decode/paint natively.
        will-change: opacity causes an extra compositing layer per image on Tizen. */
@@ -196,7 +196,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     height: 100%;
     object-fit: cover;
     border-radius: calc(var(--jf-border-radius) - 3px);
-    z-index: 0;
+    z-index: 1; /* Render below shimmer (z-index 2) */
     opacity: 1;
     transition: opacity 250ms ease-out;
     pointer-events: none;

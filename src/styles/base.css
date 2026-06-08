@@ -279,26 +279,29 @@ body.app-splash-active .page-loading .loading-spinner {
    'transform' is handled by the GPU compositor. */
 .skeleton-shimmer {
     position: relative;
-    background: #1a1a1a;
+    background: #1a1a1a; /* Fallback for static elements */
+    background: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.08);
     overflow: hidden;
 }
 
 .skeleton-shimmer::after {
     content: '';
     position: absolute;
+    z-index: 2; /* Render above the BlurHash canvas (z-index 1) but below the loaded image */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background-image: linear-gradient(90deg,
             rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.04) 50%,
+            rgba(255, 255, 255, 0.25) 50%,
             rgba(255, 255, 255, 0) 100%);
     -webkit-animation: webkit-shimmer-gpu 1.5s infinite linear;
     animation: shimmer-gpu 1.5s infinite linear;
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
+    pointer-events: none;
 }
 
 @keyframes shimmer-gpu {
