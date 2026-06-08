@@ -1039,25 +1039,32 @@ class LoginPage extends Page {
 
                 // Update password section with user info
                 const userEl = this.$('#selected-user');
-                userEl.querySelector('.login-user-name').textContent = user.Name;
+                const nameEl = userEl?.querySelector('.login-user-name, .user-name');
+                if (nameEl) {
+                    nameEl.textContent = user.Name;
+                }
 
-                const img = userEl.querySelector('.login-user-avatar');
-                const placeholder = userEl.querySelector('.user-avatar-placeholder');
+                const img = userEl?.querySelector('.login-user-avatar, .user-avatar');
+                const placeholder = userEl?.querySelector('.user-avatar-placeholder');
 
-                placeholder.textContent = user.Name.charAt(0).toUpperCase();
+                if (placeholder) {
+                    placeholder.textContent = user.Name.charAt(0).toUpperCase();
+                }
 
-                if (user.PrimaryImageTag) {
-                    const params = imageService.getParams('avatar');
-                    img.src = api.getUserImageUrl(user.Id, {
-                        maxWidth: params.maxWidth,
-                        quality: params.quality
-                    });
-                    img.classList.remove('hidden');
-                    placeholder.classList.add('hidden');
-                } else {
-                    img.src = '';
-                    img.classList.add('hidden');
-                    placeholder.classList.remove('hidden');
+                if (img) {
+                    if (user.PrimaryImageTag) {
+                        const params = imageService.getParams('avatar');
+                        img.src = api.getUserImageUrl(user.Id, {
+                            maxWidth: params.maxWidth,
+                            quality: params.quality
+                        });
+                        img.classList.remove('hidden');
+                        placeholder?.classList.add('hidden');
+                    } else {
+                        img.src = '';
+                        img.classList.add('hidden');
+                        placeholder?.classList.remove('hidden');
+                    }
                 }
 
                 // Clear password input
