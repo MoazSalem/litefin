@@ -182,26 +182,24 @@ export function buildJellyfinProfile(options = {}) {
 
     const caps = getDeviceCapabilities();
 
-    let enableHEVC = PlayerSettings.get('enableHEVC');
-    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+    const hevcSetting = PlayerSettings.get('enableHEVC');
+    const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
 
-    let enableAV1 = PlayerSettings.get('enableAV1');
-    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+    const av1Setting = PlayerSettings.get('enableAV1');
+    const enableAV1 = av1Setting === 'enable' ? true : av1Setting === 'disable' ? false : caps.av1;
 
-    let enableVP9 = PlayerSettings.get('enableVP9');
-    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
+    const vp9Setting = PlayerSettings.get('enableVP9');
+    const enableVP9 = vp9Setting === 'enable' ? true : vp9Setting === 'disable' ? false : caps.vp9;
     
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
-    let enableHDR = PlayerSettings.get('enableHDR');
-    if (localStorage.getItem('player:enableHDR') === null) {
-        enableHDR = !!caps.hdr10;
-    }
+    const hdrSetting = PlayerSettings.get('enableHDR');
+    const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : !!caps.hdr10;
     
-    let enableDts = PlayerSettings.get('enableDts');
-    if (localStorage.getItem('player:enableDts') === null) {
-        enableDts = caps.dts;
-    }
-    const enableTrueHd = PlayerSettings.get('enableTrueHd');
+    const dtsSetting = PlayerSettings.get('enableDts');
+    const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
+
+    const trueHdSetting = PlayerSettings.get('enableTrueHd');
+    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);

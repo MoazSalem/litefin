@@ -46,18 +46,21 @@ export function getDeviceCapabilities() {
     // A modern web browser we assume is capable of standard formats
     let uhd = true;
     let uhd8K = false;
-    const hdr10 = true;
-    const dolbyVision = false;
+
+    const hdr10 = window.matchMedia
+        ? (window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches)
+        : false;
+    const hlg = hdr10;
 
     const deviceId = BaseProfile.getFallbackDeviceId('litefin_web_');
     const modelName = 'Web Browser';
 
-    // Typically, we could check navigator for some things, but for codec flags
-    // we often rely on standard MediaSource or just server fallback
+    const video = document.createElement('video');
+
     let hevc = false;
     let av1 = false;
-    let vp9 = true;
-    const vp8 = true;
+    let vp9 = false;
+    let vp8 = false;
     let ac3 = false;
     let eac3 = false;
 
@@ -65,19 +68,61 @@ export function getDeviceCapabilities() {
     if (window.MediaSource) {
         hevc =
             MediaSource.isTypeSupported('video/mp4; codecs="hev1"') ||
-            MediaSource.isTypeSupported('video/mp4; codecs="hvc1"');
+            MediaSource.isTypeSupported('video/mp4; codecs="hvc1"') ||
+            MediaSource.isTypeSupported('video/mp4; codecs="hev1.1.6.L93.B0"') ||
+            MediaSource.isTypeSupported('video/mp4; codecs="hev1.2.4.L120.B0"') ||
+            MediaSource.isTypeSupported('video/mp4; codecs="hvc1.1.6.L93.B0"') ||
+            MediaSource.isTypeSupported('video/mp4; codecs="hvc1.2.4.L120.B0"');
         av1 = MediaSource.isTypeSupported('video/mp4; codecs="av01"');
-        vp9 = MediaSource.isTypeSupported('video/webm; codecs="vp9"');
+        vp9 =
+            MediaSource.isTypeSupported('video/webm; codecs="vp9"') ||
+            MediaSource.isTypeSupported('video/mp4; codecs="vp09.00.10.08"');
+        vp8 = MediaSource.isTypeSupported('video/webm; codecs="vp8"');
         ac3 = MediaSource.isTypeSupported('audio/mp4; codecs="ac-3"');
         eac3 = MediaSource.isTypeSupported('audio/mp4; codecs="ec-3"');
     }
 
-    const video = document.createElement('video');
-    hevc = hevc || video.canPlayType('video/mp4; codecs="hev1"') !== '' || video.canPlayType('video/mp4; codecs="hvc1"') !== '';
+    hevc =
+        hevc ||
+        video.canPlayType('video/mp4; codecs="hev1"') !== '' ||
+        video.canPlayType('video/mp4; codecs="hvc1"') !== '' ||
+        video.canPlayType('video/mp4; codecs="hev1.1.6.L93.B0"') !== '' ||
+        video.canPlayType('video/mp4; codecs="hev1.2.4.L120.B0"') !== '' ||
+        video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') !== '' ||
+        video.canPlayType('video/mp4; codecs="hvc1.2.4.L120.B0"') !== '';
     av1 = av1 || video.canPlayType('video/mp4; codecs="av01"') !== '';
-    vp9 = vp9 || video.canPlayType('video/webm; codecs="vp9"') !== '';
+    vp9 = vp9 || video.canPlayType('video/webm; codecs="vp9"') !== '' || video.canPlayType('video/mp4; codecs="vp09.00.10.08"') !== '';
+    vp8 = vp8 || video.canPlayType('video/webm; codecs="vp8"') !== '';
     ac3 = ac3 || video.canPlayType('audio/mp4; codecs="ac-3"') !== '';
     eac3 = eac3 || video.canPlayType('audio/mp4; codecs="ec-3"') !== '';
+
+    // Dolby Vision detection
+    const dolbyVision =
+        video.canPlayType('video/mp4; codecs="dvh1.05.01"') !== '' ||
+        video.canPlayType('video/mp4; codecs="dvhe.05.01"') !== '' ||
+        video.canPlayType('video/mp4; codecs="dvc1.05.01"') !== '';
+
+    // DTS & TrueHD detection
+    const dts =
+        video.canPlayType('audio/mp4; codecs="dts-"') !== '' ||
+        video.canPlayType('audio/mp4; codecs="dtsc"') !== '' ||
+        video.canPlayType('audio/mp4; codecs="dtsb"') !== '' ||
+        video.canPlayType('audio/mp4; codecs="dtse"') !== '';
+    const truehd =
+        video.canPlayType('audio/mp4; codecs="mlpa"') !== '';
+
+    // Dynamic max audio channel detection via Web Audio API
+    let maxAudioChannels = 2;
+    try {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            const ctx = new AudioContext();
+            maxAudioChannels = ctx.destination.maxChannelCount || 2;
+            ctx.close();
+        }
+    } catch (e) {
+        maxAudioChannels = 2;
+    }
 
     const manualRes = PlayerSettings.get('maxResolution');
     if (manualRes && manualRes !== 'auto') {
@@ -108,7 +153,7 @@ export function getDeviceCapabilities() {
         uhd8K,
         hdr10,
         hdr10Plus: false,
-        hlg: false,
+        hlg,
         dolbyVision,
         hevc,
         av1,
@@ -116,9 +161,9 @@ export function getDeviceCapabilities() {
         vp8,
         ac3,
         eac3,
-        dts: false,
-        truehd: false,
-        maxAudioChannels: 6
+        dts,
+        truehd,
+        maxAudioChannels
     };
 
     log.info('Web capabilities:', JSON.stringify(_cachedCapabilities, null, 2));
@@ -169,22 +214,18 @@ export function buildJellyfinProfile(options = {}) {
 
     const caps = getDeviceCapabilities();
 
-    let enableHEVC = PlayerSettings.get('enableHEVC');
-    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+    const hevcSetting = PlayerSettings.get('enableHEVC');
+    const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
 
-    let enableAV1 = PlayerSettings.get('enableAV1');
-    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+    const av1Setting = PlayerSettings.get('enableAV1');
+    const enableAV1 = av1Setting === 'enable' ? true : av1Setting === 'disable' ? false : caps.av1;
 
-    let enableVP9 = PlayerSettings.get('enableVP9');
-    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
+    const vp9Setting = PlayerSettings.get('enableVP9');
+    const enableVP9 = vp9Setting === 'enable' ? true : vp9Setting === 'disable' ? false : caps.vp9;
 
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
-    let enableHDR = PlayerSettings.get('enableHDR');
-    if (localStorage.getItem('player:enableHDR') === null) {
-        // HDR isn't handled perfectly in all browsers, but many 4K screens/OSs handle tone mapping.
-        // We'll stick to caps.hdr10 default (which is usually false for Web) but allow full user override.
-        enableHDR = !!caps.hdr10;
-    }
+    const hdrSetting = PlayerSettings.get('enableHDR');
+    const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : !!caps.hdr10;
 
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
@@ -200,10 +241,18 @@ export function buildJellyfinProfile(options = {}) {
 
     const maxAudioChannels = String(caps.maxAudioChannels);
 
+    const dtsSetting = PlayerSettings.get('enableDts');
+    const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
+
+    const trueHdSetting = PlayerSettings.get('enableTrueHd');
+    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
+
     // Standard web audio
     const audioCodecs = ['aac', 'mp3', 'flac', 'opus', 'vorbis', 'pcm', 'wav'];
     if (caps.ac3) audioCodecs.push('ac3');
     if (caps.eac3) audioCodecs.push('eac3');
+    if (enableDts) audioCodecs.push('dts', 'dca');
+    if (enableTrueHd) audioCodecs.push('truehd');
 
     const audioCodecString = audioCodecs.join(',');
 

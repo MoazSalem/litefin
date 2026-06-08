@@ -1760,6 +1760,15 @@ class SettingsPage extends Page {
         const skipForward = PlayerSettings.get('skipForwardLength') || 30000;
         const skipBack = PlayerSettings.get('skipBackLength') || 10000;
 
+        const caps = getDeviceCapabilities();
+        const supportStatus = (supported) => `(${i18n.t('DeviceSupports') || 'Device supports'}: ${i18n.t(supported ? 'Yes' : 'No')})`;
+
+        const forceStateOptions = [
+            { value: 'auto', label: i18n.t('ForceStateDefault') || 'Default' },
+            { value: 'enable', label: i18n.t('ForceStateEnable') || 'Force Enable' },
+            { value: 'disable', label: i18n.t('ForceStateDisable') || 'Force Disable' }
+        ];
+
         return `
             <div class="settings-tab-content">
                 <h2 class="content-title" data-i18n="VideoQuality">${i18n.t('VideoQuality')}</h2>
@@ -2160,60 +2169,42 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableHEVC">${i18n.t('EnableHEVC')}</span>
-                        <span class="setting-description" data-i18n="HEVCDescription">${i18n.t('HEVCDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.hevc)} — ${i18n.t('HEVCDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableHEVC') ? 'active' : ''}" 
-                                id="toggle-enable-hevc" 
-                                data-setting="enableHEVC"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'hevc-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableHEVC') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableHDR">${i18n.t('EnableHDR')}</span>
-                        <span class="setting-description" data-i18n="HDRDescription">${i18n.t('HDRDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.hdr10)} — ${i18n.t('HDRDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        ${(() => {
-                // Hybrid dynamic default for HDR
-                let isHdrOn = PlayerSettings.get('enableHDR');
-                if (localStorage.getItem('player:enableHDR') === null) {
-                    // First launch: Base the toggle state entirely on hardware capabilities
-                    // If running on WebOS/Tizen, default OFF if it's an SDR 1080p display
-                    try {
-                        // Hacky lazy-evaluation against global scope for adapters or rely on platform
-                        // but we can just require DeviceProfile generically if we were importing it.
-                        // To be safer without circular imports in SettingsPage, we inspect window width.
-                        isHdrOn = window.screen.width >= 3840;
-                    } catch (e) {
-                        isHdrOn = true;
-                    }
-                }
-                return `
-                                <button class="toggle-switch ${isHdrOn ? 'active' : ''}" 
-                                        id="toggle-enable-hdr" 
-                                        data-setting="enableHDR"
-                                        tabindex="0">
-                                </button>
-                            `;
-            })()}
+                        ${this._renderDropdown(
+                            'hdr-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableHDR') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableDV">${i18n.t('EnableDV')}</span>
-                        <span class="setting-description" data-i18n="DolbyVisionDescription">${i18n.t('DolbyVisionDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.dolbyVision)} — ${i18n.t('DolbyVisionDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDolbyVision') ? 'active' : ''}" 
-                                id="toggle-enable-dv" 
-                                data-setting="enableDolbyVision"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'dv-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableDolbyVision') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -2222,56 +2213,56 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableAV1">${i18n.t('EnableAV1')}</span>
-                        <span class="setting-description" data-i18n="AV1Description">${i18n.t('AV1Description')}</span>
+                        <span class="setting-description">${supportStatus(caps.av1)} — ${i18n.t('AV1Description')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableAV1') ? 'active' : ''}" 
-                                id="toggle-enable-av1" 
-                                data-setting="enableAV1"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'av1-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableAV1') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableVP9">${i18n.t('EnableVP9')}</span>
-                        <span class="setting-description" data-i18n="VP9Description">${i18n.t('VP9Description')}</span>
+                        <span class="setting-description">${supportStatus(caps.vp9)} — ${i18n.t('VP9Description')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableVP9') ? 'active' : ''}" 
-                                id="toggle-enable-vp9" 
-                                data-setting="enableVP9"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'vp9-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableVP9') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="DTSPassthrough">${i18n.t('DTSPassthrough')}</span>
-                        <span class="setting-description" data-i18n="DTSPassthroughDescription">${i18n.t('DTSPassthroughDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.dts)} — ${i18n.t('DTSPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDts') ? 'active' : ''}" 
-                                id="toggle-enable-dts" 
-                                data-setting="enableDts"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'dts-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableDts') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="TrueHDPassthrough">${i18n.t('TrueHDPassthrough')}</span>
-                        <span class="setting-description" data-i18n="TrueHDPassthroughDescription">${i18n.t('TrueHDPassthroughDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.truehd)} — ${i18n.t('TrueHDPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableTrueHd') ? 'active' : ''}" 
-                                id="toggle-enable-truehd" 
-                                data-setting="enableTrueHd"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'truehd-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableTrueHd') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -3282,7 +3273,11 @@ class SettingsPage extends Page {
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="HDRSupport">${i18n.t('HDRSupport')}</span>
                             <span class="identity-value">${(() => {
-                const userHdr = PlayerSettings.get('enableHDR');
+                const resolveOverride = (key, hwSupport) => {
+                    const val = PlayerSettings.get(key);
+                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                };
+                const userHdr = resolveOverride('enableHDR', !!caps.hdr10);
                 const hwHdr = [
                     caps.hdr10 ? 'HDR10' : null,
                     caps.hdr10Plus ? 'HDR10+' : null,
@@ -3298,11 +3293,27 @@ class SettingsPage extends Page {
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="VideoCodecs">${i18n.t('VideoCodecs')}</span>
                             <span class="identity-value">${(() => {
+                const resolveOverride = (key, hwSupport) => {
+                    const val = PlayerSettings.get(key);
+                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                };
                 const codecs = [
                     { name: 'H.264', hw: true, user: true },
-                    { name: 'HEVC', hw: caps.hevc, user: PlayerSettings.get('enableHEVC') },
-                    { name: 'AV1', hw: caps.av1, user: PlayerSettings.get('enableAV1') },
-                    { name: 'VP9', hw: caps.vp9, user: PlayerSettings.get('enableVP9') }
+                    {
+                        name: 'HEVC',
+                        hw: caps.hevc,
+                        user: resolveOverride('enableHEVC', caps.hevc)
+                    },
+                    {
+                        name: 'AV1',
+                        hw: caps.av1,
+                        user: resolveOverride('enableAV1', caps.av1)
+                    },
+                    {
+                        name: 'VP9',
+                        hw: caps.vp9,
+                        user: resolveOverride('enableVP9', caps.vp9)
+                    }
                 ];
 
                 return codecs
@@ -4307,13 +4318,6 @@ class SettingsPage extends Page {
         // Generic handler for all toggle-switch buttons with data-setting attribute
         // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
         const profileToggles = [
-            'toggle-enable-hevc',
-            'toggle-enable-hdr',
-            'toggle-enable-dv',
-            'toggle-enable-av1',
-            'toggle-enable-vp9',
-            'toggle-enable-dts',
-            'toggle-enable-truehd',
             'toggle-enable-flac-in-video',
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
@@ -4933,6 +4937,13 @@ class SettingsPage extends Page {
             'remote-yellow-select': { key: 'pref:remoteYellowAction', type: 'local', triggerEvent: true },
             'remote-blue-select': { key: 'pref:remoteBlueAction', type: 'local', triggerEvent: true },
             'time-format-select': { key: 'timeFormat', type: 'player' },
+            'hevc-force-select': { type: 'player', key: 'enableHEVC' },
+            'hdr-force-select': { type: 'player', key: 'enableHDR' },
+            'dv-force-select': { type: 'player', key: 'enableDolbyVision' },
+            'av1-force-select': { type: 'player', key: 'enableAV1' },
+            'vp9-force-select': { type: 'player', key: 'enableVP9' },
+            'dts-force-select': { type: 'player', key: 'enableDts' },
+            'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
@@ -5125,7 +5136,14 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'pgsPlaybackMode' ||
                                 settingConfig.key === 'webosSegmentLength' ||
                                 settingConfig.key === 'tizenSegmentLength' ||
-                                settingConfig.key === 'html5SegmentLength'
+                                settingConfig.key === 'html5SegmentLength' ||
+                                settingConfig.key === 'enableHEVC' ||
+                                settingConfig.key === 'enableAV1' ||
+                                settingConfig.key === 'enableVP9' ||
+                                settingConfig.key === 'enableHDR' ||
+                                settingConfig.key === 'enableDolbyVision' ||
+                                settingConfig.key === 'enableDts' ||
+                                settingConfig.key === 'enableTrueHd'
                             ) {
                                 clearCapabilitiesCache();
                             }
