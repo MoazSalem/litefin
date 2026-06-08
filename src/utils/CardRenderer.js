@@ -329,7 +329,7 @@ class CardRenderer {
                         item.Type === 'Audio'))
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
-                const params = imageService.getParams(type === 'small-poster' ? 'small-poster' : 'poster', contextType);
+                const params = imageService.getParams((type === 'small-poster' || type === 'square' || type === 'artist') ? type : 'poster', contextType);
                 
                 let targetId = itemId;
                 let targetTag = item.ImageTags?.Primary;

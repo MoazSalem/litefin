@@ -1508,7 +1508,14 @@ class HomePage extends Page {
     _preWarmImagesForRow(descriptor, items) {
         const urls = [];
         const isLandscape = descriptor.layout === 'landscape';
-        const sizeType = isLandscape ? 'backdrop' : 'poster';
+        let sizeType;
+        if (descriptor.layout === 'landscape') {
+            sizeType = 'card-backdrop';
+        } else if (descriptor.layout === 'square') {
+            sizeType = 'square';
+        } else {
+            sizeType = 'poster';
+        }
         const { maxWidth, quality } = imageService.getParams(sizeType, descriptor.contextType);
 
         const subset = items.slice(0, IMAGE_PREWARM_PER_ROW);
