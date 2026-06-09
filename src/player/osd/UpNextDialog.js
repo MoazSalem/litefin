@@ -360,11 +360,11 @@ export default class UpNextDialog extends BaseMenu {
             seriesEl.textContent = item.SeriesName || '';
         }
 
-        // ---- Episode badge (e.g. "S2E5") ------------------------------------
+        // ---- Episode badge (e.g. "S02E05") ----------------------------------
         const badgeEl = this.$el.querySelector('.upnext-badge');
         if (badgeEl) {
-            const season = item.ParentIndexNumber ? `S${item.ParentIndexNumber}` : '';
-            const ep = item.IndexNumber ? `E${item.IndexNumber}` : '';
+            const season = item.ParentIndexNumber != null ? `S${item.ParentIndexNumber.toString().padStart(2, '0')}` : '';
+            const ep = item.IndexNumber != null ? `E${item.IndexNumber.toString().padStart(2, '0')}` : '';
             badgeEl.textContent = season || ep ? `${season}${ep}` : '';
         }
 

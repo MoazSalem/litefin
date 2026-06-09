@@ -536,25 +536,17 @@ html[data-layout="modern"] .episode-badge {
 }
 
 html[data-layout="modern"] .quality-badge {
-    left: 22px;
+    right: 22px;
     padding: 5px 12px;
     border-radius: 10px;
     font-size: 1.2rem;
     letter-spacing: 0.5px;
 }
 
-/* If both episode-badge and quality-badge are present in modern, place quality badge on the right */
-html[data-layout="modern"] .episode-badge ~ .quality-badge {
-    left: auto;
-    right: 22px;
-    top: 22px;
+html[data-layout="modern"] .played-badge ~ .quality-badge,
+html[data-layout="modern"] .count-badge ~ .quality-badge {
+    right: 74px;
 }
-
-/* If played-badge is also present, shift quality badge to the left of it */
-html[data-layout="modern"] .played-badge ~ .episode-badge ~ .quality-badge {
-    right: 74px; /* 22px + 44px (played-badge width) + 8px spacing */
-}
-
 html[data-layout="modern"] .media-row--skeleton .card-image {
     background: linear-gradient(90deg, 
         var(--jf-surface, rgba(255,255,255,0.05)) 25%, 

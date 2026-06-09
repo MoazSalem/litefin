@@ -56,7 +56,7 @@ const REFRESH_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
 
 /* Tile limits per section — Samsung recommends keeping this small. */
 const NEXT_UP_LIMIT = 2;
-const RESUME_LIMIT  = 4;
+const RESUME_LIMIT = 4;
 
 /* Named local MessagePort that the ytresolver service sends its ACK to. */
 const ACK_PORT_NAME = 'SmartHubAck';
@@ -127,7 +127,7 @@ class SmartHubManager {
         }
 
         // Wire into auth events for ongoing session management.
-        eventBus.on('auth:login',  () => this._startRefreshCycle());
+        eventBus.on('auth:login', () => this._startRefreshCycle());
         eventBus.on('auth:logout', () => this._stopRefreshCycle());
     }
 
@@ -164,7 +164,7 @@ class SmartHubManager {
                 /* The outer JSON wraps the action_data inside a 'values' string.
                  * We double-parse: outer wrapper → inner action data. */
                 const outerPayload = JSON.parse(data[i].value[0]);
-                const actionData   = JSON.parse(outerPayload.values);
+                const actionData = JSON.parse(outerPayload.values);
 
                 log.info('Deep link payload received:', JSON.stringify(actionData));
 
@@ -193,7 +193,6 @@ class SmartHubManager {
 
                 return; // Payload consumed — stop searching data entries.
             }
-
         } catch (e) {
             log.error('Deep link handling threw an exception:', e);
         }
@@ -242,10 +241,7 @@ class SmartHubManager {
             ]);
 
             /* Build the Samsung-schema JSON from the raw Jellyfin items. */
-            const previewJson = this._buildPreviewJson(
-                resumeResult?.Items  || [],
-                nextUpResult?.Items  || []
-            );
+            const previewJson = this._buildPreviewJson(resumeResult?.Items || [], nextUpResult?.Items || []);
 
             /* Cache in memory so future callers can inspect last-known state. */
             this._cachedJson = previewJson;
@@ -253,7 +249,7 @@ class SmartHubManager {
             /* Log a human-readable summary at INFO level so the tile content is
              * always visible in device logs — no debug mode required. */
             const sectionSummary = previewJson.sections
-                .map(s => `"${s.title}" (${s.tiles.length} tile${s.tiles.length !== 1 ? 's' : ''})`)
+                .map((s) => `"${s.title}" (${s.tiles.length} tile${s.tiles.length !== 1 ? 's' : ''})`)
                 .join(', ');
             log.info(`Preview JSON built — sections: [${sectionSummary || 'EMPTY — nothing to show'}]`);
 
@@ -262,7 +258,6 @@ class SmartHubManager {
             await this._sendToService(previewJson);
 
             log.info('Smart Hub update complete');
-
         } catch (e) {
             log.error('Smart Hub update failed:', e.message || e);
         } finally {
@@ -353,7 +348,7 @@ class SmartHubManager {
          * most common entry point after a series marathon. */
         const nextUpTiles = nextUpItems
             .slice(0, NEXT_UP_LIMIT)
-            .map(item => this._buildTile(item))
+            .map((item) => this._buildTile(item))
             .filter(Boolean); /* _buildTile returns null for unsupported types. */
 
         if (nextUpTiles.length > 0) {
@@ -365,7 +360,7 @@ class SmartHubManager {
          * partially-watched episodes. */
         const resumeTiles = resumeItems
             .slice(0, RESUME_LIMIT)
-            .map(item => this._buildTile(item))
+            .map((item) => this._buildTile(item))
             .filter(Boolean);
 
         if (resumeTiles.length > 0) {
@@ -395,7 +390,7 @@ class SmartHubManager {
         /* action_data is embdded in every tile. handleDeepLink() parses it when
          * the user taps the tile on the TV home screen. */
         const actionData = {
-            id:   item.Id,
+            id: item.Id,
             type: (item.Type || '').toLowerCase()
         };
 
@@ -406,14 +401,14 @@ class SmartHubManager {
             /* Episode label: "S2:E4 - Episode Title" */
             const epPrefix =
                 item.ParentIndexNumber != null && item.IndexNumber != null
-                    ? `S${item.ParentIndexNumber}:E${item.IndexNumber} - `
+                    ? `S${item.ParentIndexNumber.toString().padStart(2, '0')}E${item.IndexNumber.toString().padStart(2, '0')} - `
                     : '';
 
             return {
-                title:       epPrefix + (item.Name || ''),
-                subtitle:    item.SeriesName || '',
+                title: epPrefix + (item.Name || ''),
+                subtitle: item.SeriesName || '',
                 image_ratio: '16by9',
-                image_url:   imgUrl,
+                image_url: imgUrl,
                 action_data: JSON.stringify(actionData),
                 is_playable: true
             };
@@ -421,9 +416,9 @@ class SmartHubManager {
 
         if (item.Type === 'Movie') {
             return {
-                title:       item.Name || '',
+                title: item.Name || '',
                 image_ratio: '16by9',
-                image_url:   imgUrl,
+                image_url: imgUrl,
                 action_data: JSON.stringify(actionData),
                 is_playable: true
             };
@@ -453,57 +448,49 @@ class SmartHubManager {
         const src = item.ProgramInfo || item;
 
         let imgType = null;
-        let imgTag  = null;
-        let itemId  = src.Id;
+        let imgTag = null;
+        let itemId = src.Id;
 
         /* ── 16:9 candidates ─────────────────────────────────────────────── */
         if (src.ImageTags?.Thumb) {
             imgType = 'Thumb';
-            imgTag  = src.ImageTags.Thumb;
-
+            imgTag = src.ImageTags.Thumb;
         } else if (src.SeriesThumbImageTag) {
             imgType = 'Thumb';
-            imgTag  = src.SeriesThumbImageTag;
-            itemId  = src.SeriesId;
-
+            imgTag = src.SeriesThumbImageTag;
+            itemId = src.SeriesId;
         } else if (src.ParentThumbItemId && src.ParentThumbImageTag) {
             imgType = 'Thumb';
-            imgTag  = src.ParentThumbImageTag;
-            itemId  = src.ParentThumbItemId;
-
+            imgTag = src.ParentThumbImageTag;
+            itemId = src.ParentThumbItemId;
         } else if (src.BackdropImageTags?.length) {
             imgType = 'Backdrop';
-            imgTag  = src.BackdropImageTags[0];
-
+            imgTag = src.BackdropImageTags[0];
         } else if (src.ParentBackdropItemId && src.ParentBackdropImageTags?.length) {
             imgType = 'Backdrop';
-            imgTag  = src.ParentBackdropImageTags[0];
-            itemId  = src.ParentBackdropItemId;
+            imgTag = src.ParentBackdropImageTags[0];
+            itemId = src.ParentBackdropItemId;
 
-        /* ── Portrait fallback ───────────────────────────────────────────── */
+            /* ── Portrait fallback ───────────────────────────────────────────── */
         } else if (src.ImageTags?.Primary) {
             imgType = 'Primary';
-            imgTag  = src.ImageTags.Primary;
-
+            imgTag = src.ImageTags.Primary;
         } else if (src.SeriesPrimaryImageTag) {
             imgType = 'Primary';
-            imgTag  = src.SeriesPrimaryImageTag;
-            itemId  = src.SeriesId;
-
+            imgTag = src.SeriesPrimaryImageTag;
+            itemId = src.SeriesId;
         } else if (src.PrimaryImageTag) {
             imgType = 'Primary';
-            imgTag  = src.PrimaryImageTag;
-            itemId  = src.PrimaryImageItemId || src.Id;
-
+            imgTag = src.PrimaryImageTag;
+            itemId = src.PrimaryImageItemId || src.Id;
         } else if (src.ParentPrimaryImageTag) {
             imgType = 'Primary';
-            imgTag  = src.ParentPrimaryImageTag;
-            itemId  = src.ParentPrimaryImageItemId || src.Id;
-
+            imgTag = src.ParentPrimaryImageTag;
+            itemId = src.ParentPrimaryImageItemId || src.Id;
         } else if (src.AlbumId && src.AlbumPrimaryImageTag) {
             imgType = 'Primary';
-            imgTag  = src.AlbumPrimaryImageTag;
-            itemId  = src.AlbumId;
+            imgTag = src.AlbumPrimaryImageTag;
+            itemId = src.AlbumId;
         }
 
         if (!imgType || !imgTag || !itemId) return null;
@@ -514,8 +501,8 @@ class SmartHubManager {
          * for TV home screen thumbnails without inflating tile load time. */
         return api.getImageUrl(itemId, imgType, {
             maxWidth: 480,
-            quality:  90,
-            tag:      imgTag
+            quality: 90,
+            tag: imgTag
         });
     }
 
@@ -551,8 +538,8 @@ class SmartHubManager {
             const serviceId = packageId + '.ytresolver';
 
             /* Shared state for the cleanup function below. */
-            let localPort     = null;
-            let listenerId    = null;
+            let localPort = null;
+            let listenerId = null;
             let timeoutHandle = null;
 
             /*
@@ -566,7 +553,9 @@ class SmartHubManager {
                     timeoutHandle = null;
                 }
                 if (localPort !== null && listenerId !== null) {
-                    try { localPort.removeMessagePortListener(listenerId); } catch (_) {}
+                    try {
+                        localPort.removeMessagePortListener(listenerId);
+                    } catch (_) {}
                     listenerId = null;
                 }
             };
@@ -578,7 +567,7 @@ class SmartHubManager {
                  * The service finds it by calling:
                  *   tizen.messageport.requestRemoteMessagePort(appId, ACK_PORT_NAME)
                  */
-                localPort  = tizen.messageport.requestLocalMessagePort(ACK_PORT_NAME);
+                localPort = tizen.messageport.requestLocalMessagePort(ACK_PORT_NAME);
                 listenerId = localPort.addMessagePortListener((msgData) => {
                     const status = msgData?.[0]?.value || 'unknown';
                     log.info('Smart Hub service ACK:', status);

@@ -607,7 +607,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 4;
 }
 
 .played-badge {
@@ -620,7 +620,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 4;
     /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
 }
 
@@ -637,7 +637,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 4;
     /* PERFORMANCE: Removed backdrop-filter (blur) and box-shadow. 
        These are extremely expensive on Tizen 3.0/4.0 in a grid context. */
 }
@@ -655,7 +655,7 @@ body {
     border-radius: var(--jf-border-radius);
     font-size: 1.1rem;
     font-weight: 700;
-    z-index: 2;
+    z-index: 4;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -664,21 +664,23 @@ body {
 .quality-badge {
     position: absolute;
     top: 12px;
-    left: 12px;
+    right: 12px;
     padding: 4px 8px;
     border-radius: var(--jf-border-radius);
     font-size: 1.1rem;
     font-weight: 700;
-    z-index: 2;
+    z-index: 4;
     display: flex;
     align-items: center;
     justify-content: center;
 }
 
-/* The episode badge (e.g. S1:E1) should only be shown in modern layout */
-html[data-layout="classic"] .episode-badge {
-    display: none !important;
+.played-badge ~ .quality-badge,
+.count-badge ~ .quality-badge {
+    right: 42px;
 }
+
+
 
 /* Badge Skins: Tinted vs Translucent Dark */
 html[data-badge-style="tinted"] .count-badge,
