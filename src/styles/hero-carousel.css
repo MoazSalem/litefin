@@ -861,4 +861,74 @@
     top: 24%;
 }
 
+/* ============================================================================
+   Expanded Sidebar Overlap for Immersive & Semi-Immersive Modes
+   ============================================================================ */
+
+/* 1. Shift the entire homepage to the left using margin when sidebar is visible */
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page {
+    position: relative !important;
+    margin-left: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
+    width: calc(100% + var(--sidebar-width-collapsed, 100px)) !important;
+}
+
+/* 2. Increase left padding of the scroller to keep rows in place */
+body:not(.no-sidebar):not(.sidebar-mode-hidden) #home-content {
+    padding-left: var(--sidebar-width-collapsed, 100px) !important;
+}
+
+/* 3. Expand the carousel container to the left edge of the screen */
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive,
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive {
+    margin-left: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
+    width: calc(100% + var(--sidebar-width-collapsed, 100px)) !important;
+}
+
+/* 4. Position carousel content back to its original screen position */
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-content,
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-content {
+    margin-left: var(--sidebar-width-collapsed, 100px) !important;
+}
+
+/* 5. Center navigation arrows relative to the visible screen width */
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-nav-arrows,
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-nav-arrows {
+    padding-left: calc(18px + var(--sidebar-width-collapsed, 100px)) !important;
+}
+
+/* ============================================================================
+   RTL Layout Support
+   ============================================================================ */
+
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page {
+    position: relative !important;
+    margin-right: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
+    margin-left: 0 !important;
+    width: calc(100% + var(--sidebar-width-collapsed, 100px)) !important;
+}
+
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) #home-content {
+    padding-right: var(--sidebar-width-collapsed, 100px) !important;
+    padding-left: 0 !important;
+}
+
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive,
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive {
+    margin-right: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
+    margin-left: 0 !important;
+    width: calc(100% + var(--sidebar-width-collapsed, 100px)) !important;
+}
+
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-content,
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-content {
+    margin-right: var(--sidebar-width-collapsed, 100px) !important;
+    margin-left: 0 !important;
+}
+
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-nav-arrows,
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-nav-arrows {
+    padding-right: calc(18px + var(--sidebar-width-collapsed, 100px)) !important;
+    padding-left: 18px !important;
+}
+
 
