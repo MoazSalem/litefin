@@ -928,3 +928,45 @@ html[data-card-label-style="hidden"] .genre-grid-items {
     padding-top: 12px !important;
     gap: 20px !important;
 }
+
+/* ============================================================================
+   Card Labels Alignment Adjustments
+   ============================================================================ */
+
+/* Card Labels Alignment Adjustments (excluding list-views) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: start !important;
+}
+html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: end !important;
+}
+html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: center !important;
+}
+
+/* Skeleton loader lines alignment (excluding list-views) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+[dir="rtl"] html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+[dir="rtl"] html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}

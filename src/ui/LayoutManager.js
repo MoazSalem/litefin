@@ -38,7 +38,6 @@ const THEME_MODES = {
     AMBIENT: 'ambient'
 };
 
-
 // Default Theme Color (Lavender)
 const DEFAULT_THEME_COLOR = '#af52de';
 
@@ -99,7 +98,7 @@ class LayoutManager {
     init() {
         // Load saved preferences
         const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
-        
+
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
         let initialMode = THEME_MODES.TINTED;
@@ -109,7 +108,7 @@ class LayoutManager {
         }
 
         log.info(`Loading theme: savedMode="${savedThemeMode}" -> initialMode="${initialMode}"`);
-        
+
         const savedThemeColor = storage.getItem('litefin:themeColor') || this._themeColor;
         const savedUiFont = storage.getItem('litefin:uiFont') || 'default';
         const savedRoundedCorners = storage.getItem('litefin:roundedCorners') !== 'false';
@@ -139,6 +138,10 @@ class LayoutManager {
         // Load saved card label style and stamp it on the root HTML element
         const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
         document.documentElement.setAttribute('data-card-label-style', savedCardLabelStyle);
+
+        // Load saved card label alignment and stamp it on the root HTML element
+        const savedCardLabelAlign = storage.getItem('pref:cardLabelAlign') || 'center';
+        document.documentElement.setAttribute('data-card-label-align', savedCardLabelAlign);
 
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
@@ -190,7 +193,7 @@ class LayoutManager {
     /**
      * Set the Theme Mode
      * @param {string} mode Theme mode constant
-     * @param {boolean} [save=true] 
+     * @param {boolean} [save=true]
      */
     setThemeMode(mode, save = true) {
         if (!Object.values(THEME_MODES).includes(mode)) {
@@ -207,7 +210,7 @@ class LayoutManager {
         this._applyDynamicTheme();
 
         state.set('app:themeMode', mode, true);
-        
+
         if (save) {
             storage.setItem('litefin:themeMode', mode);
             // Legacy theme key update for compatibility where needed
@@ -223,7 +226,7 @@ class LayoutManager {
     /**
      * Set the Theme Color
      * @param {string} color Hex color string
-     * @param {boolean} [save=true] 
+     * @param {boolean} [save=true]
      */
     setThemeColor(color, save = true) {
         if (!color.startsWith('#')) {
@@ -256,12 +259,12 @@ class LayoutManager {
         const contrastRgbStr = contrastRgb ? `${contrastRgb.r}, ${contrastRgb.g}, ${contrastRgb.b}` : '255, 255, 255';
 
         // Focus Indicator Logic:
-        // If the accent color is "bright" (Luminance > 0.4), the calculated contrast color 
-        // (normally for text) is very dark. Since most themes are dark, a dark focus border 
+        // If the accent color is "bright" (Luminance > 0.4), the calculated contrast color
+        // (normally for text) is very dark. Since most themes are dark, a dark focus border
         // would be invisible. We use a soft light variant for focus borders in these cases.
         const isBrightAccent = themeUtils.isBright(this._themeColor);
         const focusBorderColor = isBrightAccent ? themeUtils.getSoftLight(this._themeColor) : contrastColor;
-        
+
         // Remove any inline flash-prevention variables injected by index.html
         // so that our dynamic stylesheet (which has lower specificity than inline style)
         // can successfully cascade and take full control.
@@ -290,7 +293,7 @@ class LayoutManager {
             --jf-focus-border-color: ${accents.accent};`;
 
         // 1.5. Set Text Colors (Ensures ultra-legacy build always has stable text vars)
-        // Only inject base text colors if NOT tinted. Tinted mode handles its own 
+        // Only inject base text colors if NOT tinted. Tinted mode handles its own
         // transparent text colors in tinted.css, which we shouldn't override globally.
         if (this._themeMode !== THEME_MODES.TINTED) {
             const isLight = this._themeMode === THEME_MODES.CLASSIC_LIGHT;
@@ -334,7 +337,6 @@ class LayoutManager {
             --jf-divider: rgba(255, 255, 255, 0.06);
             --jf-navbar-bg: rgba(7, 8, 9, 0.85);`;
         } else if (this._themeMode === THEME_MODES.BLACK) {
-
             dynamicCss += `
             --jf-background: #000000;
             --jf-background-alt: #000000;
@@ -376,15 +378,21 @@ class LayoutManager {
     /**
      * Get current theme mode (for UI display etc)
      */
-    getThemeMode() { return this._themeMode; }
+    getThemeMode() {
+        return this._themeMode;
+    }
 
     /**
      * Get current theme color
      */
-    getThemeColor() { return this._themeColor; }
+    getThemeColor() {
+        return this._themeColor;
+    }
 
     // Font and Rounded Corners helpers (Existing logic maintained)
-    getUiFont() { return this._uiFont; }
+    getUiFont() {
+        return this._uiFont;
+    }
     setUiFont(font, save = true) {
         this._uiFont = font;
         if (font && font !== 'default') document.documentElement.setAttribute('data-ui-font', font);
@@ -392,7 +400,9 @@ class LayoutManager {
         if (save) storage.setItem('litefin:uiFont', font);
     }
 
-    getRoundedCorners() { return this._roundedCorners; }
+    getRoundedCorners() {
+        return this._roundedCorners;
+    }
     setRoundedCorners(enabled, save = true) {
         this._roundedCorners = enabled;
         document.documentElement.setAttribute('data-rounded-corners', enabled ? 'true' : 'false');
@@ -400,7 +410,9 @@ class LayoutManager {
         eventBus.emit('roundedCorners:changed', { enabled });
     }
 
-    getBadgeStyle() { return this._badgeStyle; }
+    getBadgeStyle() {
+        return this._badgeStyle;
+    }
     setBadgeStyle(style, save = true) {
         this._badgeStyle = style;
         let resolvedStyle = style;
@@ -416,7 +428,7 @@ class LayoutManager {
     /**
      * Set the global text scale multiplier
      * @param {number} scale Multiplier for the base font size (e.g. 1.2 for 120%)
-     * @param {boolean} [save=true] 
+     * @param {boolean} [save=true]
      */
     setTextScale(scale, save = true) {
         this._textScale = scale;
@@ -461,12 +473,12 @@ class LayoutManager {
 
     /**
      * Enable or disable Low VRAM Mode
-     * @param {boolean} enabled 
-     * @param {boolean} [save=true] 
+     * @param {boolean} enabled
+     * @param {boolean} [save=true]
      */
     setLowVramMode(enabled, save = true) {
         this._lowVramMode = enabled;
-        
+
         if (enabled) {
             document.documentElement.setAttribute('data-low-vram', 'true');
         } else {
@@ -487,12 +499,12 @@ class LayoutManager {
 
     /**
      * Enable or disable Card Scaling
-     * @param {boolean} enabled 
-     * @param {boolean} [save=true] 
+     * @param {boolean} enabled
+     * @param {boolean} [save=true]
      */
     setDisableCardScaling(enabled, save = true) {
         this._disableCardScaling = enabled;
-        
+
         if (enabled) {
             document.documentElement.setAttribute('data-disable-card-scaling', 'true');
         } else {
@@ -513,12 +525,12 @@ class LayoutManager {
 
     /**
      * Enable or disable Simple Loader
-     * @param {boolean} enabled 
-     * @param {boolean} [save=true] 
+     * @param {boolean} enabled
+     * @param {boolean} [save=true]
      */
     setSimpleLoader(enabled, save = true) {
         this._simpleLoader = enabled;
-        
+
         if (enabled) {
             document.documentElement.setAttribute('data-simple-loader', 'true');
         } else {
@@ -540,7 +552,7 @@ class LayoutManager {
     /**
      * Disable or enable BlurHash Placeholders
      * Toggles whether color-accurate blurred canvases are initialized on lazy media cards.
-     * 
+     *
      * @param {boolean} disabled - True to disable canvases; false to enable them.
      * @param {boolean} [save=true] - Persist the preference locally.
      * @public
@@ -548,7 +560,7 @@ class LayoutManager {
     setDisableBlurhash(disabled, save = true) {
         // Update local property tracking
         this._disableBlurhash = disabled;
-        
+
         // Write the HTML attribute flag so that stylesheets and card rendering can adapt
         if (disabled) {
             document.documentElement.setAttribute('data-disable-blurhash', 'true');
@@ -569,7 +581,7 @@ class LayoutManager {
     /**
      * Check if BlurHash placeholders are globally disabled.
      * Used by card renderers to determine element injection.
-     * 
+     *
      * @returns {boolean} True if disabled; false otherwise.
      * @public
      */
@@ -579,14 +591,14 @@ class LayoutManager {
 
     /**
      * Set onlyBlurHashBackdrop setting
-     * 
+     *
      * @param {boolean} only - True to use only BlurHash for Details Backdrop; false to load backdrop image too.
      * @param {boolean} [save=true] - Persist the preference locally.
      * @public
      */
     setOnlyBlurHashBackdrop(only, save = true) {
         this._onlyBlurHashBackdrop = only;
-        
+
         if (only) {
             document.documentElement.setAttribute('data-only-blurhash-backdrop', 'true');
         } else {
@@ -603,7 +615,7 @@ class LayoutManager {
 
     /**
      * Get onlyBlurHashBackdrop setting value
-     * 
+     *
      * @returns {boolean}
      * @public
      */
@@ -622,9 +634,15 @@ class LayoutManager {
         return layoutComponents.get(name) || this._components[LAYOUT.CLASSIC].get(name) || null;
     }
 
-    isClassic() { return this._layout === LAYOUT.CLASSIC; }
-    isModern() { return this._layout === LAYOUT.MODERN; }
-    getClassPrefix() { return this._layout === LAYOUT.MODERN ? 'modern' : 'classic'; }
+    isClassic() {
+        return this._layout === LAYOUT.CLASSIC;
+    }
+    isModern() {
+        return this._layout === LAYOUT.MODERN;
+    }
+    getClassPrefix() {
+        return this._layout === LAYOUT.MODERN ? 'modern' : 'classic';
+    }
     applyLayoutClass(element, baseClass) {
         element.className = `${baseClass} ${this.getClassPrefix()}-${baseClass}`;
     }

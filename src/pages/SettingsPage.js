@@ -1168,6 +1168,24 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelAlign">${i18n.t('CardLabelAlign') || 'Card Label Alignment'}</span>
+                        <span class="setting-description" data-i18n="CardLabelAlignDescription">${i18n.t('CardLabelAlignDescription') || 'Choose how titles and subtitles are aligned under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-align-select',
+                            [
+                                { value: 'center', label: i18n.t('CardLabelAlignDefault') || 'Center' },
+                                { value: 'start', label: i18n.t('CardLabelAlignStart') || 'Align to Start' },
+                                { value: 'end', label: i18n.t('CardLabelAlignEnd') || 'Align to End' }
+                            ],
+                            storage.getItem('pref:cardLabelAlign') || 'center'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -4992,6 +5010,7 @@ class SettingsPage extends Page {
             'layout-mode-select': { key: 'litefin:layout', type: 'local' },
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
             'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
+            'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -5123,6 +5142,11 @@ class SettingsPage extends Page {
                         } else if (id === 'card-label-style-select') {
                             storage.setItem('pref:cardLabelStyle', newValue);
                             document.documentElement.setAttribute('data-card-label-style', newValue);
+                            focusManager.invalidateCache('home');
+                            focusManager.invalidateCache('settings-content');
+                        } else if (id === 'card-label-align-select') {
+                            storage.setItem('pref:cardLabelAlign', newValue);
+                            document.documentElement.setAttribute('data-card-label-align', newValue);
                             focusManager.invalidateCache('home');
                             focusManager.invalidateCache('settings-content');
                         } else if (id === 'sidebar-mode-select') {
