@@ -6,7 +6,6 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
-import { platformInfo } from './PlatformInfo.js';
 
 /**
  * Convert HEX color to RGBA
@@ -35,7 +34,7 @@ function _hexToRgba(hex, opacity) {
 
 /**
  * Generate text CSS styles from settings
- * 
+ *
  * Supports dynamic selection of subtitle opacity settings depending on
  * whether the current playing video is encoded in SDR or HDR format.
  *
@@ -101,7 +100,7 @@ export function getTextStyles(isHdr = false) {
     // HDR content requires distinct luminance levels for overlay transparency.
     // ========================================================================
     const opacityKey = isHdr ? 'subtitleTextOpacityHdr' : 'subtitleTextOpacity';
-    
+
     /* -------------------------------------------------------------
        Fetch transparency percentage from player settings backend.
        Fallback value defaults to 100% (fully opaque).
@@ -177,7 +176,7 @@ export function getTextStyles(isHdr = false) {
     // HDR media might benefit from softer gray/yellow tones to prevent eye strain.
     // ========================================================================
     const colorKey = isHdr ? 'subtitleTextColorHdr' : 'subtitleTextColor';
-    
+
     /* -------------------------------------------------------------
        Fetch selected hex code from player settings backend.
        Fallback value defaults to standard White (#ffffff).

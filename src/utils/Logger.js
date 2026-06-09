@@ -104,7 +104,7 @@ class Logger {
         methods.forEach((method) => {
             // Save directly — { ...console } fails on old WebKit because
             // host object properties are non-enumerable.
-            const originalMethod = console[method] || console.log || function(){};
+            const originalMethod = console[method] || console.log || function () {};
 
             console[method] = (...args) => {
                 // 1. Forward to the native method.
@@ -188,26 +188,37 @@ class Logger {
                 // Build a single formatted string instead of spreading raw objects.
                 // Chromium 32's console.log can choke on complex object arguments
                 // (especially circular refs or host objects), so we pre-serialize.
-                const safeArgs = args.map(function(arg) {
+                const safeArgs = args.map(function (arg) {
                     if (arg === null || arg === undefined) return String(arg);
                     if (typeof arg === 'object') {
-                        try { return JSON.stringify(arg); } catch(e) { return '[Object]'; }
+                        try {
+                            return JSON.stringify(arg);
+                        } catch (e) {
+                            return '[Object]';
+                        }
                     }
                     return String(arg);
                 });
                 const msg = prefix + ' ' + safeArgs.join(' ');
 
                 switch (level) {
-                    case LogLevel.ERROR: console.error(msg); break;
-                    case LogLevel.WARN:  console.warn(msg);  break;
-                    case LogLevel.INFO:  console.info(msg);  break;
-                    default:             console.log(msg);   break;
+                    case LogLevel.ERROR:
+                        console.error(msg);
+                        break;
+                    case LogLevel.WARN:
+                        console.warn(msg);
+                        break;
+                    case LogLevel.INFO:
+                        console.info(msg);
+                        break;
+                    default:
+                        console.log(msg);
+                        break;
                 }
             } finally {
                 this._isLogging = false; // Reset flag
             }
         }
-
     }
 
     _getLevelColor(level) {

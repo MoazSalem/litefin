@@ -165,7 +165,7 @@ const DEFAULTS = {
 
     // Custom Vertical Position (0-100% from bottom, used when subtitleVerticalPosition is 'custom')
     subtitleVerticalPositionCustom: 10,
-    
+
     // PGS Subtitle Playback Mode ('client', 'burn', 'disable')
     // 'client' = Custom Web Worker rendering on the TV (Default)
     // 'burn' = Force server to transcode video and burn into frames
@@ -314,8 +314,8 @@ const DEFAULTS = {
      * =========================================================================
      * UP NEXT DIALOG TOGGLE
      * =========================================================================
-     * Controls whether the interactive countdown card (Up Next dialog) is shown 
-     * near the end of an episode playthrough. When enabled, it allows the user 
+     * Controls whether the interactive countdown card (Up Next dialog) is shown
+     * near the end of an episode playthrough. When enabled, it allows the user
      * to manually advance early or hide the prompt.
      * =========================================================================
      */
@@ -461,7 +461,7 @@ export const PlayerSettings = {
 
         storage.setItem(STORAGE_PREFIX + key, String(value));
         log.debug(`Saved ${key}: ${value}`);
-        
+
         // Notify subscribers that a setting has changed
         eventBus.emit(`pref:${key}`, value);
     },

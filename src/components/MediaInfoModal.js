@@ -64,7 +64,7 @@ class MediaInfoModal {
         // Clean-up/Close helper
         const _close = (restoreFocus = true) => {
             if (detailsPage.onBack === myOnBack) detailsPage.onBack = oldOnBack;
-            
+
             overlay.classList.remove('visible');
             setTimeout(() => overlay.remove(), 300);
 
@@ -100,21 +100,22 @@ class MediaInfoModal {
 
         // --- 2. Fetch Detailed Metadata ---
         try {
-            const item = await api.getItem(itemId, { 
-                Fields: 'MediaSources,MediaStreams,DateCreated,PremiereDate' 
+            const item = await api.getItem(itemId, {
+                Fields: 'MediaSources,MediaStreams,DateCreated,PremiereDate'
             });
-            
+
             if (!item.MediaSources || item.MediaSources.length === 0) {
-                overlay.querySelector('.modal-options').innerHTML = `<p class="media-info-empty">${i18n.t('NoMediaSourcesFound') || 'No media information available.'}</p>`;
+                overlay.querySelector('.modal-options').innerHTML =
+                    `<p class="media-info-empty">${i18n.t('NoMediaSourcesFound') || 'No media information available.'}</p>`;
                 return;
             }
 
             this._renderInfo(overlay, item);
             this._setupFocus(overlay);
-
         } catch (err) {
             log.error('Failed to load media info', err);
-            overlay.querySelector('.modal-options').innerHTML = `<p class="media-info-error">${i18n.t('ErrorLoadingMediaInfo') || 'Failed to load media specs.'}</p>`;
+            overlay.querySelector('.modal-options').innerHTML =
+                `<p class="media-info-error">${i18n.t('ErrorLoadingMediaInfo') || 'Failed to load media specs.'}</p>`;
         }
     }
 
@@ -160,7 +161,7 @@ class MediaInfoModal {
             source.MediaStreams.forEach((stream) => {
                 const typeLabel = i18n.t(stream.Type);
                 const title = stream.DisplayTitle || stream.Title || '';
-                
+
                 html += `
                     <div class="media-info-stream media-info-focusable" tabindex="0">
                         <div class="media-info-stream-header">
@@ -205,7 +206,8 @@ class MediaInfoModal {
         if (s.ColorTransfer) rows += this._renderRow(i18n.t('ColorTransfer'), s.ColorTransfer);
         if (s.ColorPrimaries) rows += this._renderRow(i18n.t('ColorPrimaries'), s.ColorPrimaries);
         if (s.PixelFormat) rows += this._renderRow(i18n.t('PixelFormat'), s.PixelFormat);
-        if (s.IsAnamorphic !== undefined) rows += this._renderRow(i18n.t('Anamorphic'), s.IsAnamorphic ? i18n.t('Yes') : i18n.t('No'));
+        if (s.IsAnamorphic !== undefined)
+            rows += this._renderRow(i18n.t('Anamorphic'), s.IsAnamorphic ? i18n.t('Yes') : i18n.t('No'));
         return rows;
     }
 
@@ -222,7 +224,8 @@ class MediaInfoModal {
     static _renderSubtitleRows(s) {
         let rows = '';
         if (s.Language) rows += this._renderRow(i18n.t('Language'), s.Language);
-        if (s.IsExternal !== undefined) rows += this._renderRow(i18n.t('Type'), s.IsExternal ? i18n.t('External') : i18n.t('Internal'));
+        if (s.IsExternal !== undefined)
+            rows += this._renderRow(i18n.t('Type'), s.IsExternal ? i18n.t('External') : i18n.t('Internal'));
         return rows;
     }
 
@@ -258,7 +261,7 @@ class MediaInfoModal {
      */
     static _setupFocus(overlay) {
         const track = overlay.querySelector('.media-info-content-track');
-        
+
         // Register focus section for the technical info cards
         focusManager.register('media-info-content', track, {
             orientation: 'vertical',

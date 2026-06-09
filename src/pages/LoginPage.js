@@ -13,13 +13,11 @@ import { state } from '../core/StateManager.js';
 import { router } from '../core/Router.js';
 
 import { focusManager } from '../ui/FocusManager.js';
-import { storage } from '../utils/StorageService.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { eventBus } from '../core/EventBus.js';
 import { layoutManager } from '../ui/LayoutManager.js';
 import { imageService } from '../utils/ImageService.js';
-
 
 const log = logger.create('Login');
 
@@ -953,12 +951,14 @@ class LoginPage extends Page {
                             <button class="login-user-card" data-user-index="${index}" tabindex="0">
                                     <img 
                                         class="login-user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                        src="${user.PrimaryImageTag
-                                    ? api.getUserImageUrl(user.Id, {
-                                          maxWidth: imageService.getParams('avatar').maxWidth,
-                                          quality: imageService.getParams('avatar').quality
-                                      })
-                                    : ''}"
+                                        src="${
+                                            user.PrimaryImageTag
+                                                ? api.getUserImageUrl(user.Id, {
+                                                      maxWidth: imageService.getParams('avatar').maxWidth,
+                                                      quality: imageService.getParams('avatar').quality
+                                                  })
+                                                : ''
+                                        }"
                                         alt="${user.Name}"
                                         onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                     >
@@ -973,12 +973,14 @@ class LoginPage extends Page {
                             <button class="user-card" data-user-index="${index}" tabindex="0">
                                 <img 
                                     class="user-avatar ${user.PrimaryImageTag ? '' : 'hidden'}" 
-                                    src="${user.PrimaryImageTag
-                                    ? api.getUserImageUrl(user.Id, {
-                                          maxWidth: imageService.getParams('avatar').maxWidth,
-                                          quality: imageService.getParams('avatar').quality
-                                      })
-                                    : ''}"
+                                    src="${
+                                        user.PrimaryImageTag
+                                            ? api.getUserImageUrl(user.Id, {
+                                                  maxWidth: imageService.getParams('avatar').maxWidth,
+                                                  quality: imageService.getParams('avatar').quality
+                                              })
+                                            : ''
+                                    }"
                                     alt="${user.Name}"
                                     onerror="this.classList.add('hidden'); this.nextElementSibling.classList.remove('hidden')"
                                 >
@@ -1536,12 +1538,16 @@ class LoginPage extends Page {
         // Restore focus to the previously focused item or keep the selection state
         if (isFocusInList && focusedIndex >= 0) {
             const selector = `.server-item[data-server-index="${focusedIndex}"]`;
-            let item = (this._savedServerList && this._savedServerList.querySelector(selector)) || this._serverList.querySelector(selector);
+            let item =
+                (this._savedServerList && this._savedServerList.querySelector(selector)) ||
+                this._serverList.querySelector(selector);
 
             if (!item) {
                 // Nearest element index fallback if original item was removed
                 const allItems = [
-                    ...(this._savedServerList ? this._savedServerList.querySelectorAll('.server-item:not(.empty)') : []),
+                    ...(this._savedServerList
+                        ? this._savedServerList.querySelectorAll('.server-item:not(.empty)')
+                        : []),
                     ...this._serverList.querySelectorAll('.server-item:not(.empty)')
                 ];
                 if (allItems.length > 0) {

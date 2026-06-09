@@ -83,7 +83,7 @@ class LiveTvPage extends Page {
         this._isMounted = true;
         this._setupTabHandlers();
         this._setupPaginationHandlers();
-        
+
         // Load the initial tab (usually Suggestions)
         this._loadTab(this._currentTab);
 
@@ -157,7 +157,7 @@ class LiveTvPage extends Page {
                     } else if (this._currentTab === 'suggestions') {
                         targetSection = 'section-on-now';
                     }
-                    
+
                     if (focusManager.getConfig(targetSection)) {
                         focusManager.setActiveSection(targetSection);
                         return true; // Handled
@@ -379,9 +379,9 @@ class LiveTvPage extends Page {
             this.registerFocusSection('livetv-content-section', gridItemsEl, {
                 orientation: 'both',
                 selector: '.media-card',
-                leaveUp: 'livetv-tabs',   // D-pad Up from top row → back to tabs
+                leaveUp: 'livetv-tabs', // D-pad Up from top row → back to tabs
                 leaveDown: 'livetv-pagination',
-                leaveLeft: 'sidebar'      // D-pad Left → sidebar
+                leaveLeft: 'sidebar' // D-pad Left → sidebar
             });
         }
     }
@@ -436,7 +436,7 @@ class LiveTvPage extends Page {
                 selector: '.media-card',
                 leaveUp: 'livetv-tabs', // D-pad Up from top row → back to tabs
                 leaveDown: 'livetv-pagination',
-                leaveLeft: 'sidebar'    // D-pad Left → sidebar
+                leaveLeft: 'sidebar' // D-pad Left → sidebar
             });
         }
     }

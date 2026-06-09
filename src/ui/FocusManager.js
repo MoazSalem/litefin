@@ -147,10 +147,11 @@ class FocusManager {
 
         // Track focus changes globally
         document.addEventListener('focusin', (e) => {
-            const isPageLoading = document.body.classList.contains('app-splash-active') || 
-                                  document.querySelector('.page.loading') || 
-                                  document.querySelector('.page-loading');
-            
+            const isPageLoading =
+                document.body.classList.contains('app-splash-active') ||
+                document.querySelector('.page.loading') ||
+                document.querySelector('.page-loading');
+
             if (isPageLoading) {
                 const sectionName = this.getSectionForElement(e.target);
                 if (sectionName && sectionName !== 'sidebar') {

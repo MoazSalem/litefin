@@ -33,7 +33,7 @@ class GlobalClock {
         this._element = document.createElement('div');
         this._element.id = 'global-clock';
         this._element.className = 'global-clock';
-        
+
         // 2. Wrap in a high-level container to stay above ALL other UI
         // We inject it directly into body to bypass any relative containers.
         document.body.appendChild(this._element);
@@ -100,7 +100,7 @@ class GlobalClock {
         this._isVisible = visible;
         if (this._element) {
             const formatHidden = PlayerSettings.get('timeFormat') === 'none';
-            this._element.style.display = (visible && !formatHidden) ? '' : 'none';
+            this._element.style.display = visible && !formatHidden ? '' : 'none';
         }
     }
 }

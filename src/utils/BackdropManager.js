@@ -127,17 +127,19 @@ class BackdropManager {
             element.style.opacity = '1';
 
             // Decodes the backdrop blurhash at low resolution asynchronously
-            import('./BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
-                const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
-                if (pixels && canvas) {
-                    canvas.width = 64;
-                    canvas.height = 36;
-                    const ctx = canvas.getContext('2d');
-                    const imageData = ctx.createImageData(64, 36);
-                    imageData.data.set(pixels);
-                    ctx.putImageData(imageData, 0, 0);
-                }
-            }).catch(err => log.error('Failed to decode backdrop blurhash', err));
+            import('./BlurHashDecoder.js')
+                .then(({ default: BlurHashDecoder }) => {
+                    const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
+                    if (pixels && canvas) {
+                        canvas.width = 64;
+                        canvas.height = 36;
+                        const ctx = canvas.getContext('2d');
+                        const imageData = ctx.createImageData(64, 36);
+                        imageData.data.set(pixels);
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+                })
+                .catch((err) => log.error('Failed to decode backdrop blurhash', err));
 
             // Return immediately — DO NOT load the actual high-resolution image!
             return;
@@ -173,28 +175,30 @@ class BackdropManager {
             element.style.opacity = '1';
 
             // Decodes the backdrop blurhash at low resolution asynchronously
-            import('./BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
-                const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
-                if (pixels && canvas) {
-                    canvas.width = 64;
-                    canvas.height = 36;
-                    const ctx = canvas.getContext('2d');
-                    const imageData = ctx.createImageData(64, 36);
-                    imageData.data.set(pixels);
-                    ctx.putImageData(imageData, 0, 0);
-                }
-            }).catch(err => log.error('Failed to decode backdrop blurhash', err));
+            import('./BlurHashDecoder.js')
+                .then(({ default: BlurHashDecoder }) => {
+                    const pixels = BlurHashDecoder.decode(blurHash, 64, 36);
+                    if (pixels && canvas) {
+                        canvas.width = 64;
+                        canvas.height = 36;
+                        const ctx = canvas.getContext('2d');
+                        const imageData = ctx.createImageData(64, 36);
+                        imageData.data.set(pixels);
+                        ctx.putImageData(imageData, 0, 0);
+                    }
+                })
+                .catch((err) => log.error('Failed to decode backdrop blurhash', err));
         }
 
         // Preload image
         const img = new Image();
         img.onload = () => {
             element.style.backgroundImage = `url('${url}')`;
-            
+
             requestAnimationFrame(() => {
                 // Ensure backdrop container is fully visible
                 element.style.opacity = '1';
-                
+
                 // Fade out and remove the BlurHash canvas cleanly
                 if (canvas) {
                     canvas.style.opacity = '0';

@@ -14,7 +14,6 @@ import { imageService } from '../utils/ImageService.js';
 import MediaGrid from '../components/MediaGrid.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
-import { lazyLoader } from '../utils/LazyLoader.js';
 
 import FavoriteButton from '../components/FavoriteButton.js';
 import BackdropManager from '../utils/BackdropManager.js';
@@ -378,7 +377,7 @@ class PersonPage extends Page {
                     // Collapse: Restrict lines back to clamp class and update text
                     bioEl.classList.add('line-clamp-6');
                     seeMoreBtn.textContent = i18n.t('ShowMore');
-                    
+
                     // Reset scroll back to top of the page view
                     const page = this.$('.page-content');
                     if (page) page.scrollTop = 0;
@@ -517,7 +516,7 @@ class PersonPage extends Page {
                 id: 'person-episodes',
                 title: i18n.t('Episodes'),
                 items: episodes,
-                type: 'episode-primary', 
+                type: 'episode-primary',
                 isLandscape: true,
                 limit: 9,
                 moreUrl: `/library/all?personId=${this._personId}&personName=${encodeURIComponent(this._item?.Name || '')}&includeItemTypes=Episode&viewModeIndex=2`,

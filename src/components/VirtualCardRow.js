@@ -76,32 +76,32 @@ export class VirtualCardRow {
         if (isModern) {
             // Add a buffer for the expanded card width (375px) so the track doesn't clip.
             // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
-            const expansion = (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist') ? 0 : 375;
+            const expansion = this.isLandscape || this.cardType === 'square' || this.cardType === 'artist' ? 0 : 375;
             this.track.style.width = `${totalWidth + expansion}px`;
 
             /**
              * Helper function to lazy-load the expansion thumb image (the backdrop).
              * Prepares the image tags and triggers the CSS transition classes once loaded.
-             * 
+             *
              * @param {HTMLElement} card - The .media-card element that is expanding.
              */
             loadExpansionThumb = (card) => {
                 // Safely grab references to the lazy backdrop layer inside the card structure.
                 const thumb = card.querySelector('.thumb-layer');
                 const thumbSrc = thumb ? thumb.getAttribute('data-thumb-src') : null;
-                
+
                 // If a valid image element and source exists, and we haven't fetched it yet:
                 if (thumb && !thumb.getAttribute('src') && thumbSrc) {
                     // Set src to kick off the browser's asynchronous download.
                     thumb.setAttribute('src', thumbSrc);
-                    
+
                     // On successful download, mark the card and image layers as ready.
                     // This triggers the CSS-driven transitions (e.g. thumb fades in).
                     thumb.onload = () => {
                         thumb.classList.add('loaded');
                         card.classList.add('expansion-ready');
                     };
-                    
+
                     // Graceful degradation in case of network drops or bad URLs.
                     thumb.onerror = () => {
                         thumb.classList.add('load-failed');
@@ -124,29 +124,29 @@ export class VirtualCardRow {
             /**
              * Focus entrypoint for focus-bound layout shifting.
              * Triggered when the card receives focus (via remote D-pad or mouse action).
-             * 
+             *
              * @param {HTMLElement} element - The target focused element or sub-component.
              */
             const handleFocus = (element) => {
                 // Find the closest media-card ancestor within this row
                 const card = element.closest('.media-card');
-                
+
                 // Ensure the card exists and belongs strictly to this row track
                 if (card && this.track.contains(card)) {
                     // Extract the mathematical virtual index from the dataset
                     const index = parseInt(card.dataset.virtualIndex);
-                    
+
                     // Shift sibling cards relative to this card's expansion state.
                     // Marks expanding index inside the CSS custom property.
                     const isExpanding = card.classList.contains('has-expansion');
-                    
+
                     // Apply focused index to track custom properties for modern styling layout shifts
                     if (isExpanding) {
                         this.track.style.setProperty('--focused-index', index);
                     } else {
                         this.track.style.setProperty('--focused-index', -1);
                     }
-                    
+
                     // Trigger asynchronous image preloading for the expanding backdrop
                     loadExpansionThumb(card);
 
@@ -159,7 +159,7 @@ export class VirtualCardRow {
                     // expansion backdrop is completely ready before focus lands on it.
                     // =========================================================
                     const nextCard = this.domNodes.get(index + 1);
-                    
+
                     // If the next card is rendered and in the DOM, preload its asset
                     if (nextCard) {
                         loadExpansionThumb(nextCard);
@@ -232,8 +232,10 @@ export class VirtualCardRow {
             dummyContent.appendChild(imageRatioDiv);
 
             // Emulate .card-info
-            const isIntegratedModern = isModern && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
-            const isPortraitModern = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
+            const isIntegratedModern =
+                isModern && (this.isLandscape || this.cardType === 'square' || this.cardType === 'artist');
+            const isPortraitModern =
+                isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
 
             if (!this.hideLabels && !isIntegratedModern && !isPortraitModern) {
                 const infoDiv = document.createElement('div');
@@ -283,7 +285,7 @@ export class VirtualCardRow {
             if (firstCard) {
                 loadExpansionThumb(firstCard);
             }
-            
+
             // Retrieve the second card (index 1) and preload its backdrop
             const secondCard = this.domNodes.get(1);
             if (secondCard) {
@@ -348,8 +350,8 @@ export class VirtualCardRow {
             this._updateWindow(this.currentIndex);
 
             // Compute the scroll offset (mirrors ScrollController logic exactly)
-            const elementPos   = this.getItemPosition(clamped);
-            
+            const elementPos = this.getItemPosition(clamped);
+
             // -----------------------------------------------------------------
             // Card Centering Geometry (Expanded Posters)
             // -----------------------------------------------------------------
@@ -362,13 +364,11 @@ export class VirtualCardRow {
             const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? 600 : this.itemWidth;
 
-            const containerWidth = this.track.parentElement
-                ? this.track.parentElement.clientWidth
-                : window.innerWidth;
-            const trackWidth   = this.getTrackWidth();
+            const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
+            const trackWidth = this.getTrackWidth();
 
-            const targetScroll   = elementPos - containerWidth / 2 + elementWidth / 2;
-            const maxScroll      = Math.max(0, trackWidth - containerWidth);
+            const targetScroll = elementPos - containerWidth / 2 + elementWidth / 2;
+            const maxScroll = Math.max(0, trackWidth - containerWidth);
             const finalScrollLeft = Math.max(0, Math.min(targetScroll, maxScroll));
 
             // Apply smooth CSS transition — same transition the track CSS already has
@@ -377,7 +377,7 @@ export class VirtualCardRow {
                 : `translate3d(-${finalScrollLeft}px, 0, 0)`;
 
             this.track.style.webkitTransform = transformValue;
-            this.track.style.transform       = transformValue;
+            this.track.style.transform = transformValue;
         };
 
         leftBtn.addEventListener('click', (e) => {
@@ -678,7 +678,8 @@ export class VirtualCardRow {
         // width style set inside the constructor).
         // -------------------------------------------------------------
         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
-        const expansion = (isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist') ? 375 : 0;
+        const expansion =
+            isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist' ? 375 : 0;
         return this.totalItems * this.totalItemWidth + this.sidePadding * 2 + expansion;
     }
 

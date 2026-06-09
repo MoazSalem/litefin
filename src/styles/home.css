@@ -243,7 +243,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     height: 100%;
     background: rgba(0, 0, 0, 0.35);
     border-radius: calc(var(--jf-border-radius) - 3px);
-    z-index: 2;
+    z-index: 7;
     transition: background-color 0.2s ease;
 }
 
@@ -257,7 +257,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    z-index: 3;
+    z-index: 8;
     color: white;
     font-size: 2.2rem;
     font-weight: 800;

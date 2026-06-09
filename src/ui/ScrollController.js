@@ -170,7 +170,7 @@ class ScrollController {
         const animIdKey = isVertical ? '_verticalScrollAnimationId' : '_horizontalScrollAnimationId';
 
         // Resolve active scroll mode from stored user preferences.
-        const scrollMode = isVertical ? (storage.getItem('pref:verticalScrollMode') || 'native') : 'current';
+        const scrollMode = isVertical ? storage.getItem('pref:verticalScrollMode') || 'native' : 'current';
 
         /* ====================================================================
          * 🚀 INSTANT SCROLL NAVIGATION OVERRIDE
@@ -387,7 +387,6 @@ class ScrollController {
         // Note: For the very first frame, we don't have a 'time' yet,
         // so we let the animate function initialize it.
         this[animIdKey] = requestAnimationFrame(animate);
-
     }
 
     /**
@@ -655,7 +654,7 @@ class ScrollController {
                     if (track.__virtualRow) {
                         const vIndex = parseInt(element.dataset.virtualIndex || '0', 10);
                         elementPos = track.__virtualRow.getItemPosition(vIndex);
-                        
+
                         // -----------------------------------------------------------------
                         // Mathematical Centering Sync (Expanded Posters)
                         // -----------------------------------------------------------------
@@ -665,8 +664,12 @@ class ScrollController {
                         // cleanly inside the viewport, preventing the right edge from clipping.
                         // -----------------------------------------------------------------
                         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
-                        const canExpand = isModern && !track.__virtualRow.isLandscape && track.__virtualRow.cardType !== 'square' && track.__virtualRow.cardType !== 'artist';
-                        
+                        const canExpand =
+                            isModern &&
+                            !track.__virtualRow.isLandscape &&
+                            track.__virtualRow.cardType !== 'square' &&
+                            track.__virtualRow.cardType !== 'artist';
+
                         elementWidth = canExpand ? 600 : track.__virtualRow.itemWidth;
                         trackWidth = track.__virtualRow.getTrackWidth();
                     } else {

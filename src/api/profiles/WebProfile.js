@@ -48,7 +48,7 @@ export function getDeviceCapabilities() {
     let uhd8K = false;
 
     const hdr10 = window.matchMedia
-        ? (window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches)
+        ? window.matchMedia('(color-gamut: rec2020)').matches || window.matchMedia('(color-gamut: p3)').matches
         : false;
     const hlg = hdr10;
 
@@ -91,7 +91,10 @@ export function getDeviceCapabilities() {
         video.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') !== '' ||
         video.canPlayType('video/mp4; codecs="hvc1.2.4.L120.B0"') !== '';
     av1 = av1 || video.canPlayType('video/mp4; codecs="av01"') !== '';
-    vp9 = vp9 || video.canPlayType('video/webm; codecs="vp9"') !== '' || video.canPlayType('video/mp4; codecs="vp09.00.10.08"') !== '';
+    vp9 =
+        vp9 ||
+        video.canPlayType('video/webm; codecs="vp9"') !== '' ||
+        video.canPlayType('video/mp4; codecs="vp09.00.10.08"') !== '';
     vp8 = vp8 || video.canPlayType('video/webm; codecs="vp8"') !== '';
     ac3 = ac3 || video.canPlayType('audio/mp4; codecs="ac-3"') !== '';
     eac3 = eac3 || video.canPlayType('audio/mp4; codecs="ec-3"') !== '';
@@ -108,8 +111,7 @@ export function getDeviceCapabilities() {
         video.canPlayType('audio/mp4; codecs="dtsc"') !== '' ||
         video.canPlayType('audio/mp4; codecs="dtsb"') !== '' ||
         video.canPlayType('audio/mp4; codecs="dtse"') !== '';
-    const truehd =
-        video.canPlayType('audio/mp4; codecs="mlpa"') !== '';
+    const truehd = video.canPlayType('audio/mp4; codecs="mlpa"') !== '';
 
     // Dynamic max audio channel detection via Web Audio API
     let maxAudioChannels = 2;
@@ -447,7 +449,6 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
-
 
     if (enableHEVC) {
         codecProfiles.push({

@@ -54,7 +54,11 @@ class FontLoader {
      */
     clearContainerFonts() {
         for (const url of this._blobUrls) {
-            try { URL.revokeObjectURL(url); } catch (_) { /* ignore */ }
+            try {
+                URL.revokeObjectURL(url);
+            } catch (_) {
+                /* ignore */
+            }
         }
         this._blobUrls.clear();
         log.debug('[FontLoader] Container font blob URLs cleared.');
@@ -216,10 +220,10 @@ class FontLoader {
                     }
                 }
             }
-            
+
             const result = [];
             if (names && names.forEach) {
-                names.forEach(name => result.push(name));
+                names.forEach((name) => result.push(name));
             }
             return result;
         } catch (e) {
@@ -275,7 +279,7 @@ class FontLoader {
             // log.debug(`ASS fontname map: ${assMap.length} entries`, assMap.map(a => a.original));
         }
 
-        let loadedFonts = [];
+        const loadedFonts = [];
         let attachIndex = 0;
 
         for (const font of fontAttachments) {
@@ -311,7 +315,9 @@ class FontLoader {
                     buffer = await res.arrayBuffer();
                 } catch (fetchErr) {
                     if (fetchErr && fetchErr.name === 'AbortError') {
-                        log.warn(`[FontLoader] Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`);
+                        log.warn(
+                            `[FontLoader] Font attachment ${uniqueIndex} timed out — skipping (probably a transcoded stream).`
+                        );
                     } else {
                         log.warn(`[FontLoader] Failed to download font attachment ${uniqueIndex}:`, fetchErr);
                     }

@@ -126,7 +126,7 @@ class BlurHashDecoder {
             const numY = Math.floor(sizeFlag / 9) + 1;
 
             const quantisedMaxVal = decode83(hash[1]);
-            const maxVal = (quantisedMaxVal + 1) / 166 * punch;
+            const maxVal = ((quantisedMaxVal + 1) / 166) * punch;
 
             // Total expected length must match: 4 + 2 * (numX * numY)
             const expectedLength = 4 + 2 * numX * numY;
@@ -136,7 +136,7 @@ class BlurHashDecoder {
             // 2. Unpack DC & AC Frequency Coefficients
             // -------------------------------------------------------------
             const colors = new Array(numX * numY);
-            
+
             // The first frequency component (0, 0) is the average DC color
             colors[0] = decodeDC(decode83(hash.substring(2, 6)));
 

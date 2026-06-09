@@ -71,7 +71,7 @@ export default {
             if (introsResult && introsResult.Items && introsResult.Items.length > 0) {
                 log.info(`Found ${introsResult.Items.length} intro(s) for item`);
 
-                // Jellyfin sometimes returns multiple intros (or duplicates). 
+                // Jellyfin sometimes returns multiple intros (or duplicates).
                 // To avoid repeating intros excessively, we only pick the first one.
                 const introToPlay = introsResult.Items[0];
                 const introItems = [await api.getItem(introToPlay.Id)];

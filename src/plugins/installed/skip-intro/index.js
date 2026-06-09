@@ -47,32 +47,32 @@ const TICKS_PER_SECOND = 10_000_000;
  */
 const SEGMENT_TYPES = [
     {
-        type:       'intro',
+        type: 'intro',
         settingKey: 'skipActionIntro',
-        labelKey:   'SkipIntro',
-        widgetId:   'skip-intro-btn',
-        cssClass:   'skip-intro-widget'
+        labelKey: 'SkipIntro',
+        widgetId: 'skip-intro-btn',
+        cssClass: 'skip-intro-widget'
     },
     {
-        type:       'outro',
+        type: 'outro',
         settingKey: 'skipActionOutro',
-        labelKey:   'SkipCredits',
-        widgetId:   'skip-outro-btn',
-        cssClass:   'skip-outro-widget'
+        labelKey: 'SkipCredits',
+        widgetId: 'skip-outro-btn',
+        cssClass: 'skip-outro-widget'
     },
     {
-        type:       'recap',
+        type: 'recap',
         settingKey: 'skipActionRecap',
-        labelKey:   'SkipRecap',
-        widgetId:   'skip-recap-btn',
-        cssClass:   'skip-recap-widget'
+        labelKey: 'SkipRecap',
+        widgetId: 'skip-recap-btn',
+        cssClass: 'skip-recap-widget'
     },
     {
-        type:       'preview',
+        type: 'preview',
         settingKey: 'skipActionPreview',
-        labelKey:   'SkipPreview',
-        widgetId:   'skip-preview-btn',
-        cssClass:   'skip-preview-widget'
+        labelKey: 'SkipPreview',
+        widgetId: 'skip-preview-btn',
+        cssClass: 'skip-preview-widget'
     }
 ];
 
@@ -85,8 +85,8 @@ const SEGMENT_TYPES = [
  */
 const skipIntroPlugin = {
     // === Required metadata ===
-    id:      'skip-intro',
-    name:    'Skip Intro & Outro',
+    id: 'skip-intro',
+    name: 'Skip Intro & Outro',
     version: '2.0.0',
 
     // Require the intro-skipper server plugin — PluginManager checks this
@@ -108,9 +108,9 @@ const skipIntroPlugin = {
      * was not returned by the server OR if the setting is 'None'.
      * @private
      */
-    _introSegment:   null,
-    _outroSegment:   null,
-    _recapSegment:   null,
+    _introSegment: null,
+    _outroSegment: null,
+    _recapSegment: null,
     _previewSegment: null,
 
     /**
@@ -158,12 +158,12 @@ const skipIntroPlugin = {
         // ----------------------------------------------------------------
         // Reset all state from any previous episode
         // ----------------------------------------------------------------
-        this._introSegment    = null;
-        this._outroSegment    = null;
-        this._recapSegment    = null;
-        this._previewSegment  = null;
+        this._introSegment = null;
+        this._outroSegment = null;
+        this._recapSegment = null;
+        this._previewSegment = null;
         this._autoSkipSegments = {};
-        this._lastAutoSkipped  = null;
+        this._lastAutoSkipped = null;
 
         // Skip Intro only makes sense for episodes
         if (item.Type !== 'Episode') {
@@ -182,7 +182,7 @@ const skipIntroPlugin = {
         }
 
         // Early-exit if absolutely everything is disabled
-        const allNone = Object.values(actions).every(a => a === 'None');
+        const allNone = Object.values(actions).every((a) => a === 'None');
         if (allNone) {
             api.log.info('Skip Intro: all segment actions are set to None — nothing to do');
             return;
@@ -197,9 +197,9 @@ const skipIntroPlugin = {
         // Convenience reference map for the 4 raw segments by type string
         // ----------------------------------------------------------------
         const segments = {
-            intro:   this._introSegment,
-            outro:   this._outroSegment,
-            recap:   this._recapSegment,
+            intro: this._introSegment,
+            outro: this._outroSegment,
+            recap: this._recapSegment,
             preview: this._previewSegment
         };
 
@@ -207,7 +207,7 @@ const skipIntroPlugin = {
         // For each segment type, apply its configured action
         // ----------------------------------------------------------------
         for (const seg of SEGMENT_TYPES) {
-            const action  = actions[seg.type];
+            const action = actions[seg.type];
             const segment = segments[seg.type];
 
             // No segment data from the server — nothing to do regardless
@@ -217,12 +217,12 @@ const skipIntroPlugin = {
                 // Show the skip button in the OSD overlay row (existing behavior)
                 api.addOSDWidget(this._buildWidget(seg, segment, api));
                 api.log.debug(`Skip Intro: [${seg.type}] AskToSkip widget registered`);
-
             } else if (action === 'Skip') {
                 // Store for auto-seek; no widget is added to the OSD
                 this._autoSkipSegments[seg.type] = segment;
-                api.log.debug(`Skip Intro: [${seg.type}] Auto-Skip registered (${segment.start / TICKS_PER_SECOND}s – ${segment.end / TICKS_PER_SECOND}s)`);
-
+                api.log.debug(
+                    `Skip Intro: [${seg.type}] Auto-Skip registered (${segment.start / TICKS_PER_SECOND}s – ${segment.end / TICKS_PER_SECOND}s)`
+                );
             } else {
                 // action === 'None' — completely ignore this segment
                 api.log.debug(`Skip Intro: [${seg.type}] action is None — ignored`);
@@ -283,7 +283,9 @@ const skipIntroPlugin = {
             // This triggers the player page to halt playback and clean up properly.
             // ----------------------------------------------------------------
             if (durationTicks > 0 && seekTarget >= durationTicks) {
-                api.log.info(`Skip Intro: auto-skip target [${type}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`);
+                api.log.info(
+                    `Skip Intro: auto-skip target [${type}] at ${seekTarget / TICKS_PER_SECOND}s is at or past duration ${durationTicks / TICKS_PER_SECOND}s. Triggering ended event.`
+                );
                 player.emit('ended');
             } else {
                 api.log.info(`Skip Intro: auto-skipping [${type}] → ${seekTarget / TICKS_PER_SECOND}s`);
@@ -321,12 +323,12 @@ const skipIntroPlugin = {
      */
     destroy(api) {
         this._cache.clear();
-        this._introSegment     = null;
-        this._outroSegment     = null;
-        this._recapSegment     = null;
-        this._previewSegment   = null;
+        this._introSegment = null;
+        this._outroSegment = null;
+        this._recapSegment = null;
+        this._previewSegment = null;
         this._autoSkipSegments = {};
-        this._lastAutoSkipped  = null;
+        this._lastAutoSkipped = null;
     },
 
     // ========================================================================
@@ -350,9 +352,9 @@ const skipIntroPlugin = {
         // Return from cache if already fetched for this episode
         if (this._cache.has(itemId)) {
             const cached = this._cache.get(itemId);
-            this._introSegment   = cached.intro;
-            this._outroSegment   = cached.outro;
-            this._recapSegment   = cached.recap;
+            this._introSegment = cached.intro;
+            this._outroSegment = cached.outro;
+            this._recapSegment = cached.recap;
             this._previewSegment = cached.preview;
             api.log.debug(`Skip Intro: segments for ${itemId} loaded from cache`);
             return;
@@ -367,31 +369,30 @@ const skipIntroPlugin = {
                 if (!raw || !(raw.End > 0)) return null;
                 return {
                     start: raw.Start * TICKS_PER_SECOND,
-                    end:   raw.End   * TICKS_PER_SECOND
+                    end: raw.End * TICKS_PER_SECOND
                 };
             };
 
-            this._introSegment   = toSegment(data?.Introduction);
-            this._outroSegment   = toSegment(data?.Credits);
-            this._recapSegment   = toSegment(data?.Recap);
+            this._introSegment = toSegment(data?.Introduction);
+            this._outroSegment = toSegment(data?.Credits);
+            this._recapSegment = toSegment(data?.Recap);
             this._previewSegment = toSegment(data?.Preview);
 
             // Cache the raw results — we'll apply action filtering in onPlayerStart
             this._cache.set(itemId, {
-                intro:   this._introSegment,
-                outro:   this._outroSegment,
-                recap:   this._recapSegment,
+                intro: this._introSegment,
+                outro: this._outroSegment,
+                recap: this._recapSegment,
                 preview: this._previewSegment
             });
 
             api.log.info(
                 `Skip Intro: fetched segments for ${itemId} —`,
-                `intro=${this._introSegment   ? 'yes' : 'no'}`,
-                `outro=${this._outroSegment   ? 'yes' : 'no'}`,
-                `recap=${this._recapSegment   ? 'yes' : 'no'}`,
+                `intro=${this._introSegment ? 'yes' : 'no'}`,
+                `outro=${this._outroSegment ? 'yes' : 'no'}`,
+                `recap=${this._recapSegment ? 'yes' : 'no'}`,
                 `preview=${this._previewSegment ? 'yes' : 'no'}`
             );
-
         } catch (err) {
             // 404 = intro-skipper has no data for this episode
             if (err.status === 404) {
@@ -402,9 +403,9 @@ const skipIntroPlugin = {
 
             // Cache a null-result to avoid hammering the server on every tick
             this._cache.set(itemId, { intro: null, outro: null, recap: null, preview: null });
-            this._introSegment   = null;
-            this._outroSegment   = null;
-            this._recapSegment   = null;
+            this._introSegment = null;
+            this._outroSegment = null;
+            this._recapSegment = null;
             this._previewSegment = null;
         }
     },
@@ -491,7 +492,9 @@ const skipIntroPlugin = {
                 // We bypass seek and trigger the 'ended' flow directly.
                 // ------------------------------------------------------------
                 if (durationTicks > 0 && seekTarget >= durationTicks) {
-                    pluginApi.log.info(`Skip ${type}: target ${seekTarget / TICKS_PER_SECOND}s is past duration ${durationTicks / TICKS_PER_SECOND}s. Ending playback.`);
+                    pluginApi.log.info(
+                        `Skip ${type}: target ${seekTarget / TICKS_PER_SECOND}s is past duration ${durationTicks / TICKS_PER_SECOND}s. Ending playback.`
+                    );
                     player.emit('ended');
                 } else {
                     pluginApi.log.info(`Skip ${type}: seeking to ${seekTarget / TICKS_PER_SECOND}s`);
@@ -508,7 +511,7 @@ const skipIntroPlugin = {
                  * segment widget variations (intro, outro, recap, etc.).
                  * ====================================================================
                  */
-                if (document.activeElement && el.contains(document.activeElement)) {
+                if (document.activeElement && document.activeElement.closest('.skip-intro-btn')) {
                     document.activeElement.blur();
                 }
             }

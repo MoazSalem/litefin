@@ -42,12 +42,12 @@ const log = logger.create('AuthManager');
 // Storage Keys
 // ============================================================================
 const STORAGE_KEYS = {
-    SERVER_URL:      'litefin:serverUrl',
-    DEVICE_ID:       'litefin:deviceId',
+    SERVER_URL: 'litefin:serverUrl',
+    DEVICE_ID: 'litefin:deviceId',
 
     // --- Active user marker ---
     /** userId string of the currently active session */
-    ACTIVE_USER:     'litefin:activeUserId',
+    ACTIVE_USER: 'litefin:activeUserId',
 
     // --- Per-server session map ---
     /**
@@ -58,11 +58,11 @@ const STORAGE_KEYS = {
     SERVER_SESSIONS: 'litefin:serverSessions',
 
     // --- Legacy flat sessions (migration reference only — do not write to this after migration) ---
-    SESSIONS:        'litefin:sessions',
+    SESSIONS: 'litefin:sessions',
 
     // --- Server names map ---
     /** Maps serverUrl -> serverName for displaying friendlier names in saved servers */
-    SERVER_NAMES:    'litefin:serverNames'
+    SERVER_NAMES: 'litefin:serverNames'
 };
 
 /**
@@ -80,15 +80,32 @@ const SUPPORTED_CAPABILITIES = {
     DeviceProfile: null, // Filled in at call time via buildJellyfinProfile()
     PlayableMediaTypes: ['Video', 'Audio'],
     SupportedCommands: [
-        'MoveUp', 'MoveDown', 'MoveLeft', 'MoveRight',
+        'MoveUp',
+        'MoveDown',
+        'MoveLeft',
+        'MoveRight',
         'ToggleOsd',
-        'Select', 'Back', 'SendKey', 'SendString',
-        'GoHome', 'GoToSettings',
-        'VolumeUp', 'VolumeDown', 'Mute', 'Unmute', 'ToggleMute', 'SetVolume',
-        'SetAudioStreamIndex', 'SetSubtitleStreamIndex',
-        'DisplayContent', 'GoToSearch', 'DisplayMessage',
-        'SetRepeatMode', 'SetShuffleQueue',
-        'ChannelUp', 'ChannelDown',
+        'Select',
+        'Back',
+        'SendKey',
+        'SendString',
+        'GoHome',
+        'GoToSettings',
+        'VolumeUp',
+        'VolumeDown',
+        'Mute',
+        'Unmute',
+        'ToggleMute',
+        'SetVolume',
+        'SetAudioStreamIndex',
+        'SetSubtitleStreamIndex',
+        'DisplayContent',
+        'GoToSearch',
+        'DisplayMessage',
+        'SetRepeatMode',
+        'SetShuffleQueue',
+        'ChannelUp',
+        'ChannelDown',
         'PlayMediaSource'
     ],
     SupportsMediaControl: true,
@@ -101,7 +118,7 @@ const SUPPORTED_CAPABILITIES = {
 class AuthManager {
     constructor() {
         // Bind methods that are wired to external event sources
-        this._onUnauthorized    = this._onUnauthorized.bind(this);
+        this._onUnauthorized = this._onUnauthorized.bind(this);
         this._onWebosDeviceInfo = this._onWebosDeviceInfo.bind(this);
 
         // Listen for unauthorized events from API
@@ -183,10 +200,10 @@ class AuthManager {
         // Already on the new format — nothing to do
         if (storage.getItem(STORAGE_KEYS.SERVER_SESSIONS) !== null) return;
 
-        const serverUrl      = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
         const flatSessionRaw = storage.getItem(STORAGE_KEYS.SESSIONS);
 
-        let initialMap = {};
+        const initialMap = {};
 
         if (flatSessionRaw && serverUrl) {
             // Existing users: lift the flat sessions array into the server's slot
@@ -221,13 +238,13 @@ class AuthManager {
     async _restoreSession() {
         log.info('_restoreSession() called');
 
-        const serverUrl    = storage.getItem(STORAGE_KEYS.SERVER_URL);
-        const sessions     = this._loadSessions();
+        const serverUrl = storage.getItem(STORAGE_KEYS.SERVER_URL);
+        const sessions = this._loadSessions();
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
 
         log.debug('Restore check:', {
-            hasServerUrl:    !!serverUrl,
-            sessionCount:    sessions.length,
+            hasServerUrl: !!serverUrl,
+            sessionCount: sessions.length,
             hasActiveUserId: !!activeUserId
         });
 
@@ -261,17 +278,17 @@ class AuthManager {
 
             // Sync the stored session with fresh user data from the server
             this._saveSession({
-                userId:          user.Id,
-                accessToken:     session.accessToken,
-                userName:        user.Name || '',
+                userId: user.Id,
+                accessToken: session.accessToken,
+                userName: user.Name || '',
                 primaryImageTag: user.PrimaryImageTag || null
             });
 
             // Publish authenticated state
-            state.set('user:data',        user);
+            state.set('user:data', user);
             state.set('user:authenticated', true);
             state.set('server:connected', true);
-            state.set('server:offline',   false);
+            state.set('server:offline', false);
             state.set('user:sessionCount', this._loadSessions().length);
 
             // Report capabilities to make this user visible as "online" in the dashboard
@@ -295,7 +312,7 @@ class AuthManager {
                 // Server unreachable — keep credentials for when it comes back
                 log.warn('Server unreachable during restore. Preserving credentials for retry.');
                 state.set('server:connected', false);
-                state.set('server:offline',   true);
+                state.set('server:offline', true);
                 state.set('user:authenticated', false);
                 state.set('user:sessionCount', sessions.length);
                 return false;
@@ -352,8 +369,8 @@ class AuthManager {
             }
 
             state.set('server:connected', true);
-            state.set('server:offline',   false);
-            state.set('server:info',      info);
+            state.set('server:offline', false);
+            state.set('server:info', info);
 
             eventBus.emit('auth:serverConnected', info);
 
@@ -416,7 +433,7 @@ class AuthManager {
 
         // Save in-memory credentials so we can restore them if this login fails
         // (prevents the app from being half-logged-out on a wrong password)
-        const prevToken  = api.accessToken;
+        const prevToken = api.accessToken;
         const prevUserId = api.userId;
 
         try {
@@ -437,8 +454,8 @@ class AuthManager {
 
             // Unpack response
             const accessToken = result.AccessToken || result.accessToken;
-            const user        = result.User        || result.user;
-            const userId      = user?.Id           || user?.id;
+            const user = result.User || result.user;
+            const userId = user?.Id || user?.id;
 
             if (!accessToken || !userId) {
                 log.error('Invalid login response structure', result);
@@ -451,8 +468,8 @@ class AuthManager {
             this._saveSession({
                 userId,
                 accessToken,
-                userName:        user.Name             || '',
-                primaryImageTag: user.PrimaryImageTag  || null
+                userName: user.Name || '',
+                primaryImageTag: user.PrimaryImageTag || null
             });
             storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
 
@@ -473,8 +490,8 @@ class AuthManager {
 
             // Update app state
             state.set('user:authenticated', true);
-            state.set('user:data',          user);
-            state.set('user:sessionCount',  this._loadSessions().length);
+            state.set('user:data', user);
+            state.set('user:sessionCount', this._loadSessions().length);
 
             eventBus.emit('auth:login', user);
             log.info(`Login successful for "${user.Name || username}"`);
@@ -521,8 +538,8 @@ class AuthManager {
             const result = await api.authenticateWithQuickConnect(secret);
 
             const accessToken = result.AccessToken || result.accessToken;
-            const user        = result.User        || result.user;
-            const userId      = user?.Id           || user?.id;
+            const user = result.User || result.user;
+            const userId = user?.Id || user?.id;
 
             if (!accessToken || !userId) {
                 log.error('Invalid Quick Connect auth response structure', result);
@@ -533,8 +550,8 @@ class AuthManager {
             this._saveSession({
                 userId,
                 accessToken,
-                userName:        user.Name             || '',
-                primaryImageTag: user.PrimaryImageTag  || null
+                userName: user.Name || '',
+                primaryImageTag: user.PrimaryImageTag || null
             });
             storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
 
@@ -556,8 +573,8 @@ class AuthManager {
 
             // Update app state
             state.set('user:authenticated', true);
-            state.set('user:data',          user);
-            state.set('user:sessionCount',  this._loadSessions().length);
+            state.set('user:data', user);
+            state.set('user:sessionCount', this._loadSessions().length);
 
             eventBus.emit('auth:login', user);
 
@@ -588,7 +605,7 @@ class AuthManager {
         log.info(`Switching to user ${userId}...`);
 
         const sessions = this._loadSessions();
-        const session  = sessions.find((s) => s.userId === userId);
+        const session = sessions.find((s) => s.userId === userId);
 
         if (!session) {
             throw new Error(`No stored session found for user ${userId}`);
@@ -606,10 +623,10 @@ class AuthManager {
 
             // Update the session with fresher data (image tag may have changed)
             this._saveSession({
-                userId:          user.Id,
-                accessToken:     session.accessToken,
-                userName:        user.Name             || '',
-                primaryImageTag: user.PrimaryImageTag  || null
+                userId: user.Id,
+                accessToken: session.accessToken,
+                userName: user.Name || '',
+                primaryImageTag: user.PrimaryImageTag || null
             });
             storage.setItem(STORAGE_KEYS.ACTIVE_USER, userId);
 
@@ -629,8 +646,8 @@ class AuthManager {
 
             // Update global state to reflect the new active user
             state.set('user:authenticated', true);
-            state.set('user:data',          user);
-            state.set('user:sessionCount',  sessions.length);
+            state.set('user:data', user);
+            state.set('user:sessionCount', sessions.length);
 
             eventBus.emit('auth:login', user);
             log.info(`Switched to user "${user.Name}"`);
@@ -665,21 +682,21 @@ class AuthManager {
         log.info('Logging out current user...');
 
         const activeUserId = storage.getItem(STORAGE_KEYS.ACTIVE_USER);
-        const sessions     = this._loadSessions();
-        const session      = sessions.find((s) => s.userId === activeUserId);
+        const sessions = this._loadSessions();
+        const session = sessions.find((s) => s.userId === activeUserId);
 
         // Close WebSocket immediately (marks this user offline on the dashboard)
         api.closeWebSocket();
 
         // Notify the server while we still have valid credentials (best-effort)
         if (session && api._serverUrl) {
-            const url        = `${api._serverUrl}/Sessions/Logout`;
+            const url = `${api._serverUrl}/Sessions/Logout`;
             const authHeader = api.getAuthHeader(session.accessToken);
 
             log.info('Notifying server of logout...');
             try {
                 await fetch(url, {
-                    method:  'POST',
+                    method: 'POST',
                     headers: {
                         'X-Emby-Authorization': authHeader,
                         'Content-Type': 'application/json'
@@ -700,7 +717,7 @@ class AuthManager {
         // Clear ApiClient credentials for this user
         api.clearAuth();
         state.set('user:authenticated', false);
-        state.set('user:data',          null);
+        state.set('user:data', null);
 
         const remaining = this._loadSessions();
         state.set('user:sessionCount', remaining.length);
@@ -776,9 +793,9 @@ class AuthManager {
 
         // Reset application state
         state.set('user:authenticated', false);
-        state.set('user:data',          null);
-        state.set('user:sessionCount',  0);
-        state.set('server:connected',   false);
+        state.set('user:data', null);
+        state.set('user:sessionCount', 0);
+        state.set('server:connected', false);
 
         // Route to login page
         eventBus.emit('auth:logout');
@@ -837,8 +854,8 @@ class AuthManager {
 
         return Object.entries(map)
             .filter(([, sessions]) => Array.isArray(sessions) && sessions.length > 0)
-            .map(([serverUrl, sessions]) => ({ 
-                serverUrl, 
+            .map(([serverUrl, sessions]) => ({
+                serverUrl,
                 sessions,
                 serverName: namesMap[serverUrl] || null
             }));
@@ -867,7 +884,7 @@ class AuthManager {
 
         api.clearAuth();
         state.set('user:authenticated', false);
-        state.set('user:data',          null);
+        state.set('user:data', null);
 
         const remaining = this._loadSessions();
         state.set('user:sessionCount', remaining.length);
@@ -921,7 +938,7 @@ class AuthManager {
             if (!raw) return {};
             const parsed = JSON.parse(raw);
             // Guard against corrupt / unexpected data shapes
-            return (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) ? parsed : {};
+            return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {};
         } catch (e) {
             log.error('Failed to parse serverSessions from storage — returning empty map:', e);
             return {};
@@ -940,7 +957,7 @@ class AuthManager {
         // Cannot scope sessions without a server URL
         if (!serverUrl) return [];
 
-        const map      = this._loadAllServerSessions();
+        const map = this._loadAllServerSessions();
         const sessions = map[serverUrl];
         return Array.isArray(sessions) ? sessions : [];
     }
@@ -960,7 +977,7 @@ class AuthManager {
         }
 
         // Read the full map, update only the active server's slot, then write back
-        const map    = this._loadAllServerSessions();
+        const map = this._loadAllServerSessions();
         map[serverUrl] = sessions;
         storage.setItem(STORAGE_KEYS.SERVER_SESSIONS, JSON.stringify(map));
     }

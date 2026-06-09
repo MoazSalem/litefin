@@ -200,6 +200,7 @@ class CardRenderer {
                 // This provides a premium "streaming service" aesthetic
                 if (isModern || item._dynamicThumbUrl) {
                     imageInnerHtml = `
+                        <div class="card-overlay-tint"></div>
                         <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
                     `;
                 }

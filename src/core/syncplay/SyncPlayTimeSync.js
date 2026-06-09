@@ -233,30 +233,32 @@ export class SyncPlayTimeSync {
             const t3 = Date.now();
 
             // Parse the two server-side timestamps from the response
-            const requestReceptionTime     = this._parseServerTime(response?.RequestReceptionTime);
+            const requestReceptionTime = this._parseServerTime(response?.RequestReceptionTime);
             const responseTransmissionTime = this._parseServerTime(response?.ResponseTransmissionTime);
 
             if (requestReceptionTime === null || responseTransmissionTime === null) {
                 // This can happen on an older Jellyfin server that doesn't populate
                 // these fields — just skip rather than poisoning our measurements.
-                log.warn('TimeSync: server response missing RequestReceptionTime / ResponseTransmissionTime fields, skipping measurement');
+                log.warn(
+                    'TimeSync: server response missing RequestReceptionTime / ResponseTransmissionTime fields, skipping measurement'
+                );
             } else {
                 // Classic NTP-style calculation:
                 //   roundTrip       = total elapsed time for the request
                 //   serverProcessing = time the server spent between receiving and sending
                 //   networkDelay    = half of the actual network transit time
                 //   clockOffset     = how far our local clock is behind (+) or ahead (-) of the server
-                const roundTrip        = t3 - t0;
+                const roundTrip = t3 - t0;
                 const serverProcessing = responseTransmissionTime - requestReceptionTime; // typically ~0ms
-                const networkDelay     = (roundTrip - serverProcessing) / 2;
-                const clockOffset      = requestReceptionTime - t0 - networkDelay;
+                const networkDelay = (roundTrip - serverProcessing) / 2;
+                const clockOffset = requestReceptionTime - t0 - networkDelay;
 
                 this._addMeasurement({ clockOffset, roundTrip });
 
                 log.debug(
                     `TimeSync ping — rtt: ${roundTrip}ms, ` +
-                    `delay: ${networkDelay.toFixed(1)}ms, ` +
-                    `offset: ${clockOffset.toFixed(1)}ms`
+                        `delay: ${networkDelay.toFixed(1)}ms, ` +
+                        `offset: ${clockOffset.toFixed(1)}ms`
                 );
             }
         } catch (err) {
@@ -264,9 +266,7 @@ export class SyncPlayTimeSync {
         }
 
         // Back off to the slower interval once we have a full buffer of samples
-        const nextDelay = this._isStable
-            ? STEADY_STATE_POLL_INTERVAL_MS
-            : INITIAL_POLL_INTERVAL_MS;
+        const nextDelay = this._isStable ? STEADY_STATE_POLL_INTERVAL_MS : INITIAL_POLL_INTERVAL_MS;
 
         this._schedulePoll(nextDelay);
     }
@@ -313,16 +313,16 @@ export class SyncPlayTimeSync {
         const best = sorted.slice(0, bestCount);
 
         // Average offset and roundtrip from best measurements
-        const avgOffset   = best.reduce((sum, m) => sum + m.clockOffset,  0) / best.length;
+        const avgOffset = best.reduce((sum, m) => sum + m.clockOffset, 0) / best.length;
         const avgRoundTrip = best.reduce((sum, m) => sum + m.roundTrip, 0) / best.length;
 
         this._timeOffset = avgOffset;
-        this._ping       = avgRoundTrip / 2;
+        this._ping = avgRoundTrip / 2;
 
         log.debug(
             `TimeSync updated — offset: ${this._timeOffset.toFixed(1)}ms, ` +
-            `ping: ${this._ping.toFixed(1)}ms ` +
-            `(from ${best.length}/${this._measurements.length} samples)`
+                `ping: ${this._ping.toFixed(1)}ms ` +
+                `(from ${best.length}/${this._measurements.length} samples)`
         );
     }
 

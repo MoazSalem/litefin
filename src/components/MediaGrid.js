@@ -109,7 +109,12 @@ class MediaGrid extends Component {
                         const itemId = card.dataset.itemId;
                         const itemType = card.dataset.type;
 
-                        if (itemType === 'Person' || itemType === 'MusicArtist' || itemType === 'Artist' || itemType === 'AlbumArtist') {
+                        if (
+                            itemType === 'Person' ||
+                            itemType === 'MusicArtist' ||
+                            itemType === 'Artist' ||
+                            itemType === 'AlbumArtist'
+                        ) {
                             log.debug('Navigating to PersonPage:', itemId);
                             router.navigate(`/person/${itemId}`);
                         } else {
@@ -162,7 +167,7 @@ class MediaGrid extends Component {
         // Fallback: In-place expansion (Deprecated for most grids)
         // We'll keep this simple for now but ideally all grids use moreUrl
         log.warn('MediaGrid: Using deprecated in-place expansion. Please provide moreUrl.');
-        
+
         const grid = document.getElementById(`${this.id}-items`);
         if (grid) {
             // Render ALL items
@@ -172,10 +177,10 @@ class MediaGrid extends Component {
             }
             grid.innerHTML = html.join('');
             lazyLoader.observe(grid);
-            
+
             // Hide the button since everything is shown
             this._hideButton();
-            
+
             // Invalidate focus cache
             focusManager.invalidateCache(`${this.id}-items`);
         }
@@ -226,9 +231,9 @@ class MediaGrid extends Component {
         // ==========================================================
         // Grid Card Rendering
         // ==========================================================
-        // Passes 'isGrid: true' to the CardRenderer. This flags the renderer 
-        // that the cards are rendered inside a strict vertical grid column 
-        // layout (like libraries and search results), disabling expanding 
+        // Passes 'isGrid: true' to the CardRenderer. This flags the renderer
+        // that the cards are rendered inside a strict vertical grid column
+        // layout (like libraries and search results), disabling expanding
         // animations to prevent cards from overlapping with their neighbors.
         // ==========================================================
         return CardRenderer.createCardHtml(item, {

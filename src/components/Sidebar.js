@@ -203,7 +203,7 @@ class Sidebar extends Component {
         // COLLAPSED SIDEBAR LIBRARY SHORTCUT ICONS CONFIGURATION
         // ---------------------------------------------------------------------
         // Read the user preference for collapsed library shortcuts. If enabled,
-        // we append the reactive class 'show-lib-icons-collapsed' directly to the 
+        // we append the reactive class 'show-lib-icons-collapsed' directly to the
         // root sidebar container. Register event bus subscription to listen for
         // user changes dynamically and perform clean layout hot-reloads.
         // ---------------------------------------------------------------------
@@ -418,7 +418,8 @@ class Sidebar extends Component {
 
         // Pointer/Magic Remote: snap to mousedown for zero lag
         el.onmousedown = (e) => {
-            if (e.button === 0) { // Left click only
+            if (e.button === 0) {
+                // Left click only
                 handleActivate(e);
             }
         };
@@ -565,7 +566,7 @@ class Sidebar extends Component {
                 const btn = document.createElement('button');
                 btn.className = 'sidebar-item library-item';
                 btn.tabIndex = 0;
-                
+
                 // Route livetv to the unified Live TV page
                 const isLiveTv = lib.CollectionType === 'livetv';
                 const buttonPath = isLiveTv ? '/livetv' : `/library/${lib.Id}`;
@@ -635,10 +636,10 @@ class Sidebar extends Component {
     _getLibraryIcon(type) {
         // Normalize strings to avoid mismatching cases
         const colType = (type || '').toLowerCase();
-        
+
         let outlinePath = '';
         let filledPath = '';
-        let viewBox = '0 0 24 24';
+        const viewBox = '0 0 24 24';
 
         // Precise path configurations for extreme visual sharpness
         switch (colType) {

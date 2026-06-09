@@ -451,7 +451,10 @@ class ImageService {
         }
 
         // 1.5 Intercept and map to modern layout card sizes if modern layout is active
-        const isModern = typeof document !== 'undefined' && document.documentElement && document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern =
+            typeof document !== 'undefined' &&
+            document.documentElement &&
+            document.documentElement.getAttribute('data-layout') === 'modern';
         if (isModern && !type.startsWith('details-') && !type.startsWith('hero-')) {
             if (type === 'expanded-poster') {
                 type = 'modern-expanded';

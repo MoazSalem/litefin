@@ -761,7 +761,8 @@ class LibraryPage extends Page {
             const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
             const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
             const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
-            const isLibraryView = this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
+            const isLibraryView =
+                this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
             const shouldHideLabels = (isLibraryView && hideLibraryLabels) || (isLibraryView && isModern);
 
             grid.innerHTML = CardRenderer.createSkeletonHtml(12, isLandscape, skeletonMode, shouldHideLabels);
@@ -1609,7 +1610,10 @@ class LibraryPage extends Page {
             try {
                 // Parse the JSON string back into a filters object
                 this.state.filters = JSON.parse(savedFilters);
-                log.info(`[Filters] Rehydrated persisted filters for library ${this.state.libraryId}:`, this.state.filters);
+                log.info(
+                    `[Filters] Rehydrated persisted filters for library ${this.state.libraryId}:`,
+                    this.state.filters
+                );
             } catch (e) {
                 // Fallback gracefully on parsing errors to keep the application stable
                 log.error('Failed to parse persisted filters, falling back to empty state', e);
@@ -2009,9 +2013,9 @@ class LibraryPage extends Page {
                 // ==========================================================
                 // Grid Card Rendering Configuration
                 // ==========================================================
-                // Here we set 'isGrid: true' to tell the card renderer that 
+                // Here we set 'isGrid: true' to tell the card renderer that
                 // this card is rendered inside the vertical library grid.
-                // This disables horizontal poster expansions to maintain 
+                // This disables horizontal poster expansions to maintain
                 // clean, stable column layouts and prevent shifts on TV displays.
                 // ==========================================================
                 CardRenderer.createCardHtml(item, {
@@ -2472,7 +2476,7 @@ class LibraryPage extends Page {
                     // ==========================================================
                     // Sub-Grid Item Rendering
                     // ==========================================================
-                    // These genre category row items are rendered as a vertical grid 
+                    // These genre category row items are rendered as a vertical grid
                     // (.genre-grid-items), so they must use isGrid: true to avoid
                     // horizontal expansions that would overlap column siblings.
                     // ==========================================================
@@ -3778,24 +3782,26 @@ class LibraryPage extends Page {
                 viewType === 'Playlists');
 
         const isCollections = (collectionType === 'boxsets' || collectionType === 'playlists') && viewType === 'Items';
-        
+
         // Home Videos, Music Videos, and Photos often use 'Folders' or 'Videos' or 'Photos' viewType
-        const isFolderLikeMain = (collectionType === 'homevideos' || collectionType === 'musicvideos' || collectionType === 'photos') &&
+        const isFolderLikeMain =
+            (collectionType === 'homevideos' || collectionType === 'musicvideos' || collectionType === 'photos') &&
             (viewType === 'Folders' || viewType === 'Videos' || viewType === 'Photos' || viewType === 'Items');
 
-        const isFolderMain = (this.state.isFolderLibrary || collectionType === 'folders') && 
+        const isFolderMain =
+            (this.state.isFolderLibrary || collectionType === 'folders') &&
             (viewType === 'Items' || viewType === 'Folders');
 
-        const shouldShow = isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
+        const shouldShow =
+            isMovieMain || isTVMain || isEpisodes || isMusicMain || isCollections || isFolderMain || isFolderLikeMain;
 
         const isSubView = this._isSubView();
         const isSubFolder = this.state.isSubFolder;
 
-        // Controls and Alpha Picker should be visible in main views, sub-views (Genre/Person), 
+        // Controls and Alpha Picker should be visible in main views, sub-views (Genre/Person),
         // or when navigating into sub-folders.
         const isControlsVisible = shouldShow || isSubView || isSubFolder;
         const isAlphaVisible = shouldShow || isSubView || isSubFolder;
-
 
         const isCollectionsLike = collectionType === 'boxsets' || collectionType === 'playlists';
         const isTabsVisible = !isCollectionsLike && !isSubView;

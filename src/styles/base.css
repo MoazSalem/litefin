@@ -607,7 +607,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 4;
+    z-index: 8;
 }
 
 .played-badge {
@@ -620,7 +620,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 4;
+    z-index: 8;
     /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
 }
 
@@ -637,7 +637,7 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 4;
+    z-index: 8;
     /* PERFORMANCE: Removed backdrop-filter (blur) and box-shadow. 
        These are extremely expensive on Tizen 3.0/4.0 in a grid context. */
 }
@@ -655,7 +655,7 @@ body {
     border-radius: var(--jf-border-radius);
     font-size: 1.1rem;
     font-weight: 700;
-    z-index: 4;
+    z-index: 8;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -669,7 +669,7 @@ body {
     border-radius: var(--jf-border-radius);
     font-size: 1.1rem;
     font-weight: 700;
-    z-index: 4;
+    z-index: 8;
     display: flex;
     align-items: center;
     justify-content: center;

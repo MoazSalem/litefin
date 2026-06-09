@@ -333,7 +333,7 @@ class HomePage extends Page {
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = {};
-                            
+
                             // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
                                 const cutoff = new Date();
@@ -348,11 +348,11 @@ class HomePage extends Page {
                     // This flag enables the sorting comparator to distinguish between resume items
                     // (which should sort by direct pause dates) and next-up items (which should
                     // sort by show activity dates).
-                    const resumeItems = (resumeRes?.Items || []).map(item => ({
+                    const resumeItems = (resumeRes?.Items || []).map((item) => ({
                         ...item,
                         _isResume: true
                     }));
-                    
+
                     const nextUpItems = (nextUpRes?.Items || [])
                         .filter((item) => {
                             // Filter out next-up items that have already been partially played,
@@ -360,7 +360,7 @@ class HomePage extends Page {
                             const position = item.UserData?.PlaybackPositionTicks || 0;
                             return position === 0;
                         })
-                        .map(item => ({
+                        .map((item) => ({
                             ...item,
                             _isResume: false
                         }));
@@ -373,9 +373,7 @@ class HomePage extends Page {
                     // Plex-style sorting, we need to know exactly when the parent series
                     // was last active. We resolve this by batch-fetching the most recent
                     // play activity of the corresponding shows in a single network request.
-                    const nextUpSeriesIds = nextUpItems
-                        .map((item) => item.SeriesId)
-                        .filter(Boolean);
+                    const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
 
                     // Initialize series activity timestamp lookup map.
                     const seriesLastPlayedMap = {};
@@ -384,7 +382,7 @@ class HomePage extends Page {
                         try {
                             // De-duplicate the series IDs to avoid sending redundant entries in the query.
                             const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
-                            
+
                             // Query played and in-progress episodes belonging to these series IDs,
                             // ordered by play date descending (using the official 'DatePlayed' parameter).
                             const activeEpisodesRes = await api.getItems({
@@ -402,7 +400,7 @@ class HomePage extends Page {
                             for (const ep of activeEpisodes) {
                                 const seriesId = ep.SeriesId;
                                 const lastPlayed = ep.UserData?.LastPlayedDate;
-                                
+
                                 // Map each series to the newest played episode timestamp encountered.
                                 if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
                                     seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
@@ -419,7 +417,7 @@ class HomePage extends Page {
                     // ──────────────────────────────────────────────────────────
                     // Combine the lists and de-duplicate by database Item ID.
                     const combined = [...resumeItems, ...nextUpItems];
-                    
+
                     const seen = new Set();
                     const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
@@ -431,10 +429,10 @@ class HomePage extends Page {
                     // PLEX-STYLE CHRONOLOGICAL SORTING
                     // ==========================================================
                     //
-                    // Replicates Plex's signature dashboard logic by sorting the merged 
-                    // array descending based on when the show/movie was last interacted with. 
+                    // Replicates Plex's signature dashboard logic by sorting the merged
+                    // array descending based on when the show/movie was last interacted with.
                     // Instead of a rigid "all resume items first" block layout, this interweaves
-                    // your partially played movies/episodes with the next upcoming episodes in 
+                    // your partially played movies/episodes with the next upcoming episodes in
                     // the exact order they were last watched.
                     //
                     // Falls back to DateCreated (indexing date) or 0 (epoch) for safety.
@@ -470,7 +468,7 @@ class HomePage extends Page {
                             // Fallback to the media creation/indexing timestamp.
                             timeB = new Date(b.DateCreated || 0).getTime();
                         }
-                        
+
                         // Sort descending: most recently active media at the start of the row.
                         return timeB - timeA;
                     });
@@ -540,30 +538,32 @@ class HomePage extends Page {
                  * ============================================================
                  * UI Layout Aspect Determination (Apple HIG Compliance)
                  * ============================================================
-                 * 
-                 * Following Apple's Human Interface Guidelines, grid systems 
-                 * should display items in card aspect ratios that match their 
-                 * media type semantics. 
-                 * 
-                 *   - Audio/Music albums, live tuner sources, personal/home 
-                 *     recordings, and music videos require a symmetrical 
+                 *
+                 * Following Apple's Human Interface Guidelines, grid systems
+                 * should display items in card aspect ratios that match their
+                 * media type semantics.
+                 *
+                 *   - Audio/Music albums, live tuner sources, personal/home
+                 *     recordings, and music videos require a symmetrical
                  *     1:1 aspect ratio ("square") for ideal presentation.
-                 * 
-                 *   - Movies and TV Shows align beautifully to a 2:3 aspect 
+                 *
+                 *   - Movies and TV Shows align beautifully to a 2:3 aspect
                  *     ratio ("portrait" or "poster" card type).
                  */
-                layout: (
-                    lib.CollectionType === 'music' || 
-                    lib.CollectionType === 'livetv' || 
-                    lib.CollectionType === 'homevideos' || 
+                layout:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
                     lib.CollectionType === 'musicvideos'
-                ) ? 'square' : 'portrait',
-                cardType: (
-                    lib.CollectionType === 'music' || 
-                    lib.CollectionType === 'livetv' || 
-                    lib.CollectionType === 'homevideos' || 
+                        ? 'square'
+                        : 'portrait',
+                cardType:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
                     lib.CollectionType === 'musicvideos'
-                ) ? 'square' : 'poster',
+                        ? 'square'
+                        : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -585,9 +585,9 @@ class HomePage extends Page {
         // Force Expandable Posters Layout Override
         // ====================================================================
         // If the user is running the Modern layout and has toggled on the force-poster
-        // preference under settings, we dynamically coerce all horizontal track rows 
+        // preference under settings, we dynamically coerce all horizontal track rows
         // to use standard portrait layouts ('portrait') with 'poster' cards.
-        // This ensures the custom expanding-backdrops and visual transitions apply 
+        // This ensures the custom expanding-backdrops and visual transitions apply
         // universally, aligning with unified grids (Apple HIG style).
         // ====================================================================
         const isModern = layoutManager.getLayout() === 'modern';
@@ -1627,7 +1627,7 @@ class HomePage extends Page {
                     // Dynamic Thumbnail Library Query
                     // ==========================================================
                     // Live TV (livetv) libraries are not standard folder structures
-                    // and do not have child items under a ParentId. Instead, they 
+                    // and do not have child items under a ParentId. Instead, they
                     // store global TV Channels, which we fetch using the specialized
                     // getLiveTvChannels API endpoint. Everything else uses standard
                     // child item queries.
@@ -1647,17 +1647,16 @@ class HomePage extends Page {
                             EnableImageTypes: 'Primary,Thumb,Backdrop',
                             Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                         });
-                        
+
                         // Extract channel items safely
                         const ltvItems = ltvResponse?.Items || [];
-                        
+
                         // Filter channels to only those with valid primary, thumb or backdrop artwork
-                        const validLtvItems = ltvItems.filter((item) => 
-                            item.ImageTags?.Primary || 
-                            item.ImageTags?.Thumb || 
-                            item.BackdropImageTags?.length > 0
+                        const validLtvItems = ltvItems.filter(
+                            (item) =>
+                                item.ImageTags?.Primary || item.ImageTags?.Thumb || item.BackdropImageTags?.length > 0
                         );
-                        
+
                         // Local shuffle to randomize the logo across loads
                         const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
                         response = { Items: shuffledLtv.slice(0, 5) };
@@ -1762,7 +1761,7 @@ class HomePage extends Page {
                                     });
                                 }
                             } else if (
-                                lib.CollectionType === 'photos' || 
+                                lib.CollectionType === 'photos' ||
                                 lib.CollectionType === 'homevideos' ||
                                 lib.CollectionType === 'musicvideos' ||
                                 lib.CollectionType === 'livetv'
@@ -1839,17 +1838,18 @@ class HomePage extends Page {
                                     EnableImageTypes: 'Primary,Thumb,Backdrop',
                                     Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                                 });
-                                
+
                                 // Extract items safely
                                 const ltvFallbackItems = ltvFallback?.Items || [];
-                                
+
                                 // Keep only channels that have valid visual assets
-                                const validFallbackItems = ltvFallbackItems.filter((item) =>
-                                    item.ImageTags?.Primary ||
-                                    item.ImageTags?.Thumb ||
-                                    item.BackdropImageTags?.length > 0
+                                const validFallbackItems = ltvFallbackItems.filter(
+                                    (item) =>
+                                        item.ImageTags?.Primary ||
+                                        item.ImageTags?.Thumb ||
+                                        item.BackdropImageTags?.length > 0
                                 );
-                                
+
                                 // Randomize the list of candidate fallback cards
                                 const shuffledFallback = validFallbackItems.sort(() => 0.5 - Math.random());
                                 fallbackResponse = { Items: shuffledFallback.slice(0, 10) };

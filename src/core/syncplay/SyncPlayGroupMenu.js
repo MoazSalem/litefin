@@ -40,8 +40,6 @@ const log = logger.create('SyncPlayGroupMenu');
 // CSS (injected into <head> once on first use)
 // ============================================================================
 
-
-
 // ============================================================================
 // SyncPlayGroupMenu Class
 // ============================================================================
@@ -68,7 +66,7 @@ export class SyncPlayGroupMenu {
         this._onKeyDown = null;
 
         /** Handler reference for keyboard/remote navigation. */
-        this._onSyncPlayEnabled  = null;
+        this._onSyncPlayEnabled = null;
         this._onSyncPlayDisabled = null;
 
         /**
@@ -90,7 +88,6 @@ export class SyncPlayGroupMenu {
     async open() {
         if (this.isVisible) return;
         this.isVisible = true;
-
 
         this._buildDOM();
         document.body.appendChild(this._overlay);
@@ -130,9 +127,9 @@ export class SyncPlayGroupMenu {
         }
 
         // Live-update status badge when group membership changes
-        this._onSyncPlayEnabled  = () => this._refreshStatus();
+        this._onSyncPlayEnabled = () => this._refreshStatus();
         this._onSyncPlayDisabled = () => this._refreshStatus();
-        eventBus.on('syncplay:enabled',  this._onSyncPlayEnabled);
+        eventBus.on('syncplay:enabled', this._onSyncPlayEnabled);
         eventBus.on('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Initialize status (badge and buttons)
@@ -162,7 +159,7 @@ export class SyncPlayGroupMenu {
             this._onKeyDown = null;
         }
 
-        eventBus.off('syncplay:enabled',  this._onSyncPlayEnabled);
+        eventBus.off('syncplay:enabled', this._onSyncPlayEnabled);
         eventBus.off('syncplay:disabled', this._onSyncPlayDisabled);
 
         // Animate out, then detach from DOM
@@ -202,7 +199,7 @@ export class SyncPlayGroupMenu {
                 <div class="syncplay-header">
                     <!-- SyncPlay icon (groups) -->
                     <div class="syncplay-icon">
-                        ${(getSyncPlayManager()?.isEnabled) ? ICONS.groupFilled : ICONS.group}
+                        ${getSyncPlayManager()?.isEnabled ? ICONS.groupFilled : ICONS.group}
                     </div>
                     <div>
                         <div class="syncplay-title">${i18n.t('SyncPlay')}</div>
@@ -250,7 +247,12 @@ export class SyncPlayGroupMenu {
 
         const isActive = manager.isEnabled;
         const info = manager.groupInfo;
-        const groupName = manager.groupName || info?.Data?.GroupName || info?.GroupName || info?.GroupId || i18n.t('SyncPlayNotInGroup');
+        const groupName =
+            manager.groupName ||
+            info?.Data?.GroupName ||
+            info?.GroupName ||
+            info?.GroupId ||
+            i18n.t('SyncPlayNotInGroup');
 
         return `
             <div class="syncplay-status-badge ${isActive ? '' : 'inactive'}">
@@ -258,7 +260,7 @@ export class SyncPlayGroupMenu {
                 ${isActive ? i18n.t('SyncPlayInGroup', groupName) : i18n.t('SyncPlayNotInGroup')}
             </div>
         `;
-}
+    }
 
     _refreshStatus() {
         if (!this._overlay) return;
@@ -283,12 +285,12 @@ export class SyncPlayGroupMenu {
         if (actions) {
             const oldBtn = actions.querySelector('#syncplay-create-btn, #syncplay-leave-btn');
             const wasFocused = oldBtn === document.activeElement || oldBtn?.classList.contains('focused');
-            
+
             if (manager.isEnabled) {
                 const html = `<button class="syncplay-btn syncplay-btn-danger focusable" id="syncplay-leave-btn">${i18n.t('SyncPlayLeave')}</button>`;
                 if (oldBtn) oldBtn.outerHTML = html;
                 else actions.insertAdjacentHTML('afterbegin', html);
-                
+
                 const leaveBtn = actions.querySelector('#syncplay-leave-btn');
                 if (leaveBtn) {
                     leaveBtn.addEventListener('click', () => this._leaveGroup());
@@ -298,7 +300,7 @@ export class SyncPlayGroupMenu {
                 const html = `<button class="syncplay-btn syncplay-btn-primary focusable" id="syncplay-create-btn">${i18n.t('SyncPlayCreate')}</button>`;
                 if (oldBtn) oldBtn.outerHTML = html;
                 else actions.insertAdjacentHTML('afterbegin', html);
-                
+
                 const createBtn = actions.querySelector('#syncplay-create-btn');
                 if (createBtn) {
                     createBtn.addEventListener('click', () => this._createGroup());
@@ -306,7 +308,7 @@ export class SyncPlayGroupMenu {
                 }
             }
         }
-        
+
         // Ensure FocusManager knows the DOM changed
         focusManager.invalidateCache('__trap__');
     }
@@ -367,9 +369,8 @@ export class SyncPlayGroupMenu {
 
             // Member count
             const memberCount = group.Participants?.length ?? 0;
-            const memberLabel = memberCount === 1 
-                ? i18n.t('SyncPlayMemberCountOne') 
-                : i18n.t('SyncPlayMemberCountMany', memberCount);
+            const memberLabel =
+                memberCount === 1 ? i18n.t('SyncPlayMemberCountOne') : i18n.t('SyncPlayMemberCountMany', memberCount);
 
             li.innerHTML = `
                 <div>
@@ -392,7 +393,7 @@ export class SyncPlayGroupMenu {
 
         container.innerHTML = '';
         container.appendChild(ul);
-        
+
         // Focus the first group or the Close button if no groups
         requestAnimationFrame(() => {
             const firstGroup = ul.querySelector('.syncplay-group-item');
@@ -403,7 +404,7 @@ export class SyncPlayGroupMenu {
                 if (closeBtn) focusManager.focusElement(closeBtn);
             }
         });
-        
+
         focusManager.invalidateCache('__trap__');
     }
 

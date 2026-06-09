@@ -11,7 +11,7 @@ import { storage } from './StorageService.js';
 
 /**
  * Determines if community/critic scores should be visible for a given item.
- * 
+ *
  * @param {Object} item - The Jellyfin media item.
  * @returns {boolean}
  */

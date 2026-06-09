@@ -113,7 +113,10 @@ class App {
 
         // 3.0. Initialize OSD track menu bg opacity CSS variable
         const trackMenuBgOpacity = PlayerSettings.get('osdTrackMenuBgOpacity');
-        document.documentElement.style.setProperty('--osd-track-menu-bg-opacity', (trackMenuBgOpacity / 100).toFixed(2));
+        document.documentElement.style.setProperty(
+            '--osd-track-menu-bg-opacity',
+            (trackMenuBgOpacity / 100).toFixed(2)
+        );
 
         // 3.1. Initialize CSS vars polyfill (no-op on Chrome 49+, active on Tizen 3.0 / Chrome 47).
         //      Must run AFTER layoutManager.init() so the data-theme attribute and theme
@@ -224,7 +227,9 @@ class App {
         this.sidebar.mount(document.getElementById('sidebar-container'));
 
         // Append trigger AFTER sidebar so we can use sibling selectors in CSS
-        document.getElementById('sidebar-container').insertAdjacentHTML('beforeend', '<div class="sidebar-hover-trigger"></div>');
+        document
+            .getElementById('sidebar-container')
+            .insertAdjacentHTML('beforeend', '<div class="sidebar-hover-trigger"></div>');
 
         // Hide the sidebar at the CSS level so the GPU layer doesn't render it over the splash screen.
         // We use visibility:hidden + pointer-events:none instead of display:none so the
@@ -266,7 +271,6 @@ class App {
             versionChecker.checkAtStartup();
         });
 
-
         // Register routes
         this._registerRoutes();
 
@@ -294,14 +298,15 @@ class App {
         // ProfilesPage is intentionally fullscreen — it IS the user switcher, so
         // showing the sidebar (which contains the active user's name) would be inconsistent.
         const fullScreenRoutes = ['/login', '/offline', '/profiles'];
-        const isFullScreen = fullScreenRoutes.includes(path) || path.startsWith('/player') || path.startsWith('/slideshow');
+        const isFullScreen =
+            fullScreenRoutes.includes(path) || path.startsWith('/player') || path.startsWith('/slideshow');
 
         if (isFullScreen) {
             document.body.classList.add('no-sidebar');
             this.sidebar.setMode('hidden');
         } else {
             document.body.classList.remove('no-sidebar');
-            
+
             // Handle Sidebar Modes (Always Hidden or Mixed)
             const sidebarMode = storage.getItem('pref:sidebarMode') || 'shown';
             if (sidebarMode === 'hidden' || (sidebarMode === 'mixed' && path.startsWith('/details'))) {
@@ -309,7 +314,7 @@ class App {
             } else {
                 document.body.classList.remove('sidebar-mode-hidden');
             }
-            
+
             this.sidebar.setMode('visible');
         }
     }
@@ -410,7 +415,7 @@ class App {
                     api.openWebSocket();
                 }
 
-                // Force a reload of the current view to fetch fresh data 
+                // Force a reload of the current view to fetch fresh data
                 // e.g., when the Tizen TV turns on from suspended sleep state.
                 // We skip reloading if the user is in the player to avoid interrupting playback.
                 const currentPath = router.getCurrentPath?.() || '';
@@ -475,7 +480,7 @@ class App {
         // Handle application exit
         eventBus.on('app:exitRequested', () => {
             log.info('Exit requested - checking settings');
-            
+
             if (storage.getItem('pref:confirmExit') === 'true') {
                 log.info('Confirm exit enabled - showing prompt');
                 exitDialog.show();
@@ -496,110 +501,126 @@ class App {
         // PLAYER EVENTS
         // ================================================================
         // Handle playback requests from any page (DetailsPage, HomePage, etc.)
-        eventBus.on('player:play', async ({ item, resume, mediaSourceId, audioStreamIndex, subtitleStreamIndex, backdropUrl, fromSlideshow }) => {
-            log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
+        eventBus.on(
+            'player:play',
+            async ({
+                item,
+                resume,
+                mediaSourceId,
+                audioStreamIndex,
+                subtitleStreamIndex,
+                backdropUrl,
+                fromSlideshow
+            }) => {
+                log.info('Playback requested for item:', item?.Name, 'ID:', item?.Id);
 
-            let itemToPlay = item;
+                let itemToPlay = item;
 
-            // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
-            // the API cannot play it directly. We must resolve it to the first playable audio track.
-            if (
-                item &&
-                ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
-            ) {
-                try {
-                    const tracks = await api.getItems({
-                        ParentId: item.Id,
-                        Recursive: true,
-                        IncludeItemTypes: 'Audio',
-                        Limit: 1,
-                        SortBy: 'SortName',
-                        SortOrder: 'Ascending'
-                    });
-                    if (tracks.Items && tracks.Items.length > 0) {
-                        itemToPlay = tracks.Items[0];
-                        itemToPlay.contextType = 'music';
-                        itemToPlay.contextId = item.Id;
-                        log.info('Resolved music container to first track:', itemToPlay.Name);
-                    } else {
-                        log.warn('No playable audio tracks found in container:', item.Id);
+                // If the requested item is a Folder/Container for audio (e.g., MusicAlbum, Playlist, BoxSet without movies/episodes),
+                // the API cannot play it directly. We must resolve it to the first playable audio track.
+                if (
+                    item &&
+                    ['MusicAlbum', 'MusicArtist', 'MusicGenre', 'Playlist', 'Artist', 'Person'].includes(item.Type)
+                ) {
+                    try {
+                        const tracks = await api.getItems({
+                            ParentId: item.Id,
+                            Recursive: true,
+                            IncludeItemTypes: 'Audio',
+                            Limit: 1,
+                            SortBy: 'SortName',
+                            SortOrder: 'Ascending'
+                        });
+                        if (tracks.Items && tracks.Items.length > 0) {
+                            itemToPlay = tracks.Items[0];
+                            itemToPlay.contextType = 'music';
+                            itemToPlay.contextId = item.Id;
+                            log.info('Resolved music container to first track:', itemToPlay.Name);
+                        } else {
+                            log.warn('No playable audio tracks found in container:', item.Id);
+                            return;
+                        }
+                    } catch (e) {
+                        log.error('Failed to resolve audio container tracks:', e);
                         return;
                     }
-                } catch (e) {
-                    log.error('Failed to resolve audio container tracks:', e);
+                }
+
+                // Store playback context for play queue building (e.g. 'boxset', 'music')
+                // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
+                state.set('player:contextType', itemToPlay?.contextType || null);
+                state.set('player:contextId', itemToPlay?.contextId || null);
+                // For BoxSet playback, forward the sort order so PlayQueue builds the
+                // full queue in the same order the collection grid is displayed.
+                state.set('player:boxsetSortBy', itemToPlay?.boxsetSortBy || null);
+
+                // Store explicit trailer metadata overrides since the player re-fetches the item
+                // and loses the parent context injected by DetailsPage.
+                if (itemToPlay && itemToPlay.Type === 'Trailer') {
+                    state.set('player:overrideName', itemToPlay.Name || null);
+                    state.set(
+                        'player:overrideYear',
+                        itemToPlay.ProductionYear !== undefined ? itemToPlay.ProductionYear : 'NONE'
+                    );
+                } else {
+                    state.set('player:overrideName', null);
+                    state.set('player:overrideYear', null);
+                }
+
+                // Store backdrop URL for loading screen transition
+                state.set('player:backdropUrl', backdropUrl || null);
+
+                if (!itemToPlay?.Id) {
+                    log.error('Cannot play - no item ID provided for playback request');
                     return;
                 }
-            }
 
-            // Store playback context for play queue building (e.g. 'boxset', 'music')
-            // IMPORTANT: Always set these (even to null) to avoid context leaking from previous plays
-            state.set('player:contextType', itemToPlay?.contextType || null);
-            state.set('player:contextId', itemToPlay?.contextId || null);
-            // For BoxSet playback, forward the sort order so PlayQueue builds the
-            // full queue in the same order the collection grid is displayed.
-            state.set('player:boxsetSortBy', itemToPlay?.boxsetSortBy || null);
-
-            // Store explicit trailer metadata overrides since the player re-fetches the item
-            // and loses the parent context injected by DetailsPage.
-            if (itemToPlay && itemToPlay.Type === 'Trailer') {
-                state.set('player:overrideName', itemToPlay.Name || null);
-                state.set('player:overrideYear', itemToPlay.ProductionYear !== undefined ? itemToPlay.ProductionYear : 'NONE');
-            } else {
-                state.set('player:overrideName', null);
-                state.set('player:overrideYear', null);
-            }
-
-            // Store backdrop URL for loading screen transition
-            state.set('player:backdropUrl', backdropUrl || null);
-
-            if (!itemToPlay?.Id) {
-                log.error('Cannot play - no item ID provided for playback request');
-                return;
-            }
-
-            // Store track selection in state for PlayerPage to consume
-            if (mediaSourceId !== undefined) {
-                state.set('player:initialMediaSourceId', mediaSourceId);
-                log.debug(`Setting initial media source ID: ${mediaSourceId}`);
-            }
-            if (audioStreamIndex !== undefined) {
-                state.set('player:initialAudioIndex', audioStreamIndex);
-                log.debug(`Setting initial audio stream index: ${audioStreamIndex}`);
-            }
-            if (subtitleStreamIndex !== undefined) {
-                state.set('player:initialSubtitleIndex', subtitleStreamIndex);
-                log.debug(`Setting initial subtitle stream index: ${subtitleStreamIndex}`);
-            }
-
-            // Navigate to player page with item ID and resume flag
-            const resumeParam = resume ? 'true' : 'false';
-            const slideshowParam = fromSlideshow ? '?fromSlideshow=true' : '';
-
-            // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
-            // Instead, we command the server to start playback of the new item. The server
-            // will broadcast a PlayQueue update to everyone (including us), which triggers the actual navigation.
-            if (window.__syncPlayManager && window.__syncPlayManager.isEnabled) {
-                log.info('SyncPlay is active. Sending SetNewQueue command instead of local launch.');
-                try {
-                    let startPosition = 0;
-                    if (resume && itemToPlay.UserData?.PlaybackPositionTicks) {
-                        startPosition = itemToPlay.UserData.PlaybackPositionTicks;
-                    }
-                    await api.post('/SyncPlay/SetNewQueue', {
-                        PlayingQueue: [itemToPlay.Id],
-                        PlayingItemPosition: 0,
-                        StartPositionTicks: startPosition
-                    });
-                } catch (err) {
-                    log.error('Failed to send SetNewQueue to SyncPlay:', err);
+                // Store track selection in state for PlayerPage to consume
+                if (mediaSourceId !== undefined) {
+                    state.set('player:initialMediaSourceId', mediaSourceId);
+                    log.debug(`Setting initial media source ID: ${mediaSourceId}`);
                 }
-                return;
-            }
+                if (audioStreamIndex !== undefined) {
+                    state.set('player:initialAudioIndex', audioStreamIndex);
+                    log.debug(`Setting initial audio stream index: ${audioStreamIndex}`);
+                }
+                if (subtitleStreamIndex !== undefined) {
+                    state.set('player:initialSubtitleIndex', subtitleStreamIndex);
+                    log.debug(`Setting initial subtitle stream index: ${subtitleStreamIndex}`);
+                }
 
-            // If we came from a slideshow, we PUSH the player so we can go BACK to the slideshow.
-            // For all other cases (Details/Library), we REPLACE the previous page to prevent history bloat.
-            router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${slideshowParam}`, { replace: !fromSlideshow });
-        });
+                // Navigate to player page with item ID and resume flag
+                const resumeParam = resume ? 'true' : 'false';
+                const slideshowParam = fromSlideshow ? '?fromSlideshow=true' : '';
+
+                // SyncPlay Override: if we are in a SyncPlay group, we do NOT launch the player locally.
+                // Instead, we command the server to start playback of the new item. The server
+                // will broadcast a PlayQueue update to everyone (including us), which triggers the actual navigation.
+                if (window.__syncPlayManager && window.__syncPlayManager.isEnabled) {
+                    log.info('SyncPlay is active. Sending SetNewQueue command instead of local launch.');
+                    try {
+                        let startPosition = 0;
+                        if (resume && itemToPlay.UserData?.PlaybackPositionTicks) {
+                            startPosition = itemToPlay.UserData.PlaybackPositionTicks;
+                        }
+                        await api.post('/SyncPlay/SetNewQueue', {
+                            PlayingQueue: [itemToPlay.Id],
+                            PlayingItemPosition: 0,
+                            StartPositionTicks: startPosition
+                        });
+                    } catch (err) {
+                        log.error('Failed to send SetNewQueue to SyncPlay:', err);
+                    }
+                    return;
+                }
+
+                // If we came from a slideshow, we PUSH the player so we can go BACK to the slideshow.
+                // For all other cases (Details/Library), we REPLACE the previous page to prevent history bloat.
+                router.navigate(`/player/${itemToPlay.Id}/${resumeParam}${slideshowParam}`, {
+                    replace: !fromSlideshow
+                });
+            }
+        );
 
         // ================================================================
         // WebSocket Remote Control
@@ -704,9 +725,9 @@ class App {
 
         // Import pages at top of file (see imports above)
         // Register all routes
-        router.register('/login',    LoginPage);
+        router.register('/login', LoginPage);
         router.register('/profiles', ProfilesPage);
-        router.register('/home',     HomePage);
+        router.register('/home', HomePage);
         router.register('/library/:id', LibraryPage);
         router.register('/library/:id/genre/:genreId', LibraryPage); // Filtered by Genre
         router.register('/library/:id/studio/:studioId', LibraryPage); // Filtered by Studio/Network
@@ -718,7 +739,7 @@ class App {
         router.register('/search', SearchPage);
         router.register('/favorites', FavoritesPage);
         router.register('/settings', SettingsPage);
-        router.register('/livetv',   LiveTvPage);
+        router.register('/livetv', LiveTvPage);
         router.register('/offline', OfflinePage);
         router.register('/slideshow/:photoId', SlideshowPage);
         router.register('/player/:id/:resume', PlayerPage); // Video player page
@@ -738,9 +759,9 @@ class App {
         //   • 0 sessions       → /login
         router.register('/', {
             init: () => {
-                const isOffline      = state.get('server:offline');
+                const isOffline = state.get('server:offline');
                 const isAuthenticated = state.get('user:authenticated');
-                const sessionCount   = state.get('user:sessionCount', 0);
+                const sessionCount = state.get('user:sessionCount', 0);
 
                 if (isOffline) {
                     // Saved session exists but server is unreachable
@@ -783,7 +804,6 @@ class App {
             eventBus.emit('app:layoutChanged', layout);
         }
     }
-
 }
 
 // Export singleton instance

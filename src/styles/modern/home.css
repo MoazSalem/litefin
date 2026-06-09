@@ -230,7 +230,7 @@ html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card
 html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
     opacity: 0;
     visibility: hidden;
-    z-index: 5;
+    z-index: 10;
     pointer-events: none;
     transition: opacity 0.2s ease, visibility 0.2s ease; /* Fast hide when moving away */
 }
@@ -239,9 +239,9 @@ html[data-layout="modern"] .media-card.has-expansion .card-info.inside {
    Label Overlays Visibility
    =========================================================================
    Brings up inside labels only when the card is in an active expanding state. */
-html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-info.inside,
-html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-info.inside,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-info.inside {
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-info.inside,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-info.inside,
+html[data-layout="modern"] .media-card.has-expansion:hover .card-info.inside {
     opacity: 1;
     visibility: visible;
     pointer-events: auto;
@@ -269,7 +269,7 @@ html[data-layout="modern"] .media-card.has-expansion:hover .card-info:not(.insid
 html[data-layout="modern"] .media-card.landscape .card-info.inside,
 html[data-layout="modern"] .media-card.square .card-info.inside {
     opacity: 1;
-    z-index: 5;
+    z-index: 10;
 }
 
 /* =========================================================================
@@ -323,7 +323,7 @@ html[data-layout="modern"] .media-card .card-image .card-image-tint {
     right: 0;
     bottom: 0;
     background: linear-gradient(0deg, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.4) 35%, rgba(0,0,0,0) 75%);
-    z-index: 4;
+    z-index: 7;
     pointer-events: none;
     opacity: 0;
     visibility: hidden;
@@ -335,9 +335,9 @@ html[data-layout="modern"] .media-card .card-image .card-image-tint {
    =========================================================================
    Show standard overlay gradient backdrop to maximize white text legibility.
    ========================================================================= */
-html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready:focus .card-image .card-image-tint,
-html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.expansion-ready.focused .card-image .card-image-tint,
-html[data-layout="modern"] .media-card.has-expansion.expansion-ready:hover .card-image .card-image-tint,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus .card-image .card-image-tint,
+html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused .card-image .card-image-tint,
+html[data-layout="modern"] .media-card.has-expansion:hover .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.landscape .card-image .card-image-tint,
 html[data-layout="modern"] .media-card.square .card-image .card-image-tint {
     opacity: 1;
@@ -353,7 +353,7 @@ html[data-layout="modern"] .card-overlay-tint {
     height: 100%;
     background: linear-gradient(to top, rgba(0,0,0,0.9) 0%, rgba(0,0,0,0.5) 25%, transparent 60%);
     border-radius: 24px; /* Fix: Match card radius */
-    z-index: 2;
+    z-index: 7;
     pointer-events: none;
 }
 

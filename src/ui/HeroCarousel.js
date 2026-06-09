@@ -247,8 +247,8 @@ class HeroCarousel {
             return { assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
         }
         if (s === 'tmdb') {
-            return { 
-                assetName: 'TMDB.png', 
+            return {
+                assetName: 'TMDB.png',
                 format: (v) => {
                     const num = parseFloat(v);
                     return (num > 10 ? num / 10 : num).toFixed(1);
@@ -318,31 +318,33 @@ class HeroCarousel {
         // BlurHash Background Placeholders for Hero Carousel items
         // ────────────────────────────────────────────────────────────────────
         const canvases = this._container.querySelectorAll('.hero-blurhash-canvas');
-        canvases.forEach(canvas => {
+        canvases.forEach((canvas) => {
             const hash = canvas.dataset.blurhash;
             if (!hash) return;
-            
+
             // Resolve the backdrop background-image URL
             const parentHeroItem = canvas.closest('.hero-item');
             const heroBackdrop = parentHeroItem.querySelector('.hero-backdrop');
-            
+
             const style = heroBackdrop.style.backgroundImage;
             const match = style.match(/url\(['"]?([^'"]+)['"]?\)/);
             if (match && match[1]) {
                 const url = match[1];
-                
+
                 // Decode blurhash at low resolution asynchronously
-                import('../utils/BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
-                    const pixels = BlurHashDecoder.decode(hash, 64, 36);
-                    if (pixels && canvas) {
-                        canvas.width = 64;
-                        canvas.height = 36;
-                        const ctx = canvas.getContext('2d');
-                        const imageData = ctx.createImageData(64, 36);
-                        imageData.data.set(pixels);
-                        ctx.putImageData(imageData, 0, 0);
-                    }
-                }).catch(err => log.error('Failed to decode hero blurhash', err));
+                import('../utils/BlurHashDecoder.js')
+                    .then(({ default: BlurHashDecoder }) => {
+                        const pixels = BlurHashDecoder.decode(hash, 64, 36);
+                        if (pixels && canvas) {
+                            canvas.width = 64;
+                            canvas.height = 36;
+                            const ctx = canvas.getContext('2d');
+                            const imageData = ctx.createImageData(64, 36);
+                            imageData.data.set(pixels);
+                            ctx.putImageData(imageData, 0, 0);
+                        }
+                    })
+                    .catch((err) => log.error('Failed to decode hero blurhash', err));
 
                 // Listen for backdrop image to finish preloading
                 const img = new Image();

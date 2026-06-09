@@ -110,7 +110,6 @@ class ScreensaverManager {
         }
     }
 
-
     _checkIdleTime() {
         if (this.isShowing) return;
         if (this._delaySeconds <= 0) return;

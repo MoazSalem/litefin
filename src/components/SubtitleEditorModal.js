@@ -112,7 +112,7 @@ class SubtitleEditorModal {
             const savedLang = storage.getItem('litefin:subtitle-language') || '';
             let prefLang = storage.getItem('pref:subtitleLang') || '';
             if (prefLang === 'none') prefLang = '';
-            
+
             const audioLang =
                 detailsPage._item?.MediaSources?.[0]?.MediaStreams?.find((s) => s.Type === 'Audio')?.Language || '';
             let currentLang = savedLang || prefLang || audioLang || 'eng';

@@ -17,10 +17,10 @@ class ThemeSongPlayer {
     constructor() {
         // Shared audio instance to optimize resource usage on TV hardware
         this._audio = null;
-        
+
         // Track the currently playing URL to avoid redundant restarts
         this._currentUrl = null;
-        
+
         // Keep track of the active show's owner ID to sustain music across seasons
         this._ownerId = null;
 
@@ -29,14 +29,14 @@ class ThemeSongPlayer {
 
         // References to deferred stop grace period timers
         this._deferredStopTimer = null;
-        
+
         // Track whether playback is currently fading out/stopping
         this._isFadingOut = false;
-        
+
         // Dynamic animation duration configs (in milliseconds)
         this.FADE_IN_DURATION = 1500;
         this.FADE_OUT_DURATION = 1000;
-        
+
         // Step interval for volume interpolation (60fps smooth volume adjustments = ~16ms)
         this.FADE_INTERVAL_STEP = 30;
 
@@ -62,17 +62,17 @@ class ThemeSongPlayer {
 
         log.debug('Initializing HTML5 Audio element instance');
         this._audio = new Audio();
-        
+
         // Set standard properties for continuous background score ambiance
         this._audio.loop = true;
-        
+
         // Ensure volume starts fully silent for visual-auditory transition sync
         this._audio.volume = 0;
     }
 
     /**
      * Plays a show's theme song with a premium, smooth fade-in effect.
-     * 
+     *
      * @param {string} url - The direct authorized stream URL from Jellyfin
      * @param {string} ownerId - Unique ID of the series/parent item owning this theme
      */
@@ -107,7 +107,8 @@ class ThemeSongPlayer {
             this._audio.volume = 0; // Force absolute silence before starting
 
             // Begin background media decoding and playback
-            this._audio.play()
+            this._audio
+                .play()
                 .then(() => {
                     // Safety check: if the user navigated away or stopped playback
                     // while the stream was loading, abort the fade-in and pause!
@@ -198,7 +199,7 @@ class ThemeSongPlayer {
      * Schedules a deferred stop transition over a brief grace period.
      * Prevents music from stopping and restarting when transitioning
      * between seasons/episodes of the same parent show.
-     * 
+     *
      * @param {number} delayMs - Delay duration in milliseconds
      */
     stopDeferred(delayMs = 2000) {
@@ -252,7 +253,7 @@ class ThemeSongPlayer {
 
     /**
      * Interpolates volume from its current level down to 0 before executing a callback.
-     * 
+     *
      * @param {Function} onComplete - Action to execute once silent
      */
     _fadeOut(onComplete) {
@@ -270,7 +271,7 @@ class ThemeSongPlayer {
 
             currentStep++;
             // Slowly decay the volume fraction
-            const nextVolume = Math.max(0, startVolume - (currentStep * volumeDecrement));
+            const nextVolume = Math.max(0, startVolume - currentStep * volumeDecrement);
             this._audio.volume = nextVolume;
 
             // Silence reached: end transition and clean up
