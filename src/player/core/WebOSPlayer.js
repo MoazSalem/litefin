@@ -1291,6 +1291,20 @@ export class WebOSPlayer {
     /**
      * Adaptive stall recovery — two-tier timer based on buffer health at stall time.
      *
+     * SELF-RECOVERY DETECTION:
+     *   Both tiers record `currentTime` at the moment the stall is detected.
+     *   When the timer fires, we compare against the current `currentTime`.
+     *   If it has advanced by more than 0.1 s, the decoder has recovered on
+     *   its own — even if the 'playing' event never fired (WebOS Chromium
+     *   event timing is unreliable). In that case we skip the recovery action
+     *   entirely, avoiding disruption of playback that's already working.
+     *
+     *   This is the primary fix for the DoVi stall issue: WebOS fires
+     *   'stalled' events for brief decoder hiccups (< 1 s) that resolve
+     *   before our timer fires. Without the self-recovery check, we were
+     *   blindly firing pause/play or seek kicks on a decoder that had
+     *   already recovered — creating visible disruption for no benefit.
+     *
      * WHY TWO TIERS:
      *
      *   Tier 1 — FAST: Decoder hiccup with healthy buffer.
@@ -1306,7 +1320,7 @@ export class WebOSPlayer {
      *   let the decoder work through it on its own.
      *
      *   WHY PAUSE/PLAY INSTEAD OF SEEK FOR DoVi:
-     *   The old 0.5 s currentTime kick forces an IDR re-init. On DoVi
+     *   The 0.5 s currentTime kick forces an IDR re-init. On DoVi
      *   content, the IDR re-init itself can trigger another decoder
      *   stall (the RPU layer must re-synchronize with the base layer),
      *   creating a seek → stall → seek feedback loop. A pause/play
@@ -1333,18 +1347,15 @@ export class WebOSPlayer {
         this._clearStallCheck();
 
         // ----------------------------------------------------------------
-        // Sample the buffer RIGHT NOW, at the moment the stall is detected.
-        // This tells us whether the network is fine (decoder hiccup) or
-        // whether we're genuinely starved (network underrun). The buffer
-        // state at stall time is far more diagnostic than what it looks like
-        // 8 seconds later when the slow timer fires.
+        // Sample the buffer AND currentTime RIGHT NOW, at the moment the
+        // stall is detected. Buffer tells us network vs decoder. currentTime
+        // lets us detect self-recovery in the timer callback: if currentTime
+        // has advanced by the time the timer fires, the decoder recovered on
+        // its own and no intervention is needed.
         // ----------------------------------------------------------------
         const bufferAtStall = this._getBufferAhead();
+        const timeAtStall = this._videoElement?.currentTime || 0;
 
-        // Threshold: if we have more than this many seconds buffered at the
-        // moment of stall, the network is not the problem — the decoder froze.
-        // 3 s is conservative enough to exclude mid-segment download drops
-        // while still catching the DV/HEVC decoder hiccup pattern clearly.
         const HICCUP_BUFFER_THRESHOLD = 3;
 
         // ── DoVi detection ────────────────────────────────────────────────
@@ -1383,6 +1394,21 @@ export class WebOSPlayer {
             this._stallTimer = setTimeout(() => {
                 if (!this._videoElement || this._videoElement.paused || !this._started) return;
 
+                // ── Self-recovery detection ──────────────────────────────
+                // If currentTime has advanced since the stall was detected,
+                // the decoder recovered on its own — even if the 'playing'
+                // event didn't fire (WebOS Chromium event timing is unreliable).
+                // Skip the recovery action entirely to avoid disrupting
+                // playback that's already working.
+                const timeNow = this._videoElement.currentTime;
+                if (timeNow > timeAtStall + 0.1) {
+                    log.info(
+                        'WebOSPlayer: Decoder self-recovered (currentTime advanced +' +
+                        (timeNow - timeAtStall).toFixed(1) + 's) — no recovery kick needed'
+                    );
+                    return;
+                }
+
                 const bufferNow = this._getBufferAhead();
 
                 if (isDoVi) {
@@ -1391,9 +1417,9 @@ export class WebOSPlayer {
                     // without triggering an IDR re-init. This avoids the
                     // stall loop caused by seeks on DoVi content.
                     log.warn(
-                        'WebOSPlayer: DoVi decoder hiccup — stalled ' + (fastDelay / 1000) + 's with',
+                        'WebOSPlayer: DoVi decoder genuinely stuck — stalled ' + (fastDelay / 1000) + 's with',
                         bufferNow.toFixed(1),
-                        's buffered — attempting pause/play flush'
+                        's buffered, currentTime frozen — attempting pause/play flush'
                     );
                     this._lastRecoveryKickTime = Date.now();
                     try {
@@ -1434,6 +1460,16 @@ export class WebOSPlayer {
             // ────────────────────────────────────────────────────────────────
             this._stallTimer = setTimeout(() => {
                 if (!this._videoElement || this._videoElement.paused || !this._started) return;
+
+                // Self-recovery check (same as fast path)
+                const timeNow = this._videoElement.currentTime;
+                if (timeNow > timeAtStall + 0.1) {
+                    log.info(
+                        'WebOSPlayer: Decoder self-recovered during slow path (currentTime advanced +' +
+                        (timeNow - timeAtStall).toFixed(1) + 's) — no kick needed'
+                    );
+                    return;
+                }
 
                 const bufferAhead = this._getBufferAhead();
 
