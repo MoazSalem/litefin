@@ -142,7 +142,7 @@
 .hero-content {
     position: relative;
     z-index: 10;
-    padding: 0 60px;
+    padding: 0 80px;
     max-width: 1600px;
     display: flex;
     flex-direction: column;
@@ -866,7 +866,7 @@
    ============================================================================ */
 
 /* 1. Shift the entire homepage to the left using margin when sidebar is visible */
-body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page {
+body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page:not(.favorites-page) {
     position: relative !important;
     margin-left: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
     width: calc(100% + var(--sidebar-width-collapsed, 100px)) !important;
@@ -893,14 +893,14 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
 /* 5. Center navigation arrows relative to the visible screen width */
 body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-nav-arrows,
 body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-nav-arrows {
-    padding-left: calc(18px + var(--sidebar-width-collapsed, 100px)) !important;
+    padding-left: calc(8px + var(--sidebar-width-collapsed, 100px)) !important;
 }
 
 /* ============================================================================
    RTL Layout Support
    ============================================================================ */
 
-[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page {
+[dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .home-page:not(.favorites-page) {
     position: relative !important;
     margin-right: calc(-1 * var(--sidebar-width-collapsed, 100px)) !important;
     margin-left: 0 !important;
@@ -927,8 +927,8 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
 
 [dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.immersive .hero-nav-arrows,
 [dir="rtl"] body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-immersive .hero-nav-arrows {
-    padding-right: calc(18px + var(--sidebar-width-collapsed, 100px)) !important;
-    padding-left: 18px !important;
+    padding-right: calc(8px + var(--sidebar-width-collapsed, 100px)) !important;
+    padding-left: 8px !important;
 }
 
 /* ============================================================================

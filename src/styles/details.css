@@ -66,6 +66,7 @@
 
 /* Details Content Scroller */
 .details-content,
+.details-page .page-content,
 .person-page .page-content {
     /* CRITICAL: Position Relative required for offsetParent calculations in FocusManager */
     position: relative;
