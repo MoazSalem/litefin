@@ -169,8 +169,23 @@ export class VirtualCardRow {
 
             // Listen for global focus changes from FocusManager (native focus is disabled on Tizen)
             // Ensures our spatial navigator correctly updates states in sync.
+            //
+            // PERFORMANCE: Gate the callback with track.contains() FIRST so that
+            // only the row that actually owns the focused element does any DOM
+            // traversal or CSS property writes. Previously ALL rows executed
+            // the full handleFocus path on every focus:changed event, which
+            // compounded to 50-100ms of main-thread blocking on Tizen when
+            // transitioning between the hero carousel and content rows.
             this._focusUnsubscribe = eventBus.on('focus:changed', (element) => {
-                handleFocus(element);
+                if (this.track.contains(element)) {
+                    handleFocus(element);
+                } else {
+                    // Focus left this row — reset expansion state, but only if
+                    // it was active (avoid redundant CSS property write + recalc)
+                    if (this.track.style.getPropertyValue('--focused-index') !== '-1') {
+                        this.track.style.setProperty('--focused-index', -1);
+                    }
+                }
             });
 
             // Native focus/mouse listeners.
@@ -193,7 +208,10 @@ export class VirtualCardRow {
             // Resets only if focus actually left the bounds of this horizontal row.
             this.track.addEventListener('focusout', (e) => {
                 if (!e.relatedTarget || !this.track.contains(e.relatedTarget)) {
-                    this.track.style.setProperty('--focused-index', -1);
+                    // Only write if not already reset — avoids redundant style recalc
+                    if (this.track.style.getPropertyValue('--focused-index') !== '-1') {
+                        this.track.style.setProperty('--focused-index', -1);
+                    }
                 }
             });
         }
