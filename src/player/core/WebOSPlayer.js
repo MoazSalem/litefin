@@ -92,6 +92,12 @@ export class WebOSPlayer {
         // ---- Stall recovery timer ----
         this._stallTimer = null;
 
+        // ---- DoVi stall loop detection ----
+        // Tracks the last recovery kick timestamp to detect and break
+        // seek → stall → seek feedback loops on Dolby Vision content.
+        this._lastRecoveryKickTime = 0;
+        this._recoveryPauseTimer  = null;
+
         // ---- Robust resume state ----
         this._robustSeekTarget   = null;
         this._robustSeekPending  = false;
@@ -351,7 +357,30 @@ export class WebOSPlayer {
 
     /**
      * Start non-HLS (MP4, MKV, etc.) playback via direct src assignment.
-     * Uses <source> element with type hints for better WebOS hardware decoder steering.
+     *
+     * For most containers (MKV, MP4, etc.) we assign src directly so the
+     * WebOS native media pipeline auto-probes the container — using a
+     * <source> element with a MIME type like 'video/x-matroska' causes the
+     * Chromium layer to silently reject it before the media pipeline sees it.
+     *
+     * DOLBY VISION EXCEPTION:
+     * For DoVi content we provide a <source> element with the codec hint
+     * `video/mp4; codecs="dvh1"`. This is the same in-band parameter-set
+     * codec tag that WebOS uses to activate its Dolby Vision hardware decoder
+     * pipeline (see the hvc1|dvh1|hev1 CodecProfile gate in WebOSProfile.js).
+     *
+     * Without this hint the WebOS decoder initialises the standard HEVC
+     * pipeline. When it later encounters DoVi RPU NAL units (type 62) it
+     * stalls — the buffer keeps filling (25+ seconds) but the decoder can't
+     * produce frames, triggering the repeated fast-recovery kicks. The codec
+     * string bypasses the container MIME check because WebOS Chromium passes
+     * the `dvh1` tag directly to the native media engine, which then opens
+     * the DoVi path before the first segment is decoded.
+     *
+     * A canPlayType guard ensures we fall back to raw video.src if Chromium
+     * would reject the codec string (e.g. on a dev browser), preventing a
+     * silent load failure.
+     *
      * @private
      */
     async _playNativeDirect(video, options) {
@@ -361,11 +390,42 @@ export class WebOSPlayer {
             video.removeChild(video.firstChild);
         }
 
-        // Assign directly to video.src. WebOS hardware media pipeline will
-        // probe the container automatically. Using <source> elements with
-        // MIME types like 'video/x-matroska' causes the Chromium layer to
-        // silently reject the source before the media pipeline sees it.
-        video.src = options.url;
+        // ── Dolby Vision hint path ───────────────────────────────────────────
+        // Detect DoVi from the media stream metadata passed down via options.
+        const videoStream = options.mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
+        const rangeType = videoStream?.VideoRangeType || '';
+        const isDoVi = rangeType.startsWith('DOVI') || rangeType === 'DOVIWithHDR10' ||
+                       rangeType === 'DOVIWithHLG' || rangeType === 'DOVIWithSDR';
+
+        if (isDoVi) {
+            // The 'dvh1' codec string tells WebOS to activate the DV hardware
+            // decoder pipeline. We use video/mp4 as the MIME wrapper because
+            // WebOS Chromium validates codec tags against MP4 codec strings
+            // (dvh1 / dvhe are ISO BMFF-defined tags). video/x-matroska with
+            // dvh1 would be rejected by Chromium's codec validation.
+            const dvHint = 'video/mp4; codecs="dvh1"';
+            const testVideo = document.createElement('video');
+            const canPlayDv = testVideo.canPlayType(dvHint) !== '';
+
+            if (canPlayDv) {
+                log.info('WebOSPlayer: DoVi content detected — using dvh1 codec hint to activate DV decoder pipeline');
+                const source = document.createElement('source');
+                source.src  = options.url;
+                source.type = dvHint;
+                video.appendChild(source);
+            } else {
+                // canPlayType rejected the codec — fall back to raw src so
+                // the native pipeline still gets a chance to probe it.
+                log.warn('WebOSPlayer: DoVi detected but canPlayType("dvh1") returned false — falling back to raw src (dev browser?)');
+                video.src = options.url;
+            }
+        } else {
+            // Standard path: direct src assignment for all non-DoVi containers.
+            // Using <source> with MIME types like 'video/x-matroska' causes the
+            // Chromium layer to silently reject the source before the media
+            // pipeline sees it, so we avoid it here.
+            video.src = options.url;
+        }
 
         video.load();
 
@@ -1233,17 +1293,25 @@ export class WebOSPlayer {
      *
      * WHY TWO TIERS:
      *
-     *   Tier 1 — FAST (1.5 s): Decoder hiccup with healthy buffer.
+     *   Tier 1 — FAST: Decoder hiccup with healthy buffer.
      *   ─────────────────────────────────────────────────────────
-     *   On Dolby Vision / HEVC content served via direct-play MKV, the WebOS
-     *   native media pipeline sometimes freezes the decoder mid-stream even
-     *   when 10–18 s of data is already buffered. This is a hardware quirk
-     *   (the decoder pipeline stalls waiting for an IDR frame that it never
-     *   initiates itself). Since the buffer is healthy, we know immediately
-     *   this is NOT a network problem — the decoder just needs a nudge.
-     *   Waiting the full 8 s to confirm this causes the visible "freeze at
-     *   start" that the user experiences. 1.5 s is long enough to confirm the
-     *   decoder won't self-recover, while keeping the stall nearly imperceptible.
+     *   Buffer is healthy, so the network is fine — the decoder froze.
+     *
+     *   For NON-DoVi content: 1.5 s timer, then currentTime += 0.5 kick.
+     *
+     *   For DoVi content: 4 s timer (DoVi decoder needs more time to
+     *   self-recover from RPU sync hiccups), then a PAUSE/PLAY flush
+     *   as the first recovery attempt. If the stall recurs within 15 s
+     *   (indicating a stall loop), the second attempt is suppressed to
+     *   let the decoder work through it on its own.
+     *
+     *   WHY PAUSE/PLAY INSTEAD OF SEEK FOR DoVi:
+     *   The old 0.5 s currentTime kick forces an IDR re-init. On DoVi
+     *   content, the IDR re-init itself can trigger another decoder
+     *   stall (the RPU layer must re-synchronize with the base layer),
+     *   creating a seek → stall → seek feedback loop. A pause/play
+     *   cycle flushes the decoder pipeline without an IDR re-init,
+     *   breaking the loop.
      *
      *   Tier 2 — SLOW (8 s, configurable): Thin buffer / genuine underrun.
      *   ────────────────────────────────────────────────────────────────────
@@ -1279,28 +1347,84 @@ export class WebOSPlayer {
         // while still catching the DV/HEVC decoder hiccup pattern clearly.
         const HICCUP_BUFFER_THRESHOLD = 3;
 
+        // ── DoVi detection ────────────────────────────────────────────────
+        const videoStream = this._currentPlayOptions?.mediaSource?.MediaStreams?.find(s => s.Type === 'Video');
+        const rangeType = videoStream?.VideoRangeType || '';
+        const isDoVi = rangeType.indexOf('DOVI') !== -1;
+
         if (bufferAtStall > HICCUP_BUFFER_THRESHOLD) {
             // ────────────────────────────────────────────────────────────────
             // FAST PATH: Decoder hiccup — buffer is healthy, network is fine.
-            // Don't wait 8 s to confirm what we already know. 1.5 s is enough
-            // to rule out a transient self-recovering wobble and still feel
-            // nearly instant to the user.
             // ────────────────────────────────────────────────────────────────
+
+            // ── Re-stall loop detection ───────────────────────────────────
+            // If we already fired a recovery kick within the last 15 s,
+            // another kick risks creating a seek → stall → seek feedback
+            // loop. Suppress the kick and let the decoder self-recover.
+            const RECOVERY_COOLDOWN_MS = 15000;
+            const timeSinceLastKick = Date.now() - this._lastRecoveryKickTime;
+            const inCooldown = this._lastRecoveryKickTime > 0 && timeSinceLastKick < RECOVERY_COOLDOWN_MS;
+
+            if (inCooldown) {
+                log.info(
+                    'WebOSPlayer: Stall detected but recovery cooldown active (' +
+                    Math.round(timeSinceLastKick / 1000) + 's since last kick) — ' +
+                    'suppressing kick to break stall loop, letting decoder self-recover'
+                );
+                return;
+            }
+
+            // DoVi content gets a longer window (4 s) because the DoVi
+            // decoder frequently needs 2–3 s to re-sync the RPU layer
+            // with the base layer after a hiccup. Kicking at 1.5 s
+            // interrupts this self-recovery.
+            const fastDelay = isDoVi ? 4000 : 1500;
+
             this._stallTimer = setTimeout(() => {
                 if (!this._videoElement || this._videoElement.paused || !this._started) return;
 
                 const bufferNow = this._getBufferAhead();
-                log.warn(
-                    'WebOSPlayer: Decoder hiccup — stalled 1.5s with',
-                    bufferNow.toFixed(1),
-                    's buffered — fast recovery kick (+0.5s)'
-                );
-                try {
-                    this._videoElement.currentTime += 0.5;
-                } catch (e) {
-                    log.error('WebOSPlayer: Fast recovery kick failed', e);
+
+                if (isDoVi) {
+                    // ── DoVi recovery: pause/play flush ──────────────────
+                    // A pause/play cycle flushes the decoder pipeline
+                    // without triggering an IDR re-init. This avoids the
+                    // stall loop caused by seeks on DoVi content.
+                    log.warn(
+                        'WebOSPlayer: DoVi decoder hiccup — stalled ' + (fastDelay / 1000) + 's with',
+                        bufferNow.toFixed(1),
+                        's buffered — attempting pause/play flush'
+                    );
+                    this._lastRecoveryKickTime = Date.now();
+                    try {
+                        this._videoElement.pause();
+                        // Short pause (200 ms) lets the decoder pipeline
+                        // drain its internal queues before we restart.
+                        this._recoveryPauseTimer = setTimeout(() => {
+                            this._recoveryPauseTimer = null;
+                            if (!this._videoElement) return;
+                            this._videoElement.play().catch(e => {
+                                log.error('WebOSPlayer: DoVi pause/play resume failed', e);
+                            });
+                        }, 200);
+                    } catch (e) {
+                        log.error('WebOSPlayer: DoVi pause/play flush failed', e);
+                    }
+                } else {
+                    // ── Standard HEVC recovery: currentTime kick ─────────
+                    log.warn(
+                        'WebOSPlayer: Decoder hiccup — stalled 1.5s with',
+                        bufferNow.toFixed(1),
+                        's buffered — fast recovery kick (+0.5s)'
+                    );
+                    this._lastRecoveryKickTime = Date.now();
+                    try {
+                        this._videoElement.currentTime += 0.5;
+                    } catch (e) {
+                        log.error('WebOSPlayer: Fast recovery kick failed', e);
+                    }
                 }
-            }, 1500);
+            }, fastDelay);
 
         } else {
             // ────────────────────────────────────────────────────────────────
@@ -1331,6 +1455,7 @@ export class WebOSPlayer {
                     bufferAhead.toFixed(1),
                     's) — recovery kick (+0.5s)'
                 );
+                this._lastRecoveryKickTime = Date.now();
                 try {
                     this._videoElement.currentTime += 0.5;
                 } catch (e) {
@@ -1345,6 +1470,10 @@ export class WebOSPlayer {
         if (this._stallTimer) {
             clearTimeout(this._stallTimer);
             this._stallTimer = null;
+        }
+        if (this._recoveryPauseTimer) {
+            clearTimeout(this._recoveryPauseTimer);
+            this._recoveryPauseTimer = null;
         }
     }
 

@@ -53,6 +53,7 @@ class PlayerPage extends Page {
 
         // Track reporting state
         this._hasReportedStart = false;
+        this._isPaused = false;
 
         // Cached media source for stop reporting
         // (player clears this internally after stop, so we need a copy)
@@ -136,6 +137,7 @@ class PlayerPage extends Page {
         this._item = null;
         this._resumePosition = 0;
         this._hasReportedStart = false;
+        this._isPaused = false;
         this._cachedPlayMethod = null;
 
         // Hide global clock during player loading/playback
@@ -1242,6 +1244,7 @@ class PlayerPage extends Page {
         if (!this._hasReportedStart) {
             this._reportPlaybackStart();
             this._hasReportedStart = true;
+            this._isPaused = false;
 
             /*
              * Thread the resolved media source ID to the OSD so TrickplayManager
@@ -1257,7 +1260,9 @@ class PlayerPage extends Page {
             }
         } else {
             // Send 'unpause' event when resuming from pause
-            this._reportPlaybackProgress('unpause');
+            if (this._isPaused) {
+                this._reportPlaybackProgress('unpause');
+            }
         }
     }
 
@@ -1265,6 +1270,7 @@ class PlayerPage extends Page {
         log.info('Paused');
         eventBus.emit('player:paused', { item: this._item });
 
+        this._isPaused = true;
         // Report paused state with explicit 'pause' event
         this._reportPlaybackProgress('pause');
     }
@@ -2087,6 +2093,12 @@ class PlayerPage extends Page {
         // Never report progress for intros
         if (this._item.isIntro) {
             return;
+        }
+
+        if (eventName === 'pause') {
+            this._isPaused = true;
+        } else if (eventName === 'unpause') {
+            this._isPaused = false;
         }
 
         try {
