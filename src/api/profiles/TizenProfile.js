@@ -263,9 +263,9 @@ export function buildJellyfinProfile(options = {}) {
 
     const videoAudioCodecString = videoAudioCodecs.join(',');
 
-    // Music audio: FLAC, ALAC, APE, AIFF, and MIDI always included — audio-only containers have no sync issue.
+    // Music audio: FLAC, APE, AIFF, and MIDI always included — audio-only containers have no sync issue.
     // Exclude 'opus' because Samsung TVs do not support playing standalone Opus audio files (only inside video containers).
-    const musicAudioCodecString = ['flac', 'alac', 'ape', 'aiff', 'midi', ...baseAudioCodecs]
+    const musicAudioCodecString = ['flac', 'ape', 'aiff', 'midi', ...baseAudioCodecs]
         .filter((codec) => codec !== 'opus')
         .join(',');
 

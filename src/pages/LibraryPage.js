@@ -2607,20 +2607,6 @@ class LibraryPage extends Page {
             return;
         }
 
-        // Handle Songs - go straight to player
-        if (this.state.viewType === 'Songs') {
-            log.debug('Navigating to Player for Song:', itemId);
-            router.navigate(`/player/${itemId}`, { replace: true });
-            return;
-        }
-
-        // For Audio/Song items in Suggestions/Playlists/Genres - double check type
-        if (card.dataset.type === 'Audio') {
-            log.debug('Navigating to Player for Audio item:', itemId);
-            router.navigate(`/player/${itemId}`, { replace: true });
-            return;
-        }
-
         // Special handling for Photos: open Slideshow
         if (card.dataset.type === 'Photo') {
             log.info('Navigating to Slideshow:', itemId);
