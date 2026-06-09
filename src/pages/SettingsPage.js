@@ -1609,6 +1609,20 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- Transparent Collapsed Sidebar Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TransparentCollapsedSidebar">${i18n.t('TransparentCollapsedSidebar') || 'Transparent Collapsed Sidebar'}</span>
+                        <span class="setting-description" data-i18n="TransparentCollapsedSidebarDescription">${i18n.t('TransparentCollapsedSidebarDescription') || 'Make the collapsed sidebar background transparent for all themes.'}</span>
+                    </div>
+                    <div class="setting-control">
+                          <button class="toggle-switch ${storage.getItem('pref:transparentCollapsedSidebar') === 'true' ? 'active' : ''}" 
+                                  id="toggle-transparent-collapsed-sidebar" 
+                                  tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Sidebar Mode Section -->
                 <div class="setting-item">
@@ -5450,6 +5464,19 @@ class SettingsPage extends Page {
                 // Broadcast custom event so active Sidebar component updates reactive classes
                 eventBus.emit('prefChanged:showCollapsedLibraryIcons', newValue);
                 log.info(`Show Collapsed Library Icons set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Transparent Collapsed Sidebar
+        const transparentCollapsedSidebarToggle = this.$('#toggle-transparent-collapsed-sidebar');
+        if (transparentCollapsedSidebarToggle) {
+            transparentCollapsedSidebarToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:transparentCollapsedSidebar', newValue.toString());
+                transparentCollapsedSidebarToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:transparentCollapsedSidebar', newValue);
+                log.info(`Transparent Collapsed Sidebar set to: ${newValue}`);
             });
         }
 

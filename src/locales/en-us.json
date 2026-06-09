@@ -977,6 +977,8 @@
     "TrailerPlayback": "Trailer Playback",
     "TrailerPlaybackDescription": "Choose how remote trailers are opened",
     "TrailersSettings": "Trailers Settings",
+    "TransparentCollapsedSidebar": "Transparent Collapsed Sidebar",
+    "TransparentCollapsedSidebarDescription": "Make the collapsed sidebar background transparent for all themes.",
     "TrueHDPassthrough": "TrueHD Passthrough Force State",
     "TrueHDPassthroughDescription": "⚠ Not in Samsung specs — only enable with external audio",
     "Type": "Type",

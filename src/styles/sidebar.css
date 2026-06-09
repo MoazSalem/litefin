@@ -47,6 +47,14 @@
     backface-visibility: hidden;
 }
 
+/* Transparent collapsed sidebar for all themes when setting is active */
+.sidebar.transparent-collapsed:not(.expanded):not(:hover) {
+    background: transparent !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+    box-shadow: none !important;
+}
+
 /* Fully hidden state */
 .sidebar.hidden {
     -webkit-transform: translate3d(-100%, 0, 0);

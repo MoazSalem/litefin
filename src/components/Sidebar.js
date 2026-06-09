@@ -218,6 +218,17 @@ class Sidebar extends Component {
         };
         eventBus.on('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
 
+        // ---------------------------------------------------------------------
+        // COLLAPSED SIDEBAR TRANSPARENT BACKGROUND CONFIGURATION
+        // ---------------------------------------------------------------------
+        this.activePath = router.getCurrentPath() || '';
+        this._updateTransparentCollapsed();
+
+        this._onTransparentCollapsedChanged = () => {
+            this._updateTransparentCollapsed();
+        };
+        eventBus.on('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
+
         // ── Sidebar Layout customization ──────────────────────────────────────
         // Hot-reload the sidebar layout when the user saves changes in Settings.
         this._onSidebarLayoutChanged = () => {
@@ -321,6 +332,10 @@ class Sidebar extends Component {
         // Unsubscribe from preference change events cleanly
         if (this._onShowLibIconsChanged) {
             eventBus.off('prefChanged:showCollapsedLibraryIcons', this._onShowLibIconsChanged);
+        }
+
+        if (this._onTransparentCollapsedChanged) {
+            eventBus.off('prefChanged:transparentCollapsedSidebar', this._onTransparentCollapsedChanged);
         }
     }
 
@@ -750,6 +765,13 @@ class Sidebar extends Component {
     _onNavigate({ path }) {
         this.activePath = path;
         this._updateActiveState();
+        this._updateTransparentCollapsed();
+    }
+
+    _updateTransparentCollapsed() {
+        const transparentCollapsed = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
+        const isSettings = (this.activePath || '').startsWith('/settings');
+        this.el.classList.toggle('transparent-collapsed', transparentCollapsed && !isSettings);
     }
 
     _updateActiveState() {
