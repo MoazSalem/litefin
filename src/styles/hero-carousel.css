@@ -931,4 +931,106 @@ body:not(.no-sidebar):not(.sidebar-mode-hidden) .hero-carousel-container.semi-im
     padding-left: 18px !important;
 }
 
+/* ============================================================================
+   Viewport Height Responsiveness (Browser Windowed Modes / Compact Layouts)
+   ============================================================================ */
+
+@media (max-height: 850px) {
+    /* Immersive Mode */
+    .hero-carousel-container.immersive .hero-carousel,
+    .hero-carousel-container.immersive.compact .hero-carousel {
+        min-height: 520px;
+    }
+    #home-hero-placeholder.style-immersive + .home-rows {
+        margin-top: -340px;
+    }
+    #home-hero-placeholder.style-immersive.style-compact + .home-rows {
+        margin-top: -420px;
+    }
+    .hero-carousel-container.immersive .hero-item {
+        padding-bottom: 360px;
+    }
+    .hero-carousel-container.immersive.compact .hero-item {
+        padding-bottom: 440px;
+    }
+    .hero-carousel-container.immersive .hero-indicators {
+        bottom: 330px;
+    }
+    .hero-carousel-container.immersive.compact .hero-indicators {
+        bottom: 410px;
+    }
+    .hero-carousel-container.immersive .hero-nav-arrows {
+        top: 35%;
+    }
+    .hero-carousel-container.immersive.compact .hero-nav-arrows {
+        top: 28%;
+    }
+
+    /* Semi-Immersive & Default Modes */
+    .hero-carousel {
+        min-height: 420px;
+    }
+    .hero-carousel-container.compact .hero-carousel {
+        min-height: 340px;
+    }
+}
+
+@media (max-height: 700px) {
+    /* Immersive Mode */
+    .hero-carousel-container.immersive .hero-carousel,
+    .hero-carousel-container.immersive.compact .hero-carousel {
+        min-height: 420px;
+    }
+    #home-hero-placeholder.style-immersive + .home-rows {
+        margin-top: -240px;
+    }
+    #home-hero-placeholder.style-immersive.style-compact + .home-rows {
+        margin-top: -300px;
+    }
+    .hero-carousel-container.immersive .hero-item {
+        padding-bottom: 260px;
+    }
+    .hero-carousel-container.immersive.compact .hero-item {
+        padding-bottom: 320px;
+    }
+    .hero-carousel-container.immersive .hero-indicators {
+        bottom: 230px;
+    }
+    .hero-carousel-container.immersive.compact .hero-indicators {
+        bottom: 290px;
+    }
+    .hero-carousel-container.immersive .hero-nav-arrows {
+        top: 40%;
+    }
+    .hero-carousel-container.immersive.compact .hero-nav-arrows {
+        top: 32%;
+    }
+
+    /* Semi-Immersive & Default Modes */
+    .hero-carousel {
+        min-height: 320px;
+    }
+    .hero-carousel-container.compact .hero-carousel {
+        min-height: 260px;
+    }
+    .hero-item {
+        padding-bottom: 80px;
+    }
+    .hero-carousel-container.compact .hero-item {
+        padding-bottom: 60px;
+    }
+    .hero-logo-container {
+        height: 60px !important;
+        margin-bottom: 10px !important;
+    }
+    .hero-item-title {
+        font-size: 2.0rem !important;
+    }
+    .hero-description {
+        -webkit-line-clamp: 2 !important;
+        line-clamp: 2 !important;
+        margin-bottom: 12px !important;
+    }
+}
+
 
