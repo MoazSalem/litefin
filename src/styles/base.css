@@ -863,3 +863,68 @@ html[data-simple-loader="true"] .loading-spinner-small::after,
 html[data-simple-loader="true"] .loading-spinner-small::before {
     display: none !important;
 }
+
+/* ============================================================================
+   Card Labels Spacing Adjustments
+   ============================================================================ */
+
+/* Horizontal tracks spacing adjustments */
+html[data-card-label-style="titleOnly"] .media-row {
+    margin-bottom: 28px !important;
+}
+html[data-card-label-style="hidden"] .media-row {
+    margin-bottom: 20px !important;
+}
+
+html[data-card-label-style="titleOnly"] .row-items {
+    padding-bottom: 18px !important;
+}
+html[data-card-label-style="hidden"] .row-items {
+    padding-bottom: 12px !important;
+}
+
+/* Grids: Poster view */
+html[data-card-label-style="titleOnly"] .library-grid:not([class*="view-"]) .media-card {
+    margin-bottom: 22px !important;
+}
+html[data-card-label-style="hidden"] .library-grid:not([class*="view-"]) .media-card {
+    margin-bottom: 12px !important;
+}
+
+/* Grids: Small Poster view */
+html[data-card-label-style="titleOnly"] .library-grid.view-small-poster .media-card {
+    margin-bottom: 16px !important;
+}
+html[data-card-label-style="hidden"] .library-grid.view-small-poster .media-card {
+    margin-bottom: 8px !important;
+}
+
+/* Grids: Landscape / Thumb view */
+html[data-card-label-style="titleOnly"] .library-grid.view-thumb .media-card {
+    margin-bottom: 30px !important;
+}
+html[data-card-label-style="hidden"] .library-grid.view-thumb .media-card {
+    margin-bottom: 15px !important;
+}
+
+/* Grids: Person / Details section grids */
+html[data-card-label-style="titleOnly"] .person-grid .media-card {
+    margin-bottom: 16px !important;
+}
+html[data-card-label-style="hidden"] .person-grid .media-card {
+    margin-bottom: 8px !important;
+}
+
+/* Grids: Library rows container gap */
+html[data-card-label-style="titleOnly"] .library-rows-container {
+    gap: 30px !important;
+}
+html[data-card-label-style="hidden"] .library-rows-container {
+    gap: 20px !important;
+}
+
+/* Grids: Genre grids */
+html[data-card-label-style="hidden"] .genre-grid-items {
+    padding-top: 12px !important;
+    gap: 20px !important;
+}

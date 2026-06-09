@@ -136,6 +136,10 @@ class LayoutManager {
         this.setOnlyBlurHashBackdrop(savedOnlyBlurHashBackdrop, false);
         this.setBadgeStyle(savedBadgeStyle, false);
 
+        // Load saved card label style and stamp it on the root HTML element
+        const savedCardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
+        document.documentElement.setAttribute('data-card-label-style', savedCardLabelStyle);
+
         // Stamp the tier and platform for CSS targeting
         document.documentElement.setAttribute('data-layout-tier', platformInfo.layoutTier);
         document.documentElement.setAttribute('data-platform', platformInfo.platformString);

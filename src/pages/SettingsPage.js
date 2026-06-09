@@ -1147,6 +1147,27 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelStyle">${i18n.t('CardLabelStyle') || 'Card Labels'}</span>
+                        <span class="setting-description" data-i18n="CardLabelStyleDescription">${i18n.t('CardLabelStyleDescription') || 'Choose how the title and subtitle are displayed under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-style-select',
+                            [
+                                {
+                                    value: 'default',
+                                    label: i18n.t('CardLabelStyleDefault') || 'Show Title and Subtitle'
+                                },
+                                { value: 'titleOnly', label: i18n.t('CardLabelStyleTitleOnly') || 'Show Title Only' },
+                                { value: 'hidden', label: i18n.t('CardLabelStyleHidden') || 'Hidden' }
+                            ],
+                            storage.getItem('pref:cardLabelStyle') || 'default'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideLiveTvInMyMedia">${i18n.t('HideLiveTvInMyMedia') || 'Hide Live TV from My Media'}</span>
                         <span class="setting-description" data-i18n="HideLiveTvInMyMediaDescription">${i18n.t('HideLiveTvInMyMediaDescription') || "Hide the Live TV library card from the 'My Media' row on the home screen"}</span>
                     </div>
@@ -4970,6 +4991,7 @@ class SettingsPage extends Page {
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             'layout-mode-select': { key: 'litefin:layout', type: 'local' },
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
+            'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -5098,6 +5120,11 @@ class SettingsPage extends Page {
                         } else if (id === 'osd-button-borders-select') {
                             // SPECIAL CASE: OSD Button Borders handled by LayoutManager
                             layoutManager.setOsdButtonBorders(newValue);
+                        } else if (id === 'card-label-style-select') {
+                            storage.setItem('pref:cardLabelStyle', newValue);
+                            document.documentElement.setAttribute('data-card-label-style', newValue);
+                            focusManager.invalidateCache('home');
+                            focusManager.invalidateCache('settings-content');
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');

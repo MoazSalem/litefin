@@ -603,6 +603,17 @@ class CardRenderer {
             subtitleText = parts.join(' · ');
         }
 
+        // --- 3.4. Label Visibility Styles ---
+        const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
+        if (!options.showMeta) {
+            if (cardLabelStyle === 'titleOnly') {
+                subtitleText = '';
+            } else if (cardLabelStyle === 'hidden') {
+                titleText = '';
+                subtitleText = '';
+            }
+        }
+
         // --- 3.5. List View Override ---
         // In list-view, we want the Title on the left and EVERY other piece of info
         // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
@@ -785,8 +796,8 @@ class CardRenderer {
         const renderOutside = !isModern || isGrid || (!isLandscape && !isSquare);
 
         // Final visibility logic (Classic vs Modern)
-        const showInside = renderInside && !isHiddenLibraryLabel;
-        const showOutside = renderOutside && !isHiddenLibraryLabel;
+        const showInside = renderInside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
+        const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
         const badgeContainer = `
@@ -917,6 +928,11 @@ class CardRenderer {
         }
         // 'poster' and 'small-poster' both use the default portrait shape
 
+        const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
+        const skeletonHideLabels = hideLabels || (viewMode !== 'list' && cardLabelStyle === 'hidden');
+        const skeletonHideSubtitle =
+            viewMode !== 'list' && (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'hidden');
+
         let html = '';
         for (let i = 0; i < count; i++) {
             const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
@@ -931,11 +947,11 @@ class CardRenderer {
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
                     ${
-                        !hideLabels
+                        !skeletonHideLabels
                             ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
-                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>
+                        ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
                     `
                             : ''
@@ -943,12 +959,12 @@ class CardRenderer {
                 </div>
             `;
             } else {
-                const infoHtml = !hideLabels
+                const infoHtml = !skeletonHideLabels
                     ? `
                     <div class="card-info${isIntegratedModern ? ' inside' : ''}">
                         <div class="card-title skeleton-line skeleton-shimmer w-80${isIntegratedModern ? '' : ' m-auto'}"></div>
                         ${isIntegratedModern ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4"></div>` : ''}
-                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>
+                        ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>` : ''}
                     </div>
                 `
                     : '';
@@ -958,7 +974,7 @@ class CardRenderer {
                     <div class="card-image skeleton-image skeleton-shimmer">
                         ${isIntegratedModern ? infoHtml : '<!-- Space reserved by aspect-ratio padding -->'}
                     </div>
-                    ${!hideLabels && !isIntegratedModern && !isPortraitModern ? infoHtml : ''}
+                    ${!skeletonHideLabels && !isIntegratedModern && !isPortraitModern ? infoHtml : ''}
                 </div>
             `;
             }
