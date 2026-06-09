@@ -37,6 +37,7 @@
     "CardLabelStyleDescription": "Choose how the title and subtitle are displayed under media cards.",
     "CardLabelStyleHidden": "Hidden",
     "CardLabelStyleTitleOnly": "Show Title Only",
+    "CardLabelStyleTitleOnly2Lines": "Show Title Only (2 Lines)",
     "Casual": "Casual",
     "Channels": "Channels",
     "Collections": "Collections",

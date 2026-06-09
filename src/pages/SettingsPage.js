@@ -1159,6 +1159,10 @@ class SettingsPage extends Page {
                                     label: i18n.t('CardLabelStyleDefault') || 'Show Title and Subtitle'
                                 },
                                 { value: 'titleOnly', label: i18n.t('CardLabelStyleTitleOnly') || 'Show Title Only' },
+                                {
+                                    value: 'titleOnly2Lines',
+                                    label: i18n.t('CardLabelStyleTitleOnly2Lines') || 'Show Title Only (2 Lines)'
+                                },
                                 { value: 'hidden', label: i18n.t('CardLabelStyleHidden') || 'Hidden' }
                             ],
                             storage.getItem('pref:cardLabelStyle') || 'default'

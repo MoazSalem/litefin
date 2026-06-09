@@ -606,7 +606,7 @@ class CardRenderer {
         // --- 3.4. Label Visibility Styles ---
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
         if (!options.showMeta) {
-            if (cardLabelStyle === 'titleOnly') {
+            if (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines') {
                 subtitleText = '';
             } else if (cardLabelStyle === 'hidden') {
                 titleText = '';
@@ -931,7 +931,8 @@ class CardRenderer {
         const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
         const skeletonHideLabels = hideLabels || (viewMode !== 'list' && cardLabelStyle === 'hidden');
         const skeletonHideSubtitle =
-            viewMode !== 'list' && (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'hidden');
+            viewMode !== 'list' &&
+            (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines' || cardLabelStyle === 'hidden');
 
         let html = '';
         for (let i = 0; i < count; i++) {
@@ -963,7 +964,7 @@ class CardRenderer {
                     ? `
                     <div class="card-info${isIntegratedModern ? ' inside' : ''}">
                         <div class="card-title skeleton-line skeleton-shimmer w-80${isIntegratedModern ? '' : ' m-auto'}"></div>
-                        ${isIntegratedModern ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4"></div>` : ''}
+                        ${isIntegratedModern || cardLabelStyle === 'titleOnly2Lines' ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4${isIntegratedModern ? '' : ' m-auto'}"></div>` : ''}
                         ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>` : ''}
                     </div>
                 `
