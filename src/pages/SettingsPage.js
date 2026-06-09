@@ -1113,6 +1113,19 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SwapEpisodeTitles">${i18n.t('SwapEpisodeTitles') || 'Swap Episode Title & Subtitle'}</span>
+                        <span class="setting-description" data-i18n="SwapEpisodeTitlesDescription">${i18n.t('SwapEpisodeTitlesDescription') || 'Display the episode name as the card title and the show name as the subtitle.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:swapEpisodeTitles') === 'true' ? 'active' : ''}" 
+                                 id="toggle-swap-episode-titles" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -3797,6 +3810,18 @@ class SettingsPage extends Page {
                 storage.setItem('pref:useEpisodeBadges', newValue);
                 useEpisodeBadgesBtn.classList.toggle('active', newValue);
                 log.info(`Use Episode Badges set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Swap Episode Titles
+        const swapEpisodeTitlesBtn = this.$('#toggle-swap-episode-titles');
+        if (swapEpisodeTitlesBtn) {
+            swapEpisodeTitlesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:swapEpisodeTitles') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:swapEpisodeTitles', newValue);
+                swapEpisodeTitlesBtn.classList.toggle('active', newValue);
+                log.info(`Swap Episode Titles set to: ${newValue}`);
             });
         }
 

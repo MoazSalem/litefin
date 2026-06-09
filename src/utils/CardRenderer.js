@@ -529,28 +529,43 @@ class CardRenderer {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             const episodeCode = `S${s}E${e}`;
+            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') === 'true';
 
-            if (isLandscape) {
+            if (swapEpisodeTitles) {
                 if (contextType === 'season-grid') {
                     titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
                     subtitleText = '';
                 } else {
-                    // Next Up Style (Keep Series Name)
-                    titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-                    // If useEpisodeBadges is true, Episode code is in the badge, just show name.
-                    // If useEpisodeBadges is false, Show "SxxExx - Name".
                     if (useEpisodeBadges) {
-                        subtitleText = i18n.ensureBiDi(item.Name);
+                        titleText = i18n.ensureBiDi(item.Name);
                     } else {
-                        subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
                     }
+                    subtitleText = i18n.ensureBiDi(item.SeriesName || '');
                 }
             } else {
-                // Poster Style: Episode code in badge if useEpisodeBadges is true
-                if (useEpisodeBadges) {
-                    subtitleText = '';
+                if (isLandscape) {
+                    if (contextType === 'season-grid') {
+                        titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
+                        subtitleText = '';
+                    } else {
+                        // Next Up Style (Keep Series Name)
+                        titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+                        // If useEpisodeBadges is true, Episode code is in the badge, just show name.
+                        // If useEpisodeBadges is false, Show "SxxExx - Name".
+                        if (useEpisodeBadges) {
+                            subtitleText = i18n.ensureBiDi(item.Name);
+                        } else {
+                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        }
+                    }
                 } else {
-                    subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                    // Poster Style: Episode code in badge if useEpisodeBadges is true
+                    if (useEpisodeBadges) {
+                        subtitleText = '';
+                    } else {
+                        subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                    }
                 }
             }
         } else if (type === 'season') {

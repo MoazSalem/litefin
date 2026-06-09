@@ -293,6 +293,7 @@
     "Videos": "Videos",
     "Writer": "Writer",
     "Writers": "Writers",
+
     "_Litefin Specific Keys": "",
     "10Minutes": "10 Minutes",
     "1Minute": "1 Minute",
@@ -891,6 +892,8 @@
     "SubtitleModeDescription": "When to show subtitles automatically",
     "SubtitleTracks": "Subtitle Tracks",
     "SubtitleWeight": "Font weight",
+    "SwapEpisodeTitles": "Swap Episode Title & Subtitle",
+    "SwapEpisodeTitlesDescription": "Display the episode name as the card title and the show name as the subtitle.",
     "SwitchServer": "Switch Server",
     "SwitchServerConfirmMessage": "Switching servers will disconnect from this server. Your saved logins for all servers are kept — you can switch back anytime.",
     "SwitchServerConfirmTitle": "Switch Server?",
