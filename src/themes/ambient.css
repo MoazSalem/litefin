@@ -208,25 +208,6 @@
     color: var(--jf-primary-btn-color, #ffffff) !important;
 }
 
-[data-theme-mode="ambient"] .sidebar-item:focus,
-[data-theme-mode="ambient"] .sidebar-item.focused {
-    /* Sleek volumetric Apple-style spring scaling transition on focus */
-    transform: scale(1.04) translateZ(0) !important;
-    
-    /* 
-     * Stacking Context Stacking Bugfix (Apple HIG Interface Integrity):
-     * CSS transforms create a new stacking context that flattens internal children
-     * (the SVG .item-icon at z-index 10 and text at z-index 6). Because the sliding 
-     * indicator is a sibling of the sidebar content, it paints on top of the flattened 
-     * item. Elevating the focused item's z-index to 10 forces the entire stacking 
-     * context above the indicator (z-index: 5), letting text and icons shine through.
-     */
-    z-index: 10 !important;
-    
-    /* Dedicated spring Bezier curve to simulate physical inertia during focus transitions */
-    transition: transform 0.25s cubic-bezier(0.25, 1.25, 0.5, 1), color 0.15s ease !important;
-}
-
 [data-theme-mode="ambient"] .sidebar-focus-indicator {
     /* Inset macOS-style capsule indicator */
     border-radius: 12px !important;
