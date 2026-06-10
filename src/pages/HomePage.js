@@ -822,7 +822,7 @@ class HomePage extends Page {
             // Set size variables for skeletons based on active card size scale
             const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
             if (isModern) {
-                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.5;
+                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3;
                 const modernMultiplier = scale / 1.5;
                 const itemMargin = Math.round(40 * modernMultiplier);
                 sectionEl.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
@@ -1446,7 +1446,8 @@ class HomePage extends Page {
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
                 // Determine current carousel style and compact settings
-                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+                // Fallback to immersive style by default for premium home screen aesthetics.
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
                 const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
 
                 // Reset existing classes to prevent state leaking when settings change

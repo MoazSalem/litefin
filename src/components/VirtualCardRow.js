@@ -40,7 +40,7 @@ export class VirtualCardRow {
         const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         this.isModern = isModern;
         const scale = isModern
-            ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.5
+            ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3
             : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
 
         if (isModern) {

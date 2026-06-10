@@ -493,7 +493,7 @@ class ImageService {
                               type !== 'logo' && 
                               type !== 'backdrop';
             if (isRowCard) {
-                const layoutDefaultScale = isModern ? 1.5 : 1.0;
+                const layoutDefaultScale = isModern ? 1.3 : 1.0;
                 const scale = parseFloat(storage.getItem(isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) || layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {
                     const scaleMap = {

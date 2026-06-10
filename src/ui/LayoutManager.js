@@ -57,7 +57,8 @@ class LayoutManager {
         this._loginPageLayout = 'classic';
 
         // Current theme mode
-        this._themeMode = THEME_MODES.TINTED;
+        // Ambient Glow is now the default theme mode for a premium glassmorphic Apple TV style look.
+        this._themeMode = THEME_MODES.AMBIENT;
 
         // Current theme color (HEX)
         this._themeColor = DEFAULT_THEME_COLOR;
@@ -115,7 +116,8 @@ class LayoutManager {
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
-        let initialMode = THEME_MODES.TINTED;
+        // Default to Ambient theme mode if no user preference is stored.
+        let initialMode = THEME_MODES.AMBIENT;
 
         if (savedThemeMode && Object.values(THEME_MODES).includes(savedThemeMode)) {
             initialMode = savedThemeMode;
@@ -155,7 +157,8 @@ class LayoutManager {
         document.documentElement.setAttribute('data-card-label-style', savedCardLabelStyle);
 
         // Load saved card label alignment and stamp it on the root HTML element
-        const savedCardLabelAlign = storage.getItem('pref:cardLabelAlign') || 'center';
+        // Alignment defaults to 'start' now for cleaner card typography alignment.
+        const savedCardLabelAlign = storage.getItem('pref:cardLabelAlign') || 'start';
         document.documentElement.setAttribute('data-card-label-align', savedCardLabelAlign);
 
         // Stamp the tier and platform for CSS targeting

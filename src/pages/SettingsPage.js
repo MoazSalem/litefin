@@ -807,11 +807,11 @@ class SettingsPage extends Page {
                                 ? [
                                       { value: '1.2', label: '120%' },
                                       { value: '1.25', label: '125%' },
-                                      { value: '1.3', label: '130%' },
+                                      { value: '1.3', label: '130% (Default)' },
                                       { value: '1.35', label: '135%' },
                                       { value: '1.4', label: '140%' },
                                       { value: '1.45', label: '145%' },
-                                      { value: '1.5', label: '150% (Default)' }
+                                      { value: '1.5', label: '150%' }
                                   ]
                                 : [
                                       { value: '1', label: '100% (Small / Default)' },
@@ -826,7 +826,7 @@ class SettingsPage extends Page {
                                       { value: '1.45', label: '145%' },
                                       { value: '1.5', label: '150%' }
                                   ];
-                            const defaultValue = isModernLayout ? '1.5' : '1';
+                            const defaultValue = isModernLayout ? '1.3' : '1';
                             const storageKey = isModernLayout
                                 ? 'pref:modernCardSizeScale'
                                 : 'pref:classicCardSizeScale';
@@ -947,7 +947,8 @@ class SettingsPage extends Page {
                                 { value: 'start', label: i18n.t('CardLabelAlignStart') || 'Align to Start' },
                                 { value: 'end', label: i18n.t('CardLabelAlignEnd') || 'Align to End' }
                             ],
-                            storage.getItem('pref:cardLabelAlign') || 'center'
+                            // Defaults to 'start' now for clean typography alignment
+                            storage.getItem('pref:cardLabelAlign') || 'start'
                         )}
                     </div>
                 </div>
@@ -1413,7 +1414,8 @@ class SettingsPage extends Page {
                                  */
                                 { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
                             ],
-                            storage.getItem('pref:heroCarouselStyle') || 'banner'
+                            // Default to 'immersive' style for the hero carousel selector
+                            storage.getItem('pref:heroCarouselStyle') || 'immersive'
                         )}
                     </div>
                 </div>

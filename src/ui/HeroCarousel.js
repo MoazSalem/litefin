@@ -41,7 +41,8 @@ class HeroCarousel {
     render() {
         if (!this._items || this._items.length === 0) return '';
 
-        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+        // Default carousel style is set to 'immersive' for a premium tvOS-style design.
+        const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
         const itemsHtml = this._items.map((item, index) => this._renderItem(item, index, carouselStyle)).join('');
         const dotsHtml = this._items
             .map(
