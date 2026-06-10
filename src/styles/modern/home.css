@@ -517,7 +517,8 @@ html[data-layout="modern"] .media-card.focused .quality-badge {
     transform: scale(1.05);
 }
 
-html[data-layout="modern"] .count-badge, .played-badge {
+html[data-layout="modern"] .count-badge,
+html[data-layout="modern"] .played-badge {
     right: 22px;
     width: 44px;
     height: 44px;

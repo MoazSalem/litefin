@@ -193,7 +193,7 @@
    ============================================================================ */
 
 .hero-logo-container {
-    height: 120px;
+    height: 130px;
     margin-bottom: 24px;
     display: flex;
     align-items: flex-end;
@@ -421,7 +421,7 @@
 }
 
 .hero-carousel-container.banner.compact .hero-logo-container {
-    height: 80px;
+    height: 110px;
     margin-bottom: 12px;
 }
 
@@ -686,7 +686,7 @@
      * Sleek logo dimensions scaled down to give 20px of extra vertical relief.
      * Preserves visual presence while avoiding crowding on 1080p screens.
      */
-    height: 100px;
+    height: 130px;
     margin-bottom: 16px;
 }
 
@@ -719,7 +719,7 @@
      * Ultra-compact 80px height designed for extreme information density.
      * Replicates Apple tvOS home screen app channel preview proportions.
      */
-    height: 80px;
+    height: 110px;
     margin-bottom: 12px;
 }
 

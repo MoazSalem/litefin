@@ -133,7 +133,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     height: 0;
     padding-bottom: 150%;
     overflow: hidden;
-    background: var(--jf-background-alt);
+    background: rgba(var(--jf-accent-rgb),.4); 
     border-radius: var(--jf-border-radius);
 
     /* Focus Border: Moved here, transparent by default */

@@ -648,6 +648,7 @@ body {
 }
 
 .episode-badge {
+    height: 40px;
     position: absolute;
     top: 12px;
     left: 12px;
@@ -662,6 +663,7 @@ body {
 }
 
 .quality-badge {
+    height: 40px;
     position: absolute;
     top: 12px;
     right: 12px;
@@ -674,12 +676,6 @@ body {
     align-items: center;
     justify-content: center;
 }
-
-.played-badge ~ .quality-badge,
-.count-badge ~ .quality-badge {
-    right: 42px;
-}
-
 
 
 /* Badge Skins: Tinted vs Translucent Dark */
