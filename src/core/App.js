@@ -790,7 +790,7 @@ class App {
      * @returns {string} 'classic' or 'modern'
      */
     getLayout() {
-        return state.get('app:layout', 'classic');
+        return layoutManager.getLayout();
     }
 
     /**
@@ -798,11 +798,7 @@ class App {
      * @param {string} layout - 'classic' or 'modern'
      */
     setLayout(layout) {
-        if (layout === 'classic' || layout === 'modern') {
-            state.set('app:layout', layout);
-            document.documentElement.setAttribute('data-layout', layout);
-            eventBus.emit('app:layoutChanged', layout);
-        }
+        layoutManager.setLayout(layout);
     }
 }
 

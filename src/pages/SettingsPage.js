@@ -747,17 +747,47 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LayoutMode">${i18n.t('LayoutMode') || 'Layout'}</span>
-                        <span class="setting-description" data-i18n="LayoutModeDescription">${i18n.t('LayoutModeDescription') || 'Choose between the classic and modern user interface.'}</span>
+                        <span class="setting-name" data-i18n="MediaRowsLayout">${i18n.t('MediaRowsLayout') || 'Media Rows Layout'}</span>
+                        <span class="setting-description" data-i18n="MediaRowsLayoutDescription">${i18n.t('MediaRowsLayoutDescription') || 'Choose the layout mode for horizontal media rows.'}</span>
                     </div>
                     <div class="setting-control">
                         ${this._renderDropdown(
-                            'layout-mode-select',
+                            'media-rows-layout-select',
                             [
                                 { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' }
+                                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
                             ],
-                            layoutManager.getLayout() || 'classic'
+                            layoutManager.getMediaRowsLayout() || 'classic'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
+                        <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:homeForceExpandablePosters') === 'true' ? 'active' : ''}" 
+                                 id="toggle-home-force-expandable-posters" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LoginPageLayout">${i18n.t('LoginPageLayout') || 'Login Page Layout'}</span>
+                        <span class="setting-description" data-i18n="LoginPageLayoutDescription">${i18n.t('LoginPageLayoutDescription') || 'Choose the layout mode for the login pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'login-page-layout-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutModernLoginPage') || 'Modern layout' }
+                            ],
+                            layoutManager.getLoginPageLayout() || 'classic'
                         )}
                     </div>
                 </div>
@@ -772,30 +802,34 @@ class SettingsPage extends Page {
                     </div>
                     <div class="setting-control">
                         ${(() => {
-                            const isModernLayout = layoutManager.getLayout() === 'modern';
-                            const cardSizeOptions = isModernLayout ? [
-                                { value: '1.2', label: '120%' },
-                                { value: '1.25', label: '125%' },
-                                { value: '1.3', label: '130%' },
-                                { value: '1.35', label: '135%' },
-                                { value: '1.4', label: '140%' },
-                                { value: '1.45', label: '145%' },
-                                { value: '1.5', label: '150% (Default)' }
-                            ] : [
-                                { value: '1', label: '100% (Small / Default)' },
-                                { value: '1.05', label: '105%' },
-                                { value: '1.1', label: '110%' },
-                                { value: '1.15', label: '115%' },
-                                { value: '1.2', label: '120%' },
-                                { value: '1.25', label: '125%' },
-                                { value: '1.3', label: '130%' },
-                                { value: '1.35', label: '135%' },
-                                { value: '1.4', label: '140%' },
-                                { value: '1.45', label: '145%' },
-                                { value: '1.5', label: '150%' }
-                            ];
+                            const isModernLayout = layoutManager.getMediaRowsLayout() === 'modern';
+                            const cardSizeOptions = isModernLayout
+                                ? [
+                                      { value: '1.2', label: '120%' },
+                                      { value: '1.25', label: '125%' },
+                                      { value: '1.3', label: '130%' },
+                                      { value: '1.35', label: '135%' },
+                                      { value: '1.4', label: '140%' },
+                                      { value: '1.45', label: '145%' },
+                                      { value: '1.5', label: '150% (Default)' }
+                                  ]
+                                : [
+                                      { value: '1', label: '100% (Small / Default)' },
+                                      { value: '1.05', label: '105%' },
+                                      { value: '1.1', label: '110%' },
+                                      { value: '1.15', label: '115%' },
+                                      { value: '1.2', label: '120%' },
+                                      { value: '1.25', label: '125%' },
+                                      { value: '1.3', label: '130%' },
+                                      { value: '1.35', label: '135%' },
+                                      { value: '1.4', label: '140%' },
+                                      { value: '1.45', label: '145%' },
+                                      { value: '1.5', label: '150%' }
+                                  ];
                             const defaultValue = isModernLayout ? '1.5' : '1';
-                            const storageKey = isModernLayout ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale';
+                            const storageKey = isModernLayout
+                                ? 'pref:modernCardSizeScale'
+                                : 'pref:classicCardSizeScale';
                             return this._renderDropdown(
                                 'classic-card-size-scale-select',
                                 cardSizeOptions,
@@ -1202,25 +1236,6 @@ class SettingsPage extends Page {
                 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
-
-                                ${
-                                    layoutManager.getLayout() === 'modern'
-                                        ? `
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
-                        <span class="setting-description" data-i18n="HomeForceExpandablePostersDescription">${i18n.t('HomeForceExpandablePostersDescription') || 'Force all home screen rows (except My Media) to use portrait posters that expand horizontally on focus.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:homeForceExpandablePosters') === 'true' ? 'active' : ''}" 
-                                 id="toggle-home-force-expandable-posters" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-                `
-                                        : ''
-                                }
 
                 <div class="setting-item">
                     <div class="setting-label">
@@ -5072,8 +5087,16 @@ class SettingsPage extends Page {
             'library-thumb-mode-select': { key: 'pref:libraryThumbMode', type: 'local' },
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
-            'layout-mode-select': { key: 'litefin:layout', type: 'local' },
-            'classic-card-size-scale-select': { key: layoutManager.getLayout() === 'modern' ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale', type: 'local', triggerEvent: true },
+            'media-rows-layout-select': { key: 'pref:mediaRowsLayout', type: 'local', triggerEvent: true },
+            'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
+            'classic-card-size-scale-select': {
+                key:
+                    layoutManager.getMediaRowsLayout() === 'modern'
+                        ? 'pref:modernCardSizeScale'
+                        : 'pref:classicCardSizeScale',
+                type: 'local',
+                triggerEvent: true
+            },
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
             'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
             'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
@@ -5202,6 +5225,12 @@ class SettingsPage extends Page {
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
+                        } else if (id === 'media-rows-layout-select') {
+                            layoutManager.setMediaRowsLayout(newValue);
+                            this._triggerHardReload();
+                        } else if (id === 'login-page-layout-select') {
+                            layoutManager.setLoginPageLayout(newValue);
+                            this._triggerHardReload();
                         } else if (id === 'osd-button-borders-select') {
                             // SPECIAL CASE: OSD Button Borders handled by LayoutManager
                             layoutManager.setOsdButtonBorders(newValue);
@@ -5228,46 +5257,14 @@ class SettingsPage extends Page {
                             }
 
                             if (
-                                settingConfig.key === 'litefin:layout' ||
+                                settingConfig.key === 'pref:mediaRowsLayout' ||
+                                settingConfig.key === 'pref:loginPageLayout' ||
                                 settingConfig.key === 'layout_direction' ||
                                 settingConfig.key === 'app_language' ||
                                 settingConfig.key === 'pref:classicCardSizeScale' ||
                                 settingConfig.key === 'pref:modernCardSizeScale'
                             ) {
-                                /*
-                                 * ----------------------------------------------------------------
-                                 * Language/Layout changes need a TRUE hard reload.
-                                 *
-                                 * WHY window.location.reload() BREAKS ON TIZEN/WEBOS:
-                                 * On these platforms, reload() is a *soft* reload — the JS
-                                 * module cache is preserved. The 'app' singleton stays alive
-                                 * with _initialized=true, so App.init() exits early without
-                                 * ever calling i18n.init(). The dictionary stays {}, causing
-                                 * all i18n.t() calls to return raw key strings.
-                                 *
-                                 * FIX: Navigate to the app's root entry-point URL *without
-                                 * the hash fragment*. The WebView treats this as a fresh
-                                 * cold-start navigation, fully re-parsing and re-executing
-                                 * all JS modules from scratch — identical to a native restart.
-                                 * ----------------------------------------------------------------
-                                 */
-                                storage.flush();
-
-                                // Compute the base URL (strips the hash / current route)
-                                const href = window.location.href;
-                                const protocol = window.location.protocol;
-                                let entryUrl;
-
-                                if (protocol === 'file:') {
-                                    // file:// packaged app — strip everything from '#' onward
-                                    entryUrl = href.split('#')[0];
-                                } else {
-                                    // http(s):// dev server — use origin + pathname (no hash)
-                                    entryUrl = window.location.origin + window.location.pathname;
-                                }
-
-                                // Hard-navigate: forces a true cold-start re-init on all platforms
-                                window.location.href = entryUrl;
+                                this._triggerHardReload();
                             }
 
                             if (settingConfig.key === 'pref:libraryThumbMode') {
@@ -5813,6 +5810,43 @@ class SettingsPage extends Page {
                 debugOverlay.toggleModule(module, newState);
             });
         });
+    }
+
+    _triggerHardReload() {
+        /*
+         * ----------------------------------------------------------------
+         * Language/Layout changes need a TRUE hard reload.
+         *
+         * WHY window.location.reload() BREAKS ON TIZEN/WEBOS:
+         * On these platforms, reload() is a *soft* reload — the JS
+         * module cache is preserved. The 'app' singleton stays alive
+         * with _initialized=true, so App.init() exits early without
+         * ever calling i18n.init(). The dictionary stays {}, causing
+         * all i18n.t() calls to return raw key strings.
+         *
+         * FIX: Navigate to the app's root entry-point URL *without
+         * the hash fragment*. The WebView treats this as a fresh
+         * cold-start navigation, fully re-parsing and re-executing
+         * all JS modules from scratch — identical to a native restart.
+         * ----------------------------------------------------------------
+         */
+        storage.flush();
+
+        // Compute the base URL (strips the hash / current route)
+        const href = window.location.href;
+        const protocol = window.location.protocol;
+        let entryUrl;
+
+        if (protocol === 'file:') {
+            // file:// packaged app — strip everything from '#' onward
+            entryUrl = href.split('#')[0];
+        } else {
+            // http(s):// dev server — use origin + pathname (no hash)
+            entryUrl = window.location.origin + window.location.pathname;
+        }
+
+        // Hard-navigate: forces a true cold-start re-init on all platforms
+        window.location.href = entryUrl;
     }
 
     _switchTab(tabId, force = false, focusContent = false) {

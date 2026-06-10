@@ -454,7 +454,7 @@ class ImageService {
         const isModern =
             typeof document !== 'undefined' &&
             document.documentElement &&
-            document.documentElement.getAttribute('data-layout') === 'modern';
+            document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         if (isModern && !type.startsWith('details-') && !type.startsWith('hero-')) {
             if (type === 'expanded-poster') {
                 type = 'modern-expanded';

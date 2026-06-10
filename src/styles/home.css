@@ -31,7 +31,7 @@
     padding-left: 48px;
 }
 
-html[data-layout="modern"] .media-row--skeleton .row-items-track {
+html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-left: 60px;
 }
 
@@ -40,7 +40,7 @@ html[data-layout="modern"] .media-row--skeleton .row-items-track {
     padding-right: 48px;
 }
 
-[dir="rtl"] html[data-layout="modern"] .media-row--skeleton .row-items-track {
+[dir="rtl"] html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-left: 0;
     padding-right: 60px;
 }

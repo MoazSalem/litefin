@@ -679,7 +679,7 @@ class ScrollController {
                         // its EXPANDED width (600px). This centers the active expanded poster
                         // cleanly inside the viewport, preventing the right edge from clipping.
                         // -----------------------------------------------------------------
-                        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+                        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
                         const canExpand =
                             isModern &&
                             !track.__virtualRow.isLandscape &&

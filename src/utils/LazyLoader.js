@@ -211,7 +211,7 @@ class LazyLoader {
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');

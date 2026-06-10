@@ -37,7 +37,7 @@ export class VirtualCardRow {
         // Static CSS measurements from home.css
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
         // Modern override: 600px / 260px with 28px margin
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         this.isModern = isModern;
         const scale = isModern
             ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.5
@@ -397,7 +397,7 @@ export class VirtualCardRow {
             // This prevents the card's right boundary from clipping and centers
             // the expanded card perfectly in the middle of the viewport.
             // -----------------------------------------------------------------
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
             const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
             const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
 
@@ -720,7 +720,7 @@ export class VirtualCardRow {
         // in our calculated mathematical track width (matching the DOM track
         // width style set inside the constructor).
         // -------------------------------------------------------------
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         const expansion =
             isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist'
                 ? 375 * (this.modernMultiplier || 1.0)

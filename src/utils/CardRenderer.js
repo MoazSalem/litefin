@@ -24,7 +24,7 @@ class CardRenderer {
      */
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null, isGrid = false } = options;
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
@@ -893,7 +893,7 @@ class CardRenderer {
     static getFallbackHtml(item, isLandscape, options = {}) {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
@@ -937,7 +937,7 @@ class CardRenderer {
 
         let html = '';
         for (let i = 0; i < count; i++) {
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
             const isSquare = viewMode === 'square' || viewMode === 'artist';
             const isIntegratedModern =
                 isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);

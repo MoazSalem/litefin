@@ -760,7 +760,7 @@ class LibraryPage extends Page {
             // For forced landscape tab types, ignore viewMode and show landscape skeletons.
             const skeletonMode = isLandscape ? 'thumb' : this.state.viewMode;
             const hideLibraryLabels = storage.getItem('pref:hideLibraryLabels') === 'true';
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
             const isLibraryView =
                 this.state.viewMode === 'library' || this.state.libraryInfo?.CollectionType === 'folders';
             const shouldHideLabels = (isLibraryView && hideLibraryLabels) || (isLibraryView && isModern);

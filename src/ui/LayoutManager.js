@@ -52,6 +52,10 @@ class LayoutManager {
         // Current layout
         this._layout = LAYOUT.CLASSIC;
 
+        // Granular layout settings
+        this._mediaRowsLayout = 'classic';
+        this._loginPageLayout = 'classic';
+
         // Current theme mode
         this._themeMode = THEME_MODES.TINTED;
 
@@ -97,7 +101,17 @@ class LayoutManager {
      */
     init() {
         // Load saved preferences
-        const savedLayout = storage.getItem('litefin:layout') || LAYOUT.CLASSIC;
+        let savedMediaRowsLayout = storage.getItem('pref:mediaRowsLayout');
+        if (!savedMediaRowsLayout) {
+            const legacy = storage.getItem('pref:modernMediaRows') || storage.getItem('litefin:layout');
+            savedMediaRowsLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
+        }
+
+        let savedLoginPageLayout = storage.getItem('pref:loginPageLayout');
+        if (!savedLoginPageLayout) {
+            const legacy = storage.getItem('pref:modernLoginPage') || storage.getItem('litefin:layout');
+            savedLoginPageLayout = legacy === 'true' || legacy === 'modern' ? 'modern' : 'classic';
+        }
 
         // Load saved theme mode
         const savedThemeMode = storage.getItem('litefin:themeMode');
@@ -121,7 +135,8 @@ class LayoutManager {
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
 
-        this.setLayout(savedLayout, false);
+        this.setMediaRowsLayout(savedMediaRowsLayout, false);
+        this.setLoginPageLayout(savedLoginPageLayout, false);
         this.setThemeMode(initialMode, false);
         this.setThemeColor(savedThemeColor, false);
         this.setUiFont(savedUiFont, false);
@@ -153,7 +168,7 @@ class LayoutManager {
     }
 
     /**
-     * Set the current layout
+     * Set the current layout (compatibility wrapper)
      */
     setLayout(layout, save = true) {
         if (layout !== LAYOUT.CLASSIC && layout !== LAYOUT.MODERN) {
@@ -161,21 +176,11 @@ class LayoutManager {
             return;
         }
 
-        const oldLayout = this._layout;
+        const oldLayout = this._mediaRowsLayout;
         this._layout = layout;
 
-        document.documentElement.setAttribute('data-layout', layout);
-        state.set('app:layout', layout, true);
-
-        // Update badge style if it is auto
-        if (this._badgeStyle === 'auto') {
-            const resolvedStyle = layout === 'modern' ? 'dark' : 'tinted';
-            document.documentElement.setAttribute('data-badge-style', resolvedStyle);
-        }
-
-        if (save) {
-            storage.setItem('litefin:layout', layout);
-        }
+        this.setMediaRowsLayout(layout, save);
+        this.setLoginPageLayout(layout, save);
 
         if (oldLayout !== layout) {
             log.info(`Layout changed from "${oldLayout}" to "${layout}"`);
@@ -184,10 +189,42 @@ class LayoutManager {
     }
 
     /**
-     * Get the current layout
+     * Get the current layout (compatibility wrapper)
      */
     getLayout() {
-        return this._layout;
+        return this._mediaRowsLayout;
+    }
+
+    getMediaRowsLayout() {
+        return this._mediaRowsLayout;
+    }
+
+    setMediaRowsLayout(layout, save = true) {
+        this._mediaRowsLayout = layout;
+        document.documentElement.setAttribute('data-layout-media-rows', layout);
+        state.set('app:layout', layout, true);
+        if (save) {
+            storage.setItem('pref:mediaRowsLayout', layout);
+        }
+        // Update badge style if it is auto
+        if (this._badgeStyle === 'auto') {
+            const resolvedStyle = layout === 'modern' ? 'dark' : 'tinted';
+            document.documentElement.setAttribute('data-badge-style', resolvedStyle);
+        }
+        eventBus.emit('mediaRowsLayout:changed', { layout });
+    }
+
+    getLoginPageLayout() {
+        return this._loginPageLayout;
+    }
+
+    setLoginPageLayout(layout, save = true) {
+        this._loginPageLayout = layout;
+        document.documentElement.setAttribute('data-layout-login', layout);
+        if (save) {
+            storage.setItem('pref:loginPageLayout', layout);
+        }
+        eventBus.emit('loginPageLayout:changed', { layout });
     }
 
     /**
@@ -635,13 +672,13 @@ class LayoutManager {
     }
 
     isClassic() {
-        return this._layout === LAYOUT.CLASSIC;
+        return this._loginPageLayout === 'classic';
     }
     isModern() {
-        return this._layout === LAYOUT.MODERN;
+        return this._loginPageLayout === 'modern';
     }
     getClassPrefix() {
-        return this._layout === LAYOUT.MODERN ? 'modern' : 'classic';
+        return this._loginPageLayout === 'modern' ? 'modern' : 'classic';
     }
     applyLayoutClass(element, baseClass) {
         element.className = `${baseClass} ${this.getClassPrefix()}-${baseClass}`;
