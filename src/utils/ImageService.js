@@ -485,6 +485,42 @@ class ImageService {
             }
         }
 
+        // 2.5 Adjust preset scale dynamically in layout modes
+        if (targetPreset !== 'original') {
+            const isRowCard = !type.startsWith('details-') && 
+                              !type.startsWith('hero-') && 
+                              type !== 'avatar' && 
+                              type !== 'logo' && 
+                              type !== 'backdrop';
+            if (isRowCard) {
+                const layoutDefaultScale = isModern ? 1.5 : 1.0;
+                const scale = parseFloat(storage.getItem(isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) || layoutDefaultScale;
+                if (scale !== layoutDefaultScale) {
+                    const scaleMap = {
+                        'low': 0.75,
+                        'medium-low': 0.90,
+                        'medium': 1.00,
+                        'medium-high': 1.10,
+                        'high': 1.20,
+                        'very-high': 1.50,
+                        'ultra': 2.00
+                    };
+                    const currentPresetScale = scaleMap[targetPreset] || 1.00;
+                    const targetScale = currentPresetScale + (scale - layoutDefaultScale);
+                    let bestPreset = targetPreset;
+                    let minDiff = Infinity;
+                    for (const [presetName, presetScale] of Object.entries(scaleMap)) {
+                        const diff = Math.abs(presetScale - targetScale);
+                        if (diff < minDiff) {
+                            minDiff = diff;
+                            bestPreset = presetName;
+                        }
+                    }
+                    targetPreset = bestPreset;
+                }
+            }
+        }
+
         const currentScale = presets[targetPreset] || presets.medium;
 
         // 3. Robust Fallback (Prefix Stripping)

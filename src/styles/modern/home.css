@@ -37,9 +37,9 @@ html[data-layout="modern"] .media-row:focus-within .row-title {
    ========================================================================= */
 /* Exclude grid-based cards using :not(.grid-card) to preserve their classic sizing. */
 html[data-layout="modern"] .media-card:not(.grid-card) {
-    width: 225px;
-    height: 337.5px !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
-    margin-right: 40px;
+    width: var(--card-width, 225px);
+    height: var(--card-height, 337.5px) !important; /* ABSOLUTE HEIGHT: Prevents vertical runaway */
+    margin-right: var(--card-margin, 40px);
     margin-left: 0;
     overflow: visible !important; /* Fix: Allow focus box-shadow to be visible */
     
@@ -56,7 +56,7 @@ html[data-layout="modern"] .media-card:not(.grid-card) {
        ONLY shift siblings if the focused card is a growing poster (not a native landscape/square).
        Difference = 600px - 225px = 375px.
      */
-    --expansion-amount: 375px;
+    --expansion-amount: var(--card-expansion, 375px);
     --is-after-focus: clamp(0, var(--focused-index, -1) - var(--item-index, -1), 1);
     /* Note: We only shift if we are NOT the focused item ourselves and we are AFTER it */
     /* This calculation is slightly complex to avoid shifting the focused item itself */
@@ -78,7 +78,7 @@ html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focu
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused ~ .media-card,
 html[data-layout="modern"] .media-card.has-expansion:hover ~ .media-card {
     /* Translate downstream siblings cleanly to make room for the 600px expanded asset */
-    transform: translateX(375px);
+    transform: translateX(var(--card-expansion, 375px));
 }
 
 /* =========================================================================
@@ -92,17 +92,17 @@ html[data-layout="modern"] .media-card.has-expansion:hover ~ .media-card {
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion:focus,
 html[data-layout="modern"] .media-row:not(:hover) .media-card.has-expansion.focused,
 html[data-layout="modern"] .media-card.has-expansion:hover {
-    width: 600px;
-    height: 337.5px !important; /* Lockdown physical dimensions to avoid layout jumps */
+    width: var(--card-expanded-width, 600px);
+    height: var(--card-height, 337.5px) !important; /* Lockdown physical dimensions to avoid layout jumps */
     z-index: 100; /* Stack on top of surrounding collapsed assets */
 }
 
 html[data-layout="modern"] .media-card.landscape:not(.grid-card) {
-    width: 600px; /* Height: 600 * 0.5625 = 337.5px */
+    width: var(--card-expanded-width, 600px); /* Height: 600 * 0.5625 = 337.5px */
 }
 
 html[data-layout="modern"] .media-card.square:not(.grid-card) {
-    width: 338px; /* Height: 338 * 1 = 338px */
+    width: var(--card-square-width, 338px); /* Height: 338 * 1 = 338px */
 }
 
 /* Integrated Labels: Reveal timing */

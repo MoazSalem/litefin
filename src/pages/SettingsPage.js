@@ -767,6 +767,46 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardSizeScale">${i18n.t('CardSizeScale') || 'Card Size Scale'}</span>
+                        <span class="setting-description" data-i18n="CardSizeScaleDescription">${i18n.t('CardSizeScaleDescription') || 'Adjust the size of horizontal row items (posters, landscape, etc.) in Classic layout mode.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                            const isModernLayout = layoutManager.getLayout() === 'modern';
+                            const cardSizeOptions = isModernLayout ? [
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' },
+                                { value: '1.45', label: '145%' },
+                                { value: '1.5', label: '150% (Default)' }
+                            ] : [
+                                { value: '1', label: '100% (Small / Default)' },
+                                { value: '1.05', label: '105%' },
+                                { value: '1.1', label: '110%' },
+                                { value: '1.15', label: '115%' },
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' },
+                                { value: '1.45', label: '145%' },
+                                { value: '1.5', label: '150%' }
+                            ];
+                            const defaultValue = isModernLayout ? '1.5' : '1';
+                            const storageKey = isModernLayout ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale';
+                            return this._renderDropdown(
+                                'classic-card-size-scale-select',
+                                cardSizeOptions,
+                                storage.getItem(storageKey) || defaultValue
+                            );
+                        })()}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideEpisodeCounts">${i18n.t('HideEpisodeCounts') || 'Hide Episode Counts'}</span>
                         <span class="setting-description" data-i18n="HideEpisodeCountsDescription">${i18n.t('HideEpisodeCountsDescription') || 'Hide the unplayed episode count badge on series and season cards.'}</span>
                     </div>
@@ -816,7 +856,7 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-                
+
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="BadgeStyle">${i18n.t('BadgeStyle') || 'Badge Style'}</span>
@@ -5033,6 +5073,7 @@ class SettingsPage extends Page {
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
             'layout-mode-select': { key: 'litefin:layout', type: 'local' },
+            'classic-card-size-scale-select': { key: layoutManager.getLayout() === 'modern' ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale', type: 'local', triggerEvent: true },
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
             'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
             'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
@@ -5189,7 +5230,9 @@ class SettingsPage extends Page {
                             if (
                                 settingConfig.key === 'litefin:layout' ||
                                 settingConfig.key === 'layout_direction' ||
-                                settingConfig.key === 'app_language'
+                                settingConfig.key === 'app_language' ||
+                                settingConfig.key === 'pref:classicCardSizeScale' ||
+                                settingConfig.key === 'pref:modernCardSizeScale'
                             ) {
                                 /*
                                  * ----------------------------------------------------------------

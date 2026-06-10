@@ -650,6 +650,8 @@
     "Language": "Language",
     "LatestFrom": "Latest {0}",
     "Lavender": "Lavender",
+    "CardSizeScale": "Card Size Scale",
+    "CardSizeScaleDescription": "Adjust the size of horizontal row items (posters, landscape, etc..), please note that the bigger this size is the worse the performance will get.",
     "LayoutClassic": "Classic",
     "LayoutDirection": "Layout Direction",
     "LayoutDirectionDescription": "Force the application's text reading direction (requires restart)",

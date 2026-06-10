@@ -2,6 +2,7 @@ import { lazyLoader } from '../utils/LazyLoader.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { platformInfo } from '../utils/PlatformInfo.js';
+import { storage } from '../utils/StorageService.js';
 
 export class VirtualCardRow {
     /**
@@ -37,20 +38,36 @@ export class VirtualCardRow {
         // Landscape width: 400px, Portrait width: 240px, Margin-right: 24px
         // Modern override: 600px / 260px with 28px margin
         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        this.isModern = isModern;
+        const scale = isModern
+            ? parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.5
+            : parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+
         if (isModern) {
+            const modernMultiplier = scale / 1.5;
+            this.modernMultiplier = modernMultiplier;
+
             // Target Height: 600px * 56.25% (16:9) = 337.5px
             if (this.isLandscape) {
-                this.itemWidth = 600;
+                this.itemWidth = Math.round(600 * modernMultiplier);
             } else if (this.cardType === 'square' || this.cardType === 'artist') {
-                this.itemWidth = 338; // 338px * 100% = 338px height
+                this.itemWidth = Math.round(338 * modernMultiplier); // 338px * 100% = 338px height
             } else {
-                this.itemWidth = 225; // 225px * 150% = 337.5px height
+                this.itemWidth = Math.round(225 * modernMultiplier); // 225px * 150% = 337.5px height
             }
-            this.itemMargin = 40; // Increased gap for premium feel
+            this.itemMargin = Math.round(40 * modernMultiplier); // Increased gap for premium feel
             this.sidePadding = 60; // Match classic alignment (60px)
+
+            // Inject CSS custom properties on the track container to update card styles dynamically
+            this.track.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-margin', `${this.itemMargin}px`);
+            this.track.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+            this.track.style.setProperty('--card-expansion', `${Math.round(375 * modernMultiplier)}px`);
         } else {
-            this.itemWidth = this.isLandscape ? 400 : 240;
-            this.itemMargin = 24;
+            this.itemWidth = Math.round((this.isLandscape ? 400 : 240) * scale);
+            this.itemMargin = Math.round(24 * scale);
             this.sidePadding = 60;
         }
 
@@ -76,7 +93,9 @@ export class VirtualCardRow {
         if (isModern) {
             // Add a buffer for the expanded card width (375px) so the track doesn't clip.
             // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
-            const expansion = this.isLandscape || this.cardType === 'square' || this.cardType === 'artist' ? 0 : 375;
+            const expansion = this.isLandscape || this.cardType === 'square' || this.cardType === 'artist'
+                ? 0
+                : 375 * (this.modernMultiplier || 1.0);
             this.track.style.width = `${totalWidth + expansion}px`;
 
             /**
@@ -380,7 +399,7 @@ export class VirtualCardRow {
             // -----------------------------------------------------------------
             const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
             const canExpand = isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist';
-            const elementWidth = canExpand ? 600 : this.itemWidth;
+            const elementWidth = canExpand ? Math.round(600 * (this.modernMultiplier || 1.0)) : this.itemWidth;
 
             const containerWidth = this.track.parentElement ? this.track.parentElement.clientWidth : window.innerWidth;
             const trackWidth = this.getTrackWidth();
@@ -445,6 +464,9 @@ export class VirtualCardRow {
                             cardNode.style.left = `${leftPos}px`;
                         }
                         cardNode.style.top = '0';
+                        if (!this.isModern) {
+                            cardNode.style.width = `${this.itemWidth}px`;
+                        }
                         cardNode.dataset.virtualIndex = i;
                         cardNode.setAttribute('data-virtual-index', i);
                         this.track.appendChild(cardNode);
@@ -536,6 +558,9 @@ export class VirtualCardRow {
                     }
 
                     cardNode.style.top = '0'; // Assumes uniform height, margins handle spacing
+                    if (!this.isModern) {
+                        cardNode.style.width = `${this.itemWidth}px`;
+                    }
 
                     // Add index for identifying the card in focus handlers
                     cardNode.dataset.virtualIndex = i;
@@ -697,7 +722,9 @@ export class VirtualCardRow {
         // -------------------------------------------------------------
         const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
         const expansion =
-            isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist' ? 375 : 0;
+            isModern && !this.isLandscape && this.cardType !== 'square' && this.cardType !== 'artist'
+                ? 375 * (this.modernMultiplier || 1.0)
+                : 0;
         return this.totalItems * this.totalItemWidth + this.sidePadding * 2 + expansion;
     }
 
