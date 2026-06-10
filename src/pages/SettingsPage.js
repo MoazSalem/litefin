@@ -841,6 +841,36 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelScale">${i18n.t('CardLabelScale') || 'Card Label Scale'}</span>
+                        <span class="setting-description" data-i18n="CardLabelScaleDescription">${i18n.t('CardLabelScaleDescription') || 'Adjust the text size of titles and subtitles under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-scale-select',
+                            [
+                                { value: '0.8', label: '80%' },
+                                { value: '0.85', label: '85%' },
+                                { value: '0.9', label: '90%' },
+                                { value: '0.95', label: '95%' },
+                                { value: '1', label: 'Normal (100%)' },
+                                { value: '1.05', label: '105%' },
+                                { value: '1.1', label: '110%' },
+                                { value: '1.15', label: '115%' },
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' },
+                                { value: '1.45', label: '145%' },
+                                { value: '1.5', label: '150%' }
+                            ],
+                            (layoutManager.getCardLabelScale() || 1.0).toString()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="HideEpisodeCounts">${i18n.t('HideEpisodeCounts') || 'Hide Episode Counts'}</span>
                         <span class="setting-description" data-i18n="HideEpisodeCountsDescription">${i18n.t('HideEpisodeCountsDescription') || 'Hide the unplayed episode count badge on series and season cards.'}</span>
                     </div>
@@ -5126,6 +5156,7 @@ class SettingsPage extends Page {
             'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
             'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
             'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
+            'card-label-scale-select': { key: 'pref:cardLabelScale', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -5270,6 +5301,8 @@ class SettingsPage extends Page {
                             document.documentElement.setAttribute('data-card-label-align', newValue);
                             focusManager.invalidateCache('home');
                             focusManager.invalidateCache('settings-content');
+                        } else if (id === 'card-label-scale-select') {
+                            layoutManager.setCardLabelScale(parseFloat(newValue));
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');

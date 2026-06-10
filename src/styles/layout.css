@@ -212,7 +212,7 @@ html[data-layout-tier="ultra-legacy"] .header-nav > *:last-child {
     overflow: hidden; /* Hide scrollbars, disable native scrolling */
     
     /* CRITICAL: Vertical padding prevents scaled focus cards from clipping */
-    padding: 30px 0; 
+    padding: 32px 0 calc(32px * var(--card-title-font-scale, 1)); 
     
     /* PERFORMANCE: Isolate horizontal rows */
     contain: layout paint style;

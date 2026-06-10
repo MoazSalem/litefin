@@ -72,6 +72,9 @@ class LayoutManager {
         // Global text scale multiplier
         this._textScale = 1.0;
 
+        // Card label text scale multiplier
+        this._cardLabelScale = 1.0;
+
         // OSD button borders mode: 'auto', 'light', 'dark', 'hidden'
         this._osdButtonBorders = 'auto';
 
@@ -136,6 +139,7 @@ class LayoutManager {
         const savedDisableBlurhash = storage.getItem('litefin:disableBlurhash') === 'true';
         const savedOnlyBlurHashBackdrop = storage.getItem('litefin:onlyBlurHashBackdrop') === 'true';
         const savedBadgeStyle = storage.getItem('litefin:badgeStyle') || 'auto';
+        const savedCardLabelScale = parseFloat(storage.getItem('pref:cardLabelScale') || '1.0');
 
         this.setMediaRowsLayout(savedMediaRowsLayout, false);
         this.setLoginPageLayout(savedLoginPageLayout, false);
@@ -144,6 +148,7 @@ class LayoutManager {
         this.setUiFont(savedUiFont, false);
         this.setRoundedCorners(savedRoundedCorners, false);
         this.setTextScale(savedTextScale, false);
+        this.setCardLabelScale(savedCardLabelScale, false);
         this.setOsdButtonBorders(savedOsdBorders, false);
         this.setLowVramMode(savedLowVram, false);
         this.setDisableCardScaling(savedDisableScaling, false);
@@ -488,6 +493,19 @@ class LayoutManager {
 
     getTextScale() {
         return this._textScale;
+    }
+
+    setCardLabelScale(scale, save = true) {
+        this._cardLabelScale = scale;
+        document.documentElement.style.setProperty('--card-title-font-scale', scale.toString());
+        if (save) {
+            storage.setItem('pref:cardLabelScale', scale.toString());
+        }
+        eventBus.emit('cardLabelScale:changed', { scale });
+    }
+
+    getCardLabelScale() {
+        return this._cardLabelScale;
     }
 
     getOsdButtonBorders() {

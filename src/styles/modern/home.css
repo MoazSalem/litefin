@@ -289,14 +289,14 @@ html[data-layout-media-rows="modern"] .media-card:not(.landscape):not(.square):n
 }
 
 html[data-layout-media-rows="modern"] .card-title {
-    font-size: 1.35rem;
+    font-size: calc(1.35rem * var(--card-title-font-scale, 1));
     font-weight: 700;
     letter-spacing: -0.3px;
     color: rgba(255, 255, 255, 0.9);
 }
 
 html[data-layout-media-rows="modern"] .card-subtitle {
-    font-size: 1.1rem;
+    font-size: calc(1.1rem * var(--card-title-font-scale, 1));
     font-weight: 500;
     margin-top: 0px;
     color: rgba(255, 255, 255, 0.5);
@@ -379,7 +379,7 @@ html[data-layout-media-rows="modern"] .card-info.inside {
 }
 
 html[data-layout-media-rows="modern"] .card-info.inside .card-title {
-    font-size: 1.5rem; /* Slightly larger for inside placement */
+    font-size: calc(1.5rem * var(--card-title-font-scale, 1)); /* Slightly larger for inside placement */
     
     /* PERFORMANCE: Replaced 6px blur text-shadow with a highly efficient 2px blur offset. */
     text-shadow: 0 1px 2px rgba(0, 0, 0, 0.9);
@@ -396,7 +396,7 @@ html[data-layout-media-rows="modern"] .card-info.inside .card-title {
 }
 
 html[data-layout-media-rows="modern"] .card-info.inside .card-subtitle {
-    font-size: 1.2rem;
+    font-size: calc(1.2rem * var(--card-title-font-scale, 1));
     color: rgba(255, 255, 255, 0.8);
     
     /* PERFORMANCE: Replaced expensive high-blur shadow. */

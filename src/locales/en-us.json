@@ -652,6 +652,8 @@
     "Lavender": "Lavender",
     "CardSizeScale": "Card Size Scale",
     "CardSizeScaleDescription": "Adjust the size of horizontal row items (posters, landscape, etc..), please note that the bigger this size is the worse the performance will get (Requires Restart).",
+    "CardLabelScale": "Card Label Scale",
+    "CardLabelScaleDescription": "Adjust the text size of titles and subtitles under media cards.",
     "LayoutClassic": "Classic",
     "LayoutExpandingPosters": "Expanding Posters",
     "LayoutModernLoginPage": "Modern layout",

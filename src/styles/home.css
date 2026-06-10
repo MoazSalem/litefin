@@ -224,7 +224,7 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 .card-title {
     color: var(--jf-text-primary);
-    font-size: 1.2rem;
+    font-size: calc(1.2rem * var(--card-title-font-scale, 1));
     font-weight: 600;
     margin: 0;
     white-space: nowrap;
@@ -235,7 +235,7 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
 
 .card-subtitle {
     color: var(--jf-text-secondary);
-    font-size: 1rem;
+    font-size: calc(1rem * var(--card-title-font-scale, 1));
     margin: 6px 0 0;
     text-align: center;
     white-space: nowrap;

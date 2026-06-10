@@ -896,7 +896,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 .media-card:focus,
 .media-card.focused,
 .media-card:hover {
-    transform: scale(1.06); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    transform: scale(1.05); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
 
