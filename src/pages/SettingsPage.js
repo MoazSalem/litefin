@@ -28,6 +28,7 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
+import { settingsIcons } from '../utils/Icons.js';
 
 const log = logger.create('SettingsPage');
 
@@ -79,52 +80,52 @@ class SettingsPage extends Page {
             {
                 id: 'appearance',
                 label: i18n.t('Display'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20Z" fill="currentColor"/></svg>'
+                icon: settingsIcons.appearance
             },
             {
                 id: 'home',
                 label: i18n.t('Home') || 'Home',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+                icon: settingsIcons.home
             },
             {
                 id: 'sidebar',
                 label: i18n.t('Sidebar') || 'Sidebar',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
+                icon: settingsIcons.sidebar
             },
             {
                 id: 'controls',
                 label: i18n.t('Controls') || 'Controls',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="14" cy="6" r="2.5" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="8" cy="12" r="2.5" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="16" cy="18" r="2.5" fill="currentColor"/></svg>'
+                icon: settingsIcons.controls
             },
             {
                 id: 'player',
                 label: i18n.t('TitlePlayback'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
+                icon: settingsIcons.player
             },
             {
                 id: 'subtitles',
                 label: i18n.t('Subtitles'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>'
+                icon: settingsIcons.subtitles
             },
             {
                 id: 'plugins',
                 label: i18n.t('Plugins'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17" y1="15" x2="9" y2="15"/></svg>'
+                icon: settingsIcons.plugins
             },
             {
                 id: 'account',
                 label: i18n.t('Account'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+                icon: settingsIcons.account
             },
             {
                 id: 'about',
                 label: i18n.t('About'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+                icon: settingsIcons.about
             },
             {
                 id: 'debug',
                 label: i18n.t('Debug'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>'
+                icon: settingsIcons.debug
             }
         ];
 
