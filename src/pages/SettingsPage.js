@@ -83,9 +83,9 @@ class SettingsPage extends Page {
                 icon: settingsIcons.appearance
             },
             {
-                id: 'home',
-                label: i18n.t('Home') || 'Home',
-                icon: settingsIcons.home
+                id: 'layout',
+                label: i18n.t('Layout') || 'Layout',
+                icon: settingsIcons.layout
             },
             {
                 id: 'sidebar',
@@ -169,8 +169,8 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
-            case 'home':
-                return this._renderHomeTab();
+            case 'layout':
+                return this._renderLayoutTab();
             case 'sidebar':
                 return this._renderSidebarTab();
             case 'controls':
@@ -1034,12 +1034,12 @@ class SettingsPage extends Page {
     }
 
     /**
-     * Render Home tab with layout customizations and library thumbnails
+     * Render Layout tab with customizations and library thumbnails
      */
-    _renderHomeTab() {
+    _renderLayoutTab() {
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title" data-i18n="Home">${i18n.t('Home') || 'Home'}</h2>
+                <h2 class="content-title" data-i18n="Layout">${i18n.t('Layout') || 'Layout'}</h2>
 
                 <!-- Home Screen Section -->
                 <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
@@ -5786,7 +5786,7 @@ class SettingsPage extends Page {
 
             this._bindContentEvents(); // Re-bind events for new content
 
-            if (tabId === 'home') {
+            if (tabId === 'layout') {
                 this._setupHomeLayoutUI();
             } else if (tabId === 'sidebar') {
                 this._setupSidebarLayoutUI();
