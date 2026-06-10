@@ -819,6 +819,26 @@ class HomePage extends Page {
             sectionEl.className = `media-row media-row--skeleton${shouldHideLabels ? ' library-no-labels' : ''}`;
             sectionEl.setAttribute('data-row-id', descriptor.id);
 
+            // Set size variables for skeletons based on active card size scale
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+            if (isModern) {
+                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.5;
+                const modernMultiplier = scale / 1.5;
+                const itemMargin = Math.round(40 * modernMultiplier);
+                sectionEl.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-margin', `${itemMargin}px`);
+                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-expansion', `${Math.round(375 * modernMultiplier)}px`);
+            } else {
+                const scale = parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+                const itemWidth = Math.round((landscape ? 400 : 240) * scale);
+                const itemMargin = Math.round(24 * scale);
+                sectionEl.style.setProperty('--skeleton-card-width', `${itemWidth}px`);
+                sectionEl.style.setProperty('--skeleton-card-margin', `${itemMargin}px`);
+            }
+
             // Build skeleton interior — title + shimmer cards
             // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
             const skeletonCardCount = landscape ? 5 : 8;

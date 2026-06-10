@@ -45,6 +45,16 @@ html[data-layout-media-rows="modern"] .media-row--skeleton .row-items-track {
     padding-right: 60px;
 }
 
+.media-row--skeleton .media-card {
+    width: var(--skeleton-card-width, 240px) !important;
+    margin-right: var(--skeleton-card-margin, 24px) !important;
+    margin-left: 0 !important;
+}
+
+.media-row--skeleton .media-card.landscape {
+    width: var(--skeleton-card-width, 400px) !important;
+}
+
 /* Skeleton rows fade out naturally when replaced (the real row fades in) */
 .media-row--skeleton .row-title {
     /* Dim the title slightly to signal "loading" state */
