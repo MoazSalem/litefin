@@ -5061,7 +5061,31 @@ class SettingsPage extends Page {
             { name: 'Brown', hex: '#a2845e' },
             { name: 'Copper', hex: '#b87333' },
             { name: 'Gold', hex: '#d4af37' },
-            { name: 'White', hex: '#ffffff' }
+            { name: 'White', hex: '#ffffff' },
+
+            // Row4:
+            { name: 'Periwinkle', hex: '#8F9FFF' },
+            { name: 'Emerald', hex: '#00A86B' },
+            { name: 'Turquoise', hex: '#40E0D0' },
+            { name: 'Amber', hex: '#FFBF00' },
+            { name: 'Rose Gold', hex: '#B76E79' },
+            { name: 'Indigo', hex: '#4B0082' },
+            { name: 'Coral', hex: '#FF6F61' },
+            { name: 'Aqua Marine', hex: '#7FFFD4' },
+            { name: 'Mint', hex: '#3EB489' },
+            { name: 'Electric Lime', hex: '#7FFF00' },
+
+            // Row5:
+            { name: 'Slate Blue', hex: '#6A5ACD' },
+            { name: 'Sea Green', hex: '#2E8B57' },
+            { name: 'Cadet Blue', hex: '#5F9EA0' },
+            { name: 'Burnt Orange', hex: '#CC5500' },
+            { name: 'Dark Turquoise', hex: '#00CED1' },
+            { name: 'Firebrick', hex: '#B22222' },
+            { name: 'Olive', hex: '#708238' },
+            { name: 'Plum', hex: '#8E4585' },
+            { name: 'Deep Sky', hex: '#00BFFF' },
+            { name: 'Royal Purple', hex: '#7851A9' }
         ];
 
         const currentColor = layoutManager.getThemeColor();
