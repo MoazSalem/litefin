@@ -17,18 +17,18 @@ export class TrailerPlayer extends Component {
         this._trailers = trailers;
         this._parentPage = parentPage;
         this._isProxy = isProxy;
-        
+
         this._currentIndex = 0;
         this._ytPlayer = null;
         this._progressTimer = null;
         this._autoHideTimer = null;
-        
+
         this._isOsdVisible = false;
         this._isPlaying = true;
-        
+
         // Focus state restoration
         this._previousFocusTarget = focusManager.getFocused();
-        
+
         // Bindings
         this._handleKeyDown = this._handleKeyDown.bind(this);
         this._onYTReady = this._onYTReady.bind(this);
@@ -38,7 +38,7 @@ export class TrailerPlayer extends Component {
         this._onMouseMove = this._onMouseMove.bind(this);
         this._onOverlayClick = this._onOverlayClick.bind(this);
         this._onThrottledMouseMove = this._onThrottledMouseMove.bind(this);
-        
+
         this._mouseMoveThrottle = null;
     }
 
@@ -58,10 +58,10 @@ export class TrailerPlayer extends Component {
 
     static launchExternal(trailers, parentPage) {
         if (!trailers || !trailers.length) return;
-        
+
         const url = trailers[0].Url || '';
         let ytId = null;
-        
+
         const yt = url.match(/[?&]v=([^&]+)/);
         if (yt) {
             ytId = yt[1];
@@ -69,7 +69,7 @@ export class TrailerPlayer extends Component {
             const ytShort = url.match(/youtu\.be\/([^?]+)/);
             if (ytShort) ytId = ytShort[1];
         }
-        
+
         if (ytId) {
             if (tizenAdapter.isTizen()) {
                 tizenAdapter.launchYouTube(ytId);
@@ -84,7 +84,6 @@ export class TrailerPlayer extends Component {
         }
     }
 
-
     render() {
         this._overlay = document.createElement('div');
         this._overlay.className = 'trailer-player-overlay';
@@ -97,8 +96,10 @@ export class TrailerPlayer extends Component {
                 backdropUrl = api.getImageUrl(item.Id, 'Backdrop', { maxWidth: 1920 });
             }
         }
-        
-        const backdropStyle = backdropUrl ? `background-image: url('${backdropUrl}'); background-size: cover; background-position: center;` : 'background-color: #000;';
+
+        const backdropStyle = backdropUrl
+            ? `background-image: url('${backdropUrl}'); background-size: cover; background-position: center;`
+            : 'background-color: #000;';
 
         this._overlay.innerHTML = `
             <div class="trailer-iframe-container" id="trailerIframeContainer" style="opacity: 0; transition: opacity 0.5s ease; position: absolute; top:0; left:0; width: 100%; height: 100%; z-index: 1;"></div>
@@ -148,7 +149,6 @@ export class TrailerPlayer extends Component {
             </div>
         `;
 
-
         // Cache DOM elements
         this._osdEl = this._overlay.querySelector('#trailerOsd');
         this._titleEl = this._overlay.querySelector('#trailerTitle');
@@ -165,9 +165,9 @@ export class TrailerPlayer extends Component {
         this._overlay.addEventListener('mousemove', this._onThrottledMouseMove);
 
         // Scrubbing via slider
-        this._positionSliderEl.addEventListener('mousedown', () => this._isDraggingSlider = true);
-        this._positionSliderEl.addEventListener('touchstart', () => this._isDraggingSlider = true, { passive: true });
-        
+        this._positionSliderEl.addEventListener('mousedown', () => (this._isDraggingSlider = true));
+        this._positionSliderEl.addEventListener('touchstart', () => (this._isDraggingSlider = true), { passive: true });
+
         // Visually update the custom CSS fill while actively dragging before "drop/change"
         this._positionSliderEl.addEventListener('input', (e) => {
             this._positionFillEl.style.width = `${e.target.value}%`;
@@ -176,15 +176,15 @@ export class TrailerPlayer extends Component {
 
         this._positionSliderEl.addEventListener('change', (e) => {
             this._isDraggingSlider = false;
-            
+
             // Set a soft lock to prevent `_updateProgress` from rubber-banding the slider
             // before the underlying YouTube player or Proxy has a chance to execute the seek
             this._isSeeking = true;
             if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
-            this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
+            this._seekLockTimer = setTimeout(() => (this._isSeeking = false), 1500);
 
             const percent = parseFloat(e.target.value);
-            
+
             if (this._isProxy) {
                 if (this._proxyDuration) {
                     const targetTime = (percent / 100) * this._proxyDuration;
@@ -211,7 +211,7 @@ export class TrailerPlayer extends Component {
             selector: '.focusable',
             orientation: 'grid'
         });
-        
+
         // Start player hidden natively and let user interactions trigger the OSD
         this._hideOsd();
         focusManager.setActiveSection('trailer-player');
@@ -224,25 +224,29 @@ export class TrailerPlayer extends Component {
         requestAnimationFrame(() => {
             focusManager.focusElement(this._playPauseBtn);
         });
-        
+
         this._loadCurrentTrailer();
     }
 
     onBeforeDestroy() {
         document.removeEventListener('keydown', this._handleKeyDown, true);
-        
+
         if (this._overlay) {
             this._overlay.removeEventListener('click', this._onOverlayClick);
             this._overlay.removeEventListener('mousemove', this._onThrottledMouseMove);
         }
 
-        if (this._isProxy) { window.removeEventListener('message', this._onProxyMessage); }
+        if (this._isProxy) {
+            window.removeEventListener('message', this._onProxyMessage);
+        }
         if (this._progressTimer) clearInterval(this._progressTimer);
         if (this._autoHideTimer) clearTimeout(this._autoHideTimer);
         if (this._mouseMoveThrottle) clearTimeout(this._mouseMoveThrottle);
-        
+
         if (this._ytPlayer) {
-            try { this._ytPlayer.destroy(); } catch(e){}
+            try {
+                this._ytPlayer.destroy();
+            } catch (e) {}
         }
 
         focusManager.unregister('trailer-player');
@@ -279,7 +283,7 @@ export class TrailerPlayer extends Component {
         const iframe = this._overlay.querySelector('#trailerIframeContainer');
         const backdrop = this._overlay.querySelector('#trailerBackdrop');
         const spinner = this._overlay.querySelector('.loading-spinner');
-        
+
         if (iframe) iframe.style.opacity = '0';
         if (backdrop) {
             backdrop.style.display = 'flex';
@@ -298,7 +302,7 @@ export class TrailerPlayer extends Component {
         const iframe = this._overlay.querySelector('#trailerIframeContainer');
         const backdrop = this._overlay.querySelector('#trailerBackdrop');
         const spinner = this._overlay.querySelector('.loading-spinner');
-        
+
         if (iframe) iframe.style.opacity = '1';
         if (backdrop) {
             // Aggressive repaints for Tizen GPU compositor bugs
@@ -327,7 +331,7 @@ export class TrailerPlayer extends Component {
 
         const trailer = this._trailers[this._currentIndex];
         this._titleEl.textContent = trailer.Name || 'Trailer';
-        
+
         // Update nav buttons
         if (this._currentIndex === 0) {
             this._prevBtn.classList.add('osd-btn-disabled');
@@ -352,11 +356,11 @@ export class TrailerPlayer extends Component {
 
         const url = trailer.Url || '';
         console.log('[TrailerPlayer] _loadCurrentTrailer url=', url);
-        
+
         // For phase 1 we only perfectly support YouTube via the API
         const ytId = this._extractYouTubeId(url);
         console.log('[TrailerPlayer] extracted ytId=', ytId);
-        
+
         if (ytId) {
             if (this._isProxy) {
                 this._initProxyPlayer(ytId);
@@ -383,7 +387,7 @@ export class TrailerPlayer extends Component {
             console.log('[TrailerPlayer] Querying fallback crawler:', `http://localhost:8123/trailer${qs}`);
             const res = await fetch(`http://localhost:8123/trailer${qs}`);
             const data = await res.json();
-            
+
             if (data && data.key) {
                 console.log('[TrailerPlayer] Crawler found key:', data.key, 'source:', data.source);
                 this._titleEl.textContent = trailer.Name || 'Trailer';
@@ -393,7 +397,7 @@ export class TrailerPlayer extends Component {
                 iframeRow.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1.5rem;">${i18n.t('NoTrailerFound') || 'No trailer found.'}</div>`;
             }
         } catch (e) {
-            console.error('[TrailerPlayer] Fallback crawler failed:', e && e.message || e);
+            console.error('[TrailerPlayer] Fallback crawler failed:', (e && e.message) || e);
             iframeRow.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#fff;font-size:1.5rem;">${i18n.t('NoTrailerFound') || 'No trailer found.'}</div>`;
         }
     }
@@ -413,9 +417,14 @@ export class TrailerPlayer extends Component {
 
         const createPlayer = () => this._createYTPlayer(videoId);
 
-        console.log('[TrailerPlayer] _initYouTubePlayer videoId=', videoId,
-            '| window.YT=', !!window.YT,
-            '| window.YT.Player=', !!(window.YT && window.YT.Player));
+        console.log(
+            '[TrailerPlayer] _initYouTubePlayer videoId=',
+            videoId,
+            '| window.YT=',
+            !!window.YT,
+            '| window.YT.Player=',
+            !!(window.YT && window.YT.Player)
+        );
 
         if (window.YT && window.YT.Player) {
             /* ── API already fully loaded, instantiate immediately ── */
@@ -472,20 +481,20 @@ export class TrailerPlayer extends Component {
            origin + host are the key fix for error 153 (embed denied) — YouTube
            validates that the embedding page's origin matches before allowing playback. */
         const paramsObj = {
-            autoplay:         '1',
-            controls:         '1', // Show native controls since we can't drive it via JS
-            rel:              '0',
-            modestbranding:   '1',
-            playsinline:      '1',
-            enablejsapi:      '0', // Explicitly off — we're in fallback, not using the API
-            fs:               '1', // Allow fullscreen from native controls
-            iv_load_policy:   '3',
-            origin:           'https://www.youtube.com',
-            host:             'https://www.youtube.com'
+            autoplay: '1',
+            controls: '1', // Show native controls since we can't drive it via JS
+            rel: '0',
+            modestbranding: '1',
+            playsinline: '1',
+            enablejsapi: '0', // Explicitly off — we're in fallback, not using the API
+            fs: '1', // Allow fullscreen from native controls
+            iv_load_policy: '3',
+            origin: 'https://www.youtube.com',
+            host: 'https://www.youtube.com'
         };
 
         const paramsString = Object.keys(paramsObj)
-            .map(key => encodeURIComponent(key) + '=' + encodeURIComponent(paramsObj[key]))
+            .map((key) => encodeURIComponent(key) + '=' + encodeURIComponent(paramsObj[key]))
             .join('&');
 
         const iframe = document.createElement('iframe');
@@ -495,7 +504,7 @@ export class TrailerPlayer extends Component {
         iframe.setAttribute('frameborder', '0');
         iframe.allow = 'autoplay; encrypted-media; fullscreen';
         iframe.allowFullscreen = true;
-        
+
         const revealIframe = () => {
             if (this._overlay) {
                 this._hideLoading();
@@ -503,7 +512,7 @@ export class TrailerPlayer extends Component {
         };
 
         iframe.addEventListener('load', revealIframe);
-        
+
         // Failsafe: some TV browsers swallow cross-origin load events
         setTimeout(revealIframe, 3000);
 
@@ -515,7 +524,12 @@ export class TrailerPlayer extends Component {
     }
 
     _createYTPlayer(videoId) {
-        console.log('[TrailerPlayer] _createYTPlayer called, videoId=', videoId, '| YT.Player=', typeof window.YT?.Player);
+        console.log(
+            '[TrailerPlayer] _createYTPlayer called, videoId=',
+            videoId,
+            '| YT.Player=',
+            typeof window.YT?.Player
+        );
         /* ── playerVars mirroring the jellyfin-web youtubePlayer plugin ─────
            Key differences from the old config:
              • enablejsapi: 1  — allows postMessage control, mandatory on TV browsers
@@ -527,23 +541,23 @@ export class TrailerPlayer extends Component {
         this._ytPlayer = new window.YT.Player('yt-player-host', {
             videoId: videoId,
             playerVars: {
-                controls: 0,        // Hide native YT UI; we draw our own OSD
-                enablejsapi: 1,     // Enable JS API postMessage bridge
-                modestbranding: 1,  // Minimal YouTube branding
-                rel: 0,             // No related videos on end
-                showinfo: 0,        // Deprecated but safe to include
-                fs: 0,              // No native fullscreen button
-                playsinline: 1,     // Inline playback, don't hijack full screen
-                iv_load_policy: 3,  // No video annotations
+                controls: 0, // Hide native YT UI; we draw our own OSD
+                enablejsapi: 1, // Enable JS API postMessage bridge
+                modestbranding: 1, // Minimal YouTube branding
+                rel: 0, // No related videos on end
+                showinfo: 0, // Deprecated but safe to include
+                fs: 0, // No native fullscreen button
+                playsinline: 1, // Inline playback, don't hijack full screen
+                iv_load_policy: 3, // No video annotations
                 // origin + host are the primary fix for error 153 (embed denied).
                 // Using youtube.com (not nocookie) matches what YouTube validates against.
                 origin: 'https://www.youtube.com',
-                host:   'https://www.youtube.com'
+                host: 'https://www.youtube.com'
             },
             events: {
-                'onReady': (e) => this._onYTReady(e),
-                'onStateChange': (e) => this._onYTStateChange(e),
-                'onError': (e) => this._onYTError(e)
+                onReady: (e) => this._onYTReady(e),
+                onStateChange: (e) => this._onYTStateChange(e),
+                onError: (e) => this._onYTError(e)
             }
         });
         console.log('[TrailerPlayer] YT.Player instantiated:', this._ytPlayer);
@@ -551,7 +565,13 @@ export class TrailerPlayer extends Component {
 
     _onYTError(event) {
         // YT error codes: 2=bad param, 5=HTML5 error, 100=not found, 101/150=embed denied
-        const errorMap = { 2: 'Bad request', 5: 'HTML5 error', 100: 'Not found', 101: 'Embed denied', 150: 'Embed denied' };
+        const errorMap = {
+            2: 'Bad request',
+            5: 'HTML5 error',
+            100: 'Not found',
+            101: 'Embed denied',
+            150: 'Embed denied'
+        };
         const msg = errorMap[event.data] || `Error ${event.data}`;
         console.warn('[TrailerPlayer] YouTube error:', msg);
         // Auto-advance to next trailer on error
@@ -561,7 +581,7 @@ export class TrailerPlayer extends Component {
     _onYTReady(event) {
         event.target.playVideo();
         this._startProgressUpdate();
-        
+
         // Failsafe: if autoplay is blocked, it will never reach PLAYING state.
         // Reveal the player once the API confirms it is loaded.
         setTimeout(() => {
@@ -574,28 +594,30 @@ export class TrailerPlayer extends Component {
             if (data && data.title) {
                 this._titleEl.textContent = data.title;
             }
-        } catch(e) {}
+        } catch (e) {}
     }
 
     _onYTStateChange(event) {
         // YT.PlayerState.PLAYING = 1, PAUSED = 2, ENDED = 0
-        if (event.data === 1) { // Playing
+        if (event.data === 1) {
+            // Playing
             this._isPlaying = true;
             this._playPauseBtn.innerHTML = ICONS.pause;
             this._hideLoading();
-            
+
             // Try again on play in case data was delayed
             try {
                 const data = this._ytPlayer.getVideoData();
                 if (data && data.title) {
                     this._titleEl.textContent = data.title;
                 }
-            } catch(e) {}
-            
-        } else if (event.data === 2) { // Paused
+            } catch (e) {}
+        } else if (event.data === 2) {
+            // Paused
             this._isPlaying = false;
             this._playPauseBtn.innerHTML = ICONS.play;
-        } else if (event.data === 0) { // Ended
+        } else if (event.data === 0) {
+            // Ended
             this._executeAction('next'); // Auto-advance to next trailer
         }
     }
@@ -607,23 +629,23 @@ export class TrailerPlayer extends Component {
 
     _updateProgress() {
         if (!this._ytPlayer || !this._ytPlayer.getCurrentTime || !this._ytPlayer.getDuration) return;
-        
+
         try {
             const current = this._ytPlayer.getCurrentTime();
             const total = this._ytPlayer.getDuration();
-            
+
             if (total > 0) {
                 // Time strings need ticks (seconds * 10,000,000)
                 this._currentTimeEl.textContent = this._formatTicks(current * 10000000);
-                
+
                 const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
                 const isRemaining = timeDisplayMode === 'remaining';
-                const durationDisplaySecs = isRemaining ? (total - current) : total;
+                const durationDisplaySecs = isRemaining ? total - current : total;
                 const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
                 this._totalTimeEl.textContent = totalStr;
-                
+
                 const percent = (current / total) * 100;
-                
+
                 // Only force slider value/visuals if user isn't actively interacting with it
                 if (!this._isDraggingSlider && !this._isSeeking) {
                     this._positionFillEl.style.width = `${percent}%`;
@@ -636,7 +658,7 @@ export class TrailerPlayer extends Component {
     }
 
     _formatTicks(ticks) {
-        if (!ticks || isNaN(ticks)) return "00:00";
+        if (!ticks || isNaN(ticks)) return '00:00';
         const totalSeconds = Math.floor(ticks / 10000000);
         const hours = Math.floor(totalSeconds / 3600);
         const minutes = Math.floor((totalSeconds % 3600) / 60);
@@ -650,7 +672,7 @@ export class TrailerPlayer extends Component {
 
     _executeAction(action) {
         this._resetAutoHide();
-        
+
         switch (action) {
             case 'close':
             case 'exit':
@@ -668,7 +690,8 @@ export class TrailerPlayer extends Component {
                 }
                 break;
             case 'rewind': {
-                let targetSecs = 0, durationSecs = 0;
+                let targetSecs = 0,
+                    durationSecs = 0;
                 if (this._isProxy && this._proxyCurrentTime !== undefined && this._proxyDuration) {
                     targetSecs = Math.max(0, this._proxyCurrentTime - 5);
                     durationSecs = this._proxyDuration;
@@ -680,20 +703,20 @@ export class TrailerPlayer extends Component {
                     targetSecs = Math.max(0, ct - 5);
                     this._ytPlayer.seekTo(targetSecs, true);
                 }
-                
+
                 if (durationSecs > 0) {
                     this._isSeeking = true;
                     if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
-                    this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
-                    
+                    this._seekLockTimer = setTimeout(() => (this._isSeeking = false), 1500);
+
                     this._currentTimeEl.textContent = this._formatTicks(targetSecs * 10000000);
-                    
+
                     const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
                     const isRemaining = timeDisplayMode === 'remaining';
-                    const durationDisplaySecs = isRemaining ? (durationSecs - targetSecs) : durationSecs;
+                    const durationDisplaySecs = isRemaining ? durationSecs - targetSecs : durationSecs;
                     const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
                     this._totalTimeEl.textContent = totalStr;
-                    
+
                     const percent = (targetSecs / durationSecs) * 100;
                     this._positionFillEl.style.width = `${percent}%`;
                     this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
@@ -701,7 +724,8 @@ export class TrailerPlayer extends Component {
                 break;
             }
             case 'fastForward': {
-                let targetSecs = 0, durationSecs = 0;
+                let targetSecs = 0,
+                    durationSecs = 0;
                 if (this._isProxy && this._proxyCurrentTime !== undefined && this._proxyDuration) {
                     targetSecs = Math.min(this._proxyDuration, this._proxyCurrentTime + 5);
                     durationSecs = this._proxyDuration;
@@ -717,16 +741,16 @@ export class TrailerPlayer extends Component {
                 if (durationSecs > 0) {
                     this._isSeeking = true;
                     if (this._seekLockTimer) clearTimeout(this._seekLockTimer);
-                    this._seekLockTimer = setTimeout(() => this._isSeeking = false, 1500);
-                    
+                    this._seekLockTimer = setTimeout(() => (this._isSeeking = false), 1500);
+
                     this._currentTimeEl.textContent = this._formatTicks(targetSecs * 10000000);
-                    
+
                     const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
                     const isRemaining = timeDisplayMode === 'remaining';
-                    const durationDisplaySecs = isRemaining ? (durationSecs - targetSecs) : durationSecs;
+                    const durationDisplaySecs = isRemaining ? durationSecs - targetSecs : durationSecs;
                     const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
                     this._totalTimeEl.textContent = totalStr;
-                    
+
                     const percent = (targetSecs / durationSecs) * 100;
                     this._positionFillEl.style.width = `${percent}%`;
                     this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
@@ -753,7 +777,7 @@ export class TrailerPlayer extends Component {
 
     _handleKeyDown(e) {
         const wasHidden = !this._isOsdVisible;
-        
+
         // Tizen specific keys and generic media keys intercept
         this._resetAutoHide();
         this._showOsd();
@@ -869,14 +893,14 @@ export class TrailerPlayer extends Component {
         this._isOsdVisible = true;
         this._osdEl.classList.remove('osd-is-hidden');
         this._osdEl.querySelector('.osd-main').classList.remove('osd-hidden');
-        
+
         if (shouldFocus) {
             this._clearMagicHover();
             // Only lock focus if explicitly requested (e.g. D-pad or click)
             focusManager.setActiveSection('trailer-player');
             focusManager.focusElement(this._playPauseBtn);
         }
-        
+
         this._resetAutoHide();
     }
 
@@ -889,7 +913,7 @@ export class TrailerPlayer extends Component {
 
     _clearMagicHover() {
         if (this._osdEl) {
-            this._osdEl.querySelectorAll('.magic-hover').forEach(el => el.classList.remove('magic-hover'));
+            this._osdEl.querySelectorAll('.magic-hover').forEach((el) => el.classList.remove('magic-hover'));
         }
         this._lastHoveredEl = null;
     }
@@ -921,10 +945,10 @@ export class TrailerPlayer extends Component {
         const container = this._overlay.querySelector('#trailerIframeContainer');
         container.innerHTML = `<iframe id="ytProxyIframe" src="http://localhost:8123/player.html?videoId=${encodeURIComponent(videoId)}" width="100%" height="100%" frameborder="0" allow="autoplay; encrypted-media; fullscreen"></iframe>`;
         this._proxyIframe = this._overlay.querySelector('#ytProxyIframe');
-        
+
         window.removeEventListener('message', this._onProxyMessage);
         window.addEventListener('message', this._onProxyMessage);
-        
+
         this._proxyDuration = 0;
         this._proxyCurrentTime = 0;
     }
@@ -932,7 +956,7 @@ export class TrailerPlayer extends Component {
     _onProxyMessage(ev) {
         if (!ev.data || !ev.data.__ytbridge) return;
         const msg = ev.data;
-        
+
         if (msg.event === 'playing') {
             this._isPlaying = true;
             this._playPauseBtn.innerHTML = ICONS.pause;
@@ -944,44 +968,46 @@ export class TrailerPlayer extends Component {
         } else if (msg.type === 'time') {
             this._proxyCurrentTime = msg.t / 1000;
             this._proxyDuration = msg.d / 1000;
-            
+
             if (this._proxyDuration > 0) {
                 this._currentTimeEl.textContent = this._formatTicks(this._proxyCurrentTime * 10000000);
-                
+
                 const timeDisplayMode = PlayerSettings.get('osdTimeDisplayMode') || 'total';
                 const isRemaining = timeDisplayMode === 'remaining';
-                const durationDisplaySecs = isRemaining ? (this._proxyDuration - this._proxyCurrentTime) : this._proxyDuration;
+                const durationDisplaySecs = isRemaining
+                    ? this._proxyDuration - this._proxyCurrentTime
+                    : this._proxyDuration;
                 const totalStr = (isRemaining ? '-' : '') + this._formatTicks(durationDisplaySecs * 10000000);
                 this._totalTimeEl.textContent = totalStr;
-                
+
                 const percent = (this._proxyCurrentTime / this._proxyDuration) * 100;
-                
+
                 // Only force slider value/visuals if user isn't actively interacting with it
                 if (!this._isDraggingSlider && !this._isSeeking) {
                     this._positionFillEl.style.width = `${percent}%`;
                     this._positionSliderEl.value = Math.max(0, Math.min(100, percent));
                 }
             }
-            
+
             if (msg.s !== undefined && msg.s !== -1) {
-                if (msg.s === 1) { 
-                    this._isPlaying = true; 
-                    this._playPauseBtn.innerHTML = ICONS.pause; 
-                } else if (msg.s === 2) { 
-                    this._isPlaying = false; 
-                    this._playPauseBtn.innerHTML = ICONS.play; 
+                if (msg.s === 1) {
+                    this._isPlaying = true;
+                    this._playPauseBtn.innerHTML = ICONS.pause;
+                } else if (msg.s === 2) {
+                    this._isPlaying = false;
+                    this._playPauseBtn.innerHTML = ICONS.play;
                 } else if (msg.s === 0) {
                     this._executeAction('next');
                 }
             }
         } else if (msg.type === 'state') {
             const state = msg.data;
-            if (state === 1) { 
-                this._isPlaying = true; 
-                this._playPauseBtn.innerHTML = ICONS.pause; 
-            } else if (state === 2) { 
-                this._isPlaying = false; 
-                this._playPauseBtn.innerHTML = ICONS.play; 
+            if (state === 1) {
+                this._isPlaying = true;
+                this._playPauseBtn.innerHTML = ICONS.pause;
+            } else if (state === 2) {
+                this._isPlaying = false;
+                this._playPauseBtn.innerHTML = ICONS.play;
             } else if (state === 0) {
                 this._executeAction('next');
             }

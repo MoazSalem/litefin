@@ -28,6 +28,7 @@ import { homeLayoutManager } from '../utils/HomeLayoutManager.js';
 import { sidebarLayoutManager } from '../utils/SidebarLayoutManager.js';
 import { eventBus } from '../core/EventBus.js';
 import { versionChecker } from '../utils/VersionChecker.js';
+import { settingsIcons } from '../utils/Icons.js';
 
 const log = logger.create('SettingsPage');
 
@@ -79,52 +80,52 @@ class SettingsPage extends Page {
             {
                 id: 'appearance',
                 label: i18n.t('Display'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a10 10 0 0 1 0 20Z" fill="currentColor"/></svg>'
+                icon: settingsIcons.appearance
             },
             {
-                id: 'home',
-                label: i18n.t('Home') || 'Home',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>'
+                id: 'layout',
+                label: i18n.t('Layout') || 'Layout',
+                icon: settingsIcons.layout
             },
             {
                 id: 'sidebar',
                 label: i18n.t('Sidebar') || 'Sidebar',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>'
+                icon: settingsIcons.sidebar
             },
             {
                 id: 'controls',
                 label: i18n.t('Controls') || 'Controls',
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><circle cx="14" cy="6" r="2.5" fill="currentColor"/><line x1="4" y1="12" x2="20" y2="12"/><circle cx="8" cy="12" r="2.5" fill="currentColor"/><line x1="4" y1="18" x2="20" y2="18"/><circle cx="16" cy="18" r="2.5" fill="currentColor"/></svg>'
+                icon: settingsIcons.controls
             },
             {
                 id: 'player',
                 label: i18n.t('TitlePlayback'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>'
+                icon: settingsIcons.player
             },
             {
                 id: 'subtitles',
                 label: i18n.t('Subtitles'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M7 15h4M15 15h2M7 11h2M13 11h4"/></svg>'
+                icon: settingsIcons.subtitles
             },
             {
                 id: 'plugins',
                 label: i18n.t('Plugins'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.24 12.24a6 6 0 0 0-8.49-8.49L5 10.5V19h8.5l6.74-6.76z"/><line x1="16" y1="8" x2="2" y2="22"/><line x1="17" y1="15" x2="9" y2="15"/></svg>'
+                icon: settingsIcons.plugins
             },
             {
                 id: 'account',
                 label: i18n.t('Account'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>'
+                icon: settingsIcons.account
             },
             {
                 id: 'about',
                 label: i18n.t('About'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+                icon: settingsIcons.about
             },
             {
                 id: 'debug',
                 label: i18n.t('Debug'),
-                icon: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="8" height="14" x="8" y="6" rx="4"/><path d="m19 7-3 2"/><path d="m5 7 3 2"/><path d="m19 19-3-2"/><path d="m5 19 3-2"/><path d="M20 13h-4"/><path d="M4 13h4"/><path d="m10 4 1 2"/><path d="m14 4-1 2"/></svg>'
+                icon: settingsIcons.debug
             }
         ];
 
@@ -168,8 +169,8 @@ class SettingsPage extends Page {
         switch (this.activeTab) {
             case 'appearance':
                 return this._renderAppearanceTab();
-            case 'home':
-                return this._renderHomeTab();
+            case 'layout':
+                return this._renderLayoutTab();
             case 'sidebar':
                 return this._renderSidebarTab();
             case 'controls':
@@ -281,23 +282,6 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="LayoutMode">${i18n.t('LayoutMode') || 'Layout'}</span>
-                        <span class="setting-description" data-i18n="LayoutModeDescription">${i18n.t('LayoutModeDescription') || 'Choose between the classic and modern user interface.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'layout-mode-select',
-                            [
-                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
-                                { value: 'modern', label: i18n.t('LayoutModern') || 'Modern' }
-                            ],
-                            layoutManager.getLayout() || 'classic'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
                         <span class="setting-name" data-i18n="LayoutDirection">${i18n.t('LayoutDirection')}</span>
                         <span class="setting-description" data-i18n="LayoutDirectionDescription">${i18n.t('LayoutDirectionDescription')}</span>
                     </div>
@@ -343,7 +327,9 @@ class SettingsPage extends Page {
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             layoutManager.getUiFont()
                         )}
@@ -436,396 +422,6 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelLibraryPageSize">${i18n.t('LabelLibraryPageSize') || 'Items per page (Library)'}</span>
-                        <span class="setting-description" data-i18n="LibraryPageSizeDescription">${i18n.t('LibraryPageSizeDescription') || 'Choose how many items to load at once in the grid view.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'library-page-size-select',
-                            [
-                                { value: 25, label: '25' },
-                                { value: 50, label: '50' },
-                                { value: 75, label: '75' },
-                                { value: 100, label: '100' },
-                                { value: 150, label: '150' }
-                            ],
-                            storage.getItem('pref:libraryPageSize') || 100
-                        )}
-                    </div>
-                </div>
-
-                <!-- Performance Tweaks Section -->
-                <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
-                        <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'vertical-scroll-mode-select',
-                            [
-                                /* -------------------------------------------------------------
-                                 * Normal (Current) scroll mode uses standard custom JS RAF loops
-                                 * ------------------------------------------------------------- */
-                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Normal (Current)' },
-                                /* -------------------------------------------------------------
-                                 * Smooth (Native) mode delegates scrolling directly to the browser
-                                 * ------------------------------------------------------------- */
-                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },
-                                /* -------------------------------------------------------------
-                                 * Fast (GPU Accelerated) mode transforms page contents using CSS
-                                 * ------------------------------------------------------------- */
-                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'Fast (GPU Accelerated)' },
-                                /* -------------------------------------------------------------
-                                 * Instant (No Animation) mode snaps content immediately to target
-                                 * ------------------------------------------------------------- */
-                                { value: 'instant', label: i18n.t('ScrollModeInstant') || 'Instant (No Animation)' }
-                            ],
-                            storage.getItem('pref:verticalScrollMode') || 'native'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelLowVramMode">${i18n.t('LabelLowVramMode') || 'Low VRAM Mode'}</span>
-                        <span class="setting-description" data-i18n="LowVramModeDescription">${i18n.t('LowVramModeDescription') || 'Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getLowVramMode() ? 'active' : ''}" 
-                                id="toggle-low-vram-mode" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelDisableCardScaling">${i18n.t('LabelDisableCardScaling') || 'Disable Card Scaling'}</span>
-                        <span class="setting-description" data-i18n="DisableCardScalingDescription">${i18n.t('DisableCardScalingDescription') || 'Stop movie posters and thumbnails from scaling up when focused. Helpful for grid stability.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getDisableCardScaling() ? 'active' : ''}" 
-                                id="toggle-disable-card-scaling" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
-                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') === 'true' ? 'active' : ''}" 
-                                 id="toggle-snap-large-scrolls" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
-                        <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getSimpleLoader() ? 'active' : ''}" 
-                                id="toggle-simple-loader" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelDisableBlurHash">${i18n.t('LabelDisableBlurHash') || 'Disable BlurHash'}</span>
-                        <span class="setting-description" data-i18n="DisableBlurHashDescription">${i18n.t('DisableBlurHashDescription') || 'Stop showing color-accurate blurred backgrounds while images are loading. Uses standard dark skeletons instead.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getDisableBlurhash() ? 'active' : ''}" 
-                                id="toggle-disable-blurhash" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <!-- OSD Section -->
-                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
-                <h3 class="setting-section-title" data-i18n="OSDCustomization">${i18n.t('OSDCustomization') || 'OSD Customization'}</h3>
-                
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
-                        <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdShowLogo') ? 'active' : ''}" 
-                                id="toggle-osd-show-logo" 
-                                data-setting="osdShowLogo"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item" id="osd-logo-size-container" style="display: ${PlayerSettings.get('osdShowLogo') ? '' : 'none'}">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdLogoSize">${i18n.t('LabelOsdLogoSize') || 'OSD Logo Size'}</span>
-                        <span class="setting-description" data-i18n="OsdLogoSizeDescription">${i18n.t('OsdLogoSizeDescription') || 'Choose the display size of the show or movie logo in the playback overlay.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-logo-size-select',
-                            [
-                                { value: 'small', label: i18n.t('Small') || 'Small' },
-                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
-                                { value: 'large', label: i18n.t('Large') || 'Large' },
-                                { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
-                                { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
-                            ],
-                            PlayerSettings.get('osdLogoSize') || 'medium'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
-                        <span class="setting-description" data-i18n="HideYearInOsdDescription">${i18n.t('HideYearInOsdDescription') || 'Hides the production year from the playback overlay title.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdHideYear') ? 'active' : ''}" 
-                                id="toggle-osd-hide-year" 
-                                data-setting="osdHideYear"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideShowNameInOsd">${i18n.t('LabelHideShowNameInOsd') || 'Hide Show Name'}</span>
-                        <span class="setting-description" data-i18n="HideShowNameInOsdDescription">${i18n.t('HideShowNameInOsdDescription') || 'Hides the show name (or logo) for episodes in the playback overlay.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('osdHideShowName') ? 'active' : ''}" 
-                                id="toggle-osd-hide-show-name" 
-                                data-setting="osdHideShowName"
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
-                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-time-display-select',
-                            [
-                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
-                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
-                            ],
-                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
-                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'osd-button-borders-select',
-                            [
-                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
-                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
-                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
-                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
-                            ],
-                            layoutManager.getOsdButtonBorders()
-                        )}
-                    </div>
-                </div>
-
-                <!-- Details Page Section -->
-                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
-                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelOnlyBlurHashBackdrop">${i18n.t('LabelOnlyBlurHashBackdrop') || 'Only Use BlurHash for Details Backdrop'}</span>
-                        <span class="setting-description" data-i18n="OnlyBlurHashBackdropDescription">${i18n.t('OnlyBlurHashBackdropDescription') || 'Use only the lightweight decoded color blurhash as the details page background. Does not fetch or load the heavy high-resolution backdrop image, saving network bandwidth and GPU VRAM.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${layoutManager.getOnlyBlurHashBackdrop() ? 'active' : ''}" 
-                                id="toggle-only-blurhash-backdrop" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelScoreVisibility">${i18n.t('LabelScoreVisibility') || 'Score Visibility'}</span>
-                        <span class="setting-description" data-i18n="ScoreVisibilityDescription">${i18n.t('ScoreVisibilityDescription') || 'Control how community and critic scores are displayed.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'score-visibility-select',
-                            [
-                                { value: 'all', label: i18n.t('OptionScoreAll') || 'Show All' },
-                                { value: 'mystery', label: i18n.t('OptionScoreMystery') || 'Mystery Mode (Hide All)' },
-                                { value: 'watched', label: i18n.t('OptionScoreWatched') || 'Watched Items Only' }
-                            ],
-                            storage.getItem('pref:scoreVisibility') || 'all'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
-                        <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'details-title-style-select',
-                            [
-                                { value: 'both', label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon' },
-                                { value: 'logo-only', label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)' },
-                                { value: 'text-only', label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title' }
-                            ],
-                            storage.getItem('pref:detailsTitleStyle') || 'both'
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <!-- Apple HIG: Clean label for toggling original language subtitle display -->
-                        <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
-                        <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <!-- Sleek fluid iOS-style toggle matching general appearance preferences, off by default -->
-                        <button class="toggle-switch ${storage.getItem('pref:hideOriginalTitle') === 'true' ? 'active' : ''}" 
-                                id="toggle-hide-original-title" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
-                        <span class="setting-description" data-i18n="ShowMdbAwardsDescription">${i18n.t('ShowMdbAwardsDescription') || 'Display award badges from MDBList on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:showMdbAwards') !== 'false' ? 'active' : ''}" 
-                                 id="toggle-mdb-awards" 
-                                 tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
-                        <span class="setting-description" data-i18n="ShowAddedDateDescription">${i18n.t('ShowAddedDateDescription') || 'Display the date this item was added to your library on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:showAddedDate') === 'true' ? 'active' : ''}" 
-                                id="toggle-show-added-date" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelShowDateAired">${i18n.t('LabelShowDateAired') || 'Show Date Aired'}</span>
-                        <span class="setting-description" data-i18n="ShowDateAiredDescription">${i18n.t('ShowDateAiredDescription') || 'Display the premiere date on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:showDateAired') === 'true' ? 'active' : ''}" 
-                                id="toggle-show-date-aired" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <!-- Apple HIG: Elegant multi-choice selector for rich metadata details customization -->
-                        <span class="setting-name" data-i18n="LabelRichMetadataStyle">${i18n.t('LabelRichMetadataStyle') || 'Rich Metadata Display'}</span>
-                        <span class="setting-description" data-i18n="RichMetadataStyleDescription">${i18n.t('RichMetadataStyleDescription') || 'Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        ${this._renderDropdown(
-                            'rich-metadata-select',
-                            [
-                                { value: 'all', label: i18n.t('OptionRichMetadataAll') || 'Show Full Rich Metadata' },
-                                { value: 'genres-studios-writers', label: i18n.t('OptionRichMetadataGenresStudiosWriters') || 'Show Genres, Studios & Writers' },
-                                { value: 'genres-writers', label: i18n.t('OptionRichMetadataGenresWriters') || 'Show Genres & Writers' },
-                                { value: 'genres-only', label: i18n.t('OptionRichMetadataGenresOnly') || 'Show Only Genres' },
-                                { value: 'none', label: i18n.t('OptionRichMetadataNone') || 'Hide All' }
-                            ],
-                            storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all')
-                        )}
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <span class="setting-name" data-i18n="LabelHideCastSection">${i18n.t('LabelHideCastSection') || 'Hide Cast & Guest Stars'}</span>
-                        <span class="setting-description" data-i18n="HideCastSectionDescription">${i18n.t('HideCastSectionDescription') || 'Hide the actors and guest stars rows on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hideCastSection') === 'true' ? 'active' : ''}" 
-                                id="toggle-hide-cast-section" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <!-- Apple HIG: Fluid toggle switch for Similar Recommendations section on details page -->
-                        <span class="setting-name" data-i18n="LabelHideSimilarSection">${i18n.t('LabelHideSimilarSection') || 'Hide More Like This'}</span>
-                        <span class="setting-description" data-i18n="HideSimilarSectionDescription">${i18n.t('HideSimilarSectionDescription') || 'Do not load or display the similar recommendations section on the details page.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:hideSimilarSection') === 'true' ? 'active' : ''}" 
-                                id="toggle-hide-similar-section" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
-                <div class="setting-item">
-                    <div class="setting-label">
-                        <!-- Apple HIG: Dynamic background theme score toggle switch, off by default -->
-                        <span class="setting-name" data-i18n="LabelPlayThemeSongs">${i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs'}</span>
-                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play show theme songs in the background when viewing details pages.'}</span>
-                    </div>
-                    <div class="setting-control">
-                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongs') === 'true' ? 'active' : ''}" 
-                                id="toggle-play-theme-songs" 
-                                tabindex="0">
-                        </button>
-                    </div>
-                </div>
-
                 
                 <!-- Image Related Section -->
                 <h3 class="setting-section-title" data-i18n="ImageRelated">${i18n.t('ImageRelated')}</h3>
@@ -989,22 +585,183 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                                <!-- Performance Tweaks Section -->
+                <h3 class="setting-section-title" data-i18n="PerformanceTweaks">${i18n.t('PerformanceTweaks') || 'Performance Tweaks'}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="VerticalScrollMode">${i18n.t('VerticalScrollMode') || 'Vertical Scroll Animation'}</span>
+                        <span class="setting-description" data-i18n="VerticalScrollModeDescription">${i18n.t('VerticalScrollModeDescription') || 'Choose how vertical page scrolling is animated (JS RAF, Native/Smooth, or GPU Accelerated).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'vertical-scroll-mode-select',
+                            [
+                                /* -------------------------------------------------------------
+                                 * Normal (Current) scroll mode uses standard custom JS RAF loops
+                                 * ------------------------------------------------------------- */
+                                { value: 'current', label: i18n.t('ScrollModeCurrent') || 'Normal (Current)' },
+                                /* -------------------------------------------------------------
+                                 * Smooth (Native) mode delegates scrolling directly to the browser
+                                 * ------------------------------------------------------------- */
+                                { value: 'native', label: i18n.t('ScrollModeNative') || 'Smooth (Native)' },
+                                /* -------------------------------------------------------------
+                                 * Fast (GPU Accelerated) mode transforms page contents using CSS
+                                 * ------------------------------------------------------------- */
+                                { value: 'gpu', label: i18n.t('ScrollModeGpu') || 'Fast (GPU Accelerated)' },
+                                /* -------------------------------------------------------------
+                                 * Instant (No Animation) mode snaps content immediately to target
+                                 * ------------------------------------------------------------- */
+                                { value: 'instant', label: i18n.t('ScrollModeInstant') || 'Instant (No Animation)' }
+                            ],
+                            storage.getItem('pref:verticalScrollMode') || 'native'
+                        )}
+                    </div>
+                </div>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLibraryPageSize">${i18n.t('LabelLibraryPageSize') || 'Items per page (Library)'}</span>
+                        <span class="setting-description" data-i18n="LibraryPageSizeDescription">${i18n.t('LibraryPageSizeDescription') || 'Choose how many items to load at once in the grid view.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'library-page-size-select',
+                            [
+                                { value: 25, label: '25' },
+                                { value: 50, label: '50' },
+                                { value: 75, label: '75' },
+                                { value: 100, label: '100' },
+                                { value: 150, label: '150' }
+                            ],
+                            storage.getItem('pref:libraryPageSize') || 100
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOnlyBlurHashBackdrop">${i18n.t('LabelOnlyBlurHashBackdrop') || 'Only Use BlurHash for Details Backdrop'}</span>
+                        <span class="setting-description" data-i18n="OnlyBlurHashBackdropDescription">${i18n.t('OnlyBlurHashBackdropDescription') || 'Use only the lightweight decoded color blurhash as the details page background. Does not fetch or load the heavy high-resolution backdrop image, saving network bandwidth and GPU VRAM.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getOnlyBlurHashBackdrop() ? 'active' : ''}" 
+                                id="toggle-only-blurhash-backdrop" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelLowVramMode">${i18n.t('LabelLowVramMode') || 'Low VRAM Mode'}</span>
+                        <span class="setting-description" data-i18n="LowVramModeDescription">${i18n.t('LowVramModeDescription') || 'Disable GPU-intensive animations and transitions to prevent rendering glitches on older hardware.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getLowVramMode() ? 'active' : ''}" 
+                                id="toggle-low-vram-mode" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableCardScaling">${i18n.t('LabelDisableCardScaling') || 'Disable Card Scaling'}</span>
+                        <span class="setting-description" data-i18n="DisableCardScalingDescription">${i18n.t('DisableCardScalingDescription') || 'Stop movie posters and thumbnails from scaling up when focused. Helpful for grid stability.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getDisableCardScaling() ? 'active' : ''}" 
+                                id="toggle-disable-card-scaling" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ReduceMotionLargeScrolls">${i18n.t('ReduceMotionLargeScrolls') || 'Reduce Motion (Large Scrolls)'}</span>
+                        <span class="setting-description" data-i18n="ReduceMotionLargeScrollsDescription">${i18n.t('ReduceMotionLargeScrollsDescription') || 'Instantly snap to the target instead of animating when scrolling long distances (improves performance).'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:snapLargeScrolls') === 'true' ? 'active' : ''}" 
+                                 id="toggle-snap-large-scrolls" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelSimpleLoader">${i18n.t('LabelSimpleLoader') || 'Simple Loading Indicator'}</span>
+                        <span class="setting-description" data-i18n="SimpleLoaderDescription">${i18n.t('SimpleLoaderDescription') || 'Replace the standard animated loader with a lightweight rotating ring to reduce CPU usage.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getSimpleLoader() ? 'active' : ''}" 
+                                id="toggle-simple-loader" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDisableBlurHash">${i18n.t('LabelDisableBlurHash') || 'Disable BlurHash'}</span>
+                        <span class="setting-description" data-i18n="DisableBlurHashDescription">${i18n.t('DisableBlurHashDescription') || 'Stop showing color-accurate blurred backgrounds while images are loading. Uses standard dark skeletons instead.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${layoutManager.getDisableBlurhash() ? 'active' : ''}" 
+                                id="toggle-disable-blurhash" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Extra Section -->
+                <h3 class="setting-section-title" data-i18n="Extra">${i18n.t('Extra')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Dynamic background theme score toggle switch, off by default -->
+                        <span class="setting-name" data-i18n="LabelPlayThemeSongs">${i18n.t('LabelPlayThemeSongs') || 'Play Theme Songs'}</span>
+                        <span class="setting-description" data-i18n="PlayThemeSongsDescription">${i18n.t('PlayThemeSongsDescription') || 'Play show theme songs in the background when viewing details pages.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:playThemeSongs') === 'true' ? 'active' : ''}" 
+                                id="toggle-play-theme-songs" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
             </div>
         `;
     }
 
     /**
-     * Render Home tab with layout customizations and library thumbnails
+     * Render Layout tab with customizations and library thumbnails
      */
-    _renderHomeTab() {
+    _renderLayoutTab() {
         return `
             <div class="settings-tab-content">
-                <h2 class="content-title" data-i18n="Home">${i18n.t('Home') || 'Home'}</h2>
+                <h2 class="content-title" data-i18n="Layout">${i18n.t('Layout') || 'Layout'}</h2>
 
-                <!-- Home Screen Section -->
-                <h3 class="setting-section-title" data-i18n="Customizations">${i18n.t('Customizations')}</h3>
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="MediaRowsLayout">${i18n.t('MediaRowsLayout') || 'Media Rows Layout'}</span>
+                        <span class="setting-description" data-i18n="MediaRowsLayoutDescription">${i18n.t('MediaRowsLayoutDescription') || 'Choose the layout mode for horizontal media rows.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'media-rows-layout-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutExpandingPosters') || 'Expanding Posters' }
+                            ],
+                            layoutManager.getMediaRowsLayout() || 'classic'
+                        )}
+                    </div>
+                </div>
 
-                ${layoutManager.getLayout() === 'modern' ? `
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="HomeForceExpandablePosters">${i18n.t('HomeForceExpandablePosters') || 'Force Expandable Posters'}</span>
@@ -1017,18 +774,98 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
-                ` : ''}
 
                 <div class="setting-item">
                     <div class="setting-label">
-                        <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
-                        <span class="setting-description" data-i18n="HideLibraryLabelsDescription">${i18n.t('HideLibraryLabelsDescription')}</span>
+                        <span class="setting-name" data-i18n="LoginPageLayout">${i18n.t('LoginPageLayout') || 'Login Page Layout'}</span>
+                        <span class="setting-description" data-i18n="LoginPageLayoutDescription">${i18n.t('LoginPageLayoutDescription') || 'Choose the layout mode for the login pages.'}</span>
                     </div>
                     <div class="setting-control">
-                         <button class="toggle-switch ${storage.getItem('pref:hideLibraryLabels') === 'true' ? 'active' : ''}" 
-                                 id="toggle-library-labels" 
-                                 tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'login-page-layout-select',
+                            [
+                                { value: 'classic', label: i18n.t('LayoutClassic') || 'Classic' },
+                                { value: 'modern', label: i18n.t('LayoutModernLoginPage') || 'Modern layout' }
+                            ],
+                            layoutManager.getLoginPageLayout() || 'classic'
+                        )}
+                    </div>
+                </div>
+
+                <!-- Media Rows Section -->
+                <h3 class="setting-section-title" data-i18n="MediaRows">${i18n.t('MediaRows')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardSizeScale">${i18n.t('CardSizeScale') || 'Card Size Scale'}</span>
+                        <span class="setting-description" data-i18n="CardSizeScaleDescription">${i18n.t('CardSizeScaleDescription') || 'Adjust the size of horizontal row items (posters, landscape, etc.) in Classic layout mode.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${(() => {
+                            const isModernLayout = layoutManager.getMediaRowsLayout() === 'modern';
+                            const cardSizeOptions = isModernLayout
+                                ? [
+                                      { value: '1.2', label: '120%' },
+                                      { value: '1.25', label: '125%' },
+                                      { value: '1.3', label: '130% (Default)' },
+                                      { value: '1.35', label: '135%' },
+                                      { value: '1.4', label: '140%' },
+                                      { value: '1.45', label: '145%' },
+                                      { value: '1.5', label: '150%' }
+                                  ]
+                                : [
+                                      { value: '1', label: '100% (Small / Default)' },
+                                      { value: '1.05', label: '105%' },
+                                      { value: '1.1', label: '110%' },
+                                      { value: '1.15', label: '115%' },
+                                      { value: '1.2', label: '120%' },
+                                      { value: '1.25', label: '125%' },
+                                      { value: '1.3', label: '130%' },
+                                      { value: '1.35', label: '135%' },
+                                      { value: '1.4', label: '140%' },
+                                      { value: '1.45', label: '145%' },
+                                      { value: '1.5', label: '150%' }
+                                  ];
+                            const defaultValue = isModernLayout ? '1.3' : '1';
+                            const storageKey = isModernLayout
+                                ? 'pref:modernCardSizeScale'
+                                : 'pref:classicCardSizeScale';
+                            return this._renderDropdown(
+                                'classic-card-size-scale-select',
+                                cardSizeOptions,
+                                storage.getItem(storageKey) || defaultValue
+                            );
+                        })()}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelScale">${i18n.t('CardLabelScale') || 'Card Label Scale'}</span>
+                        <span class="setting-description" data-i18n="CardLabelScaleDescription">${i18n.t('CardLabelScaleDescription') || 'Adjust the text size of titles and subtitles under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-scale-select',
+                            [
+                                { value: '0.8', label: '80%' },
+                                { value: '0.85', label: '85%' },
+                                { value: '0.9', label: '90%' },
+                                { value: '0.95', label: '95%' },
+                                { value: '1', label: 'Normal (100%)' },
+                                { value: '1.05', label: '105%' },
+                                { value: '1.1', label: '110%' },
+                                { value: '1.15', label: '115%' },
+                                { value: '1.2', label: '120%' },
+                                { value: '1.25', label: '125%' },
+                                { value: '1.3', label: '130%' },
+                                { value: '1.35', label: '135%' },
+                                { value: '1.4', label: '140%' },
+                                { value: '1.45', label: '145%' },
+                                { value: '1.5', label: '150%' }
+                            ],
+                            (layoutManager.getCardLabelScale() || 1.0).toString()
+                        )}
                     </div>
                 </div>
 
@@ -1040,6 +877,405 @@ class SettingsPage extends Page {
                     <div class="setting-control">
                          <button class="toggle-switch ${storage.getItem('pref:hideEpisodeCounts') === 'true' ? 'active' : ''}" 
                                  id="toggle-hide-episode-counts" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowQualityBadges">${i18n.t('ShowQualityBadges') || 'Show Quality Badges'}</span>
+                        <span class="setting-description" data-i18n="ShowQualityBadgesDescription">${i18n.t('ShowQualityBadgesDescription') || 'Display quality badges (e.g. 4K, 1080p, HDR) on media poster cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showQualityBadges') === 'true' ? 'active' : ''}" 
+                                 id="toggle-show-quality-badges" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseEpisodeBadges">${i18n.t('UseEpisodeBadges') || 'Show Episode Badges'}</span>
+                        <span class="setting-description" data-i18n="UseEpisodeBadgesDescription">${i18n.t('UseEpisodeBadgesDescription') || 'Display the episode SxxExx badge on media cards instead of prefixing the subtitle.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:useEpisodeBadges') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-use-episode-badges" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="SwapEpisodeTitles">${i18n.t('SwapEpisodeTitles') || 'Swap Episode Title & Subtitle'}</span>
+                        <span class="setting-description" data-i18n="SwapEpisodeTitlesDescription">${i18n.t('SwapEpisodeTitlesDescription') || 'Display the episode name as the card title and the show name as the subtitle.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:swapEpisodeTitles') === 'true' ? 'active' : ''}" 
+                                 id="toggle-swap-episode-titles" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="BadgeStyle">${i18n.t('BadgeStyle') || 'Badge Style'}</span>
+                        <span class="setting-description" data-i18n="BadgeStyleDescription">${i18n.t('BadgeStyleDescription') || 'Select the appearance of media poster badges (unplayed counts, play checkmarks, quality labels, etc.).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'badge-style-select',
+                            [
+                                { value: 'auto', label: i18n.t('BadgeStyleAuto') || 'Auto (Follow Layout)' },
+                                { value: 'tinted', label: i18n.t('BadgeStyleTinted') || 'Accent Tinted' },
+                                { value: 'dark', label: i18n.t('BadgeStyleDark') || 'Translucent Dark' }
+                            ],
+                            layoutManager.getBadgeStyle() || 'auto'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelStyle">${i18n.t('CardLabelStyle') || 'Card Labels'}</span>
+                        <span class="setting-description" data-i18n="CardLabelStyleDescription">${i18n.t('CardLabelStyleDescription') || 'Choose how the title and subtitle are displayed under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-style-select',
+                            [
+                                {
+                                    value: 'default',
+                                    label: i18n.t('CardLabelStyleDefault') || 'Show Title and Subtitle'
+                                },
+                                { value: 'titleOnly', label: i18n.t('CardLabelStyleTitleOnly') || 'Show Title Only' },
+                                {
+                                    value: 'titleOnly2Lines',
+                                    label: i18n.t('CardLabelStyleTitleOnly2Lines') || 'Show Title Only (2 Lines)'
+                                },
+                                { value: 'hidden', label: i18n.t('CardLabelStyleHidden') || 'Hidden' }
+                            ],
+                            storage.getItem('pref:cardLabelStyle') || 'default'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="CardLabelAlign">${i18n.t('CardLabelAlign') || 'Card Label Alignment'}</span>
+                        <span class="setting-description" data-i18n="CardLabelAlignDescription">${i18n.t('CardLabelAlignDescription') || 'Choose how titles and subtitles are aligned under media cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'card-label-align-select',
+                            [
+                                { value: 'center', label: i18n.t('CardLabelAlignDefault') || 'Center' },
+                                { value: 'start', label: i18n.t('CardLabelAlignStart') || 'Align to Start' },
+                                { value: 'end', label: i18n.t('CardLabelAlignEnd') || 'Align to End' }
+                            ],
+                            // Defaults to 'start' now for clean typography alignment
+                            storage.getItem('pref:cardLabelAlign') || 'start'
+                        )}
+                    </div>
+                </div>
+
+                <!-- OSD Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="PlayerOsd">${i18n.t('PlayerOsd') || 'Player Osd'}</h3>
+                
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowLogoInOsd">${i18n.t('LabelShowLogoInOsd') || 'Show Logo in OSD'}</span>
+                        <span class="setting-description" data-i18n="ShowLogoInOsdDescription">${i18n.t('ShowLogoInOsdDescription') || 'Display show or movie logo instead of text title in the player interface (if available).'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdShowLogo') ? 'active' : ''}" 
+                                id="toggle-osd-show-logo" 
+                                data-setting="osdShowLogo"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="osd-logo-size-container" style="display: ${PlayerSettings.get('osdShowLogo') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdLogoSize">${i18n.t('LabelOsdLogoSize') || 'OSD Logo Size'}</span>
+                        <span class="setting-description" data-i18n="OsdLogoSizeDescription">${i18n.t('OsdLogoSizeDescription') || 'Choose the display size of the show or movie logo in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-logo-size-select',
+                            [
+                                { value: 'small', label: i18n.t('Small') || 'Small' },
+                                { value: 'medium', label: i18n.t('Medium') || 'Medium' },
+                                { value: 'large', label: i18n.t('Large') || 'Large' },
+                                { value: 'extralarge', label: i18n.t('ExtraLarge') || 'Extra Large' },
+                                { value: 'xxl', label: i18n.t('DoubleExtraLarge') || 'XXL' }
+                            ],
+                            PlayerSettings.get('osdLogoSize') || 'medium'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideYearInOsd">${i18n.t('LabelHideYearInOsd') || 'Hide Year in OSD'}</span>
+                        <span class="setting-description" data-i18n="HideYearInOsdDescription">${i18n.t('HideYearInOsdDescription') || 'Hides the production year from the playback overlay title.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideYear') ? 'active' : ''}" 
+                                id="toggle-osd-hide-year" 
+                                data-setting="osdHideYear"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideShowNameInOsd">${i18n.t('LabelHideShowNameInOsd') || 'Hide Show Name'}</span>
+                        <span class="setting-description" data-i18n="HideShowNameInOsdDescription">${i18n.t('HideShowNameInOsdDescription') || 'Hides the show name (or logo) for episodes in the playback overlay.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${PlayerSettings.get('osdHideShowName') ? 'active' : ''}" 
+                                id="toggle-osd-hide-show-name" 
+                                data-setting="osdHideShowName"
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTimeDisplay">${i18n.t('LabelOsdTimeDisplay') || 'Time Display Mode'}</span>
+                        <span class="setting-description" data-i18n="OsdTimeDisplayDescription">${i18n.t('OsdTimeDisplayDescription') || 'Choose whether to show the total duration or remaining time on the player seek bar.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-time-display-select',
+                            [
+                                { value: 'total', label: i18n.t('OsdTimeTotal') || 'Total Duration' },
+                                { value: 'remaining', label: i18n.t('OsdTimeRemaining') || 'Remaining Time' }
+                            ],
+                            PlayerSettings.get('osdTimeDisplayMode') || 'total'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="OsdButtonBorders">${i18n.t('OsdButtonBorders') || 'OSD Button Borders'}</span>
+                        <span class="setting-description" data-i18n="OsdButtonBordersDescription">${i18n.t('OsdButtonBordersDescription') || 'Choose the border style for player control buttons.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'osd-button-borders-select',
+                            [
+                                { value: 'auto', label: i18n.t('Auto') || 'Auto' },
+                                { value: 'light', label: i18n.t('BorderLight') || 'Light' },
+                                { value: 'dark', label: i18n.t('BorderDark') || 'Dark' },
+                                { value: 'hidden', label: i18n.t('BorderHidden') || 'Hidden' }
+                            ],
+                            layoutManager.getOsdButtonBorders()
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelOsdTrackMenuBgOpacity">${i18n.t('LabelOsdTrackMenuBgOpacity') || 'OSD Track Menu Opacity'}</span>
+                        <span class="setting-description" data-i18n="OsdTrackMenuBgOpacityDescription">${i18n.t('OsdTrackMenuBgOpacityDescription') || 'Adjust the background opacity of the audio and subtitle selection overlay menus.'}</span>
+                    </div>
+                    <div class="setting-control slider-control">
+                        ${this._renderSlider(
+                            'osd-track-menu-bg-opacity',
+                            PlayerSettings.get('osdTrackMenuBgOpacity') ?? 85,
+                            0,
+                            100,
+                            5
+                        )}
+                    </div>
+                </div>
+
+                <!-- Details Page Section -->
+                <!-- Allows users to toggle specific metadata fields on the Details Page hero section -->
+                <h3 class="setting-section-title" data-i18n="DetailsPage">${i18n.t('DetailsPage') || 'Details Page'}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelScoreVisibility">${i18n.t('LabelScoreVisibility') || 'Score Visibility'}</span>
+                        <span class="setting-description" data-i18n="ScoreVisibilityDescription">${i18n.t('ScoreVisibilityDescription') || 'Control how community and critic scores are displayed.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'score-visibility-select',
+                            [
+                                { value: 'all', label: i18n.t('OptionScoreAll') || 'Show All' },
+                                { value: 'mystery', label: i18n.t('OptionScoreMystery') || 'Mystery Mode (Hide All)' },
+                                { value: 'watched', label: i18n.t('OptionScoreWatched') || 'Watched Items Only' }
+                            ],
+                            storage.getItem('pref:scoreVisibility') || 'all'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelDetailsTitleStyle">${i18n.t('LabelDetailsTitleStyle') || 'Title and Icon Style'}</span>
+                        <span class="setting-description" data-i18n="DetailsTitleStyleDescription">${i18n.t('DetailsTitleStyleDescription') || 'Choose how the title and logo/icon are displayed on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'details-title-style-select',
+                            [
+                                {
+                                    value: 'both',
+                                    label: i18n.t('OptionDetailsTitleStyleBoth') || 'Text Title and Icon'
+                                },
+                                {
+                                    value: 'logo-only',
+                                    label: i18n.t('OptionDetailsTitleStyleLogoOnly') || 'Only Icon as Title (Large)'
+                                },
+                                {
+                                    value: 'text-only',
+                                    label: i18n.t('OptionDetailsTitleStyleTextOnly') || 'Only Text Title'
+                                }
+                            ],
+                            storage.getItem('pref:detailsTitleStyle') || 'both'
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Clean label for toggling original language subtitle display -->
+                        <span class="setting-name" data-i18n="LabelHideOriginalTitle">${i18n.t('LabelHideOriginalTitle') || 'Hide Original Language Title'}</span>
+                        <span class="setting-description" data-i18n="HideOriginalTitleDescription">${i18n.t('HideOriginalTitleDescription') || 'Do not show the original language title under the main title on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <!-- Sleek fluid iOS-style toggle matching general appearance preferences, off by default -->
+                        <button class="toggle-switch ${storage.getItem('pref:hideOriginalTitle') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-original-title" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item" id="mdb-awards-item" style="display: ${pluginManager.isEnabled('mdblist-ratings') ? '' : 'none'}">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="ShowMdbAwards">${i18n.t('ShowMdbAwards') || 'Show Awards Badges'}</span>
+                        <span class="setting-description" data-i18n="ShowMdbAwardsDescription">${i18n.t('ShowMdbAwardsDescription') || 'Display award badges from MDBList on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:showMdbAwards') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-mdb-awards" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowAddedDate">${i18n.t('LabelShowAddedDate') || 'Show Added Date'}</span>
+                        <span class="setting-description" data-i18n="ShowAddedDateDescription">${i18n.t('ShowAddedDateDescription') || 'Display the date this item was added to your library on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showAddedDate') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-added-date" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelShowDateAired">${i18n.t('LabelShowDateAired') || 'Show Date Aired'}</span>
+                        <span class="setting-description" data-i18n="ShowDateAiredDescription">${i18n.t('ShowDateAiredDescription') || 'Display the premiere date on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:showDateAired') === 'true' ? 'active' : ''}" 
+                                id="toggle-show-date-aired" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Elegant multi-choice selector for rich metadata details customization -->
+                        <span class="setting-name" data-i18n="LabelRichMetadataStyle">${i18n.t('LabelRichMetadataStyle') || 'Rich Metadata Display'}</span>
+                        <span class="setting-description" data-i18n="RichMetadataStyleDescription">${i18n.t('RichMetadataStyleDescription') || 'Customize which metadata fields (genres, studios, writers, directors, tags) are shown on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'rich-metadata-select',
+                            [
+                                { value: 'all', label: i18n.t('OptionRichMetadataAll') || 'Show Full Rich Metadata' },
+                                {
+                                    value: 'genres-studios-writers',
+                                    label:
+                                        i18n.t('OptionRichMetadataGenresStudiosWriters') ||
+                                        'Show Genres, Studios & Writers'
+                                },
+                                {
+                                    value: 'genres-writers',
+                                    label: i18n.t('OptionRichMetadataGenresWriters') || 'Show Genres & Writers'
+                                },
+                                {
+                                    value: 'genres-only',
+                                    label: i18n.t('OptionRichMetadataGenresOnly') || 'Show Only Genres'
+                                },
+                                { value: 'none', label: i18n.t('OptionRichMetadataNone') || 'Hide All' }
+                            ],
+                            storage.getItem('pref:richMetadataStyle') ||
+                                (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all')
+                        )}
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="LabelHideCastSection">${i18n.t('LabelHideCastSection') || 'Hide Cast & Guest Stars'}</span>
+                        <span class="setting-description" data-i18n="HideCastSectionDescription">${i18n.t('HideCastSectionDescription') || 'Hide the actors and guest stars rows on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideCastSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-cast-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <!-- Apple HIG: Fluid toggle switch for Similar Recommendations section on details page -->
+                        <span class="setting-name" data-i18n="LabelHideSimilarSection">${i18n.t('LabelHideSimilarSection') || 'Hide More Like This'}</span>
+                        <span class="setting-description" data-i18n="HideSimilarSectionDescription">${i18n.t('HideSimilarSectionDescription') || 'Do not load or display the similar recommendations section on the details page.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        <button class="toggle-switch ${storage.getItem('pref:hideSimilarSection') === 'true' ? 'active' : ''}" 
+                                id="toggle-hide-similar-section" 
+                                tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                
+                <!-- Home Screen Section -->
+                <h3 class="setting-section-title" data-i18n="HomeScreen">${i18n.t('HomeScreen')}</h3>
+
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="HideLibraryLabels">${i18n.t('HideLibraryLabels')}</span>
+                        <span class="setting-description" data-i18n="HideLibraryLabelsDescription">${i18n.t('HideLibraryLabelsDescription')}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:hideLibraryLabels') === 'true' ? 'active' : ''}" 
+                                 id="toggle-library-labels" 
                                  tabindex="0">
                         </button>
                     </div>
@@ -1181,34 +1417,35 @@ class SettingsPage extends Page {
                         ${this._renderDropdown(
                             'hero-carousel-style-select',
                             [
-                                /* 
+                                /*
                                  * ==========================================================
                                  * Choice 1: Banner Mode
                                  * ==========================================================
-                                 * Sits at the top of the home screen with beautiful outer 
+                                 * Sits at the top of the home screen with beautiful outer
                                  * margins, fully rounded corners, and a sharp focus ring.
                                  */
                                 { value: 'banner', label: i18n.t('StyleBanner') || 'Banner' },
-                                
-                                /* 
+
+                                /*
                                  * ==========================================================
                                  * Choice 2: Semi-Immersive Mode (Previously Immersive)
                                  * ==========================================================
-                                 * Spans the full width of the screen at the top, without 
+                                 * Spans the full width of the screen at the top, without
                                  * any margins, acting as a clean full-viewport header.
                                  */
                                 { value: 'semi-immersive', label: i18n.t('StyleSemiImmersive') || 'Semi-Immersive' },
-                                
-                                /* 
+
+                                /*
                                  * ==========================================================
                                  * Choice 3: Immersive Mode (New tvOS-Style Design)
                                  * ==========================================================
-                                 * A highly premium, deep full-screen background backdrop 
+                                 * A highly premium, deep full-screen background backdrop
                                  * that extends visually beneath the first horizontal row.
                                  */
                                 { value: 'immersive', label: i18n.t('StyleImmersive') || 'Immersive' }
                             ],
-                            storage.getItem('pref:heroCarouselStyle') || 'banner'
+                            // Default to 'immersive' style for the hero carousel selector
+                            storage.getItem('pref:heroCarouselStyle') || 'immersive'
                         )}
                     </div>
                 </div>
@@ -1466,6 +1703,20 @@ class SettingsPage extends Page {
                         </button>
                     </div>
                 </div>
+
+                <!-- Transparent Collapsed Sidebar Section -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="TransparentCollapsedSidebar">${i18n.t('TransparentCollapsedSidebar') || 'Transparent Collapsed Sidebar'}</span>
+                        <span class="setting-description" data-i18n="TransparentCollapsedSidebarDescription">${i18n.t('TransparentCollapsedSidebarDescription') || 'Make the collapsed sidebar background transparent for all themes.'}</span>
+                    </div>
+                    <div class="setting-control">
+                          <button class="toggle-switch ${storage.getItem('pref:transparentCollapsedSidebar') === 'true' ? 'active' : ''}" 
+                                  id="toggle-transparent-collapsed-sidebar" 
+                                  tabindex="0">
+                        </button>
+                    </div>
+                </div>
                 
                 <!-- Sidebar Mode Section -->
                 <div class="setting-item">
@@ -1559,7 +1810,10 @@ class SettingsPage extends Page {
             },
             { value: 'playerQueue', label: i18n.t('OptionPlayerQueue') || 'Player: Open Queue Menu' },
             { value: 'playerChapters', label: i18n.t('OptionPlayerChapters') || 'Player: Open Chapters Menu' },
-            { value: 'playerPlaybackInfo', label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info' },
+            {
+                value: 'playerPlaybackInfo',
+                label: i18n.t('OptionPlayerPlaybackInfo') || 'Player: Toggle Playback Info'
+            },
             /*
              * ========================================================================
              * NEW PREMIUM CHAPTER NAVIGATION ACTIONS
@@ -1568,7 +1822,10 @@ class SettingsPage extends Page {
              * up the Chapters List Modal interface. Excellent for long-form content.
              * ========================================================================
              */
-            { value: 'playerPreviousChapter', label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter' },
+            {
+                value: 'playerPreviousChapter',
+                label: i18n.t('OptionPlayerPreviousChapter') || 'Player: Previous Chapter'
+            },
             { value: 'playerNextChapter', label: i18n.t('OptionPlayerNextChapter') || 'Player: Next Chapter' }
         ];
 
@@ -1710,6 +1967,16 @@ class SettingsPage extends Page {
         const currentBackend = PlayerSettings.get('playerBackend') || 'auto';
         const skipForward = PlayerSettings.get('skipForwardLength') || 30000;
         const skipBack = PlayerSettings.get('skipBackLength') || 10000;
+
+        const caps = getDeviceCapabilities();
+        const supportStatus = (supported) =>
+            `(${i18n.t('DeviceSupports') || 'Device supports'}: ${i18n.t(supported ? 'Yes' : 'No')})`;
+
+        const forceStateOptions = [
+            { value: 'auto', label: i18n.t('ForceStateDefault') || 'Default' },
+            { value: 'enable', label: i18n.t('ForceStateEnable') || 'Force Enable' },
+            { value: 'disable', label: i18n.t('ForceStateDisable') || 'Force Disable' }
+        ];
 
         return `
             <div class="settings-tab-content">
@@ -2112,60 +2379,42 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableHEVC">${i18n.t('EnableHEVC')}</span>
-                        <span class="setting-description" data-i18n="HEVCDescription">${i18n.t('HEVCDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.hevc)} — ${i18n.t('HEVCDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableHEVC') ? 'active' : ''}" 
-                                id="toggle-enable-hevc" 
-                                data-setting="enableHEVC"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'hevc-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableHEVC') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableHDR">${i18n.t('EnableHDR')}</span>
-                        <span class="setting-description" data-i18n="HDRDescription">${i18n.t('HDRDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.hdr10)} — ${i18n.t('HDRDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        ${(() => {
-                            // Hybrid dynamic default for HDR
-                            let isHdrOn = PlayerSettings.get('enableHDR');
-                            if (localStorage.getItem('player:enableHDR') === null) {
-                                // First launch: Base the toggle state entirely on hardware capabilities
-                                // If running on WebOS/Tizen, default OFF if it's an SDR 1080p display
-                                try {
-                                    // Hacky lazy-evaluation against global scope for adapters or rely on platform
-                                    // but we can just require DeviceProfile generically if we were importing it.
-                                    // To be safer without circular imports in SettingsPage, we inspect window width.
-                                    isHdrOn = window.screen.width >= 3840;
-                                } catch (e) {
-                                    isHdrOn = true;
-                                }
-                            }
-                            return `
-                                <button class="toggle-switch ${isHdrOn ? 'active' : ''}" 
-                                        id="toggle-enable-hdr" 
-                                        data-setting="enableHDR"
-                                        tabindex="0">
-                                </button>
-                            `;
-                        })()}
+                        ${this._renderDropdown(
+                            'hdr-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableHDR') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableDV">${i18n.t('EnableDV')}</span>
-                        <span class="setting-description" data-i18n="DolbyVisionDescription">${i18n.t('DolbyVisionDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.dolbyVision)} — ${i18n.t('DolbyVisionDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDolbyVision') ? 'active' : ''}" 
-                                id="toggle-enable-dv" 
-                                data-setting="enableDolbyVision"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'dv-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableDolbyVision') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -2174,56 +2423,56 @@ class SettingsPage extends Page {
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableAV1">${i18n.t('EnableAV1')}</span>
-                        <span class="setting-description" data-i18n="AV1Description">${i18n.t('AV1Description')}</span>
+                        <span class="setting-description">${supportStatus(caps.av1)} — ${i18n.t('AV1Description')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableAV1') ? 'active' : ''}" 
-                                id="toggle-enable-av1" 
-                                data-setting="enableAV1"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'av1-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableAV1') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="EnableVP9">${i18n.t('EnableVP9')}</span>
-                        <span class="setting-description" data-i18n="VP9Description">${i18n.t('VP9Description')}</span>
+                        <span class="setting-description">${supportStatus(caps.vp9)} — ${i18n.t('VP9Description')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableVP9') ? 'active' : ''}" 
-                                id="toggle-enable-vp9" 
-                                data-setting="enableVP9"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'vp9-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableVP9') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="DTSPassthrough">${i18n.t('DTSPassthrough')}</span>
-                        <span class="setting-description" data-i18n="DTSPassthroughDescription">${i18n.t('DTSPassthroughDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.dts)} — ${i18n.t('DTSPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableDts') ? 'active' : ''}" 
-                                id="toggle-enable-dts" 
-                                data-setting="enableDts"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'dts-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableDts') || 'auto'
+                        )}
                     </div>
                 </div>
 
                 <div class="setting-item">
                     <div class="setting-label">
                         <span class="setting-name" data-i18n="TrueHDPassthrough">${i18n.t('TrueHDPassthrough')}</span>
-                        <span class="setting-description" data-i18n="TrueHDPassthroughDescription">${i18n.t('TrueHDPassthroughDescription')}</span>
+                        <span class="setting-description">${supportStatus(caps.truehd)} — ${i18n.t('TrueHDPassthroughDescription')}</span>
                     </div>
                     <div class="setting-control">
-                        <button class="toggle-switch ${PlayerSettings.get('enableTrueHd') ? 'active' : ''}" 
-                                id="toggle-enable-truehd" 
-                                data-setting="enableTrueHd"
-                                tabindex="0">
-                        </button>
+                        ${this._renderDropdown(
+                            'truehd-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableTrueHd') || 'auto'
+                        )}
                     </div>
                 </div>
 
@@ -2692,7 +2941,9 @@ class SettingsPage extends Page {
                                 { value: 'space-grotesk', label: i18n.t('FontSpaceGrotesk') || 'Space Grotesk' },
                                 { value: 'retrotech', label: i18n.t('FontRetrotech') || 'RETROTECH' },
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             PlayerSettings.get('subtitleFont')
                         )}
@@ -3028,7 +3279,9 @@ class SettingsPage extends Page {
                                 { value: 'kitty', label: i18n.t('FontKitty') || 'Kitty' },
                                 { value: 'inter', label: i18n.t('FontInter') || 'Inter' },
                                 { value: 'proxima', label: i18n.t('FontProxima') || 'Proxima Nova' },
-                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' }
+                                { value: 'baloo', label: i18n.t('FontBaloo') || 'Baloo Bhaijaan 2' },
+                                { value: 'opendyslexic', label: i18n.t('FontOpenDyslexic') || 'OpenDyslexic' },
+                                { value: 'atkinson', label: i18n.t('FontAtkinson') || 'Atkinson Hyperlegible' }
                             ],
                             PlayerSettings.get('subtitleFontAss')
                         )}
@@ -3231,7 +3484,11 @@ class SettingsPage extends Page {
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="HDRSupport">${i18n.t('HDRSupport')}</span>
                             <span class="identity-value">${(() => {
-                                const userHdr = PlayerSettings.get('enableHDR');
+                                const resolveOverride = (key, hwSupport) => {
+                                    const val = PlayerSettings.get(key);
+                                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                                };
+                                const userHdr = resolveOverride('enableHDR', !!caps.hdr10);
                                 const hwHdr = [
                                     caps.hdr10 ? 'HDR10' : null,
                                     caps.hdr10Plus ? 'HDR10+' : null,
@@ -3247,11 +3504,27 @@ class SettingsPage extends Page {
                         <div class="identity-item">
                             <span class="identity-label" data-i18n="VideoCodecs">${i18n.t('VideoCodecs')}</span>
                             <span class="identity-value">${(() => {
+                                const resolveOverride = (key, hwSupport) => {
+                                    const val = PlayerSettings.get(key);
+                                    return val === 'enable' ? true : val === 'disable' ? false : hwSupport;
+                                };
                                 const codecs = [
                                     { name: 'H.264', hw: true, user: true },
-                                    { name: 'HEVC', hw: caps.hevc, user: PlayerSettings.get('enableHEVC') },
-                                    { name: 'AV1', hw: caps.av1, user: PlayerSettings.get('enableAV1') },
-                                    { name: 'VP9', hw: caps.vp9, user: PlayerSettings.get('enableVP9') }
+                                    {
+                                        name: 'HEVC',
+                                        hw: caps.hevc,
+                                        user: resolveOverride('enableHEVC', caps.hevc)
+                                    },
+                                    {
+                                        name: 'AV1',
+                                        hw: caps.av1,
+                                        user: resolveOverride('enableAV1', caps.av1)
+                                    },
+                                    {
+                                        name: 'VP9',
+                                        hw: caps.vp9,
+                                        user: resolveOverride('enableVP9', caps.vp9)
+                                    }
                                 ];
 
                                 return codecs
@@ -3624,9 +3897,9 @@ class SettingsPage extends Page {
         // ==========================================
         // TOGGLE FORCE EXPANDABLE POSTERS (MODERN)
         // ==========================================
-        // Accesses the DOM toggle switch to let the user force every row in their 
+        // Accesses the DOM toggle switch to let the user force every row in their
         // homepage to use the Apple-inspired expanding poster card layout.
-        // Toggling this will persist the value to local storage so the Home Page layout 
+        // Toggling this will persist the value to local storage so the Home Page layout
         // engine applies the configuration seamlessly when the user returns.
         const forceExpandablePostersBtn = this.$('#toggle-home-force-expandable-posters');
         if (forceExpandablePostersBtn) {
@@ -3645,25 +3918,61 @@ class SettingsPage extends Page {
         //
         // Accesses the DOM element representing our toggle button for hiding unplayed
         // episode count badges on media cards. When interacted with, this event listener
-        // will toggle the user's preference state, persist it to localStorage, and 
+        // will toggle the user's preference state, persist it to localStorage, and
         // update the button's toggle class to provide instant Apple-style tactile feedback.
         const hideEpisodeCountsBtn = this.$('#toggle-hide-episode-counts');
-        
+
         // Ensure the button is present in the current view layout before binding.
         if (hideEpisodeCountsBtn) {
             hideEpisodeCountsBtn.addEventListener('click', () => {
                 // Read current visibility preference from persistence (defaults to shown/false).
                 const isHidden = storage.getItem('pref:hideEpisodeCounts') === 'true';
                 const newValue = !isHidden;
-                
+
                 // Save updated preference key so CardRenderer checks this when building card elements.
                 storage.setItem('pref:hideEpisodeCounts', newValue);
-                
+
                 // Update CSS styling (active state class) for iOS-style slider animation.
                 hideEpisodeCountsBtn.classList.toggle('active', newValue);
-                
+
                 // Log settings adjustment for user session diagnostics.
                 log.info(`Hide Episode Counts set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Show Quality Badges
+        const showQualityBadgesBtn = this.$('#toggle-show-quality-badges');
+        if (showQualityBadgesBtn) {
+            showQualityBadgesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:showQualityBadges') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:showQualityBadges', newValue);
+                showQualityBadgesBtn.classList.toggle('active', newValue);
+                log.info(`Show Quality Badges set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Use Episode Badges
+        const useEpisodeBadgesBtn = this.$('#toggle-use-episode-badges');
+        if (useEpisodeBadgesBtn) {
+            useEpisodeBadgesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:useEpisodeBadges') !== 'false';
+                const newValue = !isEnabled;
+                storage.setItem('pref:useEpisodeBadges', newValue);
+                useEpisodeBadgesBtn.classList.toggle('active', newValue);
+                log.info(`Use Episode Badges set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Swap Episode Titles
+        const swapEpisodeTitlesBtn = this.$('#toggle-swap-episode-titles');
+        if (swapEpisodeTitlesBtn) {
+            swapEpisodeTitlesBtn.addEventListener('click', () => {
+                const isEnabled = storage.getItem('pref:swapEpisodeTitles') === 'true';
+                const newValue = !isEnabled;
+                storage.setItem('pref:swapEpisodeTitles', newValue);
+                swapEpisodeTitlesBtn.classList.toggle('active', newValue);
+                log.info(`Swap Episode Titles set to: ${newValue}`);
             });
         }
 
@@ -3791,8 +4100,6 @@ class SettingsPage extends Page {
             });
         }
 
-
-
         // Toggle Low VRAM Mode
         const lowVramBtn = this.$('#toggle-low-vram-mode');
         if (lowVramBtn) {
@@ -3830,10 +4137,10 @@ class SettingsPage extends Page {
             disableBlurhashBtn.addEventListener('click', () => {
                 // Invert the current Disable BlurHash state
                 const newValue = !layoutManager.getDisableBlurhash();
-                
+
                 // Write setting to LayoutManager which handles DOM and local persistence
                 layoutManager.setDisableBlurhash(newValue);
-                
+
                 // Toggle active class state on the premium UI toggle-switch switch
                 disableBlurhashBtn.classList.toggle('active', newValue);
             });
@@ -3868,7 +4175,7 @@ class SettingsPage extends Page {
                 // Fetch the current toggled status of Similar recommendations
                 const isHidden = storage.getItem('pref:hideSimilarSection') === 'true';
                 const newValue = !isHidden;
-                
+
                 // Save setting locally and toggle the active HIG switch class
                 storage.setItem('pref:hideSimilarSection', newValue.toString());
                 hideSimilarBtn.classList.toggle('active', newValue);
@@ -3883,7 +4190,7 @@ class SettingsPage extends Page {
                 // Read persistence state of background score playback (defaults to off/false)
                 const isEnabled = storage.getItem('pref:playThemeSongs') === 'true';
                 const newValue = !isEnabled;
-                
+
                 // Save new setting locally to toggle DetailsPage behavior instantly
                 storage.setItem('pref:playThemeSongs', newValue ? 'true' : 'false');
                 playThemeSongsBtn.classList.toggle('active', newValue);
@@ -4244,13 +4551,6 @@ class SettingsPage extends Page {
         // Generic handler for all toggle-switch buttons with data-setting attribute
         // Each toggle reads/writes to PlayerSettings and invalidates the cached profile
         const profileToggles = [
-            'toggle-enable-hevc',
-            'toggle-enable-hdr',
-            'toggle-enable-dv',
-            'toggle-enable-av1',
-            'toggle-enable-vp9',
-            'toggle-enable-dts',
-            'toggle-enable-truehd',
             'toggle-enable-flac-in-video',
             'toggle-enable-fmp4-hls',
             'toggle-force-fmp4-hls',
@@ -4507,7 +4807,8 @@ class SettingsPage extends Page {
             'subtitle-line-height': 'subtitleLineHeight',
             'subtitle-letter-spacing': 'subtitleLetterSpacing',
             'subtitle-bottom-offset': 'subtitleBottomOffset',
-            'subtitle-custom-size': 'subtitleSizeCustomValue'
+            'subtitle-custom-size': 'subtitleSizeCustomValue',
+            'osd-track-menu-bg-opacity': 'osdTrackMenuBgOpacity'
         };
 
         this.$$('.setting-slider').forEach((slider) => {
@@ -4792,7 +5093,31 @@ class SettingsPage extends Page {
             { name: 'Brown', hex: '#a2845e' },
             { name: 'Copper', hex: '#b87333' },
             { name: 'Gold', hex: '#d4af37' },
-            { name: 'White', hex: '#ffffff' }
+            { name: 'White', hex: '#ffffff' },
+
+            // Row4:
+            { name: 'Periwinkle', hex: '#8F9FFF' },
+            { name: 'Emerald', hex: '#00A86B' },
+            { name: 'Turquoise', hex: '#40E0D0' },
+            { name: 'Amber', hex: '#FFBF00' },
+            { name: 'Rose Gold', hex: '#B76E79' },
+            { name: 'Indigo', hex: '#4B0082' },
+            { name: 'Coral', hex: '#FF6F61' },
+            { name: 'Aqua Marine', hex: '#7FFFD4' },
+            { name: 'Mint', hex: '#3EB489' },
+            { name: 'Electric Lime', hex: '#7FFF00' },
+
+            // Row5:
+            { name: 'Slate Blue', hex: '#6A5ACD' },
+            { name: 'Sea Green', hex: '#2E8B57' },
+            { name: 'Cadet Blue', hex: '#5F9EA0' },
+            { name: 'Burnt Orange', hex: '#CC5500' },
+            { name: 'Dark Turquoise', hex: '#00CED1' },
+            { name: 'Firebrick', hex: '#B22222' },
+            { name: 'Olive', hex: '#708238' },
+            { name: 'Plum', hex: '#8E4585' },
+            { name: 'Deep Sky', hex: '#00BFFF' },
+            { name: 'Royal Purple', hex: '#7851A9' }
         ];
 
         const currentColor = layoutManager.getThemeColor();
@@ -4818,7 +5143,20 @@ class SettingsPage extends Page {
             'library-thumb-mode-select': { key: 'pref:libraryThumbMode', type: 'local' },
             'app-language-select': { key: 'app_language', type: 'local' },
             'layout-direction-select': { key: 'layout_direction', type: 'local' },
-            'layout-mode-select': { key: 'litefin:layout', type: 'local' },
+            'media-rows-layout-select': { key: 'pref:mediaRowsLayout', type: 'local', triggerEvent: true },
+            'login-page-layout-select': { key: 'pref:loginPageLayout', type: 'local', triggerEvent: true },
+            'classic-card-size-scale-select': {
+                key:
+                    layoutManager.getMediaRowsLayout() === 'modern'
+                        ? 'pref:modernCardSizeScale'
+                        : 'pref:classicCardSizeScale',
+                type: 'local',
+                triggerEvent: true
+            },
+            'badge-style-select': { key: 'litefin:badgeStyle', type: 'local' },
+            'card-label-style-select': { key: 'pref:cardLabelStyle', type: 'local' },
+            'card-label-align-select': { key: 'pref:cardLabelAlign', type: 'local' },
+            'card-label-scale-select': { key: 'pref:cardLabelScale', type: 'local' },
             'theme-mode-select': { key: 'themeMode', type: 'local', triggerEvent: true },
             'ui-font-select': { key: 'uiFont', type: 'local' },
             'image-quality-select': { key: 'imageQuality', type: 'service' },
@@ -4868,6 +5206,13 @@ class SettingsPage extends Page {
             'remote-yellow-select': { key: 'pref:remoteYellowAction', type: 'local', triggerEvent: true },
             'remote-blue-select': { key: 'pref:remoteBlueAction', type: 'local', triggerEvent: true },
             'time-format-select': { key: 'timeFormat', type: 'player' },
+            'hevc-force-select': { type: 'player', key: 'enableHEVC' },
+            'hdr-force-select': { type: 'player', key: 'enableHDR' },
+            'dv-force-select': { type: 'player', key: 'enableDolbyVision' },
+            'av1-force-select': { type: 'player', key: 'enableAV1' },
+            'vp9-force-select': { type: 'player', key: 'enableVP9' },
+            'dts-force-select': { type: 'player', key: 'enableDts' },
+            'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
@@ -4926,7 +5271,10 @@ class SettingsPage extends Page {
 
                     // Save Setting based on type
                     if (settingConfig) {
-                        if (id === 'theme-mode-select') {
+                        if (id === 'badge-style-select') {
+                            // SPECIAL CASE: Badge Style handled by LayoutManager
+                            layoutManager.setBadgeStyle(newValue);
+                        } else if (id === 'theme-mode-select') {
                             layoutManager.setThemeMode(newValue);
                         } else if (id === 'ui-font-select') {
                             // SPECIAL CASE: Font changes handled by LayoutManager
@@ -4934,9 +5282,27 @@ class SettingsPage extends Page {
                         } else if (id === 'text-scale-select') {
                             // SPECIAL CASE: Text Scale handled by LayoutManager
                             layoutManager.setTextScale(parseFloat(newValue));
+                        } else if (id === 'media-rows-layout-select') {
+                            layoutManager.setMediaRowsLayout(newValue);
+                            this._triggerHardReload();
+                        } else if (id === 'login-page-layout-select') {
+                            layoutManager.setLoginPageLayout(newValue);
+                            this._triggerHardReload();
                         } else if (id === 'osd-button-borders-select') {
                             // SPECIAL CASE: OSD Button Borders handled by LayoutManager
                             layoutManager.setOsdButtonBorders(newValue);
+                        } else if (id === 'card-label-style-select') {
+                            storage.setItem('pref:cardLabelStyle', newValue);
+                            document.documentElement.setAttribute('data-card-label-style', newValue);
+                            focusManager.invalidateCache('home');
+                            focusManager.invalidateCache('settings-content');
+                        } else if (id === 'card-label-align-select') {
+                            storage.setItem('pref:cardLabelAlign', newValue);
+                            document.documentElement.setAttribute('data-card-label-align', newValue);
+                            focusManager.invalidateCache('home');
+                            focusManager.invalidateCache('settings-content');
+                        } else if (id === 'card-label-scale-select') {
+                            layoutManager.setCardLabelScale(parseFloat(newValue));
                         } else if (id === 'sidebar-mode-select') {
                             storage.setItem('pref:sidebarMode', newValue);
                             document.body.classList.toggle('sidebar-mode-hidden', newValue === 'hidden');
@@ -4950,44 +5316,14 @@ class SettingsPage extends Page {
                             }
 
                             if (
-                                settingConfig.key === 'litefin:layout' ||
+                                settingConfig.key === 'pref:mediaRowsLayout' ||
+                                settingConfig.key === 'pref:loginPageLayout' ||
                                 settingConfig.key === 'layout_direction' ||
-                                settingConfig.key === 'app_language'
+                                settingConfig.key === 'app_language' ||
+                                settingConfig.key === 'pref:classicCardSizeScale' ||
+                                settingConfig.key === 'pref:modernCardSizeScale'
                             ) {
-                                /*
-                                 * ----------------------------------------------------------------
-                                 * Language/Layout changes need a TRUE hard reload.
-                                 *
-                                 * WHY window.location.reload() BREAKS ON TIZEN/WEBOS:
-                                 * On these platforms, reload() is a *soft* reload — the JS
-                                 * module cache is preserved. The 'app' singleton stays alive
-                                 * with _initialized=true, so App.init() exits early without
-                                 * ever calling i18n.init(). The dictionary stays {}, causing
-                                 * all i18n.t() calls to return raw key strings.
-                                 *
-                                 * FIX: Navigate to the app's root entry-point URL *without
-                                 * the hash fragment*. The WebView treats this as a fresh
-                                 * cold-start navigation, fully re-parsing and re-executing
-                                 * all JS modules from scratch — identical to a native restart.
-                                 * ----------------------------------------------------------------
-                                 */
-                                storage.flush();
-
-                                // Compute the base URL (strips the hash / current route)
-                                const href = window.location.href;
-                                const protocol = window.location.protocol;
-                                let entryUrl;
-
-                                if (protocol === 'file:') {
-                                    // file:// packaged app — strip everything from '#' onward
-                                    entryUrl = href.split('#')[0];
-                                } else {
-                                    // http(s):// dev server — use origin + pathname (no hash)
-                                    entryUrl = window.location.origin + window.location.pathname;
-                                }
-
-                                // Hard-navigate: forces a true cold-start re-init on all platforms
-                                window.location.href = entryUrl;
+                                this._triggerHardReload();
                             }
 
                             if (settingConfig.key === 'pref:libraryThumbMode') {
@@ -5057,7 +5393,14 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'pgsPlaybackMode' ||
                                 settingConfig.key === 'webosSegmentLength' ||
                                 settingConfig.key === 'tizenSegmentLength' ||
-                                settingConfig.key === 'html5SegmentLength'
+                                settingConfig.key === 'html5SegmentLength' ||
+                                settingConfig.key === 'enableHEVC' ||
+                                settingConfig.key === 'enableAV1' ||
+                                settingConfig.key === 'enableVP9' ||
+                                settingConfig.key === 'enableHDR' ||
+                                settingConfig.key === 'enableDolbyVision' ||
+                                settingConfig.key === 'enableDts' ||
+                                settingConfig.key === 'enableTrueHd'
                             ) {
                                 clearCapabilitiesCache();
                             }
@@ -5219,7 +5562,7 @@ class SettingsPage extends Page {
                 // Fetch cached value, coercion fallback to false (disabled by default)
                 const currentValue = storage.getItem('pref:showCollapsedLibraryIcons') === 'true';
                 const newValue = !currentValue;
-                
+
                 // Save setting as string serialized format
                 storage.setItem('pref:showCollapsedLibraryIcons', newValue.toString());
                 // Instantly update active class mapping for tactile feedback on hardware TV
@@ -5227,6 +5570,19 @@ class SettingsPage extends Page {
                 // Broadcast custom event so active Sidebar component updates reactive classes
                 eventBus.emit('prefChanged:showCollapsedLibraryIcons', newValue);
                 log.info(`Show Collapsed Library Icons set to: ${newValue}`);
+            });
+        }
+
+        // Toggle Switch for Transparent Collapsed Sidebar
+        const transparentCollapsedSidebarToggle = this.$('#toggle-transparent-collapsed-sidebar');
+        if (transparentCollapsedSidebarToggle) {
+            transparentCollapsedSidebarToggle.addEventListener('click', () => {
+                const currentValue = storage.getItem('pref:transparentCollapsedSidebar') === 'true';
+                const newValue = !currentValue;
+                storage.setItem('pref:transparentCollapsedSidebar', newValue.toString());
+                transparentCollapsedSidebarToggle.classList.toggle('active', newValue);
+                eventBus.emit('prefChanged:transparentCollapsedSidebar', newValue);
+                log.info(`Transparent Collapsed Sidebar set to: ${newValue}`);
             });
         }
 
@@ -5311,7 +5667,7 @@ class SettingsPage extends Page {
                 const currentValue = storage.getItem('pref:hideOriginalTitle') === 'true';
                 // Negate the current state for toggling
                 const newValue = !currentValue;
-                
+
                 // Commit to localStorage matching standard preferences format
                 storage.setItem('pref:hideOriginalTitle', newValue.toString());
                 // Smoothly update the active class on the DOM for sleek toggle switch transition
@@ -5515,6 +5871,43 @@ class SettingsPage extends Page {
         });
     }
 
+    _triggerHardReload() {
+        /*
+         * ----------------------------------------------------------------
+         * Language/Layout changes need a TRUE hard reload.
+         *
+         * WHY window.location.reload() BREAKS ON TIZEN/WEBOS:
+         * On these platforms, reload() is a *soft* reload — the JS
+         * module cache is preserved. The 'app' singleton stays alive
+         * with _initialized=true, so App.init() exits early without
+         * ever calling i18n.init(). The dictionary stays {}, causing
+         * all i18n.t() calls to return raw key strings.
+         *
+         * FIX: Navigate to the app's root entry-point URL *without
+         * the hash fragment*. The WebView treats this as a fresh
+         * cold-start navigation, fully re-parsing and re-executing
+         * all JS modules from scratch — identical to a native restart.
+         * ----------------------------------------------------------------
+         */
+        storage.flush();
+
+        // Compute the base URL (strips the hash / current route)
+        const href = window.location.href;
+        const protocol = window.location.protocol;
+        let entryUrl;
+
+        if (protocol === 'file:') {
+            // file:// packaged app — strip everything from '#' onward
+            entryUrl = href.split('#')[0];
+        } else {
+            // http(s):// dev server — use origin + pathname (no hash)
+            entryUrl = window.location.origin + window.location.pathname;
+        }
+
+        // Hard-navigate: forces a true cold-start re-init on all platforms
+        window.location.href = entryUrl;
+    }
+
     _switchTab(tabId, force = false, focusContent = false) {
         if (this.activeTab === tabId && !force) return;
         this.activeTab = tabId;
@@ -5535,7 +5928,7 @@ class SettingsPage extends Page {
 
             this._bindContentEvents(); // Re-bind events for new content
 
-            if (tabId === 'home') {
+            if (tabId === 'layout') {
                 this._setupHomeLayoutUI();
             } else if (tabId === 'sidebar') {
                 this._setupSidebarLayoutUI();

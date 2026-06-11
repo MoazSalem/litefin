@@ -81,10 +81,10 @@ class CssVarsPolyfill {
         // A 0ms timeout defers to after all synchronous chunk evaluation.
         // ----------------------------------------------------------------
         const self = this;
-        setTimeout(function() {
+        setTimeout(function () {
             log.debug('Running initial CSS vars ponyfill pass');
             const themeVars = self._extractThemeVariables();
-            
+
             // Provide our scoped variables manually, otherwise the ponyfill
             // ignores our [data-theme-mode="..."] selectors since they aren't :root
             const options = Object.assign({}, PONYFILL_OPTIONS, {
@@ -107,7 +107,7 @@ class CssVarsPolyfill {
         log.debug('Re-applying CSS vars polyfill after theme change');
 
         const themeVars = this._extractThemeVariables();
-        
+
         // Re-run with the preserved options + updated variables manually extracted
         // from the active theme class ([data-theme-mode="xyz"])
         const options = Object.assign({}, PONYFILL_OPTIONS, {
@@ -119,9 +119,9 @@ class CssVarsPolyfill {
     /**
      * Extracts CSS variables from the currently active theme.
      * `css-vars-ponyfill` ONLY supports variables defined in `:root` or `:host`.
-     * Since Litefin uses `[data-theme-mode="classic-dark"]` for dynamic themes, 
+     * Since Litefin uses `[data-theme-mode="classic-dark"]` for dynamic themes,
      * the ponyfill ignores our theme variables internally!
-     * 
+     *
      * We manually extract them from the <style> tags text content and provide
      * them explicitly via the `variables: {}` option.
      * @returns {Object} Map of css variable names to values
@@ -143,7 +143,10 @@ class CssVarsPolyfill {
         const rootBlockRegex = /:root[^{]*\{([^}]+)\}/g;
 
         // Regex for the active [data-theme-mode="..."] block
-        const themeBlockRegex = new RegExp('\\[data-theme(?:-mode)?=["\']?' + themeMode + '["\']?\\][^{]*\\{([^}]+)\\}', 'g');
+        const themeBlockRegex = new RegExp(
+            '\\[data-theme(?:-mode)?=["\']?' + themeMode + '["\']?\\][^{]*\\{([^}]+)\\}',
+            'g'
+        );
 
         // ----------------------------------------------------------------
         // Build regexes for ALL other active html[data-*] attributes.
@@ -154,7 +157,7 @@ class CssVarsPolyfill {
         const activeAttrRegexes = [];
         const attrs = root.attributes;
         for (let a = 0; a < attrs.length; a++) {
-            const attrName  = attrs[a].name;
+            const attrName = attrs[a].name;
             const attrValue = attrs[a].value;
             // Only process data-* attributes that have a value and aren't
             // the theme-mode one (already handled above)
@@ -167,10 +170,7 @@ class CssVarsPolyfill {
                 // Escape any special regex chars in the attribute value
                 const escapedValue = attrValue.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
                 activeAttrRegexes.push(
-                    new RegExp(
-                        '\\[' + attrName + '=["\']?' + escapedValue + '["\']?\\][^{]*\\{([^}]+)\\}',
-                        'g'
-                    )
+                    new RegExp('\\[' + attrName + '=["\']?' + escapedValue + '["\']?\\][^{]*\\{([^}]+)\\}', 'g')
                 );
             }
         }

@@ -69,7 +69,7 @@ export function getDeviceCapabilities() {
         uhd = false;
     }
 
-    const hdr10 = tizenVersion >= 4 && uhd;
+    const hdr10 = tizenVersion >= 3 && uhd;
 
     let deviceId = '';
     if (typeof tizen !== 'undefined' && tizen.systeminfo) {
@@ -111,15 +111,21 @@ export function getDeviceCapabilities() {
         uhd8K,
         hdr10,
         hdr10Plus: hdr10 && tizenVersion >= 5,
-        hlg: hdr10 && tizenVersion >= 4,
+        hlg: hdr10 && tizenVersion >= 3,
         dolbyVision: false, // Tizen generally does not support Dolby Vision natively
-        hevc: true, // Tizen 4+
-        av1: tizenVersion >= 5.5,
-        vp9: tizenVersion >= 6 || (tizenVersion >= 4 && uhd),
+        hevc: true, // Supported since Tizen 2.3 (2015)
+        av1: tizenVersion >= 5.5, // Introduced in Tizen 5.5 (2020)
+        vp9: tizenVersion >= 2.3, // Supported since Tizen 2.3 (2015)
         vp8: true,
         ac3: true,
         eac3: true,
-        dts: tizenVersion < 4, // Samsung dropped DTS in 2018 (Tizen 4.0)
+        dts: tizenVersion < 4, // Samsung dropped DTS in Tizen 4.0 (2018)
+        wma: tizenVersion < 9.0, // Samsung dropped WMA in Tizen 9.0 (2025)
+        vc1: tizenVersion < 9.0, // Samsung dropped VC-1 in Tizen 9.0 (2025)
+        rv: tizenVersion < 10.0, // Samsung dropped RealVideo in Tizen 10.0 (2026)
+        opus: tizenVersion >= 4.0, // Introduced in Tizen 4.0 (2018)
+        ac4: tizenVersion >= 4.0, // Introduced in Tizen 4.0 (2018)
+        mpegh: tizenVersion >= 4.0, // Introduced in Tizen 4.0 (2018)
         truehd: false,
         maxAudioChannels: uhd8K ? 8 : 6
     };
@@ -176,23 +182,24 @@ export function buildJellyfinProfile(options = {}) {
 
     const caps = getDeviceCapabilities();
 
-    let enableHEVC = PlayerSettings.get('enableHEVC');
-    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+    const hevcSetting = PlayerSettings.get('enableHEVC');
+    const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
 
-    let enableAV1 = PlayerSettings.get('enableAV1');
-    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+    const av1Setting = PlayerSettings.get('enableAV1');
+    const enableAV1 = av1Setting === 'enable' ? true : av1Setting === 'disable' ? false : caps.av1;
 
-    let enableVP9 = PlayerSettings.get('enableVP9');
-    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
-    
+    const vp9Setting = PlayerSettings.get('enableVP9');
+    const enableVP9 = vp9Setting === 'enable' ? true : vp9Setting === 'disable' ? false : caps.vp9;
+
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
-    let enableHDR = PlayerSettings.get('enableHDR');
-    if (localStorage.getItem('player:enableHDR') === null) {
-        enableHDR = !!caps.hdr10;
-    }
-    
-    const enableDts = PlayerSettings.get('enableDts');
-    const enableTrueHd = PlayerSettings.get('enableTrueHd');
+    const hdrSetting = PlayerSettings.get('enableHDR');
+    const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : !!caps.hdr10;
+
+    const dtsSetting = PlayerSettings.get('enableDts');
+    const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
+
+    const trueHdSetting = PlayerSettings.get('enableTrueHd');
+    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
     if (PlayerSettings.get('forceTranscode') || playbackMode === 'transcode') {
         return _buildMinimalProfile(caps);
@@ -230,26 +237,43 @@ export function buildJellyfinProfile(options = {}) {
     // broadcast Live TV (DVB/MPEG-TS) streams in Europe and elsewhere. Without it,
     // Jellyfin will set AudioCodecNotSupported and force a full transcode for Live TV.
     // AVPlay handles mp2 natively in TS containers — no transcode needed.
-    const baseAudioCodecs = ['aac', 'mp3', 'mp2', 'mp1l2', 'opus', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
+    const baseAudioCodecs = [
+        'aac',
+        'mp3',
+        'mp2',
+        'mp1l2',
+        'vorbis',
+        'pcm',
+        'wav',
+        'pcm_s16le',
+        'pcm_s24le',
+        'aac_latm'
+    ];
+    if (caps.opus) baseAudioCodecs.push('opus');
     if (caps.ac3) baseAudioCodecs.push('ac3');
     if (caps.eac3) baseAudioCodecs.push('eac3');
-    if (caps.tizenVersion >= 6.5) baseAudioCodecs.push('ac4');
+    if (caps.ac4) baseAudioCodecs.push('ac4');
+    if (caps.mpegh) baseAudioCodecs.push('mpegh');
+    if (caps.wma) baseAudioCodecs.push('wma');
     if (enableDts) baseAudioCodecs.push('dts', 'dca');
     if (enableTrueHd) baseAudioCodecs.push('truehd');
 
     // Video audio: conditionally includes FLAC based on setting
-    const videoAudioCodecs = enableFlacInVideo
-        ? ['flac', ...baseAudioCodecs]
-        : [...baseAudioCodecs];  // FLAC excluded → server transcodes to AC3
+    const videoAudioCodecs = enableFlacInVideo ? ['flac', ...baseAudioCodecs] : [...baseAudioCodecs]; // FLAC excluded → server transcodes to AC3
 
     const videoAudioCodecString = videoAudioCodecs.join(',');
 
-    // Music audio: FLAC always included — audio-only containers have no sync issue
-    const musicAudioCodecString = ['flac', ...baseAudioCodecs].join(',');
+    // Music audio: FLAC, APE, AIFF, and MIDI always included — audio-only containers have no sync issue.
+    // Exclude 'opus' because Samsung TVs do not support playing standalone Opus audio files (only inside video containers).
+    const musicAudioCodecString = ['flac', 'ape', 'aiff', 'midi', ...baseAudioCodecs]
+        .filter((codec) => codec !== 'opus')
+        .join(',');
 
     // Removed legacy alias audioCodecString to fix lint warning
 
-    const generalVideoCodecs = ['h264', 'mpeg2video', 'vc1'];
+    const generalVideoCodecs = ['h264', 'mpeg2video'];
+    if (caps.vc1) generalVideoCodecs.push('vc1');
+    if (caps.rv) generalVideoCodecs.push('realvideo');
     if (enableHEVC) generalVideoCodecs.push('hevc');
     if (enableVP9) generalVideoCodecs.push('vp9');
     if (caps.vp8) generalVideoCodecs.push('vp8');
@@ -262,11 +286,13 @@ export function buildJellyfinProfile(options = {}) {
     if (enableVP9) webmVideoCodecs.push('vp9');
     if (enableAV1) webmVideoCodecs.push('av1');
 
-    const tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
+    const tsVideoCodecs = ['h264', 'mpeg2video'];
+    if (caps.vc1) tsVideoCodecs.push('vc1');
     if (enableHEVC) tsVideoCodecs.push('hevc');
     if (enableAV1) tsVideoCodecs.push('av1');
 
-    const m2tsVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
+    const m2tsVideoCodecs = ['h264', 'mpeg2video'];
+    if (caps.vc1) m2tsVideoCodecs.push('vc1');
 
     const directPlayProfiles = [];
 
@@ -307,11 +333,13 @@ export function buildJellyfinProfile(options = {}) {
 
         // AVPlay handles many legacy containers natively
         if (!isHtml5) {
-            directPlayProfiles.push({
-                Container: 'asf',
-                Type: 'Video',
-                AudioCodec: videoAudioCodecString
-            });
+            if (caps.vc1) {
+                directPlayProfiles.push({
+                    Container: 'asf',
+                    Type: 'Video',
+                    AudioCodec: videoAudioCodecString
+                });
+            }
             directPlayProfiles.push({
                 Container: 'ts,mpegts',
                 Type: 'Video',
@@ -327,14 +355,32 @@ export function buildJellyfinProfile(options = {}) {
             directPlayProfiles.push({
                 Container: 'avi',
                 Type: 'Video',
-                VideoCodec: ['h264', enableHEVC ? 'hevc' : '', 'mpeg2video'].filter(Boolean).join(','),
+                VideoCodec: [
+                    'h264',
+                    enableHEVC ? 'hevc' : '',
+                    'mpeg2video',
+                    caps.vc1 ? 'vc1' : '',
+                    caps.rv ? 'realvideo' : ''
+                ]
+                    .filter(Boolean)
+                    .join(','),
                 AudioCodec: videoAudioCodecString
             });
-            directPlayProfiles.push({
-                Container: 'wmv,asf',
-                Type: 'Video',
-                AudioCodec: videoAudioCodecString
-            });
+            if (caps.vc1) {
+                directPlayProfiles.push({
+                    Container: 'wmv,asf',
+                    Type: 'Video',
+                    AudioCodec: videoAudioCodecString
+                });
+            }
+            if (caps.rv) {
+                directPlayProfiles.push({
+                    Container: 'rmvb',
+                    Type: 'Video',
+                    VideoCodec: 'realvideo',
+                    AudioCodec: videoAudioCodecString
+                });
+            }
             directPlayProfiles.push({
                 Container: 'mpg,mpeg,flv,3gp,vob,vro',
                 Type: 'Video',
@@ -344,8 +390,25 @@ export function buildJellyfinProfile(options = {}) {
 
         // Music/audio-only files: FLAC always allowed regardless of enableFlacInVideo.
         // Audio-only containers don't have the video-sync drift issue.
+        // Exclude 'opus' and 'webma' because Samsung TVs do not support playing standalone Opus audio files.
+        const musicContainers = [
+            'mp3',
+            'flac',
+            'aac',
+            'm4a',
+            'm4b',
+            'ogg',
+            'wav',
+            'mpa',
+            'mid',
+            'midi',
+            'ape',
+            'aif',
+            'aiff'
+        ];
+        if (caps.wma) musicContainers.push('wma');
         directPlayProfiles.push({
-            Container: 'mp3,flac,aac,m4a,m4b,ogg,opus,wav,wma,webma',
+            Container: musicContainers.join(','),
             Type: 'Audio',
             AudioCodec: musicAudioCodecString
         });
@@ -368,7 +431,7 @@ export function buildJellyfinProfile(options = {}) {
     //   The updated AVPlay properly supports AC3/EAC3 in HLS/TS, so we can request
     //   surround-sound AC3/EAC3 and AVPlay will decode it natively.
     // =========================================================================
-    let transAudioCodecsArr = [];
+    const transAudioCodecsArr = [];
     let transMaxAudioChannels;
 
     if (caps.tizenVersion >= 6) {
@@ -388,7 +451,7 @@ export function buildJellyfinProfile(options = {}) {
 
     let transAudioCodecs = transAudioCodecsArr.join(',');
 
-    let directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3'];
+    const directAudioCodecsArr = ['aac', 'ac3', 'eac3', 'mp3'];
     if (enableDts) directAudioCodecsArr.push('dts', 'dca');
     if (enableTrueHd) directAudioCodecsArr.push('truehd');
     let directAudioCodecs = directAudioCodecsArr.join(',');
@@ -400,7 +463,7 @@ export function buildJellyfinProfile(options = {}) {
     // forceFmp4HlsContainer  = bypass the tizenVersion >= 6 hardware gate and
     //                          promote fMP4 to the PRIMARY HLS transcode.
     const enableFmp4Hls = PlayerSettings.get('enableFmp4HlsContainer');
-    const forceFmp4Hls  = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
+    const forceFmp4Hls = enableFmp4Hls && PlayerSettings.get('forceFmp4HlsContainer');
 
     // Hardware version gate: Tizen < 6 cannot reliably parse fMP4 HLS segments
     // through AVPlay (fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT on some 5.x builds).
@@ -410,7 +473,6 @@ export function buildJellyfinProfile(options = {}) {
     // When fMP4 is forced, it becomes the PRIMARY HLS container (replaces TS as
     // the first entry the Jellyfin server picks from the TranscodingProfiles list).
     const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
-
 
     // =========================================================================
     // Transcode codec selection
@@ -433,7 +495,8 @@ export function buildJellyfinProfile(options = {}) {
     // directVideoCodecs is used in DirectStreamProfiles (progressive HTTP remux).
     // =========================================================================
     const tsCompatibleVideoCodecs = ['h264', 'vc1', 'mpeg2video'];
-    if (enableHEVC) tsCompatibleVideoCodecs.push('hevc');
+    // Tizen < 6.0 AVPlay does not support HEVC inside HLS MPEG-TS streams
+    if (enableHEVC && caps.tizenVersion >= 6) tsCompatibleVideoCodecs.push('hevc');
 
     // TS-compatible list (AV1/VP9 intentionally excluded — not muxable into MPEG-TS)
     let transVideoCodecs = tsCompatibleVideoCodecs.join(',');
@@ -494,10 +557,12 @@ export function buildJellyfinProfile(options = {}) {
             // Integer fields — Jellyfin TranscodingProfileDto schema is strict
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? 1 : 2,
-            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('tizenSegmentLength') || 6),
+            SegmentLength: isHtml5
+                ? PlayerSettings.get('html5SegmentLength') || 2
+                : PlayerSettings.get('tizenSegmentLength') || 6,
             // BreakOnNonKeyFrames with fMP4 must be false — fMP4 segments must align to IDR
             // frames. For TS we keep the original behaviour (false for AVPlay, true for HTML5).
-            BreakOnNonKeyFrames: forceFmp4Hls ? false : (isHtml5 ? (playbackMode !== 'remux') : false),
+            BreakOnNonKeyFrames: forceFmp4Hls ? false : isHtml5 ? playbackMode !== 'remux' : false,
             // VBR AAC in MPEG-TS uses LATM framing (stream type 0x11 in the PMT).
             // Tizen 5.0 AVPlay's HLS parser expects standard ADTS framing (0x0F) and
             // immediately fires PLAYER_ERROR_NOT_SUPPORTED_FORMAT when it sees LATM in the PMT.
@@ -521,13 +586,7 @@ export function buildJellyfinProfile(options = {}) {
             Context: 'Streaming',
             Protocol: 'http'
         },
-        {
-            Container: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
-            Type: 'Audio',
-            AudioCodec: caps.tizenVersion >= 5 ? 'opus' : 'mp3',
-            Context: 'Streaming',
-            Protocol: 'http'
-        },
+
         {
             Container: 'mp4',
             Type: 'Video',
@@ -564,15 +623,34 @@ export function buildJellyfinProfile(options = {}) {
             // which fMP4 HLS handles without issue.
             MaxAudioChannels: transMaxAudioChannels,
             MinSegments: isHtml5 ? 1 : 2,
-            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('tizenSegmentLength') || 6),
+            SegmentLength: isHtml5
+                ? PlayerSettings.get('html5SegmentLength') || 2
+                : PlayerSettings.get('tizenSegmentLength') || 6,
             // fMP4 segments MUST align to IDR boundaries — never cut on subtitle cue points.
             BreakOnNonKeyFrames: false,
             EnableAudioVbrEncoding: isHtml5
         });
     }
 
-    const h264Level = caps.uhd ? '51' : caps.tizenVersion >= 5 ? '52' : caps.tizenVersion >= 4 ? '42' : '41';
-    const hevcLevel = caps.uhd8K ? '183' : caps.uhd ? '153' : '150'; // Standardize to 5.0 fallback for HEVC
+    const h264Level = caps.uhd ? '51' : '42'; // Spec sheets note: FHD models support Level 4.2
+
+    // HEVC Level limits based on specs:
+    //   - FHD (caps.uhd is false) -> Level 4.1 (123)
+    //   - UHD & Tizen < 5.5 (2015-2019) -> Level 5.1 (153)
+    //   - UHD & Tizen >= 5.5 (2020+) -> Level 5.2 (156)
+    //   - 8K & Tizen >= 5.0 (2019+) -> Level 6.1 (183)
+    let hevcLevel = '153'; // Default to Level 5.1
+    if (caps.uhd8K && caps.tizenVersion >= 5.0) {
+        hevcLevel = '183'; // Level 6.1
+    } else if (caps.uhd) {
+        if (caps.tizenVersion >= 5.5) {
+            hevcLevel = '156'; // Level 5.2
+        } else {
+            hevcLevel = '153'; // Level 5.1
+        }
+    } else {
+        hevcLevel = '123'; // Level 4.1 for FHD models
+    }
 
     const hdrCondition = !enableHDR
         ? [{ Condition: 'EqualsAny', Property: 'VideoRangeType', Value: 'SDR', IsRequired: false }]
@@ -596,7 +674,6 @@ export function buildJellyfinProfile(options = {}) {
     const hevcVideoRangeTypes = enableHDR
         ? 'SDR|HDR10|HDR10Plus|HLG|DOVIWithHDR10|DOVIWithHDR10Plus|DOVIWithHLG|DOVIWithSDR|DOVIWithEL|DOVIWithELHDR10Plus|DOVIInvalid'
         : 'SDR|DOVIWithSDR';
-
 
     const codecProfiles = [
         {
@@ -625,12 +702,16 @@ export function buildJellyfinProfile(options = {}) {
                  * We therefore skip this condition when the caller has indicated html5 backend,
                  * allowing the server to direct-stream (or direct-play) interlaced content.
                  */
-                ...(!isHtml5 ? [{
-                    Condition: 'Equals',
-                    Property: 'IsInterlaced',
-                    Value: 'false',
-                    IsRequired: true,
-                }] : []),
+                ...(!isHtml5
+                    ? [
+                          {
+                              Condition: 'Equals',
+                              Property: 'IsInterlaced',
+                              Value: 'false',
+                              IsRequired: true
+                          }
+                      ]
+                    : []),
                 ...hdrCondition
             ]
         },
@@ -673,7 +754,6 @@ export function buildJellyfinProfile(options = {}) {
             ]
         }
     ];
-
 
     // CodecProfile for AAC: limit to stereo channels for DirectPlay qualification.
     // This tells Jellyfin: "only DirectPlay an AAC source if it has ≤2 channels".

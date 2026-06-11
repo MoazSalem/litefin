@@ -46,7 +46,7 @@ const SPEED_SYNC_THRESHOLD_MS = 2000;
  * How much to adjust playback rate for SpeedToSync.
  * E.g. 0.10 → max 10% speed change (0.90x–1.10x).
  */
-const MAX_SPEED_ADJUSTMENT = 0.10;
+const MAX_SPEED_ADJUSTMENT = 0.1;
 
 /**
  * Minimum cycle time between sync check ticks (ms).
@@ -146,7 +146,7 @@ export class SyncPlayPlaybackCore {
         this._playbackAnchor = anchor;
         log.debug(
             `Anchor updated: pos=${anchor.positionTicks}ticks / ` +
-            `when=${anchor.whenMs}ms / playing=${anchor.isPlaying}`
+                `when=${anchor.whenMs}ms / playing=${anchor.isPlaying}`
         );
     }
 
@@ -200,10 +200,10 @@ export class SyncPlayPlaybackCore {
         // ====================================================================
 
         const anchorLocalTimeMs = this._timeSync.toLocal(this._playbackAnchor.whenMs);
-        const elapsedMs         = now - anchorLocalTimeMs;
+        const elapsedMs = now - anchorLocalTimeMs;
 
         // Convert anchor position from ticks to ms, add elapsed, convert back
-        const expectedPositionMs    = (this._playbackAnchor.positionTicks / TICKS_PER_MS) + elapsedMs;
+        const expectedPositionMs = this._playbackAnchor.positionTicks / TICKS_PER_MS + elapsedMs;
         const expectedPositionTicks = expectedPositionMs * TICKS_PER_MS;
 
         // Delta in ms (positive = we are behind, negative = we are ahead)
@@ -274,8 +274,11 @@ export class SyncPlayPlaybackCore {
     _speedToSync(deltaMs) {
         if (!this._player || typeof this._player.setPlaybackRate !== 'function') {
             // Graceful fallback — backend doesn't support rate changes
-            this._skipToSync((this._playbackAnchor.positionTicks / TICKS_PER_MS +
-                             (Date.now() - this._timeSync.toLocal(this._playbackAnchor.whenMs))) * TICKS_PER_MS);
+            this._skipToSync(
+                (this._playbackAnchor.positionTicks / TICKS_PER_MS +
+                    (Date.now() - this._timeSync.toLocal(this._playbackAnchor.whenMs))) *
+                    TICKS_PER_MS
+            );
             return;
         }
 
@@ -285,7 +288,7 @@ export class SyncPlayPlaybackCore {
             1.0 + MAX_SPEED_ADJUSTMENT,
             Math.max(
                 1.0 - MAX_SPEED_ADJUSTMENT,
-                1.0 + (deltaMs / 1000) * 0.1  // 100ms off → ±1% rate change
+                1.0 + (deltaMs / 1000) * 0.1 // 100ms off → ±1% rate change
             )
         );
 

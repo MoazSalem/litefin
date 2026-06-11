@@ -2,12 +2,12 @@
    Modern Layout - Server Selection & Discovery
    ============================================================================ */
 
-html[data-layout="modern"] .server-section {
+html[data-layout-login="modern"] .server-section {
     max-width: 1110px;
     width: 100%;
 }
 
-html[data-layout="modern"] .server-section .section-title::after {
+html[data-layout-login="modern"] .server-section .section-title::after {
     content: 'Enter the URL or IP address of your Jellyfin server.';
     display: block;
     font-size: 1.3rem;
@@ -16,19 +16,19 @@ html[data-layout="modern"] .server-section .section-title::after {
     margin-top: 12px;
 }
 
-html[data-layout="modern"] .server-input-container {
+html[data-layout-login="modern"] .server-input-container {
     display: flex;
     flex-direction: column;
     position: relative;
     max-width: 700px;
 }
 
-html[data-layout="modern"] .server-input-container > *:not(:last-child) {
+html[data-layout-login="modern"] .server-input-container > *:not(:last-child) {
     margin-right: 0;
     margin-bottom: 24px;
 }
 
-html[data-layout="modern"] .server-url-input {
+html[data-layout-login="modern"] .server-url-input {
     background: var(--jf-surface, #0f0f0f);
     border: 4px solid transparent;
     padding: 21px 21px 21px 69px;
@@ -41,13 +41,13 @@ html[data-layout="modern"] .server-url-input {
     transition: border-color 0.2s ease, background-color 0.2s ease;
 }
 
-html[data-layout="modern"] .server-url-input:focus,
-html[data-layout="modern"] .server-url-input.focused {
+html[data-layout-login="modern"] .server-url-input:focus,
+html[data-layout-login="modern"] .server-url-input.focused {
     border-color: var(--jf-accent, #448aff);
     background: var(--jf-card-bg-hover, #151515);
 }
 
-html[data-layout="modern"] .server-input-container::before {
+html[data-layout-login="modern"] .server-input-container::before {
     content: '';
     position: absolute;
     left: 24px;
@@ -59,7 +59,7 @@ html[data-layout="modern"] .server-input-container::before {
     z-index: 5;
 }
 
-html[data-layout="modern"] .connect-btn {
+html[data-layout-login="modern"] .connect-btn {
     width: 100%;
     height: 72px;
     background: var(--jf-accent, #7c4dff);
@@ -76,17 +76,17 @@ html[data-layout="modern"] .connect-btn {
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-html[data-layout="modern"] .connect-btn > *:not(:last-child) {
+html[data-layout-login="modern"] .connect-btn > *:not(:last-child) {
     margin-left: 16px;
 }
 
-html[data-layout="modern"] .connect-btn:focus,
-html[data-layout="modern"] .connect-btn.focused {
+html[data-layout-login="modern"] .connect-btn:focus,
+html[data-layout-login="modern"] .connect-btn.focused {
     transform: scale(1.02);
     border-color: var(--jf-button-border-focus, #ffffff);
 }
 
-html[data-layout="modern"] .connect-btn span::before {
+html[data-layout-login="modern"] .connect-btn span::before {
     content: '';
     display: inline-block;
     width: 24px;
@@ -98,7 +98,7 @@ html[data-layout="modern"] .connect-btn span::before {
 }
 
 /* Discovered Servers & Saved Servers Sections */
-html[data-layout="modern"] .discovered-servers {
+html[data-layout-login="modern"] .discovered-servers {
     border-top: 1px solid rgba(255, 255, 255, 0.05); /* Premium delicate dark separator line */
     padding-top: 40px;
     position: relative;
@@ -106,12 +106,12 @@ html[data-layout="modern"] .discovered-servers {
 }
 
 /* Stacking consecutive sections gracefully if both exist simultaneously */
-html[data-layout="modern"] .saved-servers-section + #discovered-servers {
+html[data-layout-login="modern"] .saved-servers-section + #discovered-servers {
     margin-top: 48px; /* Slightly tighter spacing for a more coherent block structure */
     border-top: 1px solid rgba(255, 255, 255, 0.05); /* Sleek high-end accent divider */
 }
 
-html[data-layout="modern"] .discovered-header {
+html[data-layout-login="modern"] .discovered-header {
     display: flex;
     align-items: center;
     justify-content: space-between;
@@ -119,7 +119,7 @@ html[data-layout="modern"] .discovered-header {
     width: 100%;
 }
 
-html[data-layout="modern"] .discovered-header h3 {
+html[data-layout-login="modern"] .discovered-header h3 {
     font-size: 1.1rem;
     font-weight: 700;
     letter-spacing: 1px;
@@ -129,7 +129,7 @@ html[data-layout="modern"] .discovered-header h3 {
 }
 
 /* Scanning Indicator */
-html[data-layout="modern"] .discovery-status {
+html[data-layout-login="modern"] .discovery-status {
     display: flex;
     align-items: center;
     width: fit-content;
@@ -140,11 +140,11 @@ html[data-layout="modern"] .discovery-status {
     border: 1px solid var(--jf-divider, rgba(255, 255, 255, 0.05));
 }
 
-html[data-layout="modern"] .discovery-status > *:not(:last-child) {
+html[data-layout-login="modern"] .discovery-status > *:not(:last-child) {
     margin-left: 12px;
 }
 
-html[data-layout="modern"] .discovery-status .loading-spinner-small {
+html[data-layout-login="modern"] .discovery-status .loading-spinner-small {
     display: block;
     width: 16px;
     height: 16px;
@@ -155,14 +155,14 @@ html[data-layout="modern"] .discovery-status .loading-spinner-small {
     order: 2;
 }
 
-html[data-layout="modern"] .discovery-status span {
+html[data-layout-login="modern"] .discovery-status span {
     font-size: 1rem;
     opacity: 0.5;
     font-weight: 500;
     order: 1;
 }
 
-html[data-layout="modern"] .discovery-status::after {
+html[data-layout-login="modern"] .discovery-status::after {
     display: none;
 }
 
@@ -171,7 +171,7 @@ html[data-layout="modern"] .discovery-status::after {
     to { transform: rotate(360deg); }
 }
 
-html[data-layout="modern"] .server-list {
+html[data-layout-login="modern"] .server-list {
     /* Set up responsive flexbox grid layout for inline server items */
     display: flex;
     flex-wrap: wrap;
@@ -183,7 +183,7 @@ html[data-layout="modern"] .server-list {
     gap: 24px;
 }
 
-html[data-layout="modern"] .server-item {
+html[data-layout-login="modern"] .server-item {
     width: 388px;
     background: var(--jf-card-bg, #0d0d0d);
     border: 4px solid transparent;
@@ -199,7 +199,7 @@ html[data-layout="modern"] .server-item {
     margin: 0;
 }
 
-html[data-layout="modern"] .server-icon-box {
+html[data-layout-login="modern"] .server-icon-box {
     width: 56px;
     height: 56px;
     background: var(--jf-surface, #151515);
@@ -213,30 +213,30 @@ html[data-layout="modern"] .server-icon-box {
     color: var(--jf-accent);
 }
 
-html[data-layout="modern"] .server-icon-box svg {
+html[data-layout-login="modern"] .server-icon-box svg {
     width: 28px;
     height: 28px;
     opacity: 0.8;
 }
 
-html[data-layout="modern"] .server-info {
+html[data-layout-login="modern"] .server-info {
     display: flex;
     flex-direction: column;
     flex: 1;
 }
 
-html[data-layout="modern"] .name-row {
+html[data-layout-login="modern"] .name-row {
     display: flex;
     align-items: center;
     margin-bottom: 4px;
     width: fit-content;
 }
 
-html[data-layout="modern"] .name-row > *:not(:last-child) {
+html[data-layout-login="modern"] .name-row > *:not(:last-child) {
     margin-right: 8px;
 }
 
-html[data-layout="modern"] .server-name {
+html[data-layout-login="modern"] .server-name {
     font-size: 1.4rem;
     font-weight: 700;
     color: var(--jf-text-primary);
@@ -245,14 +245,14 @@ html[data-layout="modern"] .server-name {
     flex: 0 1 auto;
 }
 
-html[data-layout="modern"] .server-address {
+html[data-layout-login="modern"] .server-address {
     font-size: 1.1rem;
     opacity: 0.4;
     padding: 0;
     color: var(--jf-text-primary);
 }
 
-html[data-layout="modern"] .server-version {
+html[data-layout-login="modern"] .server-version {
     position: static;
     display: inline-block;
     background: var(--jf-accent-15, rgba(124, 77, 255, 0.15));
@@ -265,7 +265,7 @@ html[data-layout="modern"] .server-version {
     margin-left: 4px;
 }
 
-html[data-layout="modern"] .status-dot {
+html[data-layout-login="modern"] .status-dot {
     display: block;
     width: 10px;
     height: 10px;
@@ -280,15 +280,16 @@ html[data-layout="modern"] .status-dot {
     border: 2px solid var(--jf-card-bg, #0d0d0d);
 }
 
-html[data-layout="modern"] .server-item:focus,
-html[data-layout="modern"] .server-item.focused {
+html[data-layout-login="modern"] .server-item:focus,
+html[data-layout-login="modern"] .server-item.focused {
     background: var(--jf-card-bg-hover, #1a1a1a);
     border-color: var(--jf-accent, #448aff);
     transform: translateY(-4px);
     outline: none;
 }
 
-html[data-layout="modern"] .server-item:focus .server-name,
-html[data-layout="modern"] .server-item.focused .server-name {
+html[data-layout-login="modern"] .server-item:focus .server-name,
+html[data-layout-login="modern"] .server-item.focused .server-name {
     color: var(--jf-text-primary);
 }
+

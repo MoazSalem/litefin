@@ -1,6 +1,6 @@
 {
     "name": "litefin-tizen",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "description": "Native Jellyfin client for Samsung Tizen TVs",
     "main": "src/index.js",
     "type": "module",
@@ -11,6 +11,7 @@
         "build:legacy": "webpack --config webpack.config.cjs --config-name legacy",
         "build:debug": "webpack --config webpack.config.cjs --config-name debug",
         "dev": "webpack --config webpack.config.cjs --config-name normal-watch",
+        "serve": "webpack serve --config webpack.config.cjs --config-name debug",
         "lint": "eslint src/",
         "lint:fix": "eslint src/ --fix",
         "format": "prettier --write src/",
@@ -70,7 +71,8 @@
         "style-loader": "^4.0.0",
         "webostvjs": "^1.2.12",
         "webpack": "^5.88.2",
-        "webpack-cli": "^5.1.4"
+        "webpack-cli": "^5.1.4",
+        "webpack-dev-server": "^5.2.4"
     },
     "dependencies": {
         "css-vars-ponyfill": "^2.4.9",

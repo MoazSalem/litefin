@@ -2,14 +2,14 @@
    Modern Layout - Manual Login & Forms
    ============================================================================ */
 
-html[data-layout="modern"] .manual-section {
+html[data-layout-login="modern"] .manual-section {
     max-width: 1000px;
     width: 100%;
     text-align: left;
     align-items: flex-start;
 }
 
-html[data-layout="modern"] .manual-form-container {
+html[data-layout-login="modern"] .manual-form-container {
     display: flex;
     flex-direction: column;
     margin-bottom: 60px;
@@ -18,21 +18,21 @@ html[data-layout="modern"] .manual-form-container {
 }
 
 /* Manual-form-container spacing replacement for gap */
-html[data-layout="modern"] .manual-form-container > *:not(:last-child) {
+html[data-layout-login="modern"] .manual-form-container > *:not(:last-child) {
     margin-bottom: 32px;
 }
 
-html[data-layout="modern"] .manual-section .input-group {
+html[data-layout-login="modern"] .manual-section .input-group {
     display: flex;
     flex-direction: column;
 }
 
-html[data-layout="modern"] .input-container {
+html[data-layout-login="modern"] .input-container {
     position: relative;
     width: 100%;
 }
 
-html[data-layout="modern"] .text-input.tv-input {
+html[data-layout-login="modern"] .text-input.tv-input {
     background: var(--jf-surface, #0f0f0f);
     border: 4px solid transparent;
     padding: 21px 21px 21px 69px;
@@ -45,14 +45,14 @@ html[data-layout="modern"] .text-input.tv-input {
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-html[data-layout="modern"] .text-input.tv-input:focus,
-html[data-layout="modern"] .text-input.tv-input.focused {
+html[data-layout-login="modern"] .text-input.tv-input:focus,
+html[data-layout-login="modern"] .text-input.tv-input.focused {
     border-color: var(--jf-accent, #448aff);
     background: var(--jf-card-bg-hover, #151515);
     transform: scale(1.01);
 }
 
-html[data-layout="modern"] .user-input-container::before {
+html[data-layout-login="modern"] .user-input-container::before {
     content: '';
     position: absolute;
     left: 24px;
@@ -65,7 +65,7 @@ html[data-layout="modern"] .user-input-container::before {
     z-index: 5;
 }
 
-html[data-layout="modern"] .pass-input-container::before {
+html[data-layout-login="modern"] .pass-input-container::before {
     content: '';
     position: absolute;
     left: 24px;
@@ -78,12 +78,12 @@ html[data-layout="modern"] .pass-input-container::before {
     z-index: 5;
 }
 
-html[data-layout="modern"] .manual-section .section-title {
+html[data-layout-login="modern"] .manual-section .section-title {
     text-align: left;
     margin-bottom: 40px;
 }
 
-html[data-layout="modern"] .manual-signin-btn {
+html[data-layout-login="modern"] .manual-signin-btn {
     flex: 2;
     height: 72px;
     background: var(--jf-accent, #7c4dff);
@@ -97,13 +97,13 @@ html[data-layout="modern"] .manual-signin-btn {
     transition: border-color 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-html[data-layout="modern"] .manual-signin-btn:focus,
-html[data-layout="modern"] .manual-signin-btn.focused {
+html[data-layout-login="modern"] .manual-signin-btn:focus,
+html[data-layout-login="modern"] .manual-signin-btn.focused {
     transform: scale(1.02);
     border-color: var(--jf-button-border-focus, #ffffff);
 }
 
-html[data-layout="modern"] .back-btn {
+html[data-layout-login="modern"] .back-btn {
     flex: 1;
     height: 72px;
     background: var(--jf-surface, #111);
@@ -117,16 +117,16 @@ html[data-layout="modern"] .back-btn {
     margin: 0px;
 }
 
-html[data-layout="modern"] .back-btn:focus,
-html[data-layout="modern"] .back-btn.focused {
+html[data-layout-login="modern"] .back-btn:focus,
+html[data-layout-login="modern"] .back-btn.focused {
     background: var(--jf-card-bg-hover, #1a1a1a);
     border-color: var(--jf-accent, #448aff);
     color: var(--jf-text-primary);
     transform: scale(1.02);
 }
 
-html[data-layout="modern"] .manual-login-btn,
-html[data-layout="modern"] .change-server-btn {
+html[data-layout-login="modern"] .manual-login-btn,
+html[data-layout-login="modern"] .change-server-btn {
     flex: 1;
     height: 72px;
     background: var(--jf-surface, #111) !important;
@@ -139,12 +139,13 @@ html[data-layout="modern"] .change-server-btn {
     transition: border-color 0.2s ease, background-color 0.2s ease, color 0.2s ease, transform 0.2s ease;
 }
 
-html[data-layout="modern"] .manual-login-btn:focus,
-html[data-layout="modern"] .manual-login-btn.focused,
-html[data-layout="modern"] .change-server-btn:focus,
-html[data-layout="modern"] .change-server-btn.focused {
+html[data-layout-login="modern"] .manual-login-btn:focus,
+html[data-layout-login="modern"] .manual-login-btn.focused,
+html[data-layout-login="modern"] .change-server-btn:focus,
+html[data-layout-login="modern"] .change-server-btn.focused {
     background: var(--jf-card-bg-hover, #1a1a1a) !important;
     border-color: var(--jf-accent, #448aff) !important;
     color: var(--jf-text-primary) !important;
     transform: scale(1.02);
 }
+

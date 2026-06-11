@@ -13,6 +13,7 @@ import { eventBus } from '../core/EventBus.js';
 import { state } from '../core/StateManager.js';
 import { tizenAdapter } from '../tizen/TizenAdapter.js';
 import { logger } from '../utils/Logger.js';
+import { storage } from '../utils/StorageService.js';
 
 const log = logger.create('ApiClient');
 
@@ -53,13 +54,27 @@ export class ApiClient {
     // ========================================================================
     // Properties
     // ========================================================================
-    get clientName() { return this._clientName; }
-    get deviceName() { return this._deviceName; }
-    get deviceId() { return this._deviceId; }
-    get clientVersion() { return this._clientVersion; }
-    get serverUrl() { return this._serverUrl; }
-    get accessToken() { return this._accessToken; }
-    get userId() { return this._userId; }
+    get clientName() {
+        return this._clientName;
+    }
+    get deviceName() {
+        return this._deviceName;
+    }
+    get deviceId() {
+        return this._deviceId;
+    }
+    get clientVersion() {
+        return this._clientVersion;
+    }
+    get serverUrl() {
+        return this._serverUrl;
+    }
+    get accessToken() {
+        return this._accessToken;
+    }
+    get userId() {
+        return this._userId;
+    }
 
     // ========================================================================
     // Configuration Methods
@@ -166,6 +181,31 @@ export class ApiClient {
             throw new Error('Server URL not configured');
         }
 
+        // Conditionally request quality/resolution metadata if enabled
+        if (storage.getItem('pref:showQualityBadges') === 'true' && options.params) {
+            const fieldsKey = Object.keys(options.params).find((k) => k.toLowerCase() === 'fields');
+            const isItemsEndpoint =
+                endpoint.includes('/Items') ||
+                endpoint.includes('/Latest') ||
+                endpoint.includes('/Resume') ||
+                endpoint.includes('/NextUp') ||
+                endpoint.includes('/Upcoming') ||
+                endpoint.includes('/Similar') ||
+                endpoint.includes('/Episodes') ||
+                endpoint.includes('/Search/Hints');
+
+            if (isItemsEndpoint) {
+                const targetKey = fieldsKey || 'Fields';
+                const fieldsList = (options.params[targetKey] || '').split(',').filter(Boolean);
+                ['Width', 'Height', 'VideoRange', 'MediaSources'].forEach((f) => {
+                    if (!fieldsList.includes(f)) {
+                        fieldsList.push(f);
+                    }
+                });
+                options.params[targetKey] = fieldsList.join(',');
+            }
+        }
+
         let url = this.buildUrl(endpoint);
 
         // Append query parameters if provided
@@ -189,14 +229,14 @@ export class ApiClient {
 
         // Build headers
         const headers = {
-            'Accept': 'application/json',     // Explicitly request JSON response
+            Accept: 'application/json', // Explicitly request JSON response
             ...options.headers
         };
 
         if (!options.skipAuth) {
             const authHeader = this.getAuthHeader();
             headers['X-Emby-Authorization'] = authHeader;
-            headers['Authorization'] = authHeader;      // Standard header for modern servers/proxies
+            headers['Authorization'] = authHeader; // Standard header for modern servers/proxies
         }
 
         if (!options.body || !(options.body instanceof FormData)) {
@@ -1094,7 +1134,7 @@ export class ApiClient {
             UserId: this._userId,
             InheritFromParent: true
         };
-        
+
         // Dispatch the standard GET request to retrieve theme media lists
         return this.get(`/Items/${itemId}/ThemeMedia`, { ...defaults, ...params });
     }
@@ -1113,11 +1153,11 @@ export class ApiClient {
     getAudioStreamUrl(itemId) {
         // Capture active auth token from memory
         const token = this._accessToken;
-        
+
         // Define direct media path on the server, asking for static playback
         // to bypass redundant transcoding whenever possible on the TV client.
         const path = `/Audio/${itemId}/stream?static=true`;
-        
+
         // Append the API key query parameter to authorize the browser's playback fetch
         return this.buildUrl(token ? `${path}&api_key=${token}` : path);
     }
@@ -1234,9 +1274,7 @@ export class ApiClient {
             ItemId: options.ItemId
         };
 
-        const url = options.ItemId 
-            ? `/LiveStreams/Open?ItemId=${options.ItemId}` 
-            : '/LiveStreams/Open';
+        const url = options.ItemId ? `/LiveStreams/Open?ItemId=${options.ItemId}` : '/LiveStreams/Open';
 
         return this.post(url, body);
     }
@@ -1756,8 +1794,8 @@ async function _discoverViaTizenService(onServerFound) {
                     const srv = JSON.parse(event.data);
                     const serverInfo = {
                         address: srv.Address,
-                        name:    srv.Name,
-                        id:      srv.Id
+                        name: srv.Name,
+                        id: srv.Id
                     };
                     log.info('Tizen /discover: found "' + srv.Name + '" at ' + srv.Address);
                     foundServers.push(serverInfo);

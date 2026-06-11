@@ -13,7 +13,6 @@ import MediaGrid from '../components/MediaGrid.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
 import { state } from '../core/StateManager.js';
-import { lazyLoader } from '../utils/LazyLoader.js';
 import { router } from '../core/Router.js';
 
 const log = logger.create('SearchPage');

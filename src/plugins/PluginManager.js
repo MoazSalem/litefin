@@ -531,14 +531,15 @@ class PluginManager {
             if (match) serverPluginName = match.Name || match.name || dep;
         }
 
-        log.info(`Dependency check for '${pluginId}' → '${dep}': available=${result.available}, deferred=${!!result.deferred}`);
+        log.info(
+            `Dependency check for '${pluginId}' → '${dep}': available=${result.available}, deferred=${!!result.deferred}`
+        );
         return {
             available: result.available,
             deferred: !!result.deferred,
             serverPluginName
         };
     }
-
 
     // ========================================================================
     // OSD Key Forwarding

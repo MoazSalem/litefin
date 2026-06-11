@@ -209,13 +209,13 @@ class StorageService {
      */
     clearByPrefix(prefix) {
         // Collect matching keys from the in-memory cache — zero disk reads
-        const matching = Array.from(this._cache.keys()).filter(k => k.startsWith(prefix));
+        const matching = Array.from(this._cache.keys()).filter((k) => k.startsWith(prefix));
 
         // Remove each one: update the in-memory cache and queue disk deletes
         for (const key of matching) {
             this._cache.delete(key);
-            this._dirtyKeys.delete(key);    // Cancel any pending write for this key
-            this._removedKeys.add(key);     // Queue disk-level removal on next flush
+            this._dirtyKeys.delete(key); // Cancel any pending write for this key
+            this._removedKeys.add(key); // Queue disk-level removal on next flush
         }
 
         if (matching.length > 0) {
@@ -252,9 +252,7 @@ class StorageService {
              * (e.g. "libThumb:xyz" → "libThumb"), then underscore
              * (e.g. "debug_filter_Module" → "debug"), then the whole key.
              */
-            const prefix = key.includes(':') ? key.split(':')[0]
-                         : key.includes('_') ? key.split('_')[0]
-                         : key;
+            const prefix = key.includes(':') ? key.split(':')[0] : key.includes('_') ? key.split('_')[0] : key;
 
             breakdown[prefix] = (breakdown[prefix] || 0) + bytes;
         }
@@ -306,7 +304,10 @@ class StorageService {
                             log.info(`Retry after eviction succeeded for key "${key}"`);
                         } catch (retryErr) {
                             // Even after eviction we still can't write — disk is critically full
-                            log.error(`Retry still failed for key "${key}" — localStorage may be critically full`, retryErr);
+                            log.error(
+                                `Retry still failed for key "${key}" — localStorage may be critically full`,
+                                retryErr
+                            );
                         }
                     } else {
                         log.error(`Failed to write key "${key}" to disk:`, e);

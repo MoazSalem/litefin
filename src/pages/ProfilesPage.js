@@ -179,9 +179,9 @@ class ProfilesPage extends Page {
         let avatarHtml;
         if (session.primaryImageTag) {
             const params = imageService.getParams('avatar');
-            const imgUrl = api.getUserImageUrl(session.userId, { 
-                maxWidth: params.maxWidth, 
-                quality: params.quality 
+            const imgUrl = api.getUserImageUrl(session.userId, {
+                maxWidth: params.maxWidth,
+                quality: params.quality
             });
             avatarHtml = `
                 <img

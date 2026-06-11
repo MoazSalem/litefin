@@ -39,7 +39,7 @@ export default {
             // MDBList Ratings Server Plugin ID
             const pluginId = 'ab96f8b5-45ef-44be-81d6-99bc01e26b9d';
             const config = await api.serverPlugins.call(`/Plugins/${pluginId}/Configuration`);
-            
+
             if (config && config.EnableWebAwardBadges === false) {
                 this._awardsEnabledOnServer = false;
                 this.log.info('Awards are disabled in server plugin configuration. Skipping awards integration.');
@@ -48,7 +48,9 @@ export default {
             }
         } catch (e) {
             // If we can't fetch config (likely 403 for non-admins), we'll probe the endpoint instead
-            this.log.debug('Could not fetch server plugin config (expected for non-admins), probing endpoint instead...');
+            this.log.debug(
+                'Could not fetch server plugin config (expected for non-admins), probing endpoint instead...'
+            );
             try {
                 // If this endpoint exists, the plugin version supports awards
                 // We use AwardsDefinitions as a safe, no-side-effect probe
@@ -58,7 +60,9 @@ export default {
                 // If 404, the server plugin is an old version that doesn't support awards
                 if (err.status === 404) {
                     this._awardsEnabledOnServer = false;
-                    this.log.info('Server-side Awards API not found (legacy plugin version). Awards will not be loaded.');
+                    this.log.info(
+                        'Server-side Awards API not found (legacy plugin version). Awards will not be loaded.'
+                    );
                 }
             }
         }
@@ -67,7 +71,7 @@ export default {
     /**
      * Public method to fetch ratings and awards for a specific item.
      * Used by external components like the Hero Carousel.
-     * 
+     *
      * @param {string} itemId - Jellyfin item ID
      * @param {string} [imdbId] - Optional IMDb ID if already known
      * @param {boolean} [includeAwards=true] - Whether to fetch awards metadata
@@ -77,7 +81,7 @@ export default {
         try {
             // 1. Try to get IDs and ratings from MDBList cache
             const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/CachedByItemId?itemId=${itemId}`);
-            
+
             let finalImdbId = imdbId || data?.ids?.imdb || data?.ids?.Imdb;
 
             // 2. Fallback: If MDBList plugin doesn't have the item in cache, fetch IMDb ID from Jellyfin
@@ -95,7 +99,9 @@ export default {
             const userWantsAwards = storage.getItem('pref:showMdbAwards') !== 'false';
             if (includeAwards && finalImdbId && this._awardsEnabledOnServer !== false && userWantsAwards) {
                 try {
-                    const awardsData = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/AwardsByImdb?imdbId=${finalImdbId}`);
+                    const awardsData = await this.api.serverPlugins.call(
+                        `/Plugins/MdbListRatings/AwardsByImdb?imdbId=${finalImdbId}`
+                    );
                     if (awardsData && awardsData.hasAwards) {
                         awards = awardsData.badges || [];
                     }
@@ -105,7 +111,7 @@ export default {
             }
 
             return {
-                ratings: (data && data.hasCache) ? data.ratings || [] : [],
+                ratings: data && data.hasCache ? data.ratings || [] : [],
                 badges: awards || [],
                 imdbId: finalImdbId
             };
@@ -123,11 +129,11 @@ export default {
         if (!match) return;
 
         const itemId = match[1];
-        
+
         try {
             // Use the new public method to get metadata
             const metadata = await this.getItemMetadata(itemId);
-            
+
             const tryRender = () => {
                 const metaRow = pageEl.querySelector('.details-meta-row');
                 if (metaRow) {
@@ -181,14 +187,15 @@ export default {
         try {
             // Wait for DOM and server stability
             const delay = retryCount === 0 ? 800 : 3000;
-            await new Promise(r => setTimeout(r, delay));
+            await new Promise((r) => setTimeout(r, delay));
 
             this.log.info(`Fetch Awards attempt ${retryCount + 1}/2 for ${imdbId}`);
             const data = await this.api.serverPlugins.call(`/Plugins/MdbListRatings/AwardsByImdb?imdbId=${imdbId}`);
-            
+
             if (data && data.hasAwards && data.badges && data.badges.length > 0) {
                 this._renderAwardsRow(pageEl, data.badges);
-            } else if (retryCount < 1) { // Total 2 attempts
+            } else if (retryCount < 1) {
+                // Total 2 attempts
                 this._fetchAndRenderAwards(pageEl, imdbId, retryCount + 1);
             }
         } catch (err) {
@@ -291,14 +298,14 @@ export default {
             return { className: 'icon-trakt', assetName: 'Trakt.png', format: (v) => `${Math.round(v)}%` };
         }
         if (s === 'tmdb') {
-            return { 
-                className: 'icon-tmdb', 
-                assetName: 'TMDB.png', 
+            return {
+                className: 'icon-tmdb',
+                assetName: 'TMDB.png',
                 format: (v) => {
                     const num = parseFloat(v);
                     // MDBList sometimes returns TMDB as out of 100 (e.g. 82) and sometimes out of 10 (e.g. 8)
                     return (num > 10 ? num / 10 : num).toFixed(1);
-                } 
+                }
             };
         }
         if (s === 'kinopoisk') {

@@ -33,8 +33,12 @@ class LazyLoader {
                 if (img) {
                     this.forceLoad(img);
                 }
-                // Batch preload ahead to prevent popping
-                this._batchPreloadImages(img || target);
+                // Batch preload ahead to prevent popping.
+                // PERFORMANCE: Defer to the next animation frame so the 20-sibling
+                // DOM walk doesn't block the critical focus transition paint.
+                // The focus ring appears instantly; images preload before the next frame.
+                const preloadTarget = img || target;
+                requestAnimationFrame(() => this._batchPreloadImages(preloadTarget));
             }
         });
 
@@ -207,7 +211,7 @@ class LazyLoader {
                 parent.classList.contains('queue-row__thumb-wrap'));
 
         if (isSupportedParent) {
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
             // Remove shimmer
             parent.classList.remove('skeleton-shimmer');

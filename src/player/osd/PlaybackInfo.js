@@ -68,7 +68,9 @@ export default class PlaybackInfo extends BaseMenu {
             overlays.appendChild(this.$el);
 
             // Bind close button
-            this.$el.querySelector('.playback-info-close').addEventListener('click', () => {
+            this.$el.querySelector('.playback-info-close').addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
                 this.osd.togglePlaybackInfo(false);
             });
         }

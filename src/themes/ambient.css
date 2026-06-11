@@ -155,12 +155,8 @@
 [data-theme-mode="ambient"] .sidebar:hover {
     /* 1. Seamless Apple-style solid gradient when expanded */
     /* Flows from a rich accent glow (15%) at the top-left to a deep matte charcoal at the bottom-right */
-    background: linear-gradient(
-        135deg, 
-        rgba(var(--jf-accent-rgb), 0.15) 0%, 
-        rgba(10, 11, 12, 0.98) 50%, 
-        rgba(5, 5, 6, 0.99) 100%
-    ) !important;
+    /* Layered over solid base color #0a0b0c to prevent background elements from bleeding through */
+    background: linear-gradient(135deg,rgba(var(--jf-accent-rgb),0) 0,rgba(var(--jf-accent-rgb),.2) 50%,rgba(5,5,6,.99) 150%),#0a0b0c!important;
     
     /* 2. Keep shadows off to maintain flawless scroll frames */
     box-shadow: none !important;
@@ -210,25 +206,6 @@
 [data-theme-mode="ambient"] .sidebar-item.focused * {
     /* Explicitly override standard active-state specificities to guarantee AAA legibility */
     color: var(--jf-primary-btn-color, #ffffff) !important;
-}
-
-[data-theme-mode="ambient"] .sidebar-item:focus,
-[data-theme-mode="ambient"] .sidebar-item.focused {
-    /* Sleek volumetric Apple-style spring scaling transition on focus */
-    transform: scale(1.04) translateZ(0) !important;
-    
-    /* 
-     * Stacking Context Stacking Bugfix (Apple HIG Interface Integrity):
-     * CSS transforms create a new stacking context that flattens internal children
-     * (the SVG .item-icon at z-index 10 and text at z-index 6). Because the sliding 
-     * indicator is a sibling of the sidebar content, it paints on top of the flattened 
-     * item. Elevating the focused item's z-index to 10 forces the entire stacking 
-     * context above the indicator (z-index: 5), letting text and icons shine through.
-     */
-    z-index: 10 !important;
-    
-    /* Dedicated spring Bezier curve to simulate physical inertia during focus transitions */
-    transition: transform 0.25s cubic-bezier(0.25, 1.25, 0.5, 1), color 0.15s ease !important;
 }
 
 [data-theme-mode="ambient"] .sidebar-focus-indicator {

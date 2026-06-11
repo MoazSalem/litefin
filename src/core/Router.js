@@ -183,7 +183,6 @@ class Router {
         this.navigate(path, { replace: true });
     }
 
-
     /**
      * Get current route path
      * @returns {string} Current path without the hash
@@ -247,7 +246,9 @@ class Router {
 
                 // Destroy current page (after capturing state)
                 if (this._currentPage && typeof this._currentPage.destroy === 'function') {
-                    const prevPageId = this._currentPage._routePattern ? this._currentPage._routePattern.split('/')[1] : 'unknown';
+                    const prevPageId = this._currentPage._routePattern
+                        ? this._currentPage._routePattern.split('/')[1]
+                        : 'unknown';
                     pluginManager.notifyPageUnload(prevPageId);
                     this._currentPage.destroy();
                 }
@@ -317,21 +318,21 @@ class Router {
      */
     reload() {
         if (!this._currentPage) return;
-        
+
         log.info('Reloading current route');
-        
+
         // Capture current state to preserve scroll/focus during the reload
         const capturedState = navigationState.captureState(this._currentPage);
         const currentEntry = this._history[this._history.length - 1];
         if (currentEntry && typeof currentEntry === 'object') {
             currentEntry.state = capturedState;
         }
-        
+
         // Flag as back navigation temporarily so the newly instantiated page
         // will pick up the stored state, and we don't push duplicate history.
         this._isBackNavigation = true;
         this._pendingRestoreState = capturedState;
-        
+
         this._onHashChange();
     }
 }

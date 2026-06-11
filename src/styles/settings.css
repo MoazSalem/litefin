@@ -135,6 +135,22 @@ html[data-layout-tier="ultra-legacy"] .settings-menu-btn .menu-icon {
     will-change: transform;
 }
 
+.settings-menu-btn .menu-icon .icon-filled {
+    display: none;
+}
+
+.settings-menu-btn.active .menu-icon .icon-outline,
+.settings-menu-btn.focused .menu-icon .icon-outline,
+.settings-menu-btn:focus .menu-icon .icon-outline {
+    display: none;
+}
+
+.settings-menu-btn.active .menu-icon .icon-filled,
+.settings-menu-btn.focused .menu-icon .icon-filled,
+.settings-menu-btn:focus .menu-icon .icon-filled {
+    display: block;
+}
+
 /* Content Panel */
 .settings-content-panel {
     flex: 1;

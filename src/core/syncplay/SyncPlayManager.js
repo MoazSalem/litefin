@@ -586,7 +586,7 @@ export class SyncPlayManager {
                      */
                     if (this._player) {
                         this._playbackCore?.stopTracking();
-                        
+
                         this._ignoreLocalEventsAction = true;
                         try {
                             this._player.pause();
@@ -624,7 +624,7 @@ export class SyncPlayManager {
                             'SyncPlay StateUpdate: group transitioned to playing but player is paused (and no scheduled command). Unpausing natively.'
                         );
                         this._ignoreNextPlayingEcho = true;
-                        
+
                         // Wrap unpause intent in suppression to prevent play event echo
                         this._ignoreLocalEventsAction = true;
                         try {
@@ -661,7 +661,7 @@ export class SyncPlayManager {
                     // Explicit paused state (no timing handshake needed)
                     if (this._player) {
                         this._playbackCore?.stopTracking();
-                        
+
                         this._ignoreLocalEventsAction = true;
                         try {
                             this._player.pause();
@@ -899,7 +899,7 @@ export class SyncPlayManager {
                 if (this._player && this._player.isPaused && this._player.isPaused()) {
                     this._ignoreNextPlayingEcho = true;
                 }
-                
+
                 // Wrap unpause intent in suppression to prevent play event echo
                 this._ignoreLocalEventsAction = true;
                 this._player.unpause();
@@ -927,7 +927,7 @@ export class SyncPlayManager {
             if (diffMs > 2000 || (this._player && this._player.isPaused && this._player.isPaused())) {
                 this._ignoreNextPlayingEcho = true;
             }
-            
+
             // Wrap unpause intent in suppression to prevent play event echo
             this._ignoreLocalEventsAction = true;
             this._player.unpause();
@@ -1258,8 +1258,8 @@ export class SyncPlayManager {
             // When buffering resolves and player resumes, clear buffering state
             if (this._isBuffering) {
                 this._isBuffering = false;
-                
-                 // If it was a group-initiated command that caused us to buffer,
+
+                // If it was a group-initiated command that caused us to buffer,
                 // we should still clear the ignore token now that we are actually playing.
                 if (this._ignoreNextPlayingEcho) {
                     log.debug('SyncPlay: _onPlaying caught commanded resume, clearing echo token');
@@ -1275,7 +1275,7 @@ export class SyncPlayManager {
         this._onPlay = () => {
             // Iff NOT triggered by a SyncPlayCommand
             if (!this._ignoreLocalEventsAction) {
-                 this._reportLocalAction('Unpause');
+                this._reportLocalAction('Unpause');
             }
         };
         this._player.on('play', this._onPlay);
@@ -1293,7 +1293,8 @@ export class SyncPlayManager {
 
         this._onSeek = () => {
             if (!this._ignoreLocalEventsAction) {
-                const ticks = this._player.getCurrentPositionTicks?.() ?? Math.round(this._player.getCurrentPosition() * 10000);
+                const ticks =
+                    this._player.getCurrentPositionTicks?.() ?? Math.round(this._player.getCurrentPosition() * 10000);
                 log.info(
                     `SyncPlay: local seek detected at ${Math.round(ticks / TICKS_PER_MS)}ms, broadcasting to group...`
                 );

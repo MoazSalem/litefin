@@ -164,11 +164,11 @@ class FavoritesPage extends Page {
                     type: 'episode'
                 });
             if (channels.TotalRecordCount > 0)
-                sectionsData.push({ 
-                    id: 'fav-channel', 
-                    title: i18n.t('LiveTv'), 
-                    items: channels.Items, 
-                    type: 'square' 
+                sectionsData.push({
+                    id: 'fav-channel',
+                    title: i18n.t('LiveTv'),
+                    items: channels.Items,
+                    type: 'square'
                 });
             if (people.TotalRecordCount > 0)
                 sectionsData.push({ id: 'fav-person', title: i18n.t('People'), items: people.Items, type: 'person' });
@@ -225,7 +225,7 @@ class FavoritesPage extends Page {
                 if (!restoredFocus && sectionsData.length > 0) {
                     const firstSectionId = sectionsData[0].id;
                     this.setActiveSection(firstSectionId, false);
-                    
+
                     const firstCard = container.querySelector(`#${firstSectionId}-items .media-card`);
                     if (firstCard) {
                         focusManager.focusElement(firstCard, { instantScroll: true });
@@ -279,12 +279,12 @@ class FavoritesPage extends Page {
         // This creates a gorgeous, unified visual aesthetic that matches
         // Apple HIG style and matches our homepage layout conversion.
         // ==========================================================
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
         const forceExpandablePosters = isModern && storage.getItem('pref:homeForceExpandablePosters') === 'true';
 
         // Coerce types to portrait/poster if preference is enabled
         const targetCardType = forceExpandablePosters ? 'poster' : type;
-        const targetIsLandscape = forceExpandablePosters ? false : (type === 'episode');
+        const targetIsLandscape = forceExpandablePosters ? false : type === 'episode';
 
         // Initialize VirtualCardRow
         virtualRow = new VirtualCardRow(trackContainer, items, {

@@ -124,7 +124,11 @@ class SidebarLayoutManager {
         }
 
         // Build a fallback config from STATIC_ITEMS so the initial unsaved layout matches the canonical order
-        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({ id: item.id, hidden: item.hidden || false, order: index }));
+        const fallbackConfig = STATIC_ITEMS.map((item, index) => ({
+            id: item.id,
+            hidden: item.hidden || false,
+            order: index
+        }));
         const orderedStatic = this._applyOrder(staticItems, config && config.items ? config.items : fallbackConfig);
         const orderedLibs = this._applyOrder(libraryItems, config ? config.libraryItems : null);
 

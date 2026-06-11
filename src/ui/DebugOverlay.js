@@ -198,7 +198,7 @@ class DebugOverlay {
             'text-align:left',
             'line-height:1.4',
             'box-shadow:0 0 10px rgba(0,0,0,0.5)',
-            'border-radius:4px',
+            'border-radius:4px'
         ].join(';');
 
         /* Set display separately so show()/hide() can toggle it without cssText race */
@@ -222,9 +222,10 @@ class DebugOverlay {
             'justify-content:space-between',
             '-webkit-box-align:center',
             'align-items:center',
-            'color:#00a4dc',
+            'color:#00a4dc'
         ].join(';');
-        header.innerHTML = '<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v' + __APP_VERSION__ + '</span>';
+        header.innerHTML =
+            '<span>DEBUG CONSOLE</span><span style="font-size:0.8em;opacity:0.7">v' + __APP_VERSION__ + '</span>';
         this._overlay.appendChild(header);
 
         this._content = document.createElement('div');
@@ -253,15 +254,15 @@ class DebugOverlay {
     _flushUploadBufferToDOM() {
         if (!this._content || this._uploadBuffer.length === 0) return;
 
-        var fragment = document.createDocumentFragment();
+        const fragment = document.createDocumentFragment();
 
-        for (var i = 0; i < this._uploadBuffer.length; i++) {
-            var line = document.createElement('div');
+        for (let i = 0; i < this._uploadBuffer.length; i++) {
+            const line = document.createElement('div');
             line.style.borderBottom = '1px solid #222';
             line.style.padding = '2px 0';
             line.style.wordBreak = 'break-all';
 
-            var text = this._uploadBuffer[i];
+            const text = this._uploadBuffer[i];
 
             /* Colour-code based on the level string embedded in the buffered line */
             if (text.indexOf('] [ERROR]') !== -1) {
@@ -321,7 +322,7 @@ class DebugOverlay {
 
         // Force colors from CSS variables
         this._overlay.style.borderColor = 'var(--jf-accent)';
-        
+
         const header = this._overlay.querySelector('div');
         if (header) {
             header.style.color = 'var(--jf-accent)';

@@ -311,7 +311,7 @@ class PlayQueue {
             this.setShuffleMode(true);
         }
 
-    log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
+        log.info(`Queue set manually with ${this._queue.length} items. Current Index: ${this._currentIndex}`);
     }
 
     /**
@@ -387,7 +387,7 @@ class PlayQueue {
         // Splice exactly at the current active pointer
         this._queue.splice(this._currentIndex, 0, ...toInsert);
 
-        // We DO NOT modify this._currentIndex! 
+        // We DO NOT modify this._currentIndex!
         // It now naturally points to the first injected item.
 
         eventBus.emit('playqueue:updated', {
@@ -659,7 +659,9 @@ class PlayQueue {
             this._currentIndex = 0;
         }
 
-        log.info(`[PlayQueue] Playlist queue built: ${this._queue.length} items, starting at index ${this._currentIndex}`);
+        log.info(
+            `[PlayQueue] Playlist queue built: ${this._queue.length} items, starting at index ${this._currentIndex}`
+        );
     }
 }
 

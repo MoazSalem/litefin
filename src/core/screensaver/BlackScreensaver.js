@@ -23,10 +23,10 @@ export class BlackScreensaver {
             // Create the container element that will cover the entire viewport
             this._container = document.createElement('div');
             this._container.className = 'black-screensaver';
-            
+
             // Append to the body so it sits on top of everything
             document.body.appendChild(this._container);
-            
+
             // Accessibility: make it clear this is a screensaver if read by a screen reader
             this._container.setAttribute('role', 'presentation');
             this._container.setAttribute('aria-hidden', 'true');
@@ -52,16 +52,10 @@ export class BlackScreensaver {
 
                 // Perform a simple fade-out to make the transition back to the app smoother
                 if (this._container.animate) {
-                    const animation = this._container.animate(
-                        [
-                            { opacity: '1' },
-                            { opacity: '0' }
-                        ], 
-                        { 
-                            duration: 400,
-                            easing: 'ease-out'
-                        }
-                    );
+                    const animation = this._container.animate([{ opacity: '1' }, { opacity: '0' }], {
+                        duration: 400,
+                        easing: 'ease-out'
+                    });
                     animation.onfinish = onAnimationFinish;
                 } else {
                     // Fallback for environments without the Web Animations API

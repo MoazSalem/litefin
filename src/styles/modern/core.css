@@ -7,7 +7,7 @@
     display: none;
 }
 
-html[data-layout="modern"] .login-page {
+html[data-layout-login="modern"] .login-page {
     display: flex;
     flex-direction: row;
     height: 100vh;
@@ -19,7 +19,7 @@ html[data-layout="modern"] .login-page {
     padding: 0;
 }
 
-html[data-layout="modern"] .login-container {
+html[data-layout-login="modern"] .login-container {
     display: flex;
     flex-direction: row;
     align-items: stretch;
@@ -28,7 +28,7 @@ html[data-layout="modern"] .login-container {
     height: 100%;
 }
 
-html[data-layout="modern"] .login-header {
+html[data-layout-login="modern"] .login-header {
     width: 30vw;
     height: 100%;
     margin: 0;
@@ -43,25 +43,25 @@ html[data-layout="modern"] .login-header {
     box-sizing: border-box;
 }
 
-html[data-layout="modern"] .login-logo-container {
+html[data-layout-login="modern"] .login-logo-container {
     justify-content: flex-start;
     margin-bottom: 24px;
 }
 
-html[data-layout="modern"] .login-logo-svg {
+html[data-layout-login="modern"] .login-logo-svg {
     width: 70px;
     height: 70px;
     margin-right: 20px;
 }
 
-html[data-layout="modern"] .login-logo {
+html[data-layout-login="modern"] .login-logo {
     font-size: 5rem;
     font-weight: 700;
     letter-spacing: -2px;
     color: var(--jf-text-primary);
 }
 
-html[data-layout="modern"] .login-tagline {
+html[data-layout-login="modern"] .login-tagline {
     font-size: 1.4rem;
     opacity: 0.5;
     color: var(--jf-text-primary);
@@ -70,7 +70,7 @@ html[data-layout="modern"] .login-tagline {
 }
 
 /* Right Content Area Base */
-html[data-layout="modern"] .login-section {
+html[data-layout-login="modern"] .login-section {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -82,7 +82,7 @@ html[data-layout="modern"] .login-section {
     box-sizing: border-box;
 }
 
-html[data-layout="modern"] .section-title {
+html[data-layout-login="modern"] .section-title {
     display: block;
     font-size: 3.2rem;
     font-weight: 700;
@@ -90,7 +90,7 @@ html[data-layout="modern"] .section-title {
     color: var(--jf-text-primary);
 }
 
-html[data-layout="modern"] .input-label {
+html[data-layout-login="modern"] .input-label {
     font-size: 1.2rem;
     font-weight: 600;
     margin-top: 32px;
@@ -102,13 +102,14 @@ html[data-layout="modern"] .input-label {
     letter-spacing: 0;
 }
 
-html[data-layout="modern"] .modern-button-row {
+html[data-layout-login="modern"] .modern-button-row {
     display: flex;
     width: 100%;
     justify-content: flex-start;
 }
 
 /* Legacy-compatible gaps for modern buttons */
-html[data-layout="modern"] .modern-button-row > *:not(:last-child) {
+html[data-layout-login="modern"] .modern-button-row > *:not(:last-child) {
     margin-right: 20px;
 }
+

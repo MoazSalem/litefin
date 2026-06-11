@@ -307,28 +307,29 @@ export function buildJellyfinProfile(options = {}) {
     const isHtml5 = typeof options === 'object' && options.backend === 'html5';
     const caps = getDeviceCapabilities();
 
-    let enableHEVC = PlayerSettings.get('enableHEVC');
-    if (localStorage.getItem('player:enableHEVC') === null) enableHEVC = caps.hevc;
+    const hevcSetting = PlayerSettings.get('enableHEVC');
+    const enableHEVC = hevcSetting === 'enable' ? true : hevcSetting === 'disable' ? false : caps.hevc;
 
-    let enableAV1 = PlayerSettings.get('enableAV1');
-    if (localStorage.getItem('player:enableAV1') === null) enableAV1 = caps.av1;
+    const av1Setting = PlayerSettings.get('enableAV1');
+    const enableAV1 = av1Setting === 'enable' ? true : av1Setting === 'disable' ? false : caps.av1;
 
-    let enableVP9 = PlayerSettings.get('enableVP9');
-    if (localStorage.getItem('player:enableVP9') === null) enableVP9 = caps.vp9;
+    const vp9Setting = PlayerSettings.get('enableVP9');
+    const enableVP9 = vp9Setting === 'enable' ? true : vp9Setting === 'disable' ? false : caps.vp9;
 
     // Hybrid HDR: Default to hardware capability unless the user explicitly flipped the setting
-    let enableHDR = PlayerSettings.get('enableHDR');
-    if (localStorage.getItem('player:enableHDR') === null) {
-        enableHDR = caps.hdr10;
-    }
+    const hdrSetting = PlayerSettings.get('enableHDR');
+    const enableHDR = hdrSetting === 'enable' ? true : hdrSetting === 'disable' ? false : caps.hdr10;
 
     // Hybrid Dolby Vision: Default to hardware capability unless the user explicitly flipped the setting
-    let enableDolbyVision = PlayerSettings.get('enableDolbyVision');
-    if (localStorage.getItem('player:enableDolbyVision') === null) {
-        enableDolbyVision = caps.dolbyVision;
-    }
-    const enableDts = PlayerSettings.get('enableDts');
-    const enableTrueHd = PlayerSettings.get('enableTrueHd');
+    const dolbyVisionSetting = PlayerSettings.get('enableDolbyVision');
+    const enableDolbyVision =
+        dolbyVisionSetting === 'enable' ? true : dolbyVisionSetting === 'disable' ? false : caps.dolbyVision;
+
+    const dtsSetting = PlayerSettings.get('enableDts');
+    const enableDts = dtsSetting === 'enable' ? true : dtsSetting === 'disable' ? false : caps.dts;
+
+    const trueHdSetting = PlayerSettings.get('enableTrueHd');
+    const enableTrueHd = trueHdSetting === 'enable' ? true : trueHdSetting === 'disable' ? false : caps.truehd;
 
     log.info('Evaluation flags:', {
         isHtml5,
@@ -607,7 +608,9 @@ export function buildJellyfinProfile(options = {}) {
             // stream metadata, so it incorrectly applied to all HDR10/HDR10+ content
             // as well — causing the slideshow / slowmo playback reports.
             // ---------------------------------------------------------------------
-            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
+            SegmentLength: isHtml5
+                ? PlayerSettings.get('html5SegmentLength') || 2
+                : PlayerSettings.get('webosSegmentLength') || 6,
             // Force IDR-aligned segment cuts for all TS content, not only DOVI.
             // The WebOS decoder produces visible macroblocking artifacts when split
             // mid-GOP, and the resulting non-IDR boundaries also trigger additional
@@ -673,7 +676,9 @@ export function buildJellyfinProfile(options = {}) {
             Protocol: 'hls',
             MaxAudioChannels: maxAudioChannels,
             MinSegments: 1,
-            SegmentLength: isHtml5 ? (PlayerSettings.get('html5SegmentLength') || 2) : (PlayerSettings.get('webosSegmentLength') || 6),
+            SegmentLength: isHtml5
+                ? PlayerSettings.get('html5SegmentLength') || 2
+                : PlayerSettings.get('webosSegmentLength') || 6,
             // fMP4 segments MUST align to IDR boundaries; never break on subtitle cue points.
             BreakOnNonKeyFrames: false
         });

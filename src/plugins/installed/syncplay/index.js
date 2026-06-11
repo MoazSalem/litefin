@@ -72,15 +72,13 @@ const syncPlayPlugin = {
         // ----------------------------------------------------------------
         this._onStartPlayback = ({ itemId, startPositionTicks, playlistItemId }) => {
             log.info(
-                `SyncPlay: starting playback for item ${itemId} ` +
-                `at ${Math.round(startPositionTicks / 10000)}ms`
+                `SyncPlay: starting playback for item ${itemId} ` + `at ${Math.round(startPositionTicks / 10000)}ms`
             );
 
             // Check if we are already playing this exact item — if so, just
             // let the sync machinery take over without re-launching the player.
             const currentPath = router.getCurrentPath();
-            const alreadyOnItem = currentPath.startsWith('/player/') &&
-                                  currentPath.includes(itemId);
+            const alreadyOnItem = currentPath.startsWith('/player/') && currentPath.includes(itemId);
 
             if (alreadyOnItem) {
                 log.info('SyncPlay: already playing this item — skipping navigation');
@@ -107,9 +105,9 @@ const syncPlayPlugin = {
         this._onSwitchItem = ({ item, index }) => {
             log.info('SyncPlay: switching to item', item?.Name || item?.Id, 'at index', index);
             eventBus.emit('remote:queueupdate', {
-                itemIds:    null,    // PlayerPage uses item objects when itemIds is null
+                itemIds: null, // PlayerPage uses item objects when itemIds is null
                 startIndex: index,
-                _items:     [item]   // Non-standard but PlayerPage checks for this
+                _items: [item] // Non-standard but PlayerPage checks for this
             });
         };
         eventBus.on('syncplay:switchitem', this._onSwitchItem);
@@ -128,7 +126,7 @@ const syncPlayPlugin = {
             log.info('SyncPlay disabled');
         };
 
-        eventBus.on('syncplay:enabled',  this._onEnabled);
+        eventBus.on('syncplay:enabled', this._onEnabled);
         eventBus.on('syncplay:disabled', this._onDisabled);
     },
 
@@ -179,7 +177,7 @@ const syncPlayPlugin = {
             this._onSwitchItem = null;
         }
         if (this._onEnabled) {
-            eventBus.off('syncplay:enabled',  this._onEnabled);
+            eventBus.off('syncplay:enabled', this._onEnabled);
             this._onEnabled = null;
         }
         if (this._onDisabled) {

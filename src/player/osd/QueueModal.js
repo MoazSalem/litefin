@@ -153,12 +153,12 @@ export default class QueueModal extends BaseMenu {
             if (words.length > 1 && words[1]) initials += words[1][0];
             initials = initials.toUpperCase();
 
-            /* Build a subtitle line for episodes: "S1 E3 — Show Name". */
+            /* Build a subtitle line for episodes: "S01E03 — Show Name". */
             let subtitle = '';
             if (item.Type === 'Episode') {
-                const s = item.ParentIndexNumber != null ? `S${item.ParentIndexNumber}` : '';
-                const e = item.IndexNumber != null ? `E${item.IndexNumber}` : '';
-                const badge = [s, e].filter(Boolean).join(' ');
+                const s = item.ParentIndexNumber != null ? `S${item.ParentIndexNumber.toString().padStart(2, '0')}` : '';
+                const e = item.IndexNumber != null ? `E${item.IndexNumber.toString().padStart(2, '0')}` : '';
+                const badge = [s, e].filter(Boolean).join('');
                 subtitle = badge ? `${badge}${item.SeriesName ? ` — ${item.SeriesName}` : ''}` : (item.SeriesName || '');
             } else if (item.AlbumArtist) {
                 subtitle = item.AlbumArtist;

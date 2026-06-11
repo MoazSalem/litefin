@@ -10,6 +10,7 @@
     --jf-card-bg: #ffffff;
     --jf-card-bg-hover: #fcfcfc;
     --jf-overlay-bg: rgba(255, 255, 255, 0.9);
+    --jf-overlay-bg-rgb: 255, 255, 255;
 
     --jf-text-primary: #111111;
     --jf-text-secondary: #666666;

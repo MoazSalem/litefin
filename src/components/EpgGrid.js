@@ -12,7 +12,6 @@ import { api } from '../api/index.js';
 import { focusManager } from '../ui/FocusManager.js';
 import { logger } from '../utils/Logger.js';
 import { i18n } from '../utils/i18n.js';
-import { scrollController } from '../ui/ScrollController.js';
 import { eventBus } from '../core/EventBus.js';
 import { imageService } from '../utils/ImageService.js';
 import CardRenderer from '../utils/CardRenderer.js';
@@ -438,7 +437,7 @@ class EpgGrid {
                     if (deltaY !== 0) {
                         // Calculate maximum possible scroll height based on channel count and row height.
                         const maxScrollY = Math.max(0, this.channels.length * this.ROW_HEIGHT - this.visibleHeight);
-                        
+
                         // Compute target scrollY, clamped between 0 and maxScrollY.
                         this.scrollY = Math.max(0, Math.min(this.scrollY + deltaY, maxScrollY));
                     }

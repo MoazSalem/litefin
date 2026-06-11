@@ -39,7 +39,8 @@
     /* Legacy Aliases (Compatibility for untracked CSS files) */
     --text-primary: var(--jf-text-primary);
     --text-secondary: var(--jf-text-secondary);
-    --text-muted: var(--jf-text-secondary); /* Standardize muted to secondary */
+    --text-muted: var(--jf-text-secondary);
+    /* Standardize muted to secondary */
     --text-tertiary: var(--jf-text-tertiary);
 
     /* Global Rounded Corner Defaults (Setting-controlled) */
@@ -54,24 +55,86 @@ html[data-rounded-corners="true"] {
 }
 
 /* Custom UI Font Overrides */
-html[data-ui-font="system"] { --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; }
-html[data-ui-font="poppins"] { --jf-font-family: 'Poppins', sans-serif; }
-html[data-ui-font="noto-arabic"] { --jf-font-family: 'Noto Sans Arabic', sans-serif; }
-html[data-ui-font="roboto"] { --jf-font-family: 'Roboto', sans-serif; }
-html[data-ui-font="google"] { --jf-font-family: 'Google Sans', sans-serif; }
-html[data-ui-font="typewriter"] { --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier; }
-html[data-ui-font="print"] { --jf-font-family: 'Merriweather', serif; }
-html[data-ui-font="console"] { --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco; }
-html[data-ui-font="cursive"] { --jf-font-family: 'Dancing Script', cursive; }
-html[data-ui-font="casual"] { --jf-font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print'; }
-html[data-ui-font="smallcaps"] { --jf-font-family: 'Cinzel', 'Copperplate', serif; font-variant: small-caps; }
-html[data-ui-font="silkscreen"] { --jf-font-family: 'Silkscreen', 'Courier New', monospace; }
-html[data-ui-font="space-grotesk"] { --jf-font-family: 'Space Grotesk', sans-serif; }
-html[data-ui-font="retrotech"] { --jf-font-family: 'RETROTECH', sans-serif; }
-html[data-ui-font="kitty"] { --jf-font-family: 'Kitty', cursive; }
-html[data-ui-font="inter"] { --jf-font-family: 'Inter', sans-serif; }
-html[data-ui-font="proxima"] { --jf-font-family: 'Proxima Nova', sans-serif; }
-html[data-ui-font="baloo"] { --jf-font-family: 'Baloo Bhaijaan 2', sans-serif; }
+html[data-ui-font="system"] {
+    --jf-font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+html[data-ui-font="poppins"] {
+    --jf-font-family: 'Poppins', sans-serif;
+}
+
+html[data-ui-font="noto-arabic"] {
+    --jf-font-family: 'Noto Sans Arabic', sans-serif;
+}
+
+html[data-ui-font="roboto"] {
+    --jf-font-family: 'Roboto', sans-serif;
+}
+
+html[data-ui-font="google"] {
+    --jf-font-family: 'Google Sans', sans-serif;
+}
+
+html[data-ui-font="typewriter"] {
+    --jf-font-family: 'Courier Prime', monospace, 'Courier New', Courier;
+}
+
+html[data-ui-font="print"] {
+    --jf-font-family: 'Merriweather', serif;
+}
+
+html[data-ui-font="console"] {
+    --jf-font-family: 'Inconsolata', monospace, Consolas, 'Lucida Console', Monaco;
+}
+
+html[data-ui-font="cursive"] {
+    --jf-font-family: 'Dancing Script', cursive;
+}
+
+html[data-ui-font="casual"] {
+    --jf-font-family: 'Patrick Hand', cursive, 'Comic Sans MS', 'Segoe Print';
+}
+
+html[data-ui-font="smallcaps"] {
+    --jf-font-family: 'Cinzel', 'Copperplate', serif;
+    font-variant: small-caps;
+}
+
+html[data-ui-font="silkscreen"] {
+    --jf-font-family: 'Silkscreen', 'Courier New', monospace;
+}
+
+html[data-ui-font="space-grotesk"] {
+    --jf-font-family: 'Space Grotesk', sans-serif;
+}
+
+html[data-ui-font="retrotech"] {
+    --jf-font-family: 'RETROTECH', sans-serif;
+}
+
+html[data-ui-font="kitty"] {
+    --jf-font-family: 'Kitty', cursive;
+}
+
+html[data-ui-font="inter"] {
+    --jf-font-family: 'Inter', sans-serif;
+}
+
+html[data-ui-font="proxima"] {
+    --jf-font-family: 'Proxima Nova', sans-serif;
+}
+
+html[data-ui-font="baloo"] {
+    --jf-font-family: 'Baloo Bhaijaan 2', sans-serif;
+}
+
+html[data-ui-font="opendyslexic"] {
+    --jf-font-family: 'OpenDyslexic', sans-serif;
+}
+
+html[data-ui-font="atkinson"] {
+    --jf-font-family: 'Atkinson Hyperlegible', sans-serif;
+}
 
 html {
     /* Apply global font-family here so it inherits downwards to * */
@@ -152,7 +215,8 @@ body.player-active #sidebar-container {
 .person-row .person-card,
 .person-dot {
     border-radius: var(--jf-border-radius);
-    overflow: hidden; /* Ensure images/content respect the radius */
+    overflow: hidden;
+    /* Ensure images/content respect the radius */
 }
 
 /* Ensure fallbacks and overlays also get rounded */
@@ -161,6 +225,7 @@ body.player-active #sidebar-container {
 .skeleton-image {
     border-radius: var(--jf-border-radius);
 }
+
 .focusable:focus,
 .focusable.focused,
 [tabindex]:focus,
@@ -214,36 +279,49 @@ body.app-splash-active .page-loading .loading-spinner {
    'transform' is handled by the GPU compositor. */
 .skeleton-shimmer {
     position: relative;
-    background: #1a1a1a;
+    background: #1a1a1a; /* Fallback for static elements */
+    background: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.08);
     overflow: hidden;
 }
 
 .skeleton-shimmer::after {
     content: '';
     position: absolute;
+    z-index: 2; /* Render above the BlurHash canvas (z-index 1) but below the loaded image */
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
     background-image: linear-gradient(90deg,
             rgba(255, 255, 255, 0) 0%,
-            rgba(255, 255, 255, 0.04) 50%,
+            rgba(255, 255, 255, 0.25) 50%,
             rgba(255, 255, 255, 0) 100%);
     -webkit-animation: webkit-shimmer-gpu 1.5s infinite linear;
     animation: shimmer-gpu 1.5s infinite linear;
     will-change: transform;
     transform: translateZ(0);
     -webkit-transform: translateZ(0);
+    pointer-events: none;
 }
 
 @keyframes shimmer-gpu {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(100%); }
+    from {
+        transform: translateX(-100%);
+    }
+
+    to {
+        transform: translateX(100%);
+    }
 }
 
 @-webkit-keyframes webkit-shimmer-gpu {
-    from { -webkit-transform: translateX(-100%); }
-    to { -webkit-transform: translateX(100%); }
+    from {
+        -webkit-transform: translateX(-100%);
+    }
+
+    to {
+        -webkit-transform: translateX(100%);
+    }
 }
 
 
@@ -320,42 +398,81 @@ body.app-splash-active .page-loading .loading-spinner {
 }
 
 @keyframes rotation {
-    0% { transform: translateZ(0) rotate(0deg); }
-    100% { transform: translateZ(0) rotate(360deg); }
+    0% {
+        transform: translateZ(0) rotate(0deg);
+    }
+
+    100% {
+        transform: translateZ(0) rotate(360deg);
+    }
 }
 
 @-webkit-keyframes rotation {
-    0% { -webkit-transform: translateZ(0) rotate(0deg); }
-    100% { -webkit-transform: translateZ(0) rotate(360deg); }
+    0% {
+        -webkit-transform: translateZ(0) rotate(0deg);
+    }
+
+    100% {
+        -webkit-transform: translateZ(0) rotate(360deg);
+    }
 }
 
 
 @keyframes animloader-gpu {
-    0%, 100% { transform: translateZ(0) scale(0.5); }
-    50% { transform: translateZ(0) scale(1); }
+
+    0%,
+    100% {
+        transform: translateZ(0) scale(0.5);
+    }
+
+    50% {
+        transform: translateZ(0) scale(1);
+    }
 }
 
 @-webkit-keyframes animloader-gpu {
-    0%, 100% { -webkit-transform: translateZ(0) scale(0.5); }
-    50% { -webkit-transform: translateZ(0) scale(1); }
+
+    0%,
+    100% {
+        -webkit-transform: translateZ(0) scale(0.5);
+    }
+
+    50% {
+        -webkit-transform: translateZ(0) scale(1);
+    }
 }
 
 
 /* Base Animations */
 @keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 @-webkit-keyframes fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 
 @-webkit-keyframes webkit-fadeIn {
-    from { opacity: 0; }
-    to { opacity: 1; }
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
 }
 
 
@@ -485,14 +602,12 @@ body {
     height: 40px;
     padding: 0 8px;
     border-radius: var(--jf-border-radius-lg);
-    background-color: var(--jf-accent);
-    color: var(--jf-accent-content-color);
     font-size: 1.1rem;
     font-weight: 700;
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 8;
 }
 
 .played-badge {
@@ -502,12 +617,10 @@ body {
     width: 40px;
     height: 40px;
     border-radius: var(--jf-border-radius-lg);
-    background-color: var(--jf-accent);
-    color: var(--jf-accent-content-color);
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 8;
     /* PERFORMANCE: Removed box-shadow for Tizen/WebOS grid stability */
 }
 
@@ -524,13 +637,64 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    z-index: 2;
+    z-index: 8;
     /* PERFORMANCE: Removed backdrop-filter (blur) and box-shadow. 
        These are extremely expensive on Tizen 3.0/4.0 in a grid context. */
 }
 
 .video-badge svg {
-    margin-left: 4px; /* Optical alignment for play triangle */
+    margin-left: 4px;
+    /* Optical alignment for play triangle */
+}
+
+.episode-badge {
+    height: 40px;
+    position: absolute;
+    top: 12px;
+    left: 12px;
+    padding: 4px 8px;
+    border-radius: var(--jf-border-radius);
+    font-size: 1.1rem;
+    font-weight: 700;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.quality-badge {
+    height: 40px;
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    padding: 4px 8px;
+    border-radius: var(--jf-border-radius);
+    font-size: 1.1rem;
+    font-weight: 700;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* Badge Skins: Tinted vs Translucent Dark */
+html[data-badge-style="tinted"] .count-badge,
+html[data-badge-style="tinted"] .played-badge,
+html[data-badge-style="tinted"] .episode-badge,
+html[data-badge-style="tinted"] .quality-badge {
+    background-color: var(--jf-accent);
+    color: var(--jf-accent-content-color);
+    border: none;
+}
+
+html[data-badge-style="dark"] .count-badge,
+html[data-badge-style="dark"] .played-badge,
+html[data-badge-style="dark"] .episode-badge,
+html[data-badge-style="dark"] .quality-badge {
+    background-color: rgba(0, 0, 0, 0.65);
+    color: #ffffff;
+    border: 1px solid rgba(255, 255, 255, 0.15);
 }
 
 /* ============================================================================
@@ -555,6 +719,7 @@ body.webos-cursor-active .focused {
     transform: none !important;
     box-shadow: none !important;
 }
+
 /* ============================================================================
    Performance Tweaks (Legacy Hardware Mitigation)
    ============================================================================ */
@@ -568,7 +733,7 @@ body.webos-cursor-active .focused {
 html[data-low-vram="true"] *:not(.media-card):not(.grid-card):not(.result-card):not(.person-card):not(.episode-card):not(.loading-spinner):not(.loading-spinner-small):not(.player-osd):not(.osd-main):not(.osd-top):not(.osd-bottom) {
     /* Stop forcing GPU promotion for every moving part */
     will-change: auto !important;
-    
+
     /* Disable all animations and transitions for non-essential UI elements */
     -webkit-transition: none !important;
     transition: none !important;
@@ -693,4 +858,124 @@ html[data-simple-loader="true"] .loading-spinner::before,
 html[data-simple-loader="true"] .loading-spinner-small::after,
 html[data-simple-loader="true"] .loading-spinner-small::before {
     display: none !important;
+}
+
+/* ============================================================================
+   Card Labels Spacing Adjustments
+   ============================================================================ */
+
+/* Horizontal tracks spacing adjustments */
+html[data-card-label-style="titleOnly"] .media-row {
+    margin-bottom: 28px !important;
+}
+html[data-card-label-style="hidden"] .media-row {
+    margin-bottom: 20px !important;
+}
+
+html[data-card-label-style="titleOnly"] .row-items {
+    padding-bottom: 18px !important;
+}
+html[data-card-label-style="hidden"] .row-items {
+    padding-bottom: 12px !important;
+}
+
+/* Grids: Poster view */
+html[data-card-label-style="titleOnly"] .library-grid:not([class*="view-"]) .media-card {
+    margin-bottom: 22px !important;
+}
+html[data-card-label-style="hidden"] .library-grid:not([class*="view-"]) .media-card {
+    margin-bottom: 12px !important;
+}
+
+/* Grids: Small Poster view */
+html[data-card-label-style="titleOnly"] .library-grid.view-small-poster .media-card {
+    margin-bottom: 16px !important;
+}
+html[data-card-label-style="hidden"] .library-grid.view-small-poster .media-card {
+    margin-bottom: 8px !important;
+}
+
+/* Grids: Landscape / Thumb view */
+html[data-card-label-style="titleOnly"] .library-grid.view-thumb .media-card {
+    margin-bottom: 30px !important;
+}
+html[data-card-label-style="hidden"] .library-grid.view-thumb .media-card {
+    margin-bottom: 15px !important;
+}
+
+/* Grids: Person / Details section grids */
+html[data-card-label-style="titleOnly"] .person-grid .media-card {
+    margin-bottom: 16px !important;
+}
+html[data-card-label-style="hidden"] .person-grid .media-card {
+    margin-bottom: 8px !important;
+}
+
+/* Grids: Library rows container gap */
+html[data-card-label-style="titleOnly"] .library-rows-container {
+    gap: 30px !important;
+}
+html[data-card-label-style="hidden"] .library-rows-container {
+    gap: 20px !important;
+}
+
+/* Grids: Genre grids */
+html[data-card-label-style="hidden"] .genre-grid-items {
+    padding-top: 12px !important;
+    gap: 20px !important;
+}
+
+/* ============================================================================
+   Card Labels Alignment Adjustments
+   ============================================================================ */
+
+/* Card Labels Alignment Adjustments (excluding list-views) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="start"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: start !important;
+}
+html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="end"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: end !important;
+}
+html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title,
+html[data-card-label-align="center"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-subtitle {
+    text-align: center !important;
+}
+
+/* Skeleton loader lines alignment (excluding list-views) */
+html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+[dir="rtl"] html[data-card-label-align="start"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+
+html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: 0 !important;
+}
+[dir="rtl"] html[data-card-label-align="end"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: 0 !important;
+    margin-right: auto !important;
+}
+
+html[data-card-label-align="center"] .media-card:not(.list-skeleton) .skeleton-line {
+    margin-left: auto !important;
+    margin-right: auto !important;
+}
+
+/* Title Only 2 Lines Wrapping Override (excluding list-views) */
+html[data-card-label-style="titleOnly2Lines"] .media-card:not(.list-skeleton):not(.view-list .media-card) .card-title {
+    white-space: normal !important;
+    display: -webkit-box !important;
+    -webkit-line-clamp: 2 !important;
+    line-clamp: 2 !important;
+    -webkit-box-orient: vertical !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    line-height: 1.25 !important;
+    max-height: 2.5em !important;
 }

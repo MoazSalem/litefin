@@ -4,7 +4,7 @@
  * ============================================================================
  * Coordinates the mapping and execution of custom actions bound to the physical
  * remote control's colored buttons (Red, Green, Yellow, Blue).
- * 
+ *
  * Fits cleanly into the global event bus architecture by subscribing to standard
  * hardware adapter key events and executing requested system workflows. Persists
  * settings locally via the centralized StorageService.
@@ -26,7 +26,7 @@ class RemoteButtonManager {
     constructor() {
         // Prevent double-initialization scenarios during hot reloading or app re-starts
         this._initialized = false;
-        
+
         // Track customizable Sleep Timer parameters dynamically
         this._sleepTimerMinutes = 0;
         this._sleepTimerInterval = null;
@@ -66,7 +66,7 @@ class RemoteButtonManager {
         // Capitalize color string to properly align with StorageService preference key structure
         const capitalizedColor = color.charAt(0).toUpperCase() + color.slice(1);
         const prefKey = `pref:remote${capitalizedColor}Action`;
-        
+
         // Fetch saved user preference, fallback to 'none' if undefined or empty
         const action = storage.getItem(prefKey) || 'none';
 
@@ -192,20 +192,20 @@ class RemoteButtonManager {
 
         // Fetch the currently active view page from the global single-page Router
         const currentPage = router.getCurrentPage();
-        
+
         // Match player contexts using constructor class checks or fallback properties
         if (currentPage && (currentPage.constructor.name === 'PlayerPage' || currentPage._osd || currentPage.osd)) {
             // Retrieve OSDController instance from the active page using getter or internal prop
             const osd = currentPage.osd || currentPage._osd;
             if (osd) {
                 log.info(`Active PlayerPage located! Triggering OSD overlay for: ${actionType}`);
-                
+
                 // Ensure OSD overlays are rendered and visible to the user
                 osd.show();
-                
+
                 // Reset the auto-hide timer to prevent controls disappearing while viewing menu
                 osd.resetAutoHide();
-                
+
                 // Directly execute the corresponding built-in OSD action workflow
                 osd._executeAction(actionType);
             } else {

@@ -6,7 +6,6 @@
  */
 
 import { PlayerSettings } from './PlayerSettings.js';
-import { platformInfo } from './PlatformInfo.js';
 
 /**
  * Convert HEX color to RGBA
@@ -35,7 +34,7 @@ function _hexToRgba(hex, opacity) {
 
 /**
  * Generate text CSS styles from settings
- * 
+ *
  * Supports dynamic selection of subtitle opacity settings depending on
  * whether the current playing video is encoded in SDR or HDR format.
  *
@@ -101,7 +100,7 @@ export function getTextStyles(isHdr = false) {
     // HDR content requires distinct luminance levels for overlay transparency.
     // ========================================================================
     const opacityKey = isHdr ? 'subtitleTextOpacityHdr' : 'subtitleTextOpacity';
-    
+
     /* -------------------------------------------------------------
        Fetch transparency percentage from player settings backend.
        Fallback value defaults to 100% (fully opaque).
@@ -177,7 +176,7 @@ export function getTextStyles(isHdr = false) {
     // HDR media might benefit from softer gray/yellow tones to prevent eye strain.
     // ========================================================================
     const colorKey = isHdr ? 'subtitleTextColorHdr' : 'subtitleTextColor';
-    
+
     /* -------------------------------------------------------------
        Fetch selected hex code from player settings backend.
        Fallback value defaults to standard White (#ffffff).
@@ -252,6 +251,12 @@ export function getTextStyles(isHdr = false) {
                Baloo Bhaijaan 2 font option injected into styles array
                ------------------------------------------------------------- */
             styles.push({ className: 'font-baloo' });
+            break;
+        case 'opendyslexic':
+            styles.push({ className: 'font-opendyslexic' });
+            break;
+        case 'atkinson':
+            styles.push({ className: 'font-atkinson' });
             break;
         default:
             styles.push({ className: 'font-default' });
@@ -435,6 +440,8 @@ const fontClasses = [
     'font-inter',
     'font-proxima',
     'font-baloo',
+    'font-opendyslexic',
+    'font-atkinson',
     'font-default'
 ];
 
@@ -526,6 +533,10 @@ export default {
                    Map internal 'baloo' ID to '.font-baloo' class name
                    ------------------------------------------------------------- */
                 return 'font-baloo';
+            case 'opendyslexic':
+                return 'font-opendyslexic';
+            case 'atkinson':
+                return 'font-atkinson';
             default:
                 return 'font-default';
         }
@@ -568,6 +579,10 @@ export default {
                    Map internal 'baloo' ID to the CSS font-family name
                    ------------------------------------------------------------- */
                 return 'Baloo Bhaijaan 2';
+            case 'opendyslexic':
+                return 'OpenDyslexic';
+            case 'atkinson':
+                return 'Atkinson Hyperlegible';
             default:
                 // Return null when no specific font is selected, so callers that
                 // respect a null value (e.g. _preProcessAssContent) won't override

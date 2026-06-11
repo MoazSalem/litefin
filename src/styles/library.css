@@ -724,10 +724,13 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 
 /* List: move badges from image to be inline after the title */
 .library-grid.view-list .played-badge,
-.library-grid.view-list .count-badge {
+.library-grid.view-list .count-badge,
+.library-grid.view-list .quality-badge,
+.library-grid.view-list .episode-badge {
     position: relative !important;
     top: 0 !important;
     right: 0 !important;
+    left: 0 !important;
     transform: none !important;
     margin-left: 10px !important; /* Perfect gap after the title text */
     flex-shrink: 0;
@@ -893,7 +896,7 @@ html[data-layout-tier="ultra-legacy"] .alpha-btn::before {
 .media-card:focus,
 .media-card.focused,
 .media-card:hover {
-    transform: scale(1.06); /* Slightly less aggressive scale for larger cards to avoid pixelation */
+    transform: scale(1.05); /* Slightly less aggressive scale for larger cards to avoid pixelation */
     z-index: 10;
 }
 
@@ -1120,12 +1123,11 @@ html[data-layout-tier="ultra-legacy"] .library-grid.view-list .media-card {
 /* Skeletons use the real .card-image and .card-info classes for layout, 
    so we only need to style the pulsing background and lines. */
 .skeleton-image {
-    background-color: rgba(255, 255, 255, 0.08);
-    /* Fallback */
+    background-color: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.08);
 }
 
 .skeleton-line {
-    background-color: rgba(255, 255, 255, 0.08);
+    background-color: rgba(var(--jf-primary-btn-color-rgb, 255, 255, 255), 0.08);
     border-radius: var(--jf-border-radius);
 }
 

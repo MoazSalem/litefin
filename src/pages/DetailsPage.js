@@ -61,7 +61,7 @@ class DetailsPage extends Page {
     }
 
     /**
-     * Override _renderMediaCard to provide a default context for all 
+     * Override _renderMediaCard to provide a default context for all
      * related content rows (Similar, Next Up, Cast).
      */
     _renderMediaCard(item, isLandscape, type, options = {}) {
@@ -414,7 +414,9 @@ class DetailsPage extends Page {
             // Backward-compatible custom metadata selector options.
             // Check the new pref:richMetadataStyle select preference, fallback cleanly to standard hideRichMetadata.
             // Under HIG Guidelines, this guarantees lightweight layouts on spatial networks.
-            const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+            const richMetadataStyle =
+                storage.getItem('pref:richMetadataStyle') ||
+                (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
             const hideRich = richMetadataStyle === 'none';
             const hideCast = storage.getItem('pref:hideCastSection') === 'true';
 
@@ -440,20 +442,24 @@ class DetailsPage extends Page {
             if (!hideRich) {
                 // Genres are always loaded if not hidden.
                 requestedFields.push('Genres', 'GenreItems');
-                
+
                 // Studios are required for 'all' or 'genres-studios-writers'.
                 if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers') {
                     requestedFields.push('Studios');
                 }
-                
+
                 // Tags are only required when showing full metadata.
                 if (richMetadataStyle === 'all') {
                     requestedFields.push('Tags');
                 }
-                
+
                 // Directors and Writers come from the 'People' collection in Jellyfin.
                 // If they are requested via the rich metadata dropdown, ensure we include 'People' even if the cast section is hidden.
-                if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+                if (
+                    richMetadataStyle === 'all' ||
+                    richMetadataStyle === 'genres-studios-writers' ||
+                    richMetadataStyle === 'genres-writers'
+                ) {
                     requestedFields.push('People');
                 }
             }
@@ -715,21 +721,23 @@ class DetailsPage extends Page {
                     posterCanvas.style.transition = 'opacity 250ms ease-out';
                     posterCanvas.style.pointerEvents = 'none';
                     posterCanvas.style.opacity = '1';
-                    
+
                     posterContainer.appendChild(posterCanvas);
 
                     // Decode at a lightweight size asynchronously
-                    import('../utils/BlurHashDecoder.js').then(({ default: BlurHashDecoder }) => {
-                        const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
-                        if (pixels && posterCanvas) {
-                            posterCanvas.width = 32;
-                            posterCanvas.height = 48;
-                            const ctx = posterCanvas.getContext('2d');
-                            const imageData = ctx.createImageData(32, 48);
-                            imageData.data.set(pixels);
-                            ctx.putImageData(imageData, 0, 0);
-                        }
-                    }).catch(err => log.error('Failed to decode poster blurhash', err));
+                    import('../utils/BlurHashDecoder.js')
+                        .then(({ default: BlurHashDecoder }) => {
+                            const pixels = BlurHashDecoder.decode(posterBlurHash, 32, 48);
+                            if (pixels && posterCanvas) {
+                                posterCanvas.width = 32;
+                                posterCanvas.height = 48;
+                                const ctx = posterCanvas.getContext('2d');
+                                const imageData = ctx.createImageData(32, 48);
+                                imageData.data.set(pixels);
+                                ctx.putImageData(imageData, 0, 0);
+                            }
+                        })
+                        .catch((err) => log.error('Failed to decode poster blurhash', err));
                 }
 
                 const img = new Image();
@@ -1343,7 +1351,9 @@ class DetailsPage extends Page {
     _renderRichMetadata() {
         // Retrieve setting to customize rich metadata fields display.
         // Falls back to backward-compatible hideRichMetadata if new setting is not set.
-        const richMetadataStyle = storage.getItem('pref:richMetadataStyle') || (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
+        const richMetadataStyle =
+            storage.getItem('pref:richMetadataStyle') ||
+            (storage.getItem('pref:hideRichMetadata') === 'true' ? 'none' : 'all');
         const isHidden = richMetadataStyle === 'none';
         let container = this.$('#rich-meta');
         const containerWrapper = this.$('#rich-meta-container');
@@ -1415,7 +1425,11 @@ class DetailsPage extends Page {
         }
 
         // Writers (shown in 'all', 'genres-studios-writers', or 'genres-writers')
-        if (richMetadataStyle === 'all' || richMetadataStyle === 'genres-studios-writers' || richMetadataStyle === 'genres-writers') {
+        if (
+            richMetadataStyle === 'all' ||
+            richMetadataStyle === 'genres-studios-writers' ||
+            richMetadataStyle === 'genres-writers'
+        ) {
             const writers = (item.People || []).filter((p) => p.Type === 'Writer');
             if (writers.length > 0) {
                 htmlParts.push(createRow('Writers', writers));
@@ -1669,7 +1683,7 @@ class DetailsPage extends Page {
             log.info('Fetching theme media details for item ID', this._itemId);
             // Fetch list of theme media options from Jellyfin
             const themeMedia = await api.getThemeMedia(this._itemId);
-            
+
             // ----------------------------------------------------------------
             // Safety Guard: Avoid async race conditions.
             // If the user navigated away from the details page before the
@@ -1680,14 +1694,14 @@ class DetailsPage extends Page {
                 log.warn('Theme media API request resolved after page destroy; aborting playback');
                 return;
             }
-            
+
             // Check if any theme songs were successfully retrieved
             if (themeMedia && themeMedia.ThemeSongsResult?.Items?.length > 0) {
                 const song = themeMedia.ThemeSongsResult.Items[0];
-                
+
                 // Compile authenticated direct stream URL
                 const streamUrl = api.getAudioStreamUrl(song.Id);
-                
+
                 // Leverage the show owner ID to sustain music across dynamic parent navigations
                 const ownerId = themeMedia.ThemeSongsResult.OwnerId;
 
@@ -1804,11 +1818,15 @@ class DetailsPage extends Page {
 
         const isSeason = item.Type === 'Season';
         const displayTitle = i18n.ensureBiDi(isSeason ? item.SeriesName || item.Name : item.Name);
-        
+
         // Define display subtitle (original title) based on settings.
         // Season titles are unaffected; we only hide original titles for movies/shows when configured.
         const displaySubtitle = i18n.ensureBiDi(
-            isSeason ? item.Name : (!hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name ? item.OriginalTitle : '')
+            isSeason
+                ? item.Name
+                : !hideOriginalTitle && item.OriginalTitle && item.OriginalTitle !== item.Name
+                  ? item.OriginalTitle
+                  : ''
         );
 
         // Build the dynamic inner HTML for the hero-info block.
@@ -1834,16 +1852,16 @@ class DetailsPage extends Page {
         // Render episode season/number details for TV episodes.
         if (item.Type === 'Episode') {
             // When in 'logo-only' mode with a logo, the main header visual is the Series Logo.
-            // Since the text title (Episode Name) is hidden, we dynamically swap the subtitle 
+            // Since the text title (Episode Name) is hidden, we dynamically swap the subtitle
             // text from showing the Series Name to showing the Episode Name (item.Name).
             // Under any other mode (where text title is shown as the header), we keep
             // the classic 'SxxExx - Series Name' pattern.
-            const showLogoAsTitle = (titleStyle === 'logo-only' && hasLogo);
-            
+            const showLogoAsTitle = titleStyle === 'logo-only' && hasLogo;
+
             // Format the episode identification string (SxxExx)
             const seasonPrefix = `S${(item.ParentIndexNumber || 0).toString().padStart(2, '0')}`;
             const episodePrefix = `E${(item.IndexNumber || 0).toString().padStart(2, '0')}`;
-            
+
             // Construct the final display string based on layout preferences
             const subtitleText = showLogoAsTitle
                 ? `${seasonPrefix}${episodePrefix} - ${item.Name}`
@@ -2078,10 +2096,10 @@ class DetailsPage extends Page {
         // Retrieve the resume position from UserData playback position.
         // Convert playback ticks to total minutes. Note that 1 minute is equivalent to 600,000,000 ticks.
         const resumeTime = Math.round(userData.PlaybackPositionTicks / 600000000);
-        
+
         // Define a variable to store our sleekly formatted timestamp string.
         let timeString = '';
-        
+
         // Check if the user has watched past 59 minutes (i.e. at least 60 minutes).
         // If so, we format the time using a premium hour-and-minute pattern (e.g., "1h 15m").
         if (resumeTime >= 60) {
@@ -2089,7 +2107,7 @@ class DetailsPage extends Page {
             const hours = Math.floor(resumeTime / 60);
             // Calculate the remaining minutes left over.
             const minutes = resumeTime % 60;
-            
+
             // Format the string elegantly. If there are no remaining minutes (e.g. exactly 1 hour),
             // show only the hour to maintain a clean and beautiful Apple-like minimal aesthetic.
             timeString = minutes > 0 ? `${hours}h ${minutes}m` : `${hours}h`;
@@ -2100,7 +2118,7 @@ class DetailsPage extends Page {
 
         // Apply localization to the formatted time label to construct the full button label text.
         const resumeLabel = i18n.t('ResumeAt', [timeString]);
-        
+
         // Update the inner HTML of the resume button with a play icon and the formatted label.
         resumeBtn.innerHTML = `<svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor"><polygon points="5 3 19 12 5 21 5 3"/></svg> <span>${resumeLabel}</span>`;
 
@@ -3036,7 +3054,7 @@ class DetailsPage extends Page {
         if (!mediaSource?.MediaStreams) return;
 
         const key = 'Subtitle';
-        
+
         // =========================================================================
         // PGS Subtitle Filter Guard
         //
@@ -3048,7 +3066,7 @@ class DetailsPage extends Page {
         const tracks = mediaSource.MediaStreams.filter((s) => {
             // Match subtitle type
             if (s.Type !== key) return false;
-            
+
             // Skip disabled PGS tracks
             if (disablePgs) {
                 const codec = (s.Codec || '').toLowerCase();
@@ -4312,7 +4330,7 @@ class DetailsPage extends Page {
         // Under Apple's HIG principles, when transitioning between distinct
         // navigational spaces, the audio scape must cleanly fade or cease to
         // make room for the new destination's sensory focus.
-        // 
+        //
         // Elegant Sustain Logic: If the next destination is also a DetailsPage
         // (e.g. going from a Series details to a Season/Episode details, or back),
         // we defer stopping by a 2.0-second grace period. If the new page shares

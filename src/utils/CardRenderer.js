@@ -24,7 +24,7 @@ class CardRenderer {
      */
     static createCardHtml(item, options = {}) {
         const { isLandscape = false, type = 'poster', contextType = null, isGrid = false } = options;
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         let imageUrl = '';
         let imageInnerHtml = '';
@@ -90,7 +90,7 @@ class CardRenderer {
         } else if (type === 'banner') {
             // Banner Optimization: Look for horizontal branding first
             const params = imageService.getParams('banner', contextType);
-            
+
             // Priority: Banner -> Backdrop -> Thumb -> Primary
             if (item.ImageTags && item.ImageTags.Banner) {
                 imageUrl = api.getImageUrl(itemId, 'Banner', {
@@ -200,6 +200,7 @@ class CardRenderer {
                 // This provides a premium "streaming service" aesthetic
                 if (isModern || item._dynamicThumbUrl) {
                     imageInnerHtml = `
+                        <div class="card-overlay-tint"></div>
                         <div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>
                     `;
                 }
@@ -236,7 +237,9 @@ class CardRenderer {
             }
         } else if (item.Type === 'Program') {
             // Live TV Program: Primary (usually backdrop) -> Channel Primary (Logo)
-            const params = isLandscape ? imageService.getParams('card-backdrop', contextType) : imageService.getParams('poster', contextType);
+            const params = isLandscape
+                ? imageService.getParams('card-backdrop', contextType)
+                : imageService.getParams('poster', contextType);
             if (item.ImageTags && item.ImageTags.Primary) {
                 imageUrl = api.getImageUrl(itemId, 'Primary', {
                     maxWidth: params.maxWidth,
@@ -329,11 +332,14 @@ class CardRenderer {
                         item.Type === 'Audio'))
             ) {
                 // Standard Item (allow ID fallback for Music items where stubs are common)
-                const params = imageService.getParams(type === 'small-poster' ? 'small-poster' : 'poster', contextType);
-                
+                const params = imageService.getParams(
+                    type === 'small-poster' || type === 'square' || type === 'artist' ? type : 'poster',
+                    contextType
+                );
+
                 let targetId = itemId;
                 let targetTag = item.ImageTags?.Primary;
-                
+
                 // If it's an Audio track without own art, fallback to Album art
                 if (item.Type === 'Audio' && item.AlbumId && !targetTag) {
                     targetId = item.AlbumId;
@@ -408,15 +414,15 @@ class CardRenderer {
         }
 
         // --- Unplayed Count Badge ---
-        // 
+        //
         // Generates the circular badge on the top-right of media cards.
         // On series and seasons, this indicates the total unplayed episode count.
         // It is optional and can be disabled via preferences to declutter the UI.
         let badgeHtml = '';
-        
+
         // Fetch the user preference (defaults to false, meaning counts are shown by default)
         const hideEpisodeCounts = storage.getItem('pref:hideEpisodeCounts') === 'true';
-        
+
         // Only render the count badge if the user hasn't explicitly disabled it
         if (!hideEpisodeCounts && item.UserData && item.UserData.UnplayedItemCount > 0) {
             badgeHtml = `<div class="count-badge">${item.UserData.UnplayedItemCount}</div>`;
@@ -424,8 +430,12 @@ class CardRenderer {
 
         // Played Badge (Check Mark)
         let playedBadgeHtml = '';
-        const isMusic = item.Type === 'MusicArtist' || item.Type === 'Artist' || item.Type === 'MusicAlbum' || item.Type === 'Audio';
-        
+        const isMusic =
+            item.Type === 'MusicArtist' ||
+            item.Type === 'Artist' ||
+            item.Type === 'MusicAlbum' ||
+            item.Type === 'Audio';
+
         if (item.UserData && item.UserData.Played && !isMusic) {
             playedBadgeHtml = `
                 <div class="played-badge">
@@ -450,12 +460,63 @@ class CardRenderer {
 
         // Season/Episode Badge (for Series/Episodes)
         let episodeBadgeHtml = '';
-        if (item.Type === 'Episode' && item.IndexNumber !== undefined) {
-            const s = item.ParentIndexNumber || 0;
-            const e = item.IndexNumber;
-            episodeBadgeHtml = `<div class="episode-badge">S${s}:E${e}</div>`;
+        const useEpisodeBadges = storage.getItem('pref:useEpisodeBadges') !== 'false';
+        if (item.Type === 'Episode' && item.IndexNumber !== undefined && useEpisodeBadges) {
+            const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
+            const e = (item.IndexNumber || 0).toString().padStart(2, '0');
+            episodeBadgeHtml = `<div class="episode-badge">S${s}E${e}</div>`;
         } else if (item.Type === 'Season' && item.IndexNumber !== undefined) {
             episodeBadgeHtml = `<div class="episode-badge">Season ${item.IndexNumber}</div>`;
+        }
+
+        // Quality Badge (Resolution/HDR)
+        let qualityBadgeHtml = '';
+        const showQualityBadges = storage.getItem('pref:showQualityBadges') === 'true';
+        if (showQualityBadges) {
+            let width = item.Width;
+            let height = item.Height;
+            let isHdr = false;
+
+            if (item.MediaSources && item.MediaSources.length > 0) {
+                const source = item.MediaSources[0];
+                if (source.Width) width = source.Width;
+                if (source.Height) height = source.Height;
+                if (source.MediaStreams) {
+                    const videoStream = source.MediaStreams.find((s) => s.Type === 'Video');
+                    if (videoStream) {
+                        if (videoStream.Width) width = videoStream.Width;
+                        if (videoStream.Height) height = videoStream.Height;
+                        const videoRange = videoStream.VideoRange || videoStream.VideoRangeType;
+                        if (videoRange && videoRange.toLowerCase().includes('hdr')) {
+                            isHdr = true;
+                        }
+                    }
+                }
+            }
+
+            if (width || height) {
+                let resolutionLabel = '';
+                const maxDim = Math.max(width || 0, height || 0);
+                const minDim = Math.min(width || 0, height || 0);
+
+                if (maxDim >= 3840 || minDim >= 2160) {
+                    resolutionLabel = '4K';
+                } else if (maxDim >= 1920 || minDim >= 1080) {
+                    resolutionLabel = '1080p';
+                } else if (maxDim >= 1280 || minDim >= 720) {
+                    resolutionLabel = '720p';
+                } else if (maxDim > 0) {
+                    resolutionLabel = 'SD';
+                }
+
+                if (isHdr) {
+                    resolutionLabel = resolutionLabel ? `${resolutionLabel} HDR` : 'HDR';
+                }
+
+                if (resolutionLabel) {
+                    qualityBadgeHtml = `<div class="quality-badge">${resolutionLabel}</div>`;
+                }
+            }
         }
 
         // --- 3. Text Generation ---
@@ -469,28 +530,43 @@ class CardRenderer {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             const episodeCode = `S${s}E${e}`;
+            const swapEpisodeTitles = storage.getItem('pref:swapEpisodeTitles') === 'true';
 
-            if (isLandscape) {
+            if (swapEpisodeTitles) {
                 if (contextType === 'season-grid') {
                     titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
                     subtitleText = '';
                 } else {
-                    // Next Up Style (Keep Series Name)
-                    titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
-                    // Modern: Episode code is in the badge, just show name
-                    // Classic: Show "SxxExx - Name"
-                    if (isModern) {
-                        subtitleText = i18n.ensureBiDi(item.Name);
+                    if (useEpisodeBadges) {
+                        titleText = i18n.ensureBiDi(item.Name);
                     } else {
-                        subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        titleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name}`);
                     }
+                    subtitleText = i18n.ensureBiDi(item.SeriesName || '');
                 }
             } else {
-                // Poster Style: Episode code in badge for modern
-                if (isModern) {
-                    subtitleText = '';
+                if (isLandscape) {
+                    if (contextType === 'season-grid') {
+                        titleText = i18n.ensureBiDi(`${e} - ${item.Name}`);
+                        subtitleText = '';
+                    } else {
+                        // Next Up Style (Keep Series Name)
+                        titleText = i18n.ensureBiDi(item.SeriesName || item.Name);
+                        // If useEpisodeBadges is true, Episode code is in the badge, just show name.
+                        // If useEpisodeBadges is false, Show "SxxExx - Name".
+                        if (useEpisodeBadges) {
+                            subtitleText = i18n.ensureBiDi(item.Name);
+                        } else {
+                            subtitleText = i18n.ensureBiDi(`${episodeCode} - ${item.Name} `);
+                        }
+                    }
                 } else {
-                    subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                    // Poster Style: Episode code in badge if useEpisodeBadges is true
+                    if (useEpisodeBadges) {
+                        subtitleText = '';
+                    } else {
+                        subtitleText = i18n.ensureBiDi(`${episodeCode} `);
+                    }
                 }
             }
         } else if (type === 'season') {
@@ -528,8 +604,19 @@ class CardRenderer {
             subtitleText = parts.join(' · ');
         }
 
+        // --- 3.4. Label Visibility Styles ---
+        const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
+        if (!options.showMeta) {
+            if (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines') {
+                subtitleText = '';
+            } else if (cardLabelStyle === 'hidden') {
+                titleText = '';
+                subtitleText = '';
+            }
+        }
+
         // --- 3.5. List View Override ---
-        // In list-view, we want the Title on the left and EVERY other piece of info 
+        // In list-view, we want the Title on the left and EVERY other piece of info
         // (Year, Role, Rating, Score) on the right. We move subtitle parts to metaHtml.
         let listExtraInfo = '';
         if (options.showMeta && subtitleText) {
@@ -564,7 +651,7 @@ class CardRenderer {
         // ====================================================================
         // Expansion Eligibility Strategy
         // ====================================================================
-        // We allow eligible poster cards on horizontal tracks to expand 
+        // We allow eligible poster cards on horizontal tracks to expand
         // horizontally on focus/hover.
         //
         // NOTE: We now allow posters to expand even if they do not have a valid
@@ -575,14 +662,18 @@ class CardRenderer {
         // If a card inside a vertical grid expands horizontally, it will shift and overlap with the
         // neighboring cards in the grid column structure, breaking grid alignment.
         // ====================================================================
-        const canExpand = isModern && !isLandscape && !isGrid && (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person');
+        const canExpand =
+            isModern &&
+            !isLandscape &&
+            !isGrid &&
+            (type === 'poster' || type === 'movie' || type === 'series' || type === 'season' || type === 'person');
 
         let thumbPart = '';
         if (canExpand) {
             // Retrieve resolution boundaries for the modern-expanded card format.
             const thumbParams = imageService.getParams('expanded-poster');
             let thumbUrl = '';
-            
+
             // 1. Prioritize native backdrops for the classic theatrical landscape feel.
             if (item.BackdropImageTags && item.BackdropImageTags.length > 0) {
                 thumbUrl = api.getImageUrl(itemId, 'Backdrop', {
@@ -612,19 +703,19 @@ class CardRenderer {
             else {
                 const primaryTag = item.ImageTags?.Primary || item.AlbumPrimaryImageTag;
                 let targetId = itemId;
-                
+
                 // Fallback to album art for tracks.
                 if (item.Type === 'Audio' && item.AlbumId && !primaryTag) {
                     targetId = item.AlbumId;
                 }
-                
+
                 thumbUrl = api.getImageUrl(targetId, 'Primary', {
                     maxWidth: thumbParams.maxWidth,
                     quality: thumbParams.quality,
                     ...(primaryTag ? { tag: primaryTag } : {})
                 });
             }
-            
+
             if (thumbUrl) {
                 // Return image tag with data-thumb-src. The image is downloaded eagerly
                 // on-demand when the card receives focus to preserve precious memory.
@@ -642,19 +733,23 @@ class CardRenderer {
         // NOTE ON LIBRARY CARDS: In the Modern layout, library card labels are hidden
         // by default from the normal card-info sections. Instead, they are overlaid
         // directly on the card image. If a library has no preview image (falling back
-        // to a gradient), we must explicitly append the overlay label on top of the 
+        // to a gradient), we must explicitly append the overlay label on top of the
         // gradient block so the card is not rendered completely blank.
         // ====================================================================
         // Check if the user has disabled BlurHash placeholders in Display Settings
         // Fall back to the default dark grey skeletons (no canvas injected) if disabled for raw performance.
         const isBlurHashDisabled = storage.getItem('litefin:disableBlurhash') === 'true';
-        const blurHashHtml = (blurHash && !isBlurHashDisabled) ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>` : '';
+        const blurHashHtml =
+            blurHash && !isBlurHashDisabled
+                ? `<canvas class="blurhash-canvas" data-blurhash="${blurHash}"></canvas>`
+                : '';
         const imagePart = imageUrl
             ? `${imageInnerHtml}${thumbPart}${blurHashHtml}<img src="${placeholder}" ${dataAttributes} alt="${item.Name}" class="lazy ${canExpand ? 'poster-layer' : ''}" />`
             : `${CardRenderer.getFallbackHtml(item, isLandscape, { hideInitials })}${isModern && type === 'library' ? `<div class="card-overlay-label">${i18n.ensureBiDi(item.Name)}</div>` : ''}`;
         const finalContextType = contextType || item.Type;
 
-        const isHiddenLibraryLabel = type === 'library' && (storage.getItem('pref:hideLibraryLabels') === 'true' || isModern);
+        const isHiddenLibraryLabel =
+            type === 'library' && (storage.getItem('pref:hideLibraryLabels') === 'true' || isModern);
 
         // --- 5. Optional Meta Row (list view) ---
         // showMeta injects an additional row with rating + year + runtime for
@@ -663,7 +758,8 @@ class CardRenderer {
         if (options.showMeta) {
             const metaParts = [];
             if (item.OfficialRating) metaParts.push(`<span class="card-meta-rating">${item.OfficialRating}</span>`);
-            if (item.CommunityRating && shouldShowScore(item)) metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
+            if (item.CommunityRating && shouldShowScore(item))
+                metaParts.push(`<span class="card-meta-score">★ ${item.CommunityRating.toFixed(1)}</span>`);
             if (item.ProductionYear) metaParts.push(`<span class="card-meta-year">${item.ProductionYear}</span>`);
             if (item.RunTimeTicks) {
                 const mins = Math.round(item.RunTimeTicks / 600000000);
@@ -686,7 +782,7 @@ class CardRenderer {
         //    - Landscape and square cards integrate labels INSIDE the card image
         //      containers as high-end premium overlays.
         //    - Standard posters render labels OUTSIDE.
-        //    - Expandable posters render BOTH to enable a seamless crossfade and 
+        //    - Expandable posters render BOTH to enable a seamless crossfade and
         //      CSS scale transition from outside to inside on hover/focus.
         //
         // 2. In the Classic layout (isModern is false):
@@ -699,10 +795,10 @@ class CardRenderer {
         // and force standard outside labels to keep the entire grid uniform and clean.
         const renderInside = isModern && !isGrid && (isLandscape || isSquare || canExpand);
         const renderOutside = !isModern || isGrid || (!isLandscape && !isSquare);
-        
+
         // Final visibility logic (Classic vs Modern)
-        const showInside = renderInside && !isHiddenLibraryLabel;
-        const showOutside = renderOutside && !isHiddenLibraryLabel;
+        const showInside = renderInside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
+        const showOutside = renderOutside && !isHiddenLibraryLabel && (options.showMeta || cardLabelStyle !== 'hidden');
         const expansionClass = canExpand ? ' has-expansion' : '';
 
         const badgeContainer = `
@@ -710,6 +806,7 @@ class CardRenderer {
             ${playedBadgeHtml}
             ${videoBadgeHtml}
             ${episodeBadgeHtml}
+            ${qualityBadgeHtml}
         `;
 
         return `
@@ -796,7 +893,7 @@ class CardRenderer {
     static getFallbackHtml(item, isLandscape, options = {}) {
         const data = CardRenderer.getFallbackData(item.Name);
         const hideInitials = options.hideInitials || false;
-        const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+        const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
 
         return `
             <div class="media-fallback grad-${data.gradNum}">
@@ -832,11 +929,18 @@ class CardRenderer {
         }
         // 'poster' and 'small-poster' both use the default portrait shape
 
+        const cardLabelStyle = storage.getItem('pref:cardLabelStyle') || 'default';
+        const skeletonHideLabels = hideLabels || (viewMode !== 'list' && cardLabelStyle === 'hidden');
+        const skeletonHideSubtitle =
+            viewMode !== 'list' &&
+            (cardLabelStyle === 'titleOnly' || cardLabelStyle === 'titleOnly2Lines' || cardLabelStyle === 'hidden');
+
         let html = '';
         for (let i = 0; i < count; i++) {
-            const isModern = document.documentElement.getAttribute('data-layout') === 'modern';
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
             const isSquare = viewMode === 'square' || viewMode === 'artist';
-            const isIntegratedModern = isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
+            const isIntegratedModern =
+                isModern && (isLandscape || viewMode === 'thumb' || viewMode === 'banner' || isSquare);
             const isPortraitModern = isModern && !isLandscape && !isSquare;
 
             if (viewMode === 'list') {
@@ -844,29 +948,35 @@ class CardRenderer {
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer"></div>
-                    ${!hideLabels ? `
+                    ${
+                        !skeletonHideLabels
+                            ? `
                     <div class="card-info">
                         <div class="card-title skeleton-line skeleton-shimmer w-80"></div>
-                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>
+                        ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50 mt-8"></div>` : ''}
                     </div>
-                    ` : ''}
+                    `
+                            : ''
+                    }
                 </div>
             `;
             } else {
-                const infoHtml = !hideLabels ? `
+                const infoHtml = !skeletonHideLabels
+                    ? `
                     <div class="card-info${isIntegratedModern ? ' inside' : ''}">
                         <div class="card-title skeleton-line skeleton-shimmer w-80${isIntegratedModern ? '' : ' m-auto'}"></div>
-                        ${isIntegratedModern ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4"></div>` : ''}
-                        <div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>
+                        ${isIntegratedModern || cardLabelStyle === 'titleOnly2Lines' ? `<div class="card-title skeleton-line skeleton-shimmer w-50 mt-4${isIntegratedModern ? '' : ' m-auto'}"></div>` : ''}
+                        ${!skeletonHideSubtitle ? `<div class="card-subtitle skeleton-line skeleton-shimmer w-50${isIntegratedModern ? '' : ' m-auto'} mt-8"></div>` : ''}
                     </div>
-                ` : '';
+                `
+                    : '';
 
                 html += `
                 <div class="${cardClass}">
                     <div class="card-image skeleton-image skeleton-shimmer">
                         ${isIntegratedModern ? infoHtml : '<!-- Space reserved by aspect-ratio padding -->'}
                     </div>
-                    ${(!hideLabels && !isIntegratedModern && !isPortraitModern) ? infoHtml : ''}
+                    ${!skeletonHideLabels && !isIntegratedModern && !isPortraitModern ? infoHtml : ''}
                 </div>
             `;
             }

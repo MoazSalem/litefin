@@ -29,7 +29,10 @@ export class BaseProfile {
             { Format: 'vtt', Method: 'Hls' }
         ];
 
-        let complexSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto' ? 'Encode' : 'External';
+        const complexSubtitleMethod =
+            subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto'
+                ? 'Encode'
+                : 'External';
 
         const complexTextSubtitleProfiles = [
             { Format: 'ass', Method: complexSubtitleMethod },
@@ -52,7 +55,10 @@ export class BaseProfile {
         //
         // 'Encode' → explicit burn-in: always encode into video frames.
         // ====================================================================
-        let bitmapSubtitleMethod = subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto' ? 'Encode' : 'External';
+        let bitmapSubtitleMethod =
+            subtitleBurnIn === 'all' || subtitleBurnIn === 'allcomplex' || subtitleBurnIn === 'auto'
+                ? 'Encode'
+                : 'External';
 
         if (pgsMode === 'burn') {
             bitmapSubtitleMethod = 'Encode';

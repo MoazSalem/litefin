@@ -90,6 +90,8 @@ const TECHNICAL_KEYS = [
     "FontSpaceGrotesk",
     "FontRoboto",
     "FontBaloo",
+	"FontAtkinson", 
+	"FontOpenDyslexic",
     "HD",
     "Option4K",
     "Path",

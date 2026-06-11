@@ -1200,7 +1200,19 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1; 
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            this._updateFocus();
+
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
+
+            setTimeout(() => {
+                this._updateFocus();
+            }, 50);
         }
     }
 
@@ -1233,7 +1245,19 @@ export default class OSDController extends Component {
             this._currentFocusRow = 1; // Controls
             const playIdx = this._findActionIndex('togglePlay');
             this._currentFocusIndex = playIdx !== -1 ? playIdx : 0;
-            this._updateFocus();
+
+            this._focusRestoreLockout = true;
+            if (this._focusRestoreLockoutTimer) {
+                clearTimeout(this._focusRestoreLockoutTimer);
+            }
+            this._focusRestoreLockoutTimer = setTimeout(() => {
+                this._focusRestoreLockout = false;
+                this._focusRestoreLockoutTimer = null;
+            }, 350);
+
+            setTimeout(() => {
+                this._updateFocus();
+            }, 50);
         }
     }
 
@@ -3213,7 +3237,7 @@ export default class OSDController extends Component {
             if (item.IndexNumber !== undefined) {
                 const s = item.ParentIndexNumber || 1;
                 const e = item.IndexNumber;
-                secondary += ` S${String(s).padStart(2,'0')}:E${String(e).padStart(2,'0')}`;
+                secondary += ` S${String(s).padStart(2,'0')}E${String(e).padStart(2,'0')}`;
             }
             if (item.Name) secondary += ` - ${item.Name}`;
             

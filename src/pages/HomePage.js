@@ -120,6 +120,14 @@ class HomePage extends Page {
         this._focusInitialized = false;
 
         /**
+         * Whether the app:hideSplash event has already been emitted.
+         * Used to ensure we only reveal the screen once focus is on the
+         * correct row, not as soon as the skeleton rows are painted.
+         * @type {boolean}
+         */
+        this._splashHidden = false;
+
+        /**
          * Holds fetched libraries — shared across multiple descriptor fetchFns.
          * @type {Array}
          */
@@ -130,6 +138,18 @@ class HomePage extends Page {
          * @type {HeroCarousel}
          */
         this._hero = null;
+
+        /**
+         * Callback stored by _tryInitializeFocus() when a target row renders.
+         * Step 7's rAF calls this after ALL rows are done to restore focus and
+         * then hide the loading overlay. This ensures the page layout is stable
+         * before scroll calculations and before the spinner disappears.
+         * @type {Function|null}
+         */
+        this._pendingFocusRestore = null;
+
+        // Mark as async page for Navigation State so scroll/focus restoration is deferred
+        this._isAsyncPage = true;
     }
 
     render() {
@@ -182,6 +202,56 @@ class HomePage extends Page {
         if (this._hero) {
             this._hero.destroy();
             this._hero = null;
+        }
+    }
+
+    /**
+     * Override Page.setLoading to suppress the premature app:hideSplash
+     * that the base implementation emits when hiding the spinner.
+     *
+     * On the home page, the loading screen must stay visible until focus
+     * has been placed on the correct row (handled in _tryInitializeFocus).
+     * Revealing the UI before that causes a visible jump: the screen shows
+     * with focus on row 1, then snaps to the restored row a frame later.
+     *
+     * The base setLoading(false) still removes the 'loading' CSS class so
+     * the skeleton rows become interactive, but we swallow the hideSplash
+     * event here and re-emit it ourselves at the end of _tryInitializeFocus.
+     */
+    setLoading(show) {
+        if (!this.el) return;
+
+        const isCurrentlyLoading = this.el.classList.contains('loading');
+
+        if (show) {
+            let loader = this.el.querySelector('.page-loading');
+            if (!loader) {
+                loader = document.createElement('div');
+                loader.className = 'page-loading';
+                loader.innerHTML = '<div class="loading-spinner"></div>';
+                this.el.appendChild(loader);
+            }
+            if (!isCurrentlyLoading) {
+                this.el.classList.add('loading');
+            }
+        } else if (isCurrentlyLoading) {
+            // Remove loading class so the skeletons become interactive,
+            // but do NOT emit app:hideSplash yet — that happens in
+            // _tryInitializeFocus after the correct row is focused.
+            this.el.classList.remove('loading');
+        }
+    }
+
+    /**
+     * Emit app:hideSplash exactly once.
+     * Called either from _tryInitializeFocus (normal path, after focus is set)
+     * or from error paths in the pipeline where no rows will ever render.
+     */
+    _hideSplash() {
+        if (!this._splashHidden) {
+            this._splashHidden = true;
+            this.setLoading(false);
+            eventBus.emit('app:hideSplash');
         }
     }
 
@@ -263,7 +333,7 @@ class HomePage extends Page {
                             const maxDays = parseInt(storage.getItem('pref:nextUpMaxDays'), 10);
                             const daysLimit = isNaN(maxDays) ? 365 : maxDays;
                             const params = {};
-                            
+
                             // If a valid cutoff constraint is present, pass it along as an ISO date string.
                             if (daysLimit > 0) {
                                 const cutoff = new Date();
@@ -278,11 +348,11 @@ class HomePage extends Page {
                     // This flag enables the sorting comparator to distinguish between resume items
                     // (which should sort by direct pause dates) and next-up items (which should
                     // sort by show activity dates).
-                    const resumeItems = (resumeRes?.Items || []).map(item => ({
+                    const resumeItems = (resumeRes?.Items || []).map((item) => ({
                         ...item,
                         _isResume: true
                     }));
-                    
+
                     const nextUpItems = (nextUpRes?.Items || [])
                         .filter((item) => {
                             // Filter out next-up items that have already been partially played,
@@ -290,7 +360,7 @@ class HomePage extends Page {
                             const position = item.UserData?.PlaybackPositionTicks || 0;
                             return position === 0;
                         })
-                        .map(item => ({
+                        .map((item) => ({
                             ...item,
                             _isResume: false
                         }));
@@ -303,9 +373,7 @@ class HomePage extends Page {
                     // Plex-style sorting, we need to know exactly when the parent series
                     // was last active. We resolve this by batch-fetching the most recent
                     // play activity of the corresponding shows in a single network request.
-                    const nextUpSeriesIds = nextUpItems
-                        .map((item) => item.SeriesId)
-                        .filter(Boolean);
+                    const nextUpSeriesIds = nextUpItems.map((item) => item.SeriesId).filter(Boolean);
 
                     // Initialize series activity timestamp lookup map.
                     const seriesLastPlayedMap = {};
@@ -314,7 +382,7 @@ class HomePage extends Page {
                         try {
                             // De-duplicate the series IDs to avoid sending redundant entries in the query.
                             const uniqueSeriesIds = [...new Set(nextUpSeriesIds)];
-                            
+
                             // Query played and in-progress episodes belonging to these series IDs,
                             // ordered by play date descending (using the official 'DatePlayed' parameter).
                             const activeEpisodesRes = await api.getItems({
@@ -332,7 +400,7 @@ class HomePage extends Page {
                             for (const ep of activeEpisodes) {
                                 const seriesId = ep.SeriesId;
                                 const lastPlayed = ep.UserData?.LastPlayedDate;
-                                
+
                                 // Map each series to the newest played episode timestamp encountered.
                                 if (seriesId && lastPlayed && !seriesLastPlayedMap[seriesId]) {
                                     seriesLastPlayedMap[seriesId] = new Date(lastPlayed).getTime();
@@ -349,7 +417,7 @@ class HomePage extends Page {
                     // ──────────────────────────────────────────────────────────
                     // Combine the lists and de-duplicate by database Item ID.
                     const combined = [...resumeItems, ...nextUpItems];
-                    
+
                     const seen = new Set();
                     const deduplicated = combined.filter((item) => {
                         if (seen.has(item.Id)) return false;
@@ -361,10 +429,10 @@ class HomePage extends Page {
                     // PLEX-STYLE CHRONOLOGICAL SORTING
                     // ==========================================================
                     //
-                    // Replicates Plex's signature dashboard logic by sorting the merged 
-                    // array descending based on when the show/movie was last interacted with. 
+                    // Replicates Plex's signature dashboard logic by sorting the merged
+                    // array descending based on when the show/movie was last interacted with.
                     // Instead of a rigid "all resume items first" block layout, this interweaves
-                    // your partially played movies/episodes with the next upcoming episodes in 
+                    // your partially played movies/episodes with the next upcoming episodes in
                     // the exact order they were last watched.
                     //
                     // Falls back to DateCreated (indexing date) or 0 (epoch) for safety.
@@ -400,7 +468,7 @@ class HomePage extends Page {
                             // Fallback to the media creation/indexing timestamp.
                             timeB = new Date(b.DateCreated || 0).getTime();
                         }
-                        
+
                         // Sort descending: most recently active media at the start of the row.
                         return timeB - timeA;
                     });
@@ -470,30 +538,32 @@ class HomePage extends Page {
                  * ============================================================
                  * UI Layout Aspect Determination (Apple HIG Compliance)
                  * ============================================================
-                 * 
-                 * Following Apple's Human Interface Guidelines, grid systems 
-                 * should display items in card aspect ratios that match their 
-                 * media type semantics. 
-                 * 
-                 *   - Audio/Music albums, live tuner sources, personal/home 
-                 *     recordings, and music videos require a symmetrical 
+                 *
+                 * Following Apple's Human Interface Guidelines, grid systems
+                 * should display items in card aspect ratios that match their
+                 * media type semantics.
+                 *
+                 *   - Audio/Music albums, live tuner sources, personal/home
+                 *     recordings, and music videos require a symmetrical
                  *     1:1 aspect ratio ("square") for ideal presentation.
-                 * 
-                 *   - Movies and TV Shows align beautifully to a 2:3 aspect 
+                 *
+                 *   - Movies and TV Shows align beautifully to a 2:3 aspect
                  *     ratio ("portrait" or "poster" card type).
                  */
-                layout: (
-                    lib.CollectionType === 'music' || 
-                    lib.CollectionType === 'livetv' || 
-                    lib.CollectionType === 'homevideos' || 
+                layout:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
                     lib.CollectionType === 'musicvideos'
-                ) ? 'square' : 'portrait',
-                cardType: (
-                    lib.CollectionType === 'music' || 
-                    lib.CollectionType === 'livetv' || 
-                    lib.CollectionType === 'homevideos' || 
+                        ? 'square'
+                        : 'portrait',
+                cardType:
+                    lib.CollectionType === 'music' ||
+                    lib.CollectionType === 'livetv' ||
+                    lib.CollectionType === 'homevideos' ||
                     lib.CollectionType === 'musicvideos'
-                ) ? 'square' : 'poster',
+                        ? 'square'
+                        : 'poster',
                 contextType: 'latest',
                 fetchFn: async () => {
                     try {
@@ -515,9 +585,9 @@ class HomePage extends Page {
         // Force Expandable Posters Layout Override
         // ====================================================================
         // If the user is running the Modern layout and has toggled on the force-poster
-        // preference under settings, we dynamically coerce all horizontal track rows 
+        // preference under settings, we dynamically coerce all horizontal track rows
         // to use standard portrait layouts ('portrait') with 'poster' cards.
-        // This ensures the custom expanding-backdrops and visual transitions apply 
+        // This ensures the custom expanding-backdrops and visual transitions apply
         // universally, aligning with unified grids (Apple HIG style).
         // ====================================================================
         const isModern = layoutManager.getLayout() === 'modern';
@@ -621,7 +691,7 @@ class HomePage extends Page {
 
             if (descriptors.length === 0) {
                 this.showError(i18n.t('NoLibraries'));
-                this.setLoading(false);
+                this._hideSplash();
                 return;
             }
 
@@ -635,8 +705,22 @@ class HomePage extends Page {
             const priorityGroups = this._groupByPriority(descriptors);
             const priorities = Array.from(priorityGroups.keys()).sort((a, b) => a - b);
 
-            // Dismiss initial spinner — skeletons are now visible
-            this.setLoading(false);
+            // Dismiss the spinner visually — skeletons are now visible.
+            // NOTE: We suppress the app:hideSplash event here. The overridden
+            // setLoading() below skips emitting it so the splash stays visible
+            // until _tryInitializeFocus() has placed focus on the correct row.
+            //
+            // [FOCUS RESTORATION FIX]: Keep the loading spinner active whenever
+            // we have a saved focus target to restore — either from a back-button
+            // navigation (_pendingNavState) or from sidebar/forward navigation where
+            // home:lastFocusedItem was stored. In both cases we must wait until
+            // _tryInitializeFocus() has run inside its double rAF and set the correct
+            // focus + scroll before revealing the page, to prevent the visible flash
+            // of the page at scroll-top with no focused element.
+            const hasFocusTarget = this._pendingNavState || state.get('home:lastFocusedItem');
+            if (!hasFocusTarget) {
+                this.setLoading(false);
+            }
 
             // ─── Step 6: Render groups sequentially by priority ───────────────
             for (const priority of priorities) {
@@ -656,32 +740,38 @@ class HomePage extends Page {
             // Notify base Page that async content is ready for scroll/focus restoration
             this.restoreScrollFocusWhenReady();
 
-            // =================================================================
-            // CHRONOLOGICAL INITIAL FOCUS RACE CONDITION RESOLUTION
-            // =================================================================
-            // When the Hero Carousel is disabled and My Media is hidden, the 
-            // merged Continue Watching and Next Up row is the physical top row. 
-            // Because this row makes complex backend queries (including batch
-            // fetching parent show activity dates), it finishes rendering later
-            // than other simple components.
-            //
-            // If the row rendering process finishes, it schedules a deferred 
-            // focus routine via requestAnimationFrame to guarantee the DOM is painted.
-            // However, the microtask-based render pipeline finishes Step 6 and reaches
-            // Step 7 before the animation frame callback executes. 
-            //
-            // Without checking `_focusInitialized`, the synchronous check below would 
-            // see that no focus has been claimed yet, forcefully grab the sidebar, 
-            // and set `focusManager.getFocused()` to a sidebar element. When the 
-            // animation frame finally fires on the next paint tick, it would see that 
-            // a focus target already exists and gracefully decline to override it, 
-            // leaving the user stranded on the sidebar.
-            //
-            // Checking `!this._focusInitialized` prevents this premature fallback.
-            // =================================================================
-            if (!this._focusInitialized && !focusManager.getActiveSection() && !focusManager.getFocused()) {
-                this.setActiveSection('sidebar');
+            // Mark the page as fully loaded and ready, resolving the ready Promise
+            this.markReady();
+
+            // Safety net: if no row triggered _tryInitializeFocus during rendering
+            // (e.g. all rows failed or there was no target row), initialize now.
+            if (!this._focusInitialized) {
+                this._tryInitializeFocus(this.$('#home-rows'));
             }
+
+            // ── Reveal page with focus already in place ───────────────────────
+            // We wait until ALL rows have finished rendering before hiding the
+            // loading overlay. We use a rAF so that the browser paints the final
+            // fully-rendered row layout BEFORE we call _hideSplash(), and so that
+            // any focus-restoring rAF queued by _tryInitializeFocus() (which runs
+            // during Step 6) has already fired and placed focus correctly.
+            requestAnimationFrame(() => {
+                if (!this._isMounted) return;
+
+                // Execute any pending focus restoration callback
+                // (queued by _tryInitializeFocus when the target row rendered during Step 6)
+                if (typeof this._pendingFocusRestore === 'function') {
+                    this._pendingFocusRestore();
+                    this._pendingFocusRestore = null;
+                }
+
+                // Final fallback: if nothing focused yet, go to sidebar
+                if (!focusManager.getActiveSection() && !focusManager.getFocused()) {
+                    this.setActiveSection('sidebar');
+                }
+
+                this._hideSplash();
+            });
         } catch (error) {
             log.error('Pipeline failed', error);
 
@@ -698,7 +788,7 @@ class HomePage extends Page {
             const debug = `UID:${preAuth.uid} Dev:${preAuth.dev} Tok:${preAuth.hasTok ? 'OK' : 'MISS'}`;
             const status = error.status ? `HTTP ${error.status}` : 'ERR';
             this.showError(`${status}: ${error.message} [${debug}]`);
-            this.setLoading(false);
+            this._hideSplash();
         }
     }
 
@@ -728,6 +818,26 @@ class HomePage extends Page {
             const sectionEl = document.createElement('section');
             sectionEl.className = `media-row media-row--skeleton${shouldHideLabels ? ' library-no-labels' : ''}`;
             sectionEl.setAttribute('data-row-id', descriptor.id);
+
+            // Set size variables for skeletons based on active card size scale
+            const isModern = document.documentElement.getAttribute('data-layout-media-rows') === 'modern';
+            if (isModern) {
+                const scale = parseFloat(storage.getItem('pref:modernCardSizeScale')) || 1.3;
+                const modernMultiplier = scale / 1.5;
+                const itemMargin = Math.round(40 * modernMultiplier);
+                sectionEl.style.setProperty('--card-width', `${Math.round(225 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-height', `${Math.round(337.5 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-margin', `${itemMargin}px`);
+                sectionEl.style.setProperty('--card-expanded-width', `${Math.round(600 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-square-width', `${Math.round(338 * modernMultiplier)}px`);
+                sectionEl.style.setProperty('--card-expansion', `${Math.round(375 * modernMultiplier)}px`);
+            } else {
+                const scale = parseFloat(storage.getItem('pref:classicCardSizeScale')) || 1.0;
+                const itemWidth = Math.round((landscape ? 400 : 240) * scale);
+                const itemMargin = Math.round(24 * scale);
+                sectionEl.style.setProperty('--skeleton-card-width', `${itemWidth}px`);
+                sectionEl.style.setProperty('--skeleton-card-margin', `${itemMargin}px`);
+            }
 
             // Build skeleton interior — title + shimmer cards
             // Number of skeleton cards to show: landscape rows fit ~5, portrait ~8
@@ -1017,8 +1127,12 @@ class HomePage extends Page {
         const pendingNav = this._pendingNavState;
         this._pendingNavState = null;
 
-        // Defer the focus setup to after the browser has painted this first row
-        requestAnimationFrame(() => {
+        // ── Store focus-restoration logic as a callback ────────────────────────
+        // We do NOT set focus or hide the splash here. Instead we store a callback
+        // that Step 7 will call from inside a rAF, AFTER all rows have finished
+        // rendering. This guarantees the full page layout is stable before scroll
+        // calculations are made and before the loading overlay is removed.
+        this._pendingFocusRestore = () => {
             if (!this._isMounted) return;
 
             // ─── Try restoring focus from back-navigation ─────────────────────
@@ -1111,7 +1225,7 @@ class HomePage extends Page {
                     }
                 }
             }
-        });
+        };
     }
 
     // =========================================================================
@@ -1332,7 +1446,8 @@ class HomePage extends Page {
             const placeholder = this.$('#home-hero-placeholder');
             if (placeholder) {
                 // Determine current carousel style and compact settings
-                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'banner';
+                // Fallback to immersive style by default for premium home screen aesthetics.
+                const carouselStyle = storage.getItem('pref:heroCarouselStyle') || 'immersive';
                 const isCompact = storage.getItem('pref:heroCarouselCompact') !== 'false';
 
                 // Reset existing classes to prevent state leaking when settings change
@@ -1414,7 +1529,14 @@ class HomePage extends Page {
     _preWarmImagesForRow(descriptor, items) {
         const urls = [];
         const isLandscape = descriptor.layout === 'landscape';
-        const sizeType = isLandscape ? 'backdrop' : 'poster';
+        let sizeType;
+        if (descriptor.layout === 'landscape') {
+            sizeType = 'card-backdrop';
+        } else if (descriptor.layout === 'square') {
+            sizeType = 'square';
+        } else {
+            sizeType = 'poster';
+        }
         const { maxWidth, quality } = imageService.getParams(sizeType, descriptor.contextType);
 
         const subset = items.slice(0, IMAGE_PREWARM_PER_ROW);
@@ -1526,7 +1648,7 @@ class HomePage extends Page {
                     // Dynamic Thumbnail Library Query
                     // ==========================================================
                     // Live TV (livetv) libraries are not standard folder structures
-                    // and do not have child items under a ParentId. Instead, they 
+                    // and do not have child items under a ParentId. Instead, they
                     // store global TV Channels, which we fetch using the specialized
                     // getLiveTvChannels API endpoint. Everything else uses standard
                     // child item queries.
@@ -1546,17 +1668,16 @@ class HomePage extends Page {
                             EnableImageTypes: 'Primary,Thumb,Backdrop',
                             Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                         });
-                        
+
                         // Extract channel items safely
                         const ltvItems = ltvResponse?.Items || [];
-                        
+
                         // Filter channels to only those with valid primary, thumb or backdrop artwork
-                        const validLtvItems = ltvItems.filter((item) => 
-                            item.ImageTags?.Primary || 
-                            item.ImageTags?.Thumb || 
-                            item.BackdropImageTags?.length > 0
+                        const validLtvItems = ltvItems.filter(
+                            (item) =>
+                                item.ImageTags?.Primary || item.ImageTags?.Thumb || item.BackdropImageTags?.length > 0
                         );
-                        
+
                         // Local shuffle to randomize the logo across loads
                         const shuffledLtv = validLtvItems.sort(() => 0.5 - Math.random());
                         response = { Items: shuffledLtv.slice(0, 5) };
@@ -1661,7 +1782,7 @@ class HomePage extends Page {
                                     });
                                 }
                             } else if (
-                                lib.CollectionType === 'photos' || 
+                                lib.CollectionType === 'photos' ||
                                 lib.CollectionType === 'homevideos' ||
                                 lib.CollectionType === 'musicvideos' ||
                                 lib.CollectionType === 'livetv'
@@ -1738,17 +1859,18 @@ class HomePage extends Page {
                                     EnableImageTypes: 'Primary,Thumb,Backdrop',
                                     Fields: 'PrimaryImageAspectRatio,ImageTags,BackdropImageTags'
                                 });
-                                
+
                                 // Extract items safely
                                 const ltvFallbackItems = ltvFallback?.Items || [];
-                                
+
                                 // Keep only channels that have valid visual assets
-                                const validFallbackItems = ltvFallbackItems.filter((item) =>
-                                    item.ImageTags?.Primary ||
-                                    item.ImageTags?.Thumb ||
-                                    item.BackdropImageTags?.length > 0
+                                const validFallbackItems = ltvFallbackItems.filter(
+                                    (item) =>
+                                        item.ImageTags?.Primary ||
+                                        item.ImageTags?.Thumb ||
+                                        item.BackdropImageTags?.length > 0
                                 );
-                                
+
                                 // Randomize the list of candidate fallback cards
                                 const shuffledFallback = validFallbackItems.sort(() => 0.5 - Math.random());
                                 fallbackResponse = { Items: shuffledFallback.slice(0, 10) };

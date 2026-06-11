@@ -282,20 +282,19 @@
         // Immediately restore theme to prevent flash of wrong color
         (function() {
             try {
-                var savedTheme = localStorage.getItem('litefin:theme') || 'purplehaze';
+                var savedTheme = localStorage.getItem('litefin:theme') || 'ambient';
                 document.documentElement.setAttribute('data-theme', savedTheme);
 
                 // Theme variables for early loading (must match CSS)
                 var themes = {
-                    'dark': { accent: '#00a4dc', bg: '#101010', text: '#ffffff', textSec: '#999999' },
-                    'light': { accent: '#00a4dc', bg: '#f5f5f5', text: '#101010', textSec: '#666666' },
-                    'blueradiance': { accent: '#00b4d8', bg: '#0a0f1a', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
-                    'purplehaze': { accent: '#b24bf3', bg: '#0f0a14', text: '#ffffff', textSec: 'rgba(255,255,255,0.7)' },
-                    'wmc': { accent: '#52b043', bg: '#0a120a', text: '#ffffff', textSec: '#999999' },
-                    'appletv': { accent: '#0a84ff', bg: '#000000', text: '#ffffff', textSec: '#999999' }
+                    'ambient': { accent: '#af52de', bg: '#0a0b0c', text: '#ffffff', textSec: '#999999' },
+                    'tinted': { accent: '#af52de', bg: '#0f0a14', text: '#ffffff', textSec: '#999999' },
+                    'black': { accent: '#af52de', bg: '#000000', text: '#ffffff', textSec: '#999999' },
+                    'classic-dark': { accent: '#af52de', bg: '#101010', text: '#ffffff', textSec: '#999999' },
+                    'classic-light': { accent: '#af52de', bg: '#f5f5f5', text: '#101010', textSec: '#666666' }
                 };
 
-                var currentTheme = themes[savedTheme] || themes['dark'];
+                var currentTheme = themes[savedTheme] || themes['ambient'];
                 document.documentElement.style.setProperty('--jf-accent', currentTheme.accent);
                 document.documentElement.style.setProperty('--jf-background', currentTheme.bg);
                 document.documentElement.style.setProperty('--jf-text-primary', currentTheme.text);
@@ -312,7 +311,7 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: var(--jf-background, #101010);
+            background-color: var(--jf-background, #000000);
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -331,7 +330,7 @@
             height: 100vh;
             display: block;
             z-index: 2147483647; /* Absolute max z-index */
-            background-color: var(--jf-background, #101010);
+            background-color: var(--jf-background, #000000);
             transition: opacity 0.4s ease-out;
             transform: translateZ(0); /* Hardware accelerate to compete with sidebar */
             will-change: opacity;
@@ -410,7 +409,7 @@
         }
 
         .loading-spinner::before {
-            background-color: var(--jf-accent, #00a4dc);
+            background-color: var(--jf-accent, #ffffff);
             left: auto;
             right: 0;
             top: auto;

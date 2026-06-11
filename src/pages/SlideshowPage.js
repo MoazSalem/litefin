@@ -258,7 +258,6 @@ class SlideshowPage extends Page {
             if (this.params.autoPlay === 'true') {
                 this._startAutoAdvance();
             }
-
         } catch (err) {
             log.error('Slideshow init failed:', err);
             router.back();
@@ -371,9 +370,9 @@ class SlideshowPage extends Page {
             IncludeItemTypes: 'Photo,Video',
             SortBy: sortBy,
             SortOrder: sortOrder,
-            Recursive: false,    /* Direct children only for speed */
+            Recursive: false /* Direct children only for speed */,
             Fields: PHOTO_FIELDS,
-            Limit: 5000          /* Reasonable upper bound for large albums */
+            Limit: 5000 /* Reasonable upper bound for large albums */
         });
 
         this._photos = response.Items || [];
@@ -512,11 +511,11 @@ class SlideshowPage extends Page {
         /* Previous photo */
         const prevPhoto = this._photos[index - 1];
         if (prevPhoto) {
-            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', { 
-                maxWidth: 1920, 
-                maxHeight: 1080, 
-                quality: 90, 
-                tag: prevPhoto.ImageTags?.Primary 
+            this._preloadSlots.prev.src = api.getImageUrl(prevPhoto.Id, 'Primary', {
+                maxWidth: 1920,
+                maxHeight: 1080,
+                quality: 90,
+                tag: prevPhoto.ImageTags?.Primary
             });
         } else {
             this._preloadSlots.prev.src = '';
@@ -525,11 +524,11 @@ class SlideshowPage extends Page {
         /* Next photo */
         const nextPhoto = this._photos[index + 1];
         if (nextPhoto) {
-            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', { 
-                maxWidth: 1920, 
-                maxHeight: 1080, 
-                quality: 90, 
-                tag: nextPhoto.ImageTags?.Primary 
+            this._preloadSlots.next.src = api.getImageUrl(nextPhoto.Id, 'Primary', {
+                maxWidth: 1920,
+                maxHeight: 1080,
+                quality: 90,
+                tag: nextPhoto.ImageTags?.Primary
             });
         } else {
             this._preloadSlots.next.src = '';
@@ -692,16 +691,16 @@ class SlideshowPage extends Page {
         };
 
         /* Photo title */
-        const titleHtml = photo.Name
-            ? `<div class="exif-title">${this._esc(photo.Name)}</div>`
-            : '';
+        const titleHtml = photo.Name ? `<div class="exif-title">${this._esc(photo.Name)}</div>` : '';
 
         /* Date — prefer DateCreated, fall back to ProductionYear */
         let dateStr = '';
         if (photo.DateCreated) {
             try {
                 dateStr = new Date(photo.DateCreated).toLocaleDateString(undefined, {
-                    year: 'numeric', month: 'long', day: 'numeric'
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
                 });
             } catch (_) {
                 dateStr = photo.DateCreated;
@@ -711,9 +710,7 @@ class SlideshowPage extends Page {
         }
 
         /* Camera make + model */
-        const camera = [photo.CameraMake, photo.CameraModel]
-            .filter(Boolean)
-            .join(' ');
+        const camera = [photo.CameraMake, photo.CameraModel].filter(Boolean).join(' ');
 
         /* Aperture: f/2.8 */
         const aperture = photo.Aperture ? `f/${photo.Aperture}` : null;
@@ -734,9 +731,7 @@ class SlideshowPage extends Page {
         const focal = photo.FocalLength ? `${photo.FocalLength} mm` : null;
 
         /* Resolution */
-        const resolution = (photo.Width && photo.Height)
-            ? `${photo.Width} × ${photo.Height}`
-            : null;
+        const resolution = photo.Width && photo.Height ? `${photo.Width} × ${photo.Height}` : null;
 
         /* Altitude */
         const altitude = photo.Altitude != null ? `${Math.round(photo.Altitude)} m` : null;
@@ -745,13 +740,13 @@ class SlideshowPage extends Page {
         container.innerHTML = `
             ${titleHtml}
             <div class="exif-grid">
-                ${row(i18n.t('ExifDate')     || 'Date',         this._esc(dateStr))}
-                ${row(i18n.t('ExifCamera')   || 'Camera',       this._esc(camera))}
-                ${row(i18n.t('ExifAperture') || 'Aperture',     aperture)}
-                ${row(i18n.t('ExifExposure') || 'Exposure',     exposure)}
+                ${row(i18n.t('ExifDate') || 'Date', this._esc(dateStr))}
+                ${row(i18n.t('ExifCamera') || 'Camera', this._esc(camera))}
+                ${row(i18n.t('ExifAperture') || 'Aperture', aperture)}
+                ${row(i18n.t('ExifExposure') || 'Exposure', exposure)}
                 ${row(i18n.t('ExifFocalLength') || 'Focal Length', focal)}
-                ${row(i18n.t('ExifResolution')  || 'Resolution',   resolution)}
-                ${row(i18n.t('ExifAltitude')    || 'Altitude',     altitude)}
+                ${row(i18n.t('ExifResolution') || 'Resolution', resolution)}
+                ${row(i18n.t('ExifAltitude') || 'Altitude', altitude)}
             </div>
         `;
     }
@@ -763,11 +758,7 @@ class SlideshowPage extends Page {
      */
     _esc(str) {
         if (!str) return '';
-        return String(str)
-            .replace(/&/g, '&amp;')
-            .replace(/</g, '&lt;')
-            .replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;');
+        return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
     }
 
     // ──────────────────────────────────────────────────────────────────────────
