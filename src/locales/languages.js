@@ -23,7 +23,7 @@ export const availableLanguages = [
     {
         "value": "hr",
         "label": "Hrvatski",
-        "completeness": 91.16
+        "completeness": 98.57
     },
     {
         "value": "it",
@@ -33,12 +33,12 @@ export const availableLanguages = [
     {
         "value": "nl",
         "label": "Nederlands",
-        "completeness": 91.83
+        "completeness": 94.96
     },
     {
         "value": "pl",
         "label": "Polski",
-        "completeness": 94.68
+        "completeness": 97.91
     },
     {
         "value": "pt-br",
@@ -48,17 +48,17 @@ export const availableLanguages = [
     {
         "value": "sv",
         "label": "Svenska",
-        "completeness": 89.92
+        "completeness": 97.15
     },
     {
         "value": "vi",
         "label": "Tiếng Việt",
-        "completeness": 95.72
+        "completeness": 98.95
     },
     {
         "value": "tr",
         "label": "Türkçe",
-        "completeness": 94.77
+        "completeness": 98
     },
     {
         "value": "ru",
@@ -68,7 +68,7 @@ export const availableLanguages = [
     {
         "value": "sr",
         "label": "Српски",
-        "completeness": 91.35
+        "completeness": 99.43
     },
     {
         "value": "uk",
@@ -83,12 +83,12 @@ export const availableLanguages = [
     {
         "value": "hi-in",
         "label": "हिन्दी (भारत)",
-        "completeness": 90.49
+        "completeness": 99.43
     },
     {
         "value": "bn",
         "label": "বাংলা",
-        "completeness": 90.4
+        "completeness": 99.43
     },
     {
         "value": "ko",
