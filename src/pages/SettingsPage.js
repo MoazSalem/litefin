@@ -910,6 +910,19 @@ class SettingsPage extends Page {
 
                 <div class="setting-item">
                     <div class="setting-label">
+                        <span class="setting-name" data-i18n="UseSeasonBadges">${i18n.t('UseSeasonBadges') || 'Show Season Badges'}</span>
+                        <span class="setting-description" data-i18n="UseSeasonBadgesDescription">${i18n.t('UseSeasonBadgesDescription') || 'Display the season name/number badge on season cards.'}</span>
+                    </div>
+                    <div class="setting-control">
+                         <button class="toggle-switch ${storage.getItem('pref:useSeasonBadges') !== 'false' ? 'active' : ''}" 
+                                 id="toggle-use-season-badges" 
+                                 tabindex="0">
+                        </button>
+                    </div>
+                </div>
+
+                <div class="setting-item">
+                    <div class="setting-label">
                         <span class="setting-name" data-i18n="SwapEpisodeTitles">${i18n.t('SwapEpisodeTitles') || 'Swap Episode Title & Subtitle'}</span>
                         <span class="setting-description" data-i18n="SwapEpisodeTitlesDescription">${i18n.t('SwapEpisodeTitlesDescription') || 'Display the episode name as the card title and the show name as the subtitle.'}</span>
                     </div>
@@ -4011,6 +4024,29 @@ class SettingsPage extends Page {
                 storage.setItem('pref:useEpisodeBadges', newValue);
                 useEpisodeBadgesBtn.classList.toggle('active', newValue);
                 log.info(`Use Episode Badges set to: ${newValue}`);
+            });
+        }
+
+        // -------------------------------------------------------------
+        // Toggle Use Season Badges
+        // Binds the click event to toggle-use-season-badges button.
+        // Saves preference state to local storage and updates active visual class.
+        // -------------------------------------------------------------
+        const useSeasonBadgesBtn = this.$('#toggle-use-season-badges');
+        if (useSeasonBadgesBtn) {
+            useSeasonBadgesBtn.addEventListener('click', () => {
+                // Determine whether season badges are currently enabled (defaults to true)
+                const isEnabled = storage.getItem('pref:useSeasonBadges') !== 'false';
+                const newValue = !isEnabled;
+
+                // Save updated preference key
+                storage.setItem('pref:useSeasonBadges', newValue);
+
+                // Toggle active style class for switch indicator animation
+                useSeasonBadgesBtn.classList.toggle('active', newValue);
+
+                // Log action for support debugging
+                log.info(`Use Season Badges set to: ${newValue}`);
             });
         }
 

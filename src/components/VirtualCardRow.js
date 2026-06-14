@@ -93,9 +93,10 @@ export class VirtualCardRow {
         if (isModern) {
             // Add a buffer for the expanded card width (375px) so the track doesn't clip.
             // Symmetrical spacing keeps the row scroll boundaries aligned cleanly.
-            const expansion = this.isLandscape || this.cardType === 'square' || this.cardType === 'artist'
-                ? 0
-                : 375 * (this.modernMultiplier || 1.0);
+            const expansion =
+                this.isLandscape || this.cardType === 'square' || this.cardType === 'artist'
+                    ? 0
+                    : 375 * (this.modernMultiplier || 1.0);
             this.track.style.width = `${totalWidth + expansion}px`;
 
             /**

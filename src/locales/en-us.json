@@ -1016,6 +1016,8 @@
     "UploadLogsDescription": "Send current session logs to the jellyfin server",
     "UseEpisodeBadges": "Show Episode Badges",
     "UseEpisodeBadgesDescription": "Display the episode SxxExx badge on media cards instead of prefixing the episode title.",
+    "UseSeasonBadges": "Show Season Badges",
+    "UseSeasonBadgesDescription": "Display the season name/number badge on season cards.",
     "UsernameRequired": "Username is required",
     "VerticalPosition": "Vertical Position",
     "VerticalPositionAss": "Vertical Position (ASS)",

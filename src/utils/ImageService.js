@@ -487,14 +487,17 @@ class ImageService {
 
         // 2.5 Adjust preset scale dynamically in layout modes
         if (targetPreset !== 'original') {
-            const isRowCard = !type.startsWith('details-') && 
-                              !type.startsWith('hero-') && 
-                              type !== 'avatar' && 
-                              type !== 'logo' && 
-                              type !== 'backdrop';
+            const isRowCard =
+                !type.startsWith('details-') &&
+                !type.startsWith('hero-') &&
+                type !== 'avatar' &&
+                type !== 'logo' &&
+                type !== 'backdrop';
             if (isRowCard) {
                 const layoutDefaultScale = isModern ? 1.3 : 1.0;
-                const scale = parseFloat(storage.getItem(isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) || layoutDefaultScale;
+                const scale =
+                    parseFloat(storage.getItem(isModern ? 'pref:modernCardSizeScale' : 'pref:classicCardSizeScale')) ||
+                    layoutDefaultScale;
                 if (scale !== layoutDefaultScale) {
                     const scaleMap = {
                         'low': 0.75,
@@ -505,7 +508,7 @@ class ImageService {
                         'very-high': 1.50,
                         'ultra': 2.00
                     };
-                    const currentPresetScale = scaleMap[targetPreset] || 1.00;
+                    const currentPresetScale = scaleMap[targetPreset] || 1.0;
                     const targetScale = currentPresetScale + (scale - layoutDefaultScale);
                     let bestPreset = targetPreset;
                     let minDiff = Infinity;

@@ -460,12 +460,22 @@ class CardRenderer {
 
         // Season/Episode Badge (for Series/Episodes)
         let episodeBadgeHtml = '';
+
+        // -------------------------------------------------------------
+        // Retrieve Episode & Season Badge preferences from local storage.
+        // Both defaults are true if no value is explicitly set.
+        // -------------------------------------------------------------
         const useEpisodeBadges = storage.getItem('pref:useEpisodeBadges') !== 'false';
+        const useSeasonBadges = storage.getItem('pref:useSeasonBadges') !== 'false';
+
+        // -------------------------------------------------------------
+        // Check item type and build appropriate badge markup if allowed.
+        // -------------------------------------------------------------
         if (item.Type === 'Episode' && item.IndexNumber !== undefined && useEpisodeBadges) {
             const s = (item.ParentIndexNumber || 0).toString().padStart(2, '0');
             const e = (item.IndexNumber || 0).toString().padStart(2, '0');
             episodeBadgeHtml = `<div class="episode-badge">S${s}E${e}</div>`;
-        } else if (item.Type === 'Season' && item.IndexNumber !== undefined) {
+        } else if (item.Type === 'Season' && item.IndexNumber !== undefined && useSeasonBadges) {
             episodeBadgeHtml = `<div class="episode-badge">Season ${item.IndexNumber}</div>`;
         }
 

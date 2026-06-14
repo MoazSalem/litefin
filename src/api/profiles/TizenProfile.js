@@ -467,7 +467,6 @@ export function buildJellyfinProfile(options = {}) {
         transMaxAudioChannels = 2;
     }
 
-
     if (enableDts) transAudioCodecsArr.push('dts', 'dca');
     if (enableTrueHd) transAudioCodecsArr.push('truehd');
 
