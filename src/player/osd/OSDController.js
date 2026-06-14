@@ -1463,7 +1463,29 @@ export default class OSDController extends Component {
                 // focused button is sufficient to dispatch the action correctly.
                 // We do NOT fall through to togglePlay; the widget owns this press.
                 const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
-                if (focusedEl) focusedEl.click();
+                /*
+                 * ====================================================================
+                 * HIDDEN WIDGET GUARD:
+                 * If the widget that previously claimed Row -1 has since been hidden
+                 * (e.g. Skip Outro was pressed, ended the episode, and the new episode
+                 * loaded before focus could be restored), the focusedEl is either gone
+                 * or lives inside a container that lost its .visible class.
+                 * In that case we must NOT fire the button — instead snap focus back
+                 * to Play/Pause and execute it so the OK press is never silently eaten.
+                 * ====================================================================
+                 */
+                if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
+                    focusedEl.click();
+                    return true;
+                }
+
+                // Widget is hidden/gone — recover: reset row to controls and
+                // execute play/pause as the user's intent for this wakeup press.
+                this._currentFocusRow = 1;
+                const playIdx = this._findActionIndex('togglePlay');
+                if (playIdx !== -1) this._currentFocusIndex = playIdx;
+                this._updateFocus();
+                this._executeAction('togglePlay');
             } else if (this._currentFocusRow === 2) {
                 // Seekbar row: OK = toggle play/pause
                 this._executeAction('togglePlay');
@@ -1542,10 +1564,27 @@ export default class OSDController extends Component {
                     // Overlay row (Row -1): plugin widget holds focus.
                     // Click the focused button directly in JavaScript.
                     const focusedEl = this._cachedOverlayRow[this._currentFocusIndex];
-                    if (focusedEl) {
+                    /*
+                     * ====================================================================
+                     * HIDDEN WIDGET GUARD:
+                     * A widget may have been cleaned up (episode ended, next episode
+                     * loaded) leaving focus stranded at Row -1 with no visible button.
+                     * Only fire the click when the element is still inside a .visible
+                     * plugin-widget container — otherwise reset to controls row and
+                     * execute play/pause so the press is never silently swallowed.
+                     * ====================================================================
+                     */
+                    if (focusedEl && focusedEl.closest('.plugin-widget.visible')) {
                         focusedEl.click();
                         return true;
                     }
+
+                    // Widget is hidden/gone — recover to controls row so the
+                    // subsequent row checks below will dispatch correctly.
+                    this._currentFocusRow = 1;
+                    const recoverPlayIdx = this._findActionIndex('togglePlay');
+                    if (recoverPlayIdx !== -1) this._currentFocusIndex = recoverPlayIdx;
+                    this._updateFocus();
                 }
 
                 if (this._currentFocusRow === 2) {

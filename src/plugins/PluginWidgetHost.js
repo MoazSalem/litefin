@@ -242,9 +242,19 @@ class PluginWidgetHost {
      * @param {string} pluginId - The plugin's ID
      */
     removeAllWidgetsForPlugin(pluginId) {
+        /*
+         * Track whether any of the removed widgets were actually visible before
+         * teardown. If so, the OSD's focus row may be stranded at -1 (overlay row)
+         * pointing at a now-defunct button — we need to explicitly restore focus.
+         */
+        let hadVisibleWidget = false;
+
         for (const [widgetId, entry] of this._widgets) {
             // Widget IDs are namespaced as '<pluginId>:<widgetId>'
             if (entry.pluginId === pluginId) {
+                // Check visibility BEFORE removing so we know whether focus was active
+                if (entry.visible) hadVisibleWidget = true;
+
                 if (entry.syncTimer) {
                     clearTimeout(entry.syncTimer);
                 }
@@ -254,7 +264,23 @@ class PluginWidgetHost {
                 this._widgets.delete(widgetId);
             }
         }
-        this._refreshOSDCache();
+
+        /*
+         * ====================================================================
+         * FOCUS RECOVERY:
+         * If any of the removed widgets were visible, focus was likely parked
+         * in the overlay row (Row -1) by focusPluginWidget(). Since the widget
+         * is gone, we must pull focus back to the controls row — the same
+         * recovery path taken by onTimeUpdate() when all widgets hide naturally.
+         * ====================================================================
+         */
+        if (hadVisibleWidget && this._osd && typeof this._osd.restoreControlsFocus === 'function') {
+            this._osd.restoreControlsFocus();
+        } else {
+            // No visible widgets were removed — a plain cache refresh is sufficient
+            this._refreshOSDCache();
+        }
+
         log.debug(`All widgets for plugin '${pluginId}' removed`);
     }
 
