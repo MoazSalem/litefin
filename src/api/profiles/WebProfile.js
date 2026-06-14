@@ -99,6 +99,19 @@ export function getDeviceCapabilities() {
     ac3 = ac3 || video.canPlayType('audio/mp4; codecs="ac-3"') !== '';
     eac3 = eac3 || video.canPlayType('audio/mp4; codecs="ec-3"') !== '';
 
+    // Apply the user's EAC3 force-state setting.
+    // Browser canPlayType / MSE.isTypeSupported for EAC3 are notoriously unreliable
+    // on some platforms (WebOS, some Samsung browsers). If the user has set 'enable',
+    // we override the probe result so EAC3 gets into the DirectPlay list and the
+    // transcode target list regardless of what the browser reports.
+    const eac3ForceSetting = PlayerSettings.get('enableEac3');
+    if (eac3ForceSetting === 'enable') {
+        eac3 = true;
+    } else if (eac3ForceSetting === 'disable') {
+        eac3 = false;
+    }
+    // 'auto' (default): keep the probed value as-is
+
     // Dolby Vision detection
     const dolbyVision =
         video.canPlayType('video/mp4; codecs="dvh1.05.01"') !== '' ||
@@ -312,7 +325,32 @@ export function buildJellyfinProfile(options = {}) {
         });
     }
 
-    let transAudioCodecs = caps.ac3 ? 'aac,ac3,eac3' : 'aac';
+    // -------------------------------------------------------------------------
+    // HLS transcode audio codec selection.
+    //
+    // Uses the user's preferred transcode audio codec setting. The preferred
+    // codec is placed first so the Jellyfin server selects it when evaluating
+    // supported codecs. AAC is always retained as an inner fallback.
+    //
+    // Note: for the Web/HTML5 profile, AC3/EAC3 are only used here if the
+    // effective caps value is true (which already accounts for the force-state
+    // override applied in getDeviceCapabilities()). This prevents the server
+    // from transcoding to a codec the player truly cannot handle.
+    // -------------------------------------------------------------------------
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'eac3';
+    let transAudioCodecs;
+
+    if (preferredTranscodeCodec === 'eac3' && caps.eac3) {
+        // User prefers EAC3 and it is supported (probe or force-override) — use it as primary.
+        transAudioCodecs = caps.ac3 ? 'aac,eac3,ac3' : 'aac,eac3';
+    } else if (preferredTranscodeCodec === 'ac3' && caps.ac3) {
+        // User prefers AC3 and it is supported — use it as primary.
+        transAudioCodecs = caps.eac3 ? 'aac,ac3,eac3' : 'aac,ac3';
+    } else {
+        // Fallback: AAC only (either user chose AAC, or both AC3 and EAC3 are unsupported).
+        transAudioCodecs = 'aac';
+    }
+
     let transVideoCodecs = enableHEVC ? 'h264,hevc' : 'h264';
 
     if (playbackMode === 'remux') {

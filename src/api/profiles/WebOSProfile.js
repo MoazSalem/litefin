@@ -193,7 +193,14 @@ export function getDeviceCapabilities() {
     const av1 = webosVersion >= 6;
 
     const ac3 = codecs.ac3;
-    const eac3 = codecs.eac3;
+
+    // Apply the user's EAC3 force-state setting.
+    // LG WebOS Chromium builds frequently mis-report EAC3 support via canPlayType
+    // even on hardware that passes EAC3 through eARC without issue. The 'enable'
+    // override lets the user correct this, while 'disable' lets them explicitly
+    // opt out even when the probe passes.
+    const eac3Setting = PlayerSettings.get('enableEac3');
+    const eac3 = eac3Setting === 'enable' ? true : eac3Setting === 'disable' ? false : codecs.eac3;
 
     // LG disabled DTS decode support on WebOS 5.0 through 22, however, TVs can
     // still pass-through DTS over eARC. Delegate this capability directly to the user's
@@ -400,12 +407,19 @@ export function buildJellyfinProfile(options = {}) {
     // Primary HLS container: driven ONLY by the user's explicit fMP4 setting.
     const primaryHlsContainer = forceFmp4Hls ? 'mp4' : 'ts';
 
+    // -------------------------------------------------------------------------
+    // Resolve the effective EAC3 support flag for THIS profile build.
+    //
+    // caps.eac3 was already resolved in getDeviceCapabilities() against the
+    // enableEac3 force-state setting. We reference it directly here — any
+    // 'enable'/'disable' override has already been baked into caps.eac3.
+    // -------------------------------------------------------------------------
     const audioCodecs = ['aac', 'mp3', 'flac', 'vorbis', 'pcm', 'wav', 'pcm_s16le', 'pcm_s24le', 'aac_latm'];
     if (caps.webosVersion >= 4) {
         audioCodecs.push('opus');
     }
     if (caps.ac3) audioCodecs.push('ac3');
-    if (caps.eac3) audioCodecs.push('eac3');
+    if (caps.eac3) audioCodecs.push('eac3'); // caps.eac3 already reflects force-state override
     if (enableDts) audioCodecs.push('dts', 'dca');
     if (enableTrueHd) audioCodecs.push('truehd');
 
@@ -539,8 +553,30 @@ export function buildJellyfinProfile(options = {}) {
     // For HLS transcode output, AC3/EAC3 are the correct lossy fallback targets:
     // they ARE supported by the WebOS HLS pipeline for eARC passthrough and
     // work universally across all WebOS 4+ versions.
+    //
+    // The user can specify their preferred transcode codec via settings:
+    //   'eac3' — Dolby Digital Plus (better quality, default)
+    //   'ac3'  — Dolby Digital (legacy compatibility)
+    //   'aac'  — AAC (last resort for devices that can't handle AC3/EAC3 in HLS)
     // ---------------------------------------------------------------------------
-    const transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
+
+    // Read user preference and build the codec list with the preferred codec first.
+    // AAC is always included as a final fallback regardless of preference.
+    const preferredTranscodeCodec = PlayerSettings.get('transcodeAudioCodec') || 'eac3';
+
+    let transAudioCodecsArr;
+    if (preferredTranscodeCodec === 'ac3') {
+        // User prefers AC3 (Dolby Digital) — maximum legacy compatibility.
+        transAudioCodecsArr = ['aac', 'ac3', 'eac3'];
+    } else if (preferredTranscodeCodec === 'aac') {
+        // User prefers AAC only — skip surround codec entirely.
+        transAudioCodecsArr = ['aac'];
+    } else {
+        // Default: prefer EAC3 (Dolby Digital Plus) — better quality, modern AVRs.
+        // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
+        transAudioCodecsArr = ['aac', 'eac3', 'ac3'];
+    }
+
     // NOTE: DTS and TrueHD are deliberately NOT added here (see comment above).
     const transAudioCodecs = transAudioCodecsArr.join(',');
 

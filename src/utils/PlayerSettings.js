@@ -37,6 +37,46 @@ const DEFAULTS = {
     // Enable TrueHD passthrough (requires hardware support)
     enableTrueHd: 'auto',
 
+    // -------------------------------------------------------------------------
+    // EAC3 (E-AC3 / Dolby Digital Plus) FORCE STATE
+    // -------------------------------------------------------------------------
+    // On some platforms (WebOS, web browsers), the canPlayType / isTypeSupported
+    // probe for EAC3 returns '' (unsupported) even when the hardware is capable.
+    // This is a known bug — particularly on LG WebOS TVs where the Chromium build
+    // reports no EAC3 support, yet the native media pipeline passes it through
+    // eARC just fine.
+    //
+    // When this reports false:
+    //   - EAC3 is excluded from the DirectPlay audio codec list (Jellyfin treats
+    //     source EAC3 tracks as unsupported and forces an unnecessary transcode).
+    //   - The transcode target codec check (WebProfile) rejects EAC3 even when
+    //     the user has chosen it, silently falling back to AAC.
+    //
+    // 'auto'    — trust the hardware probe (default; may be wrong on some TVs)
+    // 'enable'  — force EAC3 into the profile regardless of what the probe says
+    // 'disable' — explicitly exclude EAC3 even if the probe says it is supported
+    enableEac3: 'auto',
+
+    // -------------------------------------------------------------------------
+    // PREFERRED TRANSCODE AUDIO CODEC
+    // -------------------------------------------------------------------------
+    // Controls which audio codec Jellyfin targets when it must transcode the
+    // audio stream (e.g. DTS is not natively supported, so it transcodes to one
+    // of these lossy surround formats).
+    //
+    // Valid values:
+    //   'eac3'  — E-AC3 / Dolby Digital Plus: higher quality, ~640 kbps cap.
+    //             Modern AVRs (HDMI 1.4+, eARC) handle this natively. Default.
+    //   'ac3'   — AC3 / Dolby Digital: widest compatibility, capped at 640 kbps
+    //             on the 5.1 layout. Best for older receivers.
+    //   'aac'   — Advanced Audio Coding: stereo/multichannel, universal browser
+    //             support. Choose this on devices that can't decode AC3/EAC3
+    //             at all (e.g. phones, tablets).
+    //
+    // NOTE: This only affects HLS transcode output. DirectPlay/DirectStream paths
+    // bypass this entirely — the source audio is copied as-is in those cases.
+    transcodeAudioCodec: 'eac3',
+
     // Allow FLAC audio in video containers (MKV, MP4, etc.) to DirectPlay.
     // Disabled by default: FLAC demuxing inside video containers causes a ~2s
     // A/V sync drift on Tizen hardware (the audio buffer diverges from the video

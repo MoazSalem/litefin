@@ -2476,6 +2476,56 @@ class SettingsPage extends Page {
                     </div>
                 </div>
 
+                <!-- ============================================================
+                     TRANSCODE AUDIO CODEC
+                     When the server must transcode audio (e.g. DTS is not
+                     supported natively), this setting controls what codec
+                     Jellyfin encodes the audio stream to.
+                     EAC3 is the default — higher quality than AC3 and
+                     supported by all modern receivers over HDMI eARC.
+                     ============================================================ -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name">${i18n.t('TranscodeAudioCodec') || 'Transcode Audio Codec'}</span>
+                        <span class="setting-description">${i18n.t('TranscodeAudioCodecDescription') || 'When audio must be transcoded (e.g. DTS is unsupported), use this codec. E-AC3 is higher quality; AC3 has the widest legacy receiver support; AAC is the universal fallback.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'transcode-audio-codec-select',
+                            [
+                                /* EAC3 (Dolby Digital Plus) — best quality, HDMI eARC / modern AVRs */
+                                { value: 'eac3', label: 'E-AC3 (Dolby Digital Plus)' },
+                                /* AC3 (Dolby Digital) — maximum legacy compatibility */
+                                { value: 'ac3', label: 'AC3 (Dolby Digital)' },
+                                /* AAC — universal, use for browsers or limited devices */
+                                { value: 'aac', label: 'AAC' }
+                            ],
+                            PlayerSettings.get('transcodeAudioCodec') || 'eac3'
+                        )}
+                    </div>
+                </div>
+
+                <!-- ============================================================
+                     EAC3 FORCE STATE
+                     canPlayType returns '' for EAC3 on many WebOS/browser builds
+                     even when the hardware passes it through eARC just fine.
+                     This lets the user override that false negative and force
+                     EAC3 into the DirectPlay audio list and transcode target.
+                     ============================================================ -->
+                <div class="setting-item">
+                    <div class="setting-label">
+                        <span class="setting-name" data-i18n="EnableEAC3">${i18n.t('EnableEAC3') || 'EAC3 (Dolby Digital Plus) Force State'}</span>
+                        <span class="setting-description" data-i18n="EnableEAC3Description">${supportStatus(caps.eac3)} — ${i18n.t('EnableEAC3Description') || '⚠ Use when EAC3 sources transcode unnecessarily. Overrides the browser/hardware probe. Enable if your TV passes EAC3 through eARC but the app still transcodes it.'}</span>
+                    </div>
+                    <div class="setting-control">
+                        ${this._renderDropdown(
+                            'eac3-force-select',
+                            forceStateOptions,
+                            PlayerSettings.get('enableEac3') || 'auto'
+                        )}
+                    </div>
+                </div>
+
                 ${
                     platformInfo.isTizen
                         ? `
@@ -5213,6 +5263,10 @@ class SettingsPage extends Page {
             'vp9-force-select': { type: 'player', key: 'enableVP9' },
             'dts-force-select': { type: 'player', key: 'enableDts' },
             'truehd-force-select': { type: 'player', key: 'enableTrueHd' },
+            /* Transcode target codec — used by all three device profiles (Tizen, WebOS, Web) */
+            'transcode-audio-codec-select': { type: 'player', key: 'transcodeAudioCodec' },
+            /* EAC3 force-state override — corrects broken canPlayType probes on WebOS and some browsers */
+            'eac3-force-select': { type: 'player', key: 'enableEac3' },
             /*
              * OSD focus restore mode — read live by OSDController._applyFocusRestoreMode()
              * every time the OSD transitions from hidden to visible. No extra handler needed.
@@ -5400,7 +5454,11 @@ class SettingsPage extends Page {
                                 settingConfig.key === 'enableHDR' ||
                                 settingConfig.key === 'enableDolbyVision' ||
                                 settingConfig.key === 'enableDts' ||
-                                settingConfig.key === 'enableTrueHd'
+                                settingConfig.key === 'enableTrueHd' ||
+                                /* EAC3 force-state is baked into the cached caps object — must re-probe */
+                                settingConfig.key === 'enableEac3' ||
+                                /* Changing the target transcode codec requires a fresh profile build */
+                                settingConfig.key === 'transcodeAudioCodec'
                             ) {
                                 clearCapabilitiesCache();
                             }
