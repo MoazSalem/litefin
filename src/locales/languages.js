@@ -343,7 +343,7 @@ export const availableLanguages = [
     {
         "value": "ro",
         "label": "Română",
-        "completeness": 23
+        "completeness": 100
     },
     {
         "value": "gsw",
